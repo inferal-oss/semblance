@@ -66,11 +66,10 @@ describe('SPARQL coverage', () => {
     expect(reactions).toEqual([])
   })
 
-  it('every reaction has SPARQL (beh:deletes / beh:inserts), unless it awaits an extension', () => {
+  it('every reaction has SPARQL (beh:deletes / beh:inserts)', () => {
     const loose = rows(`SELECT ?reaction WHERE {
   ?reaction a beh:Reaction .
   FILTER NOT EXISTS { ?reaction beh:inserts ?i } FILTER NOT EXISTS { ?reaction beh:deletes ?d }
-  FILTER NOT EXISTS { ?reaction sem:needsExtension ?extension }
 } ORDER BY ?reaction`)
     expect(loose).toEqual([])
   })

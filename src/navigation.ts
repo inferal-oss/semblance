@@ -174,11 +174,17 @@ function unspell(r: Reader, loc: Location, d: Dimension, text: string): Term | u
   const f = r.f
   const exists = (t: NamedNode) => r.match(t, null, null).length > 0
   if (d.target) {
-    const byAnchor = r.match(null, NAV + 'anchor', f.literal(text))[0]?.subject
-    if (byAnchor?.termType === 'NamedNode') return byAnchor
-    const candidates = text.includes(':') ? [expand(r, text)] : prefixMap(r).map(([, ns]) => ns + text)
+    const byAnchor = least(r.match(null, NAV + 'anchor', f.literal(text)).map((q) => q.subject))
+    if (byAnchor) return byAnchor
+    // In the vocabularies, longest namespace first (then by IRI); one that is shown wins.
+    const expanded = text.includes(':') && expand(r, text)
+    // Each candidate with the longest namespace that makes it.
+    const made = new Map<string, number>()
+    for (const [, ns] of text.includes(':') ? [] : prefixMap(r)) made.set(ns + text, Math.max(made.get(ns + text) ?? 0, ns.length))
+    if (expanded) made.set(expanded, 0)
     // Only text an IRI can end with (an unknown or malformed segment names nothing).
-    const found = /^[\w.~:-]+$/.test(text) ? candidates.filter((c): c is string => !!c).map((c) => f.namedNode(c)).filter(exists) : []
+    const found = /^[\w.~:-]+$/.test(text) ? [...made.keys()].map((c) => f.namedNode(c)).filter(exists) : []
+    found.sort((a, b) => made.get(b.value)! - made.get(a.value)! || (a.value < b.value ? -1 : a.value > b.value ? 1 : 0))
     return found.find((t) => shows(r, loc, t)) ?? found[0]
   }
   const range = one(r, f.namedNode(d.property), RDFS_RANGE)?.value
@@ -189,7 +195,7 @@ function unspell(r: Reader, loc: Location, d: Dimension, text: string): Term | u
   }
   const typed = (t: Term) => !range || r.match(t, RDF_TYPE, f.namedNode(range)).length > 0
   for (const p of d.prefixed ? [] : new Set([d.keyProperty, SEM.slug])) {
-    const hit = r.match(null, p, f.literal(text)).map((q) => q.subject).find(typed)
+    const hit = least(r.match(null, p, f.literal(text)).map((q) => q.subject).filter(typed))
     if (hit) return hit
   }
   const iri = expand(r, text)
@@ -197,6 +203,13 @@ function unspell(r: Reader, loc: Location, d: Dimension, text: string): Term | u
   // A literal-valued dimension without a declared range takes text as it comes.
   const current = one(r, d.subject, d.property)
   return current?.termType === 'Literal' ? f.literal(text) : undefined
+}
+
+/** The least of some terms that are IRIs, by IRI (a choice among equals that does not depend on store order). */
+function least(terms: Term[]): NamedNode | undefined {
+  let out: NamedNode | undefined
+  for (const t of terms) if (t.termType === 'NamedNode' && (!out || t.value < out.value)) out = t
+  return out
 }
 
 function expand(r: Reader, text: string): string | undefined {
@@ -261,53 +274,104 @@ const decodeSegments = (text: string) =>
       }
     })
 
+/** One segment of an address, and the dimensions that may read it. */
+interface Segment {
+  text: string
+  /** 0: the path, 1: the fragment. A reading stops at the first segment of its part no dimension reads. */
+  part: number
+  dims: Dimension[]
+}
+
+/** The query parameter `key` as a form decodes it ('+' is a space), the first one; null when absent. */
+function queryParam(search: string, key: string): string | null {
+  const decode = (s: string) => {
+    try {
+      return decodeURIComponent(s.replaceAll('+', ' '))
+    } catch {
+      return s.replaceAll('+', ' ')
+    }
+  }
+  for (const pair of search.replace(/^\?/, '').split('&')) {
+    if (!pair) continue
+    const eq = pair.indexOf('=')
+    if (decode(eq < 0 ? pair : pair.slice(0, eq)) === key) return eq < 0 ? '' : decode(pair.slice(eq + 1))
+  }
+  return null
+}
+
 /**
- * What a URL says (its query and fragment): values for the dimensions it carries that apply,
- * plus, for a target, the values that show it. Unknown text is ignored: a segment no dimension
- * in scope knows ends the path.
+ * What a URL says (its path, query and fragment): values for the dimensions it carries that apply,
+ * plus, for a target, the values that show it. Each segment is read by the first dimension (in the
+ * part's order) that knows its text, is not read by an earlier segment, and is opened by earlier
+ * segments (each parent on its way up is known by one of them as a value it applies under). The
+ * first segment of a part nothing reads ends the part; it may name the target. Unknown text is
+ * ignored. The SPARQL twin of this reading is nav:Follow's.
  */
 export function readAddress(r: Reader, loc: Location, address: string): Values {
   const url = new URL(address || '', 'https://semblance.invalid/')
   const fragment = decodeSegments(url.hash.slice(1))
   const pathDims = ordered(loc, PATH)
   const fragmentDims = ordered(loc, FRAGMENT)
-  // Read segments in order, each by the first dimension still open that knows it.
-  const read = (segments: string[], dims: Dimension[], values: Values) => {
-    for (const text of segments) {
-      const open = dims.filter((d) => !d.target && !values.has(d.iri) && (!d.parent || values.has(d.parent)) && inScope(r, loc, d, values))
-      const hit = open.map((d) => [d, unspell(r, loc, d, text)] as const).find(([, v]) => v)
-      if (hit) {
-        values.set(hit[0].iri, hit[1]!)
-        continue
-      }
-      const target = dims.find((d) => d.target)
-      const v = target && unspell(r, loc, target, text)
-      if (target && v) {
-        values.set(target.iri, v)
-        for (const [dim, val] of shows(r, loc, v) ?? []) values.set(dim, val)
-      }
-      break
-    }
-    return values
-  }
-  const values: Values = new Map()
   // A fragment that spells what the path carries is an address from before paths (#docs/rules):
   // it is read whole, path dimensions first, and the path is not.
-  const legacy = pathDims.length > 0 && fragment.length > 0 && read(fragment.slice(0, 1), pathDims, new Map()).size > 0
-  if (legacy) read(fragment, [...pathDims, ...fragmentDims], values)
-  else {
-    if (pathDims.length) read(pathSegments(url.pathname, loc.base), pathDims, values)
-    read(fragment, fragmentDims, values)
+  const legacy = fragment.length > 0 && pathDims.some((d) => !d.parent && unspell(r, loc, d, fragment[0]!))
+  const segments: Segment[] = legacy
+    ? fragment.map((text) => ({ text, part: 1, dims: [...pathDims, ...fragmentDims] }))
+    : [...pathSegments(url.pathname, loc.base).map((text) => ({ text, part: 0, dims: pathDims })), ...fragment.map((text) => ({ text, part: 1, dims: fragmentDims }))]
+  const known = new Map<string, Term | undefined>()
+  const knows = (k: number, d: Dimension) => {
+    const at = k + ' ' + d.iri
+    if (!known.has(at)) known.set(at, !d.target && segments[k]!.dims.includes(d) ? unspell(r, loc, d, segments[k]!.text) : undefined)
+    return known.get(at)
   }
-  // What the address leaves unspelled, it says by leaving it out (/components/ is in English).
-  for (const d of [...pathDims, ...fragmentDims]) if (d.implicit && !values.has(d.iri) && inScope(r, loc, d, values)) values.set(d.iri, d.implicit)
+  const byIri = (iri: string) => loc.dimensions.find((x) => x.iri === iri)
+  // Opened before segment k: each parent on the way up is known by an earlier segment as a value its child applies under.
+  const opened = (k: number, d: Dimension) => {
+    for (let x: Dimension = d, n = 0; x.parent; n++) {
+      const y = byIri(x.parent)
+      if (!y || n > 16) return false
+      const child = x
+      if (!segments.some((_, j) => j < k && child.when.some((w) => same(w, knows(j, y))))) return false
+      x = y
+    }
+    return true
+  }
+  const fresh = (k: number, d: Dimension) => !segments.some((_, j) => j < k && knows(j, d))
+  const values: Values = new Map()
+  const stopped = new Set<number>()
+  segments.forEach((seg, k) => {
+    if (stopped.has(seg.part)) return
+    const d = seg.dims.find((x) => !x.target && knows(k, x) && opened(k, x) && fresh(k, x))
+    if (d) return void values.set(d.iri, knows(k, d)!)
+    stopped.add(seg.part)
+    const target = seg.dims.find((x) => x.target)
+    const v = target && unspell(r, loc, target, seg.text)
+    if (!target || !v) return
+    values.set(target.iri, v)
+    for (const [dim, val] of shows(r, loc, v) ?? []) values.set(dim, val)
+  })
+  // What the address leaves unspelled, it says by leaving it out (/components/ is in English): each
+  // parent on the way up has, read or left out, a value its child applies under.
+  const read = new Map(values)
+  const valueOf = (y: Dimension) => read.get(y.iri) ?? y.implicit
+  for (const d of [...pathDims, ...fragmentDims]) {
+    if (d.target || !d.implicit || read.has(d.iri)) continue
+    let applies = true
+    for (let x: Dimension = d, n = 0; applies && x.parent; n++) {
+      const y = byIri(x.parent)
+      applies = !!y && n <= 16 && x.when.some((w) => same(w, valueOf(y)))
+      if (y) x = y
+    }
+    if (applies) values.set(d.iri, d.implicit)
+  }
   for (const d of ordered(loc, NAV + 'Query')) {
-    const text = url.searchParams.get(d.key)
-    const v = text !== null && !values.has(d.iri) ? unspell(r, loc, d, text) : undefined
+    const text = queryParam(url.search, d.key)
+    const v = text !== null && !d.target && !values.has(d.iri) ? unspell(r, loc, d, text) : undefined
     if (v) values.set(d.iri, v)
   }
-  // Values whose dimension does not apply under what was read are dropped.
-  for (const d of loc.dimensions) if (values.has(d.iri) && !d.target && !inScope(r, loc, d, new Map([...currentValues(r, loc), ...values]))) values.delete(d.iri)
+  // Values whose dimension does not apply under what was read (and where we are for the rest) are dropped.
+  const merged = new Map([...currentValues(r, loc), ...values])
+  for (const d of loc.dimensions) if (values.has(d.iri) && !d.target && !inScope(r, loc, d, merged)) values.delete(d.iri)
   return values
 }
 

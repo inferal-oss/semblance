@@ -142,10 +142,413 @@ nav:Navigate a owl:Class ; rdfs:subClassOf beh:Event ;
     rdfs:label "Navigate"@en , "Перехід"@uk , "Navigieren"@de , "انتقال"@ar ;
     rdfs:comment """The location changed outside the graph: Back, Forward, a typed or followed URL. Addressed
 to the nav:Location, with the URL's query and fragment as beh:value; recorded in the change log."""@en .
+# Reading the address (nav:Follow): the path's segments, then the fragment's, each read by the first
+# dimension (in the part's order: parents before their children) that knows its text, is not read by
+# an earlier segment, and is opened by earlier ones (each parent on its way up is known by one of them
+# as a value its child applies under). The first segment of a part nothing reads ends the part; in the
+# fragment it may name the target, with the values that show it. A fragment whose first segment a
+# top-level path dimension knows is an address from before paths (#docs/rules): read whole, the path
+# not. Then what the address leaves out (nav:implicit), and the query's parameters. A value whose
+# dimension does not apply under what was read (and where we are for the rest) is dropped. A
+# dimension knows text as: a value of its XML Schema range; the subject keyed by its nav:keyProperty,
+# then sem:slug (of its range; the least IRI); a prefixed name (of its range); the text itself, for a
+# literal-valued one. A target: by nav:anchor, then a name in the vocabularies (one shown first, the
+# longest namespace, the least IRI). The query below passes its tables between steps as text (one line
+# per row), which sx:matches reads back as rows. Its function twin is readAddress (src/navigation.ts).
 nav:Follow a beh:Reaction ; beh:when nav:Navigate ; beh:sourceClass nav:Location ;
-    rdfs:comment "Writes the dimensions the URL carries (and the target's) into the graph."@en ;
-    sem:functionOnly "awaits sx:Text (sx:decodeURI): it reads the address, whose keys are percent-encoded." ;
-    sem:needsExtension sx:Text ;
+    rdfs:comment "Writes the dimensions the URL carries (and the target's) into the graph, and opens what hides the target."@en ;
+    sem:needsExtension sx:Text , sx:Matches ;
+    beh:deletes """CONSTRUCT { ?subject ?property ?now . ?container ?sets ?was }
+WHERE {
+  { SELECT ?N WHERE { { SELECT (GROUP_CONCAT(COALESCE(?nline, ""); separator="") AS ?N) WHERE {
+    { SELECT ?K ?read WHERE { { SELECT ?K (GROUP_CONCAT(DISTINCT COALESCE(?rline, ""); separator="") AS ?read) WHERE {
+      { SELECT ?K ?R WHERE { { SELECT ?K (GROUP_CONCAT(COALESCE(?line, ""); separator="") AS ?R) WHERE {
+    { SELECT ?K WHERE { { SELECT (GROUP_CONCAT(CONCAT(?k, "\\t", STR(?d), "\\t", STRAFTER(?best, " "), "\\t", ?ord, "\\t", ?flags, "\\n"); separator="") AS ?K) WHERE {
+    { SELECT ?k ?d ?ord ?flags (MIN(?cand) AS ?best) WHERE {
+      $event beh:value ?address0 . BIND(STR(?address0) AS ?address)
+      BIND(IF(CONTAINS(?address, "#"), STRAFTER(?address, "#"), "") AS ?fragment)
+      BIND(IF(CONTAINS(?address, "#"), STRBEFORE(?address, "#"), ?address) AS ?beforeFragment)
+      BIND(IF(CONTAINS(?beforeFragment, "?"), STRAFTER(?beforeFragment, "?"), "") AS ?search)
+      BIND(IF(CONTAINS(?beforeFragment, "?"), STRBEFORE(?beforeFragment, "?"), ?beforeFragment) AS ?path0)
+      BIND(REPLACE(IF(STRSTARTS(?path0, "/"), ?path0, CONCAT("/", ?path0)), "/index\\\\.html?$", "/") AS ?pathname)
+      OPTIONAL { $this nav:base ?base0 }
+      BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
+      BIND(IF(STRSTARTS(?pathname, ?base), SUBSTR(?pathname, STRLEN(?base) + 1), "") AS ?under)
+      # The path's segments (0), the fragment's (1) and the query's parameters (2), keyed in order.
+      VALUES ?part { 0 1 2 }
+      BIND(IF(?part = 0, ?under, IF(?part = 1, ?fragment, ?search)) AS ?src)
+      BIND(IF(?part = 2, "[^&]+", "[^/]+") AS ?pattern)
+      (?src ?pattern) sx:matches (?raw ?start)
+      BIND(CONCAT(STR(?part), SUBSTR("000000", STRLEN(STR(?start))), STR(?start)) AS ?k)
+      BIND(IF(?part = 2, IF(CONTAINS(?raw, "="), STRBEFORE(?raw, "="), ?raw), "") AS ?name0)
+      BIND(REPLACE(IF(?part = 2, IF(CONTAINS(?raw, "="), STRAFTER(?raw, "="), ""), ?raw), IF(?part = 2, "[+]", "^$"), " ") AS ?raw2)
+      BIND(COALESCE(sx:decodeURI(?raw2), ?raw2) AS ?text)
+      BIND(REPLACE(?name0, "[+]", " ") AS ?name1)
+      BIND(COALESCE(sx:decodeURI(?name1), ?name1) AS ?name)
+      # The dimensions that may read it: the path's; the fragment's (and the path's, for an address from before paths); the query's by key, its first parameter.
+      $this nav:dimensions/rdf:rest*/rdf:first ?d .
+      ?d nav:property ?prop .
+      BIND(EXISTS { ?d a nav:TargetDimension } AS ?isTarget)
+      BIND(!?isTarget && EXISTS { ?d nav:carriedBy nav:Path } AS ?inPath)
+      BIND(EXISTS { ?d nav:carriedBy nav:Fragment } && (?isTarget || !?inPath) AS ?inFragment)
+      OPTIONAL { ?d nav:key ?key0 }
+      BIND(COALESCE(STR(?key0), REPLACE(STR(?prop), "^.*[#/]", "")) AS ?key)
+      FILTER(IF(?part = 0, ?inPath, IF(?part = 1, ?inPath || ?inFragment,
+             !?isTarget && ?name = ?key && EXISTS { ?d nav:carriedBy nav:Query }
+             && NOT EXISTS { (?search "[^&]+") sx:matches (?raw3 ?start3) FILTER(?start3 < ?start)
+               BIND(REPLACE(IF(CONTAINS(?raw3, "="), STRBEFORE(?raw3, "="), ?raw3), "[+]", " ") AS ?name3) FILTER(COALESCE(sx:decodeURI(?name3), ?name3) = ?key) })))
+      BIND(CONCAT(IF(?inFragment, "1", "0"), IF(?isTarget, "1", "0")) AS ?flags)
+      # Which reads first: the path's dimensions, parents before their children, in the location's order.
+      { SELECT ?d (COUNT(DISTINCT ?before) AS ?at) WHERE { $this nav:dimensions ?h0 . ?h0 rdf:rest* ?before . ?before rdf:rest* ?c0 . ?c0 rdf:first ?d } GROUP BY ?d }
+      OPTIONAL { ?d nav:parent ?p1 . { SELECT ?p1 (COUNT(DISTINCT ?before1) AS ?at1) WHERE { $this nav:dimensions ?h1 . ?h1 rdf:rest* ?before1 . ?before1 rdf:rest* ?c1 . ?c1 rdf:first ?p1 } GROUP BY ?p1 } }
+      BIND(SUBSTR(CONCAT("000", STR(?at)), STRLEN(STR(?at)) + 1) AS ?own)
+      BIND(CONCAT(IF(?inPath, "0", "1"), IF(!BOUND(?p1), CONCAT("0", ?own, "000"),
+           IF(IF(?inPath, EXISTS { ?p1 nav:carriedBy nav:Path }, EXISTS { ?p1 nav:carriedBy nav:Fragment } && NOT EXISTS { ?p1 nav:carriedBy nav:Path }),
+              CONCAT("0", SUBSTR(CONCAT("000", STR(?at1)), STRLEN(STR(?at1)) + 1), ?own), CONCAT("1", ?own, "000")))) AS ?ord)
+      # The value it reads the text as, the first of: a value of an XML Schema range; the subject keyed by
+      # nav:keyProperty, then sem:slug (of the range); a prefixed name (of the range); the text, for a literal.
+      # A target: by nav:anchor, then a name in the vocabularies (one shown first, the longest namespace, the least IRI).
+      OPTIONAL { ?prop rdfs:range ?range }
+      BIND(BOUND(?range) && STRSTARTS(STR(?range), "http://www.w3.org/2001/XMLSchema#") AS ?xsdRange)
+      BIND(!?isTarget && !?xsdRange && NOT EXISTS { ?d nav:spelling nav:PrefixedName } AS ?keyed)
+      LATERAL {
+        { FILTER(!?isTarget && ?xsdRange)
+          BIND(IF(?range = xsd:boolean, IF(?text IN ("true", "false"), STRDT(?text, xsd:boolean), ?none),
+               IF(?range = xsd:integer, IF(REGEX(?text, "^-?[0-9]+$"), STRDT(?text, xsd:integer), ?none), STRDT(?text, ?range))) AS ?typed)
+          BIND(CONCAT("0 ", IF(isIRI(?typed), CONCAT("I", STR(?typed)), CONCAT("L", STR(DATATYPE(?typed)), " ", ENCODE_FOR_URI(STR(?typed))))) AS ?cand) }
+        UNION { FILTER(?keyed) OPTIONAL { ?d nav:keyProperty ?kp0 } BIND(COALESCE(?kp0, sem:slug) AS ?kp)
+          ?hit ?kp ?text . FILTER(isIRI(?hit) && (!BOUND(?range) || EXISTS { ?hit a ?range })) BIND(CONCAT("1 I", STR(?hit)) AS ?cand) }
+        UNION { FILTER(?keyed) ?hit sem:slug ?text . FILTER(isIRI(?hit) && (!BOUND(?range) || EXISTS { ?hit a ?range })) BIND(CONCAT("2 I", STR(?hit)) AS ?cand) }
+        UNION { FILTER(!?xsdRange && REGEX(?text, "^[a-zA-Z][A-Za-z0-9_-]*:[A-Za-z0-9_-]+$"))
+          BIND(STRBEFORE(?text, ":") AS ?pfx)
+          OPTIONAL { ?pn sem:prefixName ?pfx ; sem:namespace ?pns }
+          OPTIONAL { ?shn sh:prefix ?shp ; sh:namespace ?shns FILTER(STR(?shp) = ?pfx) }
+          BIND(IRI(CONCAT(STR(COALESCE(?pns, ?shns)), STRAFTER(?text, ":"))) AS ?named)
+          FILTER(BOUND(?named) && EXISTS { ?named ?anyP ?anyO })
+          FILTER(?isTarget || !BOUND(?range) || EXISTS { ?named a ?range })
+          BIND(IF(?isTarget, CONCAT("4", IF(EXISTS { $this nav:root ?root0 . ?named (^nav:from/nav:to)* ?root0 } || NOT EXISTS { $this nav:root ?anyRoot0 }, "0", "1"), "9999 I", STR(?named)),
+               CONCAT("3 I", STR(?named))) AS ?cand) }
+        UNION { FILTER(!?isTarget && !?xsdRange) ?d nav:subject ?sub . ?sub ?prop ?cur . FILTER(isLiteral(?cur)) BIND(CONCAT("5 ", IF(isIRI(?text), CONCAT("I", STR(?text)), CONCAT("L", STR(DATATYPE(?text)), " ", ENCODE_FOR_URI(STR(?text))))) AS ?cand) }
+        UNION { FILTER(?isTarget) ?anchored nav:anchor ?text . FILTER(isIRI(?anchored)) BIND(CONCAT("3 I", STR(?anchored)) AS ?cand) }
+        UNION { FILTER(?isTarget && !CONTAINS(?text, ":") && REGEX(?text, "^[A-Za-z0-9_.~-]+$"))
+          { ?pn2 sem:prefixName ?pp2 ; sem:namespace ?ns2 } UNION { ?pn2 sh:prefix ?pp2 ; sh:namespace ?ns2 }
+          BIND(IRI(CONCAT(STR(?ns2), ?text)) AS ?named2)
+          FILTER EXISTS { ?named2 ?anyP2 ?anyO2 }
+          BIND(STR(9999 - STRLEN(STR(?ns2))) AS ?len2)
+          BIND(CONCAT("4", IF(EXISTS { $this nav:root ?root2 . ?named2 (^nav:from/nav:to)* ?root2 } || NOT EXISTS { $this nav:root ?anyRoot2 }, "0", "1"),
+               SUBSTR("0000", STRLEN(?len2) + 1), ?len2, " I", STR(?named2)) AS ?cand) }
+      }
+    } GROUP BY ?k ?d ?ord ?flags }
+    FILTER(BOUND(?best))
+  } } } }
+  # The segments of the path and the fragment, in order.
+  { SELECT (GROUP_CONCAT(DISTINCT CONCAT(?k, "\\n"); separator="") AS ?S) WHERE {
+      $event beh:value ?address0 . BIND(STR(?address0) AS ?address)
+      BIND(IF(CONTAINS(?address, "#"), STRAFTER(?address, "#"), "") AS ?fragment)
+      BIND(IF(CONTAINS(?address, "#"), STRBEFORE(?address, "#"), ?address) AS ?beforeFragment)
+      BIND(IF(CONTAINS(?beforeFragment, "?"), STRAFTER(?beforeFragment, "?"), "") AS ?search)
+      BIND(IF(CONTAINS(?beforeFragment, "?"), STRBEFORE(?beforeFragment, "?"), ?beforeFragment) AS ?path0)
+      BIND(REPLACE(IF(STRSTARTS(?path0, "/"), ?path0, CONCAT("/", ?path0)), "/index\\\\.html?$", "/") AS ?pathname)
+      OPTIONAL { $this nav:base ?base0 }
+      BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
+      BIND(IF(STRSTARTS(?pathname, ?base), SUBSTR(?pathname, STRLEN(?base) + 1), "") AS ?under)
+      # The path's segments (0), the fragment's (1) and the query's parameters (2), keyed in order.
+      VALUES ?part { 0 1 2 }
+      BIND(IF(?part = 0, ?under, IF(?part = 1, ?fragment, ?search)) AS ?src)
+      BIND(IF(?part = 2, "[^&]+", "[^/]+") AS ?pattern)
+      (?src ?pattern) sx:matches (?raw ?start)
+      FILTER(?part < 2)
+      BIND(CONCAT(STR(?part), SUBSTR("000000", STRLEN(STR(?start))), STR(?start)) AS ?k)
+  } }
+    # An address from before paths: its fragment's first segment is a top-level path dimension's (#docs/rules).
+    BIND(EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kml ?ksl ?kl ?dsl ?el ?ol ?fll) FILTER(STRSTARTS(?kl, "1") && STRENDS(?fll, "0") && EXISTS { ?dl0 nav:carriedBy nav:Path FILTER(STR(?dl0) = ?dsl) FILTER NOT EXISTS { ?dl0 nav:parent ?pl0 } }
+        && NOT EXISTS { (?S "([^\\\\n]+)\\\\n") sx:matches (?slm ?sls ?slk) FILTER(STRSTARTS(?slk, "1") && ?slk < ?kl) }) } AS ?legacy)
+    LATERAL { OPTIONAL {
+      { # A segment read by the first dimension (in order) that knows it, opened by earlier segments and not read before;
+         # every earlier segment of its part read.
+        (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?km ?ks ?k ?ds ?e ?o ?fl) FILTER(IF(?legacy, STRSTARTS(?k, "1"), STRSTARTS(?k, "0") || (STRSTARTS(?k, "1") && STRSTARTS(?fl, "1"))) && STRENDS(?fl, "0")) BIND(IRI(?ds) AS ?d)
+        FILTER NOT EXISTS { ?d nav:parent* ?xa . ?xa nav:parent ?ya .
+        FILTER NOT EXISTS { ?xa nav:when ?wa . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmoa ?ksoa ?koa ?dsoa ?eoa ?ooa ?floa) FILTER(?koa < ?k && ?dsoa = STR(?ya) && IF(?legacy, STRSTARTS(?koa, "1"), STRSTARTS(?koa, "0") || (STRSTARTS(?koa, "1") && STRSTARTS(?floa, "1"))) && STRENDS(?floa, "0") && ?eoa = IF(isIRI(?wa), CONCAT("I", STR(?wa)), CONCAT("L", STR(DATATYPE(?wa)), " ", ENCODE_FOR_URI(STR(?wa))))) } }
+        FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfa ?ksfa ?kfa ?dsfa ?efa ?ofa ?flfa) FILTER(?kfa < ?k && ?dsfa = ?ds && IF(?legacy, STRSTARTS(?kfa, "1"), STRSTARTS(?kfa, "0") || (STRSTARTS(?kfa, "1") && STRSTARTS(?flfa, "1"))) && STRENDS(?flfa, "0")) }
+        FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmb ?ksb ?kb ?dsb ?eb ?ob ?flb) FILTER(?kb = ?k && ?dsb != ?ds && ?ob < ?o && IF(?legacy, STRSTARTS(?kb, "1"), STRSTARTS(?kb, "0") || (STRSTARTS(?kb, "1") && STRSTARTS(?flb, "1"))) && STRENDS(?flb, "0")) BIND(IRI(?dsb) AS ?db)
+          FILTER NOT EXISTS { ?db nav:parent* ?xb . ?xb nav:parent ?yb .
+        FILTER NOT EXISTS { ?xb nav:when ?wb . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmob ?ksob ?kob ?dsob ?eob ?oob ?flob) FILTER(?kob < ?k && ?dsob = STR(?yb) && IF(?legacy, STRSTARTS(?kob, "1"), STRSTARTS(?kob, "0") || (STRSTARTS(?kob, "1") && STRSTARTS(?flob, "1"))) && STRENDS(?flob, "0") && ?eob = IF(isIRI(?wb), CONCAT("I", STR(?wb)), CONCAT("L", STR(DATATYPE(?wb)), " ", ENCODE_FOR_URI(STR(?wb))))) } }
+          FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfb ?ksfb ?kfb ?dsfb ?efb ?ofb ?flfb) FILTER(?kfb < ?k && ?dsfb = ?dsb && IF(?legacy, STRSTARTS(?kfb, "1"), STRSTARTS(?kfb, "0") || (STRSTARTS(?kfb, "1") && STRSTARTS(?flfb, "1"))) && STRENDS(?flfb, "0")) } }
+        FILTER NOT EXISTS { (?S "([^\\\\n]+)\\\\n") sx:matches (?sma ?ssa ?ja) FILTER(SUBSTR(?ja, 1, 1) = SUBSTR(?k, 1, 1) && ?ja < ?k)
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmrua ?ksrua ?ja ?dsrua ?erua ?orua ?flrua) FILTER(IF(?legacy, STRSTARTS(?ja, "1"), STRSTARTS(?ja, "0") || (STRSTARTS(?ja, "1") && STRSTARTS(?flrua, "1"))) && STRENDS(?flrua, "0")) BIND(IRI(?dsrua) AS ?drua)
+      FILTER NOT EXISTS { ?drua nav:parent* ?xrua . ?xrua nav:parent ?yrua .
+        FILTER NOT EXISTS { ?xrua nav:when ?wrua . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmorua ?ksorua ?korua ?dsorua ?eorua ?oorua ?florua) FILTER(?korua < ?ja && ?dsorua = STR(?yrua) && IF(?legacy, STRSTARTS(?korua, "1"), STRSTARTS(?korua, "0") || (STRSTARTS(?korua, "1") && STRSTARTS(?florua, "1"))) && STRENDS(?florua, "0") && ?eorua = IF(isIRI(?wrua), CONCAT("I", STR(?wrua)), CONCAT("L", STR(DATATYPE(?wrua)), " ", ENCODE_FOR_URI(STR(?wrua))))) } }
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfrua ?ksfrua ?kfrua ?dsfrua ?efrua ?ofrua ?flfrua) FILTER(?kfrua < ?ja && ?dsfrua = ?dsrua && IF(?legacy, STRSTARTS(?kfrua, "1"), STRSTARTS(?kfrua, "0") || (STRSTARTS(?kfrua, "1") && STRSTARTS(?flfrua, "1"))) && STRENDS(?flfrua, "0")) } } }
+        BIND(CONCAT("1\\t", ?ds, "\\t", ?e, "\\n") AS ?line)
+      } UNION {
+        # The first segment of the fragment nothing reads may name the target, and the values that show it.
+        (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmt ?kst ?kt ?dst ?et ?ot ?flt) FILTER(IF(?legacy, STRSTARTS(?kt, "1"), STRSTARTS(?kt, "0") || (STRSTARTS(?kt, "1") && STRSTARTS(?flt, "1"))) && STRENDS(?flt, "1"))
+        FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmrt ?ksrt ?kt ?dsrt ?ert ?ort ?flrt) FILTER(IF(?legacy, STRSTARTS(?kt, "1"), STRSTARTS(?kt, "0") || (STRSTARTS(?kt, "1") && STRSTARTS(?flrt, "1"))) && STRENDS(?flrt, "0")) BIND(IRI(?dsrt) AS ?drt)
+      FILTER NOT EXISTS { ?drt nav:parent* ?xrt . ?xrt nav:parent ?yrt .
+        FILTER NOT EXISTS { ?xrt nav:when ?wrt . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmort ?ksort ?kort ?dsort ?eort ?oort ?flort) FILTER(?kort < ?kt && ?dsort = STR(?yrt) && IF(?legacy, STRSTARTS(?kort, "1"), STRSTARTS(?kort, "0") || (STRSTARTS(?kort, "1") && STRSTARTS(?flort, "1"))) && STRENDS(?flort, "0") && ?eort = IF(isIRI(?wrt), CONCAT("I", STR(?wrt)), CONCAT("L", STR(DATATYPE(?wrt)), " ", ENCODE_FOR_URI(STR(?wrt))))) } }
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfrt ?ksfrt ?kfrt ?dsfrt ?efrt ?ofrt ?flfrt) FILTER(?kfrt < ?kt && ?dsfrt = ?dsrt && IF(?legacy, STRSTARTS(?kfrt, "1"), STRSTARTS(?kfrt, "0") || (STRSTARTS(?kfrt, "1") && STRSTARTS(?flfrt, "1"))) && STRENDS(?flfrt, "0")) } }
+        FILTER NOT EXISTS { (?S "([^\\\\n]+)\\\\n") sx:matches (?smt ?sst ?jt) FILTER(SUBSTR(?jt, 1, 1) = SUBSTR(?kt, 1, 1) && ?jt < ?kt)
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmrut ?ksrut ?jt ?dsrut ?erut ?orut ?flrut) FILTER(IF(?legacy, STRSTARTS(?jt, "1"), STRSTARTS(?jt, "0") || (STRSTARTS(?jt, "1") && STRSTARTS(?flrut, "1"))) && STRENDS(?flrut, "0")) BIND(IRI(?dsrut) AS ?drut)
+      FILTER NOT EXISTS { ?drut nav:parent* ?xrut . ?xrut nav:parent ?yrut .
+        FILTER NOT EXISTS { ?xrut nav:when ?wrut . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmorut ?ksorut ?korut ?dsorut ?eorut ?oorut ?florut) FILTER(?korut < ?jt && ?dsorut = STR(?yrut) && IF(?legacy, STRSTARTS(?korut, "1"), STRSTARTS(?korut, "0") || (STRSTARTS(?korut, "1") && STRSTARTS(?florut, "1"))) && STRENDS(?florut, "0") && ?eorut = IF(isIRI(?wrut), CONCAT("I", STR(?wrut)), CONCAT("L", STR(DATATYPE(?wrut)), " ", ENCODE_FOR_URI(STR(?wrut))))) } }
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfrut ?ksfrut ?kfrut ?dsfrut ?efrut ?ofrut ?flfrut) FILTER(?kfrut < ?jt && ?dsfrut = ?dsrut && IF(?legacy, STRSTARTS(?kfrut, "1"), STRSTARTS(?kfrut, "0") || (STRSTARTS(?kfrut, "1") && STRSTARTS(?flfrut, "1"))) && STRENDS(?flfrut, "0")) } } }
+        LATERAL { { BIND(CONCAT("0\\t", ?dst, "\\t", ?et, "\\n") AS ?line) }
+        UNION
+        { BIND(IRI(SUBSTR(?et, 2)) AS ?target) $this nav:root ?root .
+          ?target (^nav:from/nav:to)* ?child . ?edge nav:from ?child ; nav:to ?parent . ?parent (^nav:from/nav:to)* ?root .
+          ?child c:when ?when . ?parent c:cases ?anyCases ; c:controls ?controls ; c:property ?controlled .
+          $this nav:dimensions/rdf:rest*/rdf:first ?shown . ?shown nav:subject ?controls ; nav:property ?controlled . FILTER NOT EXISTS { ?shown a nav:TargetDimension }
+          BIND(CONCAT("0\\t", STR(?shown), "\\t", IF(isIRI(?when), CONCAT("I", STR(?when)), CONCAT("L", STR(DATATYPE(?when)), " ", ENCODE_FOR_URI(STR(?when)))), "\\n") AS ?line) } }
+      }
+    } }
+  } GROUP BY ?K } } }
+      # One value per dimension: the first priority, then the least.
+      LATERAL { OPTIONAL { (?R "([0-9])\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?rm ?rs ?rp ?rd ?re)
+        FILTER NOT EXISTS { (?R "([0-9])\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?rm2 ?rs2 ?rp2 ?rd ?re2) FILTER(?rp2 < ?rp || (?rp2 = ?rp && ?re2 < ?re)) }
+        BIND(CONCAT(?rd, "\\t", ?re, "\\n") AS ?rline) } }
+    } GROUP BY ?K } } }
+    LATERAL { OPTIONAL {
+      $this nav:dimensions/rdf:rest*/rdf:first ?d .
+      OPTIONAL { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?vm ?vs ?vd ?ve) FILTER(?vd = STR(?d)) }
+      # Left out (nav:implicit), on the path or in the fragment: each parent on the way up has, read or left out, a value it applies under.
+      OPTIONAL { FILTER(!BOUND(?ve)) ?d nav:implicit ?implicit .
+        FILTER NOT EXISTS { ?d a nav:TargetDimension } FILTER EXISTS { ?d nav:carriedBy ?ic FILTER(?ic IN (nav:Path, nav:Fragment)) }
+        FILTER NOT EXISTS { ?d nav:parent* ?ix . ?ix nav:parent ?iy .
+          FILTER NOT EXISTS { $this nav:dimensions/rdf:rest*/rdf:first ?iy . ?ix nav:when ?iw .
+            FILTER(EXISTS { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?im ?is ?iyd ?iye) FILTER(?iyd = STR(?iy) && ?iye = IF(isIRI(?iw), CONCAT("I", STR(?iw)), CONCAT("L", STR(DATATYPE(?iw)), " ", ENCODE_FOR_URI(STR(?iw))))) }
+                || (NOT EXISTS { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?im2 ?is2 ?iyd2 ?iye2) FILTER(?iyd2 = STR(?iy)) } && EXISTS { ?iy nav:implicit ?iw })) } } }
+      # In the query.
+      OPTIONAL { FILTER(!BOUND(?ve) && !BOUND(?implicit)) (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmq ?ksq ?kq ?dsq ?eq ?oq ?flq) FILTER(STRSTARTS(?kq, "2") && ?dsq = STR(?d)) }
+      BIND(COALESCE(?ve, IF(BOUND(?implicit), IF(isIRI(?implicit), CONCAT("I", STR(?implicit)), CONCAT("L", STR(DATATYPE(?implicit)), " ", ENCODE_FOR_URI(STR(?implicit)))), ?eq)) AS ?next)
+      FILTER(BOUND(?next))
+      BIND(CONCAT(STR(?d), "\\t", ?next, "\\n") AS ?nline)
+    } }
+  } } } }
+  $this nav:dimensions/rdf:rest*/rdf:first ?d .
+  ?d nav:subject ?subject ; nav:property ?property .
+  FILTER EXISTS { ?d nav:carriedBy ?carrier FILTER(?carrier IN (nav:Path, nav:Fragment, nav:Query)) }
+  BIND(EXISTS { ?d a nav:TargetDimension } AS ?isTarget)
+  LATERAL { OPTIONAL { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm ?ns ?nd ?next0) FILTER(?nd = STR(?d))
+    # It applies under what was read and where we are for the rest: each parent's value (read, else now) is one its child applies under.
+    FILTER(?isTarget || NOT EXISTS { ?d nav:parent* ?x . ?x nav:parent ?y .
+      FILTER NOT EXISTS { $this nav:dimensions/rdf:rest*/rdf:first ?y . ?x nav:when ?w .
+        FILTER(EXISTS { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm2 ?ns2 ?yd ?ye) FILTER(?yd = STR(?y) && ?ye = IF(isIRI(?w), CONCAT("I", STR(?w)), CONCAT("L", STR(DATATYPE(?w)), " ", ENCODE_FOR_URI(STR(?w))))) }
+            || (NOT EXISTS { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm3 ?ns3 ?yd3 ?ye3) FILTER(?yd3 = STR(?y)) } && EXISTS { ?y nav:subject ?ys ; nav:property ?yp . ?ys ?yp ?w })) } })
+  } }
+  BIND(IF(STRSTARTS(?next0, "I"), IRI(SUBSTR(?next0, 2)), STRDT(sx:decodeURI(STRAFTER(?next0, " ")), IRI(STRBEFORE(SUBSTR(?next0, 2), " ")))) AS ?next)
+  # Always bound (a LATERAL group would bind an unbound ?next itself).
+  BIND(COALESCE(?next, <urn:semblance:none>) AS ?given)
+  # Unchanged when it is the one value now.
+  BIND(BOUND(?next) && EXISTS { ?subject ?property ?next } && NOT EXISTS { ?subject ?property ?other FILTER(!sameTerm(?other, ?next)) } AS ?same)
+  LATERAL { { FILTER((BOUND(?next) && !?same) || (!BOUND(?next) && ?isTarget)) ?subject ?property ?now }
+  UNION
+  { $this nav:dimensions/rdf:rest*/rdf:first ?td . ?td a nav:TargetDimension .
+  FILTER(?d = ?td && !sameTerm(?given, <urn:semblance:none>))
+  $this nav:root ?root .
+  ?given (^nav:from/nav:to)* ?part . ?edge nav:from ?part ; nav:to ?container . ?container (^nav:from/nav:to)* ?root .
+  ?class nav:reveal ?reveal . ?reveal nav:via ?via ; nav:sets ?sets .
+  FILTER(STRSTARTS(STR(?edge), CONCAT(STR(?via), "/~up-")))
+  ?container a/rdfs:subClassOf* ?class .
+  OPTIONAL { ?reveal nav:value ?value0 }
+  BIND(COALESCE(?value0, ?part) AS ?value)
+  FILTER(!(EXISTS { ?container ?sets ?value } && NOT EXISTS { ?container ?sets ?otherValue FILTER(!sameTerm(?otherValue, ?value)) }))
+    ?container ?sets ?was } }
+}""" ;
+    beh:inserts """CONSTRUCT { ?subject ?property ?next . ?container ?sets ?value }
+WHERE {
+  { SELECT ?N WHERE { { SELECT (GROUP_CONCAT(COALESCE(?nline, ""); separator="") AS ?N) WHERE {
+    { SELECT ?K ?read WHERE { { SELECT ?K (GROUP_CONCAT(DISTINCT COALESCE(?rline, ""); separator="") AS ?read) WHERE {
+      { SELECT ?K ?R WHERE { { SELECT ?K (GROUP_CONCAT(COALESCE(?line, ""); separator="") AS ?R) WHERE {
+    { SELECT ?K WHERE { { SELECT (GROUP_CONCAT(CONCAT(?k, "\\t", STR(?d), "\\t", STRAFTER(?best, " "), "\\t", ?ord, "\\t", ?flags, "\\n"); separator="") AS ?K) WHERE {
+    { SELECT ?k ?d ?ord ?flags (MIN(?cand) AS ?best) WHERE {
+      $event beh:value ?address0 . BIND(STR(?address0) AS ?address)
+      BIND(IF(CONTAINS(?address, "#"), STRAFTER(?address, "#"), "") AS ?fragment)
+      BIND(IF(CONTAINS(?address, "#"), STRBEFORE(?address, "#"), ?address) AS ?beforeFragment)
+      BIND(IF(CONTAINS(?beforeFragment, "?"), STRAFTER(?beforeFragment, "?"), "") AS ?search)
+      BIND(IF(CONTAINS(?beforeFragment, "?"), STRBEFORE(?beforeFragment, "?"), ?beforeFragment) AS ?path0)
+      BIND(REPLACE(IF(STRSTARTS(?path0, "/"), ?path0, CONCAT("/", ?path0)), "/index\\\\.html?$", "/") AS ?pathname)
+      OPTIONAL { $this nav:base ?base0 }
+      BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
+      BIND(IF(STRSTARTS(?pathname, ?base), SUBSTR(?pathname, STRLEN(?base) + 1), "") AS ?under)
+      # The path's segments (0), the fragment's (1) and the query's parameters (2), keyed in order.
+      VALUES ?part { 0 1 2 }
+      BIND(IF(?part = 0, ?under, IF(?part = 1, ?fragment, ?search)) AS ?src)
+      BIND(IF(?part = 2, "[^&]+", "[^/]+") AS ?pattern)
+      (?src ?pattern) sx:matches (?raw ?start)
+      BIND(CONCAT(STR(?part), SUBSTR("000000", STRLEN(STR(?start))), STR(?start)) AS ?k)
+      BIND(IF(?part = 2, IF(CONTAINS(?raw, "="), STRBEFORE(?raw, "="), ?raw), "") AS ?name0)
+      BIND(REPLACE(IF(?part = 2, IF(CONTAINS(?raw, "="), STRAFTER(?raw, "="), ""), ?raw), IF(?part = 2, "[+]", "^$"), " ") AS ?raw2)
+      BIND(COALESCE(sx:decodeURI(?raw2), ?raw2) AS ?text)
+      BIND(REPLACE(?name0, "[+]", " ") AS ?name1)
+      BIND(COALESCE(sx:decodeURI(?name1), ?name1) AS ?name)
+      # The dimensions that may read it: the path's; the fragment's (and the path's, for an address from before paths); the query's by key, its first parameter.
+      $this nav:dimensions/rdf:rest*/rdf:first ?d .
+      ?d nav:property ?prop .
+      BIND(EXISTS { ?d a nav:TargetDimension } AS ?isTarget)
+      BIND(!?isTarget && EXISTS { ?d nav:carriedBy nav:Path } AS ?inPath)
+      BIND(EXISTS { ?d nav:carriedBy nav:Fragment } && (?isTarget || !?inPath) AS ?inFragment)
+      OPTIONAL { ?d nav:key ?key0 }
+      BIND(COALESCE(STR(?key0), REPLACE(STR(?prop), "^.*[#/]", "")) AS ?key)
+      FILTER(IF(?part = 0, ?inPath, IF(?part = 1, ?inPath || ?inFragment,
+             !?isTarget && ?name = ?key && EXISTS { ?d nav:carriedBy nav:Query }
+             && NOT EXISTS { (?search "[^&]+") sx:matches (?raw3 ?start3) FILTER(?start3 < ?start)
+               BIND(REPLACE(IF(CONTAINS(?raw3, "="), STRBEFORE(?raw3, "="), ?raw3), "[+]", " ") AS ?name3) FILTER(COALESCE(sx:decodeURI(?name3), ?name3) = ?key) })))
+      BIND(CONCAT(IF(?inFragment, "1", "0"), IF(?isTarget, "1", "0")) AS ?flags)
+      # Which reads first: the path's dimensions, parents before their children, in the location's order.
+      { SELECT ?d (COUNT(DISTINCT ?before) AS ?at) WHERE { $this nav:dimensions ?h0 . ?h0 rdf:rest* ?before . ?before rdf:rest* ?c0 . ?c0 rdf:first ?d } GROUP BY ?d }
+      OPTIONAL { ?d nav:parent ?p1 . { SELECT ?p1 (COUNT(DISTINCT ?before1) AS ?at1) WHERE { $this nav:dimensions ?h1 . ?h1 rdf:rest* ?before1 . ?before1 rdf:rest* ?c1 . ?c1 rdf:first ?p1 } GROUP BY ?p1 } }
+      BIND(SUBSTR(CONCAT("000", STR(?at)), STRLEN(STR(?at)) + 1) AS ?own)
+      BIND(CONCAT(IF(?inPath, "0", "1"), IF(!BOUND(?p1), CONCAT("0", ?own, "000"),
+           IF(IF(?inPath, EXISTS { ?p1 nav:carriedBy nav:Path }, EXISTS { ?p1 nav:carriedBy nav:Fragment } && NOT EXISTS { ?p1 nav:carriedBy nav:Path }),
+              CONCAT("0", SUBSTR(CONCAT("000", STR(?at1)), STRLEN(STR(?at1)) + 1), ?own), CONCAT("1", ?own, "000")))) AS ?ord)
+      # The value it reads the text as, the first of: a value of an XML Schema range; the subject keyed by
+      # nav:keyProperty, then sem:slug (of the range); a prefixed name (of the range); the text, for a literal.
+      # A target: by nav:anchor, then a name in the vocabularies (one shown first, the longest namespace, the least IRI).
+      OPTIONAL { ?prop rdfs:range ?range }
+      BIND(BOUND(?range) && STRSTARTS(STR(?range), "http://www.w3.org/2001/XMLSchema#") AS ?xsdRange)
+      BIND(!?isTarget && !?xsdRange && NOT EXISTS { ?d nav:spelling nav:PrefixedName } AS ?keyed)
+      LATERAL {
+        { FILTER(!?isTarget && ?xsdRange)
+          BIND(IF(?range = xsd:boolean, IF(?text IN ("true", "false"), STRDT(?text, xsd:boolean), ?none),
+               IF(?range = xsd:integer, IF(REGEX(?text, "^-?[0-9]+$"), STRDT(?text, xsd:integer), ?none), STRDT(?text, ?range))) AS ?typed)
+          BIND(CONCAT("0 ", IF(isIRI(?typed), CONCAT("I", STR(?typed)), CONCAT("L", STR(DATATYPE(?typed)), " ", ENCODE_FOR_URI(STR(?typed))))) AS ?cand) }
+        UNION { FILTER(?keyed) OPTIONAL { ?d nav:keyProperty ?kp0 } BIND(COALESCE(?kp0, sem:slug) AS ?kp)
+          ?hit ?kp ?text . FILTER(isIRI(?hit) && (!BOUND(?range) || EXISTS { ?hit a ?range })) BIND(CONCAT("1 I", STR(?hit)) AS ?cand) }
+        UNION { FILTER(?keyed) ?hit sem:slug ?text . FILTER(isIRI(?hit) && (!BOUND(?range) || EXISTS { ?hit a ?range })) BIND(CONCAT("2 I", STR(?hit)) AS ?cand) }
+        UNION { FILTER(!?xsdRange && REGEX(?text, "^[a-zA-Z][A-Za-z0-9_-]*:[A-Za-z0-9_-]+$"))
+          BIND(STRBEFORE(?text, ":") AS ?pfx)
+          OPTIONAL { ?pn sem:prefixName ?pfx ; sem:namespace ?pns }
+          OPTIONAL { ?shn sh:prefix ?shp ; sh:namespace ?shns FILTER(STR(?shp) = ?pfx) }
+          BIND(IRI(CONCAT(STR(COALESCE(?pns, ?shns)), STRAFTER(?text, ":"))) AS ?named)
+          FILTER(BOUND(?named) && EXISTS { ?named ?anyP ?anyO })
+          FILTER(?isTarget || !BOUND(?range) || EXISTS { ?named a ?range })
+          BIND(IF(?isTarget, CONCAT("4", IF(EXISTS { $this nav:root ?root0 . ?named (^nav:from/nav:to)* ?root0 } || NOT EXISTS { $this nav:root ?anyRoot0 }, "0", "1"), "9999 I", STR(?named)),
+               CONCAT("3 I", STR(?named))) AS ?cand) }
+        UNION { FILTER(!?isTarget && !?xsdRange) ?d nav:subject ?sub . ?sub ?prop ?cur . FILTER(isLiteral(?cur)) BIND(CONCAT("5 ", IF(isIRI(?text), CONCAT("I", STR(?text)), CONCAT("L", STR(DATATYPE(?text)), " ", ENCODE_FOR_URI(STR(?text))))) AS ?cand) }
+        UNION { FILTER(?isTarget) ?anchored nav:anchor ?text . FILTER(isIRI(?anchored)) BIND(CONCAT("3 I", STR(?anchored)) AS ?cand) }
+        UNION { FILTER(?isTarget && !CONTAINS(?text, ":") && REGEX(?text, "^[A-Za-z0-9_.~-]+$"))
+          { ?pn2 sem:prefixName ?pp2 ; sem:namespace ?ns2 } UNION { ?pn2 sh:prefix ?pp2 ; sh:namespace ?ns2 }
+          BIND(IRI(CONCAT(STR(?ns2), ?text)) AS ?named2)
+          FILTER EXISTS { ?named2 ?anyP2 ?anyO2 }
+          BIND(STR(9999 - STRLEN(STR(?ns2))) AS ?len2)
+          BIND(CONCAT("4", IF(EXISTS { $this nav:root ?root2 . ?named2 (^nav:from/nav:to)* ?root2 } || NOT EXISTS { $this nav:root ?anyRoot2 }, "0", "1"),
+               SUBSTR("0000", STRLEN(?len2) + 1), ?len2, " I", STR(?named2)) AS ?cand) }
+      }
+    } GROUP BY ?k ?d ?ord ?flags }
+    FILTER(BOUND(?best))
+  } } } }
+  # The segments of the path and the fragment, in order.
+  { SELECT (GROUP_CONCAT(DISTINCT CONCAT(?k, "\\n"); separator="") AS ?S) WHERE {
+      $event beh:value ?address0 . BIND(STR(?address0) AS ?address)
+      BIND(IF(CONTAINS(?address, "#"), STRAFTER(?address, "#"), "") AS ?fragment)
+      BIND(IF(CONTAINS(?address, "#"), STRBEFORE(?address, "#"), ?address) AS ?beforeFragment)
+      BIND(IF(CONTAINS(?beforeFragment, "?"), STRAFTER(?beforeFragment, "?"), "") AS ?search)
+      BIND(IF(CONTAINS(?beforeFragment, "?"), STRBEFORE(?beforeFragment, "?"), ?beforeFragment) AS ?path0)
+      BIND(REPLACE(IF(STRSTARTS(?path0, "/"), ?path0, CONCAT("/", ?path0)), "/index\\\\.html?$", "/") AS ?pathname)
+      OPTIONAL { $this nav:base ?base0 }
+      BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
+      BIND(IF(STRSTARTS(?pathname, ?base), SUBSTR(?pathname, STRLEN(?base) + 1), "") AS ?under)
+      # The path's segments (0), the fragment's (1) and the query's parameters (2), keyed in order.
+      VALUES ?part { 0 1 2 }
+      BIND(IF(?part = 0, ?under, IF(?part = 1, ?fragment, ?search)) AS ?src)
+      BIND(IF(?part = 2, "[^&]+", "[^/]+") AS ?pattern)
+      (?src ?pattern) sx:matches (?raw ?start)
+      FILTER(?part < 2)
+      BIND(CONCAT(STR(?part), SUBSTR("000000", STRLEN(STR(?start))), STR(?start)) AS ?k)
+  } }
+    # An address from before paths: its fragment's first segment is a top-level path dimension's (#docs/rules).
+    BIND(EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kml ?ksl ?kl ?dsl ?el ?ol ?fll) FILTER(STRSTARTS(?kl, "1") && STRENDS(?fll, "0") && EXISTS { ?dl0 nav:carriedBy nav:Path FILTER(STR(?dl0) = ?dsl) FILTER NOT EXISTS { ?dl0 nav:parent ?pl0 } }
+        && NOT EXISTS { (?S "([^\\\\n]+)\\\\n") sx:matches (?slm ?sls ?slk) FILTER(STRSTARTS(?slk, "1") && ?slk < ?kl) }) } AS ?legacy)
+    LATERAL { OPTIONAL {
+      { # A segment read by the first dimension (in order) that knows it, opened by earlier segments and not read before;
+         # every earlier segment of its part read.
+        (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?km ?ks ?k ?ds ?e ?o ?fl) FILTER(IF(?legacy, STRSTARTS(?k, "1"), STRSTARTS(?k, "0") || (STRSTARTS(?k, "1") && STRSTARTS(?fl, "1"))) && STRENDS(?fl, "0")) BIND(IRI(?ds) AS ?d)
+        FILTER NOT EXISTS { ?d nav:parent* ?xa . ?xa nav:parent ?ya .
+        FILTER NOT EXISTS { ?xa nav:when ?wa . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmoa ?ksoa ?koa ?dsoa ?eoa ?ooa ?floa) FILTER(?koa < ?k && ?dsoa = STR(?ya) && IF(?legacy, STRSTARTS(?koa, "1"), STRSTARTS(?koa, "0") || (STRSTARTS(?koa, "1") && STRSTARTS(?floa, "1"))) && STRENDS(?floa, "0") && ?eoa = IF(isIRI(?wa), CONCAT("I", STR(?wa)), CONCAT("L", STR(DATATYPE(?wa)), " ", ENCODE_FOR_URI(STR(?wa))))) } }
+        FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfa ?ksfa ?kfa ?dsfa ?efa ?ofa ?flfa) FILTER(?kfa < ?k && ?dsfa = ?ds && IF(?legacy, STRSTARTS(?kfa, "1"), STRSTARTS(?kfa, "0") || (STRSTARTS(?kfa, "1") && STRSTARTS(?flfa, "1"))) && STRENDS(?flfa, "0")) }
+        FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmb ?ksb ?kb ?dsb ?eb ?ob ?flb) FILTER(?kb = ?k && ?dsb != ?ds && ?ob < ?o && IF(?legacy, STRSTARTS(?kb, "1"), STRSTARTS(?kb, "0") || (STRSTARTS(?kb, "1") && STRSTARTS(?flb, "1"))) && STRENDS(?flb, "0")) BIND(IRI(?dsb) AS ?db)
+          FILTER NOT EXISTS { ?db nav:parent* ?xb . ?xb nav:parent ?yb .
+        FILTER NOT EXISTS { ?xb nav:when ?wb . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmob ?ksob ?kob ?dsob ?eob ?oob ?flob) FILTER(?kob < ?k && ?dsob = STR(?yb) && IF(?legacy, STRSTARTS(?kob, "1"), STRSTARTS(?kob, "0") || (STRSTARTS(?kob, "1") && STRSTARTS(?flob, "1"))) && STRENDS(?flob, "0") && ?eob = IF(isIRI(?wb), CONCAT("I", STR(?wb)), CONCAT("L", STR(DATATYPE(?wb)), " ", ENCODE_FOR_URI(STR(?wb))))) } }
+          FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfb ?ksfb ?kfb ?dsfb ?efb ?ofb ?flfb) FILTER(?kfb < ?k && ?dsfb = ?dsb && IF(?legacy, STRSTARTS(?kfb, "1"), STRSTARTS(?kfb, "0") || (STRSTARTS(?kfb, "1") && STRSTARTS(?flfb, "1"))) && STRENDS(?flfb, "0")) } }
+        FILTER NOT EXISTS { (?S "([^\\\\n]+)\\\\n") sx:matches (?sma ?ssa ?ja) FILTER(SUBSTR(?ja, 1, 1) = SUBSTR(?k, 1, 1) && ?ja < ?k)
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmrua ?ksrua ?ja ?dsrua ?erua ?orua ?flrua) FILTER(IF(?legacy, STRSTARTS(?ja, "1"), STRSTARTS(?ja, "0") || (STRSTARTS(?ja, "1") && STRSTARTS(?flrua, "1"))) && STRENDS(?flrua, "0")) BIND(IRI(?dsrua) AS ?drua)
+      FILTER NOT EXISTS { ?drua nav:parent* ?xrua . ?xrua nav:parent ?yrua .
+        FILTER NOT EXISTS { ?xrua nav:when ?wrua . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmorua ?ksorua ?korua ?dsorua ?eorua ?oorua ?florua) FILTER(?korua < ?ja && ?dsorua = STR(?yrua) && IF(?legacy, STRSTARTS(?korua, "1"), STRSTARTS(?korua, "0") || (STRSTARTS(?korua, "1") && STRSTARTS(?florua, "1"))) && STRENDS(?florua, "0") && ?eorua = IF(isIRI(?wrua), CONCAT("I", STR(?wrua)), CONCAT("L", STR(DATATYPE(?wrua)), " ", ENCODE_FOR_URI(STR(?wrua))))) } }
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfrua ?ksfrua ?kfrua ?dsfrua ?efrua ?ofrua ?flfrua) FILTER(?kfrua < ?ja && ?dsfrua = ?dsrua && IF(?legacy, STRSTARTS(?kfrua, "1"), STRSTARTS(?kfrua, "0") || (STRSTARTS(?kfrua, "1") && STRSTARTS(?flfrua, "1"))) && STRENDS(?flfrua, "0")) } } }
+        BIND(CONCAT("1\\t", ?ds, "\\t", ?e, "\\n") AS ?line)
+      } UNION {
+        # The first segment of the fragment nothing reads may name the target, and the values that show it.
+        (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmt ?kst ?kt ?dst ?et ?ot ?flt) FILTER(IF(?legacy, STRSTARTS(?kt, "1"), STRSTARTS(?kt, "0") || (STRSTARTS(?kt, "1") && STRSTARTS(?flt, "1"))) && STRENDS(?flt, "1"))
+        FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmrt ?ksrt ?kt ?dsrt ?ert ?ort ?flrt) FILTER(IF(?legacy, STRSTARTS(?kt, "1"), STRSTARTS(?kt, "0") || (STRSTARTS(?kt, "1") && STRSTARTS(?flrt, "1"))) && STRENDS(?flrt, "0")) BIND(IRI(?dsrt) AS ?drt)
+      FILTER NOT EXISTS { ?drt nav:parent* ?xrt . ?xrt nav:parent ?yrt .
+        FILTER NOT EXISTS { ?xrt nav:when ?wrt . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmort ?ksort ?kort ?dsort ?eort ?oort ?flort) FILTER(?kort < ?kt && ?dsort = STR(?yrt) && IF(?legacy, STRSTARTS(?kort, "1"), STRSTARTS(?kort, "0") || (STRSTARTS(?kort, "1") && STRSTARTS(?flort, "1"))) && STRENDS(?flort, "0") && ?eort = IF(isIRI(?wrt), CONCAT("I", STR(?wrt)), CONCAT("L", STR(DATATYPE(?wrt)), " ", ENCODE_FOR_URI(STR(?wrt))))) } }
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfrt ?ksfrt ?kfrt ?dsfrt ?efrt ?ofrt ?flfrt) FILTER(?kfrt < ?kt && ?dsfrt = ?dsrt && IF(?legacy, STRSTARTS(?kfrt, "1"), STRSTARTS(?kfrt, "0") || (STRSTARTS(?kfrt, "1") && STRSTARTS(?flfrt, "1"))) && STRENDS(?flfrt, "0")) } }
+        FILTER NOT EXISTS { (?S "([^\\\\n]+)\\\\n") sx:matches (?smt ?sst ?jt) FILTER(SUBSTR(?jt, 1, 1) = SUBSTR(?kt, 1, 1) && ?jt < ?kt)
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmrut ?ksrut ?jt ?dsrut ?erut ?orut ?flrut) FILTER(IF(?legacy, STRSTARTS(?jt, "1"), STRSTARTS(?jt, "0") || (STRSTARTS(?jt, "1") && STRSTARTS(?flrut, "1"))) && STRENDS(?flrut, "0")) BIND(IRI(?dsrut) AS ?drut)
+      FILTER NOT EXISTS { ?drut nav:parent* ?xrut . ?xrut nav:parent ?yrut .
+        FILTER NOT EXISTS { ?xrut nav:when ?wrut . (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmorut ?ksorut ?korut ?dsorut ?eorut ?oorut ?florut) FILTER(?korut < ?jt && ?dsorut = STR(?yrut) && IF(?legacy, STRSTARTS(?korut, "1"), STRSTARTS(?korut, "0") || (STRSTARTS(?korut, "1") && STRSTARTS(?florut, "1"))) && STRENDS(?florut, "0") && ?eorut = IF(isIRI(?wrut), CONCAT("I", STR(?wrut)), CONCAT("L", STR(DATATYPE(?wrut)), " ", ENCODE_FOR_URI(STR(?wrut))))) } }
+      FILTER NOT EXISTS { (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmfrut ?ksfrut ?kfrut ?dsfrut ?efrut ?ofrut ?flfrut) FILTER(?kfrut < ?jt && ?dsfrut = ?dsrut && IF(?legacy, STRSTARTS(?kfrut, "1"), STRSTARTS(?kfrut, "0") || (STRSTARTS(?kfrut, "1") && STRSTARTS(?flfrut, "1"))) && STRENDS(?flfrut, "0")) } } }
+        LATERAL { { BIND(CONCAT("0\\t", ?dst, "\\t", ?et, "\\n") AS ?line) }
+        UNION
+        { BIND(IRI(SUBSTR(?et, 2)) AS ?target) $this nav:root ?root .
+          ?target (^nav:from/nav:to)* ?child . ?edge nav:from ?child ; nav:to ?parent . ?parent (^nav:from/nav:to)* ?root .
+          ?child c:when ?when . ?parent c:cases ?anyCases ; c:controls ?controls ; c:property ?controlled .
+          $this nav:dimensions/rdf:rest*/rdf:first ?shown . ?shown nav:subject ?controls ; nav:property ?controlled . FILTER NOT EXISTS { ?shown a nav:TargetDimension }
+          BIND(CONCAT("0\\t", STR(?shown), "\\t", IF(isIRI(?when), CONCAT("I", STR(?when)), CONCAT("L", STR(DATATYPE(?when)), " ", ENCODE_FOR_URI(STR(?when)))), "\\n") AS ?line) } }
+      }
+    } }
+  } GROUP BY ?K } } }
+      # One value per dimension: the first priority, then the least.
+      LATERAL { OPTIONAL { (?R "([0-9])\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?rm ?rs ?rp ?rd ?re)
+        FILTER NOT EXISTS { (?R "([0-9])\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?rm2 ?rs2 ?rp2 ?rd ?re2) FILTER(?rp2 < ?rp || (?rp2 = ?rp && ?re2 < ?re)) }
+        BIND(CONCAT(?rd, "\\t", ?re, "\\n") AS ?rline) } }
+    } GROUP BY ?K } } }
+    LATERAL { OPTIONAL {
+      $this nav:dimensions/rdf:rest*/rdf:first ?d .
+      OPTIONAL { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?vm ?vs ?vd ?ve) FILTER(?vd = STR(?d)) }
+      # Left out (nav:implicit), on the path or in the fragment: each parent on the way up has, read or left out, a value it applies under.
+      OPTIONAL { FILTER(!BOUND(?ve)) ?d nav:implicit ?implicit .
+        FILTER NOT EXISTS { ?d a nav:TargetDimension } FILTER EXISTS { ?d nav:carriedBy ?ic FILTER(?ic IN (nav:Path, nav:Fragment)) }
+        FILTER NOT EXISTS { ?d nav:parent* ?ix . ?ix nav:parent ?iy .
+          FILTER NOT EXISTS { $this nav:dimensions/rdf:rest*/rdf:first ?iy . ?ix nav:when ?iw .
+            FILTER(EXISTS { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?im ?is ?iyd ?iye) FILTER(?iyd = STR(?iy) && ?iye = IF(isIRI(?iw), CONCAT("I", STR(?iw)), CONCAT("L", STR(DATATYPE(?iw)), " ", ENCODE_FOR_URI(STR(?iw))))) }
+                || (NOT EXISTS { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?im2 ?is2 ?iyd2 ?iye2) FILTER(?iyd2 = STR(?iy)) } && EXISTS { ?iy nav:implicit ?iw })) } } }
+      # In the query.
+      OPTIONAL { FILTER(!BOUND(?ve) && !BOUND(?implicit)) (?K "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?kmq ?ksq ?kq ?dsq ?eq ?oq ?flq) FILTER(STRSTARTS(?kq, "2") && ?dsq = STR(?d)) }
+      BIND(COALESCE(?ve, IF(BOUND(?implicit), IF(isIRI(?implicit), CONCAT("I", STR(?implicit)), CONCAT("L", STR(DATATYPE(?implicit)), " ", ENCODE_FOR_URI(STR(?implicit)))), ?eq)) AS ?next)
+      FILTER(BOUND(?next))
+      BIND(CONCAT(STR(?d), "\\t", ?next, "\\n") AS ?nline)
+    } }
+  } } } }
+  $this nav:dimensions/rdf:rest*/rdf:first ?d .
+  ?d nav:subject ?subject ; nav:property ?property .
+  FILTER EXISTS { ?d nav:carriedBy ?carrier FILTER(?carrier IN (nav:Path, nav:Fragment, nav:Query)) }
+  BIND(EXISTS { ?d a nav:TargetDimension } AS ?isTarget)
+  LATERAL { OPTIONAL { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm ?ns ?nd ?next0) FILTER(?nd = STR(?d))
+    # It applies under what was read and where we are for the rest: each parent's value (read, else now) is one its child applies under.
+    FILTER(?isTarget || NOT EXISTS { ?d nav:parent* ?x . ?x nav:parent ?y .
+      FILTER NOT EXISTS { $this nav:dimensions/rdf:rest*/rdf:first ?y . ?x nav:when ?w .
+        FILTER(EXISTS { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm2 ?ns2 ?yd ?ye) FILTER(?yd = STR(?y) && ?ye = IF(isIRI(?w), CONCAT("I", STR(?w)), CONCAT("L", STR(DATATYPE(?w)), " ", ENCODE_FOR_URI(STR(?w))))) }
+            || (NOT EXISTS { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm3 ?ns3 ?yd3 ?ye3) FILTER(?yd3 = STR(?y)) } && EXISTS { ?y nav:subject ?ys ; nav:property ?yp . ?ys ?yp ?w })) } })
+  } }
+  BIND(IF(STRSTARTS(?next0, "I"), IRI(SUBSTR(?next0, 2)), STRDT(sx:decodeURI(STRAFTER(?next0, " ")), IRI(STRBEFORE(SUBSTR(?next0, 2), " ")))) AS ?next)
+  # Always bound (a LATERAL group would bind an unbound ?next itself).
+  BIND(COALESCE(?next, <urn:semblance:none>) AS ?given)
+  # Unchanged when it is the one value now.
+  BIND(BOUND(?next) && EXISTS { ?subject ?property ?next } && NOT EXISTS { ?subject ?property ?other FILTER(!sameTerm(?other, ?next)) } AS ?same)
+  LATERAL { { FILTER(BOUND(?next) && !?same) }
+  UNION
+  { $this nav:dimensions/rdf:rest*/rdf:first ?td . ?td a nav:TargetDimension .
+  FILTER(?d = ?td && !sameTerm(?given, <urn:semblance:none>))
+  $this nav:root ?root .
+  ?given (^nav:from/nav:to)* ?part . ?edge nav:from ?part ; nav:to ?container . ?container (^nav:from/nav:to)* ?root .
+  ?class nav:reveal ?reveal . ?reveal nav:via ?via ; nav:sets ?sets .
+  FILTER(STRSTARTS(STR(?edge), CONCAT(STR(?via), "/~up-")))
+  ?container a/rdfs:subClassOf* ?class .
+  OPTIONAL { ?reveal nav:value ?value0 }
+  BIND(COALESCE(?value0, ?part) AS ?value)
+  FILTER(!(EXISTS { ?container ?sets ?value } && NOT EXISTS { ?container ?sets ?otherValue FILTER(!sameTerm(?otherValue, ?value)) })) } }
+}""" ;
     sem:function "navigation:follow" .
 
 # What the effect reports (in the navigation graph, urn:semblance:navigation).
