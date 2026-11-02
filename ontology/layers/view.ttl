@@ -136,6 +136,11 @@ iv:fromBy a owl:ObjectProperty ; rdfs:range rdf:Property .
 iv:propertyBy a owl:ObjectProperty ; rdfs:range rdf:Property .
 iv:run a owl:ObjectProperty ; rdfs:range iv:View ;
     rdfs:comment "Written by the runtime, on a node that names a query (iv:perQuery): the view that runs it, whose result set it shows."@en .
+iv:runOf a owl:ObjectProperty ; rdfs:domain iv:View ;
+    rdfs:comment "Written by the runtime on a run of an iv:perQuery template: the query it runs (a node naming several, iv:listed, tells its runs apart by it)."@en .
+iv:listed a owl:DatatypeProperty ; rdfs:domain iv:View ; rdfs:range xsd:boolean ;
+    rdfs:comment """With iv:perQuery: the property holds a list of queries (an rdf:List), each a run of its own. A node that
+binds a variable (iv:bindsBy) runs the nth query of its list as <node>/~run-n."""@en .
 iv:instanceOf a owl:ObjectProperty ; rdfs:comment "Written by the runtime on a view per instance: the view it is an instance of."@en .
 iv:focus a owl:ObjectProperty ; rdfs:comment "Written by the runtime on a view per instance: its instance ($this)."@en .
 iv:parameter a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Parameter ;

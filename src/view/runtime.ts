@@ -7,7 +7,7 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import { md5 } from '../components/data.ts'
 import { createContext, type RuleContext } from '../engine/context.ts'
-import { NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
+import { NS, PROV, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
 import { type Delta, mint, owningFocus, parseDuration, quadKey, termKey } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
@@ -487,6 +487,7 @@ export class ViewRuntime {
     const bind = binds ? { variable: bindProp('variableBy'), from: bindProp('fromBy'), property: bindProp('propertyBy') } : undefined
     return {
       property: property.value,
+      listed: this.one(s, IV + 'listed')?.value === 'true',
       classes: classes.size ? classes : undefined,
       followedBy: this.one(s, IV + 'followedBy')?.value,
       bind: bind?.variable && bind.from && bind.property ? (bind as PerQuery['bind']) : undefined,
@@ -496,28 +497,29 @@ export class ViewRuntime {
   /**
    * The views of an iv:perQuery template: one per query node that a node (of iv:referrerClass) names by
    * the property, at the query's own IRI - unless the query is a view of its own - and one per referrer
-   * that binds a variable (iv:bindsBy), at <referrer>/~run.
+   * that binds a variable (iv:bindsBy), at <referrer>/~run (<referrer>/~run-<n> for the nth query of
+   * its list, iv:listed).
    */
   private queryDefinitions(tpl: string, pq: PerQuery): Definition[] {
     const f = this.store.factory
     const nn = (x: string) => f.namedNode(x)
     this.templates.set(tpl, { perQuery: pq })
     const byIri = new Map<string, Definition>()
-    for (const q of this.store.match(null, nn(pq.property), null)) {
-      if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'NamedNode') continue
-      const ref = q.subject.value
-      const query = q.object.value
-      if (pq.classes && !this.store.match(q.subject, nn(RDF_TYPE), null).some((t) => pq.classes!.has(t.object.value))) continue
-      if (!this.text(q.object, SEM.select) && !this.text(q.object, SEM.construct)) continue
-      if (this.store.match(q.object, nn(RDF_TYPE), nn(IV + 'View')).length) continue
-      const name = pq.bind ? this.one(q.subject, pq.bind.variable)?.value : undefined
-      const from = name ? this.one(q.subject, pq.bind!.from) : undefined
-      const property = name ? this.one(q.subject, pq.bind!.property) : undefined
+    for (const { subject, object, n } of this.namedQueries(pq)) {
+      if (subject.termType !== 'NamedNode' || object.termType !== 'NamedNode') continue
+      const ref = subject.value
+      const query = object.value
+      if (pq.classes && !this.store.match(subject, nn(RDF_TYPE), null).some((t) => pq.classes!.has(t.object.value))) continue
+      if (!this.text(object, SEM.select) && !this.text(object, SEM.construct)) continue
+      if (this.store.match(object, nn(RDF_TYPE), nn(IV + 'View')).length) continue
+      const name = pq.bind ? this.one(subject, pq.bind.variable)?.value : undefined
+      const from = name ? this.one(subject, pq.bind!.from) : undefined
+      const property = name ? this.one(subject, pq.bind!.property) : undefined
       const bind = name && from?.termType === 'NamedNode' && property?.termType === 'NamedNode' ? { name, from: from.value, property: property.value } : undefined
-      const iri = bind ? mint(ref, 'run') : query
+      const iri = bind ? mint(ref, pq.listed ? `run-${n}` : 'run') : query
       const def = byIri.get(iri) ?? { iri, node: tpl, query, referrers: [], bind }
-      def.referrers!.push(ref)
-      if (pq.followedBy && this.store.match(q.subject, nn(pq.followedBy), null).some((t) => t.object.value === 'true')) def.strategy = IV + 'Auto'
+      if (!def.referrers!.includes(ref)) def.referrers!.push(ref)
+      if (pq.followedBy && this.store.match(subject as NamedNode, nn(pq.followedBy), null).some((t) => t.object.value === 'true')) def.strategy = IV + 'Auto'
       byIri.set(iri, def)
     }
     const defs = [...byIri.values()]
@@ -529,6 +531,33 @@ export class ViewRuntime {
     return defs
   }
 
+  /**
+   * The (node, query) pairs an iv:perQuery template's property says: its object, or each member of the
+   * list it holds (iv:listed; n, from 1, is the member's place). A listed template remembers the list's
+   * cells, so a change to one of them (rdf:first, rdf:rest) defines its views again.
+   */
+  private namedQueries(pq: PerQuery): { subject: Term; object: Term; n: number }[] {
+    const f = this.store.factory
+    const out: { subject: Term; object: Term; n: number }[] = []
+    if (pq.listed) pq.cells = new Set()
+    for (const q of this.store.match(null, f.namedNode(pq.property), null)) {
+      if (!pq.listed) {
+        out.push({ subject: q.subject, object: q.object, n: 1 })
+        continue
+      }
+      const seen = new Set<string>()
+      let cell: Term | undefined = q.object
+      for (let n = 1; cell && cell.value !== RDF_NIL && !seen.has(termKey(cell)); n++) {
+        seen.add(termKey(cell))
+        pq.cells!.add(termKey(cell))
+        const first = this.store.match(cell as NamedNode, f.namedNode(RDF_FIRST), null)[0]?.object
+        if (first) out.push({ subject: q.subject, object: first, n })
+        cell = this.store.match(cell as NamedNode, f.namedNode(RDF_REST), null)[0]?.object
+      }
+    }
+    return out
+  }
+
   /** The nodes that name a query by an iv:perQuery template's property (of its referrer class). */
   private queryReferrers(query: string): string[] {
     const f = this.store.factory
@@ -536,9 +565,10 @@ export class ViewRuntime {
     for (const t of this.templates.values()) {
       const pq = t.perQuery
       if (!pq) continue
-      for (const q of this.store.match(null, f.namedNode(pq.property), f.namedNode(query))) {
+      for (const q of this.namedQueries(pq)) {
+        if (q.object.value !== query || q.object.termType !== 'NamedNode') continue
         if (q.subject.termType !== 'NamedNode') continue
-        if (pq.classes && !this.store.match(q.subject, f.namedNode(RDF_TYPE), null).some((t) => pq.classes!.has(t.object.value))) continue
+        if (pq.classes && !this.store.match(q.subject as NamedNode, f.namedNode(RDF_TYPE), null).some((t) => pq.classes!.has(t.object.value))) continue
         if (pq.bind && this.one(q.subject, pq.bind.variable)) continue
         out.add(q.subject.value)
       }
@@ -549,6 +579,7 @@ export class ViewRuntime {
   /** Whether a changed triple can change which views an iv:perQuery template defines. */
   private perQueryReads(pq: PerQuery, q: Quad): boolean {
     const p = q.predicate.value
+    if (pq.cells && (p === RDF_FIRST || p === RDF_REST)) return pq.cells.has(termKey(q.subject))
     if (p === pq.property || p === pq.followedBy || p === SEM.select || p === SEM.construct) return true
     if (pq.bind && (p === pq.bind.variable || p === pq.bind.from || p === pq.bind.property)) return true
     return p === RDF_TYPE && (q.object.value === IV + 'View' || !!pq.classes?.has(q.object.value))
@@ -576,7 +607,11 @@ export class ViewRuntime {
     const nodes = new Set<string>()
     const members = new Set<string>()
     for (const q of [...changes.add, ...changes.remove]) {
-      if (q.subject.termType !== 'NamedNode') continue
+      // A cell of a list of queries (iv:listed) may be a blank node.
+      if (q.subject.termType !== 'NamedNode') {
+        for (const [tpl, t] of this.templates) if (t.perQuery?.cells && this.perQueryReads(t.perQuery, q)) members.add(tpl)
+        continue
+      }
       const s = q.subject.value
       if (q.predicate.value === RDF_TYPE && q.object.value === IV + 'View') nodes.add(s)
       else if (this.views.has(s) || this.templates.has(s) || this.undefinedViews.has(s)) nodes.add(s)
@@ -1081,9 +1116,10 @@ export class ViewRuntime {
     view.params = params
     view.paramNodes = paramNodes
     view.onRequest = onRequest
-    view.text = this.queryText(def, params).query
+    const written = text ?? this.queryText(def, params)
+    view.text = written.query
     // A run with a parameter that has no value would read every triple ($name a variable): none.
-    view.missing = text?.missing
+    view.missing = written.missing
     view.whileShown = this.one(s, IV + 'whileShown')?.value ?? def.focus
     view.deltaLog = this.one(s, IV + 'deltaLog')?.value
     if (view.deltaLog) view.keepHistory(this.retained(view.deltaLog) ?? 12)
@@ -1292,6 +1328,10 @@ export class ViewRuntime {
 /** An iv:perQuery template: the property that names a query, the referrers' classes, and what they may say. */
 interface PerQuery {
   property: string
+  /** iv:listed: the property holds a list of queries. */
+  listed?: boolean
+  /** The cells of those lists, as last read (termKey). */
+  cells?: Set<string>
   classes?: Set<string>
   followedBy?: string
   bind?: { variable: string; from: string; property: string }
@@ -1979,7 +2019,7 @@ export class MaintainedView implements ViewHandle {
     t(v, IV + 'strategy', nn(IV + (this.onRequest ? 'OnRequest' : this.plan.kind === 'recompute' ? 'Recompute' : 'Incremental')))
     // Each node that names its query says which view runs it (iv:perQuery).
     for (const r of this.def.referrers ?? []) t(nn(r), IV + 'run', v)
-    if (this.def.query) t(v, IV + 'instanceOf', nn(this.def.node))
+    if (this.def.query) t(v, IV + 'instanceOf', nn(this.def.node)), t(v, IV + 'runOf', nn(this.def.query))
     t(this.activity, RDF_TYPE, nn(PROV.Activity))
     t(this.activity, PROV.used, v)
     if (this.def.focus) {

@@ -443,7 +443,7 @@ ui:activityCard a c:Flippable ; c:front ex:activity .
 ui:logCard a c:Flippable ; c:front ui:changeLog .
 ui:changeLog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:rememberLogSwitch ui:changeLogHead ui:changeLogMembers ) .
-ui:changeLogHead a c:QueryView ; c:queries ( ui:qStream ui:qStreamView ) .
+ui:changeLogHead a c:QueryView ; c:followUpdates true ; c:queries ( ui:qStream ui:qStreamView ) .
 ui:changeLogMembers a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 8 ;
     c:emptyText "Click, type or tick something. Each relevant interaction becomes an immutable member of the beh:ChangeLog LDES, with the size of the change it caused." .
 ui:qStream a sem:Query ; rdfs:label "the event stream" ;
