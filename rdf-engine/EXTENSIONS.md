@@ -118,6 +118,17 @@ invalid tag or option (`Intl` throws) is an error. Results are simple literals.
 The time zone `sx:formatDateTime` uses when the options name none is a store
 option (`timeZone`, default the host's own), so tests can fix it (`"UTC"`).
 
+Three `sx:formatDateTime` options are not `Intl`'s; with them a rule reads a
+locale's calendar as patterns and names (`formatToParts`, `Intl.Locale`):
+
+| option | result |
+|---|---|
+| `part=<type>` | the text of the first field of that type alone (`part=month` with `month=long`: `"жовтня"` in a Ukrainian long date); `""` when there is none |
+| `fields=<type>:<text>,…` | the formatted text with each listed field's text replaced (`fields=day:%d,month:%m,year:%y`: `"%d.%m.%y"` in German); other fields as formatted |
+| `info=firstDay` | the locale's first day of the week, `1` (Monday) … `7` (Sunday); `dt` is not read |
+| `info=hourCycle` | the resolved hour cycle (`h11`, `h12`, `h23`, `h24`; `""` when the options show no hour) |
+| `info=locale` | `lang` as a canonical tag (`"en-gb"`: `"en-GB"`) |
+
 The engines reach `Intl` through one more `env` import (ABI.md):
 `intl(op, in_ptr, in_len, out_ptr, out_cap) -> i32`, with UTF-8 arguments
 separated by NUL; it returns the result's length, or minus the length needed

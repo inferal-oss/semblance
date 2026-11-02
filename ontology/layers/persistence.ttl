@@ -2,6 +2,8 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix ldes: <https://w3id.org/ldes#> .
 @prefix tree: <https://w3id.org/tree#> .
@@ -80,10 +82,158 @@ c:PolicyList a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Every per:Policy: where it remembers, whether it is on, what is stored, and a Forget button."@en ;
     sem:slug "policy-list" .
+# Every policy (sem:watchesAnywhere: what the effect reports about one, or a policy that appears), in the
+# viewer's collation of their labels (an order key from sx:sortKey), its size by sx:formatNumber and its
+# last write's clock time by sx:formatDateTime in the viewer's l10n:formatLocale (sx:Locale), its status
+# in the viewer's language (the phrases below).
 c:PolicyListRendering a sem:Rendering ; sem:targets c:PolicyList ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Locale (sx:formatNumber, sx:formatDateTime): sizes and times formatted for display." ;
-    sem:needsExtension sx:Locale .
+    sem:watchesAnywhere per:scope , per:enabled , per:storedSize , per:lastWritten , per:restored .
 c:PolicyListRendering-fn a sem:Rule ; sem:implements c:PolicyListRendering ; sem:function "policy-list" .
+per:StoredPhrase a c:Phrase ; rdfs:label "{n} triples"@en , "трійок: {n}"@uk , "{n} Tripel"@de , "{n} ثلاثيات"@ar .
+per:NothingStoredPhrase a c:Phrase ; rdfs:label "nothing stored yet"@en , "ще нічого не збережено"@uk , "noch nichts gespeichert"@de , "لم يُحفظ شيء بعد"@ar .
+per:OffPhrase a c:Phrase ; rdfs:label "off"@en , "вимкнено"@uk , "aus"@de , "متوقف"@ar .
+per:RestoredPhrase a c:Phrase ; rdfs:label "{n} restored at load"@en , "відновлено під час завантаження: {n}"@uk , "{n} beim Laden wiederhergestellt"@de , "استُعيد {n} عند التحميل"@ar .
+per:SavedPhrase a c:Phrase ; rdfs:label "saved {time}"@en , "збережено о {time}"@uk , "gespeichert um {time}"@de , "حُفظ في {time}"@ar .
+per:ForgetPhrase a c:Phrase ; rdfs:label "Forget {label}"@en , "Забути: {label}"@uk , "{label} vergessen"@de , "نسيان {label}"@ar .
+c:PolicyListRendering-sparql-screen a sem:Rule ;
+    sem:implements c:PolicyListRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Ul ; sem:renders $this ; rdfhtml:attribute ?rootName ; rdfhtml:hasChild ?row .
+  ?rootName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?listLabel .
+  ?row a rdfhtml:Li ; sem:orderKey ?order ; rdfhtml:hasChild ?switch , ?what , ?forget .
+  ?switch ord:immediatelyPrecedes ?what . ?what ord:immediatelyPrecedes ?forget .
+  ?switch a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:attribute ?switchRole , ?switchChecked , ?switchName ; per:toggles ?p ; rdfhtml:hasChild ?thumb .
+  ?switchRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "switch" .
+  ?switchChecked a rdfhtml:Attribute ; rdfhtml:attributeName "aria-checked" ; rdfhtml:attributeValue ?checked .
+  ?switchName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?thumb a rdfhtml:Span ; rdfhtml:attribute ?thumbHidden .
+  ?thumbHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?what a rdfhtml:Div ; rdfhtml:class "sem-what" ; rdfhtml:hasChild ?labelEl , ?statusEl .
+  ?labelEl ord:immediatelyPrecedes ?statusEl .
+  ?labelEl a rdfhtml:Strong ; rdfhtml:hasChild ?labelText . ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?statusEl a rdfhtml:Span ; rdfhtml:hasChild ?statusText . ?statusText a rdfhtml:Text ; rdfhtml:data ?status .
+  ?forget a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-forget" ; rdfhtml:disabled ?disabled ;
+    rdfhtml:attribute ?forgetName ; per:forgets ?p ; rdfhtml:hasChild ?forgetText .
+  ?forgetName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?forgetLabel .
+  ?forgetText a rdfhtml:Text ; rdfhtml:data "⌫" .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:PolicyList .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?rootName)
+  BIND(per:Policy AS ?class)
+  BIND(COALESCE(?class, <urn:semblance:none>) AS ?classN)
+  OPTIONAL { { ?classN l10n:label ?classC } UNION { ?classCAt l10n:of ?classN ; l10n:label ?classC } }
+  OPTIONAL { FILTER(!BOUND(?classC)) ?classN c:label ?classCOnly FILTER(isLiteral(?classCOnly)) }
+  OPTIONAL { ?classRAt l10n:of ?classN ; l10n:name ?classR }
+  OPTIONAL { FILTER(!BOUND(?classR)) ?classN rdfs:label ?classROnly FILTER(isLiteral(?classROnly)) }
+  BIND(STR(COALESCE(?classC, ?classCOnly, ?classR, ?classROnly, REPLACE(STR(?class), "^.*[#/]", ""))) AS ?listLabel)
+  OPTIONAL { ?storedPhraseAt l10n:of per:StoredPhrase ; l10n:name ?storedPhrasePicked }
+  OPTIONAL { FILTER(!BOUND(?storedPhrasePicked)) per:StoredPhrase rdfs:label ?storedPhraseOnly FILTER(LANG(?storedPhraseOnly) = "en") }
+  BIND(STR(COALESCE(?storedPhrasePicked, ?storedPhraseOnly)) AS ?storedPhrase)
+  OPTIONAL { ?nothingPhraseAt l10n:of per:NothingStoredPhrase ; l10n:name ?nothingPhrasePicked }
+  OPTIONAL { FILTER(!BOUND(?nothingPhrasePicked)) per:NothingStoredPhrase rdfs:label ?nothingPhraseOnly FILTER(LANG(?nothingPhraseOnly) = "en") }
+  BIND(STR(COALESCE(?nothingPhrasePicked, ?nothingPhraseOnly)) AS ?nothingPhrase)
+  OPTIONAL { ?offPhraseAt l10n:of per:OffPhrase ; l10n:name ?offPhrasePicked }
+  OPTIONAL { FILTER(!BOUND(?offPhrasePicked)) per:OffPhrase rdfs:label ?offPhraseOnly FILTER(LANG(?offPhraseOnly) = "en") }
+  BIND(STR(COALESCE(?offPhrasePicked, ?offPhraseOnly)) AS ?offPhrase)
+  OPTIONAL { ?restoredPhraseAt l10n:of per:RestoredPhrase ; l10n:name ?restoredPhrasePicked }
+  OPTIONAL { FILTER(!BOUND(?restoredPhrasePicked)) per:RestoredPhrase rdfs:label ?restoredPhraseOnly FILTER(LANG(?restoredPhraseOnly) = "en") }
+  BIND(STR(COALESCE(?restoredPhrasePicked, ?restoredPhraseOnly)) AS ?restoredPhrase)
+  OPTIONAL { ?savedPhraseAt l10n:of per:SavedPhrase ; l10n:name ?savedPhrasePicked }
+  OPTIONAL { FILTER(!BOUND(?savedPhrasePicked)) per:SavedPhrase rdfs:label ?savedPhraseOnly FILTER(LANG(?savedPhraseOnly) = "en") }
+  BIND(STR(COALESCE(?savedPhrasePicked, ?savedPhraseOnly)) AS ?savedPhrase)
+  OPTIONAL { ?forgetPhraseAt l10n:of per:ForgetPhrase ; l10n:name ?forgetPhrasePicked }
+  OPTIONAL { FILTER(!BOUND(?forgetPhrasePicked)) per:ForgetPhrase rdfs:label ?forgetPhraseOnly FILTER(LANG(?forgetPhraseOnly) = "en") }
+  BIND(STR(COALESCE(?forgetPhrasePicked, ?forgetPhraseOnly)) AS ?forgetPhrase)
+  OPTIONAL {
+    ?p a per:Policy . FILTER(isIRI(?p))
+    ?viewer l10n:formatLocale ?locale .
+    BIND(COALESCE(?p, <urn:semblance:none>) AS ?pN)
+    OPTIONAL { { ?pN l10n:label ?pC } UNION { ?pCAt l10n:of ?pN ; l10n:label ?pC } }
+    OPTIONAL { FILTER(!BOUND(?pC)) ?pN c:label ?pCOnly FILTER(isLiteral(?pCOnly)) }
+    OPTIONAL { ?pRAt l10n:of ?pN ; l10n:name ?pR }
+    OPTIONAL { FILTER(!BOUND(?pR)) ?pN rdfs:label ?pROnly FILTER(isLiteral(?pROnly)) }
+    BIND(STR(COALESCE(?pC, ?pCOnly, ?pR, ?pROnly, REPLACE(STR(?p), "^.*[#/]", ""))) AS ?label)
+    OPTIONAL { ?p per:enabled ?enabledRaw }
+    BIND(COALESCE(STR(?enabledRaw) != "false", true) AS ?on)
+    BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale)) AS ?order)
+    BIND(CONCAT(STR($this), "/~p-", SUBSTR(MD5(STR(?p)), 1, 8)) AS ?k)
+    BIND(IF(?on, "true", "false") AS ?checked)
+    OPTIONAL { ?p per:scope ?scope }
+    BIND(COALESCE(?scope, <urn:semblance:none>) AS ?scopeN)
+    OPTIONAL { { ?scopeN l10n:label ?scopeC } UNION { ?scopeCAt l10n:of ?scopeN ; l10n:label ?scopeC } }
+    OPTIONAL { FILTER(!BOUND(?scopeC)) ?scopeN c:label ?scopeCOnly FILTER(isLiteral(?scopeCOnly)) }
+    OPTIONAL { ?scopeRAt l10n:of ?scopeN ; l10n:name ?scopeR }
+    OPTIONAL { FILTER(!BOUND(?scopeR)) ?scopeN rdfs:label ?scopeROnly FILTER(isLiteral(?scopeROnly)) }
+    BIND(STR(COALESCE(?scopeC, ?scopeCOnly, ?scopeR, ?scopeROnly, REPLACE(STR(?scope), "^.*[#/]", ""))) AS ?scopeLabel0)
+    BIND(IF(BOUND(?scope), ?scopeLabel0, "") AS ?scopeLabel)
+    OPTIONAL { ?p per:storedSize ?sizeRaw }
+    BIND(COALESCE(xsd:double(STR(?sizeRaw)), 0) AS ?size)
+    OPTIONAL { ?p per:restored ?restoredRaw }
+    OPTIONAL { ?p per:lastWritten ?when }
+    BIND(COALESCE(sx:formatNumber(?size, ?locale), STR(?size)) AS ?sizeText)
+    BIND(COALESCE(sx:formatNumber(xsd:double(STR(?restoredRaw)), ?locale), STR(?restoredRaw)) AS ?restoredCount)
+    BIND(COALESCE(sx:formatDateTime(?when, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?when)) AS ?whenText)
+    BIND(IF(?size > 0, ?none, "") AS ?disabled)
+  }
+  BIND(IF(CONTAINS(?storedPhrase, "{n}"), CONCAT(STRBEFORE(?storedPhrase, "{n}"), ?sizeText, STRAFTER(?storedPhrase, "{n}")), ?storedPhrase) AS ?storedText)
+  BIND(IF(?on, IF(?size != 0, ?storedText, ?nothingPhrase), ?offPhrase) AS ?amount)
+  BIND(IF(CONTAINS(?restoredPhrase, "{n}"), CONCAT(STRBEFORE(?restoredPhrase, "{n}"), ?restoredCount, STRAFTER(?restoredPhrase, "{n}")), ?restoredPhrase) AS ?restoredText0)
+  BIND(IF(BOUND(?restoredRaw) && STR(?restoredRaw) != "", ?restoredText0, "") AS ?restoredText)
+  BIND(IF(CONTAINS(?savedPhrase, "{time}"), CONCAT(STRBEFORE(?savedPhrase, "{time}"), ?whenText, STRAFTER(?savedPhrase, "{time}")), ?savedPhrase) AS ?savedText0)
+  BIND(IF(BOUND(?when) && STR(?when) != "", ?savedText0, "") AS ?savedText)
+  BIND(CONCAT(IF(?scopeLabel != "", CONCAT(?scopeLabel, " · "), ""), ?amount, IF(?restoredText != "", CONCAT(" · ", ?restoredText), ""),
+    IF(?savedText != "", CONCAT(" · ", ?savedText), "")) AS ?status)
+  BIND(IF(CONTAINS(?forgetPhrase, "{label}"), CONCAT(STRBEFORE(?forgetPhrase, "{label}"), ?label, STRAFTER(?forgetPhrase, "{label}")), ?forgetPhrase) AS ?forgetLabel)
+  BIND(IRI(?k) AS ?row)
+  BIND(IRI(CONCAT(?k, "-switch")) AS ?switch)
+  BIND(IRI(CONCAT(?k, "-switch-role")) AS ?switchRole)
+  BIND(IRI(CONCAT(?k, "-switch-aria-checked")) AS ?switchChecked)
+  BIND(IRI(CONCAT(?k, "-switch-aria-label")) AS ?switchName)
+  BIND(IRI(CONCAT(?k, "-thumb")) AS ?thumb)
+  BIND(IRI(CONCAT(?k, "-thumb-aria-hidden")) AS ?thumbHidden)
+  BIND(IRI(CONCAT(?k, "-what")) AS ?what)
+  BIND(IRI(CONCAT(?k, "-label")) AS ?labelEl)
+  BIND(IRI(CONCAT(?k, "-label-text")) AS ?labelText)
+  BIND(IRI(CONCAT(?k, "-status")) AS ?statusEl)
+  BIND(IRI(CONCAT(?k, "-status-text")) AS ?statusText)
+  BIND(IRI(CONCAT(?k, "-forget")) AS ?forget)
+  BIND(IRI(CONCAT(?k, "-forget-aria-label")) AS ?forgetName)
+  BIND(IRI(CONCAT(?k, "-forget-text")) AS ?forgetText)
+}""" .
+c:PolicyListRendering-sparql-text a sem:Rule ;
+    sem:implements c:PolicyListRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?lineData ; sem:orderKey ?order .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:PolicyList .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    ?p a per:Policy . FILTER(isIRI(?p))
+    ?viewer l10n:formatLocale ?locale .
+    BIND(COALESCE(?p, <urn:semblance:none>) AS ?pN)
+    OPTIONAL { { ?pN l10n:label ?pC } UNION { ?pCAt l10n:of ?pN ; l10n:label ?pC } }
+    OPTIONAL { FILTER(!BOUND(?pC)) ?pN c:label ?pCOnly FILTER(isLiteral(?pCOnly)) }
+    OPTIONAL { ?pRAt l10n:of ?pN ; l10n:name ?pR }
+    OPTIONAL { FILTER(!BOUND(?pR)) ?pN rdfs:label ?pROnly FILTER(isLiteral(?pROnly)) }
+    BIND(STR(COALESCE(?pC, ?pCOnly, ?pR, ?pROnly, REPLACE(STR(?p), "^.*[#/]", ""))) AS ?label)
+    OPTIONAL { ?p per:enabled ?enabledRaw }
+    BIND(COALESCE(STR(?enabledRaw) != "false", true) AS ?on)
+    BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale)) AS ?order)
+    BIND(CONCAT(STR($this), "/~p-", SUBSTR(MD5(STR(?p)), 1, 8)) AS ?k)
+    BIND(CONCAT(IF(?on, "[x] ", "[ ] "), ?label, "\\n") AS ?lineData)
+  }
+  BIND(IRI(CONCAT(?k, "-line")) AS ?line)
+}""" .
 per:toggles a owl:ObjectProperty ; rdfs:comment "On a rendered element: the policy whose per:enabled activating it flips."@en .
 per:forgets a owl:ObjectProperty ; rdfs:comment "On a rendered element: the policy whose stored state activating it drops."@en .
 c:PolicyToggle a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:PolicyList ;

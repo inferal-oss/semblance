@@ -15,13 +15,17 @@ import type { Quad, Term } from '@rdfjs/types'
 import { Parser, Writer } from 'n3'
 import type { ReactionFn } from './behaviour/events.ts'
 import type { FnRule } from './engine/context.ts'
-import { BEH, EVENTS_GRAPH, MOD, NS, PERSIST_GRAPH, RDF_TYPE, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
+import { formatLocale } from './engine/context.ts'
+import { BEH, EVENTS_GRAPH, H, MOD, NS, PERSIST_GRAPH, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
 import { prefixesFor } from './prefixes.ts'
 import { type Delta, mint, parseDuration, quadKey } from './rdf.ts'
 import type { ViewHandle } from './view/runtime.ts'
 import type { Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
-import { labelOf, named, str } from './components/util.ts'
+import { labelOf, named, RDFS_LABEL, str, text } from './components/util.ts'
+import { md5Key } from './components/data.ts'
+import { TUPLE } from './render/order-key.ts'
+import { dateOf, formatDateTime, formatNumber, numberOf, sortKey } from '../rdf-engine/host/intl.ts'
 
 const PER = NS.per
 const PROV = NS.prov
@@ -606,45 +610,73 @@ export class Persistence {
 
 // --- c:PolicyList ------------------------------------------------------------------------------
 
+const DATED = new Set([NS.xsd + 'dateTime', NS.xsd + 'dateTimeStamp', NS.xsd + 'date'])
+
+/** A phrase's first `code` replaced by `value`, as the SPARQL rule's STRBEFORE / STRAFTER do. */
+const fill = (phrase: string, code: string, value: string) => {
+  const i = phrase.indexOf(code)
+  return i < 0 ? phrase : phrase.slice(0, i) + value + phrase.slice(i + code.length)
+}
+
+/**
+ * Every policy, in the viewer's collation of their labels (an order key from sx:sortKey; a row is keyed
+ * by its policy), its size and last write as sx:formatNumber and sx:formatDateTime write them in the
+ * viewer's locale, its status in the viewer's language: as c:PolicyListRendering-sparql does.
+ */
 const policyList: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
+  ctx.readsLanguage()
+  const lang = formatLocale(ctx.languages)
   const policies = ctx
     .match(null, RDF_TYPE, PER + 'Policy')
     .map((q) => q.subject)
     .filter(named)
-    .sort((a, b) => labelOf(ctx, a).localeCompare(labelOf(ctx, b)))
+    .map((p) => {
+      const label = labelOf(ctx, p)
+      return { p, label, on: ctx.object(p, PER + 'enabled')?.value !== 'false', k: 'p-' + md5Key(p.value), order: TUPLE + 's' + sortKey(label, lang) }
+    })
   if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Div', {}, policies.map((p, i) => o.text('l' + i, `[${ctx.object(p, PER + 'enabled')?.value === 'false' ? ' ' : 'x'}] ${labelOf(ctx, p)}\n`))))
+    const root = o.el('root', 'Div')
+    for (const { label, on, k, order } of policies) {
+      const line = o.text(k + '-line', `[${on ? 'x' : ' '}] ${label}\n`)
+      o.t(line, SEM.orderKey, order).t(root, H.hasChild, line)
+    }
+    o.renders(root)
     return o.quads
   }
-  const rows = policies.map((p, i) => {
-    const on = ctx.object(p, PER + 'enabled')?.value !== 'false'
+  const phrase = (name: string) => text(ctx, ctx.nn(PER + name), RDFS_LABEL) ?? ''
+  const rows = policies.map(({ p, label, on, k, order }) => {
     const scope = ctx.object(p, PER + 'scope')
     const size = Number(str(ctx.object(p, PER + 'storedSize')) ?? 0)
     const restored = str(ctx.object(p, PER + 'restored'))
-    const when = str(ctx.object(p, PER + 'lastWritten'))
-    const k = 'p' + i
-    const toggle = o.el(k + '-switch', 'Button', { type: 'button', role: 'switch', 'aria-checked': String(on), 'aria-label': labelOf(ctx, p) }, [o.el(k + '-thumb', 'Span', { 'aria-hidden': 'true' })])
+    const when = ctx.object(p, PER + 'lastWritten')
+    const at = when?.termType === 'Literal' && DATED.has(when.datatype.value) ? dateOf(when.value) : undefined
+    const time = at && !Number.isNaN(at.getTime()) ? formatDateTime(at, lang, 'hour=2-digit;minute=2-digit;second=2-digit;hour12=false', ctx.timeZone) : when?.value
+    const toggle = o.el(k + '-switch', 'Button', { type: 'button', role: 'switch', 'aria-checked': String(on), 'aria-label': label }, [o.el(k + '-thumb', 'Span', { 'aria-hidden': 'true' })])
     o.t(toggle, PER + 'toggles', p)
     const forget = o.el(k + '-forget', 'Button', { type: 'button', class: 'sem-forget', disabled: size > 0 ? undefined : '' }, [o.text(k + '-forget-text', '⌫')])
-    o.attr(forget, 'aria-label', `Forget ${labelOf(ctx, p)}`)
+    o.attr(forget, 'aria-label', fill(phrase('ForgetPhrase'), '{label}', label))
     o.t(forget, PER + 'forgets', p)
     const status = [
       scope ? labelOf(ctx, scope) : '',
-      on ? (size ? `${size} triples` : 'nothing stored yet') : 'off',
-      restored ? `${restored} restored at load` : '',
-      when ? `saved ${when.slice(11, 19)}` : '',
+      on ? (size ? fill(phrase('StoredPhrase'), '{n}', formatNumber(size, lang)) : phrase('NothingStoredPhrase')) : phrase('OffPhrase'),
+      restored ? fill(phrase('RestoredPhrase'), '{n}', formatNumber(numberOf(restored), lang)) : '',
+      time ? fill(phrase('SavedPhrase'), '{time}', time) : '',
     ].filter(Boolean)
-    return o.el(k, 'Li', {}, [
+    const row = o.el(k, 'Li', {}, [
       toggle,
       o.el(k + '-what', 'Div', { class: 'sem-what' }, [
-        o.el(k + '-label', 'Strong', {}, [o.text(k + '-label-text', labelOf(ctx, p))]),
+        o.el(k + '-label', 'Strong', {}, [o.text(k + '-label-text', label)]),
         o.el(k + '-status', 'Span', {}, [o.text(k + '-status-text', status.join(' · '))]),
       ]),
       forget,
     ])
+    o.t(row, SEM.orderKey, order)
+    return row
   })
-  o.renders(o.el('root', 'Ul', { 'aria-label': labelOf(ctx, ctx.nn(PER + 'Policy')) }, rows))
+  const root = o.el('root', 'Ul', { 'aria-label': labelOf(ctx, ctx.nn(PER + 'Policy')) })
+  for (const row of rows) o.t(root, H.hasChild, row)
+  o.renders(root)
   return o.quads
 }
 

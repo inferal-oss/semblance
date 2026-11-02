@@ -31,6 +31,8 @@ export interface RuleContext {
    */
   rows(view: Term, query?: string): Map<string, Term>[]
   readonly sparql: boolean
+  /** The time zone the store's sx:formatDateTime uses when its options name none (undefined: the host's). */
+  readonly timeZone?: string
   /**
    * When set (by the engine, around one function-rule evaluation), every
    * pattern read is recorded as subject -> predicates ('*' = any predicate).
@@ -198,6 +200,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     },
     out: (focus) => new Out(ctx, focus, graph),
     sparql: store.sparql,
+    timeZone: store.timeZone,
     rows: (view, query) => maintainedRows(ctx, view) ?? (query && store.sparql ? ctx.select(query) : []),
     select: (query, opts) => store.select(followed(prefixes() + '\n' + query, opts), graphs),
     construct: (query, opts) => store.construct(followed(prefixes() + '\n' + query, opts), graphs),

@@ -1,12 +1,15 @@
 // The "Your activity" example (demo/gallery/_ex-activity.ttl): a dashboard of SPARQL views over
 // the change log, driven through events on the site.
 import { describe, expect, it } from 'vitest'
+import { ManualClock } from '../src/behaviour/clock.ts'
+import { MOD, NS } from '../src/ns.ts'
+import { toText } from '../src/render/serialize.ts'
 import { mountSite } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 
-function activity() {
-  const h = mountSite()
+function activity(kind: 'oxigraph' | 'wat' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: ManualClock) {
+  const h = mountSite(kind, prefer, clock)
   const visible = (el: Element | null | undefined) => !!el && !el.closest('[hidden]')
   const click = (el: Element) => (h.fire(el, 'click'), h.shell.flush())
   const button = (text: string) => [...h.document.querySelectorAll('button')].find((b) => b.textContent!.trim() === text && visible(b))!
@@ -77,5 +80,43 @@ describe('the activity example', () => {
     // Coming back, it has caught up.
     visited.click(visited.button('Examples'))
     expect(visited.stat('Since you opened this page')).toBe('3')
+  })
+})
+
+// The timeline's items (#7): each event's clock time by sx:formatDateTime in the viewer's locale, what and
+// on what by their labels, the same from the SPARQL rules as from their function twin, on screen and as
+// text; on wat (Oxigraph has no sx: functions, so it runs the twin either way).
+describe('the timeline, SPARQL and function rules alike (wat)', () => {
+  it('chooses the SPARQL rules on wat', () => {
+    const rules = (activity('wat').screen.engine as unknown as { rules: { slot: string; kind: string }[] }).rules
+    expect(rules.filter((r) => r.slot === NS.c + 'TimelineItemRendering').map((r) => r.kind)).toEqual(['sparql'])
+  })
+
+  it('renders the same items as events come, in every language', () => {
+    const clock = new ManualClock(Date.parse('2026-10-24T13:05:09Z'))
+    const sites = (['sparql', 'function'] as const).map((p) => {
+      const h = activity('wat', p, clock)
+      return { ...h, text: h.runtime.project({ modality: MOD.Text, prefer: p, name: 'text-activity', roots: [UI + 'ex-activity-recent'] }) }
+    })
+    const timeline = (h: (typeof sites)[number]) => h.root().querySelector('[data-sem-c=timeline]')!.outerHTML
+    const same = (what: string) => {
+      const [a, b] = sites.map(timeline)
+      expect(a, what).toBe(b)
+      const [ta, tb] = sites.map((h) => toText(h.text.index, UI + 'ex-activity-recent'))
+      expect(ta, what).toBe(tb)
+    }
+    for (const h of sites) h.open()
+    same('opened')
+    for (const n of [1, 2]) {
+      clock.advance(61_000)
+      for (const h of sites) h.click(h.header('Events'))
+      same('click ' + n)
+    }
+    expect(sites[0]!.recent()).toBeGreaterThan(3)
+    for (const languages of [['uk'], ['de'], ['ar'], ['en']]) {
+      for (const h of sites) for (const p of [h.screen, h.text]) p.engine.reconfigure({ languages })
+      for (const h of sites) h.shell.flush()
+      same(languages.join())
+    }
   })
 })

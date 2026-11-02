@@ -5,7 +5,7 @@ import type { Attrs, FnRule, Out, RuleContext } from '../engine/context.ts'
 import { formatLocale } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { isTrue, labelOf, named, nodes, num, rdfList, str, text } from './util.ts'
-import { sortKey } from '../../rdf-engine/host/intl.ts'
+import { dateOf, formatDateTime, sortKey } from '../../rdf-engine/host/intl.ts'
 import { compareKeys, TUPLE } from '../render/order-key.ts'
 import { viewRows } from '../view/rows.ts'
 
@@ -91,6 +91,7 @@ export const md5Key = (s: string): string => md5(s).slice(0, 8)
 /** The viewer's first language that Intl knows, else en-US (the viewer's l10n:formatLocale). */
 const locale = (ctx: RuleContext) => formatLocale(ctx.languages)
 const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
+const DATED = new Set([NS.xsd + 'dateTime', NS.xsd + 'dateTimeStamp', NS.xsd + 'date'])
 const isNumeric = (t: Term | undefined) => t?.termType === 'Literal' && NUMERIC.test(t.value)
 
 /** A number written for the viewer's locale (grouped; at most `digits` decimals). */
@@ -116,8 +117,9 @@ function display(ctx: RuleContext, t: Term | undefined, format?: string): string
     case 'percent':
       return Number.isFinite(n) ? new Intl.NumberFormat(locale(ctx), { style: 'percent', maximumFractionDigits: 1 }).format(n) : t.value
     case 'time': {
-      const d = new Date(t.value)
-      return Number.isNaN(d.getTime()) ? t.value : d.toLocaleTimeString(locale(ctx), { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+      // As sx:formatDateTime writes it (in the store's time zone), which reads only dates and date-times.
+      const d = DATED.has(t.datatype.value) ? dateOf(t.value) : undefined
+      return !d || Number.isNaN(d.getTime()) ? t.value : formatDateTime(d, locale(ctx), 'hour=2-digit;minute=2-digit;second=2-digit;hour12=false', ctx.timeZone)
     }
     case 'code':
       return t.value
