@@ -185,7 +185,7 @@ ex:labels a iv:View ; sem:select """SELECT (COUNT(?t) AS ?n) WHERE { ?t <${NS.rd
     const step = v.step.bind(v)
     v.step = (...a) => ((t += 2000), step(...a))
     const f = store.factory
-    runtime.apply({ remove: [], add: [f.quad(f.namedNode(EX + 't1'), f.namedNode(NS.c + 'label'), f.literal('changed'))] })
+    runtime.apply({ remove: [], add: [f.quad(f.namedNode(EX + 't1'), f.namedNode(NS.rdfs + 'label'), f.literal('changed'))] })
     expect(runtime.watchdog.stall?.culprit).toMatchObject({ kind: 'view', iri: EX + 'labels' })
     while (runtime.continueStall(50));
     expect(runtime.held).toBe(0)
