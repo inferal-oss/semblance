@@ -1,6 +1,7 @@
 @prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -50,6 +51,12 @@ c:sortColumn a owl:ObjectProperty ; rdfs:domain c:Table ; rdfs:range c:Column ; 
 c:sortDescending a owl:DatatypeProperty ; rdfs:domain c:Table ; rdfs:range xsd:boolean .
 c:sorts a owl:ObjectProperty ; rdfs:comment "On a rendered header: the c:Column that activating it sorts by."@en .
 
+# A run of each table's query (iv:perQuery, ontology/layers/view.ttl), maintained as the graph changes,
+# its rows a result set in the views graph that the table names (iv:run); a query that is a view of its
+# own keeps its own annotations.
+c:TableRuns a iv:View ;
+    iv:perQuery c:query ; iv:referrerClass c:Table ;
+    iv:strategy iv:Auto ; iv:materialize iv:ResultSet .
 c:TableRendering a sem:Rendering ; sem:targets c:Table ; sem:stratum 0 ; sem:follows c:dataset ;
     sem:functionOnly "awaits sx:Locale (sx:formatNumber, sx:formatDateTime): numbers and times in the viewer's locale. (Its rows, the result of the SELECT named in c:query, become graph data with the views runtime.)" ;
     sem:needsExtension sx:Locale .
