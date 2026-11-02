@@ -36,7 +36,7 @@ import { functions as typeFunctions } from './type.ts'
 import { functions as actionsFunctions } from './actions.ts'
 import { functions as inputsFunctions } from './inputs.ts'
 import { functions as feedbackFunctions, phrase } from './feedback.ts'
-import { functions as dataFunctions } from './data.ts'
+import { functions as dataFunctions, md5Key } from './data.ts'
 import { functions as navigationFunctions } from './navigation.ts'
 import { functions as overlaysFunctions } from './overlays.ts'
 import { functions as disclosureFunctions } from './disclosure.ts'
@@ -56,7 +56,7 @@ import { functions as connectorFunctions } from './connector.ts'
 import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
-import { tokenizeSparql } from '../sparql-tokens.ts'
+import { matchTokens } from '../sparql-tokens.ts'
 import { encodeForUri, isA, isTrue, labelOf, nodes, RDFS_LABEL, rdfList, str, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
 
@@ -400,15 +400,17 @@ const segmented: FnRule = (ctx, focus) => {
 
 const PROV_NS = 'http://www.w3.org/ns/prov#'
 const PROV_DERIVED_FROM = PROV_NS + 'wasDerivedFrom'
+/** An IRI by the longest namespace the engine knows that starts it (then the least prefix), else <iri>. */
 const shortIri = (iri: string) => {
-  for (const [p, ns] of Object.entries(NS)) if (iri.startsWith(ns)) return `${p}:${iri.slice(ns.length)}`
-  return `<${iri}>`
+  let best: [string, string] | undefined
+  for (const [p, ns] of Object.entries(NS)) if (iri.startsWith(ns) && (!best || ns.length > best[1].length || (ns.length === best[1].length && p < best[0]))) best = [p, ns]
+  return best ? `${best[0]}:${iri.slice(best[1].length)}` : `<${iri}>`
 }
 
 /**
  * The rules that made a view: for the component and every component rendered
  * inside it, the plans of the activities that generated or decorated its root
- * (its PROV-O trail). Deduplicated, ordered by stratum.
+ * (its PROV-O trail). Deduplicated, ordered by stratum, then by IRI.
  */
 function plansOf(ctx: RuleContext, component: Term): { plan: Term; role: 'generated' | 'decorated' }[] {
   const plan = (activity: Term) => {
@@ -446,7 +448,7 @@ function plansOf(ctx: RuleContext, component: Term): { plan: Term; role: 'genera
     const slot = ctx.object(t, SEM.implements)
     return Number(str(ctx.object(t, SEM.stratum)) ?? (slot && str(ctx.object(slot, SEM.stratum))) ?? 0)
   }
-  return [...found.values()].sort((a, b) => stratum(a.plan) - stratum(b.plan) || a.seen - b.seen)
+  return [...found.values()].sort((a, b) => stratum(a.plan) - stratum(b.plan) || (a.plan.value < b.plan.value ? -1 : a.plan.value > b.plan.value ? 1 : 0))
 }
 
 /** Queries and views a component (or one inside it) shows data from (c:dataQuery and its subproperties). */
@@ -532,9 +534,10 @@ const sourceBack: FnRule = (ctx, focus) => {
   const front = ctx.object(focus, C.of)
   if (front?.termType !== 'NamedNode') return []
   const o = ctx.out(focus)
+  // Its tokens keyed by where they start, as c:SourceBackRendering-sparql keys them.
   const code = (key: string, source: string) =>
-    o.el(key + '-code', 'Pre', { class: 'sem-code' }, tokenizeSparql(source.trim()).map((t, j) =>
-      t.kind === 'text' ? o.text(`${key}-t${j}`, t.text) : o.el(`${key}-s${j}`, 'Span', { class: 'tok-' + t.kind }, [o.text(`${key}-t${j}`, t.text)]),
+    o.el(key + '-code', 'Pre', { class: 'sem-code' }, matchTokens(source.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, '')).map((t) =>
+      t.kind === 'text' ? o.text(`${key}-${t.start}`, t.text) : o.el(`${key}-${t.start}`, 'Span', { class: 'tok-' + t.kind }, [o.text(`${key}-${t.start}-text`, t.text)]),
     ))
   const section = (key: string, title: string, meta: string, body: NamedNode) =>
     o.el(key, 'Section', { class: 'sem-rule' }, [
@@ -552,17 +555,21 @@ const sourceBack: FnRule = (ctx, focus) => {
           ? ctx
               .select(`SELECT DISTINCT ?plan WHERE { GRAPH <${projection}> { ?association <http://www.w3.org/ns/prov#hadPlan> ?plan } }`)
               .map((b) => ({ plan: b.get('plan')!, role: 'generated' as const }))
-              .sort((a, b) => a.plan.value.localeCompare(b.plan.value))
+              .sort((a, b) => (a.plan.value < b.plan.value ? -1 : a.plan.value > b.plan.value ? 1 : 0))
           : plansOf(ctx, front),
     }
   })
-  const data = queries.map((q, i) => {
+  // In order by sem:orderKey (the data queries by IRI, then the rules by stratum and IRI), each keyed by its IRI.
+  const order = (n: NamedNode, key: string) => (o.t(n, SEM.orderKey, key), n)
+  const data = queries.map((q) => {
     const select = str(ctx.object(q, SEM.select))
     const construct = str(ctx.object(q, SEM.construct))
-    return section(`data-${i}`, shortIri(q.value), `data · ${label(ctx, q)}`, code(`data-${i}`, select ?? construct ?? ''))
+    const key = `data-${md5Key(q.value)}`
+    return order(section(key, shortIri(q.value), `data · ${label(ctx, q)}`, code(key, select ?? construct ?? '')), 'c' + q.value)
   })
-  const rules = plans.map(({ plan, role }, i) => {
-    const key = `rule-${i}`
+  const projected = str(ctx.object(front, C.projectionGraph)) !== undefined
+  const rules = plans.map(({ plan, role }) => {
+    const key = `rule-${md5Key(plan.value)}`
     const from = ctx.object(plan, SEM.constructFrom)
     const query = str(ctx.object(plan, SEM.construct)) ?? (from && str(ctx.object(from, SEM.construct)))
     const fn = str(ctx.object(plan, SEM.function))
@@ -570,11 +577,14 @@ const sourceBack: FnRule = (ctx, focus) => {
     const layer = ctx.object(plan, SEM.layer) ?? (slot && ctx.object(slot, SEM.layer))
     const stratum = str(ctx.object(plan, SEM.stratum)) ?? (slot && str(ctx.object(slot, SEM.stratum))) ?? '0'
     const meta = [role === 'generated' ? 'renders' : 'decorates', `stratum ${stratum}`, layer ? `layer ${shortIri(layer.value)}` : 'component rule'].join(' · ')
-    return section(key, shortIri(plan.value), meta, code(key, query ?? `# a function rule: "${fn ?? '?'}" (src/components)`))
+    const rank = String(Number(stratum)).padStart(6, '0')
+    return order(section(key, shortIri(plan.value), meta, code(key, query ?? `# a function rule: "${fn ?? '?'}" (src/components)`)), 'd' + (projected ? '' : rank) + plan.value)
   })
-  const header = o.el('header', 'Div', { class: 'sem-back-header' }, [o.el('title', 'Strong', {}, [o.text('title-text', 'How this view is made')])])
-  const empty = data.length || rules.length ? [] : [o.el('empty', 'P', {}, [o.text('empty-text', 'Enable provenance to see the rules behind this view.')])]
-  o.renders(o.el('root', 'Div', {}, [header, ...empty, ...data, ...rules]))
+  const header = order(o.el('header', 'Div', { class: 'sem-back-header' }, [o.el('title', 'Strong', {}, [o.text('title-text', 'How this view is made')])]), 'a')
+  const empty = data.length || rules.length ? [] : [order(o.el('empty', 'P', {}, [o.text('empty-text', 'Enable provenance to see the rules behind this view.')]), 'b')]
+  const root = o.el('root', 'Div')
+  for (const child of [header, ...empty, ...data, ...rules]) o.t(root, H.hasChild, child)
+  o.renders(root)
   return o.quads
 }
 

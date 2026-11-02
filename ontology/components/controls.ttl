@@ -774,12 +774,154 @@ c:SourceBackRendering a sem:Rendering ;
     sem:targets c:SourceBack ;
     sem:modality mod:Screen ;
     sem:layer sem:SourceLayer ;
-    sem:stratum 96 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it splits each rule's SPARQL into colored tokens." ;
-    sem:needsExtension sx:Matches .
+    sem:stratum 96 .
 c:SourceBackRendering-fn a sem:Rule ;
     sem:implements c:SourceBackRendering ;
     sem:function "source-back" .
+# Sections in order by sem:orderKey: the data queries by IRI, then the rules by stratum and IRI (a
+# projection view's by IRI), each keyed by its IRI's MD5; their text in tokens by the shared lexicon.
+c:SourceBackRendering-sparql a sem:Rule ;
+    sem:implements c:SourceBackRendering ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?header , ?empty , ?section .
+  ?header a rdfhtml:Div ; rdfhtml:class "sem-back-header" ; rdfhtml:hasChild ?title ; sem:orderKey "a" .
+  ?title a rdfhtml:Strong ; rdfhtml:hasChild ?titleText .
+  ?titleText a rdfhtml:Text ; rdfhtml:data "How this view is made" .
+  ?empty a rdfhtml:P ; rdfhtml:hasChild ?emptyText ; sem:orderKey "b" .
+  ?emptyText a rdfhtml:Text ; rdfhtml:data "Enable provenance to see the rules behind this view." .
+  ?section a rdfhtml:Section ; rdfhtml:class "sem-rule" ; rdfhtml:hasChild ?sectionTitle , ?sectionMeta , ?sectionCode ; sem:orderKey ?sectionOrder .
+  ?sectionTitle a rdfhtml:H4 ; rdfhtml:hasChild ?sectionTitleText ; ord:immediatelyPrecedes ?sectionMeta .
+  ?sectionTitleText a rdfhtml:Text ; rdfhtml:data ?itemName .
+  ?sectionMeta a rdfhtml:P ; rdfhtml:hasChild ?sectionMetaText ; ord:immediatelyPrecedes ?sectionCode .
+  ?sectionMetaText a rdfhtml:Text ; rdfhtml:data ?meta .
+  ?sectionCode a rdfhtml:Pre ; rdfhtml:class "sem-code" ; rdfhtml:hasChild ?tok , ?tail .
+  ?tok a ?tokElement ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterHead .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+  ?tail a rdfhtml:Text ; rdfhtml:data ?tailText ; ord:immediatelyPrecedes ?afterTail .
+}
+WHERE {
+  $this a c:SourceBack ; c:of ?front . FILTER(isIRI(?front))
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~header")) AS ?header)
+  BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~title-text")) AS ?titleText)
+  LATERAL { OPTIONAL { ?front c:projectionGraph ?projection0 } }
+  # A projection view's rules live in that projection's derived graph (its PROV-O says which).
+  BIND(EXISTS { ?front (^sem:renders/rdfhtml:hasChild+)* ?anyInst .
+    { ?anyInst c:dataQuery|c:view|c:query|c:queries|c:judgementClass ?anyData }
+    UNION { FILTER(!BOUND(?projection0)) ?anyRoot sem:renders ?anyInst ; <http://www.w3.org/ns/prov#wasGeneratedBy>|<http://www.w3.org/ns/prov#wasInfluencedBy> ?anyActivity . ?anyActivity <http://www.w3.org/ns/prov#qualifiedAssociation>/<http://www.w3.org/ns/prov#hadPlan> ?anyPlan }
+    UNION { FILTER(BOUND(?projection0)) GRAPH ?anyGraph { ?anyAssociation <http://www.w3.org/ns/prov#hadPlan> ?anyPlan } FILTER(STR(?anyGraph) = STR(?projection0)) }
+  } AS ?anything)
+  BIND(IF(?anything, ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?empty)
+  BIND(IRI(CONCAT(STR($this), "/~empty-text")) AS ?emptyText)
+  # The queries the front (and every component inside it) shows data from, then the rules that rendered
+  # them: the plans of the activities that generated or decorated their roots.
+  LATERAL { OPTIONAL {
+    {
+      { SELECT DISTINCT ?front ?item WHERE {
+        ?front (^sem:renders/rdfhtml:hasChild+)* ?inst .
+        { ?inst c:dataQuery|c:view|c:query ?item } UNION { ?inst c:queries/rdf:rest*/rdf:first ?item } UNION { ?inst c:judgementClass ?judged . ?item a ?judged }
+      } }
+      BIND("data" AS ?itemKind)
+    } UNION {
+      FILTER(!BOUND(?projection0))
+      { SELECT ?front ?item (MAX(?generatedBy) AS ?generated) WHERE {
+        ?front (^sem:renders/rdfhtml:hasChild+)* ?inst . ?instRoot sem:renders ?inst .
+        { ?instRoot <http://www.w3.org/ns/prov#wasGeneratedBy> ?activity BIND(1 AS ?generatedBy) } UNION { ?instRoot <http://www.w3.org/ns/prov#wasInfluencedBy> ?activity BIND(0 AS ?generatedBy) }
+        ?activity <http://www.w3.org/ns/prov#qualifiedAssociation>/<http://www.w3.org/ns/prov#hadPlan> ?item
+      } GROUP BY ?front ?item }
+      BIND("rule" AS ?itemKind)
+    } UNION {
+      FILTER(BOUND(?projection0))
+      { SELECT DISTINCT ?projection0 ?item WHERE { GRAPH ?graph { ?association <http://www.w3.org/ns/prov#hadPlan> ?item } FILTER(STR(?graph) = STR(?projection0)) } }
+      BIND(1 AS ?generated)
+      BIND("rule" AS ?itemKind)
+    }
+    BIND(?itemKind = "data" AS ?isData)
+    BIND(CONCAT(?itemKind, "-", SUBSTR(MD5(STR(?item)), 1, 8)) AS ?local)
+    BIND(CONCAT(STR($this), "/~", ?local) AS ?k)
+    BIND(IRI(?k) AS ?section)
+    BIND(IRI(CONCAT(?k, "-title")) AS ?sectionTitle)
+    BIND(IRI(CONCAT(?k, "-title-text")) AS ?sectionTitleText)
+    BIND(IRI(CONCAT(?k, "-meta")) AS ?sectionMeta)
+    BIND(IRI(CONCAT(?k, "-meta-text")) AS ?sectionMetaText)
+    BIND(IRI(CONCAT(?k, "-code")) AS ?sectionCode)
+    LATERAL { OPTIONAL { SELECT ?item (MIN(?itemNameKey) AS ?itemNameBest) WHERE {
+        ?itemNameDecl sem:prefixName ?itemNameName ; sem:namespace ?itemNameNs .
+        FILTER(STRSTARTS(STR(?item), STR(?itemNameNs)))
+        BIND(1000000 - STRLEN(STR(?itemNameNs)) AS ?itemNameRank)
+        BIND(CONCAT(STR(?itemNameRank), " ", STR(?itemNameName), " ", STR(?itemNameNs)) AS ?itemNameKey)
+      } GROUP BY ?item } }
+      BIND(STRAFTER(STRAFTER(COALESCE(?itemNameBest, ""), " "), " ") AS ?itemNameNs0)
+      BIND(STRBEFORE(STRAFTER(COALESCE(?itemNameBest, ""), " "), " ") AS ?itemNameName0)
+      BIND(IF(BOUND(?itemNameBest), CONCAT(?itemNameName0, ":", SUBSTR(STR(?item), STRLEN(?itemNameNs0) + 1)), CONCAT("<", STR(?item), ">")) AS ?itemName)
+    # A data query: its text; a rule: its query (or its sem:constructFrom's), else which function it is.
+    LATERAL { OPTIONAL { FILTER(?isData) ?item sem:select ?dataSelect } }
+    LATERAL { OPTIONAL { FILTER(?isData) ?item sem:construct ?dataConstruct } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:construct ?ruleQuery0 } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:constructFrom/sem:construct ?ruleQuery1 } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:function ?ruleFunction } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:stratum ?ownStratum } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:implements/sem:stratum ?slotStratum } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:layer ?ownLayer } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:implements/sem:layer ?slotLayer } }
+    BIND(COALESCE(?ownLayer, ?slotLayer) AS ?layer)
+    BIND(COALESCE(STR(?ownStratum), STR(?slotStratum), "0") AS ?stratum)
+    LATERAL { OPTIONAL { SELECT ?layer (MIN(?layerNameKey) AS ?layerNameBest) WHERE {
+        ?layerNameDecl sem:prefixName ?layerNameName ; sem:namespace ?layerNameNs .
+        FILTER(STRSTARTS(STR(?layer), STR(?layerNameNs)))
+        BIND(1000000 - STRLEN(STR(?layerNameNs)) AS ?layerNameRank)
+        BIND(CONCAT(STR(?layerNameRank), " ", STR(?layerNameName), " ", STR(?layerNameNs)) AS ?layerNameKey)
+      } GROUP BY ?layer } }
+      BIND(STRAFTER(STRAFTER(COALESCE(?layerNameBest, ""), " "), " ") AS ?layerNameNs0)
+      BIND(STRBEFORE(STRAFTER(COALESCE(?layerNameBest, ""), " "), " ") AS ?layerNameName0)
+      BIND(IF(BOUND(?layerNameBest), CONCAT(?layerNameName0, ":", SUBSTR(STR(?layer), STRLEN(?layerNameNs0) + 1)), CONCAT("<", STR(?layer), ">")) AS ?layerName)
+    OPTIONAL { { ?item l10n:label ?dataLabelL } UNION { ?dataLabelLAt l10n:of ?item ; l10n:label ?dataLabelL } }
+    OPTIONAL { FILTER(!BOUND(?dataLabelL)) ?item c:label ?dataLabelLOnly FILTER(isLiteral(?dataLabelLOnly)) }
+    OPTIONAL { ?dataLabelNAt l10n:of ?item ; l10n:name ?dataLabelN }
+    OPTIONAL { FILTER(!BOUND(?dataLabelN)) ?item rdfs:label ?dataLabelNOnly FILTER(isLiteral(?dataLabelNOnly)) }
+    BIND(STR(COALESCE(?dataLabelL, ?dataLabelLOnly, ?dataLabelN, ?dataLabelNOnly, REPLACE(STR(?item), "^.*[#/]", ""))) AS ?dataLabel)
+    BIND(IF(?isData, CONCAT("data · ", ?dataLabel),
+      CONCAT(IF(?generated = 1, "renders", "decorates"), " · stratum ", ?stratum, " · ", IF(BOUND(?layer), CONCAT("layer ", ?layerName), "component rule"))) AS ?meta)
+    BIND(IF(?isData, COALESCE(STR(?dataSelect), STR(?dataConstruct), ""),
+      COALESCE(STR(?ruleQuery0), STR(?ruleQuery1), CONCAT("# a function rule: \\"", COALESCE(STR(?ruleFunction), "?"), "\\" (src/components)"))) AS ?code)
+    BIND(xsd:integer(?stratum) AS ?stratumNumber)
+    BIND(IF(?isData, CONCAT("c", STR(?item)), IF(BOUND(?projection0), CONCAT("d", STR(?item)),
+      CONCAT("d", SUBSTR(CONCAT("000000", STR(?stratumNumber)), STRLEN(STR(?stratumNumber)) + 1), STR(?item)))) AS ?sectionOrder)
+    BIND(REPLACE(?code, "^[ \\t\\n\\r]+|[ \\t\\n\\r]+$", "") AS ?src)
+    BIND(STRLEN(?src) AS ?length)
+    BIND(CONCAT(?k, "-") AS ?key)
+    # Its text in colored tokens, by the shared lexicon (c:SparqlLexicon), each keyed by where it starts.
+    LATERAL { OPTIONAL {
+        c:SparqlLexicon c:tokenPattern ?pattern .
+        LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+        BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
+        BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
+        BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+          IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
+          IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
+          IF(BOUND(?g7), IF(false && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
+          IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
+          IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text"))))))))) AS ?kind)
+        BIND(IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m))) AS ?headLen)
+        BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
+        BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
+        BIND(?at + STRLEN(?m) AS ?next)
+        BIND(IRI(CONCAT(?key, STR(?at))) AS ?tok)
+        BIND(IF(?kind = "text", rdfhtml:Text, rdfhtml:Span) AS ?tokElement)
+        BIND(IF(?kind = "text", ?none, CONCAT("tok-", ?kind)) AS ?tokClass)
+        BIND(IF(?kind = "text", ?head, ?none) AS ?plain)
+        BIND(IF(?kind = "text", ?none, IRI(CONCAT(?key, STR(?at), "-text"))) AS ?tokText)
+        BIND(IF(?kind = "text", ?none, ?head) AS ?spanned)
+        BIND(IF(BOUND(?tailText), IRI(CONCAT(?key, STR(?at + ?headLen))), ?none) AS ?tail)
+        BIND(IF(?next <= ?length, IRI(CONCAT(?key, STR(?next))), ?none) AS ?after)
+        BIND(COALESCE(?tail, ?after) AS ?afterHead)
+        BIND(IF(BOUND(?tail), ?after, ?none) AS ?afterTail)
+    } }
+  } }
+}""" .
 
 # The base rendering only wraps the front; the source layer (below) adds the
 # floating flip control, the back face and the flipped state.

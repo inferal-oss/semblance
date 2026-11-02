@@ -9,7 +9,7 @@ import { loadStore } from '../src/node/load.ts'
 import { KEYWORDS, QUOTED_PATTERN, TOKEN_PATTERN, matchTokens, tokenizeCode, tokenizeSparql } from '../src/sparql-tokens.ts'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
-import { mountShell, mountSite } from './harness.ts'
+import { mountShell, mountShellPrepared, mountSite } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const C = 'https://semblance.dev/ns/component#'
@@ -300,5 +300,60 @@ describe('the workbench, SPARQL and function rules alike (wat)', () => {
     }
     for (const h of hs) h.fire([...h.document.querySelectorAll('.sem-sample')].find((b) => b.querySelector('.sem-sample-label')!.textContent === labels[1])!, 'click')
     same(hs, 'a rewritten sample run')
+  })
+})
+
+// The back of a card: the queries and rules that made its front, each rule's text colored.
+// Every other rendering is SPARQL on both sides (the back lists the rules that made the front): only the
+// back's own implementation differs, the function one where its SPARQL rule asks for a group no store has.
+describe('card backs, SPARQL and function rules alike (wat)', () => {
+  const sites = () =>
+    [false, true].map((twin) =>
+      mountShellPrepared((store) => {
+        const f = store.factory
+        if (twin) store.add(f.quad(f.namedNode(C + 'SourceBackRendering-sparql'), f.namedNode(NS.sem + 'needsExtension'), f.namedNode(NS.sx + 'Absent')))
+      }, 'sparql', 'wat'),
+    )
+  type H = ReturnType<typeof sites>[number]
+  const backs = (h: H) => [...h.document.querySelectorAll('[data-sem-c=source-back]')].map((b) => b.outerHTML)
+
+  it('chooses the SPARQL rule on wat', () => {
+    const kinds = sites().map((h) => (h.screen.engine as unknown as { rules: { slot: string; kind: string }[] }).rules.find((r) => r.slot === C + 'SourceBackRendering')?.kind)
+    expect(kinds).toEqual(['sparql', 'function'])
+  })
+
+  it('shows the same back of every card turned over', () => {
+    const hs = sites()
+    let seen = 0
+    const turnAll = (what: string) => {
+      const count = hs[0]!.document.querySelectorAll('[data-sem-c=flippable] .sem-face-bar .sem-flip').length
+      for (let i = 0; i < count; i++) {
+        for (const h of hs) {
+          const flip = [...h.document.querySelectorAll('[data-sem-c=flippable] > .sem-faces > .sem-front > .sem-face-bar .sem-flip')][i]
+          if (flip) h.fire(flip, 'click')
+        }
+      }
+      const [a, b] = hs.map(backs)
+      expect(a!.length, what).toBe(b!.length)
+      for (let i = 0; i < a!.length; i++) expect(a![i]!.split('<section'), `${what}: back ${i}`).toEqual(b![i]!.split('<section'))
+      seen += a!.length
+    }
+    turnAll('the playground')
+    for (const h of hs) h.fire([...h.document.querySelectorAll('[role=tab]')].find((t) => t.textContent === 'Query')!, 'click')
+    turnAll('the tools')
+    for (const group of ['GroupType', 'GroupData']) {
+      for (const h of hs) {
+        const f = h.store.factory
+        const app = f.namedNode(UI + 'app')
+        const p = f.namedNode(UI + 'galleryGroup')
+        h.showPage('Components')
+        h.runtime.apply({ remove: h.store.match(app, p, null), add: [f.quad(app, p, f.namedNode(UI + group))] })
+        h.shell.flush()
+      }
+      turnAll(group)
+    }
+    expect(seen).toBeGreaterThan(5)
+    // Something on every back, and rules colored.
+    expect(backs(hs[0]!).join('')).toContain('tok-keyword')
   })
 })
