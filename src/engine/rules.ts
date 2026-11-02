@@ -140,6 +140,7 @@ export function loadRules(store: GraphStore): Rule[] {
 
   // Semblance's prefixes, and those the graph declares (sh:prefix / sh:namespace), as reactions have.
   const prefixes = prefixesFor(store)
+  const declarations = prefixLines(prefixes)
   const rules: Rule[] = []
   for (const q of store.match(null, namedNode(RDF_TYPE), namedNode(SEM.Rule))) {
     const r = q.subject
@@ -201,7 +202,7 @@ export function loadRules(store: GraphStore): Rule[] {
       fn,
       follows: follows.filter((p): p is string => typeof p === 'string'),
       followPaths: follows.filter((p): p is string[] => typeof p !== 'string'),
-      ...(watches.length ? { watches: new Set(watches) } : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().filter((p) => !p.startsWith('^@')).map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : {}),
+      ...(watches.length ? { watches: new Set(watches) } : query ? watchedPredicates(declarations, query, [...requires, ...unless, ...follows.flat().filter((p) => !p.startsWith('^@')).map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : {}),
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach,
       anywhere: getAll(SEM.watchesAnywhere),
@@ -213,7 +214,7 @@ export function loadRules(store: GraphStore): Rule[] {
       inputOnly: get(SEM.inputOnly)?.value === 'true',
       always: get(SEM.always)?.value === 'true',
       // Member-wise output is attributed to (focus, member) pairs, which bulk output cannot be.
-      bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributable(query)),
+      bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributableOnce(query)),
       requires,
       unless,
       // The rule's own: a rendering's sem:needsExtension says what its SPARQL rule awaits.
@@ -226,6 +227,55 @@ export function loadRules(store: GraphStore): Rule[] {
   return rules.sort((a, b) => a.stratum - b.stratum || collator.compare(a.iri, b.iri))
 }
 
+/** A prefix header's declarations: each prefix's line, by its name with the colon. */
+function prefixLines(header: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const line of header.split('\n')) {
+    const m = /^PREFIX\s+([\w-]*:)/i.exec(line)
+    if (m) out.set(m[1]!, line)
+  }
+  return out
+}
+
+/** The prefixes a query may use: every name followed by a colon in it (by query: the same queries are read by every engine). */
+function prefixesUsed(query: string): string[] {
+  let used = usedCache.get(query)
+  if (!used) usedCache.set(query, (used = [...new Set(query.match(/(?<![\w.-])[A-Za-z][\w.-]*:|(?<![\w-]):/g) ?? [])]))
+  return used
+}
+const usedCache = new Map<string, string[]>()
+
+/**
+ * What a query watches (namedPredicates), read once per query: every engine (the page's, each live
+ * example's sandbox, a reload of the rules) reads the same few hundred queries, and parsing them is
+ * most of the cost of starting one. Keyed by the query with the declarations of the prefixes it
+ * uses, so engines whose graphs declare other prefixes share it. The result is shared: it is never
+ * changed.
+ */
+function watchedPredicates(declarations: Map<string, string>, query: string, also: string[]): Pick<Rule, 'watches' | 'watchesVia' | 'watchesMarked'> {
+  const header = prefixesUsed(query).flatMap((name) => declarations.get(name) ?? []).join('\n')
+  const key = header + '\n' + query + '\n\0' + also.join(' ')
+  let read = watchedCache.get(key)
+  if (!read) {
+    // Queries typed into live examples come and go: the caches are let go when they grow past them.
+    if (watchedCache.size >= 4096) watchedCache.clear(), usedCache.clear()
+    watchedCache.set(key, (read = namedPredicates(header + '\n' + query, also)))
+  }
+  return read
+}
+const watchedCache = new Map<string, Pick<Rule, 'watches' | 'watchesVia' | 'watchesMarked'>>()
+
+/** attributable(), once per query (as watchedPredicates). */
+function attributableOnce(query: string): boolean {
+  let yes = attributableCache.get(query)
+  if (yes === undefined) {
+    if (attributableCache.size >= 4096) attributableCache.clear()
+    attributableCache.set(query, (yes = attributable(query)))
+  }
+  return yes
+}
+const attributableCache = new Map<string, boolean>()
+
 /**
  * The predicates a query names in its patterns (with `also`), or undefined when some pattern takes
  * any predicate (a variable, a negated set) or the query cannot be read: a changed triple whose
@@ -233,7 +283,7 @@ export function loadRules(store: GraphStore): Rule[] {
  * A SPARQL rule watches these as a function rule's traced reads would, and is not re-run for the
  * rest of its focus's (or a followed node's) triples.
  */
-function namedPredicates(query: string, also: string[]): Pick<Rule, 'watches' | 'watchesVia' | 'watchesMarked'> {
+export function namedPredicates(query: string, also: string[]): Pick<Rule, 'watches' | 'watchesVia' | 'watchesMarked'> {
   const reads = queryReads(query)
   if (!reads) return {}
   if (reads.every((r) => r.p !== undefined)) return { watches: new Set([...reads.map((r) => r.p!), ...also]) }

@@ -40,10 +40,11 @@ async function siteClient(url: string) {
 }
 
 /** The client's live examples over `host` (its renderer's), built at once (the site defers them until seen). */
-function liveExamples(client: Awaited<ReturnType<typeof siteClient>>, renderer: DomRenderer, defer?: (slot: Element, build: () => void) => void) {
+function liveExamples(client: Awaited<ReturnType<typeof siteClient>>, renderer: DomRenderer, defer?: (slot: Element, build: () => void) => void, pace?: (mount: () => void) => void) {
   const sandboxes = new Sandboxes(client.runtime, client.screen, {
     renderer,
     defer,
+    pace,
     shown: (c) => client.screen.index.isShown(c, new Set([renderer.rootFocus])),
     flush: () => flush(),
     load,
@@ -169,7 +170,8 @@ describe('live examples rendered on the server', () => {
       const page = takeOver(renderer)
       expect(page.mismatches).toBe(0)
       let build: (() => void) | undefined
-      const { sandboxes, flush } = liveExamples(client, renderer, (_slot, b) => void (build = b))
+      let mount: (() => void) | undefined
+      const { sandboxes, flush } = liveExamples(client, renderer, (_slot, b) => void (build = b), (m) => void (mount = m))
       flush()
       expect(page.replay()).toBe(0)
       expect(g.__semblanceKept?.events.length).toBe(3)
@@ -177,6 +179,13 @@ describe('live examples rendered on the server', () => {
       // The sandbox runs (in the site, once its graphs are here and it is seen): it takes its region over and does what was kept.
       expect(build).toBeDefined()
       build!()
+      // Built, and mounted in a task of its own (the site's pace): until then the region is the server's, and what was done stays kept.
+      expect(mount).toBeDefined()
+      expect(served.hasAttribute('data-sem-ssr')).toBe(true)
+      expect(g.__semblanceKept?.events.length).toBe(3)
+      expect(host.querySelector('[data-sem-c=live-example]')!.getAttribute('data-sem-state')).toBe('pending')
+      mount!()
+      expect(host.querySelector('[data-sem-c=live-example]')!.getAttribute('data-sem-state')).toBe('live')
       expect(served.hasAttribute('data-sem-ssr')).toBe(false)
       expect(g.__semblanceKept).toBeUndefined()
       expect(stopped).toBe(1)
