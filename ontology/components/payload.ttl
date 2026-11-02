@@ -68,8 +68,9 @@ c:jsonParent a owl:ObjectProperty ; rdfs:domain c:JsonNode ; rdfs:range c:JsonNo
 # among its siblings (its position in its parent).
 
 c:JsonTreeRendering a sem:Rendering ; sem:targets c:JsonTree ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Json (sx:json): it parses the payload as JSON. What it mints, the c:JsonNode structure, is rendered by SPARQL." ;
-    sem:needsExtension sx:Json .
+    sem:functionOnly "awaits #266 (sx:json's position of a value among its siblings): it parses the payload as JSON and places an object's members in source order, which sx:json's rows do not carry. What it mints, the c:JsonNode structure, is rendered by SPARQL." ;
+    sem:needsExtension sx:Json ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/266> .
 c:JsonTreeRendering-fn a sem:Rule ; sem:implements c:JsonTreeRendering ; sem:function "payload:json-tree" .
 
 c:JsonNodeRendering a sem:Rendering ; sem:targets c:JsonNode ; sem:stratum 0 .
