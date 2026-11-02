@@ -5,7 +5,7 @@ import type { Attrs, FnRule, Out, RuleContext } from '../engine/context.ts'
 import { formatLocale } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { isTrue, labelOf, named, nodes, num, rdfList, str, text } from './util.ts'
-import { dateOf, formatDateTime, sortKey } from '../../rdf-engine/host/intl.ts'
+import { dateOf, formatDateTime, formatNumber as intlNumber, numberOf, sortKey } from '../../rdf-engine/host/intl.ts'
 import { compareKeys, TUPLE } from '../render/order-key.ts'
 import { viewRows } from '../view/rows.ts'
 
@@ -94,28 +94,24 @@ const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
 const DATED = new Set([NS.xsd + 'dateTime', NS.xsd + 'dateTimeStamp', NS.xsd + 'date'])
 const isNumeric = (t: Term | undefined) => t?.termType === 'Literal' && NUMERIC.test(t.value)
 
-/** A number written for the viewer's locale (grouped; at most `digits` decimals). */
+/** A number written for the viewer's locale as sx:formatNumber writes it (grouped; at most `digits` decimals). */
 function formatNumber(ctx: RuleContext, n: number, digits = 2): string {
-  try {
-    return new Intl.NumberFormat(locale(ctx), { maximumFractionDigits: digits }).format(n)
-  } catch {
-    return String(n)
-  }
+  return intlNumber(n, locale(ctx), `maximumFractionDigits=${digits}`)
 }
 
-/** A value as text: IRIs by their label, numbers grouped, others as they are. */
+/** A value as text, as c:TableRendering-sparql writes it: IRIs by their label, numbers in the viewer's locale, others as they are. */
 function display(ctx: RuleContext, t: Term | undefined, format?: string): string {
   if (!t) return ''
   if (t.termType === 'NamedNode') return labelOf(ctx, t)
   if (t.termType !== 'Literal') return t.value
-  const n = Number(t.value)
+  const n = numberOf(t.value)
   switch (format) {
     case 'number':
-      return Number.isFinite(n) ? formatNumber(ctx, n, 0) : t.value
+      return isNumeric(t) ? formatNumber(ctx, n, 0) : t.value
     case 'decimal':
-      return Number.isFinite(n) ? new Intl.NumberFormat(locale(ctx), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) : t.value
+      return isNumeric(t) ? intlNumber(n, locale(ctx), 'minimumFractionDigits=2;maximumFractionDigits=2') : t.value
     case 'percent':
-      return Number.isFinite(n) ? new Intl.NumberFormat(locale(ctx), { style: 'percent', maximumFractionDigits: 1 }).format(n) : t.value
+      return isNumeric(t) ? intlNumber(n, locale(ctx), 'style=percent;maximumFractionDigits=1') : t.value
     case 'time': {
       // As sx:formatDateTime writes it (in the store's time zone), which reads only dates and date-times.
       const d = DATED.has(t.datatype.value) ? dateOf(t.value) : undefined
@@ -124,7 +120,7 @@ function display(ctx: RuleContext, t: Term | undefined, format?: string): string
     case 'code':
       return t.value
   }
-  return isNumeric(t) && Number.isFinite(n) ? formatNumber(ctx, n) : t.value
+  return isNumeric(t) ? formatNumber(ctx, n) : t.value
 }
 
 /** Find, from the event's node up through its RDF/HTML ancestors, the value of a marker predicate. */
@@ -170,8 +166,10 @@ interface Column {
 }
 
 type Row = Map<string, Term>
+/** A row and its key: the run's row node (rs:solution) and its place in the run (rs:index), or for rows of a SELECT run here, its values. */
+type Keyed = { row: Row; id: string; index: number }
 
-function columnsOf(ctx: RuleContext, focus: NamedNode, rows: Row[]): Column[] {
+function columnsOf(ctx: RuleContext, focus: NamedNode, variables: string[]): Column[] {
   const declared = nodes(ctx, ctx.object(focus, C_COLUMNS)).map((node) => {
     const variable = str(ctx.object(node, C_VARIABLE)) ?? labelOf(ctx, node)
     const sorting = ctx.object(node, C_SORTABLE)
@@ -188,20 +186,69 @@ function columnsOf(ctx: RuleContext, focus: NamedNode, rows: Row[]): Column[] {
     }
   })
   if (declared.length) return declared
-  // No declared columns: the variables of the first row, in its order.
-  return [...(rows[0]?.keys() ?? [])].map((variable) => ({ node: ctx.nn(focus.value + '#' + variable), variable, label: variable }))
+  // No declared columns: the query's, in their order.
+  return variables.map((variable) => ({ node: ctx.nn(focus.value + '#' + variable), variable, label: variable }))
 }
 
-/** Compare two cells: numerically when both are numbers, else as their displayed text. */
-function compareCells(ctx: RuleContext, a: Term | undefined, b: Term | undefined, format?: string): number {
-  if (!a || !b) return a ? -1 : b ? 1 : 0
-  if (isNumeric(a) && isNumeric(b)) return Number(a.value) - Number(b.value)
-  return display(ctx, a, format).localeCompare(display(ctx, b, format), locale(ctx), { numeric: true, sensitivity: 'base' })
+/**
+ * The rows of the table's query: the run that the table names (iv:run, c:TableRuns), one row per
+ * solution, keyed by its node and placed by its index; without a run (a store with no views
+ * runtime), the SELECT run here, keyed by its values. Undefined when the run failed (its message).
+ */
+function tableRows(ctx: RuleContext, focus: NamedNode, query: Term, select: string): { rows: Keyed[]; variables: string[] } | { error: string } {
+  const run = ctx.object(focus, NS.iv + 'run')
+  if (run && ctx.match(run, RDF_TYPE, NS.rs + 'ResultSet').length) {
+    const error = ctx.object(run, NS.iv + 'error')
+    if (error) return { error: error.value }
+    const variables = ctx
+      .objects(run, NS.iv + 'column')
+      .map((col) => ({ v: str(ctx.object(col, NS.rs + 'variable')) ?? '', i: num(ctx, col, NS.rs + 'index', 0) }))
+      .sort((x, y) => x.i - y.i)
+      .map((c) => c.v)
+    const rows = ctx.objects(run, NS.rs + 'solution').map((r) => {
+      const row: Row = new Map()
+      for (const b of ctx.objects(r, NS.rs + 'binding')) {
+        const v = str(ctx.object(b, NS.rs + 'variable'))
+        const value = ctx.object(b, NS.rs + 'value')
+        if (v && value) row.set(v, value)
+      }
+      return { row, id: 'r-' + md5Key(r.value), index: num(ctx, r, NS.rs + 'index', 0) }
+    })
+    return { rows, variables }
+  }
+  let found: Row[]
+  try {
+    found = viewRows(ctx, query, select)
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+  const seen = new Map<string, number>()
+  const rows = found.map((row, i) => {
+    const base = 'r' + hashKey([...row].map(([k, v]) => `${k}=${v.value}`).join('\u0000'))
+    const n = seen.get(base) ?? 0
+    seen.set(base, n + 1)
+    return { row, id: n ? `${base}-${n}` : base, index: i + 1 }
+  })
+  return { rows, variables: [...(found[0]?.keys() ?? [])] }
+}
+
+/**
+ * A row's order key (sem:orderKey), as the SPARQL rule writes it: by its place in the run, or sorted
+ * by a column, (has a value, the value - a number, else its displayed text's sx:sortKey -, its place in
+ * the run), the first two descending when the sort is.
+ */
+function rowKey(ctx: RuleContext, r: Keyed, sortBy: Column | undefined, descending: boolean): string {
+  if (!sortBy) return String(r.index)
+  const v = r.row.get(sortBy.variable)
+  const d = descending ? '-' : ''
+  const value = !v ? 's' : isNumeric(v) ? 'n' + v.value : 's' + sortKey(display(ctx, v, sortBy.format), locale(ctx))
+  return `${TUPLE}${d}n${v ? 0 : 1}${TUPLE}${d}${value}${TUPLE}n${r.index}`
 }
 
 /**
  * Rows of a SELECT under declared columns. Sorting is graph state (c:sortColumn,
- * c:sortDescending); rows are keyed by their content, so a re-sort only reorders them.
+ * c:sortDescending); rows are keyed by their solution and placed by order keys, so a re-sort only
+ * re-keys them.
  */
 const table: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
@@ -210,23 +257,14 @@ const table: FnRule = (ctx, focus) => {
   const select = named(query) ? str(ctx.object(query, SEM.select)) : undefined
   if (!select) return message(o, 'P', text(ctx, focus, C.emptyText) ?? 'No query.')
   if (!ctx.sparql) return message(o, 'P', 'Tables run SPARQL; choose a store with SPARQL.')
-  let rows: Row[]
-  try {
-    rows = viewRows(ctx, query!, select)
-  } catch (e) {
-    return message(o, 'P', `Query ${labelOf(ctx, query!)} failed: ${(e as Error).message}`)
-  }
-  const columns = columnsOf(ctx, focus, rows)
+  const found = tableRows(ctx, focus, query!, select)
+  if ('error' in found) return message(o, 'P', `Query ${labelOf(ctx, query!)} failed: ${found.error}`)
+  const columns = columnsOf(ctx, focus, found.variables)
   const sortNode = ctx.object(focus, C_SORT_COLUMN)
   const descending = isTrue(ctx.object(focus, C_SORT_DESCENDING))
   const sortBy = sortNode ? columns.find((c) => c.sortable !== false && c.node.equals(sortNode)) : undefined
-  if (sortBy) {
-    const sign = descending ? -1 : 1
-    rows = rows
-      .map((row, i) => ({ row, i }))
-      .sort((a, b) => sign * compareCells(ctx, a.row.get(sortBy.variable), b.row.get(sortBy.variable), sortBy.format) || a.i - b.i)
-      .map(({ row }) => row)
-  }
+  ctx.readsLanguage()
+  const rows = found.rows.map((r) => ({ ...r, key: rowKey(ctx, r, sortBy, descending) }))
   const cell = (row: Row, c: Column) => {
     if (c.slotPrefix !== undefined) return ''
     const v = display(ctx, row.get(c.variable), c.format)
@@ -234,20 +272,30 @@ const table: FnRule = (ctx, focus) => {
   }
 
   if (ctx.modality === MOD.Text) {
-    const shown = rows.slice(0, 12)
+    // The first 12 rows in their order fix the widths; they are placed by their order keys in a group.
+    const shown = [...rows].sort((a, b) => compareKeys(a.key, b.key)).slice(0, 12)
     const headers = columns.map((c) => (sortBy === c ? `${c.label} ${descending ? '↓' : '↑'}` : c.label))
-    const widths = columns.map((c, i) => Math.min(28, Math.max(headers[i]!.length, ...shown.map((r) => cell(r, c).length))))
-    const pad = (s: string, i: number) => (columns[i]!.align === 'end' ? s.padStart(widths[i]!) : s.padEnd(widths[i]!))
-    const line = (cells: string[]) => cells.map((s, i) => pad(s.length > widths[i]! ? s.slice(0, widths[i]! - 1) + '…' : s, i)).join('  ').trimEnd()
+    const widths = columns.map((c, i) => Math.min(28, Math.max([...headers[i]!].length, ...shown.map((r) => [...cell(r.row, c)].length))))
+    const fit = (s: string, i: number) => {
+      const chars = [...s]
+      const w = widths[i]!
+      const cut = chars.length > w ? chars.slice(0, w - 1).join('') + '…' : s
+      const pad = ' '.repeat(Math.max(0, w - [...cut].length))
+      return columns[i]!.align === 'end' ? pad + cut : cut + pad
+    }
+    const line = (cells: string[]) => cells.map(fit).join('  ').replace(/[ ]+$/, '')
+    const lineEl = (local: string, data: string) => el(o, `line-${local}`, 'Div', {}, [o.text(`line-${local}-text`, data)])
+    const group = el(o, 'rows', 'Div')
+    for (const r of shown) o.t(group, H.hasChild, o.t(lineEl(r.id, line(columns.map((c) => cell(r.row, c)))), SEM.orderKey, r.key).node(`line-${r.id}`))
     const lines = [
-      ...(caption ? [caption] : []),
-      line(headers),
-      line(widths.map((w) => '─'.repeat(w))),
-      ...shown.map((r) => line(columns.map((c) => cell(r, c)))),
-      ...(rows.length > shown.length ? [`… ${rows.length - shown.length} more`] : []),
-      ...(rows.length ? [] : [text(ctx, focus, C.emptyText) ?? 'No rows.']),
+      ...(caption ? [lineEl('caption', caption)] : []),
+      lineEl('header', line(headers)),
+      lineEl('rule', line(widths.map((w) => '─'.repeat(w)))),
+      ...(rows.length ? [group] : []),
+      ...(rows.length > shown.length ? [lineEl('more', `… ${rows.length - shown.length} more`)] : []),
+      ...(rows.length ? [] : [lineEl('empty', text(ctx, focus, C.emptyText) ?? 'No rows.')]),
     ]
-    o.renders(el(o, 'root', 'Div', {}, lines.map((l, i) => el(o, `line${i}`, 'Div', {}, [o.text(`line${i}-text`, l)]))))
+    o.renders(el(o, 'root', 'Div', {}, lines))
     return o.quads
   }
 
@@ -268,29 +316,22 @@ const table: FnRule = (ctx, focus) => {
       return th
     })),
   ])
-  const seen = new Map<string, number>()
-  const body = rows.length
-    ? rows.map((row) => {
-        // Include host slot keys so rows with equal displayed values keep distinct elements.
-        const base = 'r' + hashKey(columns.flatMap((c) => [
-          row.get(c.variable)?.value ?? '',
-          ...(c.slotPrefix !== undefined ? [row.get(c.slotVariable ?? c.variable)?.value ?? ''] : []),
-        ]).join('\u0000'))
-        const n = seen.get(base) ?? 0
-        seen.set(base, n + 1)
-        const id = n ? `${base}-${n}` : base
-        return el(o, id, 'Tr', {}, columns.map((c, ci) => {
-          const key = row.get(c.slotVariable ?? c.variable)?.value
-          const slotName = c.slotPrefix !== undefined && key !== undefined ? c.slotPrefix + key : undefined
-          const v = cell(row, c)
-          const content = slotName !== undefined ? [] : c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])] : [o.text(`${id}-c${ci}-text`, v)]
-          const cellEl = el(o, `${id}-c${ci}`, ci === 0 ? 'Th' : 'Td', { scope: ci === 0 ? 'row' : undefined, class: alignClass(c) }, content)
-          if (slotName !== undefined) o.t(cellEl, SEM.slot, slotName)
-          return cellEl
-        }))
-      })
-    : [el(o, 'empty-row', 'Tr', {}, [el(o, 'empty-cell', 'Td', { colSpan: String(Math.max(1, columns.length)), class: 'sem-empty' }, [o.text('empty-text', text(ctx, focus, C.emptyText) ?? 'No rows.')])])]
-  const tableEl = el(o, 'table', 'Table', {}, [head, el(o, 'body', 'Tbody', {}, body)])
+  const body = el(o, 'body', 'Tbody')
+  if (rows.length)
+    for (const { row, id, key } of rows) {
+      const tr = el(o, id, 'Tr', {}, columns.map((c, ci) => {
+        const slotKey = row.get(c.slotVariable ?? c.variable)?.value
+        const slotName = c.slotPrefix !== undefined && slotKey !== undefined ? c.slotPrefix + slotKey : undefined
+        const v = cell(row, c)
+        const content = c.slotPrefix !== undefined ? [] : c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])] : [o.text(`${id}-c${ci}-text`, v)]
+        const cellEl = el(o, `${id}-c${ci}`, ci === 0 ? 'Th' : 'Td', { scope: ci === 0 ? 'row' : undefined, class: alignClass(c) }, content)
+        if (slotName !== undefined) o.t(cellEl, SEM.slot, slotName)
+        return cellEl
+      }))
+      o.t(tr, SEM.orderKey, key).t(body, H.hasChild, tr)
+    }
+  else o.t(body, H.hasChild, el(o, 'empty-row', 'Tr', {}, [el(o, 'empty-cell', 'Td', { colSpan: String(Math.max(1, columns.length)), class: 'sem-empty' }, [o.text('empty-text', text(ctx, focus, C.emptyText) ?? 'No rows.')])]))
+  const tableEl = el(o, 'table', 'Table', {}, [head, body])
   if (caption) o.attr(tableEl, 'aria-label', caption)
   o.attr(tableEl, 'aria-rowcount', String(rows.length + 1))
   // The root scrolls (the header sticks); a focusable region so keyboards can scroll it.
