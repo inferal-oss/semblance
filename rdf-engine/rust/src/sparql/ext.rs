@@ -8,6 +8,7 @@ use super::regex;
 use super::{Magic, Tv};
 use crate::dict::{Key, NONE};
 use crate::host;
+use crate::idmap::{IdMap, bytes_key};
 use alloc::vec::Vec;
 
 pub const SX: &[u8] = b"https://semblance.dev/ns/sparql#";
@@ -279,7 +280,9 @@ impl Ctx<'_> {
                 let Some(Ok((s, _))) = ins.first().map(|v| self.string(v)) else { return out };
                 let Some(values) = json(&s) else { return out };
                 let kinds: Vec<u32> = [&b"object"[..], b"array", b"string", b"number", b"boolean", b"null"].iter().map(|k| self.to_id(&Val::Str(k.to_vec(), None))).collect();
-                let mut vals = Vec::with_capacity(6);
+                // ?json and ?kept only when asked for: the spelling is a term per scalar
+                let more = m.outs.len() > 6;
+                let mut vals = Vec::with_capacity(8);
                 for j in &values {
                     vals.clear();
                     vals.push(self.to_id(&Val::Str(j.path.clone(), None)));
@@ -310,6 +313,13 @@ impl Ctx<'_> {
                         Some(i) => self.to_id(&Val::Num(Num::Int(i as i128))),
                         None => NONE,
                     });
+                    if more {
+                        vals.push(match &j.json {
+                            Some(t) => self.to_id(&Val::Str(t.clone(), None)),
+                            None => NONE,
+                        });
+                        vals.push(self.to_id(&Val::Bool(j.kept)));
+                    }
                     if !emit(self, m, row, &vals, &mut out) {
                         break;
                     }
@@ -360,8 +370,10 @@ enum JDt {
 }
 
 /// One JSON value: its pointer, its parent's, its key, its kind (object,
-/// array, string, number, boolean, null), a scalar's lexical form and its
-/// position among its siblings (None for the root).
+/// array, string, number, boolean, null), a scalar's lexical form, its
+/// position among its siblings (None for the root; a kept duplicate key's is
+/// its first occurrence's), a scalar as JSON.stringify writes it, and whether
+/// JSON.parse keeps it (not an earlier duplicate key, nor inside one).
 struct JValue {
     path: Vec<u8>,
     parent: Option<Vec<u8>>,
@@ -369,6 +381,8 @@ struct JValue {
     kind: u8,
     value: Option<(Vec<u8>, JDt)>,
     index: Option<usize>,
+    json: Option<Vec<u8>>,
+    kept: bool,
 }
 
 const MAX_DEPTH: usize = 512;
@@ -431,20 +445,25 @@ impl Json<'_> {
                 }
                 let object = self.peek() == b'{';
                 self.i += 1;
-                self.out.push(JValue { path: path.clone(), parent, key, kind: if object { 0 } else { 1 }, value: None, index: at });
+                self.out.push(JValue { path: path.clone(), parent, key, kind: if object { 0 } else { 1 }, value: None, index: at, json: None, kept: true });
                 self.ws();
                 let close = if object { b'}' } else { b']' };
                 if self.eat(close) {
                     return Some(());
                 }
                 let mut index = 0;
+                // each member name (as spelled, so lone surrogates stay apart): its
+                // first position and the rows of its last value [start, end)
+                let (mut names, mut seen) = (IdMap::new(), Vec::<(usize, usize, usize)>::new());
                 loop {
                     self.ws();
+                    let mut spelled = Vec::new();
                     let key = if object {
                         if self.peek() != b'"' {
                             return None;
                         }
-                        let k = self.string()?;
+                        let (k, j) = self.string()?;
+                        spelled = j;
                         self.ws();
                         if !self.eat(b':') {
                             return None;
@@ -473,7 +492,25 @@ impl Json<'_> {
                         }
                         JKey::Root => {}
                     }
-                    self.value(child, Some(path.clone()), key, Some(index), depth + 1)?;
+                    let start = self.out.len();
+                    let name = if object { bytes_key(&spelled) } else { Vec::new() };
+                    let earlier = names.get(&name).map(|e| seen[e as usize]);
+                    self.value(child, Some(path.clone()), key, Some(earlier.map_or(index, |e| e.0)), depth + 1)?;
+                    if object {
+                        let end = self.out.len();
+                        // JSON.parse keeps the last value, at the first one's position
+                        if let Some((_, s, e)) = earlier {
+                            for v in &mut self.out[s..e] {
+                                v.kept = false;
+                            }
+                        }
+                        let (e, _) = names.insert(&name, seen.len() as u32);
+                        if e as usize == seen.len() {
+                            seen.push((index, start, end));
+                        } else {
+                            seen[e as usize] = (seen[e as usize].0, start, end);
+                        }
+                    }
                     index += 1;
                     self.ws();
                     if self.eat(close) {
@@ -485,19 +522,20 @@ impl Json<'_> {
                 }
             }
             b'"' => {
-                let v = self.string()?;
-                self.out.push(JValue { path, parent, key, kind: 2, value: Some((v, JDt::String)), index: at });
+                let (v, j) = self.string()?;
+                self.out.push(JValue { path, parent, key, kind: 2, value: Some((v, JDt::String)), index: at, json: Some(j), kept: true });
                 Some(())
             }
             b't' | b'f' => {
                 let t = self.peek() == b't';
                 self.lit(if t { b"true" } else { b"false" })?;
-                self.out.push(JValue { path, parent, key, kind: 4, value: Some((if t { b"true".to_vec() } else { b"false".to_vec() }, JDt::Boolean)), index: at });
+                let word = if t { b"true".to_vec() } else { b"false".to_vec() };
+                self.out.push(JValue { path, parent, key, kind: 4, value: Some((word.clone(), JDt::Boolean)), index: at, json: Some(word), kept: true });
                 Some(())
             }
             b'n' => {
                 self.lit(b"null")?;
-                self.out.push(JValue { path, parent, key, kind: 5, value: None, index: at });
+                self.out.push(JValue { path, parent, key, kind: 5, value: None, index: at, json: Some(b"null".to_vec()), kept: true });
                 Some(())
             }
             _ => {
@@ -529,7 +567,9 @@ impl Json<'_> {
                     }
                     dt = JDt::Double;
                 }
-                self.out.push(JValue { path, parent, key, kind: 3, value: Some((self.s[start..self.i].to_vec(), dt)), index: at });
+                let text = &self.s[start..self.i];
+                let json = js_number(core::str::from_utf8(text).ok()?.parse::<f64>().ok()?);
+                self.out.push(JValue { path, parent, key, kind: 3, value: Some((text.to_vec(), dt)), index: at, json: Some(json), kept: true });
                 Some(())
             }
         }
@@ -544,15 +584,20 @@ impl Json<'_> {
         Some(n)
     }
 
-    /// A string at the cursor (on its `"`), unescaped.
-    fn string(&mut self) -> Option<Vec<u8>> {
+    /// A string at the cursor (on its `"`): unescaped (a lone surrogate as
+    /// U+FFFD), and as JSON.stringify writes it.
+    fn string(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
         self.i += 1;
         let mut out = Vec::new();
+        let mut json = Vec::from(*b"\"");
         loop {
             let c = *self.s.get(self.i)?;
             self.i += 1;
             match c {
-                b'"' => return Some(out),
+                b'"' => {
+                    json.push(b'"');
+                    return Some((out, json));
+                }
                 b'\\' => {
                     let e = *self.s.get(self.i)?;
                     self.i += 1;
@@ -565,28 +610,122 @@ impl Json<'_> {
                         b't' => 9,
                         b'u' => {
                             let hi = self.hex4()?;
-                            match hi {
-                                0xd800..=0xdbff => {
-                                    if !(self.eat(b'\\') && self.eat(b'u')) {
-                                        return None;
-                                    }
-                                    let lo = self.hex4()?;
-                                    if !(0xdc00..=0xdfff).contains(&lo) {
-                                        return None;
-                                    }
-                                    0x10000 + ((hi - 0xd800) << 10) + (lo - 0xdc00)
+                            let mut cp = hi;
+                            if (0xd800..=0xdbff).contains(&hi) {
+                                // a low surrogate escape after it makes a pair
+                                let at = self.i;
+                                match (self.eat(b'\\') && self.eat(b'u')).then(|| self.hex4()).flatten() {
+                                    Some(lo) if (0xdc00..=0xdfff).contains(&lo) => cp = 0x10000 + ((hi - 0xd800) << 10) + (lo - 0xdc00),
+                                    _ => self.i = at,
                                 }
-                                0xdc00..=0xdfff => return None,
-                                _ => hi,
                             }
+                            if (0xd800..=0xdfff).contains(&cp) {
+                                // lone: JSON.parse keeps it, JSON.stringify escapes it
+                                crate::lex::push_utf8(&mut out, 0xfffd);
+                                js_escape(&mut json, cp);
+                                continue;
+                            }
+                            cp
                         }
                         _ => return None,
                     };
                     crate::lex::push_utf8(&mut out, cp);
+                    js_escape(&mut json, cp);
                 }
                 0..=0x1f => return None,
-                _ => out.push(c),
+                _ => {
+                    out.push(c);
+                    if c == b'"' || c == b'\\' {
+                        json.push(b'\\');
+                    }
+                    json.push(c);
+                }
             }
         }
     }
+}
+
+/// Code point cp into a string as JSON.stringify writes it: `"`, `\\` and the
+/// controls escaped (\b \t \n \f \r, else \u00xx), a lone surrogate as \udxxx.
+fn js_escape(out: &mut Vec<u8>, cp: u32) {
+    let short = match cp {
+        0x22 => b'"',
+        0x5c => b'\\',
+        8 => b'b',
+        9 => b't',
+        10 => b'n',
+        12 => b'f',
+        13 => b'r',
+        _ => 0,
+    };
+    if short != 0 {
+        out.extend_from_slice(&[b'\\', short]);
+    } else if cp < 0x20 || (0xd800..=0xdfff).contains(&cp) {
+        out.extend_from_slice(b"\\u");
+        for k in (0..4).rev() {
+            out.push(HEX[(cp >> (k * 4)) as usize & 15]);
+        }
+    } else {
+        crate::lex::push_utf8(out, cp);
+    }
+}
+
+/// A number as JSON.stringify writes it (ECMAScript Number::toString): the
+/// shortest digits that read back, plain from 1e-6 to below 1e21, else with an
+/// exponent ("1e+21", "1.5e-7"); -0 as "0", and a number too large as "null".
+fn js_number(x: f64) -> Vec<u8> {
+    use core::fmt::Write;
+    let mut out = Vec::new();
+    if !x.is_finite() {
+        out.extend_from_slice(b"null");
+        return out;
+    }
+    if x == 0.0 {
+        out.push(b'0');
+        return out;
+    }
+    if x < 0.0 {
+        out.push(b'-');
+    }
+    // core's {:e} has the shortest digits that read back ("1.2345e-7"), but on
+    // a tie between two of them it takes the upper; ECMAScript the nearest, and
+    // on a tie the even one: x correctly rounded to that many digits (core
+    // rounds ties to even), when it reads back
+    let mut sci = alloc::string::String::new();
+    let _ = write!(sci, "{:e}", x.abs());
+    let k = sci.split('e').next().unwrap_or("").bytes().filter(u8::is_ascii_digit).count();
+    let mut near = alloc::string::String::new();
+    let _ = write!(near, "{:.*e}", k.saturating_sub(1), x.abs());
+    if near.parse::<f64>() == Ok(x.abs()) {
+        sci = near;
+    }
+    let (mantissa, exp) = sci.split_once('e').unwrap_or((&sci, "0"));
+    let mut digits: Vec<u8> = mantissa.bytes().filter(u8::is_ascii_digit).collect();
+    while digits.len() > 1 && digits.last() == Some(&b'0') {
+        digits.pop();
+    }
+    let n = exp.parse::<i32>().unwrap_or(0) + 1;
+    let k = digits.len() as i32;
+    if k <= n && n <= 21 {
+        out.extend_from_slice(&digits);
+        out.resize(out.len() + (n - k) as usize, b'0');
+    } else if 0 < n && n <= 21 {
+        out.extend_from_slice(&digits[..n as usize]);
+        out.push(b'.');
+        out.extend_from_slice(&digits[n as usize..]);
+    } else if -6 < n && n <= 0 {
+        out.extend_from_slice(b"0.");
+        out.resize(out.len() + (-n) as usize, b'0');
+        out.extend_from_slice(&digits);
+    } else {
+        out.push(digits[0]);
+        if k > 1 {
+            out.push(b'.');
+            out.extend_from_slice(&digits[1..]);
+        }
+        out.push(b'e');
+        out.push(if n - 1 < 0 { b'-' } else { b'+' });
+        num::write_int(&mut out, ((n - 1) as i128).abs());
+    }
+    out
 }

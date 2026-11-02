@@ -190,6 +190,7 @@ One row per code point of `?text`: `?char` the code point as an `xsd:string`,
 ```sparql
 (?payload) sx:json (?path ?parent ?key ?kind ?value)
 (?payload) sx:json (?path ?parent ?key ?kind ?value ?index)
+(?payload) sx:json (?path ?parent ?key ?kind ?value ?index ?json ?kept)
 ```
 
 Parses `?payload` as JSON (RFC 8259) and yields one row per value, in document
@@ -203,10 +204,31 @@ of `"object"`, `"array"`, `"string"`, `"number"`, `"boolean"`, `"null"`, and
 or `xsd:double` (an exponent); `true` and `false` as `xsd:boolean`. The optional `?index` is the value's
 0-based position among its parent's members or items (`xsd:integer`; unbound
 for the root), so a rule can order an object's members as the source does
-(`ORDER BY ?index`, or `ord:` from it); for an array item it equals `?key`. Pointer
-tokens escape `~` as `~0` and `/` as `~1`. Invalid JSON (including a lone
-surrogate escape, and nesting deeper than 512) yields no rows; whitespace
-around the value is allowed. Rules mint IRIs from `?path`.
+(`ORDER BY ?index`, or `ord:` from it); for an array item it equals `?key`.
+
+The optional `?json` is a scalar or `null` as `JSON.stringify(JSON.parse(…))`
+writes it (`xsd:string`; unbound for objects and arrays), so a rule can show
+what a JavaScript twin shows: a number in ECMAScript's shortest form (the
+fewest digits that read back as the same double, the nearest of them and on a
+tie the even one; plain from `1e-6` to below `1e21`, else with an exponent):
+`1.50` → `1.5`, `-2e3` → `-2000`, `0.1e1` → `1`, `1e21` → `1e+21`, `1E-7` →
+`1e-7`, `-0` → `0`, and a number beyond the doubles (`1e400`) → `null`; a string
+quoted and re-escaped (`"` and `\` escaped, `\b \t \n \f \r`, other controls as
+`\u00xx`, a lone surrogate as `\udxxx`, everything else as itself: `"€"`);
+`true`, `false`, `null`. The optional `?kept` (`xsd:boolean`) is whether
+`JSON.parse` keeps the value: false for an earlier occurrence of a member name
+in the same object and everything under it. A kept duplicate's `?index` is its
+first occurrence's position, which is where `JSON.parse` puts it (in every form
+of the relation). JavaScript also lists integer-like member names (`"2"`) first,
+in numeric order; `?index` stays the source position, and a rule that must
+follow that order sorts those names first itself.
+
+Pointer tokens escape `~` as `~0` and `/` as `~1`. A lone surrogate escape
+(`"\ud800"`), which `JSON.parse` accepts, is U+FFFD in `?value`, `?key` and
+`?path`, and escaped in `?json`; two names that differ only in their lone
+surrogates are still different members. Invalid JSON (and nesting deeper than
+512) yields no rows; whitespace around the value is allowed. Rules mint IRIs
+from `?path`.
 
 ## Status
 
