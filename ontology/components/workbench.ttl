@@ -54,7 +54,7 @@ c:runCount a owl:DatatypeProperty ; rdfs:domain sem:Query ; rdfs:range xsd:integ
     rdfs:comment "How many times the query was run: running the same text again re-evaluates its views."@en .
 c:followUpdates a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:label "Follow updates"@en , "Стежити за змінами"@uk , "Änderungen folgen"@de , "متابعة التحديثات"@ar ;
-    rdfs:comment """On a c:QueryWorkbench (or one c:QueryResultView): whether the results of the query it runs
+    rdfs:comment """On a c:QueryWorkbench (or one c:QueryResultView, or a c:QueryView): whether the results of the query it runs
 follow the graph. True: each view depends on the triples its query reads (its triple patterns,
 with the IRIs they name) and is re-run, at most once a frame, when one of them changes; changes
 to anything else re-run nothing. False or absent: the results stay as of the last run."""@en .
