@@ -193,10 +193,202 @@ c:HexView a owl:Class ;
 ASCII characters ('.' for the rest), in a scrolling region. At most c:limit bytes (default 512)
 are shown; a note counts the rest."""@en ;
     sem:slug "hex-view" .
-c:HexViewRendering a sem:Rendering ; sem:targets c:HexView ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Text (sx:codepoint): it writes each UTF-8 byte of the text in hex, which needs a character's code point." ;
-    sem:needsExtension sx:Text .
+c:HexViewRendering a sem:Rendering ; sem:targets c:HexView ; sem:stratum 0 ; sem:follows c:of , c:bindFrom .
 c:HexViewRendering-fn a sem:Rule ; sem:implements c:HexViewRendering ; sem:function "payload:hex-view" .
+# The payload read as the body viewer reads it; its bytes by sx:utf8Hex (sx:Text), 16 to a row, a
+# row per character of a string as long as the rows (sx:chars, sx:Matches); the offset in hex from
+# the row's number; the ASCII column from the payload's characters, each as many '.' as its UTF-8
+# bytes unless it is printable ASCII.
+c:HexViewRendering-sparql-screen a sem:Rule ;
+    sem:implements c:HexViewRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Text , sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:tabIndex ?tabIndex ; rdfhtml:attribute ?rootRole , ?rootName ;
+    rdfhtml:hasChild ?empty , ?table , ?moreEl .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?rootRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "region" .
+  ?rootName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue "Hex dump" .
+  ?table a rdfhtml:Table ; rdfhtml:attribute ?tableName ; rdfhtml:hasChild ?thead , ?tbody ; ord:immediatelyPrecedes ?moreEl .
+  ?tableName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?count .
+  ?thead a rdfhtml:Thead ; rdfhtml:hasChild ?headRow ; ord:immediatelyPrecedes ?tbody .
+  ?headRow a rdfhtml:Tr ; rdfhtml:hasChild ?hOffset , ?hHex , ?hAscii .
+  ?hOffset a rdfhtml:Th ; rdfhtml:scope "col" ; rdfhtml:hasChild ?hOffsetText ; ord:immediatelyPrecedes ?hHex .
+  ?hOffsetText a rdfhtml:Text ; rdfhtml:data "Offset" .
+  ?hHex a rdfhtml:Th ; rdfhtml:scope "col" ; rdfhtml:hasChild ?hHexText ; ord:immediatelyPrecedes ?hAscii .
+  ?hHexText a rdfhtml:Text ; rdfhtml:data "Hex" .
+  ?hAscii a rdfhtml:Th ; rdfhtml:scope "col" ; rdfhtml:hasChild ?hAsciiText .
+  ?hAsciiText a rdfhtml:Text ; rdfhtml:data "ASCII" .
+  ?tbody a rdfhtml:Tbody ; rdfhtml:hasChild ?row .
+  ?previousRow ord:immediatelyPrecedes ?row .
+  ?row a rdfhtml:Tr ; rdfhtml:hasChild ?offsetEl , ?hexEl , ?asciiEl .
+  ?offsetEl a rdfhtml:Th ; rdfhtml:scope "row" ; rdfhtml:class "sem-offset" ; rdfhtml:hasChild ?offsetText ; ord:immediatelyPrecedes ?hexEl .
+  ?offsetText a rdfhtml:Text ; rdfhtml:data ?offset .
+  ?hexEl a rdfhtml:Td ; rdfhtml:class "sem-bytes" ; rdfhtml:hasChild ?hexText ; ord:immediatelyPrecedes ?asciiEl .
+  ?hexText a rdfhtml:Text ; rdfhtml:data ?rowHex .
+  ?asciiEl a rdfhtml:Td ; rdfhtml:class "sem-ascii" ; rdfhtml:hasChild ?asciiText .
+  ?asciiText a rdfhtml:Text ; rdfhtml:data ?rowAscii .
+  ?moreEl a rdfhtml:P ; rdfhtml:class "sem-more" ; rdfhtml:hasChild ?moreText .
+  ?moreText a rdfhtml:Text ; rdfhtml:data ?more .
+}
+WHERE {
+  $this a c:HexView .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?payload)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?payload))
+      BIND(rdfhtml:P AS ?rootTag)
+      BIND("sem-empty" AS ?rootClass)
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No payload.")) AS ?emptyText)
+    } UNION {
+      FILTER(BOUND(?payload))
+      BIND(rdfhtml:Div AS ?rootTag)
+      BIND("0" AS ?tabIndex)
+      BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?rootRole)
+      BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?rootName)
+      LATERAL { OPTIONAL { $this c:limit ?limitRaw } }
+      BIND(FLOOR(COALESCE(xsd:double(STR(?limitRaw)), 512)) AS ?limit0)
+      BIND(IF(?limit0 > 65536, 65536, IF(?limit0 < 16, 16, ?limit0)) AS ?limit)
+      BIND(sx:utf8Hex(?payload) AS ?allHex)
+      BIND(IF(?allHex = "", 0, xsd:integer((STRLEN(?allHex) + 1) / 3)) AS ?bytes)
+      BIND(IF(?bytes < ?limit, ?bytes, xsd:integer(?limit)) AS ?shown)
+      BIND(SUBSTR(?allHex, 1, ?shown * 3 - 1) AS ?shownHex)
+      BIND(xsd:integer(CEIL(?shown / 16)) AS ?rowCount)
+      BIND(?bytes - ?shown AS ?rest)
+      BIND(IF(?rest > 0, CONCAT("… ", STR(?rest), " more ", IF(?rest = 1, "byte", "bytes")), ?none) AS ?more)
+      # The printable ASCII of each byte, '.' for the rest: a character's bytes are as many as UTF-8 takes.
+      BIND(SUBSTR(?payload, 1, xsd:integer(?limit)) AS ?head)
+      LATERAL { OPTIONAL { SELECT ?head (GROUP_CONCAT(?asciiPart; separator="") AS ?asciiAll) WHERE {
+        { SELECT ?head ?asciiPart WHERE { (?head) sx:chars (?asciiCh ?asciiAt)
+            BIND(sx:codepoint(?asciiCh, 1) AS ?cp)
+            BIND(IF(?cp >= 32 && ?cp < 127, ?asciiCh, IF(?cp < 128, ".", IF(?cp < 2048, "..", IF(?cp < 65536, "...", "....")))) AS ?asciiPart) } ORDER BY ?asciiAt }
+      } GROUP BY ?head } }
+      BIND(SUBSTR(COALESCE(?asciiAll, ""), 1, ?shown) AS ?ascii)
+      BIND(CONCAT(STR(?bytes), " ", IF(?bytes = 1, "byte", "bytes")) AS ?count)
+      BIND(IRI(CONCAT(STR($this), "/~table")) AS ?table)
+      BIND(IRI(CONCAT(STR($this), "/~table-aria-label")) AS ?tableName)
+      BIND(IRI(CONCAT(STR($this), "/~head")) AS ?thead)
+      BIND(IRI(CONCAT(STR($this), "/~head-row")) AS ?headRow)
+      BIND(IRI(CONCAT(STR($this), "/~h-offset")) AS ?hOffset)
+      BIND(IRI(CONCAT(STR($this), "/~h-offset-text")) AS ?hOffsetText)
+      BIND(IRI(CONCAT(STR($this), "/~h-hex")) AS ?hHex)
+      BIND(IRI(CONCAT(STR($this), "/~h-hex-text")) AS ?hHexText)
+      BIND(IRI(CONCAT(STR($this), "/~h-ascii")) AS ?hAscii)
+      BIND(IRI(CONCAT(STR($this), "/~h-ascii-text")) AS ?hAsciiText)
+      BIND(IRI(CONCAT(STR($this), "/~body")) AS ?tbody)
+      BIND(IF(BOUND(?more), IRI(CONCAT(STR($this), "/~more")), ?none) AS ?moreEl)
+      BIND(IRI(CONCAT(STR($this), "/~more-text")) AS ?moreText)
+      LATERAL { OPTIONAL {
+        BIND(SUBSTR(?allHex, 1, ?rowCount) AS ?rowSpan)
+        (?rowSpan) sx:chars (?rowCh ?rowAt)
+        BIND(?rowAt - 1 AS ?r)
+        BIND("0123456789abcdef" AS ?digits)
+        BIND(CONCAT("0000", SUBSTR(?digits, xsd:integer(FLOOR(?r / 256)) + 1, 1), SUBSTR(?digits, xsd:integer(FLOOR(?r / 16) - 16 * FLOOR(?r / 256)) + 1, 1),
+          SUBSTR(?digits, xsd:integer(?r - 16 * FLOOR(?r / 16)) + 1, 1), "0") AS ?offset)
+        BIND(SUBSTR(?shownHex, ?r * 48 + 1, 47) AS ?rowHex)
+        BIND(SUBSTR(?ascii, ?r * 16 + 1, 16) AS ?rowAscii)
+        BIND(CONCAT(STR($this), "/~r", STR(?r)) AS ?k)
+        BIND(IRI(?k) AS ?row)
+        BIND(IF(?r > 0, IRI(CONCAT(STR($this), "/~r", STR(?r - 1))), ?none) AS ?previousRow)
+        BIND(IRI(CONCAT(?k, "-offset")) AS ?offsetEl)
+        BIND(IRI(CONCAT(?k, "-offset-text")) AS ?offsetText)
+        BIND(IRI(CONCAT(?k, "-hex")) AS ?hexEl)
+        BIND(IRI(CONCAT(?k, "-hex-text")) AS ?hexText)
+        BIND(IRI(CONCAT(?k, "-ascii")) AS ?asciiEl)
+        BIND(IRI(CONCAT(?k, "-ascii-text")) AS ?asciiText)
+      } }
+    }
+  }
+}""" .
+c:HexViewRendering-sparql-text a sem:Rule ;
+    sem:implements c:HexViewRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Text , sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?empty , ?line .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?previousLine ord:immediatelyPrecedes ?line .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?data .
+}
+WHERE {
+  $this a c:HexView .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?payload)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?payload))
+      BIND("sem-empty" AS ?rootClass)
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No payload.")) AS ?emptyText)
+    } UNION {
+      FILTER(BOUND(?payload))
+      LATERAL { OPTIONAL { $this c:limit ?limitRaw } }
+      BIND(FLOOR(COALESCE(xsd:double(STR(?limitRaw)), 512)) AS ?limit0)
+      BIND(IF(?limit0 > 65536, 65536, IF(?limit0 < 16, 16, ?limit0)) AS ?limit)
+      BIND(sx:utf8Hex(?payload) AS ?allHex)
+      BIND(IF(?allHex = "", 0, xsd:integer((STRLEN(?allHex) + 1) / 3)) AS ?bytes)
+      BIND(IF(?bytes < ?limit, ?bytes, xsd:integer(?limit)) AS ?shown)
+      BIND(SUBSTR(?allHex, 1, ?shown * 3 - 1) AS ?shownHex)
+      BIND(xsd:integer(CEIL(?shown / 16)) AS ?rowCount)
+      BIND(?bytes - ?shown AS ?rest)
+      BIND(IF(?rest > 0, CONCAT("… ", STR(?rest), " more ", IF(?rest = 1, "byte", "bytes")), ?none) AS ?more)
+      # The printable ASCII of each byte, '.' for the rest: a character's bytes are as many as UTF-8 takes.
+      BIND(SUBSTR(?payload, 1, xsd:integer(?limit)) AS ?head)
+      LATERAL { OPTIONAL { SELECT ?head (GROUP_CONCAT(?asciiPart; separator="") AS ?asciiAll) WHERE {
+        { SELECT ?head ?asciiPart WHERE { (?head) sx:chars (?asciiCh ?asciiAt)
+            BIND(sx:codepoint(?asciiCh, 1) AS ?cp)
+            BIND(IF(?cp >= 32 && ?cp < 127, ?asciiCh, IF(?cp < 128, ".", IF(?cp < 2048, "..", IF(?cp < 65536, "...", "....")))) AS ?asciiPart) } ORDER BY ?asciiAt }
+      } GROUP BY ?head } }
+      BIND(SUBSTR(COALESCE(?asciiAll, ""), 1, ?shown) AS ?ascii)
+      LATERAL { {
+        BIND(SUBSTR(?allHex, 1, ?rowCount) AS ?rowSpan)
+        (?rowSpan) sx:chars (?rowCh ?rowAt)
+        BIND(?rowAt - 1 AS ?r)
+        BIND("0123456789abcdef" AS ?digits)
+        BIND(CONCAT("0000", SUBSTR(?digits, xsd:integer(FLOOR(?r / 256)) + 1, 1), SUBSTR(?digits, xsd:integer(FLOOR(?r / 16) - 16 * FLOOR(?r / 256)) + 1, 1),
+          SUBSTR(?digits, xsd:integer(?r - 16 * FLOOR(?r / 16)) + 1, 1), "0") AS ?offset)
+        BIND(SUBSTR(?shownHex, ?r * 48 + 1, 47) AS ?rowHex)
+        BIND(SUBSTR(?ascii, ?r * 16 + 1, 16) AS ?rowAscii)
+        BIND(?r AS ?n)
+        BIND(CONCAT(?offset, "  ", ?rowHex, SUBSTR("                                               ", 1, 47 - STRLEN(?rowHex)), "  |", ?rowAscii, "|") AS ?data)
+      } UNION {
+        FILTER(BOUND(?more))
+        BIND(?rowCount AS ?n)
+        BIND(?more AS ?data)
+      } }
+      BIND(IRI(CONCAT(STR($this), "/~line", STR(?n))) AS ?line)
+      BIND(IRI(CONCAT(STR($this), "/~line", STR(?n), "-text")) AS ?lineText)
+      BIND(IF(?n > 0, IRI(CONCAT(STR($this), "/~line", STR(?n - 1))), ?none) AS ?previousLine)
+    }
+  }
+}""" .
 
 # --- BodyViewer: one payload as text, hex or JSON ------------------------------------------------
 # The representation is graph state on the viewer (c:representation), chosen by toggle buttons

@@ -52,6 +52,71 @@ describe('payload components', () => {
   })
 })
 
+// The hex view and the JSON tree in SPARQL (#7): bytes by sx:utf8Hex, rows and characters by sx:chars,
+// the JSON parsed by sx:json; the same as their function twins, on screen and as text, as payloads and
+// limits change. On wat (Oxigraph has no sx: functions, so it runs the twins either way).
+describe('payload views, SPARQL and function rules alike (wat)', () => {
+  const sites = () =>
+    (['sparql', 'function'] as const).map((prefer) => {
+      const h = mountShell(5, 'wat', prefer)
+      const f = h.store.factory
+      const app = f.namedNode(UI + 'app')
+      const group = f.namedNode(UI + 'galleryGroup')
+      h.showPage('Components')
+      h.runtime.apply({ remove: h.store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupData'))] })
+      h.shell.flush()
+      return { ...h, text: h.runtime.project({ modality: MOD.Text, prefer, name: 'text-payload', roots: [UI + 'dt-payload'] }) }
+    })
+  type H = ReturnType<typeof sites>[number]
+  const html = (h: H, id: string) => [...h.document.querySelectorAll('*')].find((e) => h.shell.keyOf(e) === `${UI}${id}/~root`)?.outerHTML
+  const same = (hs: H[], id: string, what: string) => {
+    const [a, b] = hs.map((h) => html(h, id))
+    expect(a, what).toBeDefined()
+    expect(a, what).toBe(b)
+    const [ta, tb] = hs.map((h) => toText(h.text.index, UI + id))
+    expect(ta, what).toBe(tb)
+  }
+  const set = (hs: H[], id: string, p: string, value?: string, datatype?: string) => {
+    for (const h of hs) {
+      const f = h.store.factory
+      const s = f.namedNode(UI + id)
+      const add = value === undefined ? [] : [f.quad(s, f.namedNode(p), datatype ? f.literal(value, f.namedNode(datatype)) : f.literal(value))]
+      h.runtime.apply({ remove: h.store.match(s, f.namedNode(p), null), add })
+      h.shell.flush()
+    }
+  }
+
+  it('chooses the SPARQL rules on wat', () => {
+    const rules = (sites()[0]!.screen.engine as unknown as { rules: { slot: string; kind: string }[] }).rules
+    for (const slot of ['HexViewRendering']) expect(rules.find((r) => r.slot === C + slot)?.kind, slot).toBe('sparql')
+  })
+
+  it('writes the same hex dump of any payload, up to its limit', () => {
+    const hs = sites()
+    same(hs, 'dt-hex-greeting', 'at start')
+    const INT = 'http://www.w3.org/2001/XMLSchema#integer'
+    for (const [what, value] of [
+      ['empty', ''],
+      ['sixteen bytes', '0123456789abcdef'],
+      ['control characters and DEL', 'a\tb\u0000c\u007f\r\n~ '],
+      ['four-byte characters', '😀 ok 𝄞 ✓ ü'.repeat(3)],
+      ['longer than the limit', 'x'.repeat(63) + '€€'],
+    ]) {
+      set(hs, 'dt-hex-greeting', C + 'value', value)
+      same(hs, 'dt-hex-greeting', what!)
+    }
+    for (const limit of ['1', '17', '1000000']) {
+      set(hs, 'dt-hex-greeting', C + 'limit', limit, INT)
+      same(hs, 'dt-hex-greeting', 'limit ' + limit)
+    }
+    set(hs, 'dt-hex-greeting', C + 'value')
+    same(hs, 'dt-hex-greeting', 'no payload')
+    // The body viewer's hex view: a payload bound through a selection.
+    for (const h of hs) h.fire([...h.document.querySelectorAll('button')].find((b) => h.shell.keyOf(b) === UI + 'dt-body-fixed/~as-hex')!, 'click')
+    same(hs, 'dt-body-fixed', 'a body as hex')
+  })
+})
+
 for (const prefer of ['sparql', 'function'] as const) {
   describe(`c:JsonTree (${prefer})`, () => {
     it('shows keys in source order, sizes of containers and values by type, open to c:expandDepth', () => {
