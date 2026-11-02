@@ -12,7 +12,7 @@ import { exampleSpec, Sandboxes } from '../src/sandbox.ts'
 import { renderDocument } from '../src/server/document.ts'
 import { graphLanguages, renderToString } from '../src/server/render.ts'
 import type { GraphStore } from '../src/store/types.ts'
-import { takeOver } from '../src/web/takeover.ts'
+import { replayKept, takeOver } from '../src/web/takeover.ts'
 import { prepareSite, ROOT, siteLayers } from '../demo/site.ts'
 
 // Live examples rendered on the server (#220, docs/SSR.md): each one shown has its sandbox built at
@@ -40,9 +40,10 @@ async function siteClient(url: string) {
 }
 
 /** The client's live examples over `host` (its renderer's), built at once (the site defers them until seen). */
-function liveExamples(client: Awaited<ReturnType<typeof siteClient>>, renderer: DomRenderer) {
+function liveExamples(client: Awaited<ReturnType<typeof siteClient>>, renderer: DomRenderer, defer?: (slot: Element, build: () => void) => void) {
   const sandboxes = new Sandboxes(client.runtime, client.screen, {
     renderer,
+    defer,
     shown: (c) => client.screen.index.isShown(c, new Set([renderer.rootFocus])),
     flush: () => flush(),
     load,
@@ -137,6 +138,62 @@ describe('live examples rendered on the server', () => {
     sandboxes.dispose()
     server.runtime.dispose()
     client.runtime.dispose()
+  })
+
+  it("keeps what is done in the home page's todo before its sandbox runs, and does it then (#263)", async () => {
+    const server = await renderSite(await site(), '/')
+    const { host, window } = parsed(renderDocument(TEMPLATE, server, { stylesheet: { href: '/semblance.css' } }))
+    // The example's rendering is a region of its own to take over, after the page.
+    const served = host.querySelector('[data-sem-sandbox^="ssr-"]')!
+    expect(served.hasAttribute('data-sem-ssr')).toBe(true)
+    // The visitor ticks a todo, types one and adds it while the client loads (the capture script keeps each event).
+    const screen = host.querySelector('.sem-live-screen')!
+    const box = [...screen.querySelectorAll('li')].find((li) => li.textContent!.includes('Sketch'))!.querySelector('input')!
+    const field = screen.querySelector('input[type=text]') as HTMLInputElement
+    const add = [...screen.querySelectorAll('button')].find((b) => b.textContent === 'Add')!
+    const kept = (target: Element, type: string) => {
+      const e = new window.Event(type, { bubbles: true })
+      Object.defineProperty(e, 'target', { value: target })
+      return e
+    }
+    // Live form state, apart from the attributes as in a browser (linkedom's setters write the attributes).
+    Object.defineProperty(box, 'checked', { value: true, writable: true, configurable: true })
+    Object.defineProperty(field, 'value', { value: 'Ship it', writable: true, configurable: true })
+    let stopped = 0
+    const g = globalThis as { __semblanceKept?: { events: Event[]; stop(): void } }
+    g.__semblanceKept = { events: [kept(box, 'change'), kept(field, 'input'), kept(add, 'click')], stop: () => void stopped++ }
+    try {
+      // The page is taken over and replays what it kept: none of it is the page's, so all of it stays kept.
+      const client = await siteClient('/')
+      const renderer = new DomRenderer(client.screen.index, host, ROOT)
+      const page = takeOver(renderer)
+      expect(page.mismatches).toBe(0)
+      let build: (() => void) | undefined
+      const { sandboxes, flush } = liveExamples(client, renderer, (_slot, b) => void (build = b))
+      flush()
+      expect(page.replay()).toBe(0)
+      expect(g.__semblanceKept?.events.length).toBe(3)
+      expect(stopped).toBe(0)
+      // The sandbox runs (in the site, once its graphs are here and it is seen): it takes its region over and does what was kept.
+      expect(build).toBeDefined()
+      build!()
+      expect(served.hasAttribute('data-sem-ssr')).toBe(false)
+      expect(g.__semblanceKept).toBeUndefined()
+      expect(stopped).toBe(1)
+      const text = host.querySelector('.sem-live-text')!.textContent!
+      expect(text).toContain('[x] Sketch the style layer')
+      expect(text).toContain('Ship it')
+      const f = client.store.factory
+      const sb = client.store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(NS.c + 'LiveExample')).map((q) => sandboxes.sandboxOf(q.subject.value)).find(Boolean)!
+      expect(sb.store.match(null, sb.store.factory.namedNode(NS.rdfs + 'label'), sb.store.factory.literal('Ship it'), sb.store.factory.defaultGraph()).length).toBe(1)
+      expect(host.querySelector('.sem-live-data [data-sem-change=added]')).not.toBeNull()
+      expect(replayKept(host)).toBe(0) // once
+      sandboxes.dispose()
+      client.runtime.dispose()
+    } finally {
+      g.__semblanceKept = undefined
+      server.runtime.dispose()
+    }
   })
 
   it.each(['/', '/docs/start/', '/docs/recipes/', '/ar/docs/styling/', '/uk/docs/views/'])('on %s, renders each pane as the client renders it', async (url) => {

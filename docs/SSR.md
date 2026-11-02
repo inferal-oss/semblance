@@ -170,13 +170,18 @@ during the first moments. The first sandbox of a slot the server rendered takes 
 over (`DomRenderer.adopt`, `Sandboxes.adopted`) rather than replacing them: its first projection
 is the server's, so no node is created, and nothing flashes or moves. Its own stylesheet replaces
 the server's `<style>`. The frame then reads `live`. A source edit remembered from earlier in the
-session differs from what the server rendered, so it is patched, like any change. A click on a
-pre-rendered example before its sandbox runs does nothing.
+session differs from what the server rendered, so it is patched, like any change. The server marks
+each example's rendering `data-sem-ssr`, a region of its own to take over: what is done there before
+its sandbox runs (a todo ticked, one typed and added) is kept and happens once the sandbox has
+taken the region over, never on a control that changes while the graph does not.
 
-`CAPTURE_SCRIPT` sits right after the mount element. It keeps clicks (on anything but a link)
-and submits, holding them back, and it keeps `input` and `change` while letting them happen (what
-was typed stays in the field). After takeover, `replay()` dispatches each kept event again on its
-element.
+`CAPTURE_SCRIPT` sits right before the mount element, so it runs before any of the HTML it keeps
+events for has arrived. It keeps clicks (on anything but a link) and submits, holding them back,
+and it keeps `input` and `change` while letting them happen (what was typed stays in the field); no
+listener sees a kept event. After takeover, `replay()` dispatches
+each kept event again on its element, except those in a region still marked `data-sem-ssr` (a live
+example): they stay kept until that region's own takeover (`replayKept(region)`). The script stops
+keeping once no region is left.
 
 ## Making the first moments cheap
 

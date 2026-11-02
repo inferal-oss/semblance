@@ -231,7 +231,7 @@ describe('server-side rendering: documents', () => {
   it('puts the language, direction and attributes on <html>, and takes the HTML as it is', () => {
     const doc = renderDocument(TEMPLATE, { html: '<p>$& $1 cost</p>', css: 'p{}', lang: 'ar', dir: 'rtl' }, { attributes: { 'data-sem-color-scheme': 'dark' }, head: '<link rel="modulepreload" href="/a.js">' })
     expect(doc).toContain('<html lang="ar" dir="rtl" data-sem-color-scheme="dark">')
-    expect(doc).toContain('<div id="app" data-sem-ssr><p>$& $1 cost</p></div><script>')
+    expect(doc).toContain('</script><div id="app" data-sem-ssr><p>$& $1 cost</p></div>')
     expect(doc).toContain('<style data-sem-styles>p{}</style><link rel="modulepreload" href="/a.js"></head>')
     expect(() => renderDocument('<html><body></body></html>', { html: '', lang: 'en', dir: 'ltr' })).toThrow(/no empty <div id="app">/)
   })

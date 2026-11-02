@@ -46,8 +46,9 @@ export function documentParts(template: string, rendered: Pick<Rendered, 'css' |
   const open = new RegExp(`<div id="${mount}"([^>]*)>\\s*</div>`, 'i')
   const m = open.exec(doc)
   if (!m) throw new Error(`The template has no empty <div id="${mount}"></div> to render into`)
+  // Before the mount element: what is clicked while the rest of the HTML streams in is kept too.
   const capture = opts.capture === false ? '' : `<script>${CAPTURE_SCRIPT}</script>`
-  return [doc.slice(0, m.index) + `<div id="${mount}"${m[1]} ${SSR_ATTRIBUTE}>`, `</div>${capture}` + doc.slice(m.index + m[0].length)]
+  return [doc.slice(0, m.index) + `${capture}<div id="${mount}"${m[1]} ${SSR_ATTRIBUTE}>`, '</div>' + doc.slice(m.index + m[0].length)]
 }
 
 /** The document: `template` with `rendered` in its mount element. */
