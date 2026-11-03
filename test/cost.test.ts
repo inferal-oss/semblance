@@ -153,7 +153,8 @@ describe('interaction cost', () => {
         .map(([k, v]) => `${name}.${k}: ${before[name]![k]} -> ${v}`),
     )
     expect(grew).toEqual([])
-  }, 120_000)
+    // It counts work, not time; on a loaded machine its two rounds of every interaction take two minutes.
+  }, 180_000)
 })
 
 describe('fields over one node', () => {
