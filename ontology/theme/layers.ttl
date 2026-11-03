@@ -7,41 +7,57 @@
 
 # --- keyboard: a hint after any element that declares a shortcut or a key hint (Apple or other glyphs),
 # left to right in a right-to-left page too (⌘K, not K⌘) ---
+# Its box is as wide as the wider of the two spellings, whichever the viewer's platform is (the root's
+# data-sem-platform=apple, which a server-rendered page sets in its head): the hint holds both, one
+# line each, the viewer's first; it is one line tall and clips the other. No padding above or below
+# (the line height is the spacing): the other line never shows through it. So nothing moves when the
+# platform is marked, late or never (without scripts). Only the first line is the hint, seen; the
+# element's aria-keyshortcuts says the keys, so the hint is left out of its name ('' after the slash).
 # A key hint (key:hint) takes its glyphs from the part rules below; a button lays it out as a shortcut.
 [] a sty:StyleRule ; sty:part ":is(button, a, [role=button], [role=switch]):is([data-sem-shortcut], [data-sem-key-hint])::after" ;
-    sty:declares [ sty:property "margin-inline-start" ; sty:raw "8px" ] ,
-                 [ sty:property "padding" ; sty:raw "2px 5px" ] ,
+    sty:declares [ sty:property "display" ; sty:raw "inline-grid" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "content-box" ] ,
+                 [ sty:property "height" ; sty:raw "1lh" ] ,
+                 [ sty:property "overflow" ; sty:raw "clip" ] ,
+                 [ sty:property "white-space" ; sty:raw "pre" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "8px" ] ,
+                 [ sty:property "padding" ; sty:raw "0 5px" ] ,
                  [ sty:property "border-radius" ; sty:raw "5px" ] ,
                  [ sty:property "border" ; sty:raw "1px solid color-mix(in oklab, currentColor 28%, transparent)" ] ,
-                 [ sty:property "font" ; sty:raw "600 10px/1 var(--sem-font-mono)" ] ,
+                 [ sty:property "font" ; sty:raw "600 10px/14px var(--sem-font-mono)" ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] ,
                  [ sty:property "opacity" ; sty:raw "0.75" ] ,
                  [ sty:property "vertical-align" ; sty:raw "1px" ] ,
                  [ sty:property "direction" ; sty:raw "ltr" ] ,
                  [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:part ":is(button, a, [role=button], [role=switch])[data-sem-shortcut]::after" ;
-    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-other)" ] .
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-other) '\\A' attr(data-sem-shortcut-apple) / ''" ] .
 [] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] :is(button, a, [role=button], [role=switch])[data-sem-shortcut]::after" ;
-    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-apple)" ] .
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-apple) '\\A' attr(data-sem-shortcut-other) / ''" ] .
 
 # A hint on the part a component's class names (key:hintPart), or on a component's root (key:hint):
 # a key cap after it; at the end of a field box, gone while the field has the focus (typing there is
-# not the shortcut).
+# not the shortcut). Both spellings in one box, as a button's shortcut above.
 [] a sty:StyleRule ; sty:part "[data-sem-key-hint]::after" ;
-    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-key-hint)" ] ,
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-key-hint) '\\A' attr(data-sem-key-hint-apple) / ''" ] ,
+                 [ sty:property "display" ; sty:raw "inline-grid" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "content-box" ] ,
+                 [ sty:property "height" ; sty:raw "1lh" ] ,
+                 [ sty:property "overflow" ; sty:raw "clip" ] ,
+                 [ sty:property "white-space" ; sty:raw "pre" ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
-                 [ sty:property "min-width" ; sty:raw "1.6em" ] ,
-                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
-                 [ sty:property "padding" ; sty:raw "2px 5px" ] ,
+                 [ sty:property "min-width" ; sty:raw "1ch" ] ,
+                 [ sty:property "padding" ; sty:raw "0 5px" ] ,
                  [ sty:property "border-radius" ; sty:raw "5px" ] ,
                  [ sty:property "border" ; sty:raw "1px solid color-mix(in oklab, currentColor 28%, transparent)" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] ,
-                 [ sty:property "font" ; sty:raw "600 11px/1.2 var(--sem-font-mono)" ] ,
+                 [ sty:property "font" ; sty:raw "600 11px/17.2px var(--sem-font-mono)" ] ,
                  [ sty:property "text-align" ; sty:raw "center" ] ,
                  [ sty:property "pointer-events" ; sty:raw "none" ] ,
                  [ sty:property "direction" ; sty:raw "ltr" ] ,
                  [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-key-hint]::after" ;
-    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-key-hint-apple)" ] .
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-key-hint-apple) '\\A' attr(data-sem-key-hint) / ''" ] .
 [] a sty:StyleRule ; sty:part "[data-sem-key-hint]:not(button, a, [role=button], [role=switch]):focus-within::after" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
@@ -62,8 +78,13 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-md ] .
 [] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part "> div:nth-child(odd)" ;
     sty:declares [ sty:property "background" ; sty:token tok:surface-sunken ] .
+# Both spellings in one grid cell, the viewer's seen and the other hidden: as wide as the wider.
 [] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part "dd" ;
-    sty:declares [ sty:property "margin" ; sty:raw "0" ] .
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "display" ; sty:raw "grid" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part "dd > kbd" ;
+    sty:declares [ sty:property "grid-area" ; sty:raw "1 / 1" ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part "kbd" ;
     sty:declares [ sty:property "padding" ; sty:raw "3px 7px" ] ,
                  [ sty:property "border-radius" ; sty:raw "6px" ] ,
@@ -74,11 +95,11 @@
                  [ sty:property "direction" ; sty:raw "ltr" ] ,
                  [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part ".sem-apple" ;
-    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+    sty:declares [ sty:property "visibility" ; sty:raw "hidden" ] .
 [] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-c=shortcut-list] .sem-apple" ;
-    sty:declares [ sty:property "display" ; sty:raw "inline" ] .
+    sty:declares [ sty:property "visibility" ; sty:raw "visible" ] .
 [] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-c=shortcut-list] .sem-other" ;
-    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+    sty:declares [ sty:property "visibility" ; sty:raw "hidden" ] .
 
 # --- status: busy components ---
 [] a sty:StyleRule ; sty:part "[aria-busy=true]" ;

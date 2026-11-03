@@ -15,6 +15,7 @@ import { attachLightboxes } from './lightbox.ts'
 import { attachAnchoredPopups } from './anchored-popups.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 import { serverRendered, serverStyled, takeOver } from './takeover.ts'
+import { markPlatform } from './platform.ts'
 import { graphLanguages } from '../server/render.ts'
 import { Navigation, type NavigationOptions, rendererReveal } from '../navigation.ts'
 
@@ -117,6 +118,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   })
 
   const doc = element.ownerDocument
+  // The key hints' spelling (a server-rendered page's head has marked it already).
+  markPlatform(doc)
   // A server-rendered page links the stylesheet the server compiled: the same, so it is not compiled again.
   const sheet = serverStyled(doc) ? undefined : new (doc.defaultView ?? globalThis).CSSStyleSheet()
   if (sheet) {
