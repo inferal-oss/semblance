@@ -417,5 +417,12 @@ describe('bulk attributability', () => {
         'CONSTRUCT { ?root sem:renders $this ; rdfhtml:hasChild ?icon . ?icon rdfhtml:data "a. b" } WHERE { BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) BIND(IF(BOUND(?x), IRI(CONCAT(STR(?root), "-icon")), ?none) AS ?icon) }',
       ),
     ).toBe(true)
+    // A branch that is a node from the data (a zone another focus minted, #304) is not minted from the focus.
+    const zones = (pick: string) =>
+      `CONSTRUCT { ?zone rdfhtml:attribute ?attr } WHERE { OPTIONAL { $this dnd:zone ?declared } BIND(IF(BOUND(?declared), ${pick}, IRI(CONCAT(STR($this), "/~root"))) AS ?zone) BIND(IRI(CONCAT(STR(?zone), "-a")) AS ?attr) }`
+    expect(attributable(zones('?declared'))).toBe(false)
+    expect(attributable(zones('?none'))).toBe(true)
+    // Quotes inside a single-quoted string do not hide the rest of the query.
+    expect(attributable(`CONSTRUCT { ?root a rdfhtml:Div } WHERE { FILTER(?x != '"') BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }`)).toBe(true)
   })
 })

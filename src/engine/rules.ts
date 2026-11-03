@@ -363,21 +363,51 @@ export function attributable(query: string): boolean {
   }
   if (end < 0) return false
   // Drop string literals, so their dots and semicolons don't split statements.
-  const template = query.slice(start + 1, end).replace(/"""[\s\S]*?"""|"(?:[^"\\]|\\.)*"/g, '""')
+  const template = query.slice(start + 1, end).replace(STRINGS, '""')
   // Minted from $this, or from a node minted from it (to a fixed point).
   const minted = new Set(['$this', '?this'])
   // A BIND whose expression builds an IRI from a minted node (IRI(CONCAT(STR(?x), ...)),
-  // possibly inside IF / COALESCE) mints too.
-  const binds = [...query.matchAll(/BIND\s*\(([\s\S]*?)\s+AS\s+(\?\w+)\s*\)/gi)]
+  // possibly inside IF / COALESCE) mints too - unless a branch of it is a node from the data
+  // (IF(?zoned, ?declaredZone, IRI(…))): a variable bound elsewhere in the query, not minted.
+  const text = query.replace(STRINGS, '""')
+  const bindings = [...text.matchAll(/BIND\s*\(([\s\S]*?)\s+AS\s+(\?\w+)\s*\)/gi)]
+  // Variables bound outside BIND expressions (a pattern, VALUES) or by a BIND; the rest (?none) stay unbound.
+  const outside = bindings.reduce((t, m) => t.replace(m[0], ' '), text.slice(text.search(/WHERE\s*\{/i)))
+  const bound = (v: string) => bindings.some((m) => m[2] === v) || new RegExp(`[?$]${v.slice(1)}\\b`).test(outside)
+  const binds = bindings
     .filter((m) => /IRI\s*\(/i.test(m[1]!))
-    .map((m) => ({ from: [...m[1]!.matchAll(/STR\s*\(\s*([$?]\w+)\s*\)/gi)].map((x) => x[1]!), to: m[2]! }))
+    .map((m) => ({ from: [...m[1]!.matchAll(/STR\s*\(\s*([$?]\w+)\s*\)/gi)].map((x) => x[1]!), branches: branchVariables(m[1]!), to: m[2]! }))
   for (let grew = true; grew; ) {
     grew = false
-    for (const { from, to } of binds) if (!minted.has(to) && from.length && from.every((v) => minted.has(v))) minted.add(to), (grew = true)
+    for (const { from, branches, to } of binds) {
+      if (minted.has(to) || !from.length || !from.every((v) => minted.has(v))) continue
+      if (branches.every((v) => minted.has(v) || !bound(v))) minted.add(to), (grew = true)
+    }
   }
   const subjects = template
     .split(/\s\.(?=\s|$)/)
     .map((statement) => statement.trim().split(/\s+/)[0])
     .filter((t): t is string => !!t)
   return subjects.every((t) => minted.has(t))
+}
+
+/** SPARQL string literals, long and short, in double or single quotes. */
+const STRINGS = /"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g
+
+/** The variables an expression can evaluate to as they are: itself, or a branch of IF / COALESCE. */
+function branchVariables(expression: string): string[] {
+  const e = expression.trim()
+  if (/^[$?]\w+$/.test(e)) return [e]
+  const call = /^(IF|COALESCE)\s*\(/i.exec(e)
+  if (!call || !e.endsWith(')')) return []
+  const args: string[] = []
+  let depth = 0
+  let from = call[0].length
+  for (let i = from; i < e.length - 1; i++) {
+    if (e[i] === '(') depth++
+    else if (e[i] === ')') depth--
+    else if (e[i] === ',' && depth === 0) args.push(e.slice(from, i)), (from = i + 1)
+  }
+  args.push(e.slice(from, e.length - 1))
+  return (call[1]!.toUpperCase() === 'IF' ? args.slice(1) : args).flatMap(branchVariables)
 }
