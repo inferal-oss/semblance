@@ -7,6 +7,8 @@ import { mint } from '../rdf.ts'
 import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
 import { queryForm } from '../sparql-forms.ts'
 import { emitTokens, section, topNode } from './turtle.ts'
+import { maintainedRows } from '../view/rows.ts'
+import { cpCompare } from '../turtle.ts'
 import { TUPLE } from '../render/order-key.ts'
 import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text, declaredPrefixes, fnv } from './util.ts'
 import { hitToggles } from './actions.ts'
@@ -111,7 +113,7 @@ const int = (ctx: RuleContext, n: number) => ctx.f.literal(String(n), ctx.nn(XSD
 
 /** The prefixes the store knows: the framework's (NS) and those declared in the graph (sh:declare), longest namespace first. */
 function prefixMap(ctx: RuleContext): [string, string][] {
-  return ctx.memo('workbench:prefixes', () => Object.entries(declaredPrefixes(ctx)).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0])))
+  return ctx.memo('workbench:prefixes', () => Object.entries(declaredPrefixes(ctx)).sort((a, b) => b[1].length - a[1].length || cpCompare(a[0], b[0])))
 }
 const prefixRecord = (ctx: RuleContext): Record<string, string> => ctx.memo('workbench:prefix-record', () => Object.fromEntries(prefixMap(ctx)))
 
@@ -321,40 +323,22 @@ interface Word {
   kind: 'keyword' | 'function'
 }
 
-const TERM_TYPES: [string, 'class' | 'property'][] = [
-  [OWL + 'Class', 'class'],
-  [RDFS + 'Class', 'class'],
-  [RDF + 'Property', 'property'],
-  [OWL + 'ObjectProperty', 'property'],
-  [OWL + 'DatatypeProperty', 'property'],
-  [OWL + 'AnnotationProperty', 'property'],
-]
 
-/** Every class and property declared in the store, by prefixed name (read once per engine). */
+/**
+ * Every class and property the graph declares or uses (c:TermIndex: a row each, maintained), by
+ * prefixed name, a class before a property; in no particular order.
+ */
 function termIndex(ctx: RuleContext): TermEntry[] {
-  return ctx.memo('workbench:terms', () =>
-    ctx.untraced(() => {
-      const byIri = new Map<string, TermEntry>()
-      const prefixes = prefixMap(ctx)
-      const add = (t: Term, kind: 'class' | 'property') => {
-        const iri = t.value
-        if (t.termType !== 'NamedNode' || byIri.get(iri)?.kind === 'class' || (byIri.has(iri) && kind === 'property')) return
-        const hit = prefixes.find(([, ns]) => iri.startsWith(ns) && PN_LOCAL.test(iri.slice(ns.length)))
-        if (hit) byIri.set(iri, { iri, prefix: hit[0], local: iri.slice(hit[1].length), kind })
-      }
-      for (const [type, kind] of TERM_TYPES) for (const q of ctx.match(null, RDF_TYPE, type)) add(q.subject, kind)
-      // Terms the graph uses without declaring them (rdfs:subClassOf, rdf:type, ex:priority...).
-      if (ctx.sparql) {
-        try {
-          for (const r of ctx.select('SELECT DISTINCT ?c WHERE { ?s a ?c } LIMIT 5000')) add(r.get('c')!, 'class')
-          for (const r of ctx.select('SELECT DISTINCT ?p WHERE { ?s ?p ?o } LIMIT 5000')) add(r.get('p')!, 'property')
-        } catch {
-          // Declared terms are enough.
-        }
-      }
-      return [...byIri.values()].sort((a, b) => a.prefix.localeCompare(b.prefix) || a.local.localeCompare(b.local))
-    }),
-  )
+  const byIri = new Map<string, TermEntry>()
+  const prefixes = prefixMap(ctx)
+  for (const row of maintainedRows(ctx, ctx.nn(NS.c + 'TermIndex'), true) ?? []) {
+    const t = row.get('term')
+    const kind = row.get('kind')?.value === 'class' ? 'class' : 'property'
+    if (t?.termType !== 'NamedNode' || byIri.get(t.value)?.kind === 'class') continue
+    const hit = prefixes.find(([, ns]) => t.value.startsWith(ns) && PN_LOCAL.test(t.value.slice(ns.length)))
+    if (hit) byIri.set(t.value, { iri: t.value, prefix: hit[0], local: t.value.slice(hit[1].length), kind })
+  }
+  return [...byIri.values()]
 }
 
 /** A language's own words (c:CodeWord individuals of the classes that say c:language it, and their subclasses). */
@@ -436,6 +420,9 @@ function inLiteral(before: string): boolean {
 
 const SUGGESTIONS = 8
 
+/** Names in the order SPARQL rules give them: by sx:sortKey ("en"), then by code point. */
+const collate = (a: string, b: string) => cpCompare(sortKey(a, 'en'), sortKey(b, 'en')) || cpCompare(a, b)
+
 const compareScores = (a: number[], b: number[]) => {
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i]! - b[i]!
   return 0
@@ -469,7 +456,7 @@ export function suggest(ctx: RuleContext, value: string, caret: number, language
   const rankTerms = (terms: TermEntry[], typed: string, used: Set<string>) =>
     terms
       .map((t) => ({ t, score: [used.size && !used.has(t.prefix) ? 1 : 0, t.local.startsWith(typed) ? 0 : 1, t.kind === 'class' ? 0 : 1, t.local.length] }))
-      .sort((a, b) => compareScores(a.score, b.score) || a.t.local.localeCompare(b.t.local) || a.t.prefix.localeCompare(b.t.prefix))
+      .sort((a, b) => compareScores(a.score, b.score) || collate(a.t.local, b.t.local) || collate(a.t.prefix, b.t.prefix))
       .map(({ t }) => ({ completion: `${t.prefix}:${t.local}`, kind: t.kind, about: ctx.nn(t.iri) }) as Candidate)
 
   if (word[0] === '?' || word[0] === '$') {
@@ -485,9 +472,9 @@ export function suggest(ctx: RuleContext, value: string, caret: number, language
   } else {
     if (word.length < 2) return undefined
     const upper = word === lower
-    for (const w of languageWords(ctx, language).filter((x) => starts(x.label, word) && x.label.toLowerCase() !== lower).sort((a, b) => (a.kind === b.kind ? a.label.length - b.label.length || a.label.localeCompare(b.label) : a.kind === 'keyword' ? -1 : 1)))
+    for (const w of languageWords(ctx, language).filter((x) => starts(x.label, word) && x.label.toLowerCase() !== lower).sort((a, b) => (a.kind === b.kind ? a.label.length - b.label.length || collate(a.label, b.label) : a.kind === 'keyword' ? -1 : 1)))
       items.push({ completion: upper && /^[A-Z_ ]+$/.test(w.label) ? w.label.toLowerCase() : w.label, kind: w.kind, about: w.node })
-    for (const [p, ns] of Object.entries(prefixRecord(ctx)).sort((a, b) => a[0].length - b[0].length || a[0].localeCompare(b[0])))
+    for (const [p, ns] of Object.entries(prefixRecord(ctx)).sort((a, b) => a[0].length - b[0].length || collate(a[0], b[0])))
       if (starts(p, word)) items.push({ completion: p + ':', kind: 'prefix', detail: ns })
     const used = new Set([...value.matchAll(/(?<![\w?$])([A-Za-z][\w-]*):/g)].map((u) => u[1]!))
     if (word.length >= 3) items.push(...rankTerms(termIndex(ctx).filter((t) => starts(t.local, word)), word, used))

@@ -7,6 +7,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 
 # A code editor: the text is graph state (c:value, c:caret), written by the input reaction on every
 # keystroke, which re-renders the editor (its highlighted lines and suggestions) and nothing else.
@@ -46,6 +47,22 @@ c:suggestionIndex a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:comment "On a rendered suggestion: its position in the list."@en .
 c:completion a owl:DatatypeProperty ;
     rdfs:comment "On a rendered suggestion: the text that accepting it puts in place of the word."@en .
+
+# The terms an editor suggests: every class and property the graph declares (owl:Class, rdfs:Class,
+# rdf:Property, owl:ObjectProperty, owl:DatatypeProperty, owl:AnnotationProperty) or uses (as a class,
+# as a predicate), a row each, maintained as the graph changes - a declaration or a use costs what it
+# changes, and a keystroke reads the rows, not the store.
+c:TermIndex a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ;
+    rdfs:label "the classes and properties the graph declares or uses"@en ;
+    sem:select """SELECT DISTINCT ?term ?kind WHERE {
+  {
+    VALUES (?declared ?kind) { (owl:Class "class") (rdfs:Class "class") (rdf:Property "property") (owl:ObjectProperty "property") (owl:DatatypeProperty "property") (owl:AnnotationProperty "property") }
+    ?term a ?declared .
+  }
+  UNION { ?anyInstance a ?term BIND("class" AS ?kind) }
+  UNION { ?anySubject ?term ?anyObject BIND("property" AS ?kind) }
+  FILTER(isIRI(?term))
+}""" .
 
 c:CodeEditorRendering a sem:Rendering ; sem:targets c:CodeEditor ; sem:stratum 0 ;
     sem:functionOnly "awaits sx:Matches (sx:matches): it tokenizes the text for highlighting and finds the word before the caret to complete." ;
