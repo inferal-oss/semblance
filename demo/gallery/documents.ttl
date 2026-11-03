@@ -1,4 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix file: <https://semblance.dev/ns/file#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix blk: <https://semblance.dev/ns/block#> .
@@ -34,7 +36,7 @@ ui:doc-text-spec a c:Specimen ; c:label "Text, headings and marks" ;
     c:demonstrates c:BlockEditor , blk:Document , blk:Paragraph , blk:Heading1 , blk:Heading2 , blk:Quote , blk:Callout , blk:Strong , blk:Emphasis , blk:InlineCode , blk:Strike , blk:Link , blk:Mention , blk:Contents ;
     c:help "A block editor (c:of a blk:Document). Marks are ranges of a block's text (oa:start, oa:end) that may overlap: the text is split into runs at their boundaries." ;
     c:children ( ui:doc-text-actions ui:doc-text-sides ) .
-ui:doc-text-editor a c:BlockEditor ; c:label "About blocks"@en , "Про блоки"@uk , "Über Blöcke"@de , "عن الكتل"@ar ; c:of ui:doc-text-doc ;
+ui:doc-text-editor a c:BlockEditor ; c:label "About blocks"@en , "Про блоки"@uk , "Über Blöcke"@de , "عن الكتل"@ar ; c:of ui:doc-text-doc ; file:keepIn blk:Uploads ;
     c:editable true ; c:undoer ui:doc-text-undo ; c:redoer ui:doc-text-redo .
 ui:doc-text-actions a c:Toolbar ; c:label "History"@en , "Історія"@uk , "Verlauf"@de , "السجل"@ar ; c:children ( ui:doc-text-undo ui:doc-text-redo ) .
 ui:doc-text-undo a c:Button , beh:Undoer ; c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar ; sty:size sty:Small .
@@ -69,7 +71,7 @@ ui:doc-structure-spec a c:Specimen ; c:label "Lists, toggles, tables and columns
     c:demonstrates blk:BulletedList , blk:NumberedList , blk:TodoList , blk:ListItem , blk:TodoItem , blk:Toggle , blk:Table , blk:Row , blk:Cell , blk:Columns , blk:Column , blk:Divider ;
     c:help "Containers hold blocks (po:contains) in a chain (co:nextItem): a list its items, an item its nested list, a toggle what it hides, a table its rows, columns their blocks." ;
     c:children ( ui:doc-structure-sides ) .
-ui:doc-structure-editor a c:BlockEditor ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo ; c:label "Plan"@en , "План"@uk , "Plan"@de , "خطة"@ar ; c:of ui:doc-structure-doc ; c:editable true .
+ui:doc-structure-editor a c:BlockEditor ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo ; c:label "Plan"@en , "План"@uk , "Plan"@de , "خطة"@ar ; c:of ui:doc-structure-doc ; file:keepIn blk:Uploads ; c:editable true .
 ui:doc-structure-doc a blk:Document ;
     po:contains ui:ds-bullets , ui:ds-numbers , ui:ds-todos , ui:ds-toggle , ui:ds-hr , ui:ds-table , ui:ds-columns .
 ui:ds-bullets a blk:BulletedList ; po:contains ui:ds-b1 , ui:ds-b2 ; co:nextItem ui:ds-numbers .
@@ -111,7 +113,7 @@ ui:doc-media-spec a c:Specimen ; c:label "Code, math, media and links" ;
     c:demonstrates blk:Code , blk:Math , blk:Image , blk:File , blk:Bookmark , blk:Embed , blk:DocumentLink ;
     c:help "Atoms of a document: code as written, a formula in TeX, an image with its caption, a file, a bookmark of a page, an embedded page in a sandboxed frame, and a link to another document. Their details are schema.org." ;
     c:children ( ui:doc-media-sides ) .
-ui:doc-media-editor a c:BlockEditor ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo ; c:label "Attachments"@en , "Вкладення"@uk , "Anhänge"@de , "مرفقات"@ar ; c:of ui:doc-media-doc ; c:editable true .
+ui:doc-media-editor a c:BlockEditor ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo ; c:label "Attachments"@en , "Вкладення"@uk , "Anhänge"@de , "مرفقات"@ar ; c:of ui:doc-media-doc ; file:keepIn blk:Uploads ; c:editable true .
 ui:doc-media-doc a blk:Document ;
     po:contains ui:dm-code , ui:dm-math , ui:dm-image , ui:dm-file , ui:dm-bookmark , ui:dm-link .
 ui:dm-code a blk:Code ; schema:programmingLanguage "turtle" ; co:nextItem ui:dm-math ;
@@ -119,8 +121,8 @@ ui:dm-code a blk:Code ; schema:programmingLanguage "turtle" ; co:nextItem ui:dm-
     rdf:value "Hello" ;
     blk:mark [ a blk:Strong ; oa:start 0 ; oa:end 5 ] .""" .
 ui:dm-math a blk:Math ; rdf:value "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}" ; co:nextItem ui:dm-image .
-ui:dm-image a blk:Image ; schema:contentUrl "photos/harbour.jpg" ; schema:description "A harbour at dusk, boats moored along the quay" ; schema:caption "An image block: the picture (schema:contentUrl), its description and its caption." ; co:nextItem ui:dm-file .
-ui:dm-file a blk:File ; schema:contentUrl "/llms.txt" ; schema:name "llms.txt" ; schema:contentSize "4 KB" ; co:nextItem ui:dm-bookmark .
+ui:dm-image a blk:Image ; dnd:members blk:file ; file:keepIn blk:Uploads ; file:accept "image/*" ; schema:contentUrl "photos/harbour.jpg" ; schema:description "A harbour at dusk, boats moored along the quay" ; schema:caption "An image block: the picture (schema:contentUrl), its description and its caption." ; co:nextItem ui:dm-file .
+ui:dm-file a blk:File ; dnd:members blk:file ; file:keepIn blk:Uploads ; schema:contentUrl "/llms.txt" ; schema:name "llms.txt" ; schema:contentSize "4 KB" ; co:nextItem ui:dm-bookmark .
 ui:dm-bookmark a blk:Bookmark ; schema:url "http://purl.org/spar/doco" ; schema:name "DoCo, the Document Components Ontology" ;
     schema:description "Structural and rhetorical components of documents: paragraphs, sections, lists, figures, tables." ; co:nextItem ui:dm-link .
 ui:dm-link a blk:DocumentLink ; blk:target ui:doc-text-doc .
@@ -151,7 +153,7 @@ ui:doc-custom-spec a c:Specimen ; c:label "A block type of your own" ;
     c:demonstrates blk:Block , blk:BlockShortcut ;
     c:help "A site adds a block type in Turtle: a class (here a paragraph that is an aside: it names its element, so the shared rendering draws it), its style, its shape, its / entry and a Markdown shortcut (\"! \"). Type / and find it, or start a line with \"! \"." ;
     c:children ( ui:doc-custom-sides ) .
-ui:doc-custom-editor a c:BlockEditor ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo ; c:label "Notes"@en , "Нотатки"@uk , "Notizen"@de , "ملاحظات"@ar ; c:of ui:doc-custom-doc ; c:editable true .
+ui:doc-custom-editor a c:BlockEditor ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo ; c:label "Notes"@en , "Нотатки"@uk , "Notizen"@de , "ملاحظات"@ar ; c:of ui:doc-custom-doc ; file:keepIn blk:Uploads ; c:editable true .
 ui:doc-custom-doc a blk:Document ; po:contains ui:dc-p , ui:dc-key , ui:dc-empty .
 ui:dc-p a blk:Paragraph ; rdf:value "Blocks are classes, so a site's own is one more class." ; co:nextItem ui:dc-key .
 ui:dc-key a ui:KeyPoint ; rdf:value "No host code: the class, its look, its shape and its menu entry are all Turtle." ; co:nextItem ui:dc-empty .
@@ -171,7 +173,7 @@ ui:doc-rdf-undo a c:Button , beh:Undoer ; c:label "Undo"@en , "Скасуват�
 ui:doc-rdf-redo a c:Button , beh:Redoer ; c:label "Redo"@en , "Повторити"@uk , "Wiederholen"@de , "إعادة"@ar ; sty:size sty:Small .
 ui:doc-rdf-sides a c:Grid ; c:columns 2 ; c:minWidth "260px" ; pos:gap tok:space-4 ;
     c:children ( ui:doc-rdf-blocks ui:doc-rdf-triples ) .
-ui:doc-rdf-blocks a c:BlockEditor ; c:label "Recipe"@en , "Рецепт"@uk , "Rezept"@de , "وصفة"@ar ; c:of ui:dr-doc ;
+ui:doc-rdf-blocks a c:BlockEditor ; c:label "Recipe"@en , "Рецепт"@uk , "Rezept"@de , "وصفة"@ar ; c:of ui:dr-doc ; file:keepIn blk:Uploads ;
     c:editable true ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo .
 ui:doc-rdf-triples a c:RdfEditor ; c:label "Recipe as RDF"@en , "Рецепт як RDF"@uk , "Rezept als RDF"@de , "الوصفة بصيغة RDF"@ar ;
     c:entry ui:dr-doc , ui:dr-title , ui:dr-intro , ui:dr-steps , ui:dr-s1 , ui:dr-s2 ; c:editable true .

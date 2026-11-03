@@ -327,7 +327,8 @@ const image: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Pre', {}, [o.text('line', `![${description ?? caption ?? ''}](${url ?? ''})`)]))
     return o.quads
   }
-  const img = o.el('img', 'Img', { src: url !== undefined && SAFE_IMAGE.test(url) ? url : undefined, alt: description ?? '', loading: 'lazy' })
+  const kept = keptFile(ctx, focus)
+  const img = o.el('img', 'Img', { src: kept?.url ?? (url !== undefined && SAFE_IMAGE.test(url) ? url : undefined), alt: description ?? '', loading: 'lazy' })
   const figcaption = caption === undefined ? [] : [o.el('caption', 'Figcaption', {}, [o.text('caption-text', caption)])]
   o.renders(o.el('root', 'Figure', { id: o.node('root').value }, [img, ...figcaption]))
   return o.quads
@@ -335,17 +336,30 @@ const image: FnRule = (ctx, focus) => {
 
 const ariaHidden = { 'aria-hidden': 'true' }
 
+/** The latest file a block took (blk:file, by sem:order) with a page address (file:url), if any. */
+function keptFile(ctx: RuleContext, block: Term): { url: string; name?: string } | undefined {
+  let best: { url: string; name?: string; at: number } | undefined
+  for (const f of ctx.objects(block, NS.blk + 'file')) {
+    const url = str(ctx.object(f, NS.file + 'url'))
+    const at = Number(str(ctx.object(f, SEM.order)) ?? NaN)
+    if (url === undefined) continue
+    if (!best || at > best.at) best = { url, name: str(ctx.object(f, NS.file + 'name')), at }
+  }
+  return best
+}
+
 const file: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const url = str(ctx.object(focus, SCHEMA + 'contentUrl'))
-  const name = str(ctx.object(focus, SCHEMA + 'name')) ?? (url === undefined ? '' : url.replace(/^.*\//, ''))
+  const kept = keptFile(ctx, focus)
+  const name = kept?.name ?? str(ctx.object(focus, SCHEMA + 'name')) ?? (url === undefined ? '' : url.replace(/^.*\//, ''))
   const size = str(ctx.object(focus, SCHEMA + 'contentSize'))
   const parts = [
     o.el('icon', 'Span', { class: 'sem-icon', ...ariaHidden }, [o.text('icon-text', '📎')]),
     o.el('name', 'Span', { class: 'sem-name' }, [o.text('name-text', name)]),
     ...(size === undefined ? [] : [o.el('size', 'Span', { class: 'sem-size' }, [o.text('size-text', size)])]),
   ]
-  const link = o.el('link', 'A', { href: url !== undefined && SAFE_FILE.test(url) ? url : undefined, download: '', class: 'sem-file' }, parts)
+  const link = o.el('link', 'A', { href: kept?.url ?? (url !== undefined && SAFE_FILE.test(url) ? url : undefined), download: '', class: 'sem-file' }, parts)
   o.renders(o.el('root', 'Div', { id: o.node('root').value }, [link]))
   return o.quads
 }
@@ -614,6 +628,14 @@ const tableTools: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** A block that takes a file: Upload…, after its address field. */
+const uploadButton: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const button = o.el('upload', 'Button', { type: 'button', class: 'sem-upload' }, [o.text('upload-text', text(ctx, ctx.nn(NS.c + 'UploadPhrase'), NS.rdfs + 'label') ?? '')])
+  o.t(o.node('root'), H.hasChild, button).t(o.node('address-field'), ORD.immediatelyPrecedes, button)
+  return o.quads
+}
+
 const editor: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const doc = ctx.object(focus, C.of)
@@ -692,6 +714,7 @@ export const functions: Record<string, FnRule> = {
   'blk:toolbar': toolbar,
   'blk:address-field': addressField,
   'blk:table-tools': tableTools,
+  'blk:upload-button': uploadButton,
   'blk:menu-state': menuState,
   'blk:menu-options': menuOptions,
 }

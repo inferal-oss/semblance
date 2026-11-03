@@ -437,3 +437,15 @@
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-table-tools > button:hover" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-gray-3)" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:Uploadable ; sty:part "> .sem-upload" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:token tok:space-1 ] ,
+                 [ sty:property "padding" ; sty:raw "2px 10px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[role=document] .sem-upload" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .

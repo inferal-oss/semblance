@@ -1,4 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix file: <https://semblance.dev/ns/file#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix ext: <https://semblance.dev/ns/foreign#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix blk: <https://semblance.dev/ns/block#> .
@@ -203,16 +205,16 @@ blk:Column a owl:Class ; rdfs:subClassOf blk:Container ; sem:slug "blk-column" ;
     rdfs:label "Column"@en , "Колонка"@uk , "Spalte"@de , "عمود"@ar ;
     rdfs:comment "A column of blocks."@en .
 
-blk:Image a owl:Class ; rdfs:subClassOf blk:Block , doco:Figure , po:Atom , blk:Addressed ; blk:address schema:contentUrl ; sem:slug "blk-image" ;
+blk:Image a owl:Class ; rdfs:subClassOf blk:Block , doco:Figure , po:Atom , blk:Addressed , blk:Uploadable ; blk:address schema:contentUrl ; sem:slug "blk-image" ;
     rdfs:label "Image"@en , "Зображення"@uk , "Bild"@de , "صورة"@ar ;
     rdfs:comment "A picture (schema:contentUrl), described (schema:description) and captioned (schema:caption)."@en ;
     c:help "A picture, described and captioned."@en , "Зображення з підписом."@uk , "Ein Bild mit Bildunterschrift."@de , "صورة مع تعليق."@ar ;
-    blk:menuOrder 16 ; c:icon "🖼" ; blk:keyword "picture photo img figure" .
-blk:File a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom , blk:Addressed ; blk:address schema:contentUrl ; sem:slug "blk-file" ;
+    blk:menuOrder 16 ; c:icon "🖼" ; blk:keyword "picture photo img figure" ; blk:template blk:ImageTemplate .
+blk:File a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom , blk:Addressed , blk:Uploadable ; blk:address schema:contentUrl ; sem:slug "blk-file" ;
     rdfs:label "File"@en , "Файл"@uk , "Datei"@de , "ملف"@ar ;
     rdfs:comment "A file to download (schema:contentUrl, schema:name, schema:contentSize)."@en ;
     c:help "A file to download."@en , "Файл для завантаження."@uk , "Eine Datei zum Herunterladen."@de , "ملف للتنزيل."@ar ;
-    blk:menuOrder 17 ; c:icon "📎" ; blk:keyword "attachment download" .
+    blk:menuOrder 17 ; c:icon "📎" ; blk:keyword "attachment download" ; blk:template blk:FileTemplate .
 blk:Bookmark a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom , blk:Addressed ; blk:address schema:url ; sem:slug "blk-bookmark" ;
     rdfs:label "Bookmark"@en , "Закладка"@uk , "Lesezeichen"@de , "إشارة مرجعية"@ar ;
     rdfs:comment "A page elsewhere (schema:url), with its title (schema:name) and summary (schema:description)."@en ;
@@ -223,6 +225,16 @@ blk:Embed a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom , blk:Addressed ; b
     rdfs:comment "A page shown in the document (schema:embedUrl), in a sandboxed frame named schema:name."@en ;
     c:help "A page shown in the document."@en , "Сторінка, показана в документі."@uk , "Eine im Dokument gezeigte Seite."@de , "صفحة معروضة داخل المستند."@ar ;
     blk:menuOrder 19 ; c:icon "⧉" ; blk:keyword "iframe video map" .
+blk:Uploadable a owl:Class ; rdfs:subClassOf blk:Block , file:Receiver ;
+    rdfs:label "Block that takes a file"@en , "Блок, що приймає файл"@uk , "Block, der eine Datei nimmt"@de , "كتلة تقبل ملفًا"@ar ;
+    rdfs:comment """A block that shows a file (an image, a download): in an editor, Upload… picks one (or one is dropped on
+it), which the browser keeps (file:keepIn, blk:Uploads) and the block shows, the latest it took (blk:file) before
+its address."""@en .
+blk:file a owl:ObjectProperty ; rdfs:range file:File ;
+    rdfs:comment "A file a block took (uploaded or dropped); the latest (sem:order) is what it shows."@en .
+blk:Uploads a file:Store ; rdfs:label "Uploads"@en , "Завантаження"@uk , "Uploads"@de , "التحميلات"@ar ;
+    rdfs:comment "Where the files blocks take are kept: this browser's storage."@en .
+c:UploadPhrase a c:Phrase ; rdfs:label "Upload…"@en , "Завантажити…"@uk , "Hochladen…"@de , "تحميل…"@ar .
 blk:Addressed a owl:Class ; rdfs:subClassOf blk:Block ;
     rdfs:label "Block with an address"@en , "Блок з адресою"@uk , "Block mit Adresse"@de , "كتلة بعنوان"@ar ;
     rdfs:comment "A block that shows what is at an address (blk:address, on its class): in an editor, a field edits it."@en .
@@ -245,6 +257,8 @@ blk:Contents a owl:Class ; rdfs:subClassOf blk:Block , doco:TableOfContents ; se
 # --- templates: what a new block of a type starts with (the / menu copies them) ----------------------
 
 blk:ToggleTemplate c:expanded true .
+blk:ImageTemplate dnd:members blk:file ; file:keepIn blk:Uploads ; file:accept "image/*" .
+blk:FileTemplate dnd:members blk:file ; file:keepIn blk:Uploads .
 blk:CodeTemplate rdf:value "" .
 blk:MathTemplate rdf:value "" .
 blk:TableTemplate po:contains blk:TableTemplate-r1 , blk:TableTemplate-r2 .
@@ -771,7 +785,8 @@ WHERE {
 # An image: a figure, the picture (its schema:description the alternative text, else none: its
 # caption names it) and the caption.
 blk:ImageRendering a sem:Rendering ; sem:targets blk:Image ; sem:stratum 0 ;
-    sem:watches rdf:type , schema:contentUrl , schema:caption , schema:description .
+    sem:follows blk:file ;
+    sem:watches rdf:type , schema:contentUrl , schema:caption , schema:description , blk:file , file:url , sem:order .
 blk:ImageRendering-fn a sem:Rule ; sem:implements blk:ImageRendering ; sem:function "blk:image" .
 blk:ImageRendering-sparql-screen a sem:Rule ; sem:implements blk:ImageRendering ; sem:modality mod:Screen ;
     sem:construct """
@@ -786,7 +801,8 @@ WHERE {
   OPTIONAL { $this schema:contentUrl ?url }
   OPTIONAL { $this schema:caption ?captionRaw }
   OPTIONAL { $this schema:description ?description }
-  BIND(IF(REGEX(STR(?url), "^(https?:|/|data:image/|[^:]*$)"), STR(?url), ?none) AS ?src)
+  OPTIONAL { $this blk:file ?kept . ?kept file:url ?keptUrl FILTER NOT EXISTS { $this blk:file ?newer . ?newer sem:order ?newerAt . ?kept sem:order ?keptAt FILTER(?newerAt > ?keptAt) } }
+  BIND(COALESCE(STR(?keptUrl), IF(REGEX(STR(?url), "^(https?:|/|data:image/|[^:]*$)"), STR(?url), ?none)) AS ?src)
   BIND(COALESCE(STR(?description), "") AS ?alt)
   BIND(STR(?captionRaw) AS ?captionData)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -810,7 +826,8 @@ WHERE {
 
 # A file: a link that downloads it, with its name and size.
 blk:FileRendering a sem:Rendering ; sem:targets blk:File ; sem:modality mod:Screen ; sem:stratum 0 ;
-    sem:watches rdf:type , schema:contentUrl , schema:name , schema:contentSize .
+    sem:follows blk:file ;
+    sem:watches rdf:type , schema:contentUrl , schema:name , schema:contentSize , blk:file , file:url , file:name , sem:order .
 blk:FileRendering-fn a sem:Rule ; sem:implements blk:FileRendering ; sem:function "blk:file" .
 blk:FileRendering-sparql-screen a sem:Rule ; sem:implements blk:FileRendering ; sem:modality mod:Screen ;
     sem:construct """
@@ -830,8 +847,9 @@ WHERE {
   OPTIONAL { $this schema:contentUrl ?url }
   OPTIONAL { $this schema:name ?nameRaw }
   OPTIONAL { $this schema:contentSize ?sizeRaw }
-  BIND(IF(REGEX(STR(?url), "^(https?:|/|[^:]*$)"), STR(?url), ?none) AS ?href)
-  BIND(COALESCE(STR(?nameRaw), REPLACE(STR(?url), "^.*/", ""), "") AS ?nameData)
+  OPTIONAL { $this blk:file ?kept . ?kept file:url ?keptUrl ; file:name ?keptName FILTER NOT EXISTS { $this blk:file ?newer . ?newer sem:order ?newerAt . ?kept sem:order ?keptAt FILTER(?newerAt > ?keptAt) } }
+  BIND(COALESCE(STR(?keptUrl), IF(REGEX(STR(?url), "^(https?:|/|[^:]*$)"), STR(?url), ?none)) AS ?href)
+  BIND(COALESCE(STR(?keptName), STR(?nameRaw), REPLACE(STR(?url), "^.*/", ""), "") AS ?nameData)
   BIND(STR(?sizeRaw) AS ?sizeData)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(STR(?root) AS ?rootId)
@@ -1042,10 +1060,11 @@ WHERE {
 # contenteditable and states the selection the graph holds (data-sem-text-root: "anchor offset focus
 # offset"); the editing itself is block-editor.ttl.
 
-c:BlockEditor a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "block-editor" ;
+c:BlockEditor a owl:Class ; rdfs:subClassOf sem:Component , file:Receiver ; sem:slug "block-editor" ;
     rdfs:label "Block editor"@en , "Блоковий редактор"@uk , "Block-Editor"@de , "محرر الكتل"@ar ;
     rdfs:comment """A document (c:of, a blk:Document) shown as its blocks, edited in place when c:editable
-is true (block-editor.ttl). c:label is its accessible name."""@en .
+is true (block-editor.ttl). c:label is its accessible name. It takes files (file:Receiver): one pasted
+into it or dropped on it becomes an image or file block, shown once it is kept (file:keepIn) or uploaded."""@en .
 
 c:BlockEditorRendering a sem:Rendering ; sem:targets c:BlockEditor ; sem:stratum 0 ;
     sem:watches rdf:type , c:of , c:label , l10n:label , c:editable , c:anchorBlock , c:anchorOffset , c:focusBlock , c:focusOffset ,
@@ -1303,7 +1322,7 @@ c:AddressPhrase a c:Phrase ; rdfs:label "Address (https://…)"@en , "Адрес
 blk:EditAddress a beh:Reaction ;
     rdfs:label "Change the address"@en ;
     beh:when beh:Input ; beh:sourceClass blk:Addressed ; beh:undoable true ;
-    beh:deletes """CONSTRUCT { $this ?property ?old } WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~address-field"))) $this a/rdfs:subClassOf* ?cls . ?cls blk:address ?property . $this ?property ?old }""" ;
+    beh:deletes """CONSTRUCT { $this ?property ?old . $this blk:file ?kept } WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~address-field"))) $this a/rdfs:subClassOf* ?cls . ?cls blk:address ?property . { $this ?property ?old } UNION { $this blk:file ?kept } }""" ;
     beh:inserts """CONSTRUCT { $this ?property ?url } WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~address-field"))) $this a/rdfs:subClassOf* ?cls . ?cls blk:address ?property . $event beh:value ?url FILTER(?url != "") }""" .
 
 # The editor's table toolbar (block-editor.ttl), with the caret in a cell: above the table, a button per
@@ -1343,4 +1362,37 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~table-tools-data-sem-keep-focus")) AS ?keep)
   BIND(IRI(CONCAT(STR($this), "/~tt-", ?local)) AS ?btn)
   BIND(IRI(CONCAT(STR($this), "/~tt-", ?local, "-text")) AS ?btnText)
+}""" .
+
+# A block that takes a file has an Upload… button after its address field (in an editor); it asks for the
+# system picker (a file:Pick the files effect opens), and the file chosen, or dropped on the block, is
+# taken as any receiver takes one (ontology/layers/files.ttl): kept, and shown.
+blk:UploadButton a sem:Rendering ; sem:targets blk:Uploadable ; sem:modality mod:Screen ; sem:stratum 0 ; sem:watches rdf:type .
+blk:UploadButton-fn a sem:Rule ; sem:implements blk:UploadButton ; sem:function "blk:upload-button" .
+blk:UploadButton-sparql a sem:Rule ; sem:implements blk:UploadButton ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?button . ?field ord:immediatelyPrecedes ?button .
+  ?button a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-upload" ; rdfhtml:hasChild ?label .
+  ?label a rdfhtml:Text ; rdfhtml:data ?text .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Uploadable .
+  OPTIONAL { ?at l10n:of c:UploadPhrase ; l10n:name ?picked } OPTIONAL { c:UploadPhrase rdfs:label ?en FILTER(LANGMATCHES(LANG(?en), "en")) }
+  BIND(STR(COALESCE(?picked, ?en)) AS ?text)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~address-field")) AS ?field)
+  BIND(IRI(CONCAT(STR($this), "/~upload")) AS ?button)
+  BIND(IRI(CONCAT(STR($this), "/~upload-text")) AS ?label)
+}""" .
+blk:PickUpload a beh:Reaction ;
+    rdfs:label "Upload a file"@en ;
+    beh:when beh:Click ; beh:sourceClass blk:Uploadable ;
+    beh:deletes """CONSTRUCT { ?pick ?p ?o } WHERE { $event beh:node ?hit FILTER(?hit = IRI(CONCAT(STR($this), "/~upload")) || ?hit = IRI(CONCAT(STR($this), "/~upload-text"))) ?pick file:requestedBy $this ; ?p ?o . }""" ;
+    beh:inserts """CONSTRUCT { ?pick a file:Pick ; file:requestedBy $this ; file:accept ?accept ; file:multiple false . }
+WHERE {
+  $event beh:node ?hit FILTER(?hit = IRI(CONCAT(STR($this), "/~upload")) || ?hit = IRI(CONCAT(STR($this), "/~upload-text")))
+  $event beh:sequence ?sequence .
+  BIND(IRI(CONCAT(STR($this), "/~pick-", STR(?sequence))) AS ?pick)
+  OPTIONAL { $this file:accept ?accept }
 }""" .

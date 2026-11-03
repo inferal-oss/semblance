@@ -10,6 +10,8 @@
 @prefix po: <http://www.essepuntato.it/2008/12/pattern#> .
 @prefix oa: <http://www.w3.org/ns/oa#> .
 @prefix co: <http://purl.org/co/> .
+@prefix file: <https://semblance.dev/ns/file#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix schema: <https://schema.org/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
@@ -1782,3 +1784,43 @@ WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contain
   { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c } FILTER(?action = blk:RemoveRow)
   FILTER EXISTS { ?table po:contains ?otherRow FILTER(?otherRow != ?row) }
   ?prev co:nextItem ?row . ?row co:nextItem ?after . }""" .
+
+# --- files pasted or dropped on the editor --------------------------------------------------------------
+# An editor takes files (file:Receiver): one pasted into it, or dropped on it but not on a block that takes
+# files itself, becomes a new block after the caret's top-level block (else the last one): an image for an
+# image/*, else a file, which shows it once it is kept (the editor's file:keepIn) or uploaded.
+
+c:EditorTakesFile a beh:Reaction ;
+    rdfs:label "Insert a pasted or dropped file"@en ;
+    rdfs:comment """A file pasted into the editor, or dropped on it: a new image (an image/*) or file block that holds it,
+after the caret's top-level block, else the last block."""@en ;
+    beh:when file:Added ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "File inserted"@en , "Файл вставлено"@uk , "Datei eingefügt"@de , "تم إدراج الملف"@ar ;
+    beh:deletes """CONSTRUCT { ?top co:nextItem ?next . }
+WHERE {
+  $event file:file ?file .
+  $this c:editable true ; c:of ?doc .
+  OPTIONAL { $this c:focusBlock ?fb . ?fb ^po:contains* ?topF . ?doc po:contains ?topF . OPTIONAL { ?topF co:nextItem ?nextF } }
+  BIND(?nextF AS ?next) BIND(?topF AS ?top)
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?doc po:contains ?n . ?n a ?cls ; blk:file ?file ; dnd:members blk:file ; file:keepIn ?store ; file:accept ?accept .
+  ?top co:nextItem ?n . ?n co:nextItem ?next .
+}
+WHERE {
+  $event file:file ?file .
+  $this c:editable true ; c:of ?doc .
+  OPTIONAL { ?file file:mediaType ?type }
+  OPTIONAL { $this file:keepIn ?store }
+  BIND(COALESCE(STRSTARTS(STR(?type), "image/"), false) AS ?isImage)
+  BIND(IF(?isImage, blk:Image, blk:File) AS ?cls)
+  BIND(IF(?isImage, "image/*", ?none) AS ?accept)
+  OPTIONAL { $this c:focusBlock ?fb . ?fb ^po:contains* ?topF . ?doc po:contains ?topF . OPTIONAL { ?topF co:nextItem ?nextF } }
+  OPTIONAL { ?doc po:contains ?topL FILTER NOT EXISTS { ?topL co:nextItem ?anyNext } }
+  BIND(COALESCE(?topF, ?topL) AS ?top)
+  BIND(?nextF AS ?next)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?doc), "/~b-", ?ev)) AS ?n)
+}""" .

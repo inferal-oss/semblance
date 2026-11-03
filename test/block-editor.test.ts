@@ -2,6 +2,8 @@ import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
 import { domPoint } from '../src/behaviour/text.ts'
+import { memoryFileStore } from '../src/file-store.ts'
+import { Files } from '../src/files.ts'
 import { loadStore } from '../src/node/load.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -621,5 +623,56 @@ describe('nesting by shapes (c:BlockEditor)', () => {
     const e = h.press('Tab')
     expect(h.objects('t', NS.po + 'contains')).toEqual([EX + 'r'])
     expect(e.defaultPrevented).toBe(false)
+  })
+})
+
+describe('uploads (c:BlockEditor)', () => {
+  it('asks for the picker by Upload…, and shows the latest file the block took', () => {
+    const FILE = 'https://semblance.dev/ns/file#'
+    const extra = `<${EX}doc> <${NS.po}contains> <${EX}img> . <${EX}p3> <${NS.co}nextItem> <${EX}img> .
+<${EX}img> a <${NS.blk}Image> ; <${FILE}accept> "image/*" ; <${NS.blk}file> <${EX}f1> , <${EX}f2> .
+<${EX}f1> a <${FILE}File> ; <${NS.sem}order> 1 ; <${FILE}url> "blob:old" .
+<${EX}f2> a <${FILE}File> ; <${NS.sem}order> 2 ; <${FILE}url> "blob:new" .`
+    for (const prefer of ['sparql', 'function'] as const) {
+      const h = mount(prefer, 'wat', extra)
+      expect(h.app.querySelector(`[id="${EX}img/~root"] img`)!.getAttribute('src')).toBe('blob:new')
+      const upload = h.app.querySelector(`[id="${EX}img/~root"] .sem-upload`)!
+      upload.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true }))
+      const picks = h.store.match(null, h.store.factory.namedNode(FILE + 'requestedBy'), h.store.factory.namedNode(EX + 'img'))
+      expect(picks).toHaveLength(1)
+      expect(h.store.match(picks[0]!.subject, h.store.factory.namedNode(FILE + 'accept'), null)[0]!.object.value).toBe('image/*')
+    }
+  })
+})
+
+describe('pasting files (c:BlockEditor)', () => {
+  it('makes a pasted image an image block after the caret\'s block, and a pasted file a file block', async () => {
+    const FILE = 'https://semblance.dev/ns/file#'
+    for (const prefer of ['sparql', 'function'] as const) {
+      const h = mount(prefer, 'wat', `<${EX}editor> <${FILE}keepIn> <${NS.blk}Uploads> .`)
+      const files = new Files(h.bus, { keep: memoryFileStore() })
+      const off = files.attach(h.renderer)
+      const paste = (name: string, type: string) => {
+        const e = Object.assign(new (h.app.ownerDocument.defaultView!.Event)('paste', { bubbles: true, cancelable: true }), {
+          clipboardData: { files: [{ name, type, size: 3, lastModified: 0 }] },
+        })
+        h.selection.anchorNode!.parentElement!.dispatchEvent(e)
+        h.renderer.flush()
+        return e
+      }
+      h.select('p2', 3)
+      expect(paste('shot.png', 'image/png').defaultPrevented).toBe(true)
+      const after = h.objects('p2', NS.co + 'nextItem')[0]!
+      expect(h.objects(after, NS.rdf + 'type')).toContain(NS.blk + 'Image')
+      expect(h.objects(after, NS.co + 'nextItem')).toEqual([EX + 'hr'])
+      const kept = h.objects(after, NS.blk + 'file')
+      expect(kept).toHaveLength(1)
+      paste('notes.pdf', 'application/pdf')
+      const second = h.objects('p2', NS.co + 'nextItem')[0]!
+      expect(h.objects(second, NS.rdf + 'type')).toContain(NS.blk + 'File')
+      expect(h.objects(second, NS.co + 'nextItem')).toEqual([after])
+      await files.ready
+      off()
+    }
   })
 })

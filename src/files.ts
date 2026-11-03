@@ -618,15 +618,26 @@ export class Files {
       end()
       this.receive(zone.drop, files, zone.receptacle)
     }
+    // Files pasted where a target takes them arrive as if dropped there (its refusals still apply).
+    const paste = (e: Event) => {
+      const files = [...((e as ClipboardEvent).clipboardData?.files ?? [])]
+      if (!files.length) return
+      const zone = this.zoneOf(renderer, e.target)
+      if (!zone) return
+      e.preventDefault()
+      this.receive(zone.drop, files, zone.receptacle)
+    }
     doc.addEventListener('dragenter', enter)
     doc.addEventListener('dragover', over)
     doc.addEventListener('dragleave', leave)
     doc.addEventListener('drop', drop)
+    doc.addEventListener('paste', paste)
     return () => {
       doc.removeEventListener('dragenter', enter)
       doc.removeEventListener('dragover', over)
       doc.removeEventListener('dragleave', leave)
       doc.removeEventListener('drop', drop)
+      doc.removeEventListener('paste', paste)
       end()
     }
   }
