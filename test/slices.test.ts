@@ -34,6 +34,22 @@ describe('sliceAddition', () => {
     for (const slice of rest) expect(slice.some((q) => subjects(rules).has(q.subject.value))).toBe(false)
   })
 
+  it('puts the slot a rule implements, and the rule it takes its query from, with the rules, whatever their class', () => {
+    // A building block (#291), a slot of no class at all, and a query taken from another rule's description:
+    // each read by loadRules for the rule, so each goes in the change that defines it.
+    const ttl = `@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix ex: <https://example.org/> .
+ex:block a sem:BuildingBlock ; sem:targets ex:C ; sem:stratum -9 .
+ex:slot sem:targets ex:D .
+ex:query sem:construct "CONSTRUCT {} WHERE {}" .
+ex:a a sem:Rule ; sem:implements ex:block ; sem:function "ex:a" .
+ex:b a sem:Rule ; sem:implements ex:slot ; sem:constructFrom ex:query .
+ex:data ex:p 1 .`
+    const { rules, rest } = sliceAddition(parseTurtle(ttl, store.factory), 1)
+    expect(subjects(rules)).toEqual(new Set(['block', 'slot', 'query', 'a', 'b'].map((n) => 'https://example.org/' + n)))
+    expect(rest.flat().map((q) => q.subject.value)).toEqual(['https://example.org/data'])
+  })
+
   it('slices the rest without splitting a description', () => {
     const { rest } = sliceAddition(quads, 2)
     expect(rest.length).toBeGreaterThan(1)
