@@ -268,6 +268,8 @@ export function nodeTokens(node: NodeView): KeyedToken[] {
   const out: KeyedToken[] = []
   const at = (iri: string, key: string, kind: TokenKind, text: string) => out.push({ iri, key, kind, text })
   const K = node.key
+  // A subject with nothing to say prints nothing.
+  if (node.kind === 'named' && !node.entries.length) return out
   const listy = node.kind === 'head' || node.kind === 'cont'
   if (node.kind === 'named') at(node.iri + '-a0', extend(K, 'n0', 'n0'), node.subject!.kind, node.subject!.text)
   else if (node.kind === 'root' || node.kind === 'bracket') at(node.iri + '-a0', extend(K, 'n0', 'n0'), 'punct', '[')
@@ -410,8 +412,9 @@ export function printTurtle(
   const head = header ? headerTokens(view, printer.base, [...used]) : []
   out.push(...head)
   let first = !head.length
+  const said = new Set(nodes.filter((n) => n.node.top && n.entries.length).map((n) => n.node.iri))
   sections.forEach((section, i) => {
-    if (!section.subjects.length) return
+    if (!section.subjects.some((s) => said.has(`${view}/~tt-${hash12(i + ' ' + termKey(s.term))}`))) return
     out.push(...sectionTokens(view, i, section.title, first))
     first = false
   })

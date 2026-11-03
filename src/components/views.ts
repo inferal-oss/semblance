@@ -559,10 +559,10 @@ const triplesview: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** What a triples view prints: the node, when it has triples, at the top of its one section. */
+/** What a triples view prints: the node at the top of its one section. */
 const triplesviewTurtle: FnRule = (ctx, focus) => {
   const subject = ctx.object(focus, C.of)
-  if (!named(subject) || !ctx.match(subject, null, null).some((q) => !q.predicate.value.startsWith(NS.prov))) return []
+  if (!named(subject)) return []
   const o = ctx.out(focus)
   topNode(ctx, o, 0, subject)
   section(ctx, o, 0)

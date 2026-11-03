@@ -12,13 +12,14 @@ describe('turtle formatter', () => {
       rdfs:label "Page"@en, "Seite"@de, "Page" ; ex:at "2026-10-24"^^<http://www.w3.org/2001/XMLSchema#date> .
     ex:a ex:done true .`
 
-  it('pretty-prints with prefixes, inline blank nodes and lists', () => {
+  it('pretty-prints with prefixes, inline blank nodes and lists, in a defined order', () => {
     expect(toTurtle([{ title: 'input', quads: parse(src) }], prefixes)).toBe(
       [
         '@prefix ex: <https://example.org/> .',
         '@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .',
         '',
         '# input',
+        'ex:a ex:done true .',
         'ex:page a ex:Stack ;',
         '    ex:at "2026-10-24"^^<http://www.w3.org/2001/XMLSchema#date> ;',
         '    ex:children ( ex:a ex:b ) ;',
@@ -28,10 +29,9 @@ describe('turtle formatter', () => {
         '        ex:event "click"',
         '    ] ;',
         '    rdfs:label',
+        '        "Page",',
         '        "Page"@en,',
-        '        "Seite"@de,',
-        '        "Page" .',
-        'ex:a ex:done true .',
+        '        "Seite"@de .',
         '',
       ].join('\n'),
     )

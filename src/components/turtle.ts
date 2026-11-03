@@ -333,7 +333,7 @@ const header: FnRule = (ctx, focus) => {
   const sections = ctx
     .match(null, T.view, view)
     .map((q) => q.subject)
-    .filter((s) => ctx.match(s, RDF_TYPE, T.Section).length && ctx.match(null, T.section, s).length)
+    .filter((s) => ctx.match(s, RDF_TYPE, T.Section).length && ctx.match(null, T.section, s).some((q) => ctx.match(null, T.in, q.subject).length))
     .map((s) => ({ index: num(ctx.object(s, T.index))!, title: str(ctx.object(s, T.title)) }))
     .sort((a, b) => a.index - b.index)
   const out = [...head, ...sections.flatMap((s, i) => sectionTokens(view.value, s.index, s.title, !head.length && i === 0))]

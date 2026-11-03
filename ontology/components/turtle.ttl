@@ -19,7 +19,9 @@
 #   c:TurtleSection   a section of the view: its place (c:turtleIndex) and # title (c:turtleTitle)
 #   c:TurtleHead      the view's header (<view>/~th)
 #
-# then the printer's blocks, each a stratum above the last:
+# (at stratum 2, above the components that mint views - a stream's c:TriplesView s - and below the
+# layers at 4 and 5 that read nothing it writes), then the printer's blocks, each a stratum above the
+# last, from 3:
 #
 #   c:TurtleEntries   per node: an entry per (predicate, object) it prints, <node>-e<md5(p, key)>, and a
 #                     node for each inline object that no ancestor prints (a cycle prints []): one node
@@ -85,7 +87,7 @@ c:turtleHeader a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "O
 
 # Entries: what a node prints, from its source, each (predicate, object) once; a node of its own for
 # each inline object no ancestor prints (a list cell's rest: the list's next cell).
-c:TurtleEntries a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum -6 ; sem:always true ;
+c:TurtleEntries a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum 3 ; sem:always true ;
     sem:follows c:turtleTerm , ( c:turtleRows rs:solution rs:binding ) , ( c:turtleResults rs:solution ) .
 c:TurtleEntries-fn a sem:Rule ; sem:implements c:TurtleEntries ; sem:function "turtle:entries" .
 c:TurtleEntries-sparql a sem:Rule ;
@@ -156,7 +158,7 @@ WHERE {
 # quotes when it has lines; @language or ^^datatype), its place among its predicate's objects, its
 # order key - its node's, read from the entry above (top-down), then (predicate sort key, name, sort)
 # - and its object's node's depth.
-c:TurtleNames a sem:BuildingBlock ; sem:targets c:TurtleEntry ; sem:stratum -4 ; sem:always true ;
+c:TurtleNames a sem:BuildingBlock ; sem:targets c:TurtleEntry ; sem:stratum 7 ; sem:always true ;
     sem:follows c:turtleIn , ( c:turtleIn [ sem:inverse c:turtleChild ] ) , ( c:turtleIn c:turtleRestOf [ sem:inverse c:turtleChild ] ) , ( c:turtleIn [ sem:inverse c:turtleIn ] ) ,
       c:turtleChild , ( c:turtleChild [ sem:inverse c:turtleIn ] ) , c:turtleView .
 c:TurtleNames-fn a sem:Rule ; sem:implements c:TurtleNames ; sem:function "turtle:names" .
@@ -251,7 +253,7 @@ WHERE {
 }""" .
 
 # Lists: a cell whose rest is rdf:nil, or a node that is a list (read from it: bottom-up).
-c:TurtleLists a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum -5 ; sem:always true ;
+c:TurtleLists a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum 6 ; sem:always true ;
     sem:follows ( [ sem:inverse c:turtleIn ] ) ; sem:watches rdf:type , c:turtleCell , c:turtleListy , c:turtlePredicate , c:turtleObject , c:turtleIn , c:turtleChild .
 c:TurtleLists-fn a sem:Rule ; sem:implements c:TurtleLists ; sem:function "turtle:lists" .
 c:TurtleLists-sparql a sem:Rule ;
@@ -271,7 +273,7 @@ WHERE {
 # line of its own when there are more than two or one prints as [ … ], then the object. A list's
 # cells print only their rdf:first, after a space. Plain tokens (spaces, punctuation) are text, the
 # others spans of class ttl-<kind>.
-c:TurtleTokens a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum -3 ; sem:always true ;
+c:TurtleTokens a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum 8 ; sem:always true ;
     sem:follows ( [ sem:inverse c:turtleIn ] ) , ( [ sem:inverse c:turtleChild ] ) , ( c:turtleRestOf [ sem:inverse c:turtleChild ] ) , c:turtleView .
 c:TurtleTokens-fn a sem:Rule ; sem:implements c:TurtleTokens ; sem:function "turtle:tokens" .
 c:TurtleTokens-sparql a sem:Rule ;
@@ -303,6 +305,7 @@ WHERE {
     IF(EXISTS { ?listEntry c:turtleChild $this ; c:turtleListy true }, "head", "bracket"))) AS ?nodeKind)
   BIND(?nodeKind = "head" || ?nodeKind = "cont" AS ?listy)
   BIND(EXISTS { ?any c:turtleIn $this } AS ?hasEntries)
+  FILTER(?nodeKind != "named" || ?hasEntries)
   OPTIONAL { SELECT (MIN(?cand_s) AS ?best_s) WHERE {
       $this c:turtleTerm ?iri_s . FILTER(isIRI(?iri_s))
       { ?d_s sem:prefixName ?pfx_s ; sem:namespace ?ns0_s } UNION { ?d_s sh:prefix ?pfx_s ; sh:namespace ?ns0_s FILTER NOT EXISTS { ?e_s sem:prefixName ?pfx_s } }
@@ -372,7 +375,7 @@ WHERE {
 # The header and the sections, per view: @base (c:baseIri) and the @prefix line of each prefix its
 # tokens use, by prefix, when its class prints a header; a section's blank line, unless nothing comes
 # before it, and its # title.
-c:TurtleHeader a sem:BuildingBlock ; sem:targets c:TurtleHead ; sem:stratum -2 ; sem:always true ;
+c:TurtleHeader a sem:BuildingBlock ; sem:targets c:TurtleHead ; sem:stratum 9 ; sem:always true ;
     sem:follows c:turtleView , ( c:turtleView [ sem:inverse c:turtleView ] ) ;
     sem:watches rdf:type , c:turtleUses , c:baseIri , c:turtleIndex , c:turtleTitle , c:turtleSection , c:turtleView .
 c:TurtleHeader-fn a sem:Rule ; sem:implements c:TurtleHeader ; sem:function "turtle:header" .
@@ -410,9 +413,9 @@ WHERE {
     BIND(CONCAT("\\u0001n0\\u0001n1\\u0001s", ?pfx, "\\u0001n", STR(?slot)) AS ?key)
   } UNION {
     ?sec a c:TurtleSection ; c:turtleView ?view ; c:turtleIndex ?i .
-    FILTER EXISTS { ?top c:turtleSection ?sec }
+    FILTER EXISTS { ?top c:turtleSection ?sec . ?topEntry c:turtleIn ?top }
     OPTIONAL { ?sec c:turtleTitle ?title }
-    BIND(?headed || EXISTS { ?sec2 a c:TurtleSection ; c:turtleView ?view ; c:turtleIndex ?i2 FILTER(?i2 < ?i) FILTER EXISTS { ?top2 c:turtleSection ?sec2 } } AS ?after)
+    BIND(?headed || EXISTS { ?sec2 a c:TurtleSection ; c:turtleView ?view ; c:turtleIndex ?i2 FILTER(?i2 < ?i) FILTER EXISTS { ?top2 c:turtleSection ?sec2 . ?topEntry2 c:turtleIn ?top2 } } AS ?after)
     VALUES (?slot ?tokKind) { (0 "space") (1 "comment") (2 "space") }
     BIND(IF(?slot = 0, IF(?after, "\\n", ?none), IF(BOUND(?title), IF(?slot = 1, CONCAT("# ", STR(?title)), "\\n"), ?none)) AS ?t)
     BIND(IRI(CONCAT(STR(?view), "/~ts-", STR(?i), "-k", STR(?slot))) AS ?tok)
