@@ -741,7 +741,9 @@ export class EventBus {
         semRange: range,
       })
       target.dispatchEvent(synthetic)
-      renderer.resync(region)
+      // Only the block the composition was in: what the browser changed is there.
+      const holder = region.querySelector(`[data-sem-text="${started.node.replace(/["\\]/g, '\\$&')}"]`)
+      if (holder) renderer.resync(holder)
     })
     renderer.host.addEventListener('compositionstart', compositionStart)
     renderer.host.addEventListener('compositionend', compositionEnd)
