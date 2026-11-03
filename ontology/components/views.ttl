@@ -950,7 +950,7 @@ c:QueryViewRuns a iv:View ;
 # under its label) with the subjects of its run (c:QueryViewRuns, iv:runOf it) - in the order of the
 # query's sem:orderBy values (sem:descending), else by IRI; blank nodes no triple of the view's runs
 # points to at the top -, each printing its triples in the run (c:turtleRows).
-c:QueryViewTurtle a sem:BuildingBlock ; sem:targets c:QueryView ; sem:stratum 2 ;
+c:QueryViewTurtle a sem:BuildingBlock ; sem:targets c:QueryView ; sem:stratum 97 ;
     sem:follows iv:run , ( iv:run rs:solution rs:binding ) , c:bindFrom ;
     sem:watches rdf:type , c:queries , iv:run , iv:runOf , iv:error , rs:solution , rs:binding , rs:variable , rs:value , rs:index , c:bindVariable , c:bindFrom , c:bindProperty .
 c:QueryViewTurtle-fn a sem:Rule ; sem:implements c:QueryViewTurtle ; sem:function "queryview:turtle" .
@@ -1243,7 +1243,7 @@ c:TriplesView a owl:Class ;
     c:turtleInto "root" .
 # What it prints (the Turtle printer, turtle.ttl): the node at the top of its one section (nothing,
 # when it has no triples); its blank nodes inline.
-c:TriplesViewTurtle a sem:BuildingBlock ; sem:targets c:TriplesView ; sem:stratum 2 ; sem:watches rdf:type , c:of .
+c:TriplesViewTurtle a sem:BuildingBlock ; sem:targets c:TriplesView ; sem:stratum 97 ; sem:watches rdf:type , c:of .
 c:TriplesViewTurtle-fn a sem:Rule ; sem:implements c:TriplesViewTurtle ; sem:function "triplesview:turtle" .
 c:TriplesViewTurtle-sparql a sem:Rule ;
     sem:implements c:TriplesViewTurtle ;

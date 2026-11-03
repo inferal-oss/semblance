@@ -19,9 +19,9 @@
 #   c:TurtleSection   a section of the view: its place (c:turtleIndex) and # title (c:turtleTitle)
 #   c:TurtleHead      the view's header (<view>/~th)
 #
-# (at stratum 2, above the components that mint views - a stream's c:TriplesView s - and below the
-# layers at 4 and 5 that read nothing it writes), then the printer's blocks, each a stratum above the
-# last, from 3:
+# (at stratum 97), then the printer's blocks, each a stratum above the last, from 98: above every
+# other rule, since what they read - any node's triples (a component's, which layers add to), the
+# runs - may be written by any of them.
 #
 #   c:TurtleEntries   per node: an entry per (predicate, object) it prints, <node>-e<md5(p, key)>, and a
 #                     node for each inline object that no ancestor prints (a cycle prints []): one node
@@ -87,7 +87,7 @@ c:turtleHeader a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "O
 
 # Entries: what a node prints, from its source, each (predicate, object) once; a node of its own for
 # each inline object no ancestor prints (a list cell's rest: the list's next cell).
-c:TurtleEntries a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum 3 ; sem:always true ;
+c:TurtleEntries a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum 98 ; sem:always true ;
     sem:follows c:turtleTerm , ( c:turtleRows rs:solution rs:binding ) , ( c:turtleResults rs:solution ) .
 c:TurtleEntries-fn a sem:Rule ; sem:implements c:TurtleEntries ; sem:function "turtle:entries" .
 c:TurtleEntries-sparql a sem:Rule ;
@@ -158,7 +158,7 @@ WHERE {
 # quotes when it has lines; @language or ^^datatype), its place among its predicate's objects, its
 # order key - its node's, read from the entry above (top-down), then (predicate sort key, name, sort)
 # - and its object's node's depth.
-c:TurtleNames a sem:BuildingBlock ; sem:targets c:TurtleEntry ; sem:stratum 7 ; sem:always true ;
+c:TurtleNames a sem:BuildingBlock ; sem:targets c:TurtleEntry ; sem:stratum 100 ; sem:always true ;
     sem:follows c:turtleIn , ( c:turtleIn [ sem:inverse c:turtleChild ] ) , ( c:turtleIn c:turtleRestOf [ sem:inverse c:turtleChild ] ) , ( c:turtleIn [ sem:inverse c:turtleIn ] ) ,
       c:turtleChild , ( c:turtleChild [ sem:inverse c:turtleIn ] ) , c:turtleView .
 c:TurtleNames-fn a sem:Rule ; sem:implements c:TurtleNames ; sem:function "turtle:names" .
@@ -253,7 +253,7 @@ WHERE {
 }""" .
 
 # Lists: a cell whose rest is rdf:nil, or a node that is a list (read from it: bottom-up).
-c:TurtleLists a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum 6 ; sem:always true ;
+c:TurtleLists a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum 99 ; sem:always true ;
     sem:follows ( [ sem:inverse c:turtleIn ] ) ; sem:watches rdf:type , c:turtleCell , c:turtleListy , c:turtlePredicate , c:turtleObject , c:turtleIn , c:turtleChild .
 c:TurtleLists-fn a sem:Rule ; sem:implements c:TurtleLists ; sem:function "turtle:lists" .
 c:TurtleLists-sparql a sem:Rule ;
@@ -273,7 +273,7 @@ WHERE {
 # line of its own when there are more than two or one prints as [ … ], then the object. A list's
 # cells print only their rdf:first, after a space. Plain tokens (spaces, punctuation) are text, the
 # others spans of class ttl-<kind>.
-c:TurtleTokens a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum 8 ; sem:always true ;
+c:TurtleTokens a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum 101 ; sem:always true ;
     sem:follows ( [ sem:inverse c:turtleIn ] ) , ( [ sem:inverse c:turtleChild ] ) , ( c:turtleRestOf [ sem:inverse c:turtleChild ] ) , c:turtleView .
 c:TurtleTokens-fn a sem:Rule ; sem:implements c:TurtleTokens ; sem:function "turtle:tokens" .
 c:TurtleTokens-sparql a sem:Rule ;
@@ -375,7 +375,7 @@ WHERE {
 # The header and the sections, per view: @base (c:baseIri) and the @prefix line of each prefix its
 # tokens use, by prefix, when its class prints a header; a section's blank line, unless nothing comes
 # before it, and its # title.
-c:TurtleHeader a sem:BuildingBlock ; sem:targets c:TurtleHead ; sem:stratum 9 ; sem:always true ;
+c:TurtleHeader a sem:BuildingBlock ; sem:targets c:TurtleHead ; sem:stratum 102 ; sem:always true ;
     sem:follows c:turtleView , ( c:turtleView [ sem:inverse c:turtleView ] ) ;
     sem:watches rdf:type , c:turtleUses , c:baseIri , c:turtleIndex , c:turtleTitle , c:turtleSection , c:turtleView .
 c:TurtleHeader-fn a sem:Rule ; sem:implements c:TurtleHeader ; sem:function "turtle:header" .

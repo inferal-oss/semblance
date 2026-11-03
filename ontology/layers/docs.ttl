@@ -109,7 +109,7 @@ c:ClassDoc a owl:Class ;
 # What it prints (the Turtle printer, turtle.ttl), a section each: the class; the properties whose
 # rdfs:domain it is; its renderings and their rules; what layers it is for render; its reactions; its
 # SHACL shapes - their blank nodes inline, queries elided (…).
-c:ClassDocTurtle a sem:BuildingBlock ; sem:targets c:ClassDoc ; sem:stratum 2 ; sem:follows c:bindFrom .
+c:ClassDocTurtle a sem:BuildingBlock ; sem:targets c:ClassDoc ; sem:stratum 97 ; sem:follows c:bindFrom .
 c:ClassDocTurtle-fn a sem:Rule ; sem:implements c:ClassDocTurtle ; sem:function "class-doc:turtle" .
 c:ClassDocTurtle-sparql a sem:Rule ;
     sem:implements c:ClassDocTurtle ;

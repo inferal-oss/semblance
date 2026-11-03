@@ -1192,7 +1192,7 @@ as a SPARQL result set (the rs: vocabulary of the SPARQL test suite)."""@en ;
 # (its rows: c:turtleRows); the bindings of a SELECT (its first c:limit solutions, 50) or an ASK's
 # answer as a result set, the run itself printed as [ … ] (c:turtleResults); then how many more there
 # are, as a # comment.
-c:ResultTurtlePrint a sem:BuildingBlock ; sem:targets c:ResultTurtle ; sem:stratum 2 ;
+c:ResultTurtlePrint a sem:BuildingBlock ; sem:targets c:ResultTurtle ; sem:stratum 97 ;
     sem:follows c:of , iv:run , ( iv:run rs:solution rs:binding ) , c:bindFrom ;
     sem:watches rdf:type , c:of , iv:run , c:limit , sem:select , sem:construct , c:bindVariable , c:bindFrom , c:bindProperty ,
       rs:solution , rs:binding , rs:index , rs:variable , rs:value , rs:boolean , iv:rowCount , iv:triples , iv:error .
