@@ -59,6 +59,7 @@ c:Heading sem:group c:TypeGroup . c:Text sem:group c:TypeGroup . c:Link sem:grou
 c:Kbd sem:group c:TypeGroup . c:Code sem:group c:TypeGroup . c:Blockquote sem:group c:TypeGroup .
 c:GraphMark sem:group c:TypeGroup . c:MarkNode sem:group c:TypeGroup . c:Emblem sem:group c:TypeGroup .
 c:Walkthrough sem:group c:TypeGroup . c:WalkthroughStep sem:group c:TypeGroup . c:Mention sem:group c:TypeGroup .
+c:WalkNode sem:group c:TypeGroup . c:WalkBand sem:group c:TypeGroup .
 c:SourceSpan sem:group c:TypeGroup . c:StepInView sem:group c:TypeGroup .
 # Source shown as text: a source text verbatim (the walkthrough's), and a live example's Turtle
 # beside what it renders, with its sandbox's state and problems.

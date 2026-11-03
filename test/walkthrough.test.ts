@@ -169,7 +169,7 @@ describe('a walkthrough', () => {
   })
 
   it('renders the same with SPARQL rules and reactions as with functions', () => {
-    expect(implementationGaps(['components/walkthrough.ttl'])).toEqual({ noSparql: [], noFunction: [] })
+    expect(implementationGaps(['components/walkthrough.ttl', 'components/walkthrough-diagram.ttl'])).toEqual({ noSparql: [], noFunction: [] })
     // SPARQL on Oxigraph and on Semblance's own engine, and the function twins.
     const [a, b, c] = ([['sparql', 'oxigraph'], ['sparql', 'wat'], ['function', 'oxigraph']] as const).map(([prefer, kind]) => {
       const t = todo(prefer, kind)

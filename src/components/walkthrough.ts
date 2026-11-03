@@ -7,7 +7,8 @@ import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_REST, RDF_TYPE, SEM } from '../ns.ts
 import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { mint } from '../rdf.ts'
 import { RDFS_LABEL, named, nodes, str, text, encodeForUri, fnv } from './util.ts'
-import { compact } from './workbench.ts'
+import { compact, fixed } from './workbench.ts'
+import { md5 } from './data.ts'
 
 const c = NS.c
 const W = {
@@ -95,29 +96,29 @@ interface DEdge {
   label: string
 }
 
+/** A reason two of the diagram's terms are linked: a predicate between them, or what a query naming one does. */
+interface Via {
+  from: string
+  to: string
+  label: string
+  predicate?: string
+  verb?: string
+}
+
 /**
- * The links among the diagram's terms, from the graph: their own triples between each other,
+ * Why the diagram's terms are linked, from the graph: their own triples between each other,
  * membership of a list one of them holds (c:children ( … )), and query text that names one (a
  * reaction's beh:inserts naming the property it writes). Read untraced: the diagram explains the
  * example's structure, and its state changing (a todo added, a field typed in) must not lay it out again.
  */
-function linksAmong(ctx: RuleContext, terms: NamedNode[]): DEdge[] {
+function viasAmong(ctx: RuleContext, terms: NamedNode[]): Via[] {
   return ctx.untraced(() => {
     const keys = new Set(terms.map((t) => t.value))
-    const edges: DEdge[] = []
-    const seen = new Set<string>()
-    // One link per ordered pair; several predicates between the same two share it ("beh:deletes · beh:inserts").
-    const byPair = new Map<string, DEdge>()
-    const add = (from: string, p: string, to: string) => {
-      const label = p === RDF_TYPE ? 'a' : (QUERY_VERBS[p] ?? compact(ctx, p))
-      const id = `${from} ${label} ${to}`
-      if (from === to || seen.has(id)) return
-      seen.add(id)
-      const pair = byPair.get(`${from} ${to}`)
-      if (pair) return void (pair.label = [...pair.label.split(' · '), label].sort().join(' · '))
-      const edge = { from, to, label }
-      byPair.set(`${from} ${to}`, edge)
-      edges.push(edge)
+    const vias = new Map<string, Via>()
+    const add = (from: string, p: string, to: string, verb?: string) => {
+      const label = verb ?? (p === RDF_TYPE ? 'a' : compact(ctx, p))
+      if (from === to) return
+      vias.set(`${from} ${verb ?? p} ${to}`, verb ? { from, to, label, verb } : { from, to, label, predicate: p })
     }
     // Only what the app says (the default graph): not what rendering derives between components.
     const said = (q: Quad) => q.graph.termType === 'DefaultGraph'
@@ -136,12 +137,29 @@ function linksAmong(ctx: RuleContext, terms: NamedNode[]): DEdge[] {
       for (const p of QUERY_TEXT) {
         for (const v of ctx.objects(a, p)) {
           if (v.termType !== 'Literal') continue
-          for (const b of terms) if (b !== a && spellings.get(b.value)!.some((s) => names(v.value, s))) add(a.value, p, b.value)
+          for (const b of terms) if (b !== a && spellings.get(b.value)!.some((s) => names(v.value, s))) add(a.value, p, b.value, QUERY_VERBS[p])
         }
       }
     }
-    return edges
+    return [...vias.values()]
   })
+}
+
+/** One link per ordered pair, in the diagram's order; several reasons share it ("beh:deletes · beh:inserts"). */
+function linksAmong(terms: NamedNode[], vias: Via[]): DEdge[] {
+  const place = new Map(terms.map((t, i) => [t.value, i]))
+  const byPair = new Map<string, Set<string>>()
+  for (const v of vias) {
+    const k = `${v.from} ${v.to}`
+    if (!byPair.has(k)) byPair.set(k, new Set())
+    byPair.get(k)!.add(v.label)
+  }
+  return [...byPair]
+    .map(([k, labels]) => {
+      const [from, to] = k.split(' ') as [string, string]
+      return { from, to, label: [...labels].sort().join(' · ') }
+    })
+    .sort((a, b) => place.get(a.from)! - place.get(b.from)! || place.get(a.to)! - place.get(b.to)!)
 }
 
 function spellingsOf(ctx: RuleContext, iri: string): string[] {
@@ -162,7 +180,8 @@ function spellingsOf(ctx: RuleContext, iri: string): string[] {
 
 /** Whether `text` names `word` as a whole token (not a prefix of a longer name). */
 function names(text: string, word: string): boolean {
-  for (let at = text.indexOf(word); at >= 0; at = text.indexOf(word, at + 1)) {
+  // An IRI (<…>) by its first occurrence only.
+  for (let at = text.indexOf(word); at >= 0; at = word.startsWith('<') ? -1 : text.indexOf(word, at + 1)) {
     const before = text[at - 1] ?? ' '
     const after = text[at + word.length] ?? ' '
     if (!/[\w:-]/.test(before) && !/[\w-]/.test(after)) return true
@@ -199,7 +218,10 @@ function layout(dnodes: DNode[], edges: DEdge[]): { height: number; bands: { ban
       const above = neighbours.get(n.term.value)!.filter(placed)
       return above.length ? above.reduce((s, m) => s + m.x, 0) / above.length : Infinity
     }
-    const ranked = members.map((n) => ({ n, b: bary(n) })).sort((a, b) => (Number.isFinite(a.b) && Number.isFinite(b.b) ? a.b - b.b : 0) || a.n.order - b.n.order)
+    // Those with neighbours above by where they are (a mean of whole numbers), the rest after; then in order.
+    const ranked = members
+      .map((n) => ({ n, b: bary(n) }))
+      .sort((a, b) => (Number.isFinite(a.b) ? (Number.isFinite(b.b) ? a.b - b.b : -1) : Number.isFinite(b.b) ? 1 : 0) || a.n.order - b.n.order)
     bands.push({ band, y })
     for (let r = 0; r * COLS < ranked.length; r++) {
       const row = ranked.slice(r * COLS, r * COLS + COLS)
@@ -220,18 +242,18 @@ function layout(dnodes: DNode[], edges: DEdge[]): { height: number; bands: { ban
 function curve(a: DNode, b: DNode) {
   const dx = b.x - a.x
   const dy = b.y - a.y
-  const len = Math.hypot(dx, dy) || 1
+  const len = Math.sqrt(dx * dx + dy * dy) || 1
   const bend = Math.min(36, len * 0.22)
   const cx = (a.x + b.x) / 2 + (dy / len) * bend
   const cy = (a.y + b.y) / 2 - (dx / len) * bend
   const unit = (x: number, y: number) => {
-    const l = Math.hypot(x, y) || 1
+    const l = Math.sqrt(x * x + y * y) || 1
     return [x / l, y / l] as const
   }
   const [sx, sy] = unit(cx - a.x, cy - a.y)
   const [ex, ey] = unit(b.x - cx, b.y - cy)
   const [x1, y1, x2, y2] = [a.x + sx * 9, a.y + sy * 9, b.x - ex * 11, b.y - ey * 11]
-  const f = (n: number) => n.toFixed(1)
+  const f = (n: number) => fixed(n, 1)
   const head = `M${f(x2 + ex * 4)},${f(y2 + ey * 4)} L${f(x2 - ex * 5 - ey * 4)},${f(y2 - ey * 5 + ex * 4)} L${f(x2 - ex * 5 + ey * 4)},${f(y2 - ey * 5 - ex * 4)} Z`
   // The label sits on the curve's middle (a quadratic's point at t = 1/2).
   const mx = 0.25 * x1 + 0.5 * cx + 0.25 * x2
@@ -241,14 +263,12 @@ function curve(a: DNode, b: DNode) {
 
 // --- rendering ----------------------------------------------------------------------------------
 
-const walkthrough: FnRule = (ctx, focus) => {
-  const o = ctx.out(focus)
+/** The diagram of a walkthrough: its terms (in order, by band), why they are linked, the links, laid out. */
+function diagramModel(ctx: RuleContext, focus: NamedNode, lay = true) {
   const steps = nodes(ctx, ctx.object(focus, W.steps))
-  const title = text(ctx, focus, C.label)
-  const lead = text(ctx, focus, W.note)
   const refs = mentionsOf(ctx, steps)
   const excluded = new Set(ctx.objects(focus, W.excludes).map((t) => t.value))
-  // The diagram's terms: mentioned (in the order first mentioned), then included.
+  // The diagram's terms: mentioned (in the order first mentioned), then included (by IRI).
   const dnodes: DNode[] = []
   const byKey = new Map<string, DNode>()
   const addNode = (term: NamedNode, band: number) => {
@@ -258,17 +278,30 @@ const walkthrough: FnRule = (ctx, focus) => {
     byKey.set(term.value, n)
   }
   for (const r of refs) addNode(r.term, r.step)
-  const included = ctx.objects(focus, W.includes).filter(named)
+  const included = ctx
+    .objects(focus, W.includes)
+    .filter(named)
+    .sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0))
   for (const t of included) addNode(t, Infinity)
-  const edges = linksAmong(
-    ctx,
-    dnodes.map((n) => n.term),
-  )
+  const terms = dnodes.map((n) => n.term)
+  const vias = viasAmong(ctx, terms)
+  const edges = linksAmong(terms, vias)
+  // An included node sits in the band of its first mentioned neighbour (else the last step's).
+  const mentioned = new Map(dnodes.map((n) => [n.term.value, n.band]))
   for (const n of dnodes) {
     if (Number.isFinite(n.band)) continue
-    const linked = edges.flatMap((e) => (e.from === n.term.value ? [e.to] : e.to === n.term.value ? [e.from] : [])).map((k) => byKey.get(k)!.band)
+    const linked = edges.flatMap((e) => (e.from === n.term.value ? [e.to] : e.to === n.term.value ? [e.from] : [])).map((k) => mentioned.get(k)!)
     n.band = Math.min(...linked.filter(Number.isFinite), Math.max(0, steps.length - 1))
   }
+  const placed = lay ? layout(dnodes, edges) : { height: 0, bands: [] }
+  return { steps, refs, dnodes, byKey, vias, edges, mentioned, ...placed }
+}
+
+const walkthrough: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const title = text(ctx, focus, C.label)
+  const lead = text(ctx, focus, W.note)
+  const { steps, refs, dnodes, byKey, edges, height, bands } = diagramModel(ctx, focus, ctx.modality !== MOD.Text)
   const sentence = (e: DEdge) => `${byKey.get(e.from)!.label} ${e.label} ${byKey.get(e.to)!.label}.`
 
   if (ctx.modality === MOD.Text) {
@@ -283,7 +316,6 @@ const walkthrough: FnRule = (ctx, focus) => {
     return o.quads
   }
 
-  const { height, bands } = layout(dnodes, edges)
   // A node's IRI is its term's, so a rule can name it (c:WalkthroughArrows points at its dot).
   const ids = new Map(dnodes.map((n) => [n.term.value, 'node-' + encodeForUri(n.term.value)]))
   const marks: NamedNode[] = []
@@ -292,7 +324,7 @@ const walkthrough: FnRule = (ctx, focus) => {
   for (const e of edges) {
     const a = byKey.get(e.from)!
     const b = byKey.get(e.to)!
-    const id = `e${fnv(e.from + ' ' + e.label + ' ' + e.to)}`
+    const id = 'e' + md5(e.from + ' ' + e.label + ' ' + e.to).slice(0, 12)
     const k = curve(a, b)
     const link = o.svg(id, 'G', { class: 'sem-link' }, [
       o.svg(`${id}-line`, 'Path', { d: k.d, class: 'sem-edge' }),
@@ -472,7 +504,79 @@ const sourceHighlight: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+// The diagram's building blocks' function twins (walkthrough-diagram.ttl): each states its part of the model.
+const int = (ctx: RuleContext, n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'integer'))
+const WN = (walk: string, term: string) => mint(walk, 'wn-' + md5(term).slice(0, 12))
+
+function diagramBlock(state: (ctx: RuleContext, o: Out, walk: string, m: ReturnType<typeof diagramModel>, focus: NamedNode) => void, ownWalk = true): FnRule {
+  return (ctx, focus) => {
+    const o = ctx.out(focus)
+    const walk = ownWalk ? focus.value : focus.value.slice(0, focus.value.indexOf('/~'))
+    if (!ctx.match(ctx.nn(walk), RDF_TYPE, W.Walkthrough).length) return o.quads
+    state(ctx, o, walk, diagramModel(ctx, ctx.nn(walk)), focus)
+    return o.quads
+  }
+}
+
+const walkNodes = diagramBlock((ctx, o, walk, m) => {
+  o.t(ctx.nn(mint(walk, 'wp')), c + 'partsOf', ctx.nn(walk)).t(ctx.nn(mint(walk, 'wp')), c + 'stepCount', int(ctx, m.steps.length))
+  for (const n of m.dnodes) {
+    const node = ctx.nn(WN(walk, n.term.value))
+    o.t(node, c + 'walkNodeIn', ctx.nn(walk)).t(node, c + 'nodeTerm', n.term).t(node, c + 'nodeOrder', int(ctx, n.order))
+    const band = m.mentioned.get(n.term.value)!
+    if (Number.isFinite(band)) o.t(node, c + 'band', int(ctx, band))
+    else o.t(node, c + 'includedNode', ctx.f.literal('true', ctx.nn(NS.xsd + 'boolean')))
+  }
+})
+const walkVias = diagramBlock((ctx, o, walk, m) => {
+  for (const v of m.vias) {
+    const [from, to] = [WN(walk, v.from), WN(walk, v.to)]
+    const via = ctx.nn(mint(walk, 'wv-' + md5(`${from} ${v.predicate ?? v.verb} ${to}`).slice(0, 12)))
+    o.t(via, c + 'walkViaIn', ctx.nn(walk)).t(via, c + 'linkFrom', ctx.nn(from)).t(via, c + 'linkTo', ctx.nn(to))
+    if (v.predicate) o.t(via, c + 'viaPredicate', ctx.nn(v.predicate))
+    if (v.verb) o.t(via, c + 'viaVerb', v.verb)
+  }
+})
+const walkNames = diagramBlock((ctx, o, walk, m) => {
+  for (const n of m.dnodes) o.t(ctx.nn(WN(walk, n.term.value)), c + 'nodeLabel', n.label)
+  for (const v of m.vias) {
+    const [from, to] = [WN(walk, v.from), WN(walk, v.to)]
+    o.t(ctx.nn(mint(walk, 'wv-' + md5(`${from} ${v.predicate ?? v.verb} ${to}`).slice(0, 12))), c + 'viaLabel', v.label)
+  }
+  for (const r of m.refs) {
+    const name = ctx.nn(mint(walk, 'wm-' + md5(r.mention.value).slice(0, 12)))
+    o.t(name, c + 'mentionOf', r.mention).t(name, c + 'mentionName', compact(ctx, r.term.value))
+  }
+})
+const walkLinks = diagramBlock((ctx, o, walk, m) => {
+  for (const e of m.edges) {
+    const [from, to] = [WN(walk, e.from), WN(walk, e.to)]
+    const link = ctx.nn(mint(walk, 'wl-' + md5(`${from} ${to}`).slice(0, 12)))
+    o.t(link, c + 'walkLinkIn', ctx.nn(walk)).t(link, c + 'linkFrom', ctx.nn(from)).t(link, c + 'linkTo', ctx.nn(to)).t(link, c + 'linkLabel', e.label)
+  }
+})
+const walkBands = diagramBlock((ctx, o, walk, m) => {
+  const cols = m.dnodes.length > 14 ? 4 : 3
+  for (const n of m.dnodes) if (!Number.isFinite(m.mentioned.get(n.term.value)!)) o.t(ctx.nn(WN(walk, n.term.value)), c + 'band', int(ctx, n.band))
+  for (const b of m.bands) {
+    const band = ctx.nn(mint(walk, 'wb-' + b.band))
+    o.t(band, RDF_TYPE, ctx.nn(c + 'WalkBand')).t(band, c + 'bandIn', ctx.nn(walk)).t(band, c + 'bandIndex', int(ctx, b.band))
+    o.t(band, c + 'bandTop', int(ctx, b.y)).t(band, c + 'bandColumns', int(ctx, cols))
+    for (const n of m.dnodes) if (n.band === b.band) o.t(band, c + 'bandMember', ctx.nn(WN(walk, n.term.value)))
+  }
+  if (m.dnodes.length) o.t(ctx.nn(mint(walk, 'wp')), c + 'height', int(ctx, m.height))
+})
+const walkRows = diagramBlock((ctx, o, walk, m, focus) => {
+  for (const n of m.dnodes) if (mint(walk, 'wb-' + n.band) === focus.value) o.t(ctx.nn(WN(walk, n.term.value)), c + 'x', int(ctx, n.x)).t(ctx.nn(WN(walk, n.term.value)), c + 'y', int(ctx, n.y))
+}, false)
+
 export const functions: Record<string, FnRule> = {
+  'walkthrough:nodes': walkNodes,
+  'walkthrough:vias': walkVias,
+  'walkthrough:names': walkNames,
+  'walkthrough:links': walkLinks,
+  'walkthrough:bands': walkBands,
+  'walkthrough:rows': walkRows,
   walkthrough,
   mention,
   'walkthrough:focus': walkFocus,
