@@ -12,6 +12,7 @@
 @prefix co: <http://purl.org/co/> .
 @prefix schema: <https://schema.org/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
@@ -1364,7 +1365,9 @@ WHERE {
 
 c:IndentBlock a beh:Reaction ;
     rdfs:label "Put inside"@en ;
-    rdfs:comment """Tab in a block that is not an item, after a toggle, a callout or an item: it goes in, as its last block."""@en ;
+    rdfs:comment """Tab in a block that is not an item: it goes into the block before it (or the last item of the list before it), as
+its last block, when that is a container whose shapes allow it (sh:class on po:contains): a toggle, a callout, a
+quote or an item takes any block, a table only rows."""@en ;
     beh:when c:BlockStructureKey ;
     beh:sourceClass c:BlockEditor ;
     beh:undoable true ;
@@ -1376,17 +1379,33 @@ WHERE {
   ?p co:nextItem ?b . ?x po:contains ?b .
   OPTIONAL { ?b co:nextItem ?n }
   FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
-  ?p a/rdfs:subClassOf* blk:TextBlock , blk:Container .
+  # Into the block before it, or into the last item of the list before it.
+  OPTIONAL { ?p a/rdfs:subClassOf* blk:List ; po:contains ?lastItem FILTER NOT EXISTS { ?lastItem co:nextItem ?anyAfterItem } }
+  BIND(COALESCE(?lastItem, ?p) AS ?target)
+  ?target a/rdfs:subClassOf* blk:Container .
+  FILTER NOT EXISTS {
+    ?shape sh:targetClass ?tc ; sh:property ?ps . ?target a/rdfs:subClassOf* ?tc .
+    ?ps sh:path po:contains ; sh:class ?required .
+    FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?required }
+  }
 }""" ;
-    beh:inserts """CONSTRUCT { ?p co:nextItem ?n ; po:contains ?b . ?last co:nextItem ?b . }
+    beh:inserts """CONSTRUCT { ?p co:nextItem ?n . ?target po:contains ?b . ?last co:nextItem ?b . }
 WHERE {
   $event beh:key "tab" ; beh:startBlock ?b ; beh:endBlock ?b .
   FILTER NOT EXISTS { $this c:menuOpen true }
   ?p co:nextItem ?b . ?x po:contains ?b .
   OPTIONAL { ?b co:nextItem ?n }
   FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
-  ?p a/rdfs:subClassOf* blk:TextBlock , blk:Container .
-  OPTIONAL { ?p po:contains ?last FILTER NOT EXISTS { ?last co:nextItem ?anyAfter } }
+  # Into the block before it, or into the last item of the list before it.
+  OPTIONAL { ?p a/rdfs:subClassOf* blk:List ; po:contains ?lastItem FILTER NOT EXISTS { ?lastItem co:nextItem ?anyAfterItem } }
+  BIND(COALESCE(?lastItem, ?p) AS ?target)
+  ?target a/rdfs:subClassOf* blk:Container .
+  FILTER NOT EXISTS {
+    ?shape sh:targetClass ?tc ; sh:property ?ps . ?target a/rdfs:subClassOf* ?tc .
+    ?ps sh:path po:contains ; sh:class ?required .
+    FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?required }
+  }
+  OPTIONAL { ?target po:contains ?last FILTER NOT EXISTS { ?last co:nextItem ?anyAfter } }
 }""" .
 
 c:Unnest a beh:Reaction ;
@@ -1528,3 +1547,238 @@ c:RemoveLink a beh:Reaction ;
     beh:deletes """CONSTRUCT { ?b blk:mark ?m . ?m ?p ?o . $this c:linkMark ?m . }
 WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . FILTER(?btn = IRI(CONCAT(STR($this), "/~link-remove"))) $this c:linkMark ?m . ?b blk:mark ?m . ?m ?p ?o . }""" ;
     beh:inserts """CONSTRUCT { } WHERE { }""" .
+
+# --- tables -----------------------------------------------------------------------------------------
+# In a cell, Tab goes to the next cell (past the last one, to a new row) and Shift+Tab to the one before.
+# With the caret in a cell, the editor's table toolbar adds a row above or below, a column before or
+# after, and removes the row or the column (blk:tableAction on its buttons). A column is the cells at
+# one place in their rows (as many cells before them).
+
+blk:tableAction a owl:ObjectProperty ; rdfs:comment "On a rendered table toolbar button: what it does to the table (blk:RowAbove …)."@en .
+blk:TableAction a owl:Class ; rdfs:comment "Something a table toolbar button does to the table the caret is in."@en .
+blk:RowAbove a blk:TableAction ; rdfs:label "Row above"@en , "Рядок вище"@uk , "Zeile darüber"@de , "صف أعلاه"@ar .
+blk:RowBelow a blk:TableAction ; rdfs:label "Row below"@en , "Рядок нижче"@uk , "Zeile darunter"@de , "صف أدناه"@ar .
+blk:ColumnBefore a blk:TableAction ; rdfs:label "Column before"@en , "Стовпець перед"@uk , "Spalte davor"@de , "عمود قبل"@ar .
+blk:ColumnAfter a blk:TableAction ; rdfs:label "Column after"@en , "Стовпець після"@uk , "Spalte danach"@de , "عمود بعد"@ar .
+blk:RemoveRow a blk:TableAction ; rdfs:label "Remove row"@en , "Вилучити рядок"@uk , "Zeile entfernen"@de , "إزالة الصف"@ar .
+blk:RemoveColumn a blk:TableAction ; rdfs:label "Remove column"@en , "Вилучити стовпець"@uk , "Spalte entfernen"@de , "إزالة العمود"@ar .
+c:TableToolsPhrase a c:Phrase ; rdfs:label "Table"@en , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar .
+
+c:NextCell a beh:Reaction ;
+    rdfs:label "Next cell"@en ;
+    rdfs:comment """Tab in a cell: the caret goes to the next cell, in the row or the next one."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:key "tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?c co:nextItem ?sameRow }
+  OPTIONAL { ?row co:nextItem ?nextRow . ?nextRow po:contains ?nextRowFirst FILTER NOT EXISTS { ?anyBefore co:nextItem ?nextRowFirst } }
+  BIND(COALESCE(?sameRow, ?nextRowFirst) AS ?to) FILTER(BOUND(?to)) OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { $this c:anchorBlock ?to ; c:anchorOffset 0 ; c:focusBlock ?to ; c:focusOffset 0 . }
+WHERE { $event beh:key "tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?c co:nextItem ?sameRow }
+  OPTIONAL { ?row co:nextItem ?nextRow . ?nextRow po:contains ?nextRowFirst FILTER NOT EXISTS { ?anyBefore co:nextItem ?nextRowFirst } }
+  BIND(COALESCE(?sameRow, ?nextRowFirst) AS ?to) FILTER(BOUND(?to)) }""" .
+
+c:NewRowByTab a beh:Reaction ;
+    rdfs:label "Add a row"@en ;
+    rdfs:comment """Tab in the last cell of a table: a new row (as many cells as the last one) and the caret in its first cell."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Row added"@en , "Рядок додано"@uk , "Zeile hinzugefügt"@de , "تمت إضافة صف"@ar ;
+    beh:deletes """CONSTRUCT { $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:key "tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?c co:nextItem ?sameRow }
+  OPTIONAL { ?row co:nextItem ?nextRow . ?nextRow po:contains ?nextRowFirst FILTER NOT EXISTS { ?anyBefore co:nextItem ?nextRowFirst } }
+  BIND(COALESCE(?sameRow, ?nextRowFirst) AS ?to) FILTER(!BOUND(?to)) OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?table po:contains ?newRow . ?row co:nextItem ?newRow . ?newRow a blk:Row ; po:contains ?newCell . ?newCell a blk:Cell ; rdf:value "" ; co:nextItem ?newNext .
+  $this c:anchorBlock ?first ; c:anchorOffset 0 ; c:focusBlock ?first ; c:focusOffset 0 . }
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?c co:nextItem ?sameRow }
+  OPTIONAL { ?row co:nextItem ?nextRow . ?nextRow po:contains ?nextRowFirst FILTER NOT EXISTS { ?anyBefore co:nextItem ?nextRowFirst } }
+  BIND(COALESCE(?sameRow, ?nextRowFirst) AS ?to)
+  FILTER(!BOUND(?to))
+  ?table po:contains ?row .
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow)
+  ?row po:contains ?cell . BIND(IRI(CONCAT(STR(?cell), "-", ?ev)) AS ?newCell)
+  OPTIONAL { ?cell co:nextItem ?next } BIND(IRI(CONCAT(STR(?next), "-", ?ev)) AS ?newNext)
+  ?row po:contains ?head FILTER NOT EXISTS { ?anyBefore co:nextItem ?head } BIND(IRI(CONCAT(STR(?head), "-", ?ev)) AS ?first)
+}""" .
+
+c:PreviousCell a beh:Reaction ;
+    rdfs:label "Previous cell"@en ;
+    rdfs:comment """Shift+Tab in a cell: the caret goes to the end of the cell before it."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:key "shift+tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?sameRow co:nextItem ?c }
+  OPTIONAL { ?prevRow co:nextItem ?row . ?prevRow po:contains ?prevRowLast FILTER NOT EXISTS { ?prevRowLast co:nextItem ?anyAfter } }
+  BIND(COALESCE(?sameRow, ?prevRowLast) AS ?to) FILTER(BOUND(?to))
+  OPTIONAL { ?to rdf:value ?toValue } BIND(STRLEN(COALESCE(STR(?toValue), "")) AS ?end) OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { $this c:anchorBlock ?to ; c:anchorOffset ?end ; c:focusBlock ?to ; c:focusOffset ?end . }
+WHERE { $event beh:key "shift+tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?sameRow co:nextItem ?c }
+  OPTIONAL { ?prevRow co:nextItem ?row . ?prevRow po:contains ?prevRowLast FILTER NOT EXISTS { ?prevRowLast co:nextItem ?anyAfter } }
+  BIND(COALESCE(?sameRow, ?prevRowLast) AS ?to) FILTER(BOUND(?to))
+  OPTIONAL { ?to rdf:value ?toValue } BIND(STRLEN(COALESCE(STR(?toValue), "")) AS ?end) }""" .
+
+c:TableRowAbove a beh:Reaction ;
+    rdfs:label "Add a row"@en ;
+    rdfs:comment """The table toolbar's "row above": a new row of as many cells as the caret's row, before it."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Row added"@en , "Рядок додано"@uk , "Zeile hinzugefügt"@de , "تمت إضافة صف"@ar ;
+    beh:deletes """CONSTRUCT { ?prev co:nextItem ?row . } WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  FILTER(?action = blk:RowAbove)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow) ?prev co:nextItem ?row . }""" ;
+    beh:inserts """CONSTRUCT { ?table po:contains ?newRow . ?prev co:nextItem ?newRow . ?newRow co:nextItem ?row ; a blk:Row ; po:contains ?newCell . ?newCell a blk:Cell ; rdf:value "" ; co:nextItem ?newNext . }
+WHERE {
+  $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  FILTER(?action = blk:RowAbove)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow)
+  OPTIONAL { ?prev co:nextItem ?row }
+  ?row po:contains ?cell . BIND(IRI(CONCAT(STR(?cell), "-", ?ev)) AS ?newCell)
+  OPTIONAL { ?cell co:nextItem ?next } BIND(IRI(CONCAT(STR(?next), "-", ?ev)) AS ?newNext)
+}""" .
+
+c:TableRowBelow a beh:Reaction ;
+    rdfs:label "Add a row"@en ;
+    rdfs:comment """The table toolbar's "row below": a new row of as many cells as the caret's row, after it."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Row added"@en , "Рядок додано"@uk , "Zeile hinzugefügt"@de , "تمت إضافة صف"@ar ;
+    beh:deletes """CONSTRUCT { ?row co:nextItem ?after . } WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  FILTER(?action = blk:RowBelow)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow) ?row co:nextItem ?after . }""" ;
+    beh:inserts """CONSTRUCT { ?table po:contains ?newRow . ?row co:nextItem ?newRow . ?newRow co:nextItem ?after ; a blk:Row ; po:contains ?newCell . ?newCell a blk:Cell ; rdf:value "" ; co:nextItem ?newNext . }
+WHERE {
+  $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  FILTER(?action = blk:RowBelow)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow)
+  OPTIONAL { ?row co:nextItem ?after }
+  ?row po:contains ?cell . BIND(IRI(CONCAT(STR(?cell), "-", ?ev)) AS ?newCell)
+  OPTIONAL { ?cell co:nextItem ?next } BIND(IRI(CONCAT(STR(?next), "-", ?ev)) AS ?newNext)
+}""" .
+
+c:TableColumnBefore a beh:Reaction ;
+    rdfs:label "Add a column"@en ;
+    rdfs:comment """The table toolbar's "column before": in every row a new cell before the cell at the caret's place."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column added"@en , "Стовпець додано"@uk , "Spalte hinzugefügt"@de , "تمت إضافة عمود"@ar ;
+    beh:deletes """CONSTRUCT { ?prev co:nextItem ?at . } WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:ColumnBefore) ?prev co:nextItem ?at . }""" ;
+    beh:inserts """CONSTRUCT { ?r po:contains ?new . ?new a blk:Cell ; rdf:value "" ; co:nextItem ?at . ?prev co:nextItem ?new . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:ColumnBefore) OPTIONAL { ?prev co:nextItem ?at } }""" .
+
+c:TableColumnAfter a beh:Reaction ;
+    rdfs:label "Add a column"@en ;
+    rdfs:comment """The table toolbar's "column after": in every row a new cell after the cell at the caret's place."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column added"@en , "Стовпець додано"@uk , "Spalte hinzugefügt"@de , "تمت إضافة عمود"@ar ;
+    beh:deletes """CONSTRUCT { ?at co:nextItem ?after . } WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:ColumnAfter) ?at co:nextItem ?after . }""" ;
+    beh:inserts """CONSTRUCT { ?r po:contains ?new . ?new a blk:Cell ; rdf:value "" ; co:nextItem ?after . ?at co:nextItem ?new . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:ColumnAfter) OPTIONAL { ?at co:nextItem ?after } }""" .
+
+c:TableRemoveColumn a beh:Reaction ;
+    rdfs:label "Remove the column"@en ;
+    rdfs:comment """The table toolbar's "remove column": the cell at the caret's place goes from every row (not a table's last column)."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column removed"@en , "Стовпець вилучено"@uk , "Spalte entfernt"@de , "تمت إزالة العمود"@ar ;
+    beh:deletes """CONSTRUCT { ?at ?p ?o . ?r po:contains ?at . ?prev co:nextItem ?at . ?at blk:mark ?m . ?m ?mp ?mo . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:RemoveColumn)
+  FILTER EXISTS { ?row po:contains ?otherCell FILTER(?otherCell != ?c) }
+  ?at ?p ?o . OPTIONAL { ?prev co:nextItem ?at } OPTIONAL { ?at blk:mark ?m . ?m ?mp ?mo } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?prev co:nextItem ?after . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:RemoveColumn)
+  FILTER EXISTS { ?row po:contains ?otherCell FILTER(?otherCell != ?c) }
+  ?prev co:nextItem ?at . ?at co:nextItem ?after . }""" .
+
+c:TableRemoveRow a beh:Reaction ;
+    rdfs:label "Remove the row"@en ;
+    rdfs:comment """The table toolbar's "remove row": the caret's row goes (not a table's last row)."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Row removed"@en , "Рядок вилучено"@uk , "Zeile entfernt"@de , "تمت إزالة الصف"@ar ;
+    beh:deletes """CONSTRUCT { ?row ?rp ?ro . ?table po:contains ?row . ?prev co:nextItem ?row . ?cell ?p ?o . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c } FILTER(?action = blk:RemoveRow)
+  FILTER EXISTS { ?table po:contains ?otherRow FILTER(?otherRow != ?row) }
+  ?row ?rp ?ro . OPTIONAL { ?row po:contains ?cell . ?cell ?p ?o } OPTIONAL { ?prev co:nextItem ?row } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?prev co:nextItem ?after . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c } FILTER(?action = blk:RemoveRow)
+  FILTER EXISTS { ?table po:contains ?otherRow FILTER(?otherRow != ?row) }
+  ?prev co:nextItem ?row . ?row co:nextItem ?after . }""" .

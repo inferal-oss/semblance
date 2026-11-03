@@ -546,3 +546,80 @@ describe('addresses and site types (c:BlockEditor)', () => {
     expect(h.objects(next, NS.rdf + 'type')).toEqual([NS.blk + 'Paragraph'])
   })
 })
+
+describe('tables (c:BlockEditor)', () => {
+  const extra = `
+<${EX}doc> <${NS.po}contains> <${EX}t> . <${EX}p3> <${NS.co}nextItem> <${EX}t> .
+<${EX}t> a <${NS.blk}Table> ; <${NS.po}contains> <${EX}r1> , <${EX}r2> .
+<${EX}r1> a <${NS.blk}Row> ; <${NS.po}contains> <${EX}a1> , <${EX}b1> ; <${NS.co}nextItem> <${EX}r2> .
+<${EX}a1> a <${NS.blk}Cell> ; <${NS.rdf}value> "a1" ; <${NS.co}nextItem> <${EX}b1> .
+<${EX}b1> a <${NS.blk}Cell> ; <${NS.rdf}value> "b1" .
+<${EX}r2> a <${NS.blk}Row> ; <${NS.po}contains> <${EX}a2> , <${EX}b2> .
+<${EX}a2> a <${NS.blk}Cell> ; <${NS.rdf}value> "a2" ; <${NS.co}nextItem> <${EX}b2> .
+<${EX}b2> a <${NS.blk}Cell> ; <${NS.rdf}value> "b2" .`
+
+  it('moves between cells by Tab, and adds and removes rows and columns, the same with SPARQL and function rules', () => {
+    const both = [mount('sparql', 'wat', extra), mount('function', 'wat', extra)] as const
+    const [m] = both
+    const step = (what: string, act: (h: ReturnType<typeof mount>) => void) => {
+      for (const h of both) act(h)
+      sameHtml(both[1].html(), both[0].html(), what)
+      expect(both[1].text(), what).toBe(both[0].text())
+    }
+    const tool = (h: ReturnType<typeof mount>, local: string) =>
+      [...h.app.querySelectorAll('.sem-table-tools button')].find((b) => h.renderer.keyOf(b) === `${EX}editor/~tt-${local}`)!.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true }))
+    const grid = () => [...m.app.querySelectorAll(`[id="${EX}t/~root"] tr`)].map((tr) => [...tr.children].map((c) => c.textContent))
+    step('Tab goes to the next cell', (h) => {
+      h.select('a1', 2)
+      h.press('Tab')
+    })
+    expect(m.caret()).toBe(`${EX}b1 0 ${EX}b1 0`)
+    expect(m.app.querySelector('.sem-table-tools')!.getAttribute('data-sem-anchor')).toBe(`${EX}t/~root`)
+    step('Tab at the end of a row goes to the next', (h) => h.press('Tab'))
+    expect(m.caret()).toBe(`${EX}a2 0 ${EX}a2 0`)
+    step('Shift+Tab goes back to the end of the cell before', (h) => h.press('Tab', { shiftKey: true }))
+    expect(m.caret()).toBe(`${EX}b1 2 ${EX}b1 2`)
+    step('Tab past the last cell adds a row', (h) => {
+      h.select('b2', 2)
+      h.press('Tab')
+    })
+    expect(grid()).toEqual([['a1', 'b1'], ['a2', 'b2'], ['', '']])
+    step('a column after', (h) => {
+      h.select('a1', 0)
+      tool(h, 'column-after')
+    })
+    expect(grid()).toEqual([['a1', '', 'b1'], ['a2', '', 'b2'], ['', '', '']])
+    step('a row above', (h) => tool(h, 'row-above'))
+    expect(grid()).toEqual([['', '', ''], ['a1', '', 'b1'], ['a2', '', 'b2'], ['', '', '']])
+    step('remove the column', (h) => tool(h, 'remove-column'))
+    expect(grid()).toEqual([['', ''], ['', 'b1'], ['', 'b2'], ['', '']])
+    step('remove the row', (h) => {
+      h.select('b2', 0)
+      tool(h, 'remove-row')
+    })
+    expect(grid()).toEqual([['', ''], ['', 'b1'], ['', '']])
+  })
+})
+
+describe('nesting by shapes (c:BlockEditor)', () => {
+  it('puts a paragraph after a list into its last item, and none into a table, whose shape takes rows only', () => {
+    const extra = `
+<${EX}doc> <${NS.po}contains> <${EX}l> , <${EX}x> , <${EX}t> , <${EX}y> . <${EX}p3> <${NS.co}nextItem> <${EX}l> .
+<${EX}l> a <${NS.blk}BulletedList> ; <${NS.po}contains> <${EX}li> ; <${NS.co}nextItem> <${EX}x> .
+<${EX}li> a <${NS.blk}ListItem> ; <${NS.rdf}value> "Item" .
+<${EX}x> a <${NS.blk}Paragraph> ; <${NS.rdf}value> "More about the item" ; <${NS.co}nextItem> <${EX}t> .
+<${EX}t> a <${NS.blk}Table> ; <${NS.po}contains> <${EX}r> ; <${NS.co}nextItem> <${EX}y> .
+<${EX}r> a <${NS.blk}Row> ; <${NS.po}contains> <${EX}c> .
+<${EX}c> a <${NS.blk}Cell> ; <${NS.rdf}value> "c" .
+<${EX}y> a <${NS.blk}Paragraph> ; <${NS.rdf}value> "After the table" .`
+    const h = mount('sparql', 'wat', extra)
+    h.select('x', 0)
+    h.press('Tab')
+    expect(h.objects('li', NS.po + 'contains')).toEqual([EX + 'x'])
+    expect(h.app.querySelector(`[id="${EX}li/~root"] .sem-children [id="${EX}x/~root"]`)).not.toBeNull()
+    h.select('y', 0)
+    const e = h.press('Tab')
+    expect(h.objects('t', NS.po + 'contains')).toEqual([EX + 'r'])
+    expect(e.defaultPrevented).toBe(false)
+  })
+})

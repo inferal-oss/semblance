@@ -580,6 +580,40 @@ const addressField: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+const TABLE_ACTIONS: [action: string, local: string][] = [
+  ['RowAbove', 'row-above'],
+  ['RowBelow', 'row-below'],
+  ['ColumnBefore', 'column-before'],
+  ['ColumnAfter', 'column-after'],
+  ['RemoveRow', 'remove-row'],
+  ['RemoveColumn', 'remove-column'],
+]
+
+/** The editor's table toolbar, with the caret in a cell: above its table, a button per thing it does to it. */
+const tableTools: FnRule = (ctx, focus) => {
+  if (!isTrue(ctx.object(focus, NS.c + 'editable'))) return []
+  const cell = ctx.object(focus, NS.c + 'focusBlock')
+  if (!cell || !isA(ctx, cell, BLK.Cell)) return []
+  const row = parentOf(ctx, cell)
+  const table = row && parentOf(ctx, row)
+  if (!table) return []
+  const o = ctx.out(focus)
+  const tools = o.el('table-tools', 'Div', {
+    class: 'sem-table-tools',
+    role: 'toolbar',
+    'aria-label': text(ctx, ctx.nn(NS.c + 'TableToolsPhrase'), NS.rdfs + 'label'),
+    'data-sem-anchor': table.value + '/~root',
+    'data-sem-keep-focus': '',
+  })
+  TABLE_ACTIONS.forEach(([action, local], i) => {
+    const btn = o.el(`tt-${local}`, 'Button', { type: 'button' }, [o.text(`tt-${local}-text`, text(ctx, ctx.nn(NS.blk + action), NS.rdfs + 'label') ?? '')])
+    o.t(btn, NS.blk + 'tableAction', ctx.nn(NS.blk + action)).t(btn, SEM.orderKey, String(i + 1))
+    o.t(tools, H.hasChild, btn)
+  })
+  o.t(o.node('root'), H.hasChild, tools).t(o.node('body'), ORD.precedes, tools).t(tools, ORD.precedes, o.node('toolbar'))
+  return o.quads
+}
+
 const editor: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const doc = ctx.object(focus, C.of)
@@ -657,6 +691,7 @@ export const functions: Record<string, FnRule> = {
   'blk:atom': atom,
   'blk:toolbar': toolbar,
   'blk:address-field': addressField,
+  'blk:table-tools': tableTools,
   'blk:menu-state': menuState,
   'blk:menu-options': menuOptions,
 }

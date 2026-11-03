@@ -113,7 +113,7 @@ blk:Heading3 a owl:Class ; rdfs:subClassOf blk:Heading ; sem:slug "blk-heading-3
     rdfs:comment "A small heading."@en ;
     c:help "A small heading."@en , "Малий заголовок."@uk , "Kleine Überschrift."@de , "عنوان صغير."@ar ;
     blk:menuOrder 4 ; c:icon "H3" ; blk:keyword "h3 heading" .
-blk:Quote a owl:Class ; rdfs:subClassOf blk:TextBlock , doco:BlockQuotation ; sem:slug "blk-quote" ; blk:element rdfhtml:Blockquote ; blk:prefix "> " ;
+blk:Quote a owl:Class ; rdfs:subClassOf blk:TextBlock , blk:Container , doco:BlockQuotation ; sem:slug "blk-quote" ; blk:element rdfhtml:Blockquote ; blk:prefix "> " ;
     rdfs:label "Quote"@en , "Цитата"@uk , "Zitat"@de , "اقتباس"@ar ;
     rdfs:comment "A quotation."@en ;
     c:help "A quotation."@en , "Цитата з джерела."@uk , "Ein Zitat."@de , "اقتباس من مصدر."@ar ;
@@ -1177,8 +1177,11 @@ blk:LinkShape a sh:NodeShape ; sh:targetClass blk:Link ;
     sh:property [ sh:path schema:url ; sh:minCount 1 ; sh:maxCount 1 ; sh:message "A link goes somewhere (schema:url)." ] .
 blk:MentionShape a sh:NodeShape ; sh:targetClass blk:Mention ;
     sh:property [ sh:path oa:hasBody ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ; sh:message "A mention names a resource (oa:hasBody)." ] .
+# What each container may hold (the editor's Tab nests a block only where these allow it).
 blk:ContainerShape a sh:NodeShape ; sh:targetClass blk:Container ;
     sh:property [ sh:path po:contains ; sh:class blk:Block ; sh:message "A container holds blocks." ] .
+blk:ColumnShape a sh:NodeShape ; sh:targetClass blk:Column ;
+    sh:property [ sh:path po:contains ; sh:class blk:Block ; sh:message "A column holds blocks." ] .
 blk:BlockShape a sh:NodeShape ; sh:targetClass blk:Block ;
     sh:property [ sh:path co:nextItem ; sh:maxCount 1 ; sh:class blk:Block ; sh:message "A block has one next block." ] .
 blk:ListShape a sh:NodeShape ; sh:targetClass blk:List ;
@@ -1302,3 +1305,42 @@ blk:EditAddress a beh:Reaction ;
     beh:when beh:Input ; beh:sourceClass blk:Addressed ; beh:undoable true ;
     beh:deletes """CONSTRUCT { $this ?property ?old } WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~address-field"))) $this a/rdfs:subClassOf* ?cls . ?cls blk:address ?property . $this ?property ?old }""" ;
     beh:inserts """CONSTRUCT { $this ?property ?url } WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~address-field"))) $this a/rdfs:subClassOf* ?cls . ?cls blk:address ?property . $event beh:value ?url FILTER(?url != "") }""" .
+
+# The editor's table toolbar (block-editor.ttl), with the caret in a cell: above the table, a button per
+# thing it does to it.
+c:BlockEditorTableTools a sem:Rendering ; sem:targets c:BlockEditor ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows c:focusBlock ;
+    sem:watches rdf:type , c:editable , c:focusBlock .
+c:BlockEditorTableTools-fn a sem:Rule ; sem:implements c:BlockEditorTableTools ; sem:function "blk:table-tools" .
+c:BlockEditorTableTools-sparql a sem:Rule ; sem:implements c:BlockEditorTableTools ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?tools . ?body ord:precedes ?tools . ?tools ord:precedes ?toolbar .
+  ?tools a rdfhtml:Div ; rdfhtml:class "sem-table-tools" ; rdfhtml:hasChild ?btn ; rdfhtml:attribute ?role , ?name , ?anchor , ?keep .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "toolbar" .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?toolsName .
+  ?anchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?anchorId .
+  ?keep a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-keep-focus" ; rdfhtml:attributeValue "" .
+  ?btn a rdfhtml:Button ; rdfhtml:type "button" ; blk:tableAction ?action ; sem:orderKey ?order ; rdfhtml:hasChild ?btnText .
+  ?btnText a rdfhtml:Text ; rdfhtml:data ?label .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:BlockEditor ; c:editable true ; c:focusBlock ?cell .
+  ?cell a/rdfs:subClassOf* blk:Cell . ?row po:contains ?cell . ?table po:contains ?row .
+  VALUES (?action ?local ?order) { (blk:RowAbove "row-above" "1") (blk:RowBelow "row-below" "2") (blk:ColumnBefore "column-before" "3") (blk:ColumnAfter "column-after" "4") (blk:RemoveRow "remove-row" "5") (blk:RemoveColumn "remove-column" "6") }
+  OPTIONAL { ?aAt l10n:of ?action ; l10n:name ?aPicked } OPTIONAL { ?action rdfs:label ?aEn FILTER(LANGMATCHES(LANG(?aEn), "en")) }
+  BIND(STR(COALESCE(?aPicked, ?aEn)) AS ?label)
+  OPTIONAL { ?tAt l10n:of c:TableToolsPhrase ; l10n:name ?tPicked } OPTIONAL { c:TableToolsPhrase rdfs:label ?tEn FILTER(LANGMATCHES(LANG(?tEn), "en")) }
+  BIND(STR(COALESCE(?tPicked, ?tEn)) AS ?toolsName)
+  BIND(STR(IRI(CONCAT(STR(?table), "/~root"))) AS ?anchorId)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~toolbar")) AS ?toolbar)
+  BIND(IRI(CONCAT(STR($this), "/~table-tools")) AS ?tools)
+  BIND(IRI(CONCAT(STR($this), "/~table-tools-role")) AS ?role)
+  BIND(IRI(CONCAT(STR($this), "/~table-tools-aria-label")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~table-tools-data-sem-anchor")) AS ?anchor)
+  BIND(IRI(CONCAT(STR($this), "/~table-tools-data-sem-keep-focus")) AS ?keep)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", ?local)) AS ?btn)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", ?local, "-text")) AS ?btnText)
+}""" .
