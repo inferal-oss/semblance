@@ -95,6 +95,7 @@ export function mount(prefer: 'sparql' | 'function', kind: 'wat' | 'oxigraph' = 
     const e = new window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
     Object.assign(e, { key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods })
     ;(selection.anchorNode!.parentElement ?? region()).dispatchEvent(e)
+    return e
   }
   const click = (label: string) => [...app.querySelectorAll('button')].find((b) => b.textContent === label)!.dispatchEvent(new window.Event('click', { bubbles: true }))
   const caret = () => region().getAttribute('data-sem-text-root')
@@ -383,5 +384,74 @@ describe('the / menu (c:BlockEditor)', () => {
     })
     expect(menu()).toBeNull()
     expect(m.store.match(m.store.factory.namedNode(empty), m.store.factory.namedNode(NS.rdf + 'value'), null)[0]!.object.value).toBe(' /quo')
+  })
+})
+
+describe('nesting and moving blocks (c:BlockEditor)', () => {
+  const extra = `
+<${EX}p3> <${NS.co}nextItem> <${EX}list> .
+<${EX}doc> <${NS.po}contains> <${EX}list> , <${EX}tog> , <${EX}after> .
+<${EX}list> a <${NS.blk}BulletedList> ; <${NS.po}contains> <${EX}i1> , <${EX}i2> , <${EX}i3> ; <${NS.co}nextItem> <${EX}tog> .
+<${EX}i1> a <${NS.blk}ListItem> ; <${NS.rdf}value> "One" ; <${NS.co}nextItem> <${EX}i2> .
+<${EX}i2> a <${NS.blk}ListItem> ; <${NS.rdf}value> "Two" ; <${NS.co}nextItem> <${EX}i3> .
+<${EX}i3> a <${NS.blk}ListItem> ; <${NS.rdf}value> "Three" .
+<${EX}tog> a <${NS.blk}Toggle> ; <${NS.rdf}value> "More" ; <${NS.c}expanded> true ; <${NS.co}nextItem> <${EX}after> .
+<${EX}after> a <${NS.blk}Paragraph> ; <${NS.rdf}value> "After" .`
+
+  it('nests by Tab, takes out by Shift+Tab and moves by Alt+arrows, the same with SPARQL and function rules', () => {
+    const both = [mount('sparql', 'wat', extra), mount('function', 'wat', extra)] as const
+    const [m] = both
+    const step = (what: string, act: (h: ReturnType<typeof mount>) => void) => {
+      for (const h of both) act(h)
+      sameHtml(both[1].html(), both[0].html(), what)
+      expect(both[1].text(), what).toBe(both[0].text())
+    }
+    step('Tab nests an item in the one before it', (h) => {
+      h.select('i2', 0)
+      h.press('Tab')
+    })
+    const nested = m.objects('i1', NS.po + 'contains')[0]!
+    expect(m.objects(nested, NS.po + 'contains')).toEqual([EX + 'i2'])
+    expect(m.objects('i1', NS.co + 'nextItem')).toEqual([EX + 'i3'])
+    expect(m.text()).toContain('  - Two')
+    step('Tab on the next joins that nested list', (h) => {
+      h.select('i3', 0)
+      h.press('Tab')
+    })
+    expect(m.objects(nested, NS.po + 'contains').sort()).toEqual([EX + 'i2', EX + 'i3'])
+    expect(m.objects('i2', NS.co + 'nextItem')).toEqual([EX + 'i3'])
+    step('Shift+Tab takes it out again', (h) => {
+      h.select('i3', 0)
+      h.press('Tab', { shiftKey: true })
+    })
+    expect(m.objects('i1', NS.co + 'nextItem')).toEqual([EX + 'i3'])
+    step('Tab puts a paragraph into the toggle before it', (h) => {
+      h.select('after', 0)
+      h.press('Tab')
+    })
+    expect(m.objects('tog', NS.po + 'contains')).toEqual([EX + 'after'])
+    step('Shift+Tab takes it out', (h) => {
+      h.select('after', 0)
+      h.press('Tab', { shiftKey: true })
+    })
+    expect(m.objects('tog', NS.co + 'nextItem')).toEqual([EX + 'after'])
+    step('Alt+Up moves a block up', (h) => {
+      h.select('tog', 0)
+      h.press('ArrowUp', { altKey: true })
+    })
+    expect(m.objects('p3', NS.co + 'nextItem')).toEqual([EX + 'tog'])
+    expect(m.objects('tog', NS.co + 'nextItem')).toEqual([EX + 'list'])
+    step('Alt+Down moves it back', (h) => {
+      h.select('tog', 0)
+      h.press('ArrowDown', { altKey: true })
+    })
+    expect(m.objects('list', NS.co + 'nextItem')).toEqual([EX + 'tog'])
+  })
+
+  it('lets Tab move the focus on where nothing can nest', () => {
+    const h = mount('sparql', 'wat', extra)
+    h.select('p1', 0)
+    const e = h.press('Tab')
+    expect(e.defaultPrevented).toBe(false)
   })
 })

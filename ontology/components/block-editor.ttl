@@ -495,9 +495,9 @@ WHERE {
 
 c:Outdent a beh:Reaction ;
     rdfs:label "Move up a level"@en ;
-    rdfs:comment """Enter on an empty item, or Backspace at the start of an item, in a list nested in an item: the item moves
-up a level, to follow that item. A nested list it leaves empty goes."""@en ;
-    beh:when c:SplitBlock , c:DeleteText ;
+    rdfs:comment """Enter on an empty item, Backspace at the start of an item or Shift+Tab, in a list nested in an item: the
+item moves up a level, to follow that item. A nested list it leaves empty goes."""@en ;
+    beh:when c:SplitBlock , c:DeleteText , c:BlockStructureKey ;
     beh:sourceClass c:BlockEditor ;
     beh:undoable true ;
     ann:announces "Moved up a level"@en , "Рівнем вище"@uk , "Eine Ebene höher"@de , "نُقل مستوى للأعلى"@ar ;
@@ -507,6 +507,7 @@ up a level, to follow that item. A nested list it leaves empty goes."""@en ;
 }
 WHERE {
   { $event a c:SplitBlock ; beh:startBlock ?a ; beh:endBlock ?a . OPTIONAL { ?a rdf:value ?raw0 } FILTER(COALESCE(STR(?raw0), "") = "") }
+  UNION { $event a c:BlockStructureKey ; beh:key "shift+tab" ; beh:startBlock ?a . FILTER NOT EXISTS { $this c:menuOpen true } }
   UNION { $event a c:DeleteText ; beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 . FILTER(STRENDS(STR(?it), "Backward")) }
   ?a a/rdfs:subClassOf* blk:Item .
   ?list po:contains ?a . ?outer po:contains ?list .
@@ -524,6 +525,7 @@ WHERE {
 }
 WHERE {
   { $event a c:SplitBlock ; beh:startBlock ?a ; beh:endBlock ?a . OPTIONAL { ?a rdf:value ?raw0 } FILTER(COALESCE(STR(?raw0), "") = "") }
+  UNION { $event a c:BlockStructureKey ; beh:key "shift+tab" ; beh:startBlock ?a . FILTER NOT EXISTS { $this c:menuOpen true } }
   UNION { $event a c:DeleteText ; beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 . FILTER(STRENDS(STR(?it), "Backward")) }
   ?a a/rdfs:subClassOf* blk:Item .
   ?list po:contains ?a . ?outer po:contains ?list .
@@ -540,7 +542,7 @@ c:LeaveList a beh:Reaction ;
 becomes a paragraph, out of the list, in its place - before the list when it was the first item, after it
 when it was the last, between its two halves (the second a new list, minted from the event) when it was in
 the middle, and instead of it when it was the only one."""@en ;
-    beh:when c:SplitBlock , c:DeleteText ;
+    beh:when c:SplitBlock , c:DeleteText , c:BlockStructureKey ;
     beh:sourceClass c:BlockEditor ;
     beh:undoable true ;
     ann:announces "Left the list"@en , "Поза списком"@uk , "Liste verlassen"@de , "خارج القائمة"@ar ;
@@ -552,6 +554,7 @@ the middle, and instead of it when it was the only one."""@en ;
 }
 WHERE {
   { $event a c:SplitBlock ; beh:startBlock ?a ; beh:endBlock ?a . OPTIONAL { ?a rdf:value ?raw0 } FILTER(COALESCE(STR(?raw0), "") = "") }
+  UNION { $event a c:BlockStructureKey ; beh:key "shift+tab" ; beh:startBlock ?a . FILTER NOT EXISTS { $this c:menuOpen true } }
   UNION { $event a c:DeleteText ; beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 . FILTER(STRENDS(STR(?it), "Backward")) }
   ?a a/rdfs:subClassOf* blk:Item .
   ?list po:contains ?a . ?outer po:contains ?list .
@@ -574,6 +577,7 @@ WHERE {
 }
 WHERE {
   { $event a c:SplitBlock ; beh:startBlock ?a ; beh:endBlock ?a . OPTIONAL { ?a rdf:value ?raw0 } FILTER(COALESCE(STR(?raw0), "") = "") }
+  UNION { $event a c:BlockStructureKey ; beh:key "shift+tab" ; beh:startBlock ?a . FILTER NOT EXISTS { $this c:menuOpen true } }
   UNION { $event a c:DeleteText ; beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 . FILTER(STRENDS(STR(?it), "Backward")) }
   ?a a/rdfs:subClassOf* blk:Item .
   ?list po:contains ?a . ?outer po:contains ?list .
@@ -1280,3 +1284,139 @@ WHERE {
   FILTER(?fb != ?mb || ?fo <= ?mf)
 }""" ;
     beh:inserts """CONSTRUCT { } WHERE { }""" .
+
+# --- nesting and moving -------------------------------------------------------------------------------
+# Tab puts the block with the caret into the block before it (an item into a nested list of its list's
+# kind; any other block into a text block that holds blocks: a toggle, a callout, an item); Shift+Tab
+# takes it out to follow the block it was in (an item of a nested list up a level, of a list that is not
+# nested out of it, as Enter on an empty item does). Alt+Up and Alt+Down move it past its neighbour.
+# Where nothing can nest, Tab is not used, so the focus moves on.
+
+c:BlockStructureKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "tab" , "shift+tab" , "alt+arrowup" , "alt+arrowdown" ;
+    rdfs:comment "A key press in a block editor that nests a block, takes it out, or moves it."@en .
+
+c:IndentItem a beh:Reaction ;
+    rdfs:label "Indent"@en ;
+    rdfs:comment """Tab in an item after an item: it goes into the item before it, as the last item of its nested list of the
+same kind (a new one, minted from the event, when it has none)."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Indented"@en , "Відступ збільшено"@uk , "Eingerückt"@de , "تمت الإزاحة للداخل"@ar ;
+    beh:deletes """CONSTRUCT { ?p co:nextItem ?b . ?b co:nextItem ?n . ?x po:contains ?b . }
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . ?x po:contains ?b .
+  OPTIONAL { ?b co:nextItem ?n }
+  ?b a/rdfs:subClassOf* blk:Item . ?p a/rdfs:subClassOf* blk:Item .
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?p co:nextItem ?n . ?last co:nextItem ?b . ?into po:contains ?b .
+  ?newList a ?listType ; po:contains ?b . ?p po:contains ?newList . ?lastChild co:nextItem ?newList .
+}
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . ?x po:contains ?b .
+  OPTIONAL { ?b co:nextItem ?n }
+  ?b a/rdfs:subClassOf* blk:Item . ?p a/rdfs:subClassOf* blk:Item .
+  ?x a ?listType . ?listType rdfs:subClassOf* blk:List .
+  OPTIONAL { ?p po:contains ?lastChild0 FILTER NOT EXISTS { ?lastChild0 co:nextItem ?anyAfter } }
+  BIND(IF(BOUND(?lastChild0) && EXISTS { ?lastChild0 a ?listType }, ?lastChild0, ?none) AS ?into)
+  OPTIONAL { ?p po:contains ?l2 . ?l2 a ?listType FILTER NOT EXISTS { ?l2 co:nextItem ?anyAfter2 } ?l2 po:contains ?last FILTER NOT EXISTS { ?last co:nextItem ?anyAfter3 } }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IF(BOUND(?into), ?none, IRI(CONCAT(STR(?p), "/~list-", ?ev))) AS ?newList)
+  BIND(IF(BOUND(?into), ?none, ?lastChild0) AS ?lastChild)
+}""" .
+
+c:IndentBlock a beh:Reaction ;
+    rdfs:label "Put inside"@en ;
+    rdfs:comment """Tab in a block that is not an item, after a toggle, a callout or an item: it goes in, as its last block."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Moved inside"@en , "Переміщено всередину"@uk , "Hineinverschoben"@de , "نُقل إلى الداخل"@ar ;
+    beh:deletes """CONSTRUCT { ?p co:nextItem ?b . ?b co:nextItem ?n . ?x po:contains ?b . }
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . ?x po:contains ?b .
+  OPTIONAL { ?b co:nextItem ?n }
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
+  ?p a/rdfs:subClassOf* blk:TextBlock , blk:Container .
+}""" ;
+    beh:inserts """CONSTRUCT { ?p co:nextItem ?n ; po:contains ?b . ?last co:nextItem ?b . }
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . ?x po:contains ?b .
+  OPTIONAL { ?b co:nextItem ?n }
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
+  ?p a/rdfs:subClassOf* blk:TextBlock , blk:Container .
+  OPTIONAL { ?p po:contains ?last FILTER NOT EXISTS { ?last co:nextItem ?anyAfter } }
+}""" .
+
+c:Unnest a beh:Reaction ;
+    rdfs:label "Take out"@en ;
+    rdfs:comment """Shift+Tab in a block (not an item) inside a toggle, a callout or an item: it comes out, to follow that block."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Moved out"@en , "Винесено назовні"@uk , "Herausgenommen"@de , "نُقل إلى الخارج"@ar ;
+    beh:deletes """CONSTRUCT { ?x po:contains ?b ; co:nextItem ?afterX . ?pv co:nextItem ?b . ?b co:nextItem ?nx . }
+WHERE {
+  $event beh:key "shift+tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
+  ?x po:contains ?b . ?x a/rdfs:subClassOf* blk:TextBlock . ?y po:contains ?x .
+  OPTIONAL { ?pv co:nextItem ?b } OPTIONAL { ?b co:nextItem ?nx } OPTIONAL { ?x co:nextItem ?afterX }
+}""" ;
+    beh:inserts """CONSTRUCT { ?y po:contains ?b . ?x co:nextItem ?b . ?b co:nextItem ?afterX . ?pv co:nextItem ?nx . }
+WHERE {
+  $event beh:key "shift+tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
+  ?x po:contains ?b . ?x a/rdfs:subClassOf* blk:TextBlock . ?y po:contains ?x .
+  OPTIONAL { ?pv co:nextItem ?b } OPTIONAL { ?b co:nextItem ?nx } OPTIONAL { ?x co:nextItem ?afterX }
+}""" .
+
+c:MoveBlockUp a beh:Reaction ;
+    rdfs:label "Move up"@en ;
+    rdfs:comment """Alt+Up: the block with the caret moves past the block before it in its container."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Moved up"@en , "Переміщено вгору"@uk , "Nach oben verschoben"@de , "نُقل للأعلى"@ar ;
+    beh:deletes """CONSTRUCT { ?q co:nextItem ?p . ?p co:nextItem ?b . ?b co:nextItem ?n . }
+WHERE {
+  $event beh:key "alt+arrowup" ; beh:startBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . OPTIONAL { ?q co:nextItem ?p } OPTIONAL { ?b co:nextItem ?n }
+}""" ;
+    beh:inserts """CONSTRUCT { ?q co:nextItem ?b . ?b co:nextItem ?p . ?p co:nextItem ?n . }
+WHERE {
+  $event beh:key "alt+arrowup" ; beh:startBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . OPTIONAL { ?q co:nextItem ?p } OPTIONAL { ?b co:nextItem ?n }
+}""" .
+
+c:MoveBlockDown a beh:Reaction ;
+    rdfs:label "Move down"@en ;
+    rdfs:comment """Alt+Down: the block with the caret moves past the block after it in its container."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Moved down"@en , "Переміщено вниз"@uk , "Nach unten verschoben"@de , "نُقل للأسفل"@ar ;
+    beh:deletes """CONSTRUCT { ?p co:nextItem ?b . ?b co:nextItem ?n . ?n co:nextItem ?m . }
+WHERE {
+  $event beh:key "alt+arrowdown" ; beh:startBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?b co:nextItem ?n . OPTIONAL { ?p co:nextItem ?b } OPTIONAL { ?n co:nextItem ?m }
+}""" ;
+    beh:inserts """CONSTRUCT { ?p co:nextItem ?n . ?n co:nextItem ?b . ?b co:nextItem ?m . }
+WHERE {
+  $event beh:key "alt+arrowdown" ; beh:startBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?b co:nextItem ?n . OPTIONAL { ?p co:nextItem ?b } OPTIONAL { ?n co:nextItem ?m }
+}""" .
