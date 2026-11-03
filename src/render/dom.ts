@@ -372,10 +372,14 @@ export class DomRenderer {
 /**
  * Insert `n` before `anchor`: with moveBefore where both are connected, which keeps an iframe's
  * document, the focus and running animations; else (older browsers, detached trees) insertBefore.
+ * An ordered list's item is inserted, not moved: Chrome counts an item moveBefore moves again
+ * without uncounting it, so two items swapped twice read "5. 6.", until the list is laid out anew
+ * (the patch gives a moved node its focus back).
  */
 function move(parent: Node, n: Node, anchor: Node | null) {
   const p = parent as Node & { moveBefore?: (node: Node, child: Node | null) => void }
-  if (p.moveBefore && parent.isConnected && n.isConnected) {
+  const numbered = n.nodeName === 'LI' && (parent.nodeName === 'OL' || n.parentNode?.nodeName === 'OL')
+  if (p.moveBefore && parent.isConnected && n.isConnected && !numbered) {
     try {
       return p.moveBefore(n, anchor)
     } catch {

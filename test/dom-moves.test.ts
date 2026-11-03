@@ -6,7 +6,8 @@ import { HtmlIndex } from '../src/render/html-index.ts'
 
 const prefix = `@prefix ui: <https://example.org/ui#> .
 @prefix h: <https://ia2.dev/spec/rdf-html#> .
-@prefix sem: <https://semblance.dev/ns/core#> .`
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .`
 const parse = (text: string) => new Parser().parse(prefix + text)
 
 function mount(graph: string, nativeMoves: boolean) {
@@ -85,6 +86,22 @@ ui:slot a h:Div ; sem:slot "page" .`, true)
       expect(old.isConnected).toBe(false)
       expect(app.host.querySelectorAll('div')).toHaveLength(1)
       expect(app.moves).toContain(app.slot)
+    } finally { app.dispose() }
+  })
+
+  it("inserts an ordered list's items rather than moving them, so the browser numbers them afresh", () => {
+    const app = mount(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:slot, ui:ol, ui:ul .
+ui:slot a h:Div ; sem:slot "page" .
+ui:ol a h:Ol ; h:hasChild ui:o1, ui:o2 . ui:o1 a h:Li . ui:o2 a h:Li . ui:o1 ord:immediatelyPrecedes ui:o2 .
+ui:ul a h:Ul ; h:hasChild ui:u1, ui:u2 . ui:u1 a h:Li . ui:u2 a h:Li . ui:u1 ord:immediatelyPrecedes ui:u2 .`, true)
+    try {
+      const [o1, o2] = [...app.host.querySelectorAll('ol > li')]
+      const [u1, u2] = [...app.host.querySelectorAll('ul > li')]
+      app.apply('ui:o1 ord:immediatelyPrecedes ui:o2 . ui:u1 ord:immediatelyPrecedes ui:u2 .', 'ui:o2 ord:immediatelyPrecedes ui:o1 . ui:u2 ord:immediatelyPrecedes ui:u1 .')
+      expect([...app.host.querySelectorAll('ol > li')]).toEqual([o2, o1])
+      expect([...app.host.querySelectorAll('ul > li')]).toEqual([u2, u1])
+      expect(app.moves.some((n) => n === o1 || n === o2)).toBe(false)
+      expect(app.moves.some((n) => n === u1 || n === u2)).toBe(true)
     } finally { app.dispose() }
   })
 
