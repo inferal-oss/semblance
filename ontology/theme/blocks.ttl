@@ -327,9 +327,16 @@
                  [ sty:property "text-underline-offset" ; sty:raw "2px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu > .sem-empty" ;
     sty:declares [ sty:property "padding" ; sty:raw "7px 10px" ] , [ sty:property "color" ; sty:token tok:muted ] .
-# An empty block holding the caret says what typing / does.
+# An empty block holding the caret says what typing / does: out of the text's flow, so the caret blinks
+# at the start of the line, before the words.
+[] a sty:StyleRule ; sty:appliesTo blk:TextBlock ; sty:part ".sem-text[data-sem-placeholder]:has(> br:only-child)" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] .
 [] a sty:StyleRule ; sty:appliesTo blk:TextBlock ; sty:part ".sem-text[data-sem-placeholder]:has(> br:only-child)::before" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-placeholder)" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "inset-block-start" ; sty:raw "0" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "color" ; sty:token tok:faint ] ,
                  [ sty:property "pointer-events" ; sty:raw "none" ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] .

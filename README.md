@@ -112,7 +112,7 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   whose `val:requires` fields are invalid.
 - **Dependency**: views that depend on another view's value. A component follows a
   value (`dep:follows` a node, `dep:property` of it) and takes the properties of the profile
-  that value selects - carried by the value itself (`dep:takes`: a country's `co:postalField`)
+  that value selects - carried by the value itself (`dep:takes`: a country's `ck:postalField`)
   or listed by the component (`dep:case`), else `dep:otherwise` - before validation and the
   components run, so a field's label, placeholder, SHACL shape, options, `c:disabled` or
   `c:hidden` follow it. Choosing a value also applies its `dep:defaults` (a country's

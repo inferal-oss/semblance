@@ -13,14 +13,14 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
-@prefix co: <https://semblance.dev/demo/checkout#> .
+@prefix ck: <https://semblance.dev/demo/checkout#> .
 
 # =================================================================================================
 # Checkout: a four-step flow (cart, shipping, review, done) as one graph.
 #
 # Three kinds of thing make it work, all in this file:
-#   - the order's own vocabulary (co:), with the cart's lines as data;
-#   - one rule, co:Pricing, that derives every figure from the lines (quantities, line totals,
+#   - the order's own vocabulary (ck:), with the cart's lines as data;
+#   - one rule, ck:Pricing, that derives every figure from the lines (quantities, line totals,
 #     subtotal, shipping, tax, total, the free-shipping hint) - a SPARQL CONSTRUCT here, and a
 #     function twin in src/examples/checkout.ts that writes the same triples;
 #   - reactions, one per thing a button means: one fewer, one more, remove, undo, continue,
@@ -33,178 +33,178 @@
 # =================================================================================================
 
 # Reactions read the graph's declared prefixes; rules declare their own (PREFIX in the query).
-ui:prefixes sh:declare [ sh:prefix "co" ; sh:namespace "https://semblance.dev/demo/checkout#"^^xsd:anyURI ] .
+ui:prefixes sh:declare [ sh:prefix "ck" ; sh:namespace "https://semblance.dev/demo/checkout#"^^xsd:anyURI ] .
 
 # --- the order's vocabulary ------------------------------------------------------------------------
 
-co:Order a owl:Class ;
+ck:Order a owl:Class ;
     rdfs:comment "An order being checked out. A mixin: the example's root is also the order, so the rule that prices it runs while it is shown."@en .
-co:line a owl:ObjectProperty ; rdfs:domain co:Order ; rdfs:comment "A line of the cart (a product and a quantity)."@en .
-co:unitPrice a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "In US dollars."@en .
-co:detail a owl:DatatypeProperty ; rdfs:comment "What the cart says under a product's name, before its price."@en .
-co:quantity a owl:DatatypeProperty ; rdfs:range xsd:integer .
-co:initialQuantity a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "What a new order starts with."@en .
-co:maxQuantity a owl:DatatypeProperty ; rdfs:range xsd:integer .
-co:taxRate a owl:DatatypeProperty ; rdfs:domain co:Country ; rdfs:range xsd:decimal .
+ck:line a owl:ObjectProperty ; rdfs:domain ck:Order ; rdfs:comment "A line of the cart (a product and a quantity)."@en .
+ck:unitPrice a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "In US dollars."@en .
+ck:detail a owl:DatatypeProperty ; rdfs:comment "What the cart says under a product's name, before its price."@en .
+ck:quantity a owl:DatatypeProperty ; rdfs:range xsd:integer .
+ck:initialQuantity a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "What a new order starts with."@en .
+ck:maxQuantity a owl:DatatypeProperty ; rdfs:range xsd:integer .
+ck:taxRate a owl:DatatypeProperty ; rdfs:domain ck:Country ; rdfs:range xsd:decimal .
 
-co:status a owl:ObjectProperty ; rdfs:range co:LineStatus .
-co:LineStatus a owl:Class .
-co:InCart a co:LineStatus ; rdfs:label "In the cart" .
-co:Removed a co:LineStatus ; rdfs:label "Removed" .
+ck:status a owl:ObjectProperty ; rdfs:range ck:LineStatus .
+ck:LineStatus a owl:Class .
+ck:InCart a ck:LineStatus ; rdfs:label "In the cart" .
+ck:Removed a ck:LineStatus ; rdfs:label "Removed" .
 
 # Where a line's figures are shown, and which buttons act on it.
-co:quantityText a owl:ObjectProperty ; rdfs:comment "The text that shows the line's quantity."@en .
-co:totalText a owl:ObjectProperty ; rdfs:comment "The text that shows the line's total."@en .
-co:detailText a owl:ObjectProperty ; rdfs:comment "The text that shows the line's detail and unit price."@en .
-co:fewer a owl:ObjectProperty ; rdfs:comment "The button that takes one away."@en .
-co:more a owl:ObjectProperty ; rdfs:comment "The button that adds one."@en .
-co:remover a owl:ObjectProperty ; rdfs:comment "The button that removes the line."@en .
-co:restorer a owl:ObjectProperty ; rdfs:comment "The button that puts a removed line back."@en .
-co:FewerButton a owl:Class .
-co:MoreButton a owl:Class .
-co:RemoveButton a owl:Class .
-co:UndoButton a owl:Class .
+ck:quantityText a owl:ObjectProperty ; rdfs:comment "The text that shows the line's quantity."@en .
+ck:totalText a owl:ObjectProperty ; rdfs:comment "The text that shows the line's total."@en .
+ck:detailText a owl:ObjectProperty ; rdfs:comment "The text that shows the line's detail and unit price."@en .
+ck:fewer a owl:ObjectProperty ; rdfs:comment "The button that takes one away."@en .
+ck:more a owl:ObjectProperty ; rdfs:comment "The button that adds one."@en .
+ck:remover a owl:ObjectProperty ; rdfs:comment "The button that removes the line."@en .
+ck:restorer a owl:ObjectProperty ; rdfs:comment "The button that puts a removed line back."@en .
+ck:FewerButton a owl:Class .
+ck:MoreButton a owl:Class .
+ck:RemoveButton a owl:Class .
+ck:UndoButton a owl:Class .
 
-# Derived by co:Pricing, for the review.
-co:reviewLine a owl:ObjectProperty ; rdfs:comment "Derived: a line that is in the cart."@en .
-co:caption a owl:DatatypeProperty ; rdfs:comment "Derived: the line as the review lists it (\"Stoneware mug × 2\")."@en .
-co:amount a owl:DatatypeProperty ; rdfs:comment "Derived: the line's total, as money."@en .
+# Derived by ck:Pricing, for the review.
+ck:reviewLine a owl:ObjectProperty ; rdfs:comment "Derived: a line that is in the cart."@en .
+ck:caption a owl:DatatypeProperty ; rdfs:comment "Derived: the line as the review lists it (\"Stoneware mug × 2\")."@en .
+ck:amount a owl:DatatypeProperty ; rdfs:comment "Derived: the line's total, as money."@en .
 
-# What the shipping form fills in on the order (each field says which property: co:fills).
-co:fills a owl:ObjectProperty ; rdfs:comment "On a field: the property of the order that Continue copies its value to."@en .
-co:recipient a owl:DatatypeProperty ; rdfs:label "Recipient" .
-co:street a owl:DatatypeProperty ; rdfs:label "Street address" .
-co:city a owl:DatatypeProperty ; rdfs:label "City" .
-co:postalCode a owl:DatatypeProperty ; rdfs:label "Postal code" .
-co:place a owl:DatatypeProperty ; rdfs:label "City" ; rdfs:comment "The city and postal code as one line (\"San Francisco 94110\"), written by Continue."@en .
-co:orderNumber a owl:DatatypeProperty ; rdfs:label "Order number" .
-co:totalDue a owl:DatatypeProperty ; rdfs:label "Total due" ; rdfs:comment "Derived by co:Pricing."@en .
+# What the shipping form fills in on the order (each field says which property: ck:fills).
+ck:fills a owl:ObjectProperty ; rdfs:comment "On a field: the property of the order that Continue copies its value to."@en .
+ck:recipient a owl:DatatypeProperty ; rdfs:label "Recipient" .
+ck:street a owl:DatatypeProperty ; rdfs:label "Street address" .
+ck:city a owl:DatatypeProperty ; rdfs:label "City" .
+ck:postalCode a owl:DatatypeProperty ; rdfs:label "Postal code" .
+ck:place a owl:DatatypeProperty ; rdfs:label "City" ; rdfs:comment "The city and postal code as one line (\"San Francisco 94110\"), written by Continue."@en .
+ck:orderNumber a owl:DatatypeProperty ; rdfs:label "Order number" .
+ck:totalDue a owl:DatatypeProperty ; rdfs:label "Total due" ; rdfs:comment "Derived by ck:Pricing."@en .
 
-co:phone a owl:DatatypeProperty ; rdfs:label "Phone" ; rdfs:comment "The dialling code and number as one line (\"+44 20 7946 0958\"), written by Continue."@en .
+ck:phone a owl:DatatypeProperty ; rdfs:label "Phone" ; rdfs:comment "The dialling code and number as one line (\"+44 20 7946 0958\"), written by Continue."@en .
 
 # --- countries: how each one shapes the order --------------------------------------------------------
 # The country is where the form's codependence lives, as data (the dependency layer,
 # ontology/layers/dependency.ttl, applies it). Each country says:
-#   - how its address fields look and check: co:cityField, co:postalField, co:regionField are
+#   - how its address fields look and check: ck:cityField, ck:postalField, ck:regionField are
 #     profiles that the fields following the order's country take (label, placeholder, SHACL
-#     shape, options); a country without co:regionField has no region field at all;
+#     shape, options); a country without ck:regionField has no region field at all;
 #   - what choosing it sets (dep:defaults): the currency, the dialling code, a region - defaults
 #     the person can still change;
-#   - its sales tax (co:taxName, co:taxRate), which co:Pricing reads, and whether its addresses
-#     write the postal code first (co:postalFirst).
+#   - its sales tax (ck:taxName, ck:taxRate), which ck:Pricing reads, and whether its addresses
+#     write the postal code first (ck:postalFirst).
 # A new country is one more node; no rule or reaction names one.
 
-co:country a owl:ObjectProperty ; rdfs:label "Country" ; rdfs:range co:Country .
-co:Country a owl:Class .
-co:cityField a owl:ObjectProperty ; rdfs:domain co:Country ; rdfs:comment "How the city field looks in this country (a profile)."@en .
-co:postalField a owl:ObjectProperty ; rdfs:domain co:Country ; rdfs:comment "How the postal code field looks and checks in this country (a profile)."@en .
-co:regionField a owl:ObjectProperty ; rdfs:domain co:Country ; rdfs:comment "The region field of this country - its label and options (a profile). Without one, there is none."@en .
-co:postalFirst a owl:DatatypeProperty ; rdfs:domain co:Country ; rdfs:range xsd:boolean ;
+ck:country a owl:ObjectProperty ; rdfs:label "Country" ; rdfs:range ck:Country .
+ck:Country a owl:Class .
+ck:cityField a owl:ObjectProperty ; rdfs:domain ck:Country ; rdfs:comment "How the city field looks in this country (a profile)."@en .
+ck:postalField a owl:ObjectProperty ; rdfs:domain ck:Country ; rdfs:comment "How the postal code field looks and checks in this country (a profile)."@en .
+ck:regionField a owl:ObjectProperty ; rdfs:domain ck:Country ; rdfs:comment "The region field of this country - its label and options (a profile). Without one, there is none."@en .
+ck:postalFirst a owl:DatatypeProperty ; rdfs:domain ck:Country ; rdfs:range xsd:boolean ;
     rdfs:comment "Addresses here write the postal code before the city (\"10115 Berlin\")."@en .
-co:taxName a owl:DatatypeProperty ; rdfs:domain co:Country ; rdfs:comment "What the sales tax is called (\"VAT\")."@en .
-co:region a owl:ObjectProperty ; rdfs:label "Region" ; rdfs:range co:Region .
-co:Region a owl:Class .
-co:code a owl:DatatypeProperty ; rdfs:comment "A region's short form, as an address writes it (\"CA\")."@en .
+ck:taxName a owl:DatatypeProperty ; rdfs:domain ck:Country ; rdfs:comment "What the sales tax is called (\"VAT\")."@en .
+ck:region a owl:ObjectProperty ; rdfs:label "Region" ; rdfs:range ck:Region .
+ck:Region a owl:Class .
+ck:code a owl:DatatypeProperty ; rdfs:comment "A region's short form, as an address writes it (\"CA\")."@en .
 
-co:US a co:Country ; rdfs:label "United States" ; sem:order 1 ; co:taxName "Sales tax" ; co:taxRate 0.08 ;
-    co:cityField [ c:label "City" ; c:placeholder "San Francisco" ] ;
-    co:postalField [ c:label "ZIP code" ; c:placeholder "94110" ; val:validates co:ZipShape ] ;
-    co:regionField [ c:label "State" ; c:options co:USStates ] ;
-    dep:defaults [ co:currency co:USD ; co:dialCode co:Plus1 ; co:region co:US-CA ] .
-co:CA a co:Country ; rdfs:label "Canada" ; sem:order 2 ; co:taxName "GST" ; co:taxRate 0.05 ;
-    co:cityField [ c:label "City" ; c:placeholder "Toronto" ] ;
-    co:postalField [ c:label "Postal code" ; c:placeholder "M5V 2T6" ; val:validates co:CanadaPostalShape ] ;
-    co:regionField [ c:label "Province" ; c:options co:CAProvinces ] ;
-    dep:defaults [ co:currency co:CAD ; co:dialCode co:Plus1 ; co:region co:CA-ON ] .
-co:GB a co:Country ; rdfs:label "United Kingdom" ; sem:order 3 ; co:taxName "VAT" ; co:taxRate 0.20 ;
-    co:cityField [ c:label "Town or city" ; c:placeholder "London" ] ;
-    co:postalField [ c:label "Postcode" ; c:placeholder "SW1A 1AA" ; val:validates co:UKPostcodeShape ] ;
-    dep:defaults [ co:currency co:GBP ; co:dialCode co:Plus44 ] .
-co:DE a co:Country ; rdfs:label "Germany" ; sem:order 4 ; co:taxName "VAT" ; co:taxRate 0.19 ; co:postalFirst true ;
-    co:cityField [ c:label "City" ; c:placeholder "Berlin" ] ;
-    co:postalField [ c:label "Postal code (PLZ)" ; c:placeholder "10115" ; val:validates co:GermanPostalShape ] ;
-    dep:defaults [ co:currency co:EUR ; co:dialCode co:Plus49 ] .
-co:NL a co:Country ; rdfs:label "Netherlands" ; sem:order 5 ; co:taxName "VAT" ; co:taxRate 0.21 ; co:postalFirst true ;
-    co:cityField [ c:label "City" ; c:placeholder "Amsterdam" ] ;
-    co:postalField [ c:label "Postcode" ; c:placeholder "1012 AB" ; val:validates co:DutchPostcodeShape ] ;
-    dep:defaults [ co:currency co:EUR ; co:dialCode co:Plus31 ] .
+ck:US a ck:Country ; rdfs:label "United States" ; sem:order 1 ; ck:taxName "Sales tax" ; ck:taxRate 0.08 ;
+    ck:cityField [ c:label "City" ; c:placeholder "San Francisco" ] ;
+    ck:postalField [ c:label "ZIP code" ; c:placeholder "94110" ; val:validates ck:ZipShape ] ;
+    ck:regionField [ c:label "State" ; c:options ck:USStates ] ;
+    dep:defaults [ ck:currency ck:USD ; ck:dialCode ck:Plus1 ; ck:region ck:US-CA ] .
+ck:CA a ck:Country ; rdfs:label "Canada" ; sem:order 2 ; ck:taxName "GST" ; ck:taxRate 0.05 ;
+    ck:cityField [ c:label "City" ; c:placeholder "Toronto" ] ;
+    ck:postalField [ c:label "Postal code" ; c:placeholder "M5V 2T6" ; val:validates ck:CanadaPostalShape ] ;
+    ck:regionField [ c:label "Province" ; c:options ck:CAProvinces ] ;
+    dep:defaults [ ck:currency ck:CAD ; ck:dialCode ck:Plus1 ; ck:region ck:CA-ON ] .
+ck:GB a ck:Country ; rdfs:label "United Kingdom" ; sem:order 3 ; ck:taxName "VAT" ; ck:taxRate 0.20 ;
+    ck:cityField [ c:label "Town or city" ; c:placeholder "London" ] ;
+    ck:postalField [ c:label "Postcode" ; c:placeholder "SW1A 1AA" ; val:validates ck:UKPostcodeShape ] ;
+    dep:defaults [ ck:currency ck:GBP ; ck:dialCode ck:Plus44 ] .
+ck:DE a ck:Country ; rdfs:label "Germany" ; sem:order 4 ; ck:taxName "VAT" ; ck:taxRate 0.19 ; ck:postalFirst true ;
+    ck:cityField [ c:label "City" ; c:placeholder "Berlin" ] ;
+    ck:postalField [ c:label "Postal code (PLZ)" ; c:placeholder "10115" ; val:validates ck:GermanPostalShape ] ;
+    dep:defaults [ ck:currency ck:EUR ; ck:dialCode ck:Plus49 ] .
+ck:NL a ck:Country ; rdfs:label "Netherlands" ; sem:order 5 ; ck:taxName "VAT" ; ck:taxRate 0.21 ; ck:postalFirst true ;
+    ck:cityField [ c:label "City" ; c:placeholder "Amsterdam" ] ;
+    ck:postalField [ c:label "Postcode" ; c:placeholder "1012 AB" ; val:validates ck:DutchPostcodeShape ] ;
+    dep:defaults [ ck:currency ck:EUR ; ck:dialCode ck:Plus31 ] .
 
 # The regions a country offers, as named lists, so a profile can point at them (c:options).
-co:USStates rdf:first co:US-CA ; rdf:rest ( co:US-IL co:US-MA co:US-NY co:US-TX co:US-WA ) .
-co:CAProvinces rdf:first co:CA-AB ; rdf:rest ( co:CA-BC co:CA-ON co:CA-QC ) .
-co:US-CA a co:Region ; rdfs:label "California" ; co:code "CA" .
-co:US-IL a co:Region ; rdfs:label "Illinois" ; co:code "IL" .
-co:US-MA a co:Region ; rdfs:label "Massachusetts" ; co:code "MA" .
-co:US-NY a co:Region ; rdfs:label "New York" ; co:code "NY" .
-co:US-TX a co:Region ; rdfs:label "Texas" ; co:code "TX" .
-co:US-WA a co:Region ; rdfs:label "Washington" ; co:code "WA" .
-co:CA-AB a co:Region ; rdfs:label "Alberta" ; co:code "AB" .
-co:CA-BC a co:Region ; rdfs:label "British Columbia" ; co:code "BC" .
-co:CA-ON a co:Region ; rdfs:label "Ontario" ; co:code "ON" .
-co:CA-QC a co:Region ; rdfs:label "Quebec" ; co:code "QC" .
+ck:USStates rdf:first ck:US-CA ; rdf:rest ( ck:US-IL ck:US-MA ck:US-NY ck:US-TX ck:US-WA ) .
+ck:CAProvinces rdf:first ck:CA-AB ; rdf:rest ( ck:CA-BC ck:CA-ON ck:CA-QC ) .
+ck:US-CA a ck:Region ; rdfs:label "California" ; ck:code "CA" .
+ck:US-IL a ck:Region ; rdfs:label "Illinois" ; ck:code "IL" .
+ck:US-MA a ck:Region ; rdfs:label "Massachusetts" ; ck:code "MA" .
+ck:US-NY a ck:Region ; rdfs:label "New York" ; ck:code "NY" .
+ck:US-TX a ck:Region ; rdfs:label "Texas" ; ck:code "TX" .
+ck:US-WA a ck:Region ; rdfs:label "Washington" ; ck:code "WA" .
+ck:CA-AB a ck:Region ; rdfs:label "Alberta" ; ck:code "AB" .
+ck:CA-BC a ck:Region ; rdfs:label "British Columbia" ; ck:code "BC" .
+ck:CA-ON a ck:Region ; rdfs:label "Ontario" ; ck:code "ON" .
+ck:CA-QC a ck:Region ; rdfs:label "Quebec" ; ck:code "QC" .
 
-# Prices are set in US dollars; co:Pricing shows every figure in the order's currency.
-co:currency a owl:ObjectProperty ; rdfs:label "Currency" ; rdfs:range co:Currency .
-co:Currency a owl:Class .
-co:symbol a owl:DatatypeProperty ; rdfs:domain co:Currency .
-co:perDollar a owl:DatatypeProperty ; rdfs:domain co:Currency ; rdfs:range xsd:decimal ;
+# Prices are set in US dollars; ck:Pricing shows every figure in the order's currency.
+ck:currency a owl:ObjectProperty ; rdfs:label "Currency" ; rdfs:range ck:Currency .
+ck:Currency a owl:Class .
+ck:symbol a owl:DatatypeProperty ; rdfs:domain ck:Currency .
+ck:perDollar a owl:DatatypeProperty ; rdfs:domain ck:Currency ; rdfs:range xsd:decimal ;
     rdfs:comment "What one US dollar is in this currency."@en .
-co:USD a co:Currency ; rdfs:label "US dollars ($)" ; sem:order 1 ; co:symbol "$" ; co:perDollar 1.00 .
-co:CAD a co:Currency ; rdfs:label "Canadian dollars (CA$)" ; sem:order 2 ; co:symbol "CA$" ; co:perDollar 1.37 .
-co:GBP a co:Currency ; rdfs:label "Pounds sterling (£)" ; sem:order 3 ; co:symbol "£" ; co:perDollar 0.79 .
-co:EUR a co:Currency ; rdfs:label "Euros (€)" ; sem:order 4 ; co:symbol "€" ; co:perDollar 0.92 .
+ck:USD a ck:Currency ; rdfs:label "US dollars ($)" ; sem:order 1 ; ck:symbol "$" ; ck:perDollar 1.00 .
+ck:CAD a ck:Currency ; rdfs:label "Canadian dollars (CA$)" ; sem:order 2 ; ck:symbol "CA$" ; ck:perDollar 1.37 .
+ck:GBP a ck:Currency ; rdfs:label "Pounds sterling (£)" ; sem:order 3 ; ck:symbol "£" ; ck:perDollar 0.79 .
+ck:EUR a ck:Currency ; rdfs:label "Euros (€)" ; sem:order 4 ; ck:symbol "€" ; ck:perDollar 0.92 .
 
 # The dialling code also shapes a field: the phone number's placeholder follows it.
-co:dialCode a owl:ObjectProperty ; rdfs:label "Dialling code" ; rdfs:range co:DialCode .
-co:DialCode a owl:Class .
-co:phoneField a owl:ObjectProperty ; rdfs:domain co:DialCode ; rdfs:comment "How the phone field looks for this dialling code (a profile)."@en .
-co:Plus1 a co:DialCode ; rdfs:label "+1" ; sem:order 1 ; co:phoneField [ c:placeholder "415 555 0132" ] .
-co:Plus31 a co:DialCode ; rdfs:label "+31" ; sem:order 2 ; co:phoneField [ c:placeholder "20 794 6000" ] .
-co:Plus44 a co:DialCode ; rdfs:label "+44" ; sem:order 3 ; co:phoneField [ c:placeholder "20 7946 0958" ] .
-co:Plus49 a co:DialCode ; rdfs:label "+49" ; sem:order 4 ; co:phoneField [ c:placeholder "30 901820" ] .
+ck:dialCode a owl:ObjectProperty ; rdfs:label "Dialling code" ; rdfs:range ck:DialCode .
+ck:DialCode a owl:Class .
+ck:phoneField a owl:ObjectProperty ; rdfs:domain ck:DialCode ; rdfs:comment "How the phone field looks for this dialling code (a profile)."@en .
+ck:Plus1 a ck:DialCode ; rdfs:label "+1" ; sem:order 1 ; ck:phoneField [ c:placeholder "415 555 0132" ] .
+ck:Plus31 a ck:DialCode ; rdfs:label "+31" ; sem:order 2 ; ck:phoneField [ c:placeholder "20 794 6000" ] .
+ck:Plus44 a ck:DialCode ; rdfs:label "+44" ; sem:order 3 ; ck:phoneField [ c:placeholder "20 7946 0958" ] .
+ck:Plus49 a ck:DialCode ; rdfs:label "+49" ; sem:order 4 ; ck:phoneField [ c:placeholder "30 901820" ] .
 
-# Delivery: each speed has a cost; standard delivery is free from a threshold (co:freeFrom).
-co:speed a owl:ObjectProperty ; rdfs:label "Delivery" ; rdfs:range co:Speed .
-co:Speed a owl:Class .
-co:cost a owl:DatatypeProperty ; rdfs:range xsd:decimal .
-co:freeFrom a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "Orders of at least this much ship free at this speed."@en .
+# Delivery: each speed has a cost; standard delivery is free from a threshold (ck:freeFrom).
+ck:speed a owl:ObjectProperty ; rdfs:label "Delivery" ; rdfs:range ck:Speed .
+ck:Speed a owl:Class .
+ck:cost a owl:DatatypeProperty ; rdfs:range xsd:decimal .
+ck:freeFrom a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "Orders of at least this much ship free at this speed."@en .
 # (Costs are in US dollars, like the prices; the summary shows them in the order's currency.)
-co:Standard a co:Speed ; rdfs:label "Standard" ; rdfs:comment "3–5 business days · free on larger orders" ; sem:order 1 ;
-    co:cost 4.90 ; co:freeFrom 60.00 .
-co:Express a co:Speed ; rdfs:label "Express" ; rdfs:comment "Next business day" ; sem:order 2 ; co:cost 12.00 .
-co:Pickup a co:Speed ; rdfs:label "Pick up in store" ; rdfs:comment "Ready in two hours at 18 Valencia Street, San Francisco · free" ; sem:order 3 ; co:cost 0.00 .
+ck:Standard a ck:Speed ; rdfs:label "Standard" ; rdfs:comment "3–5 business days · free on larger orders" ; sem:order 1 ;
+    ck:cost 4.90 ; ck:freeFrom 60.00 .
+ck:Express a ck:Speed ; rdfs:label "Express" ; rdfs:comment "Next business day" ; sem:order 2 ; ck:cost 12.00 .
+ck:Pickup a ck:Speed ; rdfs:label "Pick up in store" ; rdfs:comment "Ready in two hours at 18 Valencia Street, San Francisco · free" ; sem:order 3 ; ck:cost 0.00 .
 
 # Payment happens later: on delivery, or by invoice. (No card or bank details are asked for.)
-co:payment a owl:ObjectProperty ; rdfs:label "Payment" ; rdfs:range co:PaymentMethod .
-co:PaymentMethod a owl:Class .
-co:OnDelivery a co:PaymentMethod ; rdfs:label "Pay on delivery" ; rdfs:comment "Cash or card to the courier, or at the counter" ; sem:order 1 .
-co:Invoice a co:PaymentMethod ; rdfs:label "Invoice" ; rdfs:comment "Pay by bank transfer within 14 days" ; sem:order 2 .
+ck:payment a owl:ObjectProperty ; rdfs:label "Payment" ; rdfs:range ck:PaymentMethod .
+ck:PaymentMethod a owl:Class .
+ck:OnDelivery a ck:PaymentMethod ; rdfs:label "Pay on delivery" ; rdfs:comment "Cash or card to the courier, or at the counter" ; sem:order 1 .
+ck:Invoice a ck:PaymentMethod ; rdfs:label "Invoice" ; rdfs:comment "Pay by bank transfer within 14 days" ; sem:order 2 .
 
 # --- the order and its lines ---------------------------------------------------------------------
 
-ui:ex-checkout co:speed co:Standard ; co:payment co:OnDelivery ;
-    co:country co:US ; co:currency co:USD ; co:dialCode co:Plus1 ; co:region co:US-CA ;
-    co:line co:l-kettle , co:l-mug , co:l-beans .
+ui:ex-checkout ck:speed ck:Standard ; ck:payment ck:OnDelivery ;
+    ck:country ck:US ; ck:currency ck:USD ; ck:dialCode ck:Plus1 ; ck:region ck:US-CA ;
+    ck:line ck:l-kettle , ck:l-mug , ck:l-beans .
 
-co:l-kettle rdfs:label "Pour-over kettle" ; sem:order 1 ; co:unitPrice 34.00 ;
-    co:quantity 1 ; co:initialQuantity 1 ; co:maxQuantity 9 ; co:status co:InCart ;
-    co:detail "Stainless steel, 1 L" ;
-    co:quantityText ui:co-kettle-qty ; co:totalText ui:co-kettle-total ; co:detailText ui:co-kettle-detail ;
-    co:fewer ui:co-kettle-fewer ; co:more ui:co-kettle-more ; co:remover ui:co-kettle-remove ; co:restorer ui:co-kettle-undo .
-co:l-mug rdfs:label "Stoneware mug" ; sem:order 2 ; co:unitPrice 12.50 ;
-    co:quantity 1 ; co:initialQuantity 1 ; co:maxQuantity 9 ; co:status co:InCart ;
-    co:detail "350 ml, speckled glaze" ;
-    co:quantityText ui:co-mug-qty ; co:totalText ui:co-mug-total ; co:detailText ui:co-mug-detail ;
-    co:fewer ui:co-mug-fewer ; co:more ui:co-mug-more ; co:remover ui:co-mug-remove ; co:restorer ui:co-mug-undo .
-co:l-beans rdfs:label "Single-origin beans" ; sem:order 3 ; co:unitPrice 9.50 ;
-    co:quantity 1 ; co:initialQuantity 1 ; co:maxQuantity 9 ; co:status co:InCart ;
-    co:detail "Ethiopia Guji, 250 g" ;
-    co:quantityText ui:co-beans-qty ; co:totalText ui:co-beans-total ; co:detailText ui:co-beans-detail ;
-    co:fewer ui:co-beans-fewer ; co:more ui:co-beans-more ; co:remover ui:co-beans-remove ; co:restorer ui:co-beans-undo .
+ck:l-kettle rdfs:label "Pour-over kettle" ; sem:order 1 ; ck:unitPrice 34.00 ;
+    ck:quantity 1 ; ck:initialQuantity 1 ; ck:maxQuantity 9 ; ck:status ck:InCart ;
+    ck:detail "Stainless steel, 1 L" ;
+    ck:quantityText ui:co-kettle-qty ; ck:totalText ui:co-kettle-total ; ck:detailText ui:co-kettle-detail ;
+    ck:fewer ui:co-kettle-fewer ; ck:more ui:co-kettle-more ; ck:remover ui:co-kettle-remove ; ck:restorer ui:co-kettle-undo .
+ck:l-mug rdfs:label "Stoneware mug" ; sem:order 2 ; ck:unitPrice 12.50 ;
+    ck:quantity 1 ; ck:initialQuantity 1 ; ck:maxQuantity 9 ; ck:status ck:InCart ;
+    ck:detail "350 ml, speckled glaze" ;
+    ck:quantityText ui:co-mug-qty ; ck:totalText ui:co-mug-total ; ck:detailText ui:co-mug-detail ;
+    ck:fewer ui:co-mug-fewer ; ck:more ui:co-mug-more ; ck:remover ui:co-mug-remove ; ck:restorer ui:co-mug-undo .
+ck:l-beans rdfs:label "Single-origin beans" ; sem:order 3 ; ck:unitPrice 9.50 ;
+    ck:quantity 1 ; ck:initialQuantity 1 ; ck:maxQuantity 9 ; ck:status ck:InCart ;
+    ck:detail "Ethiopia Guji, 250 g" ;
+    ck:quantityText ui:co-beans-qty ; ck:totalText ui:co-beans-total ; ck:detailText ui:co-beans-detail ;
+    ck:fewer ui:co-beans-fewer ; ck:more ui:co-beans-more ; ck:remover ui:co-beans-remove ; ck:restorer ui:co-beans-undo .
 
 # --- the page ---------------------------------------------------------------------------------------
 
-ui:ex-checkout a c:Stack , co:Order ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+ui:ex-checkout a c:Stack , ck:Order ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:co-intro ui:co-card ) .
 ui:co-intro a c:Text ;
     c:label "A checkout as one graph: the step is a triple, every price is derived by a rule from the cart's lines, the shipping form is checked by SHACL shapes, and each button is a reaction with its condition in its WHERE clause. Add a mug to see standard shipping become free; on the next step, pick another country to see the form, the currency and the tax follow it." .
@@ -231,15 +231,15 @@ ui:co-case-done c:when ui:co-step-done ; c:content ui:co-done .
 # One row per line. Each row is a c:Switch over the line's status: in the cart it shows the
 # product, − / + and the line total; removed, it says so (first column) and offers Undo
 # (second column). The quantity and
-# the line total are texts with no label of their own: co:Pricing writes it.
+# the line total are texts with no label of their own: ck:Pricing writes it.
 
 ui:co-cart a c:Stack ; pos:layout pos:Sidebar ; pos:gap tok:space-5 ; c:children ( ui:co-lines ui:co-cart-side ) .
-ui:co-lines a c:Stack ; pos:layout co:CartColumns ; c:children ( ui:co-kettle ui:co-mug ui:co-beans ) .
+ui:co-lines a c:Stack ; pos:layout ck:CartColumns ; c:children ( ui:co-kettle ui:co-mug ui:co-beans ) .
 
 # The cart's columns, declared once: product, − / +, line total, remove. Each row is a
 # pos:Subgrid, so it takes its columns from here and every row's cells line up; the
 # switches between the list and its rows take no part in layout. Figures are tabular.
-co:CartColumns a pos:Layout ; sem:slug "cart-columns" ;
+ck:CartColumns a pos:Layout ; sem:slug "cart-columns" ;
     rdfs:comment "The cart's four columns: what, how many, line total, remove."@en ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) auto minmax(5.5rem, auto) auto" ] ,
@@ -248,9 +248,9 @@ co:CartColumns a pos:Layout ; sem:slug "cart-columns" ;
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
 
-ui:co-kettle a c:Switch ; c:controls co:l-kettle ; c:property co:status ; c:cases ( ui:co-kettle-in ui:co-kettle-out ) .
-ui:co-kettle-in c:when co:InCart ; c:content ui:co-kettle-row .
-ui:co-kettle-out c:when co:Removed ; c:content ui:co-kettle-gone .
+ui:co-kettle a c:Switch ; c:controls ck:l-kettle ; c:property ck:status ; c:cases ( ui:co-kettle-in ui:co-kettle-out ) .
+ui:co-kettle-in c:when ck:InCart ; c:content ui:co-kettle-row .
+ui:co-kettle-out c:when ck:Removed ; c:content ui:co-kettle-gone .
 ui:co-kettle-row a c:Stack ; pos:layout pos:Subgrid ;
     c:children ( ui:co-kettle-about ui:co-kettle-count ui:co-kettle-total ui:co-kettle-remove ) .
 ui:co-kettle-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:co-kettle-name ui:co-kettle-detail ) .
@@ -258,19 +258,19 @@ ui:co-kettle-name a c:Text ; c:label "Pour-over kettle" .
 ui:co-kettle-detail a c:Text ; sty:textStyle sty:Caption .
 ui:co-kettle-count a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:gap tok:space-2 ;
     c:children ( ui:co-kettle-fewer ui:co-kettle-qty ui:co-kettle-more ) .
-ui:co-kettle-fewer a c:IconButton , co:FewerButton ; c:icon "−" ; c:label "Remove one Pour-over kettle" ; sty:size sty:Small .
+ui:co-kettle-fewer a c:IconButton , ck:FewerButton ; c:icon "−" ; c:label "Remove one Pour-over kettle" ; sty:size sty:Small .
 ui:co-kettle-qty a c:Text ; c:inline true .
-ui:co-kettle-more a c:IconButton , co:MoreButton ; c:icon "+" ; c:label "Add one Pour-over kettle" ; sty:size sty:Small .
+ui:co-kettle-more a c:IconButton , ck:MoreButton ; c:icon "+" ; c:label "Add one Pour-over kettle" ; sty:size sty:Small .
 ui:co-kettle-total a c:Text ; c:inline true ; pos:textAlign pos:TextEnd .
-ui:co-kettle-remove a c:IconButton , co:RemoveButton ; c:icon "✕" ; c:label "Remove Pour-over kettle from the cart" ;
+ui:co-kettle-remove a c:IconButton , ck:RemoveButton ; c:icon "✕" ; c:label "Remove Pour-over kettle from the cart" ;
     sty:tone sty:Danger ; sty:emphasis sty:Ghost ; sty:size sty:Small .
 ui:co-kettle-gone a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:co-kettle-gone-text ui:co-kettle-undo ) .
 ui:co-kettle-gone-text a c:Text ; sty:textStyle sty:Caption ; c:label "Pour-over kettle removed." .
-ui:co-kettle-undo a c:Button , co:UndoButton ; c:label "Undo" ; sty:emphasis sty:Ghost ; sty:size sty:Small .
+ui:co-kettle-undo a c:Button , ck:UndoButton ; c:label "Undo" ; sty:emphasis sty:Ghost ; sty:size sty:Small .
 
-ui:co-mug a c:Switch ; c:controls co:l-mug ; c:property co:status ; c:cases ( ui:co-mug-in ui:co-mug-out ) .
-ui:co-mug-in c:when co:InCart ; c:content ui:co-mug-row .
-ui:co-mug-out c:when co:Removed ; c:content ui:co-mug-gone .
+ui:co-mug a c:Switch ; c:controls ck:l-mug ; c:property ck:status ; c:cases ( ui:co-mug-in ui:co-mug-out ) .
+ui:co-mug-in c:when ck:InCart ; c:content ui:co-mug-row .
+ui:co-mug-out c:when ck:Removed ; c:content ui:co-mug-gone .
 ui:co-mug-row a c:Stack ; pos:layout pos:Subgrid ;
     c:children ( ui:co-mug-about ui:co-mug-count ui:co-mug-total ui:co-mug-remove ) .
 ui:co-mug-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:co-mug-name ui:co-mug-detail ) .
@@ -278,19 +278,19 @@ ui:co-mug-name a c:Text ; c:label "Stoneware mug" .
 ui:co-mug-detail a c:Text ; sty:textStyle sty:Caption .
 ui:co-mug-count a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:gap tok:space-2 ;
     c:children ( ui:co-mug-fewer ui:co-mug-qty ui:co-mug-more ) .
-ui:co-mug-fewer a c:IconButton , co:FewerButton ; c:icon "−" ; c:label "Remove one Stoneware mug" ; sty:size sty:Small .
+ui:co-mug-fewer a c:IconButton , ck:FewerButton ; c:icon "−" ; c:label "Remove one Stoneware mug" ; sty:size sty:Small .
 ui:co-mug-qty a c:Text ; c:inline true .
-ui:co-mug-more a c:IconButton , co:MoreButton ; c:icon "+" ; c:label "Add one Stoneware mug" ; sty:size sty:Small .
+ui:co-mug-more a c:IconButton , ck:MoreButton ; c:icon "+" ; c:label "Add one Stoneware mug" ; sty:size sty:Small .
 ui:co-mug-total a c:Text ; c:inline true ; pos:textAlign pos:TextEnd .
-ui:co-mug-remove a c:IconButton , co:RemoveButton ; c:icon "✕" ; c:label "Remove Stoneware mug from the cart" ;
+ui:co-mug-remove a c:IconButton , ck:RemoveButton ; c:icon "✕" ; c:label "Remove Stoneware mug from the cart" ;
     sty:tone sty:Danger ; sty:emphasis sty:Ghost ; sty:size sty:Small .
 ui:co-mug-gone a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:co-mug-gone-text ui:co-mug-undo ) .
 ui:co-mug-gone-text a c:Text ; sty:textStyle sty:Caption ; c:label "Stoneware mug removed." .
-ui:co-mug-undo a c:Button , co:UndoButton ; c:label "Undo" ; sty:emphasis sty:Ghost ; sty:size sty:Small .
+ui:co-mug-undo a c:Button , ck:UndoButton ; c:label "Undo" ; sty:emphasis sty:Ghost ; sty:size sty:Small .
 
-ui:co-beans a c:Switch ; c:controls co:l-beans ; c:property co:status ; c:cases ( ui:co-beans-in ui:co-beans-out ) .
-ui:co-beans-in c:when co:InCart ; c:content ui:co-beans-row .
-ui:co-beans-out c:when co:Removed ; c:content ui:co-beans-gone .
+ui:co-beans a c:Switch ; c:controls ck:l-beans ; c:property ck:status ; c:cases ( ui:co-beans-in ui:co-beans-out ) .
+ui:co-beans-in c:when ck:InCart ; c:content ui:co-beans-row .
+ui:co-beans-out c:when ck:Removed ; c:content ui:co-beans-gone .
 ui:co-beans-row a c:Stack ; pos:layout pos:Subgrid ;
     c:children ( ui:co-beans-about ui:co-beans-count ui:co-beans-total ui:co-beans-remove ) .
 ui:co-beans-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:co-beans-name ui:co-beans-detail ) .
@@ -298,17 +298,17 @@ ui:co-beans-name a c:Text ; c:label "Single-origin beans" .
 ui:co-beans-detail a c:Text ; sty:textStyle sty:Caption .
 ui:co-beans-count a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:gap tok:space-2 ;
     c:children ( ui:co-beans-fewer ui:co-beans-qty ui:co-beans-more ) .
-ui:co-beans-fewer a c:IconButton , co:FewerButton ; c:icon "−" ; c:label "Remove one Single-origin beans" ; sty:size sty:Small .
+ui:co-beans-fewer a c:IconButton , ck:FewerButton ; c:icon "−" ; c:label "Remove one Single-origin beans" ; sty:size sty:Small .
 ui:co-beans-qty a c:Text ; c:inline true .
-ui:co-beans-more a c:IconButton , co:MoreButton ; c:icon "+" ; c:label "Add one Single-origin beans" ; sty:size sty:Small .
+ui:co-beans-more a c:IconButton , ck:MoreButton ; c:icon "+" ; c:label "Add one Single-origin beans" ; sty:size sty:Small .
 ui:co-beans-total a c:Text ; c:inline true ; pos:textAlign pos:TextEnd .
-ui:co-beans-remove a c:IconButton , co:RemoveButton ; c:icon "✕" ; c:label "Remove Single-origin beans from the cart" ;
+ui:co-beans-remove a c:IconButton , ck:RemoveButton ; c:icon "✕" ; c:label "Remove Single-origin beans from the cart" ;
     sty:tone sty:Danger ; sty:emphasis sty:Ghost ; sty:size sty:Small .
 ui:co-beans-gone a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:co-beans-gone-text ui:co-beans-undo ) .
 ui:co-beans-gone-text a c:Text ; sty:textStyle sty:Caption ; c:label "Single-origin beans removed." .
-ui:co-beans-undo a c:Button , co:UndoButton ; c:label "Undo" ; sty:emphasis sty:Ghost ; sty:size sty:Small .
+ui:co-beans-undo a c:Button , ck:UndoButton ; c:label "Undo" ; sty:emphasis sty:Ghost ; sty:size sty:Small .
 
-# The summary: one description list whose values co:Pricing writes (shared with the review).
+# The summary: one description list whose values ck:Pricing writes (shared with the review).
 ui:co-cart-side a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:co-summary ui:co-free-hint ui:co-to-shipping ) .
 ui:co-summary a c:DescriptionList ; c:items ( ui:co-sum-items ui:co-sum-subtotal ui:co-sum-shipping ui:co-sum-tax ui:co-sum-total ) .
@@ -327,7 +327,7 @@ ui:co-to-shipping a c:Button ; c:label "Continue to shipping" ; sty:tone sty:Acc
 # range, or the c:options a field takes from the country.
 #
 # The country comes first because it reshapes the rest. The fields that vary follow the
-# order's country (dep:follows ui:ex-checkout ; dep:property co:country) and take one of its
+# order's country (dep:follows ui:ex-checkout ; dep:property ck:country) and take one of its
 # profiles (dep:takes): the city's label and placeholder, the postal code's label, placeholder
 # and shape - ZIP code in the US, Postcode in the UK - and the region's label and options,
 # hidden where the country has none (dep:otherwise). What does not vary stays on the field.
@@ -339,33 +339,33 @@ ui:co-to-shipping a c:Button ; c:label "Continue to shipping" ; sty:tone sty:Acc
 ui:co-shipping a c:Stack ; pos:layout pos:Sidebar ; pos:gap tok:space-5 ; c:children ( ui:co-form ui:co-shipping-side ) .
 ui:co-form a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:co-country ui:co-name ui:co-street ui:co-place ui:co-contact ui:co-speed ui:co-payment ui:co-currency ui:co-shipping-actions ) .
-ui:co-country a c:Choice ; c:label "Country" ; c:controls ui:ex-checkout ; c:property co:country .
-ui:co-name a c:TextField ; c:label "Full name" ; c:placeholder "Ada Lovelace" ; co:fills co:recipient ; val:validates co:NameShape .
-ui:co-street a c:TextField ; c:label "Street address" ; c:placeholder "12 Harbour Road, Apt 3" ; co:fills co:street ; val:validates co:StreetShape .
+ui:co-country a c:Choice ; c:label "Country" ; c:controls ui:ex-checkout ; c:property ck:country .
+ui:co-name a c:TextField ; c:label "Full name" ; c:placeholder "Ada Lovelace" ; ck:fills ck:recipient ; val:validates ck:NameShape .
+ui:co-street a c:TextField ; c:label "Street address" ; c:placeholder "12 Harbour Road, Apt 3" ; ck:fills ck:street ; val:validates ck:StreetShape .
 # Fields side by side line up part by part (pos:FieldRow): labels in one row, inputs in the next,
 # help and errors below, so a help line or an error never moves a neighbour's input.
 ui:co-place a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-4 ; c:children ( ui:co-city ui:co-region ui:co-postal ) .
-ui:co-city a c:TextField ; co:fills co:city ; val:validates co:CityShape ;
-    dep:follows ui:ex-checkout ; dep:property co:country ; dep:takes co:cityField ;
+ui:co-city a c:TextField ; ck:fills ck:city ; val:validates ck:CityShape ;
+    dep:follows ui:ex-checkout ; dep:property ck:country ; dep:takes ck:cityField ;
     dep:otherwise [ c:label "City" ; c:placeholder "City" ] .
-ui:co-region a c:Choice ; c:controls ui:ex-checkout ; c:property co:region ;
-    dep:follows ui:ex-checkout ; dep:property co:country ; dep:takes co:regionField ;
+ui:co-region a c:Choice ; c:controls ui:ex-checkout ; c:property ck:region ;
+    dep:follows ui:ex-checkout ; dep:property ck:country ; dep:takes ck:regionField ;
     dep:otherwise [ c:hidden true ] .
-ui:co-postal a c:TextField ; co:fills co:postalCode ;
-    dep:follows ui:ex-checkout ; dep:property co:country ; dep:takes co:postalField ;
-    dep:otherwise [ c:label "Postal code" ; c:placeholder "Postal code" ; val:validates co:PostalShape ] .
+ui:co-postal a c:TextField ; ck:fills ck:postalCode ;
+    dep:follows ui:ex-checkout ; dep:property ck:country ; dep:takes ck:postalField ;
+    dep:otherwise [ c:label "Postal code" ; c:placeholder "Postal code" ; val:validates ck:PostalShape ] .
 # The dialling code and the number are two fields, each its own value with its own label; side by
 # side, the code's select lines up with the number's input, the number's help line below both.
 ui:co-contact a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ; c:children ( ui:co-dial ui:co-phone ) .
-ui:co-dial a c:Choice ; c:label "Code" ; c:controls ui:ex-checkout ; c:property co:dialCode .
-ui:co-phone a c:TextField ; c:label "Phone" ; c:inputType "tel" ; val:validates co:PhoneShape ;
+ui:co-dial a c:Choice ; c:label "Code" ; c:controls ui:ex-checkout ; c:property ck:dialCode .
+ui:co-phone a c:TextField ; c:label "Phone" ; c:inputType "tel" ; val:validates ck:PhoneShape ;
     c:help "For the courier, if they need to reach you." ;
-    dep:follows ui:ex-checkout ; dep:property co:dialCode ; dep:takes co:phoneField ;
+    dep:follows ui:ex-checkout ; dep:property ck:dialCode ; dep:takes ck:phoneField ;
     dep:otherwise [ c:placeholder "Phone number" ] .
-ui:co-speed a c:RadioGroup ; c:label "Delivery" ; c:controls ui:ex-checkout ; c:property co:speed ;
+ui:co-speed a c:RadioGroup ; c:label "Delivery" ; c:controls ui:ex-checkout ; c:property ck:speed ;
     c:help "Changes the shipping line of the total." .
-ui:co-payment a c:RadioGroup ; c:label "Payment" ; c:controls ui:ex-checkout ; c:property co:payment .
-ui:co-currency a c:Choice ; c:label "Pay in" ; c:controls ui:ex-checkout ; c:property co:currency .
+ui:co-payment a c:RadioGroup ; c:label "Payment" ; c:controls ui:ex-checkout ; c:property ck:payment .
+ui:co-currency a c:Choice ; c:label "Pay in" ; c:controls ui:ex-checkout ; c:property ck:currency .
 ui:co-shipping-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:co-back-to-cart ui:co-to-review ) .
 ui:co-back-to-cart a c:Button ; c:label "Back to cart" ; sty:emphasis sty:Ghost .
 ui:co-to-review a c:Button ; c:label "Continue to review" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ;
@@ -377,44 +377,44 @@ ui:co-shipping-side a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:co-shipping-summary ui:co-ships-from ) .
 ui:co-shipping-summary a c:DescriptionList ; c:items ( ui:co-sum-items ui:co-sum-subtotal ui:co-sum-shipping ui:co-sum-tax ui:co-sum-total ) .
 ui:co-ships-from a c:Text ; sty:textStyle sty:Caption ;
-    dep:follows ui:ex-checkout ; dep:property co:country ;
-    dep:case [ dep:when co:US ; dep:gives [ c:label "Ships from our San Francisco store." ] ] ;
+    dep:follows ui:ex-checkout ; dep:property ck:country ;
+    dep:case [ dep:when ck:US ; dep:gives [ c:label "Ships from our San Francisco store." ] ] ;
     dep:otherwise [ c:label "Ships from San Francisco: import duties may be due on delivery." ] .
 
-co:NameShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 2 ;
+ck:NameShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 2 ;
     sh:message "Enter the name of the person receiving the parcel." .
-co:StreetShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 5 ;
+ck:StreetShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 5 ;
     sh:message "Enter a street and number, like 12 Harbour Road." .
-co:CityShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 2 ;
+ck:CityShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 2 ;
     sh:message "Enter a city." .
-co:PhoneShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[0-9][0-9 ()-]{5,17}$" ;
+ck:PhoneShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[0-9][0-9 ()-]{5,17}$" ;
     sh:message "Enter a phone number: digits and spaces, without the dialling code." .
-# The postal code's shape is the country's (co:postalField); this one is for a country without.
-co:PostalShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[A-Za-z0-9][A-Za-z0-9 -]{2,9}$" ;
+# The postal code's shape is the country's (ck:postalField); this one is for a country without.
+ck:PostalShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[A-Za-z0-9][A-Za-z0-9 -]{2,9}$" ;
     sh:message "Enter a postal code." .
-co:ZipShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[0-9]{5}(-[0-9]{4})?$" ;
+ck:ZipShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[0-9]{5}(-[0-9]{4})?$" ;
     sh:message "Enter a 5-digit ZIP code, like 94110." .
-co:CanadaPostalShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]$" ;
+ck:CanadaPostalShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]$" ;
     sh:message "Enter a postal code like M5V 2T6." .
-co:UKPostcodeShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}$" ;
+ck:UKPostcodeShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}$" ;
     sh:message "Enter a postcode, like SW1A 1AA." .
-co:GermanPostalShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[0-9]{5}$" ;
+ck:GermanPostalShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[0-9]{5}$" ;
     sh:message "Enter the 5-digit Postleitzahl, like 10115." .
-co:DutchPostcodeShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[0-9]{4} ?[A-Za-z]{2}$" ;
+ck:DutchPostcodeShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[0-9]{4} ?[A-Za-z]{2}$" ;
     sh:message "Enter a postcode, like 1012 AB." .
 
 # --- step 3: review -------------------------------------------------------------------------------
 # Where it goes (the order's properties, copied from the form by Continue), what is in it
-# (the lines co:Pricing lists as co:reviewLine), and the same summary as the cart.
+# (the lines ck:Pricing lists as ck:reviewLine), and the same summary as the cart.
 
 ui:co-review a c:Stack ; pos:layout pos:Sidebar ; pos:gap tok:space-5 ; c:children ( ui:co-review-main ui:co-review-side ) .
 ui:co-review-main a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:co-review-where-title ui:co-review-where ui:co-review-what-title ui:co-review-what ) .
 ui:co-review-where-title a c:Heading ; c:level 3 ; c:label "Shipping to" .
 ui:co-review-where a c:DescriptionList ; c:of ui:ex-checkout ;
-    c:fields ( co:recipient co:street co:place co:country co:phone co:speed co:payment co:currency ) .
+    c:fields ( ck:recipient ck:street ck:place ck:country ck:phone ck:speed ck:payment ck:currency ) .
 ui:co-review-what-title a c:Heading ; c:level 3 ; c:label "In the parcel" .
-ui:co-review-what a c:DescriptionList ; c:of ui:ex-checkout ; c:entryProperty co:reviewLine ; c:keyProperty co:caption ; c:valueProperty co:amount .
+ui:co-review-what a c:DescriptionList ; c:of ui:ex-checkout ; c:entryProperty ck:reviewLine ; c:keyProperty ck:caption ; c:valueProperty ck:amount .
 ui:co-review-side a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:co-review-summary ui:co-review-actions ) .
 ui:co-review-summary a c:DescriptionList ; c:items ( ui:co-sum-items ui:co-sum-subtotal ui:co-sum-shipping ui:co-sum-tax ui:co-sum-total ) .
@@ -428,47 +428,47 @@ ui:co-done a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:co-done-alert ui:co-done-details ui:co-new-order ) .
 ui:co-done-alert a c:Alert ; sty:tone sty:Success ; c:label "Thank you - your order is placed" ;
     c:help "A confirmation is on its way. Nothing is charged now: you pay as you chose below." .
-ui:co-done-details a c:DescriptionList ; c:of ui:ex-checkout ; c:fields ( co:orderNumber co:totalDue co:payment co:speed ) .
+ui:co-done-details a c:DescriptionList ; c:of ui:ex-checkout ; c:fields ( ck:orderNumber ck:totalDue ck:payment ck:speed ) .
 ui:co-new-order a c:Button ; c:label "Start a new order" ; sty:emphasis sty:Outline .
 
 # --- the rule: every figure, from the lines ---------------------------------------------------------
 # Runs for the order (the example's root) before the components (stratum -15), again whenever
-# a line (sem:follows co:line) or the order's speed, country or currency changes. Prices are
-# set in US dollars; each is converted to the order's currency (co:perDollar) as whole cents,
+# a line (sem:follows ck:line) or the order's speed, country or currency changes. Prices are
+# set in US dollars; each is converted to the order's currency (ck:perDollar) as whole cents,
 # then summed as integers, and written with the currency's symbol ("€11.50"). It writes:
 #   - each line: its detail with the unit price; in the cart, its quantity and total texts,
-#     − disabled at 1, + at the line's maximum, and its review entry (co:reviewLine,
-#     co:caption, co:amount);
+#     − disabled at 1, + at the line's maximum, and its review entry (ck:reviewLine,
+#     ck:caption, ck:amount);
 #   - the summary figures (items, subtotal, shipping, tax, total), the tax line's label - the
-#     country's tax and rate ("VAT (20%)") - and the order's co:totalDue;
+#     country's tax and rate ("VAT (20%)") - and the order's ck:totalDue;
 #   - the free-shipping hint, and Continue disabled while the cart is empty.
-# Shipping is the chosen speed's cost, nothing when the subtotal reaches its co:freeFrom; tax
-# is the country's co:taxRate of the subtotal.
+# Shipping is the chosen speed's cost, nothing when the subtotal reaches its ck:freeFrom; tax
+# is the country's ck:taxRate of the subtotal.
 
-co:Pricing a sem:Rendering ;
+ck:Pricing a sem:Rendering ;
     rdfs:comment "Prices the order: line totals, subtotal, shipping, tax and total, from its lines, in its currency."@en ;
-    sem:targets co:Order ;
+    sem:targets ck:Order ;
     sem:stratum -15 ;
     sem:inputOnly true ;
-    sem:follows co:line ;
-    sem:watches co:line , co:speed , co:quantity , co:status , co:country , co:currency .
-co:Pricing-fn a sem:Rule ; sem:implements co:Pricing ; sem:function "checkout:pricing" .
-co:Pricing-sparql a sem:Rule ;
-    sem:implements co:Pricing ;
+    sem:follows ck:line ;
+    sem:watches ck:line , ck:speed , ck:quantity , ck:status , ck:country , ck:currency .
+ck:Pricing-fn a sem:Rule ; sem:implements ck:Pricing ; sem:function "checkout:pricing" .
+ck:Pricing-sparql a sem:Rule ;
+    sem:implements ck:Pricing ;
     sem:construct """
 PREFIX ui: <https://semblance.dev/demo#>
-PREFIX co: <https://semblance.dev/demo/checkout#>
+PREFIX ck: <https://semblance.dev/demo/checkout#>
 CONSTRUCT { ?s ?p ?money . ?s2 ?p2 ?o2 }
 WHERE {
-  $this a co:Order ; co:speed ?speed ; co:country ?country ; co:currency ?currency .
-  ?country co:taxRate ?rate ; co:taxName ?taxName .
-  ?currency co:symbol ?symbol ; co:perDollar ?fx .
-  ?speed co:cost ?cost .
-  OPTIONAL { ?speed co:freeFrom ?speedFree }
-  co:Standard co:freeFrom ?threshold .
+  $this a ck:Order ; ck:speed ?speed ; ck:country ?country ; ck:currency ?currency .
+  ?country ck:taxRate ?rate ; ck:taxName ?taxName .
+  ?currency ck:symbol ?symbol ; ck:perDollar ?fx .
+  ?speed ck:cost ?cost .
+  OPTIONAL { ?speed ck:freeFrom ?speedFree }
+  ck:Standard ck:freeFrom ?threshold .
   { SELECT (COALESCE(SUM(?lineCents), 0) AS ?sub) (COALESCE(SUM(?n), 0) AS ?count)
-    WHERE { $this co:currency ?lineCurrency ; co:line ?l . ?lineCurrency co:perDollar ?lineFx .
-            ?l co:status co:InCart ; co:quantity ?n ; co:unitPrice ?unit
+    WHERE { $this ck:currency ?lineCurrency ; ck:line ?l . ?lineCurrency ck:perDollar ?lineFx .
+            ?l ck:status ck:InCart ; ck:quantity ?n ; ck:unitPrice ?unit
             BIND(?n * xsd:integer(ROUND(?unit * 100 * ?lineFx)) AS ?lineCents) } }
   BIND(xsd:integer(ROUND(?threshold * 100 * ?fx)) AS ?freeCents)
   BIND(IF(?count = 0 || (BOUND(?speedFree) && ?sub >= xsd:integer(ROUND(?speedFree * 100 * ?fx))), 0, xsd:integer(ROUND(?cost * 100 * ?fx))) AS ?ship)
@@ -480,27 +480,27 @@ WHERE {
     UNION { BIND(ui:co-sum-shipping AS ?s) BIND(c:value AS ?p) BIND(?ship AS ?cents) BIND(?ship = 0 AS ?free) }
     UNION { BIND(ui:co-sum-tax AS ?s) BIND(c:value AS ?p) BIND(?tax AS ?cents) }
     UNION { BIND(ui:co-sum-total AS ?s) BIND(c:value AS ?p) BIND(?total AS ?cents) }
-    UNION { BIND($this AS ?s) BIND(co:totalDue AS ?p) BIND(?total AS ?cents) }
-    UNION { $this co:line ?line . ?line co:status co:InCart ; co:quantity ?q ; co:unitPrice ?price ; co:totalText ?s
+    UNION { BIND($this AS ?s) BIND(ck:totalDue AS ?p) BIND(?total AS ?cents) }
+    UNION { $this ck:line ?line . ?line ck:status ck:InCart ; ck:quantity ?q ; ck:unitPrice ?price ; ck:totalText ?s
             BIND(c:label AS ?p) BIND(?q * xsd:integer(ROUND(?price * 100 * ?fx)) AS ?cents) }
-    UNION { $this co:line ?s . ?s co:status co:InCart ; co:quantity ?q ; co:unitPrice ?price
-            BIND(co:amount AS ?p) BIND(?q * xsd:integer(ROUND(?price * 100 * ?fx)) AS ?cents) }
-    UNION { $this co:line ?line . ?line co:unitPrice ?price ; co:detail ?detail ; co:detailText ?s
+    UNION { $this ck:line ?s . ?s ck:status ck:InCart ; ck:quantity ?q ; ck:unitPrice ?price
+            BIND(ck:amount AS ?p) BIND(?q * xsd:integer(ROUND(?price * 100 * ?fx)) AS ?cents) }
+    UNION { $this ck:line ?line . ?line ck:unitPrice ?price ; ck:detail ?detail ; ck:detailText ?s
             BIND(c:label AS ?p) BIND(xsd:integer(ROUND(?price * 100 * ?fx)) AS ?cents)
             BIND(CONCAT(?detail, " · ") AS ?before) BIND(" each" AS ?after) }
     UNION { FILTER(?count > 0 && ?sub < ?freeCents)
             BIND(ui:co-free-hint AS ?s) BIND(c:label AS ?p) BIND(?freeCents - ?sub AS ?cents)
             BIND("Add " AS ?before) BIND(" more for free standard shipping." AS ?after) }
     # Everything else (?s2 ?p2 ?o2).
-    UNION { $this co:line ?line . ?line co:status co:InCart ; co:quantity ?q ; co:quantityText ?s2
+    UNION { $this ck:line ?line . ?line ck:status ck:InCart ; ck:quantity ?q ; ck:quantityText ?s2
             BIND(c:label AS ?p2) BIND(STR(?q) AS ?o2) }
-    UNION { $this co:line ?line . ?line co:status co:InCart ; rdfs:label ?name ; co:quantity ?q
-            BIND(?line AS ?s2) BIND(co:caption AS ?p2) BIND(CONCAT(?name, " × ", STR(?q)) AS ?o2) }
-    UNION { $this co:line ?line . ?line co:status co:InCart
-            BIND($this AS ?s2) BIND(co:reviewLine AS ?p2) BIND(?line AS ?o2) }
-    UNION { $this co:line ?line . ?line co:status co:InCart ; co:quantity ?q ; co:fewer ?s2 FILTER(?q <= 1)
+    UNION { $this ck:line ?line . ?line ck:status ck:InCart ; rdfs:label ?name ; ck:quantity ?q
+            BIND(?line AS ?s2) BIND(ck:caption AS ?p2) BIND(CONCAT(?name, " × ", STR(?q)) AS ?o2) }
+    UNION { $this ck:line ?line . ?line ck:status ck:InCart
+            BIND($this AS ?s2) BIND(ck:reviewLine AS ?p2) BIND(?line AS ?o2) }
+    UNION { $this ck:line ?line . ?line ck:status ck:InCart ; ck:quantity ?q ; ck:fewer ?s2 FILTER(?q <= 1)
             BIND(c:disabled AS ?p2) BIND(true AS ?o2) }
-    UNION { $this co:line ?line . ?line co:status co:InCart ; co:quantity ?q ; co:maxQuantity ?max ; co:more ?s2 FILTER(?q >= ?max)
+    UNION { $this ck:line ?line . ?line ck:status ck:InCart ; ck:quantity ?q ; ck:maxQuantity ?max ; ck:more ?s2 FILTER(?q >= ?max)
             BIND(c:disabled AS ?p2) BIND(true AS ?o2) }
     UNION { BIND(ui:co-sum-items AS ?s2) BIND(c:value AS ?p2) BIND(CONCAT(STR(?count), IF(?count = 1, " item", " items")) AS ?o2) }
     UNION { BIND(ui:co-sum-tax AS ?s2) BIND(c:label AS ?p2) BIND(CONCAT(?taxName, " (", STR(xsd:integer(ROUND(?rate * 100))), "%)") AS ?o2) }
@@ -515,79 +515,79 @@ WHERE {
 }""" .
 
 # --- reactions: what the buttons mean ---------------------------------------------------------------
-# The quantity buttons are classes (co:FewerButton...), so one reaction serves every line:
-# the line is the one whose co:fewer (co:more, co:remover, co:restorer) is the clicked button.
+# The quantity buttons are classes (ck:FewerButton...), so one reaction serves every line:
+# the line is the one whose ck:fewer (ck:more, ck:remover, ck:restorer) is the clicked button.
 
-co:OneFewer a beh:Reaction ; beh:when beh:Click ; beh:sourceClass co:FewerButton ;
-    beh:deletes """CONSTRUCT { ?line co:quantity ?q } WHERE { ?line co:fewer $this ; co:quantity ?q FILTER(?q > 1) }""" ;
-    beh:inserts """CONSTRUCT { ?line co:quantity ?less } WHERE { ?line co:fewer $this ; co:quantity ?q FILTER(?q > 1) BIND(?q - 1 AS ?less) }""" .
-co:OneMore a beh:Reaction ; beh:when beh:Click ; beh:sourceClass co:MoreButton ;
-    beh:deletes """CONSTRUCT { ?line co:quantity ?q } WHERE { ?line co:more $this ; co:quantity ?q ; co:maxQuantity ?max FILTER(?q < ?max) }""" ;
-    beh:inserts """CONSTRUCT { ?line co:quantity ?more } WHERE { ?line co:more $this ; co:quantity ?q ; co:maxQuantity ?max FILTER(?q < ?max) BIND(?q + 1 AS ?more) }""" .
-co:RemoveLine a beh:Reaction ; beh:when beh:Click ; beh:sourceClass co:RemoveButton ;
-    beh:deletes """CONSTRUCT { ?line co:status co:InCart } WHERE { ?line co:remover $this ; co:status co:InCart }""" ;
-    beh:inserts """CONSTRUCT { ?line co:status co:Removed } WHERE { ?line co:remover $this ; co:status co:InCart }""" ;
+ck:OneFewer a beh:Reaction ; beh:when beh:Click ; beh:sourceClass ck:FewerButton ;
+    beh:deletes """CONSTRUCT { ?line ck:quantity ?q } WHERE { ?line ck:fewer $this ; ck:quantity ?q FILTER(?q > 1) }""" ;
+    beh:inserts """CONSTRUCT { ?line ck:quantity ?less } WHERE { ?line ck:fewer $this ; ck:quantity ?q FILTER(?q > 1) BIND(?q - 1 AS ?less) }""" .
+ck:OneMore a beh:Reaction ; beh:when beh:Click ; beh:sourceClass ck:MoreButton ;
+    beh:deletes """CONSTRUCT { ?line ck:quantity ?q } WHERE { ?line ck:more $this ; ck:quantity ?q ; ck:maxQuantity ?max FILTER(?q < ?max) }""" ;
+    beh:inserts """CONSTRUCT { ?line ck:quantity ?more } WHERE { ?line ck:more $this ; ck:quantity ?q ; ck:maxQuantity ?max FILTER(?q < ?max) BIND(?q + 1 AS ?more) }""" .
+ck:RemoveLine a beh:Reaction ; beh:when beh:Click ; beh:sourceClass ck:RemoveButton ;
+    beh:deletes """CONSTRUCT { ?line ck:status ck:InCart } WHERE { ?line ck:remover $this ; ck:status ck:InCart }""" ;
+    beh:inserts """CONSTRUCT { ?line ck:status ck:Removed } WHERE { ?line ck:remover $this ; ck:status ck:InCart }""" ;
     ann:announces "Removed from the cart" .
-co:RestoreLine a beh:Reaction ; beh:when beh:Click ; beh:sourceClass co:UndoButton ;
-    beh:deletes """CONSTRUCT { ?line co:status co:Removed } WHERE { ?line co:restorer $this ; co:status co:Removed }""" ;
-    beh:inserts """CONSTRUCT { ?line co:status co:InCart } WHERE { ?line co:restorer $this ; co:status co:Removed }""" .
+ck:RestoreLine a beh:Reaction ; beh:when beh:Click ; beh:sourceClass ck:UndoButton ;
+    beh:deletes """CONSTRUCT { ?line ck:status ck:Removed } WHERE { ?line ck:restorer $this ; ck:status ck:Removed }""" ;
+    beh:inserts """CONSTRUCT { ?line ck:status ck:InCart } WHERE { ?line ck:restorer $this ; ck:status ck:Removed }""" .
 
 # Moving between steps. Each move names the step it starts from, so a stale click does nothing.
-co:ToShipping a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-to-shipping ;
-    beh:deletes """CONSTRUCT { ui:co-steps c:current ui:co-step-cart } WHERE { ui:co-steps c:current ui:co-step-cart . FILTER EXISTS { ui:ex-checkout co:line ?l . ?l co:status co:InCart } }""" ;
-    beh:inserts """CONSTRUCT { ui:co-steps c:current ui:co-step-shipping } WHERE { ui:co-steps c:current ui:co-step-cart . FILTER EXISTS { ui:ex-checkout co:line ?l . ?l co:status co:InCart } }""" .
-co:BackToCart a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-back-to-cart ;
+ck:ToShipping a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-to-shipping ;
+    beh:deletes """CONSTRUCT { ui:co-steps c:current ui:co-step-cart } WHERE { ui:co-steps c:current ui:co-step-cart . FILTER EXISTS { ui:ex-checkout ck:line ?l . ?l ck:status ck:InCart } }""" ;
+    beh:inserts """CONSTRUCT { ui:co-steps c:current ui:co-step-shipping } WHERE { ui:co-steps c:current ui:co-step-cart . FILTER EXISTS { ui:ex-checkout ck:line ?l . ?l ck:status ck:InCart } }""" .
+ck:BackToCart a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-back-to-cart ;
     beh:deletes """CONSTRUCT { ui:co-steps c:current ui:co-step-shipping } WHERE { ui:co-steps c:current ui:co-step-shipping }""" ;
     beh:inserts """CONSTRUCT { ui:co-steps c:current ui:co-step-cart } WHERE { ui:co-steps c:current ui:co-step-shipping }""" .
-# Continue copies the form onto the order (co:fills), and writes the address's place line
-# (co:place: city, region and postal code in the country's order) and the phone with its
-# dialling code (co:phone) - only when no field it requires is invalid (val:invalid is the
+# Continue copies the form onto the order (ck:fills), and writes the address's place line
+# (ck:place: city, region and postal code in the country's order) and the phone with its
+# dialling code (ck:phone) - only when no field it requires is invalid (val:invalid is the
 # validation layer's conclusion, read from the derived graph).
-co:ToReview a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-to-review ;
+ck:ToReview a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-to-review ;
     beh:deletes """
-CONSTRUCT { ui:co-steps c:current ui:co-step-shipping . ui:ex-checkout ?p ?old ; co:place ?oldPlace ; co:phone ?oldPhone }
+CONSTRUCT { ui:co-steps c:current ui:co-step-shipping . ui:ex-checkout ?p ?old ; ck:place ?oldPlace ; ck:phone ?oldPhone }
 WHERE {
   ui:co-steps c:current ui:co-step-shipping .
   FILTER NOT EXISTS { ui:co-to-review val:requires/rdf:rest*/rdf:first ?bad . ?bad val:invalid true }
-  {} UNION { ?field co:fills ?p . ui:ex-checkout ?p ?old } UNION { ui:ex-checkout co:place ?oldPlace } UNION { ui:ex-checkout co:phone ?oldPhone }
+  {} UNION { ?field ck:fills ?p . ui:ex-checkout ?p ?old } UNION { ui:ex-checkout ck:place ?oldPlace } UNION { ui:ex-checkout ck:phone ?oldPhone }
 }""" ;
     beh:inserts """
-CONSTRUCT { ui:co-steps c:current ui:co-step-review . ui:ex-checkout ?p ?v ; co:place ?place ; co:phone ?phone }
+CONSTRUCT { ui:co-steps c:current ui:co-step-review . ui:ex-checkout ?p ?v ; ck:place ?place ; ck:phone ?phone }
 WHERE {
   ui:co-steps c:current ui:co-step-shipping .
   FILTER NOT EXISTS { ui:co-to-review val:requires/rdf:rest*/rdf:first ?bad . ?bad val:invalid true }
-  OPTIONAL { ?field co:fills ?p ; c:value ?v }
+  OPTIONAL { ?field ck:fills ?p ; c:value ?v }
   OPTIONAL {
     ui:co-city c:value ?city . ui:co-postal c:value ?code .
-    OPTIONAL { ui:ex-checkout co:region/co:code ?region }
-    OPTIONAL { ui:ex-checkout co:country/co:postalFirst ?first }
+    OPTIONAL { ui:ex-checkout ck:region/ck:code ?region }
+    OPTIONAL { ui:ex-checkout ck:country/ck:postalFirst ?first }
     BIND(IF(COALESCE(?first, false), CONCAT(?code, " ", ?city),
             CONCAT(?city, IF(BOUND(?region), CONCAT(", ", ?region), ""), " ", ?code)) AS ?place)
   }
-  OPTIONAL { ui:co-phone c:value ?number . ui:ex-checkout co:dialCode/rdfs:label ?dial BIND(CONCAT(?dial, " ", ?number) AS ?phone) }
+  OPTIONAL { ui:co-phone c:value ?number . ui:ex-checkout ck:dialCode/rdfs:label ?dial BIND(CONCAT(?dial, " ", ?number) AS ?phone) }
 }""" .
-co:BackToShipping a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-back-to-shipping ;
+ck:BackToShipping a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-back-to-shipping ;
     beh:deletes """CONSTRUCT { ui:co-steps c:current ui:co-step-review } WHERE { ui:co-steps c:current ui:co-step-review }""" ;
     beh:inserts """CONSTRUCT { ui:co-steps c:current ui:co-step-shipping } WHERE { ui:co-steps c:current ui:co-step-review }""" .
 # The order number is derived from the event that placed it.
-co:PlaceOrder a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-place-order ;
-    beh:deletes """CONSTRUCT { ui:co-steps c:current ui:co-step-review . ui:ex-checkout co:orderNumber ?old }
-WHERE { ui:co-steps c:current ui:co-step-review OPTIONAL { ui:ex-checkout co:orderNumber ?old } }""" ;
-    beh:inserts """CONSTRUCT { ui:co-steps c:current ui:co-step-done . ui:ex-checkout co:orderNumber ?number }
+ck:PlaceOrder a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-place-order ;
+    beh:deletes """CONSTRUCT { ui:co-steps c:current ui:co-step-review . ui:ex-checkout ck:orderNumber ?old }
+WHERE { ui:co-steps c:current ui:co-step-review OPTIONAL { ui:ex-checkout ck:orderNumber ?old } }""" ;
+    beh:inserts """CONSTRUCT { ui:co-steps c:current ui:co-step-done . ui:ex-checkout ck:orderNumber ?number }
 WHERE { ui:co-steps c:current ui:co-step-review BIND(CONCAT("SB-", UCASE(SUBSTR(MD5(STR($event)), 1, 6))) AS ?number) }""" ;
     ann:announces "Order placed" ; ann:tone sty:Success .
 # A new order: the lines as they started, back to the cart. The address stays filled in.
-co:NewOrder a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-new-order ;
+ck:NewOrder a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-new-order ;
     beh:deletes """
-CONSTRUCT { ui:co-steps c:current ?step . ui:ex-checkout co:orderNumber ?number . ?line co:quantity ?q ; co:status ?status }
+CONSTRUCT { ui:co-steps c:current ?step . ui:ex-checkout ck:orderNumber ?number . ?line ck:quantity ?q ; ck:status ?status }
 WHERE {
   ui:co-steps c:current ui:co-step-done .
-  { ui:co-steps c:current ?step } UNION { ui:ex-checkout co:orderNumber ?number }
-  UNION { ui:ex-checkout co:line ?line . ?line co:quantity ?q } UNION { ui:ex-checkout co:line ?line . ?line co:status ?status }
+  { ui:co-steps c:current ?step } UNION { ui:ex-checkout ck:orderNumber ?number }
+  UNION { ui:ex-checkout ck:line ?line . ?line ck:quantity ?q } UNION { ui:ex-checkout ck:line ?line . ?line ck:status ?status }
 }""" ;
     beh:inserts """
-CONSTRUCT { ui:co-steps c:current ui:co-step-cart . ?line co:quantity ?q ; co:status co:InCart }
-WHERE { ui:co-steps c:current ui:co-step-done . OPTIONAL { ui:ex-checkout co:line ?line . ?line co:initialQuantity ?q } }""" .
+CONSTRUCT { ui:co-steps c:current ui:co-step-cart . ?line ck:quantity ?q ; ck:status ck:InCart }
+WHERE { ui:co-steps c:current ui:co-step-done . OPTIONAL { ui:ex-checkout ck:line ?line . ?line ck:initialQuantity ?q } }""" .
 
 # --- how it works -----------------------------------------------------------------------------------
 
@@ -600,11 +600,11 @@ ui:co-w1 a c:WalkthroughStep ; rdfs:label "The order is data" ;
 ui:co-w2 a c:WalkthroughStep ; rdfs:label "The step is one triple" ;
     c:children ( "Where you are is the c:current of " ui:co-m-steps ", a " ui:co-m-Stepper ". " ui:co-m-panels ", a switch over that triple, shows the matching panel. Every Continue and Back is a reaction that rewrites it - " ui:co-m-toshipping " only from the cart, so a stale click does nothing - and the steps not shown are not evaluated at all." ) .
 ui:co-w3 a c:WalkthroughStep ; rdfs:label "One rule prices everything" ;
-    c:children ( ui:co-m-pricing " derives every figure from the lines before the components render: each line's quantity and total texts (" ui:co-m-mugtotal "), the summary " ui:co-m-summary ", the order's co:totalDue, the free-shipping hint, and which buttons are disabled. It is a SPARQL CONSTRUCT with aggregates, in cents of the order's currency (prices are set in dollars) and with the country's tax; its function twin in src/examples/checkout.ts writes the same triples." ) .
+    c:children ( ui:co-m-pricing " derives every figure from the lines before the components render: each line's quantity and total texts (" ui:co-m-mugtotal "), the summary " ui:co-m-summary ", the order's ck:totalDue, the free-shipping hint, and which buttons are disabled. It is a SPARQL CONSTRUCT with aggregates, in cents of the order's currency (prices are set in dollars) and with the country's tax; its function twin in src/examples/checkout.ts writes the same triples." ) .
 ui:co-w4 a c:WalkthroughStep ; rdfs:label "One reaction per meaning, not per button" ;
-    c:children ( "The − / + / ✕ buttons are instances of classes: " ui:co-m-more " is a " ui:co-m-MoreButton ", so " ui:co-m-onemore " serves every line - the line is the one whose co:more is the clicked button. " ui:co-m-remove " sets the line's status to " ui:co-m-removed ", and the row " ui:co-m-mugswitch " is a switch over that status, so Undo is just as small. The rows line up because the list declares its columns once, " ui:co-m-columns "." ) .
+    c:children ( "The − / + / ✕ buttons are instances of classes: " ui:co-m-more " is a " ui:co-m-MoreButton ", so " ui:co-m-onemore " serves every line - the line is the one whose ck:more is the clicked button. " ui:co-m-remove " sets the line's status to " ui:co-m-removed ", and the row " ui:co-m-mugswitch " is a switch over that status, so Undo is just as small. The rows line up because the list declares its columns once, " ui:co-m-columns "." ) .
 ui:co-w5 a c:WalkthroughStep ; rdfs:label "Shipping is checked by shapes" ;
-    c:children ( "Each field points at a SHACL property shape: in the United States " ui:co-m-postal " validates against " ui:co-m-postalshape ". The validation layer writes the errors and disables " ui:co-m-toreviewbutton ", which requires the five text fields. " ui:co-m-toreview " copies each field's value onto the order property it fills (co:fills). Country, delivery and payment are choices over the order itself, their options the individuals of each range." ) .
+    c:children ( "Each field points at a SHACL property shape: in the United States " ui:co-m-postal " validates against " ui:co-m-postalshape ". The validation layer writes the errors and disables " ui:co-m-toreviewbutton ", which requires the five text fields. " ui:co-m-toreview " copies each field's value onto the order property it fills (ck:fills). Country, delivery and payment are choices over the order itself, their options the individuals of each range." ) .
 ui:co-w5b a c:WalkthroughStep ; rdfs:label "The form follows the country" ;
     c:children ( "Countries are data that say how they shape the form. " ui:co-m-postal2 " follows the order's country and takes its " ui:co-m-postalfield
     " - " ui:co-m-us " gives it the label ZIP code, a placeholder and a five-digit shape, " ui:co-m-gb " a Postcode and its own - and " ui:co-m-region
@@ -616,37 +616,37 @@ ui:co-w7 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
     c:children ( "Changing a quantity changes one triple. The pricing rule re-runs because it follows " ui:co-m-line2 " to that line, and only the texts whose values changed render again; the hidden steps are parked until shown." ) .
 
 ui:co-m-order a c:Mention ; c:label "ui:ex-checkout" ; c:mentions ui:ex-checkout .
-ui:co-m-Order a c:Mention ; c:label "co:Order" ; c:mentions co:Order .
-ui:co-m-line a c:Mention ; c:label "co:line" ; c:mentions co:line .
-ui:co-m-line2 a c:Mention ; c:label "co:line" ; c:mentions co:line .
-ui:co-m-mug a c:Mention ; c:label "co:l-mug" ; c:mentions co:l-mug .
-ui:co-m-speed a c:Mention ; c:label "speed" ; c:mentions co:Standard .
-ui:co-m-country a c:Mention ; c:label "country" ; c:mentions co:US .
+ui:co-m-Order a c:Mention ; c:label "ck:Order" ; c:mentions ck:Order .
+ui:co-m-line a c:Mention ; c:label "ck:line" ; c:mentions ck:line .
+ui:co-m-line2 a c:Mention ; c:label "ck:line" ; c:mentions ck:line .
+ui:co-m-mug a c:Mention ; c:label "ck:l-mug" ; c:mentions ck:l-mug .
+ui:co-m-speed a c:Mention ; c:label "speed" ; c:mentions ck:Standard .
+ui:co-m-country a c:Mention ; c:label "country" ; c:mentions ck:US .
 ui:co-m-steps a c:Mention ; c:label "ui:co-steps" ; c:mentions ui:co-steps .
 ui:co-m-Stepper a c:Mention ; c:label "c:Stepper" ; c:mentions c:Stepper ; c:to c:Stepper .
 ui:co-m-panels a c:Mention ; c:label "ui:co-panels" ; c:mentions ui:co-panels .
-ui:co-m-toshipping a c:Mention ; c:label "co:ToShipping" ; c:mentions co:ToShipping .
-ui:co-m-pricing a c:Mention ; c:label "co:Pricing" ; c:mentions co:Pricing .
+ui:co-m-toshipping a c:Mention ; c:label "ck:ToShipping" ; c:mentions ck:ToShipping .
+ui:co-m-pricing a c:Mention ; c:label "ck:Pricing" ; c:mentions ck:Pricing .
 ui:co-m-mugtotal a c:Mention ; c:label "the mug's total" ; c:mentions ui:co-mug-total .
 ui:co-m-summary a c:Mention ; c:label "ui:co-summary" ; c:mentions ui:co-summary .
 ui:co-m-more a c:Mention ; c:label "the mug's +" ; c:mentions ui:co-mug-more .
-ui:co-m-MoreButton a c:Mention ; c:label "co:MoreButton" ; c:mentions co:MoreButton .
-ui:co-m-onemore a c:Mention ; c:label "co:OneMore" ; c:mentions co:OneMore .
-ui:co-m-remove a c:Mention ; c:label "co:RemoveLine" ; c:mentions co:RemoveLine .
-ui:co-m-removed a c:Mention ; c:label "co:Removed" ; c:mentions co:Removed .
+ui:co-m-MoreButton a c:Mention ; c:label "ck:MoreButton" ; c:mentions ck:MoreButton .
+ui:co-m-onemore a c:Mention ; c:label "ck:OneMore" ; c:mentions ck:OneMore .
+ui:co-m-remove a c:Mention ; c:label "ck:RemoveLine" ; c:mentions ck:RemoveLine .
+ui:co-m-removed a c:Mention ; c:label "ck:Removed" ; c:mentions ck:Removed .
 ui:co-m-mugswitch a c:Mention ; c:label "ui:co-mug" ; c:mentions ui:co-mug .
-ui:co-m-columns a c:Mention ; c:label "co:CartColumns" ; c:mentions co:CartColumns .
+ui:co-m-columns a c:Mention ; c:label "ck:CartColumns" ; c:mentions ck:CartColumns .
 ui:co-m-postal a c:Mention ; c:label "the postal code" ; c:mentions ui:co-postal .
-ui:co-m-postalshape a c:Mention ; c:label "co:ZipShape" ; c:mentions co:ZipShape .
+ui:co-m-postalshape a c:Mention ; c:label "ck:ZipShape" ; c:mentions ck:ZipShape .
 ui:co-m-postal2 a c:Mention ; c:label "the postal code" ; c:mentions ui:co-postal .
-ui:co-m-postalfield a c:Mention ; c:label "co:postalField" ; c:mentions co:postalField .
-ui:co-m-us a c:Mention ; c:label "co:US" ; c:mentions co:US .
-ui:co-m-gb a c:Mention ; c:label "co:GB" ; c:mentions co:GB .
+ui:co-m-postalfield a c:Mention ; c:label "ck:postalField" ; c:mentions ck:postalField .
+ui:co-m-us a c:Mention ; c:label "ck:US" ; c:mentions ck:US .
+ui:co-m-gb a c:Mention ; c:label "ck:GB" ; c:mentions ck:GB .
 ui:co-m-region a c:Mention ; c:label "the region choice" ; c:mentions ui:co-region .
 ui:co-m-facets a c:Mention ; c:label "dep:Facets" ; c:mentions dep:Facets ; c:to dep:Facets .
 ui:co-m-defaults a c:Mention ; c:label "dep:defaults" ; c:mentions dep:defaults ; c:to dep:defaults .
 ui:co-m-currency a c:Mention ; c:label "the currency" ; c:mentions ui:co-currency .
 ui:co-m-toreviewbutton a c:Mention ; c:label "Continue" ; c:mentions ui:co-to-review .
-ui:co-m-toreview a c:Mention ; c:label "co:ToReview" ; c:mentions co:ToReview .
-ui:co-m-place a c:Mention ; c:label "co:PlaceOrder" ; c:mentions co:PlaceOrder .
-ui:co-m-neworder a c:Mention ; c:label "co:NewOrder" ; c:mentions co:NewOrder .
+ui:co-m-toreview a c:Mention ; c:label "ck:ToReview" ; c:mentions ck:ToReview .
+ui:co-m-place a c:Mention ; c:label "ck:PlaceOrder" ; c:mentions ck:PlaceOrder .
+ui:co-m-neworder a c:Mention ; c:label "ck:NewOrder" ; c:mentions ck:NewOrder .

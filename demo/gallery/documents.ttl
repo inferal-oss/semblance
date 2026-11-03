@@ -22,7 +22,7 @@
 # (co:nextItem), a text block's text is its rdf:value with standoff marks.
 
 ui:gallery-documents a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-documents-intro ui:gallery-documents-lede ui:doc-text ui:doc-structure ui:doc-media ui:doc-custom ) .
+    c:children ( ui:gallery-documents-intro ui:gallery-documents-lede ui:doc-rdf ui:doc-text ui:doc-structure ui:doc-media ui:doc-custom ) .
 ui:gallery-documents-intro a c:Heading ; c:label "Documents" .
 ui:gallery-documents-lede a c:Text ;
     c:label "Documents of blocks: every block a DoCo or Pattern Ontology class that is also a component, its text and marks graph state, rendered as plain semantic HTML and, in the Text modality, as Markdown." .
@@ -156,3 +156,29 @@ ui:doc-custom-doc a blk:Document ; po:contains ui:dc-p , ui:dc-key , ui:dc-empty
 ui:dc-p a blk:Paragraph ; rdf:value "Blocks are classes, so a site's own is one more class." ; co:nextItem ui:dc-key .
 ui:dc-key a ui:KeyPoint ; rdf:value "No host code: the class, its look, its shape and its menu entry are all Turtle." ; co:nextItem ui:dc-empty .
 ui:dc-empty a blk:Paragraph ; rdf:value "" .
+
+# --- the document as RDF, both ways ----------------------------------------------------------------
+# One document in two editors: as blocks, and as the RDF it is (c:RdfEditor). They edit the same graph,
+# so an edit in either shows in the other at once, and one Undo takes back either's.
+
+ui:doc-rdf a c:Flippable ; c:front ui:doc-rdf-spec .
+ui:doc-rdf-spec a c:Specimen ; c:label "The document as RDF" ;
+    c:demonstrates c:BlockEditor , blk:Document , blk:Mark ;
+    c:help "The same document as blocks and as the RDF it is. Type in the blocks and the triples change; change a triple (Enter on a value in the RDF editor) and the block shows it. One Undo takes back either." ;
+    c:children ( ui:doc-rdf-actions ui:doc-rdf-sides ) .
+ui:doc-rdf-actions a c:Toolbar ; c:label "History"@en , "Історія"@uk , "Verlauf"@de , "السجل"@ar ; c:children ( ui:doc-rdf-undo ui:doc-rdf-redo ) .
+ui:doc-rdf-undo a c:Button , beh:Undoer ; c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar ; sty:size sty:Small .
+ui:doc-rdf-redo a c:Button , beh:Redoer ; c:label "Redo"@en , "Повторити"@uk , "Wiederholen"@de , "إعادة"@ar ; sty:size sty:Small .
+ui:doc-rdf-sides a c:Grid ; c:columns 2 ; c:minWidth "260px" ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-rdf-blocks ui:doc-rdf-triples ) .
+ui:doc-rdf-blocks a c:BlockEditor ; c:label "Recipe"@en , "Рецепт"@uk , "Rezept"@de , "وصفة"@ar ; c:of ui:dr-doc ;
+    c:editable true ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo .
+ui:doc-rdf-triples a c:RdfEditor ; c:label "Recipe as RDF"@en , "Рецепт як RDF"@uk , "Rezept als RDF"@de , "الوصفة بصيغة RDF"@ar ;
+    c:entry ui:dr-doc , ui:dr-title , ui:dr-intro , ui:dr-steps , ui:dr-s1 , ui:dr-s2 ; c:editable true .
+ui:dr-doc a blk:Document ; schema:name "Bread" ; po:contains ui:dr-title , ui:dr-intro , ui:dr-steps .
+ui:dr-title a blk:Heading2 ; rdf:value "Bread" ; co:nextItem ui:dr-intro .
+ui:dr-intro a blk:Paragraph ; rdf:value "Flour, water, salt and time." ; blk:mark ui:dr-intro-time ; co:nextItem ui:dr-steps .
+ui:dr-intro-time a blk:Emphasis ; oa:start 23 ; oa:end 27 .
+ui:dr-steps a blk:NumberedList ; po:contains ui:dr-s1 , ui:dr-s2 .
+ui:dr-s1 a blk:ListItem ; rdf:value "Mix and rest overnight." ; co:nextItem ui:dr-s2 .
+ui:dr-s2 a blk:ListItem ; rdf:value "Bake hot." .
