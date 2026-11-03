@@ -1706,6 +1706,48 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~tt-", ?local, "-text")) AS ?btnText)
 }""" .
 
+# The editor's columns toolbar (block-editor.ttl), with the caret in a layout column and not in a table's
+# cell (whose toolbar it has instead): under the columns, a button per thing it does to them.
+c:BlockEditorColumnsTools a sem:Rendering ; sem:targets c:BlockEditor ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows c:focusBlock ;
+    sem:watches rdf:type , c:editable , c:focusBlock , po:contains .
+c:BlockEditorColumnsTools-fn a sem:Rule ; sem:implements c:BlockEditorColumnsTools ; sem:function "blk:columns-tools" .
+c:BlockEditorColumnsTools-sparql a sem:Rule ; sem:implements c:BlockEditorColumnsTools ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?tools . ?body ord:precedes ?tools . ?tools ord:precedes ?toolbar .
+  ?tools a rdfhtml:Div ; rdfhtml:class "sem-table-tools" ; rdfhtml:hasChild ?btn ; rdfhtml:attribute ?role , ?name , ?anchor , ?keep .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "toolbar" .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?toolsName .
+  ?anchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?anchorId .
+  ?keep a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-keep-focus" ; rdfhtml:attributeValue "" .
+  ?btn a rdfhtml:Button ; rdfhtml:type "button" ; blk:columnsAction ?action ; sem:orderKey ?order ; rdfhtml:hasChild ?btnText .
+  ?btnText a rdfhtml:Text ; rdfhtml:data ?label .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:BlockEditor ; c:editable true ; c:focusBlock ?f .
+  FILTER NOT EXISTS { ?f a/rdfs:subClassOf* blk:Cell }
+  ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column .
+  VALUES (?action ?local ?order) { (blk:LayoutColumnBefore "column-before" "1") (blk:LayoutColumnAfter "column-after" "2") (blk:RemoveLayoutColumn "remove-column" "3") }
+  OPTIONAL { ?aAt l10n:of ?action ; l10n:name ?aPicked } OPTIONAL { ?action rdfs:label ?aEn FILTER(LANGMATCHES(LANG(?aEn), "en")) }
+  BIND(STR(COALESCE(?aPicked, ?aEn)) AS ?label)
+  OPTIONAL { ?tAt l10n:of c:ColumnsToolsPhrase ; l10n:name ?tPicked } OPTIONAL { c:ColumnsToolsPhrase rdfs:label ?tEn FILTER(LANGMATCHES(LANG(?tEn), "en")) }
+  BIND(STR(COALESCE(?tPicked, ?tEn)) AS ?toolsName)
+  BIND(STR(IRI(CONCAT(STR(?columns), "/~root"))) AS ?anchorId)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~toolbar")) AS ?toolbar)
+  BIND(IRI(CONCAT(STR($this), "/~columns-tools")) AS ?tools)
+  BIND(IRI(CONCAT(STR($this), "/~columns-tools-role")) AS ?role)
+  BIND(IRI(CONCAT(STR($this), "/~columns-tools-aria-label")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~columns-tools-data-sem-anchor")) AS ?anchor)
+  BIND(IRI(CONCAT(STR($this), "/~columns-tools-data-sem-keep-focus")) AS ?keep)
+  BIND(IRI(CONCAT(STR($this), "/~ct-", ?local)) AS ?btn)
+  BIND(IRI(CONCAT(STR($this), "/~ct-", ?local, "-text")) AS ?btnText)
+}""" .
+
 # A block that takes a file has an Upload… button after its address field (in an editor); it asks for the
 # system picker (a file:Pick the files effect opens), and the file chosen, or dropped on the block, is
 # taken as any receiver takes one (ontology/layers/files.ttl): kept, and shown.

@@ -1728,6 +1728,147 @@ WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contain
   FILTER EXISTS { ?table po:contains ?otherRow FILTER(?otherRow != ?row) }
   ?prev co:nextItem ?row . ?row co:nextItem ?after . }""" .
 
+# --- columns ------------------------------------------------------------------------------------------
+# With the caret in a layout column (not in a table's cell), the editor's columns toolbar adds an empty
+# column before or after it, or removes it with what it holds; removing one of the last two leaves the
+# other's blocks in the columns' place (blk:columnsAction on its buttons). The caret's column is the
+# innermost one around it.
+
+blk:columnsAction a owl:ObjectProperty ; rdfs:comment "On a rendered columns toolbar button: what it does to the columns (blk:LayoutColumnBefore …)."@en .
+blk:ColumnsAction a owl:Class ; rdfs:comment "Something a columns toolbar button does to the columns the caret is in."@en .
+blk:LayoutColumnBefore a blk:ColumnsAction ; rdfs:label "Column before"@en , "Колонка перед"@uk , "Spalte davor"@de , "عمود قبل"@ar .
+blk:LayoutColumnAfter a blk:ColumnsAction ; rdfs:label "Column after"@en , "Колонка після"@uk , "Spalte danach"@de , "عمود بعد"@ar .
+blk:RemoveLayoutColumn a blk:ColumnsAction ; rdfs:label "Remove column"@en , "Вилучити колонку"@uk , "Spalte entfernen"@de , "إزالة العمود"@ar .
+c:ColumnsToolsPhrase a c:Phrase ; rdfs:label "Columns"@en , "Колонки"@uk , "Spalten"@de , "أعمدة"@ar .
+
+c:LayoutColumnBefore a beh:Reaction ;
+    rdfs:label "Add a column"@en ;
+    rdfs:comment """The columns toolbar's "column before": an empty column (a paragraph) before the caret's, and the caret in it."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column added"@en , "Колонку додано"@uk , "Spalte hinzugefügt"@de , "تمت إضافة عمود"@ar ;
+    beh:deletes """CONSTRUCT { ?prev co:nextItem ?column . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:LayoutColumnBefore)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column .
+  OPTIONAL { ?prev co:nextItem ?column } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo } OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?columns po:contains ?new . ?new a blk:Column ; po:contains ?para . ?new co:nextItem ?column . ?prev co:nextItem ?new . ?para a blk:Paragraph ; rdf:value "" .
+  $this c:anchorBlock ?para ; c:anchorOffset 0 ; c:focusBlock ?para ; c:focusOffset 0 . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:LayoutColumnBefore)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column .
+  OPTIONAL { ?prev co:nextItem ?column }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?column), "-", ?ev)) AS ?new) BIND(IRI(CONCAT(STR(?column), "-", ?ev, "-p")) AS ?para) }""" .
+
+c:LayoutColumnAfter a beh:Reaction ;
+    rdfs:label "Add a column"@en ;
+    rdfs:comment """The columns toolbar's "column after": an empty column (a paragraph) after the caret's, and the caret in it."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column added"@en , "Колонку додано"@uk , "Spalte hinzugefügt"@de , "تمت إضافة عمود"@ar ;
+    beh:deletes """CONSTRUCT { ?column co:nextItem ?after . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:LayoutColumnAfter)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column .
+  OPTIONAL { ?column co:nextItem ?after } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo } OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?columns po:contains ?new . ?new a blk:Column ; po:contains ?para . ?new co:nextItem ?after . ?column co:nextItem ?new . ?para a blk:Paragraph ; rdf:value "" .
+  $this c:anchorBlock ?para ; c:anchorOffset 0 ; c:focusBlock ?para ; c:focusOffset 0 . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:LayoutColumnAfter)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column .
+  OPTIONAL { ?column co:nextItem ?after }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?column), "-", ?ev)) AS ?new) BIND(IRI(CONCAT(STR(?column), "-", ?ev, "-p")) AS ?para) }""" .
+
+c:RemoveLayoutColumn a beh:Reaction ;
+    rdfs:label "Remove the column"@en ;
+    rdfs:comment """The columns toolbar's "remove column", with three columns or more: the caret's column goes with what it holds (and
+their marks); the caret goes to the start of the column after it (else before it)."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column removed"@en , "Колонку вилучено"@uk , "Spalte entfernt"@de , "تمت إزالة العمود"@ar ;
+    beh:deletes """CONSTRUCT { ?n ?p ?o . ?columns po:contains ?column . ?prev co:nextItem ?column . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?column po:contains* ?n . ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?column po:contains* ?holder . ?holder blk:mark ?n . ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    OPTIONAL { ?prev co:nextItem ?column } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo } OPTIONAL { $this c:pendingMark ?xpm } }
+}""" ;
+    beh:inserts """CONSTRUCT { ?prev co:nextItem ?after . $this c:anchorBlock ?to ; c:anchorOffset 0 ; c:focusBlock ?to ; c:focusOffset 0 . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+  OPTIONAL { ?prev co:nextItem ?column } OPTIONAL { ?column co:nextItem ?after }
+  BIND(COALESCE(?after, ?prev) AS ?near) ?near po:contains ?to FILTER NOT EXISTS { ?earlier co:nextItem ?to } }""" .
+
+c:DissolveColumns a beh:Reaction ;
+    rdfs:label "Remove the column"@en ;
+    rdfs:comment """The columns toolbar's "remove column", with two columns: the caret's column goes with what it holds, and the
+other one's blocks take the columns' place; the caret goes to the first of them."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column removed"@en , "Колонку вилучено"@uk , "Spalte entfernt"@de , "تمت إزالة العمود"@ar ;
+    beh:deletes """CONSTRUCT { ?n ?p ?o . ?parent po:contains ?columns . ?outerPrev co:nextItem ?columns . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?column po:contains* ?n . ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?column po:contains* ?holder . ?holder blk:mark ?n . ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?columns ?p ?o BIND(?columns AS ?n) FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?columns po:contains ?n FILTER(?n != ?column) ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?parent po:contains ?columns . OPTIONAL { ?outerPrev co:nextItem ?columns } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo } OPTIONAL { $this c:pendingMark ?xpm } }
+}""" ;
+    beh:inserts """CONSTRUCT { ?parent po:contains ?child . ?outerPrev co:nextItem ?first . ?last co:nextItem ?outerNext . $this c:anchorBlock ?first ; c:anchorOffset 0 ; c:focusBlock ?first ; c:focusOffset 0 . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+  ?parent po:contains ?columns .
+  ?columns po:contains ?other FILTER(?other != ?column)
+  ?other po:contains ?child .
+  ?other po:contains ?first FILTER NOT EXISTS { ?earlier co:nextItem ?first }
+  ?other po:contains ?last FILTER NOT EXISTS { ?last co:nextItem ?later }
+  OPTIONAL { ?outerPrev co:nextItem ?columns } OPTIONAL { ?columns co:nextItem ?outerNext } }""" .
+
 # --- files pasted or dropped on the editor --------------------------------------------------------------
 # An editor takes files (file:Receiver): one pasted into it, or dropped on it but not on a block that takes
 # files itself, becomes a new block after the caret's top-level block (else the last one): an image for an

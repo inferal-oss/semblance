@@ -104,7 +104,8 @@ const entered: FnRule = (ctx, focus) => {
 }
 
 const members: FnRule = (ctx, focus, member) => {
-  if (!member) return []
+  // A member it no longer holds (re-evaluated for a change to the member itself) renders nothing.
+  if (!member || !ctx.match(focus, PO.contains, member).length) return []
   const o = ctx.out(focus)
   const region = o.node(isA(ctx, focus, BLK.TextBlock) || isA(ctx, focus, BLK.Table) ? 'children' : 'root')
   o.t(region, H.hasChild, member)
@@ -852,6 +853,38 @@ const tableTools: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+const COLUMNS_ACTIONS: [action: string, local: string][] = [
+  ['LayoutColumnBefore', 'column-before'],
+  ['LayoutColumnAfter', 'column-after'],
+  ['RemoveLayoutColumn', 'remove-column'],
+]
+
+/** The editor's columns toolbar, with the caret in a layout column (not in a cell): under the columns, a button per thing it does to them. */
+const columnsTools: FnRule = (ctx, focus) => {
+  if (!isTrue(ctx.object(focus, NS.c + 'editable'))) return []
+  const block = ctx.object(focus, NS.c + 'focusBlock')
+  if (!block || isA(ctx, block, BLK.Cell)) return []
+  let column = parentOf(ctx, block)
+  while (column && !isA(ctx, column, NS.blk + 'Column')) column = parentOf(ctx, column)
+  const columns = column && parentOf(ctx, column)
+  if (!columns) return []
+  const o = ctx.out(focus)
+  const tools = o.el('columns-tools', 'Div', {
+    class: 'sem-table-tools',
+    role: 'toolbar',
+    'aria-label': text(ctx, ctx.nn(NS.c + 'ColumnsToolsPhrase'), NS.rdfs + 'label'),
+    'data-sem-anchor': columns.value + '/~root',
+    'data-sem-keep-focus': '',
+  })
+  COLUMNS_ACTIONS.forEach(([action, local], i) => {
+    const btn = o.el(`ct-${local}`, 'Button', { type: 'button' }, [o.text(`ct-${local}-text`, text(ctx, ctx.nn(NS.blk + action), NS.rdfs + 'label') ?? '')])
+    o.t(btn, NS.blk + 'columnsAction', ctx.nn(NS.blk + action)).t(btn, SEM.orderKey, String(i + 1))
+    o.t(tools, H.hasChild, btn)
+  })
+  o.t(o.node('root'), H.hasChild, tools).t(o.node('body'), ORD.precedes, tools).t(tools, ORD.precedes, o.node('toolbar'))
+  return o.quads
+}
+
 /** A block that takes a file: Upload…, after its address field. */
 const uploadButton: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
@@ -943,6 +976,7 @@ export const functions: Record<string, FnRule> = {
   'blk:drop-zone': dropZone,
   'blk:drop-objections': dropObjections,
   'blk:table-tools': tableTools,
+  'blk:columns-tools': columnsTools,
   'blk:upload-button': uploadButton,
   'blk:menu-state': menuState,
   'blk:menu-options': menuOptions,

@@ -625,6 +625,55 @@ describe('tables (c:BlockEditor)', () => {
   })
 })
 
+describe('columns (c:BlockEditor)', () => {
+  const extra = `
+<${EX}doc> <${NS.po}contains> <${EX}cols> . <${EX}p3> <${NS.co}nextItem> <${EX}cols> .
+<${EX}cols> a <${NS.blk}Columns> ; <${NS.po}contains> <${EX}ca> , <${EX}cb> .
+<${EX}ca> a <${NS.blk}Column> ; <${NS.po}contains> <${EX}pa> ; <${NS.co}nextItem> <${EX}cb> .
+<${EX}pa> a <${NS.blk}Paragraph> ; <${NS.rdf}value> "left" .
+<${EX}cb> a <${NS.blk}Column> ; <${NS.po}contains> <${EX}pb> .
+<${EX}pb> a <${NS.blk}Paragraph> ; <${NS.rdf}value> "right" .`
+
+  it('adds and removes columns from its toolbar, and leaves the last one\'s blocks in their place, the same with SPARQL and function rules', () => {
+    const both = [mount('sparql', 'wat', extra), mount('function', 'wat', extra)] as const
+    const [m] = both
+    const step = (what: string, act: (h: ReturnType<typeof mount>) => void) => {
+      for (const h of both) act(h)
+      sameHtml(both[1].html(), both[0].html(), what)
+      expect(both[1].text(), what).toBe(both[0].text())
+    }
+    const tool = (h: ReturnType<typeof mount>, local: string) =>
+      [...h.app.querySelectorAll('.sem-table-tools button')].find((b) => h.renderer.keyOf(b) === `${EX}editor/~ct-${local}`)!.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true }))
+    const layout = () => [...m.app.querySelectorAll(`[id="${EX}cols/~root"] > [data-sem-c=blk-column]`)].map((c) => c.textContent)
+    expect(m.app.querySelector('.sem-table-tools')).toBeNull()
+    step('the caret in a column', (h) => h.select('pa', 2))
+    expect(m.app.querySelector('.sem-table-tools')!.getAttribute('data-sem-anchor')).toBe(`${EX}cols/~root`)
+    step('a column after', (h) => tool(h, 'column-after'))
+    expect(layout()).toEqual(['left', '', 'right'])
+    const fresh = m.caret()!.split(' ')[0]!
+    expect(m.objects(fresh, NS.rdf + 'type')).toEqual([NS.blk + 'Paragraph'])
+    step('a column before', (h) => tool(h, 'column-before'))
+    expect(layout()).toEqual(['left', '', '', 'right'])
+    step('remove the column', (h) => tool(h, 'remove-column'))
+    expect(layout()).toEqual(['left', '', 'right'])
+    expect(m.caret()).toBe(`${fresh} 0 ${fresh} 0`)
+    step('remove another', (h) => tool(h, 'remove-column'))
+    expect(layout()).toEqual(['left', 'right'])
+    expect(m.caret()).toBe(`${EX}pb 0 ${EX}pb 0`)
+    step('remove one of the last two', (h) => tool(h, 'remove-column'))
+    expect(m.app.querySelector(`[id="${EX}cols/~root"]`)).toBeNull()
+    expect(m.objects('doc', NS.po + 'contains')).toContain(EX + 'pa')
+    expect(m.objects('p3', NS.co + 'nextItem')).toEqual([EX + 'pa'])
+    expect(m.objects('pb', NS.rdf + 'type')).toEqual([])
+    for (const gone of ['cols', 'ca', 'cb']) expect(m.objects(gone, NS.rdf + 'type'), gone).toEqual([])
+    expect(m.objects('ca', NS.po + 'contains')).toEqual([])
+    expect(m.caret()).toBe(`${EX}pa 0 ${EX}pa 0`)
+    expect(m.app.querySelector('.sem-table-tools')).toBeNull()
+    step('undo', (h) => h.click('Undo'))
+    expect(layout()).toEqual(['left', 'right'])
+  })
+})
+
 describe('nesting by shapes (c:BlockEditor)', () => {
   it('puts a paragraph after a list into its last item, and none into a table, whose shape takes rows only', () => {
     const extra = `
