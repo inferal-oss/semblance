@@ -507,7 +507,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-drag")) AS ?carriedAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-roledescription")) AS ?describe)
   # A tab stop, unless its class keeps its own (a roving grid row).
-  BIND(IF(EXISTS { $this a/rdfs:subClassOf* ?keeper . ?keeper dnd:keepsFocus true }, ?none, IRI(CONCAT(STR($this), "/~root-tabindex"))) AS ?tab)
+  OPTIONAL { ?keeper dnd:keepsFocus true . $this a/rdfs:subClassOf* ?keeper }
+  BIND(IF(BOUND(?keeper), ?none, IRI(CONCAT(STR($this), "/~root-tabindex"))) AS ?tab)
   BIND(IF(?lifted, IRI(CONCAT(STR($this), "/~root-data-sem-lifted")), ?none) AS ?liftedAttr)
   BIND(IF(BOUND(?status), IRI(CONCAT(STR($this), "/~root-data-sem-drag-status")), ?none) AS ?statusAttr)
   BIND(IF(EXISTS { $this dnd:refusedBy ?refusal }, IRI(CONCAT(STR($this), "/~root-data-sem-refused")), ?none) AS ?refusedAttr)
