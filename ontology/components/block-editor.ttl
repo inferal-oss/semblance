@@ -98,7 +98,7 @@ blk:whole a owl:DatatypeProperty ; rdfs:domain blk:BlockShortcut ; rdfs:range xs
 blk:within a owl:ObjectProperty ; rdfs:domain blk:BlockShortcut ; rdfs:range owl:Class ;
     rdfs:comment "On a shortcut that makes an item: the kind of list it puts it in."@en .
 blk:continues a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:boolean ;
-    rdfs:comment "On a text block class: Enter in a block of it makes another of it (a paragraph, a list item), not a paragraph."@en .
+    rdfs:comment "On a text block class: Enter in a block of it (of it itself, not of a subclass) makes another of it (a paragraph, a list item), not a paragraph."@en .
 
 blk:Paragraph blk:continues true . blk:ListItem blk:continues true . blk:TodoItem blk:continues true . blk:Quote blk:continues true .
 
@@ -124,7 +124,7 @@ c:EditText a beh:Reaction ;
     rdfs:comment """Text typed over, or deleted from, a range of one block: its rdf:value spliced, its marks moved (a mark
 grows when text is typed at its end, not at its start; a link at neither), a mark left empty removed, the
 pending marks put on what was typed, the caret after it. Not text that completes a Markdown shortcut."""@en ;
-    beh:when c:InsertText , c:DeleteText ;
+    beh:when c:InsertText , c:DeleteText , c:SplitBlock ;
     beh:sourceClass c:BlockEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?a rdf:value ?raw . ?m oa:start ?ms ; oa:end ?me . ?a blk:mark ?gone . ?gone ?gp ?go . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
@@ -132,13 +132,15 @@ WHERE {
   $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
   OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
   OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
-  BIND(IF(?it = "insertLineBreak", "\\n", COALESCE(STR(?t0), "")) AS ?typed)
+  BIND(IF(?it = "insertLineBreak" || ?it = "insertParagraph", "\\n", COALESCE(STR(?t0), "")) AS ?typed)
   BIND(STRLEN(?typed) AS ?L)
   BIND(SUBSTR(?old, 1, ?s) AS ?before)
-  FILTER(?s < ?e || (?s = ?e && EXISTS { $event a c:InsertText } && ?L > 0))
+  # Enter is a new line only in plain text (code, a formula); elsewhere it splits the block.
+  FILTER(?it != "insertParagraph" || EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock })
+  FILTER(?s < ?e || (?s = ?e && (EXISTS { $event a c:InsertText } || EXISTS { $event a c:SplitBlock }) && ?L > 0))
   FILTER NOT EXISTS { ?bsc a blk:BlockShortcut ; blk:trigger ?typed ; blk:pattern ?bp . ?a a/rdfs:subClassOf* blk:Paragraph
     FILTER(?s = ?e && REGEX(?before, ?bp) && (NOT EXISTS { ?bsc blk:whole true } || ?s = STRLEN(?old))) }
-  FILTER NOT EXISTS { ?isc a blk:InlineShortcut ; blk:trigger ?typed ; blk:pattern ?ip FILTER(?s = ?e && REGEX(?before, ?ip)) }
+  FILTER NOT EXISTS { ?isc a blk:InlineShortcut ; blk:trigger ?typed ; blk:pattern ?ip FILTER(?s = ?e && REGEX(?before, ?ip)) FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock } }
   OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
   OPTIONAL { $this c:pendingMark ?xpm }
   OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
@@ -155,13 +157,15 @@ WHERE {
   $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
   OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
   OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
-  BIND(IF(?it = "insertLineBreak", "\\n", COALESCE(STR(?t0), "")) AS ?typed)
+  BIND(IF(?it = "insertLineBreak" || ?it = "insertParagraph", "\\n", COALESCE(STR(?t0), "")) AS ?typed)
   BIND(STRLEN(?typed) AS ?L)
   BIND(SUBSTR(?old, 1, ?s) AS ?before)
-  FILTER(?s < ?e || (?s = ?e && EXISTS { $event a c:InsertText } && ?L > 0))
+  # Enter is a new line only in plain text (code, a formula); elsewhere it splits the block.
+  FILTER(?it != "insertParagraph" || EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock })
+  FILTER(?s < ?e || (?s = ?e && (EXISTS { $event a c:InsertText } || EXISTS { $event a c:SplitBlock }) && ?L > 0))
   FILTER NOT EXISTS { ?bsc a blk:BlockShortcut ; blk:trigger ?typed ; blk:pattern ?bp . ?a a/rdfs:subClassOf* blk:Paragraph
     FILTER(?s = ?e && REGEX(?before, ?bp) && (NOT EXISTS { ?bsc blk:whole true } || ?s = STRLEN(?old))) }
-  FILTER NOT EXISTS { ?isc a blk:InlineShortcut ; blk:trigger ?typed ; blk:pattern ?ip FILTER(?s = ?e && REGEX(?before, ?ip)) }
+  FILTER NOT EXISTS { ?isc a blk:InlineShortcut ; blk:trigger ?typed ; blk:pattern ?ip FILTER(?s = ?e && REGEX(?before, ?ip)) FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock } }
   BIND(STRAFTER(STR($event), "event:") AS ?ev)
   BIND(CONCAT(?before, ?typed, SUBSTR(?old, ?e + 1)) AS ?new)
   BIND(?s + ?L AS ?caret)
@@ -437,7 +441,8 @@ c:SplitBlock a beh:Reaction ;
     rdfs:label "Split the block"@en ;
     rdfs:comment """Enter: the block is split at the caret (what was selected goes). The new block, minted from the event
 in the editor's document, follows it in its container: of its type when its class blk:continues (a
-paragraph, a list item, a to-do, a quote) and not at the end of a heading, else a paragraph; with the
+paragraph, a list item, a to-do, a quote: the block's own class, not a superclass, so a site's paragraph-like
+type is followed by a paragraph) and not at the end of a heading, else a paragraph; with the
 marks after the caret. The caret goes to its start."""@en ;
     beh:when c:SplitBlock ;
     beh:sourceClass c:BlockEditor ;
@@ -482,7 +487,7 @@ WHERE {
   BIND(?ms0 < ?s AS ?left) BIND(?me0 > ?e AS ?right)
   BIND(SUBSTR(?old, 1, ?s) AS ?head)
   BIND(SUBSTR(?old, ?e + 1) AS ?tail)
-  BIND(EXISTS { ?a a/rdfs:subClassOf* ?cont . ?cont blk:continues true } && (?s < STRLEN(?old) || NOT EXISTS { ?a a/rdfs:subClassOf* blk:Heading }) AS ?same)
+  BIND(EXISTS { ?a a ?cont . ?cont blk:continues true } && (?s < STRLEN(?old) || NOT EXISTS { ?a a/rdfs:subClassOf* blk:Heading }) AS ?same)
   ?a a ?own . BIND(IF(?same, ?own, blk:Paragraph) AS ?type)
   BIND(IF(EXISTS { ?a a/rdfs:subClassOf* blk:TodoItem }, false, ?none) AS ?unchecked)
   BIND(IF(BOUND(?mk) && ?left && IF(?me0 < ?s, ?me0, ?s) != ?me0, ?mk, ?none) AS ?keep)
@@ -712,6 +717,7 @@ WHERE {
   BIND(SUBSTR(?old, 1, ?s) AS ?before)
   ?sc a blk:InlineShortcut ; blk:trigger ?trigger ; blk:pattern ?pattern ; blk:delimiter ?delim ; blk:makes ?makes .
   FILTER(STR(?t0) = ?trigger && REGEX(?before, ?pattern))
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock }
   BIND(STRLEN(REPLACE(?before, ?pattern, "$1")) AS ?o)
   BIND(STRLEN(REPLACE(?before, ?pattern, "$2")) AS ?n)
   BIND(STRLEN(?delim) AS ?k)
@@ -728,6 +734,7 @@ WHERE {
   BIND(SUBSTR(?old, 1, ?s) AS ?before)
   ?sc a blk:InlineShortcut ; blk:trigger ?trigger ; blk:pattern ?pattern ; blk:delimiter ?delim ; blk:makes ?makes .
   FILTER(STR(?t0) = ?trigger && REGEX(?before, ?pattern))
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock }
   BIND(STRLEN(REPLACE(?before, ?pattern, "$1")) AS ?o)
   BIND(STRLEN(REPLACE(?before, ?pattern, "$2")) AS ?n)
   BIND(STRLEN(?delim) AS ?k)
@@ -744,14 +751,18 @@ c:MarkOn a beh:Reaction ;
     rdfs:label "Mark the selection"@en ;
     rdfs:comment """Mod+B (bold), Mod+I (italic), Mod+E (code), Mod+Shift+S (struck out) over a selection in one block that
 is not all marked so: one mark of the kind over it and every mark of the kind it touches."""@en ;
-    beh:when c:BlockEditorKey , c:FormatText ;
+    beh:when c:BlockEditorKey , c:FormatText , beh:Click ;
     beh:sourceClass c:BlockEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?a blk:mark ?old . ?old ?op ?oo . }
 WHERE {
-  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) } }
-  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) } }
-  $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
   BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
   FILTER(?s < ?e && !?covered)
   ?a blk:mark ?old . ?old a ?kind ; oa:start ?os ; oa:end ?oe FILTER(?os <= ?e && ?oe >= ?s)
@@ -760,14 +771,19 @@ WHERE {
     beh:inserts """CONSTRUCT { ?a blk:mark ?made . ?made a ?kind ; oa:start ?from ; oa:end ?to . }
 WHERE {
   { SELECT ?a ?kind (MIN(?bs) AS ?from) (MAX(?be) AS ?to) WHERE {
-    { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) } }
-      UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) } }
-      $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+    { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+        $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+      UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+        $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+      UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+        $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+        BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
       BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
     FILTER(?s < ?e && !?covered)
-    { $event beh:startOffset ?bs ; beh:endOffset ?be }
-    UNION { $event beh:startBlock ?a2 ; beh:startOffset ?s2 ; beh:endOffset ?e2 . ?a2 blk:mark ?old . ?old oa:start ?bs ; oa:end ?be FILTER(?bs <= ?e2 && ?be >= ?s2) ?old a ?kind2 }
-    FILTER(!BOUND(?kind2) || ?kind2 = ?kind)
+    OPTIONAL { ?a blk:mark ?old . ?old a ?kind ; oa:start ?os ; oa:end ?oe }
+    BIND(BOUND(?os) && ?os <= ?e && ?oe >= ?s AS ?touches)
+    BIND(IF(?touches && ?os < ?s, ?os, ?s) AS ?bs)
+    BIND(IF(?touches && ?oe > ?e, ?oe, ?e) AS ?be)
   } GROUP BY ?a ?kind }
   BIND(STRAFTER(STR($event), "event:") AS ?ev)
   BIND(IRI(CONCAT(STR(?a), "/~mark-", ?ev)) AS ?made)
@@ -777,14 +793,18 @@ c:MarkOff a beh:Reaction ;
     rdfs:label "Unmark the selection"@en ;
     rdfs:comment """The same keys over a selection all marked so: the marks of the kind lose the selected part (one over it
 splits in two)."""@en ;
-    beh:when c:BlockEditorKey , c:FormatText ;
+    beh:when c:BlockEditorKey , c:FormatText , beh:Click ;
     beh:sourceClass c:BlockEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?m oa:start ?ms ; oa:end ?me . ?a blk:mark ?gone . ?gone ?gp ?go . }
 WHERE {
-  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) } }
-  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) } }
-  $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
   BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
   FILTER(?s < ?e && ?covered)
   ?a blk:mark ?m . ?m a ?kind ; oa:start ?ms ; oa:end ?me FILTER(?ms < ?e && ?me > ?s)
@@ -793,9 +813,13 @@ WHERE {
 }""" ;
     beh:inserts """CONSTRUCT { ?left oa:start ?ms ; oa:end ?s . ?right a ?kind ; oa:start ?e ; oa:end ?me . ?a blk:mark ?right . }
 WHERE {
-  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) } }
-  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) } }
-  $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
   BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
   FILTER(?s < ?e && ?covered)
   ?a blk:mark ?m . ?m a ?kind ; oa:start ?ms ; oa:end ?me FILTER(?ms < ?e && ?me > ?s)
@@ -811,18 +835,26 @@ c:PendingMark a beh:Reaction ;
     beh:sourceClass c:BlockEditor ;
     beh:deletes """CONSTRUCT { $this c:pendingMark ?kind . }
 WHERE {
-  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) } }
-  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) } }
-  $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
   BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
   FILTER(?s = ?e)
   $this c:pendingMark ?kind .
 }""" ;
     beh:inserts """CONSTRUCT { $this c:pendingMark ?kind . }
 WHERE {
-  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) } }
-  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) } }
-  $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
   BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
   FILTER(?s = ?e)
   FILTER NOT EXISTS { $this c:pendingMark ?kind }
@@ -1420,3 +1452,79 @@ WHERE {
   FILTER NOT EXISTS { $this c:menuOpen true }
   ?b co:nextItem ?n . OPTIONAL { ?p co:nextItem ?b } OPTIONAL { ?n co:nextItem ?m }
 }""" .
+
+# --- the selection toolbar and links -------------------------------------------------------------------
+# A selection in one block shows a toolbar over it: bold, italic, code, strikethrough and link. Mod+K or
+# its link button makes the selection a link (to "https://", to be edited); with the caret or the
+# selection in a link (c:linkMark), the toolbar shows its address in a field, which edits it, and a
+# button that takes the link off.
+
+c:linkMark a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; rdfs:range blk:Link ; beh:viewState true ;
+    rdfs:comment "The link the caret or the selection is in: the toolbar edits its address."@en .
+blk:toggles a owl:ObjectProperty ; rdfs:range owl:Class ;
+    rdfs:comment "On a rendered toolbar button: the kind of mark it puts on or takes off the selection."@en .
+c:BlockLinkKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "mod+k" ;
+    rdfs:comment "Mod+K in a block editor: make the selection a link."@en .
+c:TextToolbarPhrase a c:Phrase ; rdfs:label "Format"@en , "Формат"@uk , "Format"@de , "تنسيق"@ar .
+c:LinkAddressPhrase a c:Phrase ; rdfs:label "Link address"@en , "Адреса посилання"@uk , "Linkadresse"@de , "عنوان الرابط"@ar .
+c:RemoveLinkPhrase a c:Phrase ; rdfs:label "Remove link"@en , "Прибрати посилання"@uk , "Link entfernen"@de , "إزالة الرابط"@ar .
+
+c:FindLink a beh:Reaction ;
+    rdfs:label "Find the link"@en ;
+    rdfs:comment """Where the selection moved: the link its moving end is in, if any, is the one the toolbar edits."""@en ;
+    beh:when c:BlockSelect ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:linkMark ?old . }
+WHERE { $this c:linkMark ?old . FILTER NOT EXISTS { $event beh:focusBlock ?b ; beh:focusOffset ?fo .
+  ?b blk:mark ?m . ?m a blk:Link ; oa:start ?ms ; oa:end ?me . FILTER(?ms <= ?fo && ?fo <= ?me) FILTER(?m = ?old) } }""" ;
+    beh:inserts """CONSTRUCT { $this c:linkMark ?m . }
+WHERE { $event beh:focusBlock ?b ; beh:focusOffset ?fo .
+  ?b blk:mark ?m . ?m a blk:Link ; oa:start ?ms ; oa:end ?me . FILTER(?ms <= ?fo && ?fo <= ?me) }""" .
+
+c:MakeLink a beh:Reaction ;
+    rdfs:label "Make a link"@en ;
+    rdfs:comment """Mod+K, or the toolbar's link button, over a selection in one block that is no link yet: it becomes a link to
+"https://", whose address the toolbar then edits."""@en ;
+    beh:when c:BlockLinkKey , beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Link added"@en , "Посилання додано"@uk , "Link hinzugefügt"@de , "تمت إضافة الرابط"@ar ;
+    beh:deletes """CONSTRUCT { $this c:linkMark ?old . }
+WHERE { { $event beh:key "mod+k" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles blk:Link .
+          $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+          BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+  FILTER(?s < ?e)
+  FILTER NOT EXISTS { ?a blk:mark ?other . ?other a blk:Link ; oa:start ?os ; oa:end ?oe FILTER(?os < ?e && ?oe > ?s) } $this c:linkMark ?old . }""" ;
+    beh:inserts """CONSTRUCT { ?a blk:mark ?made . ?made a blk:Link ; oa:start ?s ; oa:end ?e ; schema:url "https://" . $this c:linkMark ?made . }
+WHERE {
+  { $event beh:key "mod+k" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles blk:Link .
+          $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+          BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+  FILTER(?s < ?e)
+  FILTER NOT EXISTS { ?a blk:mark ?other . ?other a blk:Link ; oa:start ?os ; oa:end ?oe FILTER(?os < ?e && ?oe > ?s) }
+  BIND(IRI(CONCAT(STR(?a), "/~mark-", STRAFTER(STR($event), "event:"))) AS ?made)
+}""" .
+
+c:LinkAddress a beh:Reaction ;
+    rdfs:label "Change the address"@en ;
+    rdfs:comment """Typing in the toolbar's address field: the link goes there."""@en ;
+    beh:when beh:Input ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?m schema:url ?old . }
+WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~link-url"))) $this c:linkMark ?m . ?m schema:url ?old . }""" ;
+    beh:inserts """CONSTRUCT { ?m schema:url ?url . }
+WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~link-url"))) $this c:linkMark ?m . $event beh:value ?url . }""" .
+
+c:RemoveLink a beh:Reaction ;
+    rdfs:label "Remove the link"@en ;
+    rdfs:comment """The toolbar's remove button: the link goes (its text stays)."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Link removed"@en , "Посилання прибрано"@uk , "Link entfernt"@de , "تمت إزالة الرابط"@ar ;
+    beh:deletes """CONSTRUCT { ?b blk:mark ?m . ?m ?p ?o . $this c:linkMark ?m . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . FILTER(?btn = IRI(CONCAT(STR($this), "/~link-remove"))) $this c:linkMark ?m . ?b blk:mark ?m . ?m ?p ?o . }""" ;
+    beh:inserts """CONSTRUCT { } WHERE { }""" .

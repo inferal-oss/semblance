@@ -512,6 +512,9 @@ export class EventBus {
         }
       }
     const listener = guarded((e: Event) => {
+      // A selection is reported by its own handler (below), from the document's; a field's own
+      // selectionchange (browsers fire one at inputs too) is not a rich text region's.
+      if (e.type === 'selectionchange') return
       if (renderer.inSlot(e.target as Node)) return
       // In a rich text region (data-sem-text-root) the browser edits nothing: every edit it would make
       // is an event, and the rendering of the graph's change is what shows (docs/BLOCKS.md).
@@ -700,6 +703,9 @@ export class EventBus {
       if (placed && sel && sel.anchorNode === placed.anchorNode && sel.anchorOffset === placed.anchorOffset && sel.focusNode === placed.focusNode && sel.focusOffset === placed.focusOffset) return
       const region = sel?.anchorNode ? regionOf(sel.anchorNode) : null
       if (!region || !renderer.host.contains(region) || renderer.inSlot(region)) return
+      // Only while the region has the focus: a toolbar's field or button taking it leaves the selection where it was.
+      const active = doc.activeElement
+      if ((active !== region && !region.contains(active)) || active?.matches?.('input, textarea')) return
       const types = this.eventClasses('selectionchange')
       for (let el: Node | null = region; el && el !== renderer.host; el = el.parentNode) {
         const key = renderer.keyOf(el)
@@ -862,6 +868,8 @@ export class EventBus {
     if (!region || owningFocus(renderer.keyOf(region) ?? '') !== focus) return
     const active = region.ownerDocument.activeElement
     if (active !== region && !region.contains(active)) return
+    // A field inside the region (a block's address) keeps its own caret.
+    if (active?.matches?.('input, textarea')) return
     this.placeIn(region)
   }
 

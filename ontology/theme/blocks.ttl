@@ -353,3 +353,65 @@
                  [ sty:property "color" ; sty:token tok:faint ] ,
                  [ sty:property "pointer-events" ; sty:raw "none" ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] .
+
+# --- the selection toolbar ---
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-text-toolbar" ;
+    sty:declares [ sty:property "z-index" ; sty:raw "40" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-1 ] ,
+                 [ sty:property "padding" ; sty:raw "4px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "background" ; sty:token tok:surface-overlay ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-text-toolbar > div" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] , [ sty:property "align-items" ; sty:raw "center" ] , [ sty:property "gap" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-text-toolbar button" ;
+    sty:declares [ sty:property "min-inline-size" ; sty:raw "28px" ] ,
+                 [ sty:property "block-size" ; sty:raw "28px" ] ,
+                 [ sty:property "padding" ; sty:raw "0 6px" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-text-toolbar button:hover" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-gray-3)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-text-toolbar button[aria-pressed=true]" ;
+    sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] , [ sty:property "color" ; sty:token tok:accent-strong ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-text-toolbar button:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "2px solid var(--sem-ring)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-text-toolbar input" ;
+    sty:declares [ sty:property "inline-size" ; sty:raw "min(18rem, 60vw)" ] ,
+                 [ sty:property "block-size" ; sty:raw "28px" ] ,
+                 [ sty:property "padding" ; sty:raw "0 8px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font" ; sty:raw "inherit" ] .
+
+# --- an address field (images, files, bookmarks, embeds, links to pages): only where the document is edited ---
+[] a sty:StyleRule ; sty:appliesTo blk:Addressed ; sty:part "> .sem-address-field" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "margin-block-start" ; sty:token tok:space-1 ] ,
+                 [ sty:property "block-size" ; sty:raw "28px" ] ,
+                 [ sty:property "padding" ; sty:raw "0 8px" ] ,
+                 [ sty:property "border" ; sty:raw "1px dashed var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] .
+[] a sty:StyleRule ; sty:appliesTo blk:Addressed ; sty:part "> .sem-address-field:focus" ;
+    sty:declares [ sty:property "border-style" ; sty:raw "solid" ] , [ sty:property "color" ; sty:token tok:text ] , [ sty:property "outline" ; sty:raw "2px solid var(--sem-ring)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[role=document] .sem-address-field" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .

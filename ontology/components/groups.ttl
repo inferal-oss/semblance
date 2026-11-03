@@ -206,3 +206,5 @@ c:BlockMenuKey sem:group c:DocumentsGroup .
 c:BlockStructureKey sem:group c:DocumentsGroup .
 blk:PlainTextBlock sem:group c:DocumentsGroup .
 blk:Typeset sem:group c:DocumentsGroup .
+c:BlockLinkKey sem:group c:DocumentsGroup .
+blk:Addressed sem:group c:DocumentsGroup .

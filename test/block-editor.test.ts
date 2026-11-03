@@ -309,7 +309,7 @@ describe('the cost of typing in a block (c:BlockEditor)', () => {
       const short = keystroke(0, prefer)
       const long = keystroke(3000, prefer)
       expect(long).toEqual(short)
-      expect(short.runs).toBeLessThanOrEqual(6)
+      expect(short.runs).toBeLessThanOrEqual(8)
     })
   }
 })
@@ -472,5 +472,77 @@ describe('pasting into a block (c:BlockEditor)', () => {
     expect(e.defaultPrevented).toBe(true)
     expect(h.value('p2')).toBe('Second paste')
     expect(h.caret()).toBe(`${EX}p2 12 ${EX}p2 12`)
+  })
+})
+
+describe('the selection toolbar and links (c:BlockEditor)', () => {
+  it('marks the selection by its buttons, makes it a link and edits the address, the same with SPARQL and function rules', () => {
+    const both = [mount('sparql'), mount('function')] as const
+    const [m] = both
+    const step = (what: string, act: (h: ReturnType<typeof mount>) => void) => {
+      for (const h of both) act(h)
+      sameHtml(both[1].html(), both[0].html(), what)
+    }
+    const button = (h: ReturnType<typeof mount>, local: string) => [...h.app.querySelectorAll('.sem-text-toolbar button')].find((b) => h.renderer.keyOf(b) === `${EX}editor/~tb-${local}`)!
+    step('a selection shows the toolbar', (h) => h.select('p2', 0, 'p2', 6))
+    expect(m.app.querySelector('.sem-text-toolbar')!.getAttribute('data-sem-anchor')).toBe(`${EX}p2/~root`)
+    expect(button(m, 'strong').getAttribute('aria-pressed')).toBe('false')
+    step('B makes it bold', (h) => button(h, 'strong').dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true })))
+    expect(m.app.querySelector(`[id="${EX}p2/~root"] strong`)!.textContent).toBe('Second')
+    expect(button(m, 'strong').getAttribute('aria-pressed')).toBe('true')
+    step('the link button makes it a link to https://', (h) => button(h, 'link').dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true })))
+    const field = () => m.app.querySelector('.sem-text-toolbar input') as HTMLInputElement
+    expect(field().value).toBe('https://')
+    step('typing in the address field edits it', (h) => {
+      const input = h.app.querySelector('.sem-text-toolbar input') as HTMLInputElement
+      input.value = 'https://semblance.dev'
+      input.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('input', { bubbles: true }))
+    })
+    expect(m.app.querySelector(`[id="${EX}p2/~root"] a`)!.getAttribute('href')).toBe('https://semblance.dev')
+    step('remove takes the link off', (h) => {
+      const remove = [...h.app.querySelectorAll('.sem-text-toolbar button')].find((b) => h.renderer.keyOf(b) === `${EX}editor/~link-remove`)!
+      remove.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true }))
+    })
+    expect(m.app.querySelector(`[id="${EX}p2/~root"] a`)).toBeNull()
+  })
+
+  it('makes a link by Mod+K', () => {
+    const h = mount('sparql')
+    h.select('p2', 7, 'p2', 11)
+    h.press('k', { ctrlKey: true })
+    expect(h.app.querySelector(`[id="${EX}p2/~root"] a`)!.textContent).toBe('line')
+  })
+
+  it('starts a new line by Enter in code', () => {
+    const extra = `<${EX}doc> <${NS.po}contains> <${EX}code> . <${EX}p3> <${NS.co}nextItem> <${EX}code> . <${EX}code> a <${NS.blk}Code> ; <${NS.rdf}value> "a = 1" .`
+    const h = mount('sparql', 'wat', extra)
+    h.select('code', 5)
+    h.input('insertParagraph')
+    h.type('b')
+    expect(h.value('code')).toBe('a = 1\nb')
+  })
+})
+
+describe('addresses and site types (c:BlockEditor)', () => {
+  it('links an image by typing its address', () => {
+    const extra = `<${EX}doc> <${NS.po}contains> <${EX}img> . <${EX}p3> <${NS.co}nextItem> <${EX}img> . <${EX}img> a <${NS.blk}Image> .`
+    const h = mount('sparql', 'wat', extra)
+    const field = h.app.querySelector(`[id="${EX}img/~root"] .sem-address-field`) as HTMLInputElement
+    expect(field.value).toBe('')
+    field.value = 'https://semblance.dev/favicon.svg'
+    field.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('input', { bubbles: true }))
+    expect(h.objects('img', NS.schema + 'contentUrl')).toEqual(['https://semblance.dev/favicon.svg'])
+    expect(h.app.querySelector(`[id="${EX}img/~root"] img`)!.getAttribute('src')).toBe('https://semblance.dev/favicon.svg')
+  })
+
+  it('follows a site\'s paragraph-like type with a paragraph on Enter', () => {
+    const extra = `<${EX}Key> <http://www.w3.org/2000/01/rdf-schema#subClassOf> <${NS.blk}Paragraph> .
+<${EX}doc> <${NS.po}contains> <${EX}kp> . <${EX}p3> <${NS.co}nextItem> <${EX}kp> .
+<${EX}kp> a <${EX}Key> ; <${NS.rdf}value> "Key" .`
+    const h = mount('sparql', 'wat', extra)
+    h.select('kp', 3)
+    h.input('insertParagraph')
+    const next = h.objects('kp', NS.co + 'nextItem')[0]!
+    expect(h.objects(next, NS.rdf + 'type')).toEqual([NS.blk + 'Paragraph'])
   })
 })

@@ -203,30 +203,35 @@ blk:Column a owl:Class ; rdfs:subClassOf blk:Container ; sem:slug "blk-column" ;
     rdfs:label "Column"@en , "Колонка"@uk , "Spalte"@de , "عمود"@ar ;
     rdfs:comment "A column of blocks."@en .
 
-blk:Image a owl:Class ; rdfs:subClassOf blk:Block , doco:Figure , po:Atom ; sem:slug "blk-image" ;
+blk:Image a owl:Class ; rdfs:subClassOf blk:Block , doco:Figure , po:Atom , blk:Addressed ; blk:address schema:contentUrl ; sem:slug "blk-image" ;
     rdfs:label "Image"@en , "Зображення"@uk , "Bild"@de , "صورة"@ar ;
     rdfs:comment "A picture (schema:contentUrl), described (schema:description) and captioned (schema:caption)."@en ;
     c:help "A picture, described and captioned."@en , "Зображення з підписом."@uk , "Ein Bild mit Bildunterschrift."@de , "صورة مع تعليق."@ar ;
     blk:menuOrder 16 ; c:icon "🖼" ; blk:keyword "picture photo img figure" .
-blk:File a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-file" ;
+blk:File a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom , blk:Addressed ; blk:address schema:contentUrl ; sem:slug "blk-file" ;
     rdfs:label "File"@en , "Файл"@uk , "Datei"@de , "ملف"@ar ;
     rdfs:comment "A file to download (schema:contentUrl, schema:name, schema:contentSize)."@en ;
     c:help "A file to download."@en , "Файл для завантаження."@uk , "Eine Datei zum Herunterladen."@de , "ملف للتنزيل."@ar ;
     blk:menuOrder 17 ; c:icon "📎" ; blk:keyword "attachment download" .
-blk:Bookmark a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-bookmark" ;
+blk:Bookmark a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom , blk:Addressed ; blk:address schema:url ; sem:slug "blk-bookmark" ;
     rdfs:label "Bookmark"@en , "Закладка"@uk , "Lesezeichen"@de , "إشارة مرجعية"@ar ;
     rdfs:comment "A page elsewhere (schema:url), with its title (schema:name) and summary (schema:description)."@en ;
     c:help "A page elsewhere, with its title and summary."@en , "Сторінка деінде, з назвою."@uk , "Eine Seite anderswo, mit Titel."@de , "صفحة في مكان آخر مع عنوانها."@ar ;
     blk:menuOrder 18 ; c:icon "🔖" ; blk:keyword "link url web page" .
-blk:Embed a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-embed" ;
+blk:Embed a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom , blk:Addressed ; blk:address schema:embedUrl ; sem:slug "blk-embed" ;
     rdfs:label "Embed"@en , "Вбудоване"@uk , "Einbettung"@de , "تضمين"@ar ;
     rdfs:comment "A page shown in the document (schema:embedUrl), in a sandboxed frame named schema:name."@en ;
     c:help "A page shown in the document."@en , "Сторінка, показана в документі."@uk , "Eine im Dokument gezeigte Seite."@de , "صفحة معروضة داخل المستند."@ar ;
     blk:menuOrder 19 ; c:icon "⧉" ; blk:keyword "iframe video map" .
+blk:Addressed a owl:Class ; rdfs:subClassOf blk:Block ;
+    rdfs:label "Block with an address"@en , "Блок з адресою"@uk , "Block mit Adresse"@de , "كتلة بعنوان"@ar ;
+    rdfs:comment "A block that shows what is at an address (blk:address, on its class): in an editor, a field edits it."@en .
+blk:address a owl:ObjectProperty ; rdfs:domain owl:Class ; rdfs:range rdf:Property ;
+    rdfs:comment "On a block class: the property that holds its blocks' address (schema:contentUrl, schema:url)."@en .
 blk:Linked a owl:Class ; rdfs:subClassOf blk:Block ;
     rdfs:label "Linked block"@en , "Блок-посилання"@uk , "Verweisblock"@de , "كتلة رابط"@ar ;
     rdfs:comment "A block that stands for something at an address: a file, a bookmark, an embed, a link to a document."@en .
-blk:DocumentLink a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-document-link" ;
+blk:DocumentLink a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom , blk:Addressed ; blk:address schema:url ; sem:slug "blk-document-link" ;
     rdfs:label "Link to page"@en , "Посилання на сторінку"@uk , "Link zur Seite"@de , "رابط إلى صفحة"@ar ;
     rdfs:comment "A link to another document (blk:target, named by its schema:name; or schema:url)."@en ;
     c:help "A link to another document."@en , "Посилання на інший документ."@uk , "Ein Link zu einem anderen Dokument."@de , "رابط إلى مستند آخر."@ar ;
@@ -1197,3 +1202,103 @@ blk:EmbedShape a sh:NodeShape ; sh:targetClass blk:Embed ;
 blk:DocumentLinkShape a sh:NodeShape ; sh:targetClass blk:DocumentLink ;
     sh:or ( [ sh:path blk:target ; sh:minCount 1 ] [ sh:path schema:url ; sh:minCount 1 ] ) ;
     sh:message "A link to a page names the document (blk:target) or its address (schema:url)." .
+
+# The editor's toolbar (block-editor.ttl): over a selection in one block, a button per kind of mark
+# (pressed when the selection is all of it); with the caret or selection in a link, the link's address in
+# a field and a button that takes it off.
+c:BlockEditorToolbar a sem:Rendering ; sem:targets c:BlockEditor ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows c:linkMark , c:anchorBlock , ( c:anchorBlock blk:mark ) ;
+    sem:watches rdf:type , c:editable , c:anchorBlock , c:anchorOffset , c:focusBlock , c:focusOffset , c:linkMark , schema:url ,
+        blk:mark , oa:start , oa:end .
+c:BlockEditorToolbar-fn a sem:Rule ; sem:implements c:BlockEditorToolbar ; sem:function "blk:toolbar" .
+c:BlockEditorToolbar-sparql a sem:Rule ; sem:implements c:BlockEditorToolbar ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?toolbar . ?body ord:precedes ?toolbar .
+  ?toolbar a rdfhtml:Div ; rdfhtml:class "sem-text-toolbar" ; rdfhtml:hasChild ?buttons , ?linkRow ; rdfhtml:attribute ?tbRole , ?tbName , ?tbAnchor .
+  ?tbRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "toolbar" .
+  ?tbName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?toolbarName .
+  ?tbAnchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?anchorId .
+  ?buttons a rdfhtml:Div ; rdfhtml:class "sem-marks" ; rdfhtml:hasChild ?btn ; rdfhtml:attribute ?keep ; ord:immediatelyPrecedes ?linkRow .
+  ?keep a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-keep-focus" ; rdfhtml:attributeValue "" .
+  ?btn a rdfhtml:Button ; rdfhtml:type "button" ; blk:toggles ?kind ; sem:orderKey ?order ; rdfhtml:hasChild ?glyphText ; rdfhtml:attribute ?pressedAttr , ?btnName .
+  ?pressedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-pressed" ; rdfhtml:attributeValue ?pressed .
+  ?btnName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?kindName .
+  ?glyphText a rdfhtml:Text ; rdfhtml:data ?glyph .
+  ?linkRow a rdfhtml:Div ; rdfhtml:class "sem-link" ; rdfhtml:hasChild ?url , ?remove .
+  ?url a rdfhtml:Input ; rdfhtml:type "url" ; rdfhtml:value ?href ; rdfhtml:attribute ?urlName ; ord:immediatelyPrecedes ?remove .
+  ?urlName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?addressName .
+  ?remove a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:hasChild ?removeText .
+  ?removeText a rdfhtml:Text ; rdfhtml:data ?removeName .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:BlockEditor ; c:editable true .
+  OPTIONAL { $this c:anchorBlock ?ab ; c:anchorOffset ?ao ; c:focusBlock ?fb ; c:focusOffset ?fo }
+  OPTIONAL { $this c:linkMark ?link . ?link schema:url ?href0 }
+  BIND(BOUND(?ab) && ?ab = ?fb && ?ao != ?fo AS ?ranged)
+  BIND(BOUND(?link) AS ?linked)
+  FILTER(?ranged || ?linked)
+  BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~toolbar")) AS ?toolbar)
+  BIND(IRI(CONCAT(STR($this), "/~toolbar-role")) AS ?tbRole)
+  BIND(IRI(CONCAT(STR($this), "/~toolbar-aria-label")) AS ?tbName)
+  BIND(IRI(CONCAT(STR($this), "/~toolbar-data-sem-anchor")) AS ?tbAnchor)
+  OPTIONAL { ?tnAt l10n:of c:TextToolbarPhrase ; l10n:name ?tnPicked } OPTIONAL { c:TextToolbarPhrase rdfs:label ?tnEn FILTER(LANGMATCHES(LANG(?tnEn), "en")) }
+  BIND(STR(COALESCE(?tnPicked, ?tnEn)) AS ?toolbarName)
+  OPTIONAL { $this c:linkMark ?linkAt . ?linkBlock blk:mark ?linkAt }
+  BIND(STR(IRI(CONCAT(STR(COALESCE(?linkBlock, ?ab)), "/~root"))) AS ?anchorId)
+  VALUES (?kind ?local ?glyph ?order) { (blk:Strong "strong" "B" "1") (blk:Emphasis "em" "I" "2") (blk:InlineCode "code" "</>" "3") (blk:Strike "s" "S" "4") (blk:Link "link" "🔗" "5") }
+  OPTIONAL { ?kAt l10n:of ?kind ; l10n:name ?kPicked } OPTIONAL { ?kind rdfs:label ?kEn FILTER(LANGMATCHES(LANG(?kEn), "en")) }
+  BIND(STR(COALESCE(?kPicked, ?kEn)) AS ?kindName)
+  BIND(IF(EXISTS { ?ab blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) }, "true", "false") AS ?pressed)
+  BIND(IF(?ranged, IRI(CONCAT(STR($this), "/~tb-", ?local)), ?none) AS ?btn)
+  BIND(IF(?ranged, IRI(CONCAT(STR($this), "/~tb-", ?local, "-aria-pressed")), ?none) AS ?pressedAttr)
+  BIND(IF(?ranged, IRI(CONCAT(STR($this), "/~tb-", ?local, "-aria-label")), ?none) AS ?btnName)
+  BIND(IF(?ranged, IRI(CONCAT(STR($this), "/~tb-", ?local, "-text")), ?none) AS ?glyphText)
+  BIND(IF(?ranged, IRI(CONCAT(STR($this), "/~toolbar-marks")), ?none) AS ?buttons)
+  BIND(IF(?ranged, IRI(CONCAT(STR($this), "/~toolbar-marks-data-sem-keep-focus")), ?none) AS ?keep)
+  BIND(IF(?linked, STR(?href0), ?none) AS ?href)
+  BIND(IF(?linked, IRI(CONCAT(STR($this), "/~link-row")), ?none) AS ?linkRow)
+  BIND(IF(?linked, IRI(CONCAT(STR($this), "/~link-url")), ?none) AS ?url)
+  BIND(IF(?linked, IRI(CONCAT(STR($this), "/~link-url-aria-label")), ?none) AS ?urlName)
+  BIND(IF(?linked, IRI(CONCAT(STR($this), "/~link-remove")), ?none) AS ?remove)
+  BIND(IF(?linked, IRI(CONCAT(STR($this), "/~link-remove-text")), ?none) AS ?removeText)
+  OPTIONAL { ?anAt l10n:of c:LinkAddressPhrase ; l10n:name ?anPicked } OPTIONAL { c:LinkAddressPhrase rdfs:label ?anEn FILTER(LANGMATCHES(LANG(?anEn), "en")) }
+  BIND(STR(COALESCE(?anPicked, ?anEn)) AS ?addressName)
+  OPTIONAL { ?rnAt l10n:of c:RemoveLinkPhrase ; l10n:name ?rnPicked } OPTIONAL { c:RemoveLinkPhrase rdfs:label ?rnEn FILTER(LANGMATCHES(LANG(?rnEn), "en")) }
+  BIND(STR(COALESCE(?rnPicked, ?rnEn)) AS ?removeName)
+}""" .
+
+# A block with an address shows a field for it (in an editor: a read-only document hides it), after what it
+# shows; typing there edits the address (blk:EditAddress).
+blk:AddressField a sem:Rendering ; sem:targets blk:Addressed ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , schema:contentUrl , schema:url , schema:embedUrl .
+blk:AddressField-fn a sem:Rule ; sem:implements blk:AddressField ; sem:function "blk:address-field" .
+blk:AddressField-sparql a sem:Rule ; sem:implements blk:AddressField ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?field . ?before ord:precedes ?field .
+  ?field a rdfhtml:Input ; rdfhtml:type "url" ; rdfhtml:class "sem-address-field" ; rdfhtml:value ?value ; rdfhtml:placeholder ?hint ;
+         rdfhtml:attribute ?name .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?hint .
+}
+WHERE {
+  $this a/rdfs:subClassOf* ?cls . ?cls blk:address ?property .
+  OPTIONAL { $this ?property ?raw }
+  BIND(COALESCE(STR(?raw), "") AS ?value)
+  OPTIONAL { ?hintAt l10n:of c:AddressPhrase ; l10n:name ?hintPicked } OPTIONAL { c:AddressPhrase rdfs:label ?hintEn FILTER(LANGMATCHES(LANG(?hintEn), "en")) }
+  BIND(STR(COALESCE(?hintPicked, ?hintEn)) AS ?hint)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~address-field")) AS ?field)
+  BIND(IRI(CONCAT(STR($this), "/~address-field-aria-label")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), IF(EXISTS { $this a/rdfs:subClassOf* blk:Image }, "/~img", IF(EXISTS { $this a/rdfs:subClassOf* blk:Embed }, "/~frame", "/~link")))) AS ?before)
+}""" .
+c:AddressPhrase a c:Phrase ; rdfs:label "Address (https://…)"@en , "Адреса (https://…)"@uk , "Adresse (https://…)"@de , "العنوان (https://…)"@ar .
+blk:EditAddress a beh:Reaction ;
+    rdfs:label "Change the address"@en ;
+    beh:when beh:Input ; beh:sourceClass blk:Addressed ; beh:undoable true ;
+    beh:deletes """CONSTRUCT { $this ?property ?old } WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~address-field"))) $this a/rdfs:subClassOf* ?cls . ?cls blk:address ?property . $this ?property ?old }""" ;
+    beh:inserts """CONSTRUCT { $this ?property ?url } WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~address-field"))) $this a/rdfs:subClassOf* ?cls . ?cls blk:address ?property . $event beh:value ?url FILTER(?url != "") }""" .

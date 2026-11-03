@@ -522,6 +522,64 @@ function menuRows(ctx: RuleContext, focus: NamedNode) {
   return { shown, active }
 }
 
+const TOOLBAR_MARKS: [kind: string, local: string, glyph: string][] = [
+  [BLK.Strong, 'strong', 'B'],
+  [BLK.Emphasis, 'em', 'I'],
+  [BLK.InlineCode, 'code', '</>'],
+  [BLK.Strike, 's', 'S'],
+  [BLK.Link, 'link', '🔗'],
+]
+
+/** The editor's toolbar: mark buttons over a selection in one block; a link's address and its remove button. */
+const toolbar: FnRule = (ctx, focus) => {
+  if (!isTrue(ctx.object(focus, NS.c + 'editable'))) return []
+  const at = (p: string) => ctx.object(focus, NS.c + p)
+  const [ab, ao, fb, fo] = [at('anchorBlock'), at('anchorOffset'), at('focusBlock'), at('focusOffset')]
+  const link = at('linkMark')
+  const href = link && str(ctx.object(link, NS.schema + 'url'))
+  const ranged = !!ab && !!fb && ab.value === fb.value && ao?.value !== fo?.value
+  const linked = href !== undefined
+  if (!ranged && !linked) return []
+  const s = Math.min(Number(ao?.value), Number(fo?.value))
+  const e = Math.max(Number(ao?.value), Number(fo?.value))
+  const o = ctx.out(focus)
+  const phrase = (name: string) => text(ctx, ctx.nn(NS.c + name), NS.rdfs + 'label') ?? ''
+  const linkBlock = link ? ctx.match(null, BLK.mark, link)[0]?.subject : undefined
+  const parts: NamedNode[] = []
+  if (ranged) {
+    const buttons = TOOLBAR_MARKS.map(([kind, local, glyph], i) => {
+      const pressed = marksOf(ctx, ab!).some((m) => covers(m, kind, s, e))
+      const btn = o.el(`tb-${local}`, 'Button', { type: 'button', 'aria-pressed': String(pressed), 'aria-label': text(ctx, ctx.nn(kind), NS.rdfs + 'label') }, [o.text(`tb-${local}-text`, glyph)])
+      o.t(btn, NS.blk + 'toggles', ctx.nn(kind)).t(btn, SEM.orderKey, String(i + 1))
+      return btn
+    })
+    const group = o.el('toolbar-marks', 'Div', { class: 'sem-marks', 'data-sem-keep-focus': '' })
+    for (const b of buttons) o.t(group, H.hasChild, b)
+    parts.push(group)
+  }
+  if (linked) {
+    const url = o.el('link-url', 'Input', { type: 'url', value: href, 'aria-label': phrase('LinkAddressPhrase') })
+    const remove = o.el('link-remove', 'Button', { type: 'button' }, [o.text('link-remove-text', phrase('RemoveLinkPhrase'))])
+    parts.push(o.el('link-row', 'Div', { class: 'sem-link' }, [url, remove]))
+  }
+  const anchor = (linkBlock ?? ab)!.value + '/~root'
+  const bar = o.el('toolbar', 'Div', { class: 'sem-text-toolbar', role: 'toolbar', 'aria-label': phrase('TextToolbarPhrase'), 'data-sem-anchor': anchor }, parts)
+  o.t(o.node('root'), H.hasChild, bar).t(o.node('body'), ORD.precedes, bar)
+  return o.quads
+}
+
+/** A block with an address: a field for it, after what the block shows. */
+const addressField: FnRule = (ctx, focus) => {
+  const property = nearest(ctx, focus, NS.blk + 'address')
+  if (!property) return []
+  const o = ctx.out(focus)
+  const hint = text(ctx, ctx.nn(NS.c + 'AddressPhrase'), NS.rdfs + 'label') ?? ''
+  const field = o.el('address-field', 'Input', { type: 'url', class: 'sem-address-field', value: str(ctx.object(focus, property.value)) ?? '', placeholder: hint, 'aria-label': hint })
+  const before = isA(ctx, focus, BLK.Image) ? 'img' : isA(ctx, focus, BLK.Embed) ? 'frame' : 'link'
+  o.t(o.node('root'), H.hasChild, field).t(o.node(before), ORD.precedes, field)
+  return o.quads
+}
+
 const editor: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const doc = ctx.object(focus, C.of)
@@ -597,6 +655,8 @@ export const functions: Record<string, FnRule> = {
   'blk:contents': contents,
   'blk:editor': editor,
   'blk:atom': atom,
+  'blk:toolbar': toolbar,
+  'blk:address-field': addressField,
   'blk:menu-state': menuState,
   'blk:menu-options': menuOptions,
 }
