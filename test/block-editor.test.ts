@@ -312,3 +312,76 @@ describe('the cost of typing in a block (c:BlockEditor)', () => {
     })
   }
 })
+
+describe('the / menu (c:BlockEditor)', () => {
+  it('opens at a "/", filters as one types, moves by key and turns the block into what is picked, the same with SPARQL and function rules', () => {
+    const both = [mount('sparql'), mount('function')] as const
+    const [m] = both
+    const step = (what: string, act: (h: ReturnType<typeof mount>) => void) => {
+      for (const h of both) act(h)
+      sameHtml(both[1].html(), both[0].html(), what)
+    }
+    const menu = () => m.app.querySelector('.sem-block-menu')
+    const shown = () => [...m.app.querySelectorAll('.sem-block-menu [role=option]:not([hidden])')].map((o) => o.querySelector('.sem-ta-label')!.textContent)
+    const active = () => m.app.querySelector('.sem-block-menu [aria-selected=true] .sem-ta-label')?.textContent
+
+    step('Enter at the end of the first block makes an empty one', (h) => {
+      h.select('p1', 11)
+      h.input('insertParagraph')
+    })
+    const empty = m.objects('p1', NS.co + 'nextItem')[0]!
+    step('"/" opens the menu', (h) => h.type('/'))
+    expect(menu()).not.toBeNull()
+    expect(menu()!.getAttribute('data-sem-anchor')).toBe(`${empty}/~root`)
+    expect(shown()[0]).toBe('Text')
+    expect(shown()).toContain('Heading 1')
+    expect(active()).toBe('Text')
+    const region = m.app.querySelector('[data-sem-text-root]')!
+    expect(region.getAttribute('aria-expanded')).toBe('true')
+    expect(region.getAttribute('aria-activedescendant')).toBe(`${EX}editor/~opt-${encodeURIComponent(NS.blk + 'Paragraph')}/~root`)
+
+    step('typing filters it', (h) => h.type('head'))
+    // The table of contents is found by its keyword "headings".
+    expect(shown()).toEqual(['Heading 1', 'Heading 2', 'Heading 3', 'Table of contents'])
+    expect(m.app.querySelector('.sem-block-menu mark')!.textContent).toBe('Head')
+    step('Down moves to the next', (h) => h.press('ArrowDown'))
+    expect(active()).toBe('Heading 2')
+    step('Up moves back', (h) => h.press('ArrowUp'))
+    step('Up again goes round to the last', (h) => h.press('ArrowUp'))
+    expect(active()).toBe('Table of contents')
+    step('and Up once more', (h) => h.press('ArrowUp'))
+    expect(active()).toBe('Heading 3')
+    step('Enter picks it: the block becomes one, without the "/head"', (h) => h.press('Enter'))
+    expect(m.objects(empty, NS.rdf + 'type')).toEqual([NS.blk + 'Heading3'])
+    expect(m.store.match(m.store.factory.namedNode(empty), m.store.factory.namedNode(NS.rdf + 'value'), null)[0]!.object.value).toBe('')
+    expect(menu()).toBeNull()
+
+    step('a type that is not text goes above the empty line', (h) => {
+      h.type('/divi')
+      h.press('Enter')
+    })
+    const before = m.store.match(null, m.store.factory.namedNode(NS.co + 'nextItem'), m.store.factory.namedNode(empty))[0]!.subject.value
+    expect(m.objects(before, NS.rdf + 'type')).toEqual([NS.blk + 'Divider'])
+
+    step('a table comes with its rows and cells', (h) => {
+      h.type('/table')
+      h.press('Enter')
+    })
+    const table = m.store.match(null, m.store.factory.namedNode(NS.co + 'nextItem'), m.store.factory.namedNode(empty))[0]!.subject.value
+    expect(m.app.querySelectorAll(`[id="${table}/~root"] th`)).toHaveLength(2)
+    expect(m.app.querySelectorAll(`[id="${table}/~root"] td`)).toHaveLength(2)
+
+    step('a list type makes the empty block its only item', (h) => {
+      h.type('/todo')
+      h.press('Enter')
+    })
+    expect(m.objects(empty, NS.rdf + 'type')).toEqual([NS.blk + 'TodoItem'])
+
+    step('Escape closes it, the text stays', (h) => {
+      h.type(' /quo')
+      h.press('Escape')
+    })
+    expect(menu()).toBeNull()
+    expect(m.store.match(m.store.factory.namedNode(empty), m.store.factory.namedNode(NS.rdf + 'value'), null)[0]!.object.value).toBe(' /quo')
+  })
+})

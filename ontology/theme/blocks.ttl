@@ -258,3 +258,78 @@
     sty:declares [ sty:property "padding-inline-start" ; sty:token tok:space-4 ] .
 [] a sty:StyleRule ; sty:appliesTo blk:Contents ; sty:part ".sem-level-3" ;
     sty:declares [ sty:property "padding-inline-start" ; sty:token tok:space-6 ] .
+
+# --- the editor's region and its / menu ---
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[contenteditable=true]" ;
+    sty:declares [ sty:property "caret-color" ; sty:token tok:accent-9 ] ,
+                 [ sty:property "min-block-size" ; sty:raw "4em" ] ,
+                 [ sty:property "padding-block" ; sty:token tok:space-1 ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu" ;
+    sty:declares [ sty:property "z-index" ; sty:raw "40" ] ,
+                 [ sty:property "inline-size" ; sty:raw "min(20rem, calc(100vw - 32px))" ] ,
+                 [ sty:property "padding" ; sty:raw "5px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
+                 [ sty:property "background" ; sty:token tok:surface-overlay ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "cursor" ; sty:raw "default" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu > ul" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "max-block-size" ; sty:raw "min(320px, 45vh)" ] ,
+                 [ sty:property "overflow-y" ; sty:raw "auto" ] ,
+                 [ sty:property "overscroll-behavior" ; sty:raw "contain" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu > ul > li" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "2rem 1fr" ] ,
+                 [ sty:property "column-gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "min-block-size" ; sty:raw "40px" ] ,
+                 [ sty:property "padding" ; sty:raw "4px 8px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu > ul > li[hidden]" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu > ul > li:hover" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-gray-3)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu > ul > li[aria-selected=true]" ;
+    sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu .sem-ta-icon" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "span 2" ] ,
+                 [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "place-items" ; sty:raw "center" ] ,
+                 [ sty:property "inline-size" ; sty:raw "2rem" ] ,
+                 [ sty:property "block-size" ; sty:raw "2rem" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu .sem-ta-label" ;
+    sty:declares [ sty:property "grid-column" ; sty:raw "2" ] , [ sty:property "font-weight" ; sty:raw "550" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu .sem-ta-help" ;
+    sty:declares [ sty:property "grid-column" ; sty:raw "2" ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu mark" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "underline" ] ,
+                 [ sty:property "text-underline-offset" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-block-menu > .sem-empty" ;
+    sty:declares [ sty:property "padding" ; sty:raw "7px 10px" ] , [ sty:property "color" ; sty:token tok:muted ] .
+# An empty block holding the caret says what typing / does.
+[] a sty:StyleRule ; sty:appliesTo blk:TextBlock ; sty:part ".sem-text[data-sem-placeholder]:has(> br:only-child)::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-placeholder)" ] ,
+                 [ sty:property "color" ; sty:token tok:faint ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "user-select" ; sty:raw "none" ] .

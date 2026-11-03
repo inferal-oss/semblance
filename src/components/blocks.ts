@@ -452,6 +452,68 @@ const atom: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+// --- the / menu (block-editor.ttl) ----------------------------------------------------------------------
+
+/** Whether the / menu is open (the caret after its "/" in its block), and the text typed after it. */
+const menuState: FnRule = (ctx, focus) => {
+  const b = ctx.object(focus, NS.c + 'menuBlock')
+  const from = Number(str(ctx.object(focus, NS.c + 'menuFrom')))
+  const fb = ctx.object(focus, NS.c + 'focusBlock')
+  const at = Number(str(ctx.object(focus, NS.c + 'focusOffset')))
+  if (!b || !fb || fb.value !== b.value || !(at > from)) return []
+  const v = ctx.object(b, RDF_VALUE)
+  if (!v || substr(v.value, from, 1) !== '/') return []
+  const q = substr(v.value, from + 1, at - from - 1).toLowerCase()
+  if (q.startsWith(' ')) return []
+  return ctx.out(focus).t(focus, NS.c + 'menuOpen', ctx.f.literal('true', ctx.nn(NS.xsd + 'boolean'))).t(focus, NS.c + 'foldedQuery', q).quads
+}
+
+/** A text of a class in the viewer's language as the SPARQL rules pick it: its twin, else the untagged one, else English. */
+function picked(ctx: RuleContext, cls: Term, p: string): string | undefined {
+  const values = ctx.objects(cls, p).filter((t) => t.termType === 'Literal')
+  if (values.length > 1) return text(ctx, cls, p)
+  return values.find((t) => (t as { language: string }).language === '')?.value ?? values.find((t) => (t as { language: string }).language.toLowerCase().startsWith('en'))?.value
+}
+
+/** The block types the menu offers (every class with a blk:menuOrder), as typeahead options of the editor. */
+const menuOptions: FnRule = (ctx, focus) => {
+  if (!ctx.object(focus, NS.c + 'menuBlock')) return []
+  const o = ctx.out(focus)
+  const list = o.node('menu-list')
+  for (const q of ctx.match(null, NS.blk + 'menuOrder', null)) {
+    const cls = q.subject as NamedNode
+    const label = picked(ctx, cls, NS.rdfs + 'label')
+    if (label === undefined) continue
+    const key = label.toLowerCase()
+    const words = ctx.objects(cls, NS.blk + 'keyword').map((w) => w.value.toLowerCase())
+    const item = o.node('opt-' + encodeForUri(cls.value))
+    o.t(list, H.hasChild, item)
+    o.t(item, RDF_TYPE, ctx.nn(NS.c + 'TypeaheadOption')).t(item, NS.c + 'of', focus).t(item, NS.c + 'option', cls)
+    o.t(item, C.label, label).t(item, NS.c + 'searchKey', key).t(item, NS.c + 'matchKey', [key, ...words].join(' '))
+    const help = picked(ctx, cls, C.help)
+    if (help !== undefined) o.t(item, C.help, help)
+    const icon = ctx.object(cls, C.icon)
+    if (icon) o.t(item, C.icon, icon)
+    o.t(item, NS.c + 'rank', q.object).t(item, SEM.orderKey, q.object.value)
+  }
+  return o.quads
+}
+
+/** The menu's options shown, by rank, and the active one (c:activeOption when shown, else the first). */
+function menuRows(ctx: RuleContext, focus: NamedNode) {
+  const q = str(ctx.object(focus, NS.c + 'foldedQuery')) ?? ''
+  const shown = ctx
+    .match(null, NS.c + 'of', focus)
+    .map((t) => t.subject)
+    .filter((opt) => ctx.object(opt, NS.c + 'matchKey') && (q === '' || str(ctx.object(opt, NS.c + 'matchKey'))!.includes(q)))
+    .map((opt) => ({ cls: ctx.object(opt, NS.c + 'option')!, rank: Number(str(ctx.object(opt, NS.c + 'rank'))) }))
+  const chosen = ctx.object(focus, NS.c + 'activeOption')
+  const first = shown.length ? Math.min(...shown.map((r) => r.rank)) : undefined
+  const rank = shown.find((r) => chosen && r.cls.value === chosen.value)?.rank ?? first
+  const active = shown.filter((r) => r.rank === rank).map((r) => r.cls)[0]
+  return { shown, active }
+}
+
 const editor: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const doc = ctx.object(focus, C.of)
@@ -474,7 +536,29 @@ const editor: FnRule = (ctx, focus) => {
     spellcheck: editable ? 'true' : undefined,
     'data-sem-text-root': editable ? selection : undefined,
   }, children)
-  o.renders(o.el('root', 'Div', {}, [body]))
+  // The / menu, while it is open: below its block, its options shown or why there are none.
+  const open = isTrue(ctx.object(focus, NS.c + 'menuOpen'))
+  if (editable) o.attr(body, 'aria-expanded', open ? 'true' : 'false').attr(body, 'aria-haspopup', 'listbox')
+  const parts = [body]
+  if (open) {
+    const { shown, active } = menuRows(ctx, focus)
+    const list = o.el('menu-list', 'Ul', { id: o.node('menu-list').value, role: 'listbox', 'aria-label': text(ctx, ctx.nn(NS.c + 'BlockMenuPhrase'), NS.rdfs + 'label') })
+    const menuParts = [list]
+    if (!shown.length) menuParts.push(o.el('menu-empty', 'Div', { class: 'sem-empty' }, [o.text('menu-empty-text', text(ctx, ctx.nn(NS.c + 'NoBlocksPhrase'), NS.rdfs + 'label') ?? '')]))
+    const block = ctx.object(focus, NS.c + 'menuBlock')!
+    parts.push(o.el('menu', 'Div', { class: 'sem-block-menu', 'data-sem-anchor': block.value + '/~root', 'data-sem-keep-focus': '' }, menuParts))
+    o.attr(body, 'aria-controls', list.value)
+    if (active) {
+      const row = ctx.nn(o.node('opt-' + encodeForUri(active.value)).value + '/~root')
+      o.attr(body, 'aria-activedescendant', row.value)
+      o.attr(row, 'aria-selected', 'true', 'active-aria-selected')
+    }
+  }
+  // Where the caret is, collapsed: its text says what typing / does (shown while the block is empty).
+  if (editable && ab && fb && ab.value === fb.value && ao?.value === fo?.value) {
+    o.attr(ctx.nn(ab.value + '/~text'), 'data-sem-placeholder', text(ctx, ctx.nn(NS.c + 'TypeSlashPhrase'), NS.rdfs + 'label') ?? '', 'caret-placeholder')
+  }
+  o.renders(o.el('root', 'Div', {}, parts))
   return o.quads
 }
 
@@ -505,4 +589,6 @@ export const functions: Record<string, FnRule> = {
   'blk:contents': contents,
   'blk:editor': editor,
   'blk:atom': atom,
+  'blk:menu-state': menuState,
+  'blk:menu-options': menuOptions,
 }

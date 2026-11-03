@@ -91,35 +91,51 @@ blk:Document a owl:Class ; rdfs:subClassOf blk:Container , doco:BodyMatter ; sem
 blk:Paragraph a owl:Class ; rdfs:subClassOf blk:TextBlock , doco:Paragraph ; sem:slug "blk-paragraph" ;
     blk:element rdfhtml:P ;
     rdfs:label "Text"@en , "Текст"@uk , "Text"@de , "نص"@ar ;
-    rdfs:comment "Plain text."@en , "Звичайний текст."@uk , "Einfacher Text."@de , "نص عادي."@ar .
+    rdfs:comment "Plain text."@en ;
+    c:help "Plain text."@en , "Звичайний текст."@uk , "Einfacher Text."@de , "نص عادي."@ar ;
+    blk:menuOrder 1 ; c:icon "¶" ; blk:keyword "paragraph plain" .
 blk:Heading a owl:Class ; rdfs:subClassOf blk:TextBlock , doco:SectionTitle ;
     rdfs:label "Heading"@en , "Заголовок"@uk , "Überschrift"@de , "عنوان"@ar ;
     rdfs:comment "A heading of a level (blk:level on its class). Level 1 is an h2: the page has its own h1."@en .
 blk:Heading1 a owl:Class ; rdfs:subClassOf blk:Heading ; sem:slug "blk-heading-1" ; blk:level 1 ; blk:element rdfhtml:H2 ; blk:prefix "# " ;
     rdfs:label "Heading 1"@en , "Заголовок 1"@uk , "Überschrift 1"@de , "عنوان 1"@ar ;
-    rdfs:comment "A section heading."@en , "Заголовок розділу."@uk , "Abschnittsüberschrift."@de , "عنوان قسم."@ar .
+    rdfs:comment "A section heading."@en ;
+    c:help "A section heading."@en , "Заголовок розділу."@uk , "Abschnittsüberschrift."@de , "عنوان قسم."@ar ;
+    blk:menuOrder 2 ; c:icon "H1" ; blk:keyword "title h1 heading" .
 blk:Heading2 a owl:Class ; rdfs:subClassOf blk:Heading ; sem:slug "blk-heading-2" ; blk:level 2 ; blk:element rdfhtml:H3 ; blk:prefix "## " ;
     rdfs:label "Heading 2"@en , "Заголовок 2"@uk , "Überschrift 2"@de , "عنوان 2"@ar ;
-    rdfs:comment "A subsection heading."@en , "Заголовок підрозділу."@uk , "Unterabschnittsüberschrift."@de , "عنوان قسم فرعي."@ar .
+    rdfs:comment "A subsection heading."@en ;
+    c:help "A subsection heading."@en , "Заголовок підрозділу."@uk , "Unterabschnittsüberschrift."@de , "عنوان قسم فرعي."@ar ;
+    blk:menuOrder 3 ; c:icon "H2" ; blk:keyword "subtitle h2 heading" .
 blk:Heading3 a owl:Class ; rdfs:subClassOf blk:Heading ; sem:slug "blk-heading-3" ; blk:level 3 ; blk:element rdfhtml:H4 ; blk:prefix "### " ;
     rdfs:label "Heading 3"@en , "Заголовок 3"@uk , "Überschrift 3"@de , "عنوان 3"@ar ;
-    rdfs:comment "A small heading."@en , "Малий заголовок."@uk , "Kleine Überschrift."@de , "عنوان صغير."@ar .
+    rdfs:comment "A small heading."@en ;
+    c:help "A small heading."@en , "Малий заголовок."@uk , "Kleine Überschrift."@de , "عنوان صغير."@ar ;
+    blk:menuOrder 4 ; c:icon "H3" ; blk:keyword "h3 heading" .
 blk:Quote a owl:Class ; rdfs:subClassOf blk:TextBlock , doco:BlockQuotation ; sem:slug "blk-quote" ; blk:element rdfhtml:Blockquote ; blk:prefix "> " ;
     rdfs:label "Quote"@en , "Цитата"@uk , "Zitat"@de , "اقتباس"@ar ;
-    rdfs:comment "A quotation."@en , "Цитата з джерела."@uk , "Ein Zitat."@de , "اقتباس من مصدر."@ar .
+    rdfs:comment "A quotation."@en ;
+    c:help "A quotation."@en , "Цитата з джерела."@uk , "Ein Zitat."@de , "اقتباس من مصدر."@ar ;
+    blk:menuOrder 9 ; c:icon "❝" ; blk:keyword "blockquote citation" .
 
 blk:List a owl:Class ; rdfs:subClassOf blk:Container , doco:List ;
     rdfs:label "List"@en , "Список"@uk , "Liste"@de , "قائمة"@ar ;
     rdfs:comment "A list: the items it holds, in order."@en .
 blk:BulletedList a owl:Class ; rdfs:subClassOf blk:List ; sem:slug "blk-bulleted-list" ; blk:element rdfhtml:Ul ;
     rdfs:label "Bulleted list"@en , "Маркований список"@uk , "Aufzählung"@de , "قائمة نقطية"@ar ;
-    rdfs:comment "A list of points."@en , "Список пунктів."@uk , "Eine Liste von Punkten."@de , "قائمة نقاط."@ar .
+    rdfs:comment "A list of points."@en ;
+    c:help "A list of points."@en , "Список пунктів."@uk , "Eine Liste von Punkten."@de , "قائمة نقاط."@ar ;
+    blk:menuOrder 5 ; c:icon "•" ; blk:keyword "bullet unordered ul list" ; blk:itemClass blk:ListItem .
 blk:NumberedList a owl:Class ; rdfs:subClassOf blk:List ; sem:slug "blk-numbered-list" ; blk:element rdfhtml:Ol ;
     rdfs:label "Numbered list"@en , "Нумерований список"@uk , "Nummerierte Liste"@de , "قائمة مرقمة"@ar ;
-    rdfs:comment "A list of steps, numbered."@en , "Список кроків із номерами."@uk , "Eine nummerierte Liste von Schritten."@de , "قائمة خطوات مرقمة."@ar .
+    rdfs:comment "A list of steps, numbered."@en ;
+    c:help "A list of steps, numbered."@en , "Список кроків із номерами."@uk , "Eine nummerierte Liste von Schritten."@de , "قائمة خطوات مرقمة."@ar ;
+    blk:menuOrder 6 ; c:icon "1." ; blk:keyword "ordered number ol list" ; blk:itemClass blk:ListItem .
 blk:TodoList a owl:Class ; rdfs:subClassOf blk:List ; sem:slug "blk-todo-list" ; blk:element rdfhtml:Ul ;
     rdfs:label "To-do list"@en , "Список справ"@uk , "Aufgabenliste"@de , "قائمة مهام"@ar ;
-    rdfs:comment "Things to do, each checked off when done."@en , "Справи, які позначають, коли виконано."@uk , "Aufgaben zum Abhaken."@de , "مهام تُعلَّم عند إنجازها."@ar .
+    rdfs:comment "Things to do, each checked off when done."@en ;
+    c:help "Things to do, each checked off when done."@en , "Справи, які позначають, коли виконано."@uk , "Aufgaben zum Abhaken."@de , "مهام تُعلَّم عند إنجازها."@ar ;
+    blk:menuOrder 7 ; c:icon "☑" ; blk:keyword "todo task checkbox list" ; blk:itemClass blk:TodoItem .
 blk:Item a owl:Class ; rdfs:subClassOf blk:TextBlock , blk:Container ;
     rdfs:label "Item"@en , "Пункт"@uk , "Eintrag"@de , "عنصر"@ar ;
     rdfs:comment "An item of a list: its text, and the blocks nested in it (a nested list)."@en .
@@ -131,23 +147,35 @@ blk:TodoItem a owl:Class ; rdfs:subClassOf blk:Item ; sem:slug "blk-todo-item" ;
 
 blk:Toggle a owl:Class ; rdfs:subClassOf blk:TextBlock , blk:Container , po:HeadedContainer ; sem:slug "blk-toggle" ;
     rdfs:label "Toggle"@en , "Розгортання"@uk , "Aufklapper"@de , "قسم قابل للطي"@ar ;
-    rdfs:comment "A line that shows or hides the blocks under it (c:expanded)."@en , "Рядок, що показує або ховає блоки під ним."@uk , "Eine Zeile, die die Blöcke darunter ein- und ausblendet."@de , "سطر يُظهر الكتل تحته أو يخفيها."@ar .
+    rdfs:comment "A line that shows or hides the blocks under it (c:expanded)."@en ;
+    c:help "A line that shows or hides the blocks under it."@en , "Рядок, що показує або ховає блоки під ним."@uk , "Eine Zeile, die die Blöcke darunter ein- und ausblendet."@de , "سطر يُظهر الكتل تحته أو يخفيها."@ar ;
+    blk:menuOrder 8 ; c:icon "▸" ; blk:keyword "collapse details disclosure" ; blk:template blk:ToggleTemplate .
 blk:Callout a owl:Class ; rdfs:subClassOf blk:TextBlock , blk:Container , doco:TextBox ; sem:slug "blk-callout" ;
     rdfs:label "Callout"@en , "Виноска"@uk , "Hinweis"@de , "تنبيه"@ar ;
-    rdfs:comment "Text set apart, with an icon (c:icon) and a tone (sty:tone)."@en , "Виділений текст зі значком."@uk , "Hervorgehobener Text mit Symbol."@de , "نص مميز مع أيقونة."@ar .
+    rdfs:comment "Text set apart, with an icon (c:icon) and a tone (sty:tone)."@en ;
+    c:help "Text set apart, with an icon and a tone."@en , "Виділений текст зі значком."@uk , "Hervorgehobener Text mit Symbol."@de , "نص مميز مع أيقونة."@ar ;
+    blk:menuOrder 10 ; c:icon "💡" ; blk:keyword "note tip info aside" .
 blk:Divider a owl:Class ; rdfs:subClassOf blk:Block , po:Milestone ; sem:slug "blk-divider" ;
     rdfs:label "Divider"@en , "Розділювач"@uk , "Trennlinie"@de , "فاصل"@ar ;
-    rdfs:comment "A line between parts."@en , "Лінія між частинами."@uk , "Eine Linie zwischen Teilen."@de , "خط بين الأجزاء."@ar .
+    rdfs:comment "A line between parts."@en ;
+    c:help "A line between parts."@en , "Лінія між частинами."@uk , "Eine Linie zwischen Teilen."@de , "خط بين الأجزاء."@ar ;
+    blk:menuOrder 11 ; c:icon "—" ; blk:keyword "hr rule separator line" .
 blk:Code a owl:Class ; rdfs:subClassOf blk:Block , po:Block ; sem:slug "blk-code" ;
     rdfs:label "Code"@en , "Код"@uk , "Code"@de , "شيفرة"@ar ;
-    rdfs:comment "Code in a language (schema:programmingLanguage), as written (rdf:value)."@en , "Код мовою програмування."@uk , "Code in einer Programmiersprache."@de , "شيفرة بلغة برمجة."@ar .
+    rdfs:comment "Code in a language (schema:programmingLanguage), as written (rdf:value)."@en ;
+    c:help "Code in a language, as written."@en , "Код мовою програмування."@uk , "Code in einer Programmiersprache."@de , "شيفرة بلغة برمجة."@ar ;
+    blk:menuOrder 12 ; c:icon "</>" ; blk:keyword "pre program snippet" ; blk:template blk:CodeTemplate .
 blk:Math a owl:Class ; rdfs:subClassOf blk:Block , doco:Formula ; sem:slug "blk-math" ;
     rdfs:label "Math"@en , "Формула"@uk , "Formel"@de , "معادلة"@ar ;
-    rdfs:comment "A formula, in TeX (rdf:value)."@en , "Формула в TeX."@uk , "Eine Formel in TeX."@de , "معادلة بصيغة TeX."@ar .
+    rdfs:comment "A formula, in TeX (rdf:value)."@en ;
+    c:help "A formula, in TeX."@en , "Формула в TeX."@uk , "Eine Formel in TeX."@de , "معادلة بصيغة TeX."@ar ;
+    blk:menuOrder 13 ; c:icon "∑" ; blk:keyword "formula equation tex latex" ; blk:template blk:MathTemplate .
 
 blk:Table a owl:Class ; rdfs:subClassOf blk:Container , doco:Table ; sem:slug "blk-table" ;
     rdfs:label "Table"@en , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar ;
-    rdfs:comment "Rows of cells (blk:Row, blk:Cell)."@en , "Рядки клітинок."@uk , "Zeilen aus Zellen."@de , "صفوف من الخلايا."@ar .
+    rdfs:comment "Rows of cells (blk:Row, blk:Cell)."@en ;
+    c:help "Rows of cells."@en , "Рядки клітинок."@uk , "Zeilen aus Zellen."@de , "صفوف من الخلايا."@ar ;
+    blk:menuOrder 14 ; c:icon "▦" ; blk:keyword "grid rows cells" ; blk:template blk:TableTemplate .
 blk:Row a owl:Class ; rdfs:subClassOf blk:Container ; sem:slug "blk-row" ; blk:element rdfhtml:Tr ; blk:textElement rdfhtml:Pre ;
     rdfs:label "Row"@en , "Рядок"@uk , "Zeile"@de , "صف"@ar ;
     rdfs:comment "A row of a table: its cells (blk:header true: the header row)."@en .
@@ -157,32 +185,64 @@ blk:Cell a owl:Class ; rdfs:subClassOf blk:TextBlock ; sem:slug "blk-cell" ;
 
 blk:Columns a owl:Class ; rdfs:subClassOf blk:Container ; sem:slug "blk-columns" ; blk:element rdfhtml:Div ;
     rdfs:label "Columns"@en , "Колонки"@uk , "Spalten"@de , "أعمدة"@ar ;
-    rdfs:comment "Blocks side by side, in columns (blk:Column); one under the other on a narrow screen."@en , "Блоки поруч, у колонках."@uk , "Blöcke nebeneinander, in Spalten."@de , "كتل متجاورة في أعمدة."@ar .
+    rdfs:comment "Blocks side by side, in columns (blk:Column); one under the other on a narrow screen."@en ;
+    c:help "Blocks side by side, in columns; one under the other on a narrow screen."@en , "Блоки поруч, у колонках."@uk , "Blöcke nebeneinander, in Spalten."@de , "كتل متجاورة في أعمدة."@ar ;
+    blk:menuOrder 15 ; c:icon "▥" ; blk:keyword "layout side by side" ; blk:template blk:ColumnsTemplate .
 blk:Column a owl:Class ; rdfs:subClassOf blk:Container ; sem:slug "blk-column" ; blk:element rdfhtml:Div ;
     rdfs:label "Column"@en , "Колонка"@uk , "Spalte"@de , "عمود"@ar ;
     rdfs:comment "A column of blocks."@en .
 
 blk:Image a owl:Class ; rdfs:subClassOf blk:Block , doco:Figure , po:Atom ; sem:slug "blk-image" ;
     rdfs:label "Image"@en , "Зображення"@uk , "Bild"@de , "صورة"@ar ;
-    rdfs:comment "A picture (schema:contentUrl), described (schema:description) and captioned (schema:caption)."@en , "Зображення з підписом."@uk , "Ein Bild mit Bildunterschrift."@de , "صورة مع تعليق."@ar .
+    rdfs:comment "A picture (schema:contentUrl), described (schema:description) and captioned (schema:caption)."@en ;
+    c:help "A picture, described and captioned."@en , "Зображення з підписом."@uk , "Ein Bild mit Bildunterschrift."@de , "صورة مع تعليق."@ar ;
+    blk:menuOrder 16 ; c:icon "🖼" ; blk:keyword "picture photo img figure" .
 blk:File a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-file" ;
     rdfs:label "File"@en , "Файл"@uk , "Datei"@de , "ملف"@ar ;
-    rdfs:comment "A file to download (schema:contentUrl, schema:name, schema:contentSize)."@en , "Файл для завантаження."@uk , "Eine Datei zum Herunterladen."@de , "ملف للتنزيل."@ar .
+    rdfs:comment "A file to download (schema:contentUrl, schema:name, schema:contentSize)."@en ;
+    c:help "A file to download."@en , "Файл для завантаження."@uk , "Eine Datei zum Herunterladen."@de , "ملف للتنزيل."@ar ;
+    blk:menuOrder 17 ; c:icon "📎" ; blk:keyword "attachment download" .
 blk:Bookmark a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-bookmark" ;
     rdfs:label "Bookmark"@en , "Закладка"@uk , "Lesezeichen"@de , "إشارة مرجعية"@ar ;
-    rdfs:comment "A page elsewhere (schema:url), with its title (schema:name) and summary (schema:description)."@en , "Сторінка деінде, з назвою."@uk , "Eine Seite anderswo, mit Titel."@de , "صفحة في مكان آخر مع عنوانها."@ar .
+    rdfs:comment "A page elsewhere (schema:url), with its title (schema:name) and summary (schema:description)."@en ;
+    c:help "A page elsewhere, with its title and summary."@en , "Сторінка деінде, з назвою."@uk , "Eine Seite anderswo, mit Titel."@de , "صفحة في مكان آخر مع عنوانها."@ar ;
+    blk:menuOrder 18 ; c:icon "🔖" ; blk:keyword "link url web page" .
 blk:Embed a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-embed" ;
     rdfs:label "Embed"@en , "Вбудоване"@uk , "Einbettung"@de , "تضمين"@ar ;
-    rdfs:comment "A page shown in the document (schema:embedUrl), in a sandboxed frame named schema:name."@en , "Сторінка, показана в документі."@uk , "Eine im Dokument gezeigte Seite."@de , "صفحة معروضة داخل المستند."@ar .
+    rdfs:comment "A page shown in the document (schema:embedUrl), in a sandboxed frame named schema:name."@en ;
+    c:help "A page shown in the document."@en , "Сторінка, показана в документі."@uk , "Eine im Dokument gezeigte Seite."@de , "صفحة معروضة داخل المستند."@ar ;
+    blk:menuOrder 19 ; c:icon "⧉" ; blk:keyword "iframe video map" .
 blk:Linked a owl:Class ; rdfs:subClassOf blk:Block ;
     rdfs:label "Linked block"@en , "Блок-посилання"@uk , "Verweisblock"@de , "كتلة رابط"@ar ;
     rdfs:comment "A block that stands for something at an address: a file, a bookmark, an embed, a link to a document."@en .
 blk:DocumentLink a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-document-link" ;
     rdfs:label "Link to page"@en , "Посилання на сторінку"@uk , "Link zur Seite"@de , "رابط إلى صفحة"@ar ;
-    rdfs:comment "A link to another document (blk:target, named by its schema:name; or schema:url)."@en , "Посилання на інший документ."@uk , "Ein Link zu einem anderen Dokument."@de , "رابط إلى مستند آخر."@ar .
+    rdfs:comment "A link to another document (blk:target, named by its schema:name; or schema:url)."@en ;
+    c:help "A link to another document."@en , "Посилання на інший документ."@uk , "Ein Link zu einem anderen Dokument."@de , "رابط إلى مستند آخر."@ar ;
+    blk:menuOrder 20 ; c:icon "📄" ; blk:keyword "page document link" .
 blk:Contents a owl:Class ; rdfs:subClassOf blk:Block , doco:TableOfContents ; sem:slug "blk-contents" ;
     rdfs:label "Table of contents"@en , "Зміст"@uk , "Inhaltsverzeichnis"@de , "جدول المحتويات"@ar ;
-    rdfs:comment "The headings of the document it is in, linked."@en , "Заголовки документа з посиланнями."@uk , "Die Überschriften des Dokuments, verlinkt."@de , "عناوين المستند مع روابطها."@ar .
+    rdfs:comment "The headings of the document it is in, linked."@en ;
+    c:help "The headings of the document it is in, linked."@en , "Заголовки документа з посиланнями."@uk , "Die Überschriften des Dokuments, verlinkt."@de , "عناوين المستند مع روابطها."@ar ;
+    blk:menuOrder 21 ; c:icon "☰" ; blk:keyword "toc table of contents outline headings" .
+
+# --- templates: what a new block of a type starts with (the / menu copies them) ----------------------
+
+blk:ToggleTemplate c:expanded true .
+blk:CodeTemplate rdf:value "" .
+blk:MathTemplate rdf:value "" .
+blk:TableTemplate po:contains blk:TableTemplate-r1 , blk:TableTemplate-r2 .
+blk:TableTemplate-r1 a blk:Row ; blk:header true ; po:contains blk:TableTemplate-c11 , blk:TableTemplate-c12 ; co:nextItem blk:TableTemplate-r2 .
+blk:TableTemplate-c11 a blk:Cell ; rdf:value "" ; co:nextItem blk:TableTemplate-c12 .
+blk:TableTemplate-c12 a blk:Cell ; rdf:value "" .
+blk:TableTemplate-r2 a blk:Row ; po:contains blk:TableTemplate-c21 , blk:TableTemplate-c22 .
+blk:TableTemplate-c21 a blk:Cell ; rdf:value "" ; co:nextItem blk:TableTemplate-c22 .
+blk:TableTemplate-c22 a blk:Cell ; rdf:value "" .
+blk:ColumnsTemplate po:contains blk:ColumnsTemplate-a , blk:ColumnsTemplate-b .
+blk:ColumnsTemplate-a a blk:Column ; po:contains blk:ColumnsTemplate-ap ; co:nextItem blk:ColumnsTemplate-b .
+blk:ColumnsTemplate-ap a blk:Paragraph ; rdf:value "" .
+blk:ColumnsTemplate-b a blk:Column ; po:contains blk:ColumnsTemplate-bp .
+blk:ColumnsTemplate-bp a blk:Paragraph ; rdf:value "" .
 
 # --- the shared renderings ----------------------------------------------------------------------------
 
@@ -959,14 +1019,33 @@ c:BlockEditor a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "block-edit
 is true (block-editor.ttl). c:label is its accessible name."""@en .
 
 c:BlockEditorRendering a sem:Rendering ; sem:targets c:BlockEditor ; sem:stratum 0 ;
-    sem:watches rdf:type , c:of , c:label , l10n:label , c:editable , c:anchorBlock , c:anchorOffset , c:focusBlock , c:focusOffset .
+    sem:watches rdf:type , c:of , c:label , l10n:label , c:editable , c:anchorBlock , c:anchorOffset , c:focusBlock , c:focusOffset ,
+        c:menuBlock , c:menuFrom , c:activeOption , c:menuOpen , c:foldedQuery .
 c:BlockEditorRendering-fn a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:function "blk:editor" .
 c:BlockEditorRendering-sparql-screen a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:modality mod:Screen ;
+    sem:bulk false ;  # its subquery reads $this
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?body .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?body , ?menu .
   ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?doc ; rdfhtml:attribute ?role , ?name , ?multiline , ?region ;
-        rdfhtml:contenteditable ?editableText ; rdfhtml:spellcheck ?spellcheck .
+        rdfhtml:contenteditable ?editableText ; rdfhtml:spellcheck ?spellcheck ; ord:immediatelyPrecedes ?menu ;
+        rdfhtml:attribute ?expandedAttr , ?popupAttr , ?controlsAttr , ?activeAttr .
+  ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?expandedValue .
+  ?popupAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-haspopup" ; rdfhtml:attributeValue "listbox" .
+  ?controlsAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?listId .
+  ?activeAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-activedescendant" ; rdfhtml:attributeValue ?activeId .
+  ?menu a rdfhtml:Div ; rdfhtml:class "sem-block-menu" ; rdfhtml:hasChild ?list , ?empty ; rdfhtml:attribute ?anchorAttr , ?keepAttr .
+  ?anchorAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?anchorId .
+  ?keepAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-keep-focus" ; rdfhtml:attributeValue "" .
+  ?list a rdfhtml:Ul ; rdfhtml:id ?listId ; rdfhtml:attribute ?listRole , ?listName ; ord:immediatelyPrecedes ?empty .
+  ?listRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "listbox" .
+  ?listName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?menuName .
+  ?empty a rdfhtml:Div ; rdfhtml:class "sem-empty" ; rdfhtml:hasChild ?emptyText .
+  ?emptyText a rdfhtml:Text ; rdfhtml:data ?nothing .
+  ?activeRow rdfhtml:attribute ?selectedAttr .
+  ?caretText rdfhtml:attribute ?placeholderAttr .
+  ?placeholderAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-placeholder" ; rdfhtml:attributeValue ?placeholder .
+  ?selectedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-selected" ; rdfhtml:attributeValue "true" .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue ?roleName .
   ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
   ?multiline a rdfhtml:Attribute ; rdfhtml:attributeName "aria-multiline" ; rdfhtml:attributeValue "true" .
@@ -982,6 +1061,45 @@ WHERE {
   BIND(IF(?editable, IRI(CONCAT(STR($this), "/~body-data-sem-text-root")), ?none) AS ?region)
   OPTIONAL { $this c:anchorBlock ?ab ; c:anchorOffset ?ao ; c:focusBlock ?fb ; c:focusOffset ?fo }
   BIND(IF(?editable, COALESCE(CONCAT(STR(?ab), " ", STR(?ao), " ", STR(?fb), " ", STR(?fo)), ""), ?none) AS ?selection)
+  # The / menu (block-editor.ttl), while it is open: below its block, its options shown or why there are none.
+  BIND(EXISTS { $this c:menuOpen true } AS ?open)
+  BIND(IF(?editable, IF(?open, "true", "false"), ?none) AS ?expandedValue)
+  BIND(IF(?editable, IRI(CONCAT(STR($this), "/~body-aria-expanded")), ?none) AS ?expandedAttr)
+  BIND(IF(?editable, IRI(CONCAT(STR($this), "/~body-aria-haspopup")), ?none) AS ?popupAttr)
+  OPTIONAL { $this c:foldedQuery ?q0 } BIND(COALESCE(STR(?q0), "") AS ?q)
+  OPTIONAL { { SELECT (MIN(xsd:decimal(?sr)) AS ?firstRank) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?sq0 } BIND(COALESCE(STR(?sq0), "") AS ?sq)
+      ?so c:of $this ; c:matchKey ?smk ; c:rank ?sr . FILTER(?sq = "" || CONTAINS(STR(?smk), ?sq)) } } }
+  OPTIONAL { $this c:activeOption ?chosen . ?co c:of $this ; c:option ?chosen ; c:matchKey ?cmk ; c:rank ?cr FILTER(?q = "" || CONTAINS(STR(?cmk), ?q)) }
+  BIND(IF(?open, COALESCE(xsd:decimal(?cr), ?firstRank), ?none) AS ?activeRank)
+  OPTIONAL { ?ao2 c:of $this ; c:option ?activeClass ; c:rank ?ar FILTER(xsd:decimal(?ar) = ?activeRank) }
+  BIND(IF(BOUND(?activeClass), IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?activeClass)), "/~root")), ?none) AS ?activeRow)
+  BIND(STR(?activeRow) AS ?activeId)
+  BIND(IF(BOUND(?activeRow), IRI(CONCAT(STR($this), "/~body-aria-activedescendant")), ?none) AS ?activeAttr)
+  BIND(IF(BOUND(?activeRow), IRI(CONCAT(STR($this), "/~active-aria-selected")), ?none) AS ?selectedAttr)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~menu")), ?none) AS ?menu)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~menu-list")), ?none) AS ?list)
+  BIND(STR(?list) AS ?listId)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~body-aria-controls")), ?none) AS ?controlsAttr)
+  OPTIONAL { $this c:menuBlock ?menuBlock }
+  BIND(IF(?open, STR(IRI(CONCAT(STR(?menuBlock), "/~root"))), ?none) AS ?anchorId)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~menu-data-sem-anchor")), ?none) AS ?anchorAttr)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~menu-data-sem-keep-focus")), ?none) AS ?keepAttr)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~menu-list-role")), ?none) AS ?listRole)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~menu-list-aria-label")), ?none) AS ?listName)
+  OPTIONAL { ?menuNameAt l10n:of c:BlockMenuPhrase ; l10n:name ?menuNamePicked }
+  OPTIONAL { c:BlockMenuPhrase rdfs:label ?menuNameEn FILTER(LANGMATCHES(LANG(?menuNameEn), "en")) }
+  BIND(STR(COALESCE(?menuNamePicked, ?menuNameEn)) AS ?menuName)
+  OPTIONAL { ?nothingAt l10n:of c:NoBlocksPhrase ; l10n:name ?nothingPicked }
+  OPTIONAL { c:NoBlocksPhrase rdfs:label ?nothingEn FILTER(LANGMATCHES(LANG(?nothingEn), "en")) }
+  BIND(IF(?open && !BOUND(?firstRank), STR(COALESCE(?nothingPicked, ?nothingEn)), ?none) AS ?nothing)
+  # Where the caret is, collapsed: its text says what typing / does (shown while the block is empty).
+  BIND(IF(?editable && BOUND(?ab) && ?ab = ?fb && ?ao = ?fo, IRI(CONCAT(STR(?ab), "/~text")), ?none) AS ?caretText)
+  OPTIONAL { ?placeholderAt l10n:of c:TypeSlashPhrase ; l10n:name ?placeholderPicked }
+  OPTIONAL { c:TypeSlashPhrase rdfs:label ?placeholderEn FILTER(LANGMATCHES(LANG(?placeholderEn), "en")) }
+  BIND(IF(BOUND(?caretText), STR(COALESCE(?placeholderPicked, ?placeholderEn)), ?none) AS ?placeholder)
+  BIND(IF(BOUND(?caretText), IRI(CONCAT(STR($this), "/~caret-placeholder")), ?none) AS ?placeholderAttr)
+  BIND(IF(BOUND(?nothing), IRI(CONCAT(STR($this), "/~menu-empty")), ?none) AS ?empty)
+  BIND(IF(BOUND(?nothing), IRI(CONCAT(STR($this), "/~menu-empty-text")), ?none) AS ?emptyText)
   OPTIONAL { $this c:of ?doc FILTER(isIRI(?doc)) }
   OPTIONAL { $this l10n:label ?picked }
   OPTIONAL { $this c:label ?own FILTER(NOT EXISTS { $this l10n:label ?anyPicked }) }

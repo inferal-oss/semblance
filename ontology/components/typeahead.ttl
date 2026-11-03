@@ -843,6 +843,29 @@ WHERE {
 # An option may also say what it does (c:help, a line after its label) and the keys that do the same
 # (key:hint: shown in Apple or other glyphs, as the keyboard layer's hints are, and announced with
 # aria-keyshortcuts) - a command palette's options do.
+# An option with an icon (c:icon, a glyph) shows it before its label, hidden from screen readers: the
+# label names the option.
+c:TypeaheadOptionIcon a sem:Rendering ; sem:targets c:TypeaheadOption ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:requires c:icon ; sem:watches rdf:type , c:icon .
+c:TypeaheadOptionIcon-fn a sem:Rule ; sem:implements c:TypeaheadOptionIcon ; sem:function "typeahead:option-icon" .
+c:TypeaheadOptionIcon-sparql a sem:Rule ; sem:implements c:TypeaheadOptionIcon ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?icon .
+  ?icon a rdfhtml:Span ; rdfhtml:class "sem-ta-icon" ; rdfhtml:hasChild ?glyphText ; rdfhtml:attribute ?hidden ; ord:immediatelyPrecedes ?text .
+  ?hidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?glyphText a rdfhtml:Text ; rdfhtml:data ?glyph .
+}
+WHERE {
+  $this a c:TypeaheadOption ; c:icon ?glyph0 .
+  BIND(STR(?glyph0) AS ?glyph)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~icon")) AS ?icon)
+  BIND(IRI(CONCAT(STR($this), "/~icon-aria-hidden")) AS ?hidden)
+  BIND(IRI(CONCAT(STR($this), "/~icon-text")) AS ?glyphText)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+}""" .
+
 c:TypeaheadOptionRendering a sem:Rendering ;
     sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:TypeaheadOption ;
