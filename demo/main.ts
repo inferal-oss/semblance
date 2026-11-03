@@ -28,6 +28,7 @@ import type { Quad } from '@rdfjs/types'
 import { compileStyles } from '../src/style/compile.ts'
 import { hasStore, initWeb, loadOntology, loadStoreOf, loadStoreWith, ONTOLOGY_NAMES, ontologyText, type StoreKind } from '../src/web/load.ts'
 import { attachWalkthroughs } from '../src/web/walkthrough.ts'
+import { markPlatform } from '../src/web/platform.ts'
 import { attachConnectors } from '../src/web/connectors.ts'
 import { attachSnaps } from '../src/web/snap.ts'
 import { attachLightboxes } from '../src/web/lightbox.ts'
@@ -107,8 +108,9 @@ const screen = runtime.project({ modality: MOD.Screen, layers: enabledLayers(), 
 const text = runtime.project({ modality: MOD.Text, prefer, provenance: 'onDemand', languages, name: 'text', roots: [EX + 'page'] })
 performance.mark('sem:rules')
 
-// The keyboard layer shows ⌘ / ⌥ glyphs on Apple platforms, Ctrl / Alt elsewhere.
-if (/Mac|iPhone|iPad/.test(navigator.platform)) document.documentElement.setAttribute('data-sem-platform', 'apple')
+// The keyboard layer shows ⌘ / ⌥ glyphs on Apple platforms, Ctrl / Alt elsewhere (a page rendered
+// beforehand has marked the platform in its head already).
+markPlatform(document)
 
 // A page rendered beforehand links the stylesheet the build compiled from this graph: it is not compiled again.
 let css = serverStyled(document) ? undefined : compileStyles(store)

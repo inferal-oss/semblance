@@ -381,10 +381,11 @@
 [] a sty:StyleRule ; sty:appliesTo c:TypeaheadOption ; sty:part "> .sem-ta-help" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font-size" ; sty:token tok:font-size-small ] .
+# Both spellings in one grid cell, the viewer's seen and the other hidden: as wide as the wider, so
+# nothing moves when the platform is marked.
 [] a sty:StyleRule ; sty:appliesTo c:TypeaheadOption ; sty:part "> .sem-ta-keys" ;
-    sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+    sty:declares [ sty:property "display" ; sty:raw "inline-grid" ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
-                 [ sty:property "gap" ; sty:raw "4px" ] ,
                  [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
 [] a sty:StyleRule ; sty:appliesTo c:TypeaheadOption ; sty:part "> .sem-ta-keys > kbd" ;
     sty:declares [ sty:property "padding" ; sty:raw "2px 6px" ] ,
@@ -394,11 +395,13 @@
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font" ; sty:raw "600 11px/1.2 var(--sem-font-mono)" ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] ,
+                 [ sty:property "grid-area" ; sty:raw "1 / 1" ] ,
                  [ sty:property "direction" ; sty:raw "ltr" ] ,
                  [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:appliesTo c:TypeaheadOption ; sty:part "> .sem-ta-keys > .sem-apple" ;
-    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+    sty:declares [ sty:property "visibility" ; sty:raw "hidden" ] .
 [] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-c=typeahead-option] > .sem-ta-keys > .sem-apple" ;
-    sty:declares [ sty:property "display" ; sty:raw "inline" ] .
+    sty:declares [ sty:property "visibility" ; sty:raw "visible" ] .
 [] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-c=typeahead-option] > .sem-ta-keys > .sem-other" ;
-    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+    sty:declares [ sty:property "visibility" ; sty:raw "hidden" ] .

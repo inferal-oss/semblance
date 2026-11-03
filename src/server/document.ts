@@ -1,10 +1,12 @@
 // A whole HTML document from a template (the client build's index.html) and a rendering
 // (renderToString): the root's HTML in the mount element, marked for the client to take over, the
 // document's language, direction and attributes on <html>, the stylesheet (a file the client does
-// not compile again, or inline), and the script that keeps what the visitor does until the client
-// is ready (src/web/takeover.ts). Platform-neutral string work: used by the static build, the
+// not compile again, or inline), the script that marks the viewer's platform before the first paint
+// (src/web/platform.ts: the key hints' spelling) and the one that keeps what the visitor does until
+// the client is ready (src/web/takeover.ts). Platform-neutral string work: used by the static build, the
 // request handler and anyone's own server.
 import { CAPTURE_SCRIPT, SSR_ATTRIBUTE, STYLES_ATTRIBUTE } from '../web/takeover.ts'
+import { PLATFORM_SCRIPT } from '../web/platform.ts'
 import type { Rendered } from './render.ts'
 
 export interface DocumentOptions {
@@ -41,8 +43,9 @@ export function documentParts(template: string, rendered: Pick<Rendered, 'css' |
   const sheet = opts.stylesheet ?? 'inline'
   const styles =
     sheet === 'none' ? '' : sheet === 'inline' ? (rendered.css ? `<style ${STYLES_ATTRIBUTE}>${rendered.css.replace(/<\/style/gi, '<\\/style')}</style>` : '') : `<link rel="stylesheet" href="${escapeAttr(sheet.href)}" ${STYLES_ATTRIBUTE}>`
-  // Functions, so `$` in what is inserted is not read as a replacement pattern.
-  doc = doc.replace(/<\/head>/i, () => `${styles}${opts.head ?? ''}</head>`)
+  // Functions, so `$` in what is inserted is not read as a replacement pattern. The platform is
+  // marked ahead of the styles that read it, so no key hint is painted in the other spelling first.
+  doc = doc.replace(/<\/head>/i, () => `<script>${PLATFORM_SCRIPT}</script>${styles}${opts.head ?? ''}</head>`)
   const open = new RegExp(`<div id="${mount}"([^>]*)>\\s*</div>`, 'i')
   const m = open.exec(doc)
   if (!m) throw new Error(`The template has no empty <div id="${mount}"></div> to render into`)

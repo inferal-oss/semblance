@@ -190,6 +190,12 @@ each example's rendering `data-sem-ssr`, a region of its own to take over: what 
 its sandbox runs (a todo ticked, one typed and added) is kept and happens once the sandbox has
 taken the region over, never on a control that changes while the graph does not.
 
+`PLATFORM_SCRIPT` (`src/web/platform.ts`) sits in the head, ahead of the stylesheet: it marks
+`<html data-sem-platform="apple">` on macOS, iOS and iPadOS before the first paint, so the key
+hints show `⌘K` rather than `Ctrl+K` from the start. A page the client renders itself is marked
+when it mounts (`markPlatform`), alike. Either way a hint's box holds both spellings and is as wide
+as the wider one, so nothing moves when the platform is marked, late or never.
+
 `CAPTURE_SCRIPT` sits right before the mount element, so it runs before any of the HTML it keeps
 events for has arrived. It keeps clicks (on anything but a link) and submits, holding them back,
 and it keeps `input` and `change` while letting them happen (what was typed stays in the field); no
