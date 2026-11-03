@@ -56,6 +56,7 @@ export const ONTOLOGY_FILES = [
   'components/editor.ttl',
   'components/workbench.ttl',
   'components/result-graph.ttl',
+  'components/turtle.ttl',
   'components/grid.ttl',
   'components/panes.ttl',
   'components/payload.ttl',

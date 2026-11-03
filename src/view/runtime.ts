@@ -464,6 +464,24 @@ export class ViewRuntime {
     return this.derivedPreds ?? undefined
   }
 
+  /** The runs on request that run again when a node changes (iv:refreshedBy): node -> their IRIs; undefined when none do. */
+  private refreshNodes(): Map<string, string[]> | undefined {
+    let out: Map<string, string[]> | undefined
+    const f = this.store.factory
+    for (const v of this.views.values()) {
+      const by = v.onRequest ? this.templates.get(v.def.node)?.perQuery?.refreshedBy : undefined
+      if (!by) continue
+      for (const ref of v.def.referrers ?? []) {
+        for (const q of this.store.match(f.namedNode(ref), f.namedNode(by), null)) {
+          if (q.object.termType !== 'NamedNode') continue
+          out ??= new Map()
+          ;(out.get(q.object.value) ?? out.set(q.object.value, []).get(q.object.value)!).push(v.iri)
+        }
+      }
+    }
+    return out
+  }
+
   /** A template's iv:perQuery declaration, if it has one. */
   private readPerQuery(iri: string): PerQuery | undefined {
     const f = this.store.factory
@@ -490,6 +508,7 @@ export class ViewRuntime {
       listed: this.one(s, IV + 'listed')?.value === 'true',
       classes: classes.size ? classes : undefined,
       followedBy: this.one(s, IV + 'followedBy')?.value,
+      refreshedBy: this.one(s, IV + 'refreshedBy')?.value,
       bind: bind?.variable && bind.from && bind.property ? (bind as PerQuery['bind']) : undefined,
     }
   }
@@ -606,6 +625,7 @@ export class ViewRuntime {
     const redefine = new Set<string>()
     const nodes = new Set<string>()
     const members = new Set<string>()
+    const refreshed = this.refreshNodes()
     for (const q of [...changes.add, ...changes.remove]) {
       // A cell of a list of queries (iv:listed) may be a blank node.
       if (q.subject.termType !== 'NamedNode') {
@@ -613,6 +633,8 @@ export class ViewRuntime {
         continue
       }
       const s = q.subject.value
+      // A node a run's referrer names to refresh it by (iv:refreshedBy) changed: it runs again.
+      for (const iri of refreshed?.get(s) ?? []) redefine.add(iri)
       if (q.predicate.value === RDF_TYPE && q.object.value === IV + 'View') nodes.add(s)
       else if (this.views.has(s) || this.templates.has(s) || this.undefinedViews.has(s)) nodes.add(s)
       // An instance of a template's class, or a node naming it (iv:perReferrer), came or went.
@@ -1334,6 +1356,8 @@ interface PerQuery {
   cells?: Set<string>
   classes?: Set<string>
   followedBy?: string
+  /** iv:refreshedBy: a run on request runs again when a triple about the node a referrer names by it changes. */
+  refreshedBy?: string
   bind?: { variable: string; from: string; property: string }
 }
 

@@ -1,5 +1,6 @@
 @prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix iv: <https://semblance.dev/ns/view#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
@@ -922,11 +923,13 @@ sem:orderBy a owl:ObjectProperty ; rdfs:domain sem:Query ;
 sem:descending a owl:DatatypeProperty ; rdfs:domain sem:Query ; rdfs:range xsd:boolean .
 
 c:QueryView a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TurtleView ;
     rdfs:comment """Runs named CONSTRUCTs (c:queries) and shows their results as syntax-colored Turtle,
 one section per query. A variable (c:bindVariable) may be bound to the value of c:bindProperty
 on c:bindFrom; c:of names a node whose changes should refresh the view (e.g. an event stream)."""@en ;
-    sem:slug "query-view" .
+    sem:slug "query-view" ;
+    c:turtleInto "root" ;
+    c:turtleHeader true .
 c:queries a owl:ObjectProperty ; rdfs:range rdf:List .
 c:bindVariable a owl:DatatypeProperty .
 c:bindFrom a owl:ObjectProperty .
@@ -938,18 +941,100 @@ c:baseIri a owl:DatatypeProperty ; rdfs:comment "Base IRI for relative display o
 # the graph changes when the view follows updates (c:followUpdates). Its result is a result set in the
 # views graph (iv:ResultSet: a CONSTRUCT's triples as rows ?subject ?predicate ?object), which the view
 # names by iv:run and tells apart by iv:runOf. A view that binds a variable (c:bindVariable) runs its
-# own, <view>/~run-n for its nth query. A run reads what a rule's query would, rendered elements
-# included, but not provenance.
+# own, <view>/~run-n for its nth query. A change to the node it names by c:of runs it again
+# (iv:refreshedBy). A run reads what a rule's query would, rendered elements included, but not
+# provenance.
 c:QueryViewRuns a iv:View ;
-    iv:perQuery c:queries ; iv:listed true ; iv:referrerClass c:QueryView ; iv:followedBy c:followUpdates ; iv:bindsBy c:QueryRunBinding ;
+    iv:perQuery c:queries ; iv:listed true ; iv:referrerClass c:QueryView ; iv:followedBy c:followUpdates ; iv:refreshedBy c:of ; iv:bindsBy c:QueryRunBinding ;
     iv:strategy iv:OnRequest ; iv:materialize iv:ResultSet .
+# What it prints (the Turtle printer, turtle.ttl): a section per query (by its place in c:queries,
+# under its label) with the subjects of its run (c:QueryViewRuns, iv:runOf it) - in the order of the
+# query's sem:orderBy values (sem:descending), else by IRI; blank nodes no triple of the view's runs
+# points to at the top -, each printing its triples in the run (c:turtleRows).
+c:QueryViewTurtle a sem:BuildingBlock ; sem:targets c:QueryView ; sem:stratum 97 ;
+    sem:follows iv:run , ( iv:run rs:solution rs:binding ) , c:bindFrom ;
+    sem:watches rdf:type , c:queries , iv:run , iv:runOf , iv:error , rs:solution , rs:binding , rs:variable , rs:value , rs:index , c:bindVariable , c:bindFrom , c:bindProperty .
+c:QueryViewTurtle-fn a sem:Rule ; sem:implements c:QueryViewTurtle ; sem:function "queryview:turtle" .
+c:QueryViewTurtle-sparql a sem:Rule ;
+    sem:implements c:QueryViewTurtle ;
+    sem:bulk false ;
+    sem:needsExtension sx:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?head a c:TurtleHead ; c:turtleView $this .
+  ?section a c:TurtleSection ; c:turtleView $this ; c:turtleIndex ?i ; c:turtleTitle ?title .
+  ?node a c:TurtleNode ; c:turtleView $this ; c:turtleTerm ?s ; c:turtleKey ?key ; c:turtleBody 1 ; c:turtleTop ?top ; c:turtleSection ?section ; c:turtleRows ?run .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:QueryView .
+  # Nothing while it says something instead: a failed query, a bound variable without a value.
+  FILTER NOT EXISTS { $this iv:run ?failedRun . ?failedRun iv:error ?anyError }
+  FILTER(NOT EXISTS { $this c:bindVariable ?variable FILTER(STR(?variable) != "") } || EXISTS { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?value FILTER(isIRI(?value)) })
+  BIND(IRI(CONCAT(STR($this), "/~th")) AS ?head)
+  # Each query by its place in the list (from 0), its run.
+  { SELECT ?q ?i WHERE {
+      { SELECT ?cell (COUNT(?before) - 1 AS ?i) WHERE { $this c:queries ?list . ?list rdf:rest* ?before . ?before rdf:rest* ?cell . ?cell rdf:first ?anyQuery } GROUP BY ?cell }
+      ?cell rdf:first ?q FILTER(isIRI(?q))
+    } }
+  $this iv:run ?run . ?run iv:runOf ?q .
+  OPTIONAL { ?titleAt l10n:of ?q ; l10n:name ?title0 } OPTIONAL { FILTER(!BOUND(?title0)) ?q rdfs:label ?title1 FILTER(isLiteral(?title1)) }
+  BIND(STR(COALESCE(?title0, ?title1)) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~ts-", STR(?i))) AS ?section)
+  # Its subjects: IRIs, and blank nodes no triple of the view's runs points to.
+  { SELECT DISTINCT ?run ?s WHERE {
+      $this iv:run ?run . ?run rs:solution ?r . ?r rs:binding ?sb , ?pb . ?sb rs:variable "subject" ; rs:value ?s . ?pb rs:variable "predicate" ; rs:value ?p FILTER(isIRI(?p))
+    } }
+  FILTER(!isBlank(?s) || NOT EXISTS { $this iv:run ?anyRun . ?anyRun rs:solution ?pr . ?pr rs:binding ?pob . ?pob rs:variable "object" ; rs:value ?s })
+  # Its place: the least sem:orderBy value of its triples in the run (missing ones first, or last
+  # when descending), then its IRI.
+  OPTIONAL { ?q sem:orderBy ?orderBy }
+  BIND(EXISTS { ?q sem:descending ?desc FILTER(STR(?desc) = "true") } AS ?descending)
+  OPTIONAL { { SELECT ?run ?s (MIN(?v) AS ?rank) WHERE {
+      $this iv:run ?run . ?run iv:runOf ?rq . ?rq sem:orderBy ?rp .
+      ?run rs:solution ?rr . ?rr rs:binding ?rsb , ?rpb , ?rob . ?rsb rs:variable "subject" ; rs:value ?s . ?rpb rs:variable "predicate" ; rs:value ?rp . ?rob rs:variable "object" ; rs:value ?v FILTER(isNumeric(?v))
+    } GROUP BY ?run ?s } }
+  BIND(IF(!BOUND(?orderBy), "n0\\u0001n0", IF(BOUND(?rank), IF(?descending, CONCAT("n0\\u0001-n", STR(?rank)), CONCAT("n1\\u0001n", STR(?rank))), IF(?descending, "n1\\u0001n0", "n0\\u0001n0"))) AS ?rankKey)
+  BIND(IF(isBlank(?s), CONCAT("_:", sx:blankLabel(?s)), STR(?s)) AS ?termKey)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", SUBSTR(MD5(CONCAT(STR(?i), " ", ?termKey)), 1, 12))) AS ?node)
+  BIND(IF(isBlank(?s), "root", "named") AS ?top)
+  BIND(CONCAT("\\u0001n1\\u0001n", STR(?i), "\\u0001n1\\u0001", ?rankKey, "\\u0001s", IF(isBlank(?s), "~", ""), ?termKey) AS ?key)
+}""" .
+# Its element: the tokens' (when its runs have triples), else a sentence: nothing selected (a bound
+# variable without a value), the first failed query's error, or no results (its c:emptyText).
 c:QueryViewRendering a sem:Rendering ;
     sem:targets c:QueryView ;
     sem:stratum 0 ;
-    sem:follows c:bindFrom, c:of ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it prints the results of the queries in the data (c:queries) as colored Turtle tokens. (The results would be rows written as graph data.)" ;
-    sem:needsExtension sx:Matches .
+    sem:follows c:bindFrom , c:of , iv:run ;
+    sem:watches rdf:type , c:queries , c:bindVariable , c:bindFrom , c:bindProperty , c:emptyText , iv:run , iv:runOf , iv:error , rs:solution .
 c:QueryViewRendering-fn a sem:Rule ; sem:implements c:QueryViewRendering ; sem:function "queryview" .
+c:QueryViewRendering-sparql a sem:Rule ;
+    sem:implements c:QueryViewRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:class ?class ; rdfhtml:hasChild ?message .
+  ?message a rdfhtml:Text ; rdfhtml:data ?text .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:QueryView .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(EXISTS { $this c:bindVariable ?variable FILTER(STR(?variable) != "") } AS ?binds)
+  BIND(EXISTS { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?value FILTER(isIRI(?value)) } AS ?bound)
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?empty0 } OPTIONAL { FILTER(!BOUND(?empty0)) $this c:emptyText ?empty1 FILTER(isLiteral(?empty1)) }
+  BIND(STR(COALESCE(?empty0, ?empty1)) AS ?emptyText)
+  # The first query (by its place in the list) whose run failed.
+  OPTIONAL { SELECT (MIN(?failedKey) AS ?failure) WHERE {
+      { SELECT ?cell (COUNT(?before) AS ?n) WHERE { $this c:queries ?list . ?list rdf:rest* ?before . ?before rdf:rest* ?cell . ?cell rdf:first ?anyQuery } GROUP BY ?cell }
+      ?cell rdf:first ?fq . $this iv:run ?fr . ?fr iv:runOf ?fq ; iv:error ?error .
+      OPTIONAL { ?fqAt l10n:of ?fq ; l10n:name ?fl0 } OPTIONAL { FILTER(!BOUND(?fl0)) ?fq rdfs:label ?fl1 FILTER(isLiteral(?fl1)) }
+      BIND(COALESCE(STR(COALESCE(?fl0, ?fl1)), REPLACE(STR(?fq), "^.*[#/]", "")) AS ?label)
+      BIND(CONCAT(SUBSTR("000000", STRLEN(STR(?n)) + 1), STR(?n), "Query ", ?label, " failed: ", STR(?error)) AS ?failedKey)
+    } }
+  BIND(EXISTS { $this iv:run ?anyRun . ?anyRun rs:solution ?anySolution FILTER NOT EXISTS { ?anyRun iv:error ?anyError } } AS ?results)
+  BIND(IF(?binds && !?bound, COALESCE(?emptyText, "Nothing selected."), IF(BOUND(?failure), SUBSTR(?failure, 7), IF(?results, ?none, COALESCE(?emptyText, "No results.")))) AS ?text)
+  BIND(IF(BOUND(?text), rdfhtml:Div, rdfhtml:Pre) AS ?element)
+  BIND(IF(BOUND(?text), "sem-empty", "sem-turtle") AS ?class)
+  BIND(IF(BOUND(?text), IRI(CONCAT(STR($this), "/~empty")), ?none) AS ?message)
+}""" .
 
 # A rule may show the queries it runs on its back side (c:Flippable lists them).
 c:dataQuery a owl:ObjectProperty ; rdfs:comment "Links a component to a query or view whose result it shows."@en .
@@ -1153,10 +1238,35 @@ WHERE {
 }""" .
 
 c:TriplesView a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TurtleView ;
     rdfs:comment "The triples about one node (c:of) as syntax-colored Turtle."@en ;
-    sem:slug "triples-view" .
-c:TriplesViewRendering a sem:Rendering ; sem:targets c:TriplesView ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it colors the Turtle it prints for the node's triples, token by token." ;
-    sem:needsExtension sx:Matches .
+    sem:slug "triples-view" ;
+    c:turtleInto "root" .
+# What it prints (the Turtle printer, turtle.ttl): the node at the top of its one section (nothing,
+# when it has no triples); its blank nodes inline.
+c:TriplesViewTurtle a sem:BuildingBlock ; sem:targets c:TriplesView ; sem:stratum 97 ; sem:watches rdf:type , c:of .
+c:TriplesViewTurtle-fn a sem:Rule ; sem:implements c:TriplesViewTurtle ; sem:function "triplesview:turtle" .
+c:TriplesViewTurtle-sparql a sem:Rule ;
+    sem:implements c:TriplesViewTurtle ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?node a c:TurtleNode ; c:turtleView $this ; c:turtleTerm ?s ; c:turtleKey ?key ; c:turtleBody 1 ; c:turtleTop "named" ; c:turtleSection ?section .
+  ?section a c:TurtleSection ; c:turtleView $this ; c:turtleIndex 0 .
+  ?head a c:TurtleHead ; c:turtleView $this .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:TriplesView ; c:of ?s FILTER(isIRI(?s))
+  BIND(IRI(CONCAT(STR($this), "/~ts-0")) AS ?section)
+  BIND(IRI(CONCAT(STR($this), "/~th")) AS ?head)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", SUBSTR(MD5(CONCAT("0 ", STR(?s))), 1, 12))) AS ?node)
+  BIND(CONCAT("\\u0001n1\\u0001n0\\u0001n1\\u0001n0\\u0001n0\\u0001s", STR(?s)) AS ?key)
+}""" .
+# The element its tokens go into.
+c:TriplesViewRendering a sem:Rendering ; sem:targets c:TriplesView ; sem:stratum 0 .
 c:TriplesViewRendering-fn a sem:Rule ; sem:implements c:TriplesViewRendering ; sem:function "triplesview" .
+c:TriplesViewRendering-sparql a sem:Rule ;
+    sem:implements c:TriplesViewRendering ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle" . }
+WHERE { $this a/rdfs:subClassOf* c:TriplesView ; c:of ?s FILTER(isIRI(?s)) BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .

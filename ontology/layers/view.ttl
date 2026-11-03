@@ -128,6 +128,8 @@ iv:referrerClass a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range owl:Cla
     rdfs:comment "With iv:perQuery: only nodes of this class (or a subclass) name queries."@en .
 iv:followedBy a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range rdf:Property ;
     rdfs:comment "With iv:perQuery: a query a node names while saying this property true is maintained (iv:Auto), not run on request."@en .
+iv:refreshedBy a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range rdf:Property ;
+    rdfs:comment "With iv:perQuery: a run on request runs again when a triple about the node its referrer names by this property changes (a query view's c:of)."@en .
 iv:bindsBy a owl:ObjectProperty ; rdfs:domain iv:View ;
     rdfs:comment """With iv:perQuery: how a node binds a variable of the query it names - the property holding the
 variable's name (iv:variableBy), the node (iv:fromBy) and the property (iv:propertyBy) whose value it is."""@en .

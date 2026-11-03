@@ -7,6 +7,7 @@ import { HtmlIndex } from '../render/html-index.ts'
 import { toIndentedHTML } from '../render/serialize.ts'
 import { matchTokens, tokenizeSparql } from '../sparql-tokens.ts'
 import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
+import { section, topNode } from './turtle.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { labelOf as textLabelOf, text, declaredPrefixes, fnv, named, rdfList, str } from './util.ts'
 import { md5Key } from './data.ts'
@@ -233,6 +234,86 @@ const toggle: FnRule = (ctx, focus) => {
 
 // --- Query views -----------------------------------------------------------------------------
 
+/** A query view's queries in their list's order, each with its run (c:QueryViewRuns: iv:runOf it), if any. */
+function viewRuns(ctx: RuleContext, focus: NamedNode): { q: NamedNode; run?: Term }[] {
+  const runs = ctx.objects(focus, NS.iv + 'run')
+  return rdfList(ctx, ctx.object(focus, C.queries))
+    .filter(named)
+    .map((q) => ({ q, run: runs.find((r) => ctx.object(r, NS.iv + 'runOf')?.equals(q)) }))
+}
+
+const RS = NS.rs
+/** A run's rows as triples: (subject, predicate, object) of each solution. */
+function runTriples(ctx: RuleContext, run: Term): [Term, NamedNode, Term][] {
+  const out: [Term, NamedNode, Term][] = []
+  for (const r of ctx.objects(run, RS + 'solution')) {
+    const value = (v: string) => ctx.object(ctx.nn(r.value + '-' + v), RS + 'value')
+    const [s, p, o] = [value('subject'), value('predicate'), value('object')]
+    if (s && named(p) && o) out.push([s, p, o])
+  }
+  return out
+}
+
+/** Its element: the tokens' (turtle.ts) when its runs have triples, else a sentence. */
+const queryview: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const message = (text: string) => {
+    o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text)]))
+    return o.quads
+  }
+  if (!ctx.sparql) return message('This view runs SPARQL; choose a store with SPARQL (Semblance WASM, Semblance Rust, Oxigraph or Hybrid).')
+  const variable = str(ctx.object(focus, C.bindVariable))
+  const from = ctx.object(focus, C.bindFrom)
+  const property = ctx.object(focus, C.bindProperty)
+  const value = from && property ? ctx.object(from, property) : undefined
+  if (variable && !named(value)) return message(text(ctx, focus, C.emptyText) ?? 'Nothing selected.')
+  const runs = viewRuns(ctx, focus)
+  for (const { q, run } of runs) {
+    const error = run && ctx.object(run, NS.iv + 'error')
+    if (error) return message(`Query ${text(ctx, q, RDFS_LABEL) ?? q.value.replace(/^.*[#/]/, '')} failed: ${error.value}`)
+  }
+  if (!ctx.objects(focus, NS.iv + 'run').some((r) => ctx.objects(r, RS + 'solution').length)) return message(text(ctx, focus, C.emptyText) ?? 'No results.')
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }))
+  return o.quads
+}
+
+/**
+ * What a query view prints: a section per query (by its place in the list, under its label) with the
+ * subjects of its run, by the query's sem:orderBy values, then IRI.
+ */
+const queryviewTurtle: FnRule = (ctx, focus) => {
+  const runs = viewRuns(ctx, focus)
+  // Nothing while it says something instead: a failed query, a bound variable without a value.
+  if (ctx.objects(focus, NS.iv + 'run').some((r) => ctx.object(r, NS.iv + 'error'))) return []
+  const from = ctx.object(focus, C.bindFrom)
+  const property = ctx.object(focus, C.bindProperty)
+  if (str(ctx.object(focus, C.bindVariable)) && !(from && property && named(ctx.object(from, property)))) return []
+  const o = ctx.out(focus)
+  const pointed = new Set(ctx.objects(focus, NS.iv + 'run').flatMap((r) => runTriples(ctx, r).flatMap(([, , x]) => (x.termType === 'BlankNode' ? [x.value] : []))))
+  runs.forEach(({ q, run }, i) => {
+    if (!run || ctx.object(run, NS.iv + 'error')) return
+    section(ctx, o, i, text(ctx, q, RDFS_LABEL))
+    const triples = runTriples(ctx, run)
+    const orderBy = ctx.object(q, SEM.orderBy)
+    const descending = str(ctx.object(q, SEM.descending)) === 'true'
+    const subjects = new Map<string, Term>()
+    for (const [s] of triples) if (!(s.termType === 'BlankNode' && pointed.has(s.value))) subjects.set(s.termType + s.value, s)
+    for (const s of subjects.values()) {
+      let rank: { missing: number; value: number; lexical?: string } | undefined
+      if (orderBy) {
+        const values = triples.filter(([x, p, v]) => x.equals(s) && p.equals(orderBy) && v.termType === 'Literal' && isNumericLiteral(v)).map(([, , v]) => v)
+        const least = values.sort((a, b) => Number(a.value) - Number(b.value))[0]
+        rank = least ? { missing: descending ? 0 : 1, value: 0, lexical: (descending ? '-n' : 'n') + least.value } : { missing: descending ? 1 : 0, value: 0 }
+      }
+      topNode(ctx, o, i, s, { rows: run, rank })
+    }
+  })
+  return o.quads
+}
+
+const NUMERIC = new Set(['integer', 'decimal', 'double', 'float', 'long', 'int', 'short', 'byte', 'nonNegativeInteger', 'positiveInteger', 'negativeInteger', 'nonPositiveInteger', 'unsignedLong', 'unsignedInt', 'unsignedShort', 'unsignedByte'].map((t) => NS.xsd + t))
+const isNumericLiteral = (v: Term) => v.termType === 'Literal' && NUMERIC.has(v.datatype.value)
+
 /**
  * Turtle tokens as RDF/HTML nodes. Nodes are keyed by the content of their line
  * (and position in it), not by their position in the document: when results
@@ -270,44 +351,6 @@ function turtleNodes(o: ReturnType<RuleContext['out']>, tokens: ReturnType<typeo
     flushPlain()
   }
   return nodes
-}
-
-const queryview: FnRule = (ctx, focus) => {
-  const o = ctx.out(focus)
-  const queries = rdfList(ctx, ctx.object(focus, C.queries)).filter(named)
-  const variable = str(ctx.object(focus, C.bindVariable))
-  const from = ctx.object(focus, C.bindFrom)
-  const property = ctx.object(focus, C.bindProperty)
-  const value = from && property ? ctx.object(from, property) : undefined
-  const message = (text: string) => {
-    o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text)]))
-    return o.quads
-  }
-  if (!ctx.sparql) return message('This view runs SPARQL; choose a store with SPARQL (Semblance WASM, Semblance Rust, Oxigraph or Hybrid).')
-  if (variable && !named(value)) return message(text(ctx, focus, C.emptyText) ?? 'Nothing selected.')
-  const sections: TurtleSection[] = []
-  for (const q of queries) {
-    let query = str(ctx.object(q, SEM.construct)) ?? ''
-    if (variable && named(value)) query = query.replaceAll('$' + variable, `<${value.value}>`)
-    let quads: Quad[]
-    try {
-      quads = ctx.construct(query)
-    } catch (e) {
-      return message(`Query ${labelOf(ctx, q)} failed: ${(e as Error).message}`)
-    }
-    const orderBy = ctx.object(q, SEM.orderBy)
-    if (orderBy) {
-      const rank = new Map(quads.filter((x) => x.predicate.value === orderBy.value).map((x) => [x.subject.value, Number(x.object.value)]))
-      const sign = str(ctx.object(q, SEM.descending)) === 'true' ? -1 : 1
-      const order = (s: string) => (rank.has(s) ? rank.get(s)! * sign : -Infinity * sign)
-      quads = [...quads].sort((a, b) => order(a.subject.value) - order(b.subject.value))
-    }
-    if (quads.length) sections.push({ title: text(ctx, q, RDFS_LABEL), quads })
-  }
-  if (!sections.length) return message(text(ctx, focus, C.emptyText) ?? 'No results.')
-  const nodes = turtleNodes(o, turtleTokens(sections, declaredPrefixes(ctx), str(ctx.object(focus, C.baseIri))))
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, nodes))
-  return o.quads
 }
 
 /** The triples of a rendered element's subtree that the HTML index reads (no provenance, no input). */
@@ -550,12 +593,21 @@ const streammembers: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** The element the Turtle printer puts the node's tokens in (turtle.ttl). */
 const triplesview: FnRule = (ctx, focus) => {
+  if (!named(ctx.object(focus, C.of))) return []
+  const o = ctx.out(focus)
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }))
+  return o.quads
+}
+
+/** What a triples view prints: the node at the top of its one section. */
+const triplesviewTurtle: FnRule = (ctx, focus) => {
   const subject = ctx.object(focus, C.of)
   if (!named(subject)) return []
-  const quads = ctx.match(subject, null, null)
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, turtleNodes(o, turtleTokens([{ quads }], declaredPrefixes(ctx), undefined, false))))
+  topNode(ctx, o, 0, subject)
+  section(ctx, o, 0)
   return o.quads
 }
 
@@ -599,4 +651,6 @@ export const viewFunctions: Record<string, FnRule> = {
   hostslot,
   streammembers,
   triplesview,
+  'triplesview:turtle': triplesviewTurtle,
+  'queryview:turtle': queryviewTurtle,
 }
