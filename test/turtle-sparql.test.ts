@@ -356,3 +356,82 @@ describe('the query view in SPARQL', () => {
     }
   })
 })
+
+// --- the element markup (c:ElementMarkup): the component as Turtle, the element as HTML ------------------
+
+const MARKUP = `@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix ex: <https://example.org/#> .
+
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/#"^^xsd:anyURI ] .
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ex:title ex:todos ex:add ex:triples ) .
+ex:title a c:Heading ; c:label "Todos & <more>" .
+ex:todos a c:List ; c:label "Todos" ; c:sortBy ex:created ; c:itemLabel rdfs:label ; c:itemChecked ex:done ; c:item ex:write , ex:render .
+ex:write rdfs:label "Write the ontology" ; ex:created 1 ; ex:done true .
+ex:render rdfs:label "Render it" ; ex:created 2 ; ex:done false .
+ex:add a c:Button ; c:label "Add \\"one\\"" ; sty:intent sty:Primary .
+ex:triples a c:TriplesView ; c:of ex:write .
+
+ex:pick ex:el ex:page .
+ex:markup a c:ElementMarkup ; c:active true ; c:bindFrom ex:pick ; c:bindProperty ex:el ; c:baseIri "https://example.org/" .
+ex:off a c:ElementMarkup ; c:active false ; c:bindFrom ex:pick ; c:bindProperty ex:el .
+ex:none a c:ElementMarkup ; c:active true ; c:bindFrom ex:pick ; c:bindProperty ex:nothing ; c:emptyText "Pick an element." .
+`
+const MARKUP_ROOTS = ['markup', 'off', 'none']
+
+function mountMarkup(prefer: 'sparql' | 'function') {
+  const store = loadStore((process.env.ENGINE as 'wat') ?? 'wat', MARKUP)
+  const runtime = new Runtime(store)
+  const { document } = parseHTML('<!doctype html><html><body><div id="page"></div><div id="m"></div><div id="o"></div><div id="n"></div></body></html>')
+  const screen = runtime.project({ modality: MOD.Screen, layers: [STY.Layer], prefer, name: 'm', roots: [EX + 'page', ...MARKUP_ROOTS.map((r) => EX + r)] }, (e) => {
+    throw e
+  })
+  const renderers = [['page', 'page'], ['markup', 'm'], ['off', 'o'], ['none', 'n']].map(([root, id]) => [root, new DomRenderer(screen.index, document.getElementById(id)!, EX + root), document.getElementById(id)!] as const)
+  const at = (root: string) => renderers.find(([r]) => r === root)!
+  const f = store.factory
+  return {
+    runtime,
+    screen,
+    html: (root: string) => (at(root)[1].flush(), at(root)[2].innerHTML),
+    text: (root: string) => (at(root)[1].flush(), at(root)[2].textContent ?? ''),
+    pick: (node: string) => runtime.apply({ remove: store.match(f.namedNode(EX + 'pick'), f.namedNode(EX + 'el'), null), add: [f.quad(f.namedNode(EX + 'pick'), f.namedNode(EX + 'el'), f.namedNode(node))] }),
+    add: (s: string, p: string, o: string) => runtime.apply({ add: [f.quad(f.namedNode(EX + s), f.namedNode(EX + p), f.literal(o))], remove: [] }),
+  }
+}
+
+describe('the element markup in SPARQL', () => {
+  it('prints what the function prints, for each element picked', () => {
+    const [sp, fn] = [mountMarkup('sparql'), mountMarkup('function')]
+    const same = (what: string) => {
+      for (const h of [sp, fn]) h.runtime.refresh()
+      for (const root of ['page', ...MARKUP_ROOTS]) sameHtml(sp.html(root), fn.html(root), `${root} after ${what}`)
+    }
+    same('loading')
+    const page = sp.text('markup')
+    expect(page).toMatch(/^@base <https:\/\/example.org\/> \.\n/)
+    expect(page).toContain('# the component\nex:page a c:Stack ;')
+    expect(page).toContain('\n\n# the element as HTML\n<div')
+    expect(page).toContain('\n  <h2 data-sem-c="heading">Todos &amp; &lt;more&gt;</h2>\n')
+    expect(page).toContain('>Add "one"</button>')
+    expect(page.indexOf('Write the ontology')).toBeLessThan(page.indexOf('Render it'))
+    expect(page).toMatch(/<input [^>]*type="checkbox"/)
+    expect(sp.html('off')).toContain('hidden')
+    expect(sp.text('none')).toBe('Pick an element.')
+    expect(sp.screen.engine.stats.byRule.get('https://semblance.dev/ns/component#MarkupTokens-sparql')?.runs ?? 0).toBeGreaterThan(0)
+    for (const node of ['ex:title', 'ex:todos', 'ex:triples', 'ex:add'].map((x) => x.replace('ex:', EX))) {
+      for (const h of [sp, fn]) h.pick(node)
+      same(`picking ${node}`)
+      if (node.endsWith('triples')) expect(sp.text('markup')).toContain('<pre class="sem-turtle" data-sem-c="triples-view">\n  <span class="ttl-pname">ex:write</span>')
+    }
+    for (const h of [sp, fn]) h.add('write', 'note', 'a new triple')
+    same('a triple the picked view shows')
+    for (const h of [sp, fn]) h.pick(EX + 'title/~root')
+    same('picking an element')
+  })
+})
