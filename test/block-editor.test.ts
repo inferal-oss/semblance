@@ -685,9 +685,9 @@ describe('formulas and code (c:BlockEditor)', () => {
 <${EX}m> a <${NS.blk}Math> ; <${NS.rdf}value> "x^2" .
 <${EX}code> a <${NS.blk}Code> ; <${NS.rdf}value> "let a = 1" .`
 
-  it('folds a formula\'s TeX unless the caret is in it', () => {
+  it('marks a block entered while the caret is in it (its sources show only then)', () => {
     const both = [mount('sparql', 'wat', extra), mount('function', 'wat', extra)] as const
-    const folded = (h: (typeof both)[number]) => h.app.querySelector(`[id="${EX}m/~root"] code`)!.hasAttribute('data-sem-folded')
+    const folded = (h: (typeof both)[number]) => !h.app.querySelector(`[id="${EX}m/~root"]`)!.hasAttribute('data-sem-entered')
     for (const h of both) expect(folded(h)).toBe(true)
     for (const h of both) h.select('m', 1)
     for (const h of both) expect(folded(h)).toBe(false)
@@ -695,6 +695,20 @@ describe('formulas and code (c:BlockEditor)', () => {
     for (const h of both) h.select('p1', 0)
     for (const h of both) expect(folded(h)).toBe(true)
     sameHtml(both[1].html(), both[0].html(), "after the step")
+  })
+
+  it('enters an atom with an address by a click on it', () => {
+    const more = extra + `\n<${EX}doc> <${NS.po}contains> <${EX}img> . <${EX}code> <${NS.co}nextItem> <${EX}img> . <${EX}img> a <${NS.blk}Image> ; <${NS.schema}contentUrl> "/a.png" .`
+    const both = [mount('sparql', 'wat', more), mount('function', 'wat', more)] as const
+    for (const h of both) {
+      const root = h.app.querySelector(`[id="${EX}img/~root"]`)!
+      expect(root.getAttribute('contenteditable')).toBe('false')
+      expect(root.hasAttribute('data-sem-entered')).toBe(false)
+      root.querySelector('img')!.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true }))
+      expect(h.app.querySelector(`[id="${EX}img/~root"]`)!.hasAttribute('data-sem-entered')).toBe(true)
+      expect(h.caret()).toBe(`${EX}img 0 ${EX}img 0`)
+    }
+    sameHtml(both[1].html(), both[0].html(), 'entered')
   })
 
   it('moves a caret put on the typeset formula into its TeX', () => {

@@ -94,6 +94,15 @@ const covers = (m: Mark, type: string, b: number, n: number) => m.types.has(type
 
 // --- the shared renderings ----------------------------------------------------------------------------
 
+/** A block an editor's caret is in is entered (its sources show); an atom with an address is not editable text. */
+const entered: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const root = o.node('root')
+  if (ctx.match(null, NS.c + 'focusBlock', focus).length) o.attr(root, 'data-sem-entered', '')
+  if (isA(ctx, focus, NS.blk + 'Addressed')) o.t(root, H.ns + 'contenteditable', 'false')
+  return o.quads
+}
+
 const members: FnRule = (ctx, focus, member) => {
   if (!member) return []
   const o = ctx.out(focus)
@@ -301,9 +310,7 @@ const math: FnRule = (ctx, focus) => {
     // Typeset by the island (blk:Typeset), the TeX editable beneath it.
     const typeset = o.node('typeset')
     o.t(typeset, RDF_TYPE, ctx.nn(NS.blk + 'Typeset')).t(typeset, C.of, focus)
-    // The TeX is folded unless an editor's caret is in the formula.
-    const folded = value !== '' && !ctx.match(null, NS.c + 'focusBlock', focus).length ? '' : undefined
-    o.renders(o.el('root', 'Div', { id: o.node('root').value, role: 'math', 'aria-label': value }, [typeset, o.el('code', 'Code', { 'data-sem-text': focus.value, 'data-sem-folded': folded }, plainText(o, value))]))
+    o.renders(o.el('root', 'Div', { id: o.node('root').value, role: 'math', 'aria-label': value }, [typeset, o.el('code', 'Code', { 'data-sem-text': focus.value }, plainText(o, value))]))
   }
   return o.quads
 }
@@ -726,6 +733,7 @@ export const functions: Record<string, FnRule> = {
   'blk:atom': atom,
   'blk:toolbar': toolbar,
   'blk:address-field': addressField,
+  'blk:entered': entered,
   'blk:table-tools': tableTools,
   'blk:upload-button': uploadButton,
   'blk:menu-state': menuState,

@@ -285,6 +285,39 @@ blk:ColumnsTemplate-bp a blk:Paragraph ; rdf:value "" .
 # block's place in the chain and nothing of its content, so typing in a block never runs it. The chain is
 # the Collections Ontology's co:nextItem: the document's own order, which the engine follows as data (ord:
 # is the rendered output's placement, never followed).
+# A block an editor's caret is in (its c:focusBlock) is entered: its root says so (data-sem-entered), and
+# the theme shows its sources only then - a formula's TeX, an atom's address and upload button, a code
+# block's language field - and otherwise only what they render. An atom with an address is not
+# editable text (contenteditable=false): a click enters it (blk:EnterBlock), and so does focusing its handle.
+blk:EnteredRendering a sem:Rendering ; sem:targets blk:Block ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows ( [ sem:inverse c:focusBlock ] ) ;
+    sem:watches rdf:type , c:focusBlock .
+blk:EnteredRendering-fn a sem:Rule ; sem:implements blk:EnteredRendering ; sem:function "blk:entered" .
+blk:EnteredRendering-sparql a sem:Rule ; sem:implements blk:EnteredRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?entered . ?entered a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-entered" ; rdfhtml:attributeValue "" .
+  ?atomRoot rdfhtml:contenteditable "false" .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Block .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(EXISTS { ?editor c:focusBlock $this }, IRI(CONCAT(STR($this), "/~root-data-sem-entered")), ?none) AS ?entered)
+  BIND(IF(EXISTS { $this a/rdfs:subClassOf* blk:Addressed }, ?root, ?none) AS ?atomRoot)
+}""" .
+blk:EnterBlock a beh:Reaction ;
+    rdfs:label "Enter a block"@en ;
+    rdfs:comment "A click on an atom with an address: the editor's caret is in it, so its address and upload button show."@en ;
+    beh:when beh:Click ; beh:sourceClass blk:Addressed ;
+    beh:deletes """CONSTRUCT { ?editor c:anchorBlock ?ab ; c:anchorOffset ?ao ; c:focusBlock ?fb ; c:focusOffset ?fo . }
+WHERE {
+  $this ^po:contains+ ?doc . ?editor c:of ?doc ; c:editable true .
+  FILTER NOT EXISTS { ?editor c:focusBlock $this }
+  OPTIONAL { ?editor c:anchorBlock ?ab } OPTIONAL { ?editor c:anchorOffset ?ao } OPTIONAL { ?editor c:focusBlock ?fb } OPTIONAL { ?editor c:focusOffset ?fo }
+}""" ;
+    beh:inserts """CONSTRUCT { ?editor c:anchorBlock $this ; c:anchorOffset 0 ; c:focusBlock $this ; c:focusOffset 0 . }
+WHERE { $this ^po:contains+ ?doc . ?editor c:of ?doc ; c:editable true . FILTER NOT EXISTS { ?editor c:focusBlock $this } }""" .
+
 blk:Members a sem:Rendering ; sem:targets blk:Container ; sem:stratum 0 ;
     sem:forEach po:contains ;
     sem:watches rdf:type , po:contains , co:nextItem .
@@ -701,8 +734,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~source")) AS ?source)
 }""" .
 
-# Its TeX is folded (data-sem-folded) unless an editor's caret is in it (c:focusBlock): the formula alone shows.
-blk:MathRendering a sem:Rendering ; sem:targets blk:Math ; sem:stratum 0 ; sem:follows ( [ sem:inverse c:focusBlock ] ) ; sem:watches rdf:type , rdf:value , c:focusBlock .
+blk:MathRendering a sem:Rendering ; sem:targets blk:Math ; sem:stratum 0 ; sem:watches rdf:type , rdf:value .
 blk:MathRendering-fn a sem:Rule ; sem:implements blk:MathRendering ; sem:function "blk:math" .
 blk:MathRendering-sparql-screen a sem:Rule ; sem:implements blk:MathRendering ; sem:modality mod:Screen ;
     sem:construct """
@@ -711,15 +743,13 @@ CONSTRUCT {
   ?typeset a blk:Typeset ; c:of $this ; ord:immediatelyPrecedes ?code .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "math" .
   ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?value .
-  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source , ?br ; rdfhtml:attribute ?holder , ?folded .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source , ?br ; rdfhtml:attribute ?holder .
   ?holder a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-text" ; rdfhtml:attributeValue ?block .
-  ?folded a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-folded" ; rdfhtml:attributeValue "" .
   ?source a rdfhtml:Text ; rdfhtml:data ?value ; ord:immediatelyPrecedes ?br .
   ?br a rdfhtml:Br .
 }
 WHERE {
   $this a/rdfs:subClassOf* blk:Math .
-  BIND(EXISTS { ?editor c:focusBlock $this } AS ?editing)
   OPTIONAL { $this rdf:value ?raw }
   BIND(COALESCE(STR(?raw), "") AS ?value)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -731,7 +761,6 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~code-data-sem-text")) AS ?holder)
   BIND(STR($this) AS ?block)
   BIND(IRI(CONCAT(STR($this), "/~typeset")) AS ?typeset)
-  BIND(IF(?editing || ?value = "", ?none, IRI(CONCAT(STR($this), "/~code-data-sem-folded"))) AS ?folded)
   BIND(IF(?value = "" || STRENDS(?value, "\\n"), IRI(CONCAT(STR($this), "/~br")), ?none) AS ?br)
 }""" .
 blk:MathRendering-sparql-text a sem:Rule ; sem:implements blk:MathRendering ; sem:modality mod:Text ;
