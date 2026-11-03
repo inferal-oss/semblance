@@ -1181,16 +1181,279 @@ c:ClearGraphSelection a beh:Reaction ;
     sem:function "workbench:clear-node" .
 
 c:ResultTurtle a owl:Class ;
-    rdfs:subClassOf c:QueryResultView ;
+    rdfs:subClassOf c:QueryResultView , c:TurtleView ;
     rdfs:label "Result Turtle"@en , "Результати в Turtle"@uk , "Ergebnis als Turtle"@de , "النتائج بصيغة Turtle"@ar ;
     rdfs:comment """The results as syntax-colored Turtle: the graph of a CONSTRUCT, or the bindings of a SELECT
 as a SPARQL result set (the rs: vocabulary of the SPARQL test suite)."""@en ;
-    sem:slug "result-turtle" .
-c:ResultTurtleRendering a sem:Rendering ; sem:targets c:ResultTurtle ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
-    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it prints the result as Turtle colored token by token. (Its rows would come from a step that writes them as graph data, as the views runtime does.)" ;
-    sem:needsExtension sx:Matches .
+    sem:slug "result-turtle" ;
+    c:turtleInto "code" ;
+    c:turtleHeader true .
+# What it prints (the Turtle printer, turtle.ttl): a CONSTRUCT's first c:limit triples (400) by subject
+# (its rows: c:turtleRows); the bindings of a SELECT (its first c:limit solutions, 50) or an ASK's
+# answer as a result set, the run itself printed as [ … ] (c:turtleResults); then how many more there
+# are, as a # comment.
+c:ResultTurtlePrint a sem:BuildingBlock ; sem:targets c:ResultTurtle ; sem:stratum 2 ;
+    sem:follows c:of , iv:run , ( iv:run rs:solution rs:binding ) , c:bindFrom ;
+    sem:watches rdf:type , c:of , iv:run , c:limit , sem:select , sem:construct , c:bindVariable , c:bindFrom , c:bindProperty ,
+      rs:solution , rs:binding , rs:index , rs:variable , rs:value , rs:boolean , iv:rowCount , iv:triples , iv:error .
+c:ResultTurtlePrint-fn a sem:Rule ; sem:implements c:ResultTurtlePrint ; sem:function "workbench:turtle-print" .
+c:ResultTurtlePrint-sparql a sem:Rule ;
+    sem:implements c:ResultTurtlePrint ;
+    sem:bulk false ;
+    sem:needsExtension sx:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?head a c:TurtleHead ; c:turtleView $this .
+  ?section a c:TurtleSection ; c:turtleView $this ; c:turtleIndex 0 ; c:turtleTitle ?title .
+  ?node a c:TurtleNode ; c:turtleView $this ; c:turtleTerm ?s ; c:turtleKey ?key ; c:turtleBody 1 ; c:turtleTop ?top ; c:turtleSection ?section ;
+    c:turtleRows ?rowsRun ; c:turtleResults ?resultsRun ; c:turtleLimit ?limit .
+  ?code rdfhtml:hasChild ?tail .
+  ?tail a ?tailElement ; rdfhtml:data ?tailPlain ; rdfhtml:class ?tailClass ; rdfhtml:hasChild ?tailText ; sem:orderKey ?tailKey .
+  ?tailText a rdfhtml:Text ; rdfhtml:data ?tailSpanned .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultTurtle .
+  OPTIONAL { $this c:of ?q FILTER(isIRI(?q)) FILTER EXISTS { { ?q sem:select ?qt } UNION { ?q sem:construct ?qt } FILTER(REGEX(STR(?qt), "[^ \\t\\r\\n]")) } }
+  BIND(EXISTS { $this c:bindVariable ?anyVariable FILTER(STR(?anyVariable) != "") } AS ?binds)
+  BIND(EXISTS { $this c:bindFrom ?bindFrom ; c:bindProperty ?bindProperty . ?bindFrom ?bindProperty ?bindValue FILTER(isIRI(?bindValue)) } AS ?bindsValue)
+  OPTIONAL { $this iv:run ?run . ?run a rs:ResultSet }
+  BIND(COALESCE(?run, c:none) AS ?view)
+  BIND(IF(!BOUND(?q), "none", IF(?binds && !?bindsValue, "unbound", IF(!BOUND(?run), "none",
+       IF(EXISTS { ?view iv:error ?anyError }, "error", IF(EXISTS { ?view rs:boolean ?anyAnswer }, "answer", "rows"))))) AS ?state)
+  BIND(EXISTS { ?view iv:triples ?anyTriples } AS ?triples)
+  LATERAL { OPTIONAL { ?view iv:rowCount ?total0 } }
+  BIND(COALESCE(xsd:integer(?total0), 0) AS ?total)
+  FILTER(?state = "rows" || ?state = "answer")
+  OPTIONAL { $this c:limit ?limit0 }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?limit0))), IF(?triples, 400, 50)) AS ?limit1)
+  BIND(IF(?limit1 < 1, 1, ?limit1) AS ?limit)
+  BIND(IRI(CONCAT(STR($this), "/~th")) AS ?head)
+  BIND(IRI(CONCAT(STR($this), "/~ts-0")) AS ?section)
+  BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
+  OPTIONAL { FILTER(?state = "rows" && !?triples) ?titleAt l10n:of c:ResultSetPhrase ; l10n:name ?title0 }
+  OPTIONAL { FILTER(?state = "rows" && !?triples && !BOUND(?title0)) c:ResultSetPhrase rdfs:label ?title1 }
+  BIND(STR(COALESCE(?title0, ?title1)) AS ?title)
+  OPTIONAL { ?moreAt l10n:of c:MorePhrase ; l10n:name ?more0 } OPTIONAL { FILTER(!BOUND(?more0)) c:MorePhrase rdfs:label ?more1 }
+  BIND(STR(COALESCE(?more0, ?more1)) AS ?morePhrase)
+  BIND(IF(?total < ?limit, ?total, ?limit) AS ?shown)
+  BIND(?total - ?shown AS ?hidden)
+  BIND(STR(?hidden) AS ?hiddenS) BIND(STRLEN(?hiddenS) AS ?hiddenL) BIND(xsd:integer(?hiddenL - FLOOR((?hiddenL - 1) / 3) * 3) AS ?hiddenG)
+  BIND(CONCAT(SUBSTR(?hiddenS, 1, ?hiddenG), IF(?hiddenL > ?hiddenG, CONCAT(",", SUBSTR(?hiddenS, ?hiddenG + 1, 3)), ""), IF(?hiddenL > ?hiddenG + 3, CONCAT(",", SUBSTR(?hiddenS, ?hiddenG + 4, 3)), ""),
+       IF(?hiddenL > ?hiddenG + 6, CONCAT(",", SUBSTR(?hiddenS, ?hiddenG + 7, 3)), ""), IF(?hiddenL > ?hiddenG + 9, CONCAT(",", SUBSTR(?hiddenS, ?hiddenG + 10, 3)), "")) AS ?hiddenText)
+  LATERAL {
+    {
+      # A CONSTRUCT's subjects: IRIs, and blank nodes no shown triple points to.
+      FILTER(?triples)
+      { SELECT DISTINCT ?s WHERE {
+          $this iv:run ?sr . ?sr rs:solution ?r . ?r rs:index ?ri ; rs:binding ?sb , ?pb , ?ob .
+          ?sb rs:variable "subject" ; rs:value ?s . ?pb rs:variable "predicate" ; rs:value ?p FILTER(isIRI(?p)) ?ob rs:variable "object" ; rs:value ?o .
+          OPTIONAL { $this c:limit ?sl0 }
+          FILTER(?ri <= IF(COALESCE(xsd:integer(ROUND(xsd:double(?sl0))), 400) < 1, 1, COALESCE(xsd:integer(ROUND(xsd:double(?sl0))), 400)))
+        } }
+      FILTER(!isBlank(?s) || NOT EXISTS { ?run rs:solution ?pr . ?pr rs:index ?pri ; rs:binding ?pob . ?pob rs:variable "object" ; rs:value ?s FILTER(?pri <= ?limit) })
+      BIND(?run AS ?rowsRun)
+      BIND(IF(isBlank(?s), "root", "named") AS ?top)
+      BIND(IF(isBlank(?s), CONCAT("~_:", sx:blankLabel(?s)), STR(?s)) AS ?subjectKey)
+      BIND(IF(isBlank(?s), CONCAT("_:", sx:blankLabel(?s)), STR(?s)) AS ?termKey)
+    } UNION {
+      # A SELECT's bindings or an ASK's answer: the run, as a result set.
+      FILTER(!?triples)
+      BIND(?run AS ?s) BIND(?run AS ?resultsRun) BIND("root" AS ?top)
+      BIND(STR(?run) AS ?subjectKey) BIND(STR(?run) AS ?termKey)
+    } UNION {
+      # How many more there are.
+      FILTER(?hidden > 0)
+      VALUES (?slot ?tailText0 ?tailKind) { (0 "\\n" "space") (1 "" "comment") }
+      BIND(IRI(CONCAT(STR($this), "/~tm-", STR(?slot))) AS ?tail)
+      BIND(CONCAT("\\u0001n2\\u0001n", STR(?slot)) AS ?tailKey)
+      BIND(IF(?slot = 0, ?tailText0, CONCAT("# ", IF(CONTAINS(?morePhrase, "{n}"), CONCAT(STRBEFORE(?morePhrase, "{n}"), ?hiddenText, STRAFTER(?morePhrase, "{n}")), ?morePhrase))) AS ?tailT)
+      BIND(IF(?tailKind = "space", rdfhtml:Text, rdfhtml:Span) AS ?tailElement)
+      BIND(IF(?tailKind = "space", ?tailT, ?none) AS ?tailPlain)
+      BIND(IF(?tailKind = "space", ?none, "ttl-comment") AS ?tailClass)
+      BIND(IF(?tailKind = "space", ?none, IRI(CONCAT(STR(?tail), "-x"))) AS ?tailText)
+      BIND(IF(?tailKind = "space", ?none, ?tailT) AS ?tailSpanned)
+    }
+  }
+  BIND(IF(BOUND(?termKey), IRI(CONCAT(STR($this), "/~tt-", SUBSTR(MD5(CONCAT("0 ", ?termKey)), 1, 12))), ?none) AS ?node)
+  BIND(IF(BOUND(?subjectKey), CONCAT("\\u0001n1\\u0001n0\\u0001n1\\u0001n0\\u0001n0\\u0001s", ?subjectKey), ?none) AS ?key)
+}""" .
+# The view: not run, a binding without a value, a failed run (as the other result views say them), a
+# CONSTRUCT with no triples; else on screen the summary (beside the c:actions) and the element the
+# tokens go into, as text that element alone.
+c:ResultTurtleRendering a sem:Rendering ; sem:targets c:ResultTurtle ; sem:stratum 0 ; sem:follows c:of , iv:run , c:bindFrom ; sem:refresh sem:NextFrame ;
+    sem:watches rdf:type , c:of , iv:run , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions , c:bindVariable , c:bindFrom , c:bindProperty ,
+      rs:boolean , iv:rowCount , iv:triples , iv:error , c:emptyText .
 c:ResultTurtleRendering-fn a sem:Rule ; sem:implements c:ResultTurtleRendering ; sem:function "workbench:turtle" .
+c:ResultTurtleRendering-sparql-screen a sem:Rule ;
+    sem:implements c:ResultTurtleRendering ;
+    sem:modality mod:Screen ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; sem:orderKey ?key ; c:label ?alertLabel ; c:help ?alertHelp ; sty:tone ?tone ; rdfhtml:hasChild ?textNode .
+  ?parent rdfhtml:hasChild ?el .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data .
+  ?el ord:immediatelyPrecedes ?after .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultTurtle .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this c:of ?q FILTER(isIRI(?q)) FILTER EXISTS { { ?q sem:select ?qt } UNION { ?q sem:construct ?qt } FILTER(REGEX(STR(?qt), "[^ \\t\\r\\n]")) } }
+  BIND(EXISTS { $this c:bindVariable ?anyVariable FILTER(STR(?anyVariable) != "") } AS ?binds)
+  BIND(EXISTS { $this c:bindFrom ?bindFrom ; c:bindProperty ?bindProperty . ?bindFrom ?bindProperty ?bindValue FILTER(isIRI(?bindValue)) } AS ?bindsValue)
+  OPTIONAL { $this iv:run ?run . ?run a rs:ResultSet }
+  BIND(COALESCE(?run, c:none) AS ?view)
+  BIND(IF(!BOUND(?q), "none", IF(?binds && !?bindsValue, "unbound", IF(!BOUND(?run), "none",
+       IF(EXISTS { ?view iv:error ?anyError }, "error", IF(EXISTS { ?view rs:boolean ?anyAnswer }, "answer", "rows"))))) AS ?state)
+  BIND(EXISTS { ?view iv:triples ?anyTriples } AS ?triples)
+  LATERAL { OPTIONAL { ?view iv:rowCount ?total0 } }
+  BIND(COALESCE(xsd:integer(?total0), 0) AS ?total)
+  OPTIONAL { ?notRunAt l10n:of c:NotRunPhrase ; l10n:name ?notRun0 } OPTIONAL { FILTER(!BOUND(?notRun0)) c:NotRunPhrase rdfs:label ?notRun1 }
+  OPTIONAL { ?failedAt l10n:of c:QueryFailedPhrase ; l10n:name ?failed0 } OPTIONAL { FILTER(!BOUND(?failed0)) c:QueryFailedPhrase rdfs:label ?failed1 }
+  OPTIONAL { ?answerAt l10n:of c:AnswerPhrase ; l10n:name ?answer0 } OPTIONAL { FILTER(!BOUND(?answer0)) c:AnswerPhrase rdfs:label ?answer1 }
+  OPTIONAL { ?noResultsAt l10n:of c:NoResultsPhrase ; l10n:name ?noResults0 } OPTIONAL { FILTER(!BOUND(?noResults0)) c:NoResultsPhrase rdfs:label ?noResults1 }
+  BIND(IF(?triples, c:TriplesPhrase, c:RowsPhrase) AS ?countNode)
+  LATERAL { OPTIONAL { ?countAt l10n:of ?countNode ; l10n:name ?count0 } }
+  LATERAL { OPTIONAL { FILTER(!BOUND(?count0)) ?countNode rdfs:label ?count1 } }
+  BIND(STR(COALESCE(?notRun0, ?notRun1)) AS ?notRun)
+  BIND(STR(COALESCE(?failed0, ?failed1)) AS ?failed)
+  BIND(STR(COALESCE(?answer0, ?answer1)) AS ?answerPhrase)
+  BIND(STR(COALESCE(?count0, ?count1)) AS ?countPhrase)
+  BIND(STR(?total) AS ?totalS) BIND(STRLEN(?totalS) AS ?totalL) BIND(xsd:integer(?totalL - FLOOR((?totalL - 1) / 3) * 3) AS ?totalG)
+  BIND(CONCAT(SUBSTR(?totalS, 1, ?totalG), IF(?totalL > ?totalG, CONCAT(",", SUBSTR(?totalS, ?totalG + 1, 3)), ""), IF(?totalL > ?totalG + 3, CONCAT(",", SUBSTR(?totalS, ?totalG + 4, 3)), ""),
+       IF(?totalL > ?totalG + 6, CONCAT(",", SUBSTR(?totalS, ?totalG + 7, 3)), ""), IF(?totalL > ?totalG + 9, CONCAT(",", SUBSTR(?totalS, ?totalG + 10, 3)), "")) AS ?totalText)
+  OPTIONAL { ?view rs:boolean ?answer }
+  BIND(IF(?state = "answer", IF(CONTAINS(?answerPhrase, "{v}"), CONCAT(STRBEFORE(?answerPhrase, "{v}"), STR(?answer), STRAFTER(?answerPhrase, "{v}")), ?answerPhrase),
+       IF(CONTAINS(?countPhrase, "{n}"), CONCAT(STRBEFORE(?countPhrase, "{n}"), ?totalText, STRAFTER(?countPhrase, "{n}")), ?countPhrase)) AS ?line)
+  BIND(?state = "rows" && ?triples && ?total = 0 AS ?nothing)
+  BIND(EXISTS { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
+  LATERAL {
+  {
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
+  } UNION {
+    # Not run (no query, or no run yet), or a binding without a value: a sentence (its c:emptyText).
+    FILTER(?state = "none" || ?state = "unbound")
+    OPTIONAL { FILTER(?state = "unbound") ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+    OPTIONAL { FILTER(?state = "unbound" && !BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~empty-text")) AS ?textNode) BIND(STR(COALESCE(?e0, ?e1, ?notRun)) AS ?data)
+  } UNION {
+    # A failed run: its error, as a c:Alert.
+    FILTER(?state = "error")
+    ?view iv:error ?message .
+    BIND(IRI(CONCAT(?me, "/~error")) AS ?el) BIND(c:Alert AS ?tag) BIND(?root AS ?parent)
+    BIND(?failed AS ?alertLabel) BIND(STR(?message) AS ?alertHelp) BIND(sty:Danger AS ?tone)
+  } UNION {
+    # A CONSTRUCT with no triples: the count and a sentence.
+    FILTER(?nothing)
+    VALUES (?local ?cls0 ?key0) { ("summary" "sem-summary" 0) ("empty" "sem-empty" 1) }
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(rdfhtml:P AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~", ?local, "-text")) AS ?textNode)
+    BIND(IF(?local = "summary", ?line, STR(COALESCE(?noResults0, ?noResults1))) AS ?data)
+  } UNION {
+    FILTER((?state = "rows" || ?state = "answer") && !?nothing)
+    VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
+      ("summary-bar" rdfhtml:Div "sem-result-bar" "root" 0) ("summary" rdfhtml:P "sem-summary" UNDEF 0) ("actions" rdfhtml:Div "sem-actions" "summary-bar" 1)
+      ("code" rdfhtml:Pre "sem-turtle" "root" 1)
+    }
+    FILTER(IF(?local = "summary-bar" || ?local = "actions", ?bar, true))
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+    BIND(IRI(CONCAT(?me, "/~", COALESCE(?parentLocal, IF(?bar, "summary-bar", "root")))) AS ?parent)
+    BIND(IF(?local = "summary", IRI(CONCAT(?me, "/~summary-text")), ?unset) AS ?textNode)
+    BIND(IF(?local = "summary", ?line, ?unset) AS ?data)
+  } UNION {
+    # The actions, in their order.
+    FILTER((?state = "rows" || ?state = "answer") && !?nothing && ?bar)
+    $this c:actions/rdf:rest* ?cell . ?cell rdf:first ?el FILTER(isIRI(?el))
+    BIND(IRI(CONCAT(?me, "/~actions")) AS ?parent)
+    OPTIONAL { ?cell rdf:rest/rdf:first ?after FILTER(isIRI(?after)) }
+  }
+  }
+}""" .
+c:ResultTurtleRendering-sparql-text a sem:Rule ;
+    sem:implements c:ResultTurtleRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; sem:orderKey ?key ; c:label ?alertLabel ; c:help ?alertHelp ; sty:tone ?tone ; rdfhtml:hasChild ?textNode .
+  ?parent rdfhtml:hasChild ?el .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data .
+  ?el ord:immediatelyPrecedes ?after .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultTurtle .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this c:of ?q FILTER(isIRI(?q)) FILTER EXISTS { { ?q sem:select ?qt } UNION { ?q sem:construct ?qt } FILTER(REGEX(STR(?qt), "[^ \\t\\r\\n]")) } }
+  BIND(EXISTS { $this c:bindVariable ?anyVariable FILTER(STR(?anyVariable) != "") } AS ?binds)
+  BIND(EXISTS { $this c:bindFrom ?bindFrom ; c:bindProperty ?bindProperty . ?bindFrom ?bindProperty ?bindValue FILTER(isIRI(?bindValue)) } AS ?bindsValue)
+  OPTIONAL { $this iv:run ?run . ?run a rs:ResultSet }
+  BIND(COALESCE(?run, c:none) AS ?view)
+  BIND(IF(!BOUND(?q), "none", IF(?binds && !?bindsValue, "unbound", IF(!BOUND(?run), "none",
+       IF(EXISTS { ?view iv:error ?anyError }, "error", IF(EXISTS { ?view rs:boolean ?anyAnswer }, "answer", "rows"))))) AS ?state)
+  BIND(EXISTS { ?view iv:triples ?anyTriples } AS ?triples)
+  LATERAL { OPTIONAL { ?view iv:rowCount ?total0 } }
+  BIND(COALESCE(xsd:integer(?total0), 0) AS ?total)
+  OPTIONAL { ?notRunAt l10n:of c:NotRunPhrase ; l10n:name ?notRun0 } OPTIONAL { FILTER(!BOUND(?notRun0)) c:NotRunPhrase rdfs:label ?notRun1 }
+  OPTIONAL { ?failedAt l10n:of c:QueryFailedPhrase ; l10n:name ?failed0 } OPTIONAL { FILTER(!BOUND(?failed0)) c:QueryFailedPhrase rdfs:label ?failed1 }
+  OPTIONAL { ?answerAt l10n:of c:AnswerPhrase ; l10n:name ?answer0 } OPTIONAL { FILTER(!BOUND(?answer0)) c:AnswerPhrase rdfs:label ?answer1 }
+  OPTIONAL { ?noResultsAt l10n:of c:NoResultsPhrase ; l10n:name ?noResults0 } OPTIONAL { FILTER(!BOUND(?noResults0)) c:NoResultsPhrase rdfs:label ?noResults1 }
+  BIND(IF(?triples, c:TriplesPhrase, c:RowsPhrase) AS ?countNode)
+  LATERAL { OPTIONAL { ?countAt l10n:of ?countNode ; l10n:name ?count0 } }
+  LATERAL { OPTIONAL { FILTER(!BOUND(?count0)) ?countNode rdfs:label ?count1 } }
+  BIND(STR(COALESCE(?notRun0, ?notRun1)) AS ?notRun)
+  BIND(STR(COALESCE(?failed0, ?failed1)) AS ?failed)
+  BIND(STR(COALESCE(?answer0, ?answer1)) AS ?answerPhrase)
+  BIND(STR(COALESCE(?count0, ?count1)) AS ?countPhrase)
+  BIND(STR(?total) AS ?totalS) BIND(STRLEN(?totalS) AS ?totalL) BIND(xsd:integer(?totalL - FLOOR((?totalL - 1) / 3) * 3) AS ?totalG)
+  BIND(CONCAT(SUBSTR(?totalS, 1, ?totalG), IF(?totalL > ?totalG, CONCAT(",", SUBSTR(?totalS, ?totalG + 1, 3)), ""), IF(?totalL > ?totalG + 3, CONCAT(",", SUBSTR(?totalS, ?totalG + 4, 3)), ""),
+       IF(?totalL > ?totalG + 6, CONCAT(",", SUBSTR(?totalS, ?totalG + 7, 3)), ""), IF(?totalL > ?totalG + 9, CONCAT(",", SUBSTR(?totalS, ?totalG + 10, 3)), "")) AS ?totalText)
+  OPTIONAL { ?view rs:boolean ?answer }
+  BIND(IF(?state = "answer", IF(CONTAINS(?answerPhrase, "{v}"), CONCAT(STRBEFORE(?answerPhrase, "{v}"), STR(?answer), STRAFTER(?answerPhrase, "{v}")), ?answerPhrase),
+       IF(CONTAINS(?countPhrase, "{n}"), CONCAT(STRBEFORE(?countPhrase, "{n}"), ?totalText, STRAFTER(?countPhrase, "{n}")), ?countPhrase)) AS ?line)
+  BIND(?state = "rows" && ?triples && ?total = 0 AS ?nothing)
+  BIND(EXISTS { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
+  LATERAL {
+  {
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
+  } UNION {
+    # Not run (no query, or no run yet), or a binding without a value: a sentence (its c:emptyText).
+    FILTER(?state = "none" || ?state = "unbound")
+    OPTIONAL { FILTER(?state = "unbound") ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+    OPTIONAL { FILTER(?state = "unbound" && !BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~empty-text")) AS ?textNode) BIND(STR(COALESCE(?e0, ?e1, ?notRun)) AS ?data)
+  } UNION {
+    # A failed run: its error, as a c:Alert.
+    FILTER(?state = "error")
+    ?view iv:error ?message .
+    BIND(IRI(CONCAT(?me, "/~error")) AS ?el) BIND(c:Alert AS ?tag) BIND(?root AS ?parent)
+    BIND(?failed AS ?alertLabel) BIND(STR(?message) AS ?alertHelp) BIND(sty:Danger AS ?tone)
+  } UNION {
+    # A CONSTRUCT with no triples: the count and a sentence.
+    FILTER(?nothing)
+    VALUES (?local ?cls0 ?key0) { ("summary" "sem-summary" 0) ("empty" "sem-empty" 1) }
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(rdfhtml:P AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~", ?local, "-text")) AS ?textNode)
+    BIND(IF(?local = "summary", ?line, STR(COALESCE(?noResults0, ?noResults1))) AS ?data)
+  } UNION {
+    FILTER((?state = "rows" || ?state = "answer") && !?nothing)
+    VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
+      ("summary-bar" rdfhtml:Div "sem-result-bar" "root" 0) ("summary" rdfhtml:P "sem-summary" UNDEF 0) ("actions" rdfhtml:Div "sem-actions" "summary-bar" 1)
+      ("code" rdfhtml:Pre "sem-turtle" "root" 1)
+    }
+    FILTER(IF(?local = "summary-bar" || ?local = "actions", false, ?local = "code"))
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+    BIND(IRI(CONCAT(?me, "/~", COALESCE(?parentLocal, IF(?bar, "summary-bar", "root")))) AS ?parent)
+    BIND(IF(?local = "summary", IRI(CONCAT(?me, "/~summary-text")), ?unset) AS ?textNode)
+    BIND(IF(?local = "summary", ?line, ?unset) AS ?data)
+  }
+  }
+}""" .
 
 # --- phrases --------------------------------------------------------------------------------------------------
 

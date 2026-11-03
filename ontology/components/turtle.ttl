@@ -65,7 +65,7 @@ c:turtleRestOf a owl:ObjectProperty ; rdfs:comment "Derived: the list cell (c:tu
 c:turtleCell a owl:DatatypeProperty ; rdfs:comment "Derived: an inline c:TurtleNode with one rdf:first and one rdf:rest, the rest rdf:nil or a node of its own."@en .
 c:turtleListy a owl:DatatypeProperty ; rdfs:comment "Derived, on a c:TurtleEntry: its object's node is a list cell whose rest chain is cells ending in rdf:nil, so it prints as ( … )."@en .
 c:turtleRows a owl:ObjectProperty ; rdfs:comment "Derived: the run (a CONSTRUCT's triples as rows) a c:TurtleNode reads its statements from."@en .
-c:turtleResults a owl:ObjectProperty ; rdfs:comment "Derived: the run a c:TurtleNode prints as a result set (rdf:type and the rs: triples of its nodes)."@en .
+c:turtleResults a owl:ObjectProperty ; rdfs:comment "Derived: the run a c:TurtleNode prints as a result set (the rs: triples of its nodes, and their rs: types)."@en .
 c:turtleLimit a owl:DatatypeProperty ; rdfs:comment "Derived: how many rows (c:turtleRows) or solutions (c:turtleResults) are printed, by rs:index."@en .
 c:turtleIn a owl:ObjectProperty ; rdfs:comment "Derived: the c:TurtleNode a c:TurtleEntry is printed under."@en .
 c:turtlePredicate a owl:ObjectProperty ; rdfs:comment "Derived: a c:TurtleEntry's predicate."@en .
@@ -125,7 +125,7 @@ WHERE {
           { FILTER(BOUND(?rows2)) ?rows2 rs:solution ?sr . ?sr rs:index ?sri FILTER(!BOUND(?limit2) || ?sri <= ?limit2)
              ?sr rs:binding ?ssb , ?spb , ?sob . ?ssb rs:variable "subject" ; rs:value ?st2 . ?spb rs:variable "predicate" ; rs:value ?sp . ?sob rs:variable "object" ; rs:value ?so FILTER(isIRI(?sp)) }
           UNION
-          { FILTER(BOUND(?results2)) ?st2 ?sp ?so FILTER(sameTerm(?sp, rdf:type) || STRSTARTS(STR(?sp), STR(rs:)))
+          { FILTER(BOUND(?results2)) ?st2 ?sp ?so FILTER((sameTerm(?sp, rdf:type) && STRSTARTS(STR(?so), STR(rs:))) || STRSTARTS(STR(?sp), STR(rs:)))
              FILTER(!sameTerm(?sp, rs:solution) || !BOUND(?limit2) || NOT EXISTS { ?so rs:index ?soi FILTER(?soi > ?limit2) }) }
         }
       } }
@@ -141,7 +141,7 @@ WHERE {
     { FILTER(BOUND(?rows)) ?rows rs:solution ?r . ?r rs:index ?ri FILTER(!BOUND(?limit) || ?ri <= ?limit)
        ?r rs:binding ?sb , ?pb , ?ob . ?sb rs:variable "subject" ; rs:value ?t . ?pb rs:variable "predicate" ; rs:value ?p . ?ob rs:variable "object" ; rs:value ?o FILTER(isIRI(?p)) }
     UNION
-    { FILTER(BOUND(?results)) ?t ?p ?o FILTER(sameTerm(?p, rdf:type) || STRSTARTS(STR(?p), STR(rs:)))
+    { FILTER(BOUND(?results)) ?t ?p ?o FILTER((sameTerm(?p, rdf:type) && STRSTARTS(STR(?o), STR(rs:))) || STRSTARTS(STR(?p), STR(rs:)))
        FILTER(!sameTerm(?p, rs:solution) || !BOUND(?limit) || NOT EXISTS { ?o rs:index ?oi FILTER(?oi > ?limit) }) }
   }
   BIND(isBlank(?o) || (BOUND(?results) && (sameTerm(?p, rs:solution) || sameTerm(?p, rs:binding))) AS ?isInline)
@@ -396,7 +396,7 @@ WHERE {
   OPTIONAL { ?view c:baseIri ?base0 }
   BIND(IF(?header, STR(?base0), ?none) AS ?base)
   BIND(?header && (BOUND(?base) || EXISTS { $this c:turtleUses ?anyUse }) AS ?headed)
-  {
+  LATERAL { {
     FILTER(?header && BOUND(?base))
     VALUES (?slot ?text ?tokKind) { (0 "@base" "keyword") (1 " " "space") (3 " ." "punct") (4 "\\n" "space") (2 "" "iri") }
     BIND(IF(?slot = 2, CONCAT("<", ?base, ">"), ?text) AS ?t)
@@ -420,7 +420,7 @@ WHERE {
     BIND(IF(?slot = 0, IF(?after, "\\n", ?none), IF(BOUND(?title), IF(?slot = 1, CONCAT("# ", STR(?title)), "\\n"), ?none)) AS ?t)
     BIND(IRI(CONCAT(STR(?view), "/~ts-", STR(?i), "-k", STR(?slot))) AS ?tok)
     BIND(CONCAT("\\u0001n1\\u0001n", STR(?i), "\\u0001n0\\u0001n", STR(?slot)) AS ?key)
-  }
+  } }
   FILTER(BOUND(?t))
   BIND(?tokKind = "space" || ?tokKind = "punct" AS ?plainKind)
   BIND(IF(?plainKind, rdfhtml:Text, rdfhtml:Span) AS ?element)

@@ -6,7 +6,8 @@ import { BEH, C, H, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD
 import { mint } from '../rdf.ts'
 import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
 import { queryForm } from '../sparql-forms.ts'
-import { turtleTokens } from '../turtle.ts'
+import { emitTokens, section, topNode } from './turtle.ts'
+import { TUPLE } from '../render/order-key.ts'
 import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text, declaredPrefixes, fnv } from './util.ts'
 import { hitToggles } from './actions.ts'
 import { md5 } from './data.ts'
@@ -269,18 +270,6 @@ function readRun(ctx: RuleContext, focus: NamedNode, limit = Infinity): Run {
   }
   rows.sort((a, b) => a.index - b.index)
   return { kind: 'rows', triples: !!ctx.object(view, IV + 'triples'), total: Number(ctx.object(view, IV + 'rowCount')?.value ?? 0), columns, rows }
-}
-
-/** A run as the function-only result views use it (the graph, Turtle): every row. */
-function outcome(ctx: RuleContext, focus: NamedNode): Outcome {
-  const run = readRun(ctx, focus)
-  if (run.kind !== 'rows') return run
-  if (run.triples) {
-    const quads = run.rows.flatMap((r) => (r.cells[0] && r.cells[1]?.termType === 'NamedNode' && r.cells[2] ? [quad(r.cells[0], r.cells[1] as NamedNode, r.cells[2])] : []))
-    return { kind: 'graph', quads }
-  }
-  const rows = run.rows.map((r) => new Map(r.cells.flatMap((t, i): [string, Term][] => (t ? [[run.columns[i]!, t]] : []))))
-  return { kind: 'select', vars: run.columns, rows }
 }
 
 /** What a result view shows instead of results: a sentence, or the error as a c:Alert. */
@@ -1368,74 +1357,58 @@ const graphSelection: FnRule = (ctx, focus) => {
 
 // --- results: Turtle -------------------------------------------------------------------------------------
 
-const TURTLE_PLAIN = new Set(['space', 'punct'])
-
-/** A blank node for display only (never written to a store). */
-function blank(value: string): BlankNode {
-  const b: BlankNode = { termType: 'BlankNode', value, equals: (other) => !!other && other.termType === 'BlankNode' && other.value === value }
-  return b
-}
-const quad = (s: Term, p: NamedNode, o: Term): Quad => ({ subject: s, predicate: p, object: o, graph: undefined as never, termType: 'Quad', value: '', equals: () => false }) as unknown as Quad
-
-/** SELECT bindings as a result set in the vocabulary of the SPARQL test suite (rs:). */
-function resultSet(ctx: RuleContext, vars: string[], rows: Row[]): Quad[] {
-  const p = (local: string) => ctx.nn(RS + local)
-  const set = blank('results')
-  const out: Quad[] = [quad(set, ctx.nn(RDF_TYPE), p('ResultSet'))]
-  for (const v of vars) out.push(quad(set, p('resultVariable'), ctx.f.literal(v)))
-  rows.forEach((row, i) => {
-    const solution = blank(`s${i + 1}`)
-    out.push(quad(set, p('solution'), solution), quad(solution, p('index'), int(ctx, i + 1)))
-    vars.forEach((v, j) => {
-      const value = row.get(v)
-      if (!value) return
-      const binding = blank(`s${i + 1}b${j}`)
-      out.push(quad(solution, p('binding'), binding), quad(binding, p('variable'), ctx.f.literal(v)), quad(binding, p('value'), value))
-    })
-  })
-  return out
-}
-
+/**
+ * The result as Turtle: on screen the summary (beside the c:actions) and the element the Turtle printer
+ * puts its tokens in (turtle.ttl); as text that element alone. A CONSTRUCT with no triples says so.
+ */
 const turtleview: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const result = outcome(ctx, focus)
-  const shownNotice = notice(ctx, o, result)
+  const run = readRun(ctx, focus)
+  const shownNotice = notice(ctx, o, run.kind === 'rows' || run.kind === 'ask' ? ({ kind: 'select', vars: [], rows: [] } as Outcome) : run)
   if (shownNotice) {
     o.renders(o.el('root', 'Div', {}, shownNotice))
     return o.quads
   }
-  const prefixes = { ...prefixRecord(ctx), rs: RS }
-  let quads: Quad[]
-  let line: string
-  let title: string | undefined
-  let hidden = 0
-  if (result.kind === 'graph') {
-    const limit = limitOf(ctx, focus, 400)
-    quads = result.quads.slice(0, limit)
-    hidden = result.quads.length - quads.length
-    line = say(ctx, P.triples, 'Triples: {n}', { n: result.quads.length })
-  } else if (result.kind === 'select') {
-    const limit = limitOf(ctx, focus, 50)
-    quads = resultSet(ctx, result.vars, result.rows.slice(0, limit))
-    hidden = result.rows.length - Math.min(limit, result.rows.length)
-    line = say(ctx, P.rows, 'Rows: {n}', { n: result.rows.length })
-    title = say(ctx, P.resultSet, 'The bindings, as a SPARQL result set')
-  } else {
-    const answer = result.kind === 'ask' && result.answer
-    quads = [quad(blank('results'), ctx.nn(RDF_TYPE), ctx.nn(RS + 'ResultSet')), quad(blank('results'), ctx.nn(RS + 'boolean'), ctx.f.literal(String(answer), ctx.nn(XSD_BOOLEAN)))]
-    line = say(ctx, P.answer, 'Answer: {v}', { v: String(answer) })
-  }
-  if (!quads.length) {
+  if (run.kind !== 'rows' && run.kind !== 'ask') return []
+  const line = run.kind === 'ask' ? say(ctx, P.answer, 'Answer: {v}', { v: String(run.answer) }) : run.triples ? sayCount(ctx, P.triples, 'Triples: {n}', run.total) : sayCount(ctx, P.rows, 'Rows: {n}', run.total)
+  if (run.kind === 'rows' && run.triples && !run.total) {
     o.renders(o.el('root', 'Div', {}, [summary(o, line), o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.noResults, 'No results.'))])]))
     return o.quads
   }
-  const tokens = turtleTokens([{ title, quads }], prefixes)
-  if (hidden > 0) tokens.push({ kind: 'space', text: '\n' }, { kind: 'comment', text: '# ' + say(ctx, P.more, '+{n} more', { n: hidden }) })
-  if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Div', {}, [o.text('turtle', tokens.map((t) => t.text).join(''))]))
-    return o.quads
-  }
-  o.renders(o.el('root', 'Div', {}, [summaryBar(ctx, o, line), o.el('code', 'Pre', { class: 'sem-turtle' }, codeNodes(o, tokens, TURTLE_PLAIN, 'ttl-'))]))
+  const code = o.el('code', 'Pre', { class: 'sem-turtle' })
+  o.renders(o.el('root', 'Div', {}, ctx.modality === MOD.Text ? [code] : [summaryBar(ctx, o, line), code]))
+  return o.quads
+}
+
+/**
+ * What it prints (the Turtle printer): a CONSTRUCT's first c:limit triples (400) by subject; the
+ * bindings of a SELECT (its first c:limit solutions, 50) or an ASK's answer as a result set, the run
+ * itself printed as [ … ]; then how many more there are, as a # comment.
+ */
+const turtlePrint: FnRule = (ctx, focus) => {
+  const run = readRun(ctx, focus)
+  const view = ctx.object(focus, IV + 'run')
+  if ((run.kind !== 'rows' && run.kind !== 'ask') || !named(view)) return []
+  const o = ctx.out(focus)
+  const triples = run.kind === 'rows' && run.triples
+  const limit = limitOf(ctx, focus, triples ? 400 : 50)
+  section(ctx, o, 0, run.kind === 'rows' && !run.triples ? say(ctx, P.resultSet, 'The bindings, as a SPARQL result set') : undefined)
+  if (triples) {
+    const shown = run.rows.filter((r) => r.index <= limit)
+    const pointed = new Set(shown.flatMap((r) => (r.cells[2]?.termType === 'BlankNode' ? [r.cells[2].value] : [])))
+    const subjects = new Map<string, Term>()
+    for (const r of shown) {
+      const s = r.cells[0]
+      if (s && r.cells[1]?.termType === 'NamedNode' && r.cells[2] && !(s.termType === 'BlankNode' && pointed.has(s.value))) subjects.set(s.termType + s.value, s)
+    }
+    for (const s of subjects.values()) topNode(ctx, o, 0, s, { rows: view, limit })
+  } else topNode(ctx, o, 0, view, { root: true, results: view, limit })
+  const hidden = run.kind === 'rows' ? run.total - Math.min(limit, run.total) : 0
+  if (hidden > 0)
+    emitTokens(ctx, o, focus, [
+      { iri: focus.value + '/~tm-0', key: TUPLE + 'n2' + TUPLE + 'n0', kind: 'space', text: '\n' },
+      { iri: focus.value + '/~tm-1', key: TUPLE + 'n2' + TUPLE + 'n1', kind: 'comment', text: '# ' + sayCount(ctx, P.more, '+{n} more', hidden) },
+    ])
   return o.quads
 }
 
@@ -1458,6 +1431,7 @@ export const functions: Record<string, FnRule> = {
   'workbench:graph-rows': graphRows,
   'workbench:graph-selection': graphSelection,
   'workbench:turtle': turtleview,
+  'workbench:turtle-print': turtlePrint,
 }
 
 // --- reactions (function variants of the SPARQL in workbench.ttl) -------------------------------------------

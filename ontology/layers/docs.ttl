@@ -101,15 +101,70 @@ WHERE {
 }""" .
 
 c:ClassDoc a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TurtleView ;
     rdfs:comment "The ontology of one class (c:of, or the value of c:bindProperty on c:bindFrom): the class, its properties, renderings, reactions and shape, as highlighted Turtle."@en ;
-    sem:slug "class-doc" .
+    sem:slug "class-doc" ;
+    c:turtleInto "root" ;
+    c:turtleElides sem:construct , beh:deletes , beh:inserts .
+# What it prints (the Turtle printer, turtle.ttl), a section each: the class; the properties whose
+# rdfs:domain it is; its renderings and their rules; what layers it is for render; its reactions; its
+# SHACL shapes - their blank nodes inline, queries elided (…).
+c:ClassDocTurtle a sem:BuildingBlock ; sem:targets c:ClassDoc ; sem:stratum 2 ; sem:follows c:bindFrom .
+c:ClassDocTurtle-fn a sem:Rule ; sem:implements c:ClassDocTurtle ; sem:function "class-doc:turtle" .
+c:ClassDocTurtle-sparql a sem:Rule ;
+    sem:implements c:ClassDocTurtle ;
+    sem:bulk false ;
+    sem:needsExtension sx:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?head a c:TurtleHead ; c:turtleView $this .
+  ?section a c:TurtleSection ; c:turtleView $this ; c:turtleIndex ?i ; c:turtleTitle ?title .
+  ?node a c:TurtleNode ; c:turtleView $this ; c:turtleTerm ?s ; c:turtleKey ?key ; c:turtleBody 1 ; c:turtleTop ?top ; c:turtleSection ?section .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ClassDoc .
+  OPTIONAL { $this c:of ?of }
+  OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bound . ?from ?bound ?boundValue }
+  BIND(COALESCE(?of, ?boundValue) AS ?cls)
+  FILTER(isIRI(?cls))
+  BIND(IRI(CONCAT(STR($this), "/~th")) AS ?head)
+  VALUES (?i ?title) { (0 "the class") (1 "its properties") (2 "how it renders") (3 "what the layer renders") (4 "how it reacts") (5 "what a valid one looks like") }
+  LATERAL {
+    { FILTER(?i = 0) BIND(?cls AS ?s) }
+    UNION { FILTER(?i = 1) ?s rdfs:domain ?cls }
+    UNION { FILTER(?i = 2) { ?s sem:targets ?cls } UNION { ?rendering sem:targets ?cls . ?s sem:implements ?rendering } }
+    UNION { FILTER(?i = 3) ?s sem:layer ?cls }
+    UNION { FILTER(?i = 4) ?s beh:sourceClass ?cls }
+    UNION { FILTER(?i = 5) ?s sh:targetClass ?cls }
+  }
+  FILTER(!isLiteral(?s))
+  BIND(IRI(CONCAT(STR($this), "/~ts-", STR(?i))) AS ?section)
+  BIND(IF(isBlank(?s), CONCAT("_:", sx:blankLabel(?s)), STR(?s)) AS ?termKey)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", SUBSTR(MD5(CONCAT(STR(?i), " ", ?termKey)), 1, 12))) AS ?node)
+  BIND(IF(isBlank(?s), "root", "named") AS ?top)
+  BIND(CONCAT("\\u0001n1\\u0001n", STR(?i), "\\u0001n1\\u0001n0\\u0001n0\\u0001s", IF(isBlank(?s), "~", ""), ?termKey) AS ?key)
+}""" .
+# The element its tokens go into (in the tab order: it scrolls).
 c:ClassDocRendering a sem:Rendering ;
     sem:targets c:ClassDoc ;
     sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it colors the Turtle it prints, token by token, and splitting text into tokens needs a regex-match relation no SPARQL (1.1 or 1.2) has." ;
-    sem:needsExtension sx:Matches .
+    sem:follows c:bindFrom .
 c:ClassDocRendering-fn a sem:Rule ; sem:implements c:ClassDocRendering ; sem:function "class-doc" .
+c:ClassDocRendering-sparql a sem:Rule ;
+    sem:implements c:ClassDocRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle" ; rdfhtml:attribute ?tab .
+  ?tab a rdfhtml:Attribute ; rdfhtml:attributeName "tabindex" ; rdfhtml:attributeValue "0" .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ClassDoc .
+  OPTIONAL { $this c:of ?of }
+  OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bound . ?from ?bound ?boundValue }
+  FILTER(isIRI(COALESCE(?of, ?boundValue)))
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-tabindex")) AS ?tab)
+}""" .
 
 sem:ToggleOntology a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:Specimen ;
     beh:deletes """CONSTRUCT { $this sem:showsOntology ?v } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n sem:revealsOntology $this . $this sem:showsOntology ?v }""" ;

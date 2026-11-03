@@ -132,9 +132,9 @@ export const tuple = (...parts: string[]) => TUPLE + parts.join(TUPLE)
 const extend = (key: string, ...parts: string[]) => key + TUPLE + parts.join(TUPLE)
 
 /** A top node's key: its section, then its subject's place (rank, then its IRI; blank nodes after IRIs). */
-export function topKey(section: number, subject: Term, rank?: { missing: number; value: number }): string {
+export function topKey(section: number, subject: Term, rank?: { missing: number; value: number; lexical?: string }): string {
   const s = subject.termType === 'BlankNode' ? '~' + termKey(subject) : termKey(subject)
-  return tuple('n1', 'n' + section, 'n1', 'n' + (rank?.missing ?? 0), 'n' + (rank?.value ?? 0), 's' + s)
+  return tuple('n1', 'n' + section, 'n1', 'n' + (rank?.missing ?? 0), rank?.lexical ?? 'n' + (rank?.value ?? 0), 's' + s)
 }
 
 export class TurtlePrinter {
@@ -355,7 +355,7 @@ export function quadSource(quads: readonly Quad[], extra?: (t: Term) => { p: Nam
 /** A whole printed document's tokens in order: the header, then each section's subjects. */
 export function printTurtle(
   view: string,
-  sections: { title?: string; subjects: { term: Term; own?: { p: NamedNode; o: Term }[]; rank?: { missing: number; value: number } }[] }[],
+  sections: { title?: string; subjects: { term: Term; own?: { p: NamedNode; o: Term }[]; rank?: { missing: number; value: number; lexical?: string } }[] }[],
   printer: TurtlePrinter,
   header: boolean,
 ): KeyedToken[] {

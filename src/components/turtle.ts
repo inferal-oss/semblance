@@ -99,7 +99,7 @@ function source(ctx: RuleContext, view: Term, node: Term): TurtleSource {
     if (results) {
       return ctx
         .match(t, null, null)
-        .filter((q) => q.predicate.value === RDF_TYPE || q.predicate.value.startsWith(RS))
+        .filter((q) => (q.predicate.value === RDF_TYPE && q.object.value.startsWith(RS)) || q.predicate.value.startsWith(RS))
         .filter((q) => q.predicate.value !== RS + 'solution' || limit === undefined || !ctx.objects(q.object, RS + 'index').some((i) => Number(i.value) > limit))
         .map((q) => ({ p: q.predicate as NamedNode, o: q.object }))
     }
@@ -252,6 +252,12 @@ function into(ctx: RuleContext, view: Term): NamedNode | undefined {
   return local ? ctx.nn(`${view.value}/~${local.value}`) : undefined
 }
 
+/** Tokens put in a view's element (c:turtleInto). */
+export function emitTokens(ctx: RuleContext, o: Out, view: Term, tokens: KeyedToken[]) {
+  const parent = into(ctx, view)
+  if (parent) emit(ctx, o, parent, tokens)
+}
+
 /** Tokens as RDF/HTML: plain ones (spaces, punctuation) as text, the others as spans of class ttl-<kind>. */
 function emit(ctx: RuleContext, o: Out, parent: NamedNode, tokens: KeyedToken[], view?: Term) {
   for (const t of tokens) {
@@ -355,7 +361,7 @@ export function topNode(
   o: Out,
   index: number,
   subject: Term,
-  opts: { root?: boolean; rows?: Term; results?: Term; limit?: number; rank?: { missing: number; value: number } } = {},
+  opts: { root?: boolean; rows?: Term; results?: Term; limit?: number; rank?: { missing: number; value: number; lexical?: string } } = {},
 ): NamedNode {
   const view = o.focus
   const n = ctx.nn(`${view.value}/~tt-${hash12(index + ' ' + termKey(subject))}`)
