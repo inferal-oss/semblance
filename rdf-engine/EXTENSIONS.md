@@ -32,7 +32,7 @@ has all of them.
 | group | IRI | contents |
 |---|---|---|
 | Math | `sx:Math` | `sx:log` … `sx:pi` |
-| Text | `sx:Text` | `sx:codepoint` … `sx:fnv1a` |
+| Text | `sx:Text` | `sx:codepoint` … `sx:jsonString` |
 | Locale | `sx:Locale` | `sx:formatNumber`, `sx:formatDateTime`, `sx:collated`, `sx:sortKey` |
 | Matches | `sx:Matches` | `sx:matches`, `sx:chars` |
 | JSON | `sx:Json` | `sx:json` |
@@ -96,6 +96,7 @@ literals of `xsd:integer` or a type derived from it.
 | `sx:utf8Hex(s)` | `xsd:string`: each UTF-8 byte of `s` as two lowercase hex digits, space-separated (`"€"` → `"e2 82 ac"`, `""` → `""`) |
 | `sx:decodeURI(s)` | `xsd:string`: `%XX` sequences (either case) decoded as UTF-8, everything else kept (`+` too); error if a `%` is not followed by two hex digits or the bytes are not UTF-8 |
 | `sx:fnv1a(s)` | `xsd:string`: FNV-1a 32-bit hash (offset basis `811c9dc5`, prime `01000193`) of the UTF-8 bytes, 8 lowercase hex digits |
+| `sx:jsonString(s)` | `xsd:string`: `s` as `JSON.stringify` writes it: in double quotes, with `"` and `\` escaped, `\b` `\t` `\n` `\f` `\r`, and the other control characters (below U+0020) as `\u00xx` (lowercase hex); everything else as it is (`"a\tb"` → `"\"a\\tb\""`) |
 
 String results are simple literals (no language tag) whatever the input.
 

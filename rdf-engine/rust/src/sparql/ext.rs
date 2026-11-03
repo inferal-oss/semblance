@@ -19,7 +19,7 @@ pub const GROUPS: i32 = 1 | 2 | 4 | 8 | 16;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Fx {
     Log, Log10, Log2, Exp, Pow, Sqrt, Sin, Cos, Tan, Asin, Acos, Atan, Atan2, Pi,
-    Codepoint, Char, Utf8Hex, DecodeUri, Fnv1a,
+    Codepoint, Char, Utf8Hex, DecodeUri, Fnv1a, JsonString,
     FormatNumber, FormatDateTime, Collated, SortKey,
 }
 
@@ -46,6 +46,7 @@ pub fn func(local: &[u8]) -> Option<(Fx, usize, usize)> {
         b"utf8Hex" => (Utf8Hex, 1, 1),
         b"decodeURI" => (DecodeUri, 1, 1),
         b"fnv1a" => (Fnv1a, 1, 1),
+        b"jsonString" => (JsonString, 1, 1),
         b"formatNumber" => (FormatNumber, 2, 3),
         b"formatDateTime" => (FormatDateTime, 2, 3),
         b"collated" => (Collated, 2, 2),
@@ -184,6 +185,16 @@ impl Ctx<'_> {
             Fnv1a => {
                 let (s, _) = self.string(&v[0])?;
                 Ok(Val::Str(fnv1a(&s), None))
+            }
+            JsonString => {
+                let (s, _) = self.string(&v[0])?;
+                let mut out = Vec::with_capacity(s.len() + 2);
+                out.push(b'"');
+                for c in regex::chars(&s) {
+                    js_escape(&mut out, c);
+                }
+                out.push(b'"');
+                Ok(Val::Str(out, None))
             }
             FormatNumber | FormatDateTime => {
                 let lit = self.lit(&v[0]).ok_or(())?;
