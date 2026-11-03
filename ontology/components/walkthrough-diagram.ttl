@@ -1,0 +1,646 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# The diagram of a walkthrough (c:Walkthrough, walkthrough.ttl) in SPARQL: the diagram is data first,
+# laid out by building blocks a stratum apart, and the walkthrough's rendering reads it.
+#
+#   c:WalkNodes       its terms: those its steps mention (in the order first mentioned, in the band of
+#                     that step) and those it includes (by IRI, after), less those it excludes:
+#                     <walkthrough>/~wn-<md5(term)[:12]>
+#   c:WalkVias        what links two of them: their own triples (as the app states them, in no named
+#                     graph), membership of a list one of them holds, and query text naming one
+#   c:WalkNames       a node's label (a prefixed name, 22 characters); a via's label
+#   c:WalkLinks       a link per ordered pair, its labels in order joined by " · "
+#   c:WalkBands       an included node's band (its first mentioned neighbour's, else the last step's);
+#                     the bands (<walkthrough>/~wb-<n>): where each begins, how many to a row
+#   c:WalkRows        per band: its nodes in rows, by the mean x of their neighbours in the bands above
+#                     (each band read again when one of them moves), then in order
+#
+# The function twin (walkthrough.ts, "walkthrough") computes the same in one pass, untraced; these read
+# only what the walkthrough says (its steps, mentions, includes), so the app's state changing does not
+# lay the diagram out again either.
+
+c:WalkNode a owl:Class ; rdfs:comment "Derived (c:WalkNodes): a term a walkthrough's diagram shows."@en .
+c:WalkBand a owl:Class ; rdfs:comment "Derived (c:WalkBands): the nodes of a walkthrough's diagram placed by one step."@en .
+c:walkNodeIn a owl:ObjectProperty ; rdfs:range c:Walkthrough ; rdfs:comment "Derived: the walkthrough whose diagram shows a node."@en .
+c:walkLinkIn a owl:ObjectProperty ; rdfs:range c:Walkthrough ; rdfs:comment "Derived: the walkthrough whose diagram shows a link."@en .
+c:walkViaIn a owl:ObjectProperty ; rdfs:range c:Walkthrough ; rdfs:comment "Derived: the walkthrough a link's reason belongs to."@en .
+c:nodeOrder a owl:DatatypeProperty ; rdfs:comment "Derived: a diagram node's place (from 0): as first mentioned, then the included by IRI."@en .
+c:band a owl:DatatypeProperty ; rdfs:comment "Derived: the step (from 0) whose band a diagram node is in."@en .
+c:includedNode a owl:DatatypeProperty ; rdfs:comment "Derived: true for a diagram node no step mentions (c:diagramIncludes)."@en .
+c:stepCount a owl:DatatypeProperty ; rdfs:comment "Derived, on a walkthrough's parts: how many steps it has."@en .
+c:viaLabel a owl:DatatypeProperty ; rdfs:comment "Derived: what a reason for a link says (a, the predicate's prefixed name, what a query does)."@en .
+c:viaPredicate a rdf:Property ; rdfs:comment "Derived: the predicate a reason for a link is."@en .
+c:viaVerb a owl:DatatypeProperty ; rdfs:comment "Derived: what a query that names the other node does (inserts, deletes, constructs, selects)."@en .
+c:bandIn a owl:ObjectProperty ; rdfs:comment "Derived: the walkthrough a c:WalkBand belongs to."@en .
+c:bandIndex a owl:DatatypeProperty ; rdfs:comment "Derived: the step a c:WalkBand is for (from 0)."@en .
+c:bandMember a owl:ObjectProperty ; rdfs:comment "Derived: a node in a c:WalkBand."@en .
+c:bandTop a owl:DatatypeProperty ; rdfs:comment "Derived: the y of a c:WalkBand's first row."@en .
+c:bandColumns a owl:DatatypeProperty ; rdfs:comment "Derived: how many nodes a row of a c:WalkBand holds (3, or 4 when there are more than 14 nodes)."@en .
+c:mentionOf a owl:ObjectProperty ; rdfs:comment "Derived: the mention a name is for (<walkthrough>/~wm-<md5>)."@en .
+c:mentionName a owl:DatatypeProperty ; rdfs:comment "Derived: the whole name of a mention's term (a prefixed name, else <iri>)."@en .
+
+c:WalkNodes a sem:BuildingBlock ; sem:targets c:Walkthrough ; sem:stratum -9 ;
+    sem:follows ( c:steps [ sem:zeroOrMore rdf:rest ] rdf:first c:children [ sem:zeroOrMore rdf:rest ] rdf:first ) ;
+    sem:watches rdf:type , c:steps , c:children , c:mentions , c:diagramIncludes , c:diagramExcludes , rdf:first , rdf:rest .
+c:WalkNodes-fn a sem:Rule ; sem:implements c:WalkNodes ; sem:function "walkthrough:nodes" .
+c:WalkNodes-sparql a sem:Rule ;
+    sem:implements c:WalkNodes ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?node c:walkNodeIn $this ; c:nodeTerm ?term ; c:nodeOrder ?order ; c:band ?band ; c:includedNode ?included .
+  ?parts c:partsOf $this ; c:stepCount ?stepCount .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Walkthrough .
+  BIND(IRI(CONCAT(STR($this), "/~wp")) AS ?parts)
+  { SELECT (COUNT(?sc) AS ?stepCount) WHERE { $this c:steps ?sl0 . ?sl0 rdf:rest* ?sc . ?sc rdf:first ?anyStep } }
+  LATERAL {
+    { } UNION {
+      # Mentioned: in the order first mentioned (step, then place in it), in that step's band.
+      { SELECT ?term ?first (SUM(?one) AS ?order) WHERE {
+          { { SELECT ?term (MIN(?k) AS ?first) WHERE {
+        { SELECT ?step (COUNT(?smid) AS ?si) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step } GROUP BY ?step }
+        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this c:steps/rdf:rest*/rdf:first ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
+        ?ccell rdf:first ?part . ?part a c:Mention ; c:mentions ?term FILTER(isIRI(?term))
+        FILTER NOT EXISTS { $this c:diagramExcludes ?term }
+        BIND((?si - 1) * 100000 + ?ci - 1 AS ?k)
+      } GROUP BY ?term } BIND(0 AS ?one) }
+          UNION { { SELECT ?term (MIN(?k) AS ?first) WHERE {
+        { SELECT ?step (COUNT(?smid) AS ?si) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step } GROUP BY ?step }
+        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this c:steps/rdf:rest*/rdf:first ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
+        ?ccell rdf:first ?part . ?part a c:Mention ; c:mentions ?term FILTER(isIRI(?term))
+        FILTER NOT EXISTS { $this c:diagramExcludes ?term }
+        BIND((?si - 1) * 100000 + ?ci - 1 AS ?k)
+      } GROUP BY ?term } { SELECT ?other (MIN(?k) AS ?otherFirst) WHERE {
+        { SELECT ?step (COUNT(?smid) AS ?si) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step } GROUP BY ?step }
+        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this c:steps/rdf:rest*/rdf:first ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
+        ?ccell rdf:first ?part . ?part a c:Mention ; c:mentions ?other FILTER(isIRI(?other))
+        FILTER NOT EXISTS { $this c:diagramExcludes ?other }
+        BIND((?si - 1) * 100000 + ?ci - 1 AS ?k)
+      } GROUP BY ?other } FILTER(?otherFirst < ?first) BIND(1 AS ?one) }
+        } GROUP BY ?term ?first }
+      BIND(xsd:integer(FLOOR(?first / 100000)) AS ?band)
+    } UNION {
+      # Included: after them, by IRI.
+      { SELECT (COUNT(?mt) AS ?mentioned) WHERE { { SELECT ?mt (MIN(?k) AS ?mf) WHERE {
+        { SELECT ?step (COUNT(?smid) AS ?si) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step } GROUP BY ?step }
+        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this c:steps/rdf:rest*/rdf:first ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
+        ?ccell rdf:first ?part . ?part a c:Mention ; c:mentions ?mt FILTER(isIRI(?mt))
+        FILTER NOT EXISTS { $this c:diagramExcludes ?mt }
+        BIND((?si - 1) * 100000 + ?ci - 1 AS ?k)
+      } GROUP BY ?mt } } }
+      { SELECT ?term (SUM(?one) AS ?place) WHERE {
+          { $this c:diagramIncludes ?term FILTER(isIRI(?term)) FILTER NOT EXISTS { $this c:diagramExcludes ?term } BIND(0 AS ?one) }
+          UNION { $this c:diagramIncludes ?term , ?before FILTER(isIRI(?term) && isIRI(?before) && STR(?before) < STR(?term))
+            FILTER NOT EXISTS { $this c:diagramExcludes ?term } FILTER NOT EXISTS { $this c:diagramExcludes ?before }
+            FILTER NOT EXISTS { { SELECT ?before (MIN(?k) AS ?bf) WHERE {
+        { SELECT ?step (COUNT(?smid) AS ?si) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step } GROUP BY ?step }
+        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this c:steps/rdf:rest*/rdf:first ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
+        ?ccell rdf:first ?part . ?part a c:Mention ; c:mentions ?before FILTER(isIRI(?before))
+        FILTER NOT EXISTS { $this c:diagramExcludes ?before }
+        BIND((?si - 1) * 100000 + ?ci - 1 AS ?k)
+      } GROUP BY ?before } }
+            BIND(1 AS ?one) }
+        } GROUP BY ?term }
+      FILTER NOT EXISTS { { SELECT ?term (MIN(?k) AS ?tf) WHERE {
+        { SELECT ?step (COUNT(?smid) AS ?si) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step } GROUP BY ?step }
+        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this c:steps/rdf:rest*/rdf:first ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
+        ?ccell rdf:first ?part . ?part a c:Mention ; c:mentions ?term FILTER(isIRI(?term))
+        FILTER NOT EXISTS { $this c:diagramExcludes ?term }
+        BIND((?si - 1) * 100000 + ?ci - 1 AS ?k)
+      } GROUP BY ?term } }
+      BIND(?mentioned + ?place AS ?order)
+      BIND(true AS ?included)
+    }
+  }
+  BIND(IF(BOUND(?term), IRI(CONCAT(STR($this), "/~wn-", SUBSTR(MD5(STR(?term)), 1, 12))), ?unset) AS ?node)
+}""" .
+
+# What links two of the diagram's terms, each a "via" (<walkthrough>/~wv-<md5>): their own triples, as
+# the app states them (in the default graph, in no named graph: not what rules derive or views write);
+# membership of a list one holds (from the cell back to the list's head, and what holds that); and
+# query text that names one (a reaction's beh:inserts naming the property it writes), by any prefix it
+# is known by or its full IRI, as a whole name.
+c:WalkVias a sem:BuildingBlock ; sem:targets c:Walkthrough ; sem:stratum -8 ; sem:readsMinted true ;
+    sem:watches rdf:type , c:steps , c:diagramIncludes , c:diagramExcludes .
+c:WalkVias-fn a sem:Rule ; sem:implements c:WalkVias ; sem:function "walkthrough:vias" .
+c:WalkVias-sparql a sem:Rule ;
+    sem:implements c:WalkVias ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?via c:walkViaIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:viaPredicate ?p ; c:viaVerb ?verb . }
+WHERE {
+  $this a/rdfs:subClassOf* c:Walkthrough .
+  {
+    ?from c:walkNodeIn $this ; c:nodeTerm ?a . ?to c:walkNodeIn $this ; c:nodeTerm ?b . FILTER(!sameTerm(?a, ?b))
+    ?a ?p ?b . FILTER NOT EXISTS { GRAPH ?anyGraph { ?a ?p ?b } }
+  } UNION {
+    ?to c:walkNodeIn $this ; c:nodeTerm ?b .
+    ?cell rdf:first ?b . FILTER NOT EXISTS { GRAPH ?anyGraph { ?cell rdf:first ?b } }
+    ?head rdf:rest* ?cell . FILTER NOT EXISTS { ?prev rdf:rest ?head }
+    ?a ?p ?head . FILTER(?p != rdf:rest) FILTER NOT EXISTS { GRAPH ?anyGraph { ?a ?p ?head } }
+    ?from c:walkNodeIn $this ; c:nodeTerm ?a . FILTER(!sameTerm(?a, ?b))
+  } UNION {
+    ?from c:walkNodeIn $this ; c:nodeTerm ?a .
+    VALUES (?qp ?verb) { (beh:inserts "inserts") (beh:deletes "deletes") (sem:construct "constructs") (sem:select "selects") }
+    ?a ?qp ?text FILTER(isLiteral(?text))
+    ?to c:walkNodeIn $this ; c:nodeTerm ?b . FILTER(!sameTerm(?a, ?b))
+    { SELECT ?b ?spelling WHERE {
+        ?sn c:walkNodeIn $this ; c:nodeTerm ?b .
+        LATERAL {
+          { BIND(CONCAT("<", STR(?b), ">") AS ?spelling) }
+          UNION
+          { { ?d sem:prefixName ?p0 ; sem:namespace ?ns0 } UNION { ?d sh:prefix ?p0 ; sh:namespace ?ns0 }
+            FILTER(STRSTARTS(STR(?b), STR(?ns0)) && REGEX(SUBSTR(STR(?b), STRLEN(STR(?ns0)) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$"))
+            BIND(CONCAT(STR(?p0), ":", SUBSTR(STR(?b), STRLEN(STR(?ns0)) + 1)) AS ?spelling) }
+        }
+      } }
+    FILTER(CONTAINS(?text, ?spelling))
+    # A whole name: not inside a longer one (a prefixed name is word characters, :, -; an IRI's first
+    # occurrence is checked by the characters around it).
+    BIND(STRBEFORE(?text, ?spelling) AS ?before0) BIND(SUBSTR(STRAFTER(?text, ?spelling), 1, 1) AS ?after0)
+    FILTER(IF(STRSTARTS(?spelling, "<"),
+      !REGEX(SUBSTR(?before0, STRLEN(?before0)), "[A-Za-z0-9_:-]") && !REGEX(?after0, "[A-Za-z0-9_-]"),
+      REGEX(?text, CONCAT("(^|[^A-Za-z0-9_:-])", ?spelling, "($|[^A-Za-z0-9_-])"))))
+    BIND(?unset AS ?p)
+  }
+  BIND(IRI(CONCAT(STR($this), "/~wv-", SUBSTR(MD5(CONCAT(STR(?from), " ", COALESCE(STR(?p), ?verb), " ", STR(?to))), 1, 12))) AS ?via)
+}""" .
+
+# Names: a node's label (its term's prefixed name, else <iri>, cut at 22 characters with …); a via's
+# (a for rdf:type, what a query does, else its predicate's prefixed name).
+c:WalkNames a sem:BuildingBlock ; sem:targets c:Walkthrough ; sem:stratum -7 ; sem:readsMinted true ;
+    sem:watches rdf:type , c:steps , c:diagramIncludes , c:diagramExcludes .
+c:WalkNames-fn a sem:Rule ; sem:implements c:WalkNames ; sem:function "walkthrough:names" .
+c:WalkNames-sparql a sem:Rule ;
+    sem:implements c:WalkNames ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?node c:nodeLabel ?label . ?via c:viaLabel ?viaLabel . ?mentionName c:mentionOf ?mention ; c:mentionName ?name . }
+WHERE {
+  $this a/rdfs:subClassOf* c:Walkthrough .
+  {
+    { SELECT ?node (MAX(?cand) AS ?best) WHERE {
+        { ?node c:walkNodeIn $this ; c:nodeTerm ?t . BIND(CONCAT("0", IF(STRLEN(STR(?t)) > 60, CONCAT("<…", SUBSTR(STR(?t), STRLEN(STR(?t)) - 55), ">"), CONCAT("<", STR(?t), ">"))) AS ?cand) }
+        UNION { SELECT ?node ?t (CONCAT("1", ?prefix, ":", SUBSTR(STR(?t), ?length + 1)) AS ?cand) WHERE {
+          { SELECT ?node ?t ?length (MIN(?pp) AS ?prefix) WHERE {
+              { SELECT ?node ?t (MAX(STRLEN(?ns)) AS ?length) WHERE {
+                  ?node c:walkNodeIn $this ; c:nodeTerm ?t . FILTER(isIRI(?t))
+                  { ?d sem:prefixName ?p0 ; sem:namespace ?ns0 } UNION { ?d sh:prefix ?p0 ; sh:namespace ?ns0 }
+                  BIND(STR(?ns0) AS ?ns)
+                  FILTER(STRSTARTS(STR(?t), ?ns) && REGEX(SUBSTR(STR(?t), STRLEN(?ns) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$"))
+                } GROUP BY ?node ?t }
+              { ?d2 sem:prefixName ?p1 ; sem:namespace ?ns1 } UNION { ?d2 sh:prefix ?p1 ; sh:namespace ?ns1 }
+              BIND(STR(?p1) AS ?pp)
+              FILTER(STRLEN(STR(?ns1)) = ?length && STRSTARTS(STR(?t), STR(?ns1)))
+            } GROUP BY ?node ?t ?length }
+        } }
+      } GROUP BY ?node }
+    BIND(SUBSTR(?best, 2) AS ?name)
+    BIND(IF(STRLEN(?name) > 22, CONCAT(SUBSTR(?name, 1, 21), "…"), ?name) AS ?label)
+  } UNION {
+    # Every mention's term, whole (a mention of a term the diagram leaves out is named so).
+    { SELECT ?mention (MAX(?cand) AS ?best) WHERE {
+        { $this c:steps/rdf:rest*/rdf:first/c:children/rdf:rest*/rdf:first ?mention . ?mention a c:Mention ; c:mentions ?t . BIND(CONCAT("0", IF(STRLEN(STR(?t)) > 60, CONCAT("<…", SUBSTR(STR(?t), STRLEN(STR(?t)) - 55), ">"), CONCAT("<", STR(?t), ">"))) AS ?cand) }
+        UNION { SELECT ?mention ?t (CONCAT("1", ?prefix, ":", SUBSTR(STR(?t), ?length + 1)) AS ?cand) WHERE {
+          { SELECT ?mention ?t ?length (MIN(?pp) AS ?prefix) WHERE {
+              { SELECT ?mention ?t (MAX(STRLEN(?ns)) AS ?length) WHERE {
+                  $this c:steps/rdf:rest*/rdf:first/c:children/rdf:rest*/rdf:first ?mention . ?mention a c:Mention ; c:mentions ?t . FILTER(isIRI(?t))
+                  { ?d sem:prefixName ?p0 ; sem:namespace ?ns0 } UNION { ?d sh:prefix ?p0 ; sh:namespace ?ns0 }
+                  BIND(STR(?ns0) AS ?ns)
+                  FILTER(STRSTARTS(STR(?t), ?ns) && REGEX(SUBSTR(STR(?t), STRLEN(?ns) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$"))
+                } GROUP BY ?mention ?t }
+              { ?d2 sem:prefixName ?p1 ; sem:namespace ?ns1 } UNION { ?d2 sh:prefix ?p1 ; sh:namespace ?ns1 }
+              BIND(STR(?p1) AS ?pp)
+              FILTER(STRLEN(STR(?ns1)) = ?length && STRSTARTS(STR(?t), STR(?ns1)))
+            } GROUP BY ?mention ?t ?length }
+        } }
+      } GROUP BY ?mention }
+    BIND(SUBSTR(?best, 2) AS ?name)
+    BIND(IRI(CONCAT(STR($this), "/~wm-", SUBSTR(MD5(STR(?mention)), 1, 12))) AS ?mentionName)
+  } UNION {
+    ?via c:walkViaIn $this ; c:viaVerb ?viaLabel .
+  } UNION {
+    ?via c:walkViaIn $this ; c:viaPredicate rdf:type . BIND("a" AS ?viaLabel)
+  } UNION {
+    { SELECT ?via (MAX(?cand) AS ?best) WHERE {
+        { ?via c:walkViaIn $this ; c:viaPredicate ?t . BIND(CONCAT("0", IF(STRLEN(STR(?t)) > 60, CONCAT("<…", SUBSTR(STR(?t), STRLEN(STR(?t)) - 55), ">"), CONCAT("<", STR(?t), ">"))) AS ?cand) }
+        UNION { SELECT ?via ?t (CONCAT("1", ?prefix, ":", SUBSTR(STR(?t), ?length + 1)) AS ?cand) WHERE {
+          { SELECT ?via ?t ?length (MIN(?pp) AS ?prefix) WHERE {
+              { SELECT ?via ?t (MAX(STRLEN(?ns)) AS ?length) WHERE {
+                  ?via c:walkViaIn $this ; c:viaPredicate ?t . FILTER(isIRI(?t))
+                  { ?d sem:prefixName ?p0 ; sem:namespace ?ns0 } UNION { ?d sh:prefix ?p0 ; sh:namespace ?ns0 }
+                  BIND(STR(?ns0) AS ?ns)
+                  FILTER(STRSTARTS(STR(?t), ?ns) && REGEX(SUBSTR(STR(?t), STRLEN(?ns) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$"))
+                } GROUP BY ?via ?t }
+              { ?d2 sem:prefixName ?p1 ; sem:namespace ?ns1 } UNION { ?d2 sh:prefix ?p1 ; sh:namespace ?ns1 }
+              BIND(STR(?p1) AS ?pp)
+              FILTER(STRLEN(STR(?ns1)) = ?length && STRSTARTS(STR(?t), STR(?ns1)))
+            } GROUP BY ?via ?t ?length }
+        } }
+      } GROUP BY ?via }
+    FILTER NOT EXISTS { ?via c:viaPredicate rdf:type }
+    BIND(SUBSTR(?best, 2) AS ?viaLabel)
+  }
+}""" .
+
+# A link per ordered pair of nodes, labelled by its vias' labels in order, joined by " · " (up to 8).
+c:WalkLinks a sem:BuildingBlock ; sem:targets c:Walkthrough ; sem:stratum -6 ; sem:readsMinted true ;
+    sem:watches rdf:type , c:steps , c:diagramIncludes , c:diagramExcludes .
+c:WalkLinks-fn a sem:Rule ; sem:implements c:WalkLinks ; sem:function "walkthrough:links" .
+c:WalkLinks-sparql a sem:Rule ;
+    sem:implements c:WalkLinks ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?link c:walkLinkIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:linkLabel ?label . }
+WHERE {
+  $this a/rdfs:subClassOf* c:Walkthrough .
+  { SELECT ?from ?to (MAX(IF(?rank = 0, ?lab, "")) AS ?l0) (MAX(IF(?rank = 1, ?lab, "")) AS ?l1) (MAX(IF(?rank = 2, ?lab, "")) AS ?l2) (MAX(IF(?rank = 3, ?lab, "")) AS ?l3) (MAX(IF(?rank = 4, ?lab, "")) AS ?l4) (MAX(IF(?rank = 5, ?lab, "")) AS ?l5) (MAX(IF(?rank = 6, ?lab, "")) AS ?l6) (MAX(IF(?rank = 7, ?lab, "")) AS ?l7) WHERE {
+      { SELECT ?from ?to ?lab (SUM(?one) AS ?rank) WHERE {
+          { { SELECT ?from ?to ?lab WHERE { ?v c:walkViaIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:viaLabel ?lab } GROUP BY ?from ?to ?lab } BIND(0 AS ?one) }
+          UNION { { SELECT ?from ?to ?lab WHERE { ?v c:walkViaIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:viaLabel ?lab } GROUP BY ?from ?to ?lab } { SELECT ?from ?to ?lab2 WHERE { ?v c:walkViaIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:viaLabel ?lab2 } GROUP BY ?from ?to ?lab2 } FILTER(?lab2 < ?lab) BIND(1 AS ?one) }
+        } GROUP BY ?from ?to ?lab }
+    } GROUP BY ?from ?to }
+  BIND(CONCAT(?l0, IF(?l1 != "", CONCAT(" · ", ?l1), ""), IF(?l2 != "", CONCAT(" · ", ?l2), ""), IF(?l3 != "", CONCAT(" · ", ?l3), ""), IF(?l4 != "", CONCAT(" · ", ?l4), ""), IF(?l5 != "", CONCAT(" · ", ?l5), ""), IF(?l6 != "", CONCAT(" · ", ?l6), ""), IF(?l7 != "", CONCAT(" · ", ?l7), "")) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~wl-", SUBSTR(MD5(CONCAT(STR(?from), " ", STR(?to))), 1, 12))) AS ?link)
+}""" .
+
+# The bands: an included node's band (as the twin: its first mentioned neighbour's, else the last
+# step's); each band's nodes, where its first row is (36 at the top, 54 a row, 14 between bands), and
+# how many to a row (3, or 4 when the diagram has more than 14 nodes); the diagram's height.
+c:WalkBands a sem:BuildingBlock ; sem:targets c:Walkthrough ; sem:stratum -5 ; sem:readsMinted true ;
+    sem:watches rdf:type , c:steps , c:diagramIncludes , c:diagramExcludes .
+c:WalkBands-fn a sem:Rule ; sem:implements c:WalkBands ; sem:function "walkthrough:bands" .
+c:WalkBands-sparql a sem:Rule ;
+    sem:implements c:WalkBands ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?node c:band ?includedBand .
+  ?bandNode a c:WalkBand ; c:bandIn $this ; c:bandIndex ?band ; c:bandMember ?member ; c:bandTop ?top ; c:bandColumns ?cols .
+  ?parts c:height ?height .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Walkthrough .
+  BIND(IRI(CONCAT(STR($this), "/~wp")) AS ?parts)
+  { SELECT (COUNT(?cn) AS ?count) WHERE { ?cn c:walkNodeIn $this } }
+  BIND(IF(?count > 14, 4, 3) AS ?cols)
+  LATERAL {
+    {
+      { SELECT ?node (MIN(?cand) AS ?includedBand) WHERE {
+          { ?node c:walkNodeIn $this ; c:band ?cand FILTER NOT EXISTS { ?node c:includedNode true } }
+          UNION { ?node c:walkNodeIn $this ; c:includedNode true . ?bp c:partsOf $this ; c:stepCount ?sc . BIND(IF(?sc > 1, ?sc - 1, 0) AS ?cand) }
+          UNION { ?node c:walkNodeIn $this ; c:includedNode true . ?bl c:walkLinkIn $this . { ?bl c:linkFrom ?node ; c:linkTo ?nb } UNION { ?bl c:linkTo ?node ; c:linkFrom ?nb } ?nb c:band ?cand FILTER NOT EXISTS { ?nb c:includedNode true } }
+        } GROUP BY ?node }
+      ?node c:includedNode true .
+    } UNION {
+      { SELECT ?member (MIN(?cand) AS ?band) WHERE {
+          { ?member c:walkNodeIn $this ; c:band ?cand FILTER NOT EXISTS { ?member c:includedNode true } }
+          UNION { ?member c:walkNodeIn $this ; c:includedNode true . ?bp c:partsOf $this ; c:stepCount ?sc . BIND(IF(?sc > 1, ?sc - 1, 0) AS ?cand) }
+          UNION { ?member c:walkNodeIn $this ; c:includedNode true . ?bl c:walkLinkIn $this . { ?bl c:linkFrom ?member ; c:linkTo ?nb } UNION { ?bl c:linkTo ?member ; c:linkFrom ?nb } ?nb c:band ?cand FILTER NOT EXISTS { ?nb c:includedNode true } }
+        } GROUP BY ?member }
+      BIND(IRI(CONCAT(STR($this), "/~wb-", STR(?band))) AS ?bandNode)
+      # Where it begins: below the rows of the bands above.
+      { SELECT ?band (SUM(?rows) AS ?above) WHERE {
+          { SELECT DISTINCT ?band WHERE { { SELECT ?m1 (MIN(?cand) AS ?band) WHERE {
+          { ?m1 c:walkNodeIn $this ; c:band ?cand FILTER NOT EXISTS { ?m1 c:includedNode true } }
+          UNION { ?m1 c:walkNodeIn $this ; c:includedNode true . ?bp c:partsOf $this ; c:stepCount ?sc . BIND(IF(?sc > 1, ?sc - 1, 0) AS ?cand) }
+          UNION { ?m1 c:walkNodeIn $this ; c:includedNode true . ?bl c:walkLinkIn $this . { ?bl c:linkFrom ?m1 ; c:linkTo ?nb } UNION { ?bl c:linkTo ?m1 ; c:linkFrom ?nb } ?nb c:band ?cand FILTER NOT EXISTS { ?nb c:includedNode true } }
+        } GROUP BY ?m1 } } }
+          { SELECT ?b2 (COUNT(?m2) AS ?size2) WHERE { { SELECT ?m2 (MIN(?cand) AS ?b2) WHERE {
+          { ?m2 c:walkNodeIn $this ; c:band ?cand FILTER NOT EXISTS { ?m2 c:includedNode true } }
+          UNION { ?m2 c:walkNodeIn $this ; c:includedNode true . ?bp c:partsOf $this ; c:stepCount ?sc . BIND(IF(?sc > 1, ?sc - 1, 0) AS ?cand) }
+          UNION { ?m2 c:walkNodeIn $this ; c:includedNode true . ?bl c:walkLinkIn $this . { ?bl c:linkFrom ?m2 ; c:linkTo ?nb } UNION { ?bl c:linkTo ?m2 ; c:linkFrom ?nb } ?nb c:band ?cand FILTER NOT EXISTS { ?nb c:includedNode true } }
+        } GROUP BY ?m2 } } GROUP BY ?b2 }
+          { SELECT (IF(COUNT(?an) > 14, 4, 3) AS ?colsAll) WHERE { ?an c:walkNodeIn $this } }
+          BIND(IF(?b2 < ?band, CEIL(?size2 / ?colsAll) * 54 + 14, 0) AS ?rows)
+        } GROUP BY ?band }
+      BIND(xsd:integer(36 + ?above) AS ?top)
+    } UNION {
+      { SELECT (SUM(?rows) AS ?all) WHERE {
+          { SELECT ?b2 (COUNT(?m2) AS ?size2) WHERE { { SELECT ?m2 (MIN(?cand) AS ?b2) WHERE {
+          { ?m2 c:walkNodeIn $this ; c:band ?cand FILTER NOT EXISTS { ?m2 c:includedNode true } }
+          UNION { ?m2 c:walkNodeIn $this ; c:includedNode true . ?bp c:partsOf $this ; c:stepCount ?sc . BIND(IF(?sc > 1, ?sc - 1, 0) AS ?cand) }
+          UNION { ?m2 c:walkNodeIn $this ; c:includedNode true . ?bl c:walkLinkIn $this . { ?bl c:linkFrom ?m2 ; c:linkTo ?nb } UNION { ?bl c:linkTo ?m2 ; c:linkFrom ?nb } ?nb c:band ?cand FILTER NOT EXISTS { ?nb c:includedNode true } }
+        } GROUP BY ?m2 } } GROUP BY ?b2 }
+          { SELECT (IF(COUNT(?an) > 14, 4, 3) AS ?colsAll) WHERE { ?an c:walkNodeIn $this } }
+          BIND(CEIL(?size2 / ?colsAll) * 54 + 14 AS ?rows)
+        } }
+      FILTER(?count > 0)
+      BIND(xsd:integer(36 + ?all - 14 - 54 + 40) AS ?height)
+    }
+  }
+}""" .
+
+# A band's rows: its nodes by the mean x of their neighbours in the bands above (those without any
+# after), then in order; COLS to a row, every other row shifted a fifth of a column, each row's nodes
+# spread across the width (as many slots as the band's first row has). A band is evaluated again when a
+# neighbour above moves, so the bands settle from the top.
+c:WalkRows a sem:BuildingBlock ; sem:targets c:WalkBand ; sem:stratum -4 ; sem:always true ;
+    sem:follows ( c:bandMember [ sem:inverse c:linkFrom ] c:linkTo ) , ( c:bandMember [ sem:inverse c:linkTo ] c:linkFrom ) , c:bandMember ;
+    sem:watches rdf:type , c:bandMember , c:bandIndex , c:bandTop , c:bandColumns , c:nodeOrder , c:band , c:linkFrom , c:linkTo , c:x .
+c:WalkRows-fn a sem:Rule ; sem:implements c:WalkRows ; sem:function "walkthrough:rows" .
+c:WalkRows-sparql a sem:Rule ;
+    sem:implements c:WalkRows ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?n c:x ?x ; c:y ?y }
+WHERE {
+  $this a c:WalkBand ; c:bandTop ?top ; c:bandColumns ?cols .
+  { SELECT (COUNT(?mm) AS ?size) WHERE { $this c:bandMember ?mm } }
+  { SELECT ?n (SUM(?one) AS ?rank) WHERE {
+      { $this c:bandMember ?n BIND(0 AS ?one) }
+      UNION { { SELECT ?n ?b ?o WHERE {
+          $this c:bandMember ?n ; c:bandIndex ?myBand . ?n c:nodeOrder ?o .
+          { SELECT ?n (SUM(?px) AS ?sumX) (SUM(?pc) AS ?count) WHERE {
+              { $this c:bandMember ?n BIND(0 AS ?px) BIND(0 AS ?pc) }
+              UNION { $this c:bandMember ?n ; c:bandIndex ?bi . ?nl c:walkLinkIn ?wk .
+                { ?nl c:linkFrom ?n ; c:linkTo ?nb } UNION { ?nl c:linkTo ?n ; c:linkFrom ?nb }
+                ?nb c:band ?nbBand ; c:x ?px FILTER(?nbBand < ?bi) BIND(1 AS ?pc) }
+            } GROUP BY ?n }
+          BIND(IF(?count = 0, ?unset, xsd:double(?sumX) / xsd:double(?count)) AS ?b)
+        } } { SELECT ?m ?b2 ?o2 WHERE {
+          $this c:bandMember ?m ; c:bandIndex ?myBand . ?m c:nodeOrder ?o2 .
+          { SELECT ?m (SUM(?px) AS ?sumX) (SUM(?pc) AS ?count) WHERE {
+              { $this c:bandMember ?m BIND(0 AS ?px) BIND(0 AS ?pc) }
+              UNION { $this c:bandMember ?m ; c:bandIndex ?bi . ?nl c:walkLinkIn ?wk .
+                { ?nl c:linkFrom ?m ; c:linkTo ?nb } UNION { ?nl c:linkTo ?m ; c:linkFrom ?nb }
+                ?nb c:band ?nbBand ; c:x ?px FILTER(?nbBand < ?bi) BIND(1 AS ?pc) }
+            } GROUP BY ?m }
+          BIND(IF(?count = 0, ?unset, xsd:double(?sumX) / xsd:double(?count)) AS ?b2)
+        } }
+        FILTER(IF(BOUND(?b2), !BOUND(?b) || ?b2 < ?b, false) || (IF(BOUND(?b2), BOUND(?b) && ?b2 = ?b, !BOUND(?b)) && ?o2 < ?o))
+        BIND(1 AS ?one) }
+    } GROUP BY ?n }
+  BIND(xsd:integer(FLOOR(?rank / ?cols)) AS ?row)
+  BIND(?rank - ?row * ?cols AS ?j)
+  BIND(IF(?cols < ?size, ?cols, ?size) AS ?slots)
+  BIND(IF(?row - 2 * FLOOR(?row / 2) = 1, xsd:double(490) / xsd:double(?cols * 5), 0) AS ?shift)
+  BIND(xsd:integer(ROUND(30 + ?shift + ((490 - ?shift) * (?j + 5.0E-1)) / ?slots)) AS ?x)
+  BIND(?top + ?row * 54 AS ?y)
+}""" .
+
+# --- the walkthrough, drawn from the data above --------------------------------------------------------
+# What c:WalkthroughRendering-fn renders: on screen the head, the steps (each a numbered, titled
+# item, saying what it shows and mentions), each mention's hint, the diagram (its bands, links and
+# nodes, its toggles, its text alternative) and the arrows' layer; as text the title, the numbered
+# steps and the links as sentences.
+c:WalkthroughRendering-sparql a sem:Rule ;
+    sem:implements c:WalkthroughRendering ;
+    sem:modality mod:Screen ;
+    sem:bulk false ;
+    sem:readsMinted true ;
+    sem:needsExtension sx:Math ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:id ?id ; rdfhtml:type ?type ; sem:orderKey ?key ; sem:tooltip ?tip ; c:term ?term ; c:edgeFrom ?edgeFrom ; c:edgeTo ?edgeTo ;
+      c:showsStep ?showsStep ; c:mentions ?mentions ; fs:toggles ?toggles ; fs:property ?fact ; rdfhtml:hasChild ?textNode ; rdfhtml:attribute ?attr .
+  ?parent rdfhtml:hasChild ?el .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?el ord:immediatelyPrecedes ?after .
+  ?textNode ord:immediatelyPrecedes ?afterText .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Walkthrough .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  BIND(IRI(CONCAT(?me, "/~wp")) AS ?parts)
+  # Its title in the viewer's language (l10n:Labels, on the component), else the one it has.
+  OPTIONAL { { $this l10n:label ?title0 } UNION { ?titleAt l10n:of $this ; l10n:label ?title0 } }
+  OPTIONAL { FILTER(!BOUND(?title0)) $this c:label ?title1 FILTER(isLiteral(?title1)) }
+  BIND(COALESCE(STR(COALESCE(?title0, ?title1)), "") AS ?title)
+  BIND(EXISTS { ?anyLink c:walkLinkIn $this } AS ?linked)
+  OPTIONAL { { $this l10n:note ?lead0 } UNION { ?leadAt l10n:of $this ; l10n:note ?lead0 } } OPTIONAL { FILTER(!BOUND(?lead0)) $this c:note ?lead1 FILTER(isLiteral(?lead1)) }
+  BIND(COALESCE(STR(COALESCE(?lead0, ?lead1)), "") AS ?lead)
+  BIND(?title != "" || ?lead != "" AS ?headed)
+  LATERAL {
+  {
+    # The section: a head (its title and lead), the body (the steps beside the diagram), the arrows' layer.
+    VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
+      ("root" rdfhtml:Section UNDEF UNDEF UNDEF) ("head" rdfhtml:Header "sem-walk-head" "root" 0) ("title" rdfhtml:H2 UNDEF "head" 0) ("lead" rdfhtml:P "sem-walk-lead" "head" 1)
+      ("body" rdfhtml:Div "sem-walk-body" "root" 1) ("steps" rdfhtml:Ol "sem-walk-steps" "body" 0) ("aside" rdfhtml:Aside "sem-walk-aside" "body" 1)
+      ("diagram" rdfhtml:Figure "sem-walk-diagram" "aside" UNDEF) ("fullscreen-toggles" rdfhtml:Div "sem-fullscreen-toggles" "diagram" 0) ("plot" svg:Svg UNDEF "diagram" 1)
+      ("diagram-text" rdfhtml:Figcaption "sem-sr" "diagram" 2) ("arrows" rdfhtml:Div "sem-walk-arrows" "root" 2)
+    }
+    FILTER(IF(?local = "head", ?headed, IF(?local = "title", ?title != "", IF(?local = "lead", ?lead != "", true))))
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+    BIND(IF(BOUND(?parentLocal), IRI(CONCAT(?me, "/~", ?parentLocal)), ?unset) AS ?parent)
+    BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
+    BIND(IF(?local IN ("title", "lead"), IRI(CONCAT(?me, "/~", ?local, "-text")), ?unset) AS ?textNode)
+    BIND(IF(?local = "title", ?title, IF(?local = "lead", ?lead, ?unset)) AS ?data)
+    BIND(IF(?local = "diagram-text", CONCAT(?me, "/~diagram-text"), ?unset) AS ?id)
+    # The source it explains, after the diagram.
+    OPTIONAL { FILTER(?local = "diagram") $this c:sourceView ?after FILTER(isIRI(?after)) }
+  } UNION {
+    $this c:sourceView ?el FILTER(isIRI(?el))
+    BIND(IRI(CONCAT(?me, "/~aside")) AS ?parent)
+  } UNION {
+    # The plot's attributes: as tall as its bands, at least 120.
+    BIND(IRI(CONCAT(?me, "/~plot")) AS ?el)
+    OPTIONAL { ?parts c:height ?h0 }
+    BIND(COALESCE(?h0, 8) AS ?height)
+    OPTIONAL { ?diagramWordsAt l10n:of c:DiagramPhrase ; l10n:name ?diagramWords0 } OPTIONAL { FILTER(!BOUND(?diagramWords0)) c:DiagramPhrase rdfs:label ?diagramWords1 FILTER(isLiteral(?diagramWords1)) }
+  BIND(STR(COALESCE(?diagramWords0, ?diagramWords1, "A diagram of the graph this explains: what the steps mention, and how it is linked")) AS ?diagramWords)
+    VALUES ?an { "viewBox" "role" "aria-label" "aria-describedby" "class" } BIND(IF(?an = "viewBox", CONCAT("0 0 520 ", STR(IF(?height > 120, ?height, 120))), IF(?an = "role", "img", IF(?an = "aria-label", ?diagramWords, IF(?an = "aria-describedby", CONCAT(?me, "/~diagram-text"), IF(?an = "class", "sem-plot", ?unset))))) AS ?av) FILTER(BOUND(?av)) BIND(IRI(CONCAT(?me, "/~", "plot", "-a-", ?an)) AS ?attr)
+  } UNION {
+    # Its own full-screen toggles (fs:Fullscreenable): fill the window, full screen.
+    VALUES (?local ?fact ?kind ?k) { ("viewport-toggle" fs:fullViewport "viewport" 0) ("fullscreen-toggle" fs:fullscreen "screen" 1) }
+    BIND(IF(?k = 0, fs:ViewportCommand, fs:ToggleCommand) AS ?command)
+    LATERAL { OPTIONAL { ?commandAt l10n:of ?command ; l10n:name ?command0 } }
+    LATERAL { OPTIONAL { FILTER(!BOUND(?command0)) ?command rdfs:label ?command1 FILTER(isLiteral(?command1)) } }
+    BIND(STR(COALESCE(?command0, ?command1, IF(?k = 0, "Fill the window", "Full screen"))) AS ?tip)
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(rdfhtml:Button AS ?tag) BIND("button" AS ?type) BIND("sem-fullscreen-toggle" AS ?cls) BIND(?k AS ?key)
+    BIND(IRI(CONCAT(?me, "/~fullscreen-toggles")) AS ?parent) BIND($this AS ?toggles)
+    VALUES ?an { "data-sem-kind" "aria-label" }
+    BIND(IF(?an = "data-sem-kind", ?kind, ?tip) AS ?av)
+    BIND(IRI(CONCAT(?me, "/~", ?local, "-", ?an)) AS ?attr)
+  } UNION {
+    # A step: its number, its title, the step itself; what it shows, and what it mentions.
+    { SELECT ?step (COUNT(?smid) - 1 AS ?i) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step FILTER(isIRI(?step)) } GROUP BY ?step }
+    OPTIONAL { ?stepNameAt l10n:of ?step ; l10n:name ?stepName0 } OPTIONAL { FILTER(!BOUND(?stepName0)) ?step rdfs:label ?stepName1 FILTER(isLiteral(?stepName1)) }
+    BIND(COALESCE(STR(COALESCE(?stepName0, ?stepName1)), "") AS ?stepName)
+    BIND(CONCAT("step-", STR(?i)) AS ?s)
+    VALUES ?part { "li" "num" "title" "step" }
+    FILTER(?part != "title" || ?stepName != "")
+    BIND(IF(?part = "step", ?step, IRI(CONCAT(?me, "/~", ?s, IF(?part = "li", "", CONCAT("-", ?part))))) AS ?el)
+    BIND(IF(?part = "li", rdfhtml:Li, IF(?part = "num", rdfhtml:Span, IF(?part = "title", rdfhtml:H3, ?unset))) AS ?tag)
+    BIND(IF(?part = "li", "sem-walk-step", IF(?part = "num", "sem-walk-num", IF(?part = "title", "sem-walk-title", ?unset))) AS ?cls)
+    BIND(IF(?part = "li", IRI(CONCAT(?me, "/~steps")), IRI(CONCAT(?me, "/~", ?s))) AS ?parent)
+    BIND(IF(?part = "li", ?i, ?unset) AS ?key)
+    BIND(IF(?part = "li", ?step, ?unset) AS ?showsStep)
+    BIND(IF(?part = "num", IRI(CONCAT(?me, "/~", ?s, IF(?stepName != "", "-title", ""))), IF(?part = "title", ?step, ?unset)) AS ?after)
+    BIND(IF(?part IN ("num", "title"), IRI(CONCAT(?me, "/~", ?s, "-", ?part, "-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "num", STR(?i + 1), IF(?part = "title", ?stepName, ?unset)) AS ?data)
+    OPTIONAL { FILTER(?part = "li") ?step c:children/rdf:rest*/rdf:first ?mention . ?mention a c:Mention ; c:mentions ?mentions FILTER(isIRI(?mentions)) }
+    LATERAL {
+      { FILTER(?part = "li") BIND("tabindex" AS ?an) BIND("0" AS ?av) BIND(IRI(CONCAT(?me, "/~", ?s, "-tabindex")) AS ?attr) }
+      UNION { FILTER(?part = "num") BIND("aria-hidden" AS ?an) BIND("true" AS ?av) BIND(IRI(CONCAT(?me, "/~", ?s, "-num-aria-hidden")) AS ?attr) }
+      UNION { FILTER(?part IN ("title", "step")) }
+    }
+  } UNION {
+    # What each mention points at, and what activating it does.
+    { SELECT ?step (COUNT(?smid) - 1 AS ?i) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step FILTER(isIRI(?step)) } GROUP BY ?step }
+    OPTIONAL { ?stepNameAt l10n:of ?step ; l10n:name ?stepName0 } OPTIONAL { FILTER(!BOUND(?stepName0)) ?step rdfs:label ?stepName1 FILTER(isLiteral(?stepName1)) }
+    BIND(COALESCE(STR(COALESCE(?stepName0, ?stepName1)), "") AS ?stepName)
+    ?step c:children/rdf:rest*/rdf:first ?mention . ?mention a c:Mention ; c:mentions ?mterm FILTER(isIRI(?mterm))
+    OPTIONAL { ?mnode c:walkNodeIn $this ; c:nodeTerm ?mterm ; c:nodeLabel ?mlabel }
+    OPTIONAL { ?mname c:mentionOf ?mention ; c:mentionName ?mcompact }
+    BIND(COALESCE(?mlabel, ?mcompact) AS ?mName)
+    BIND(EXISTS { ?mention c:to ?anyTo } AS ?toPage)
+    OPTIONAL { ?linkWordsAt l10n:of c:MentionLinkPhrase ; l10n:name ?linkWords0 } OPTIONAL { FILTER(!BOUND(?linkWords0)) c:MentionLinkPhrase rdfs:label ?linkWords1 FILTER(isLiteral(?linkWords1)) }
+  BIND(STR(COALESCE(?linkWords0, ?linkWords1, "{name}, in the diagram; opens its page")) AS ?linkWords)
+    OPTIONAL { ?hintWordsAt l10n:of c:MentionHintPhrase ; l10n:name ?hintWords0 } OPTIONAL { FILTER(!BOUND(?hintWords0)) c:MentionHintPhrase rdfs:label ?hintWords1 FILTER(isLiteral(?hintWords1)) }
+  BIND(STR(COALESCE(?hintWords0, ?hintWords1, "{name}, in the diagram; activate to see its Turtle in the source")) AS ?hintWords)
+    BIND(IRI(CONCAT(STR(?mention), "/~root")) AS ?el)
+    BIND("aria-description" AS ?an)
+    BIND(IF(?toPage, ?linkWords, ?hintWords) AS ?words)
+    BIND(IF(CONTAINS(?words, "{name}"), CONCAT(STRBEFORE(?words, "{name}"), ?mName, STRAFTER(?words, "{name}")), ?words) AS ?av)
+    BIND(IRI(CONCAT(?me, "/~hint-", REPLACE(STR(?mention), "^.*[#/]", ""))) AS ?attr)
+  } UNION {
+    # Band numbers down the left edge: which step a row of nodes belongs to.
+    ?band a c:WalkBand ; c:bandIn $this ; c:bandIndex ?b ; c:bandTop ?top .
+    BIND(CONCAT("band-", STR(?b)) AS ?local0)
+    BIND(IRI(CONCAT(?me, "/~", ?local0)) AS ?el) BIND(svg:Text AS ?tag) BIND(IRI(CONCAT(?me, "/~plot")) AS ?parent) BIND(?b AS ?key)
+    BIND(IRI(CONCAT(?me, "/~", ?local0, "-text")) AS ?textNode) BIND(STR(?b + 1) AS ?data)
+    VALUES ?an { "x" "y" "text-anchor" "class" } BIND(IF(?an = "x", "14", IF(?an = "y", STR(?top + 4), IF(?an = "text-anchor", "middle", IF(?an = "class", "sem-band", ?unset)))) AS ?av) FILTER(BOUND(?av)) BIND(IRI(CONCAT(?me, "/~", ?local0, "-a-", ?an)) AS ?attr)
+  } UNION {
+    # A link: a curve bending to the left of its direction, from dot to dot, its arrowhead, its label on its middle.
+    ?link c:walkLinkIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:linkLabel ?label .
+    ?from c:nodeTerm ?fromTerm ; c:nodeLabel ?fromLabel ; c:nodeOrder ?fromOrder . ?to c:nodeTerm ?toTerm ; c:nodeLabel ?toLabel ; c:nodeOrder ?toOrder .
+    BIND(?fromOrder * 1000 + ?toOrder AS ?linkOrder)
+    ?from c:x ?ax ; c:y ?ay . ?to c:x ?bx ; c:y ?by .
+    BIND(CONCAT("e", SUBSTR(MD5(CONCAT(STR(?fromTerm), " ", ?label, " ", STR(?toTerm))), 1, 12)) AS ?id0)
+    BIND(?bx - ?ax AS ?dx) BIND(?by - ?ay AS ?dy) BIND(sx:sqrt(?dx * ?dx + ?dy * ?dy) AS ?len0) BIND(IF(?len0 = 0, 1.0E0, ?len0) AS ?len) BIND(IF(36 < ?len * 2.2E-1, 36, ?len * 2.2E-1) AS ?bend) BIND(xsd:double(?ax + ?bx) / 2 + (?dy / ?len) * ?bend AS ?cx) BIND(xsd:double(?ay + ?by) / 2 - (?dx / ?len) * ?bend AS ?cy) BIND(?cx - ?ax AS ?sx0) BIND(?cy - ?ay AS ?sy0) BIND(sx:sqrt(?sx0 * ?sx0 + ?sy0 * ?sy0) AS ?sl0) BIND(IF(?sl0 = 0, 1.0E0, ?sl0) AS ?sl) BIND(?sx0 / ?sl AS ?ux) BIND(?sy0 / ?sl AS ?uy) BIND(?bx - ?cx AS ?ex0) BIND(?by - ?cy AS ?ey0) BIND(sx:sqrt(?ex0 * ?ex0 + ?ey0 * ?ey0) AS ?el0) BIND(IF(?el0 = 0, 1.0E0, ?el0) AS ?elen) BIND(?ex0 / ?elen AS ?vx) BIND(?ey0 / ?elen AS ?vy) BIND(?ax + ?ux * 9 AS ?x1) BIND(?ay + ?uy * 9 AS ?y1) BIND(?bx - ?vx * 11 AS ?x2) BIND(?by - ?vy * 11 AS ?y2) BIND(2.5E-1 * ?x1 + 5.0E-1 * ?cx + 2.5E-1 * ?x2 AS ?mx) BIND(2.5E-1 * ?y1 + 5.0E-1 * ?cy + 2.5E-1 * ?y2 AS ?my)
+    BIND(xsd:integer(ROUND((?x1) * 10)) AS ?x1sR) BIND(STR(ABS(?x1sR)) AS ?x1sD0) BIND(IF(STRLEN(?x1sD0) <= 1, CONCAT("0", ?x1sD0), ?x1sD0) AS ?x1sD) BIND(CONCAT(IF(?x1sR < 0, "-", ""), SUBSTR(?x1sD, 1, STRLEN(?x1sD) - 1), ".", SUBSTR(?x1sD, STRLEN(?x1sD))) AS ?x1s) BIND(xsd:integer(ROUND((?y1) * 10)) AS ?y1sR) BIND(STR(ABS(?y1sR)) AS ?y1sD0) BIND(IF(STRLEN(?y1sD0) <= 1, CONCAT("0", ?y1sD0), ?y1sD0) AS ?y1sD) BIND(CONCAT(IF(?y1sR < 0, "-", ""), SUBSTR(?y1sD, 1, STRLEN(?y1sD) - 1), ".", SUBSTR(?y1sD, STRLEN(?y1sD))) AS ?y1s) BIND(xsd:integer(ROUND((?cx) * 10)) AS ?cxsR) BIND(STR(ABS(?cxsR)) AS ?cxsD0) BIND(IF(STRLEN(?cxsD0) <= 1, CONCAT("0", ?cxsD0), ?cxsD0) AS ?cxsD) BIND(CONCAT(IF(?cxsR < 0, "-", ""), SUBSTR(?cxsD, 1, STRLEN(?cxsD) - 1), ".", SUBSTR(?cxsD, STRLEN(?cxsD))) AS ?cxs) BIND(xsd:integer(ROUND((?cy) * 10)) AS ?cysR) BIND(STR(ABS(?cysR)) AS ?cysD0) BIND(IF(STRLEN(?cysD0) <= 1, CONCAT("0", ?cysD0), ?cysD0) AS ?cysD) BIND(CONCAT(IF(?cysR < 0, "-", ""), SUBSTR(?cysD, 1, STRLEN(?cysD) - 1), ".", SUBSTR(?cysD, STRLEN(?cysD))) AS ?cys) BIND(xsd:integer(ROUND((?x2) * 10)) AS ?x2sR) BIND(STR(ABS(?x2sR)) AS ?x2sD0) BIND(IF(STRLEN(?x2sD0) <= 1, CONCAT("0", ?x2sD0), ?x2sD0) AS ?x2sD) BIND(CONCAT(IF(?x2sR < 0, "-", ""), SUBSTR(?x2sD, 1, STRLEN(?x2sD) - 1), ".", SUBSTR(?x2sD, STRLEN(?x2sD))) AS ?x2s) BIND(xsd:integer(ROUND((?y2) * 10)) AS ?y2sR) BIND(STR(ABS(?y2sR)) AS ?y2sD0) BIND(IF(STRLEN(?y2sD0) <= 1, CONCAT("0", ?y2sD0), ?y2sD0) AS ?y2sD) BIND(CONCAT(IF(?y2sR < 0, "-", ""), SUBSTR(?y2sD, 1, STRLEN(?y2sD) - 1), ".", SUBSTR(?y2sD, STRLEN(?y2sD))) AS ?y2s) BIND(xsd:integer(ROUND((?x2 + ?vx * 4) * 10)) AS ?h1xR) BIND(STR(ABS(?h1xR)) AS ?h1xD0) BIND(IF(STRLEN(?h1xD0) <= 1, CONCAT("0", ?h1xD0), ?h1xD0) AS ?h1xD) BIND(CONCAT(IF(?h1xR < 0, "-", ""), SUBSTR(?h1xD, 1, STRLEN(?h1xD) - 1), ".", SUBSTR(?h1xD, STRLEN(?h1xD))) AS ?h1x) BIND(xsd:integer(ROUND((?y2 + ?vy * 4) * 10)) AS ?h1yR) BIND(STR(ABS(?h1yR)) AS ?h1yD0) BIND(IF(STRLEN(?h1yD0) <= 1, CONCAT("0", ?h1yD0), ?h1yD0) AS ?h1yD) BIND(CONCAT(IF(?h1yR < 0, "-", ""), SUBSTR(?h1yD, 1, STRLEN(?h1yD) - 1), ".", SUBSTR(?h1yD, STRLEN(?h1yD))) AS ?h1y) BIND(xsd:integer(ROUND((?x2 - ?vx * 5 - ?vy * 4) * 10)) AS ?h2xR) BIND(STR(ABS(?h2xR)) AS ?h2xD0) BIND(IF(STRLEN(?h2xD0) <= 1, CONCAT("0", ?h2xD0), ?h2xD0) AS ?h2xD) BIND(CONCAT(IF(?h2xR < 0, "-", ""), SUBSTR(?h2xD, 1, STRLEN(?h2xD) - 1), ".", SUBSTR(?h2xD, STRLEN(?h2xD))) AS ?h2x) BIND(xsd:integer(ROUND((?y2 - ?vy * 5 + ?vx * 4) * 10)) AS ?h2yR) BIND(STR(ABS(?h2yR)) AS ?h2yD0) BIND(IF(STRLEN(?h2yD0) <= 1, CONCAT("0", ?h2yD0), ?h2yD0) AS ?h2yD) BIND(CONCAT(IF(?h2yR < 0, "-", ""), SUBSTR(?h2yD, 1, STRLEN(?h2yD) - 1), ".", SUBSTR(?h2yD, STRLEN(?h2yD))) AS ?h2y) BIND(xsd:integer(ROUND((?x2 - ?vx * 5 + ?vy * 4) * 10)) AS ?h3xR) BIND(STR(ABS(?h3xR)) AS ?h3xD0) BIND(IF(STRLEN(?h3xD0) <= 1, CONCAT("0", ?h3xD0), ?h3xD0) AS ?h3xD) BIND(CONCAT(IF(?h3xR < 0, "-", ""), SUBSTR(?h3xD, 1, STRLEN(?h3xD) - 1), ".", SUBSTR(?h3xD, STRLEN(?h3xD))) AS ?h3x) BIND(xsd:integer(ROUND((?y2 - ?vy * 5 - ?vx * 4) * 10)) AS ?h3yR) BIND(STR(ABS(?h3yR)) AS ?h3yD0) BIND(IF(STRLEN(?h3yD0) <= 1, CONCAT("0", ?h3yD0), ?h3yD0) AS ?h3yD) BIND(CONCAT(IF(?h3yR < 0, "-", ""), SUBSTR(?h3yD, 1, STRLEN(?h3yD) - 1), ".", SUBSTR(?h3yD, STRLEN(?h3yD))) AS ?h3y) BIND(xsd:integer(ROUND((?mx) * 10)) AS ?mxsR) BIND(STR(ABS(?mxsR)) AS ?mxsD0) BIND(IF(STRLEN(?mxsD0) <= 1, CONCAT("0", ?mxsD0), ?mxsD0) AS ?mxsD) BIND(CONCAT(IF(?mxsR < 0, "-", ""), SUBSTR(?mxsD, 1, STRLEN(?mxsD) - 1), ".", SUBSTR(?mxsD, STRLEN(?mxsD))) AS ?mxs) BIND(xsd:integer(ROUND((?my - 3) * 10)) AS ?mysR) BIND(STR(ABS(?mysR)) AS ?mysD0) BIND(IF(STRLEN(?mysD0) <= 1, CONCAT("0", ?mysD0), ?mysD0) AS ?mysD) BIND(CONCAT(IF(?mysR < 0, "-", ""), SUBSTR(?mysD, 1, STRLEN(?mysD) - 1), ".", SUBSTR(?mysD, STRLEN(?mysD))) AS ?mys)
+    VALUES ?part { "g" "line" "head" "label" }
+    BIND(IF(?part = "g", ?id0, CONCAT(?id0, "-", ?part)) AS ?local0)
+    BIND(IRI(CONCAT(?me, "/~", ?local0)) AS ?el)
+    BIND(IF(?part = "g", svg:G, IF(?part = "label", svg:Text, svg:Path)) AS ?tag)
+    BIND(IF(?part = "g", IRI(CONCAT(?me, "/~plot")), IRI(CONCAT(?me, "/~", ?id0))) AS ?parent)
+    BIND(IF(?part = "g", 1000000 + ?linkOrder, IF(?part = "line", 0, IF(?part = "head", 1, 2))) AS ?key)
+    BIND(IF(?part = "g", IRI(CONCAT(?me, "/~node-", ENCODE_FOR_URI(STR(?fromTerm)))), ?unset) AS ?edgeFrom)
+    BIND(IF(?part = "g", IRI(CONCAT(?me, "/~node-", ENCODE_FOR_URI(STR(?toTerm)))), ?unset) AS ?edgeTo)
+    BIND(IF(?part = "label", IRI(CONCAT(?me, "/~", ?id0, "-label-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "label", IF(STRLEN(?label) > 30, CONCAT(SUBSTR(?label, 1, 29), "…"), ?label), ?unset) AS ?data)
+    LATERAL {
+      VALUES ?an { "d" "x" "y" "text-anchor" "class" } BIND(IF(?an = "d", IF(?part = "line", CONCAT("M", ?x1s, ",", ?y1s, " Q", ?cxs, ",", ?cys, " ", ?x2s, ",", ?y2s), IF(?part = "head", CONCAT("M", ?h1x, ",", ?h1y, " L", ?h2x, ",", ?h2y, " L", ?h3x, ",", ?h3y, " Z"), ?unset)), IF(?an = "x", IF(?part = "label", ?mxs, ?unset), IF(?an = "y", IF(?part = "label", ?mys, ?unset), IF(?an = "text-anchor", IF(?part = "label", "middle", ?unset), IF(?an = "class", IF(?part = "g", "sem-link", IF(?part = "line", "sem-edge", IF(?part = "head", "sem-arrow", "sem-edge-label"))), ?unset))))) AS ?av) FILTER(BOUND(?av)) BIND(IRI(CONCAT(?me, "/~", ?local0, "-a-", ?an)) AS ?attr)
+    }
+  } UNION {
+    # A node: its term (c:term, data-sem-term), a dot with the term as its tooltip, its label.
+    ?node c:walkNodeIn $this ; c:nodeTerm ?nodeTerm ; c:nodeLabel ?nodeLabel ; c:nodeOrder ?order ; c:x ?nx ; c:y ?ny .
+    BIND(CONCAT("node-", ENCODE_FOR_URI(STR(?nodeTerm))) AS ?id0)
+    VALUES ?part { "g" "dot" "label" }
+    BIND(IF(?part = "g", ?id0, CONCAT(?id0, "-", ?part)) AS ?local0)
+    BIND(IRI(CONCAT(?me, "/~", ?local0)) AS ?el)
+    BIND(IF(?part = "g", svg:G, IF(?part = "dot", svg:Circle, svg:Text)) AS ?tag)
+    BIND(IF(?part = "g", IRI(CONCAT(?me, "/~plot")), IRI(CONCAT(?me, "/~", ?id0))) AS ?parent)
+    BIND(IF(?part = "g", 1000000000 + ?order, IF(?part = "dot", 0, 1)) AS ?key)
+    BIND(IF(?part IN ("g", "dot"), ?nodeTerm, ?unset) AS ?term)
+    BIND(IF(?part = "dot", STR(?nodeTerm), ?unset) AS ?tip)
+    BIND(IF(?part = "label", IRI(CONCAT(?me, "/~", ?id0, "-label-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "label", ?nodeLabel, ?unset) AS ?data)
+    LATERAL {
+      VALUES ?an { "class" "data-sem-term" "cx" "cy" "r" "x" "y" "text-anchor" } BIND(IF(?an = "class", IF(?part = "g", "sem-node sem-iri", IF(?part = "dot", "sem-dot", "sem-node-label")), IF(?an = "data-sem-term", IF(?part = "g", STR(?nodeTerm), ?unset), IF(?an = "cx", IF(?part = "dot", STR(?nx), ?unset), IF(?an = "cy", IF(?part = "dot", STR(?ny), ?unset), IF(?an = "r", IF(?part = "dot", "7", ?unset), IF(?an = "x", IF(?part = "label", STR(?nx), ?unset), IF(?an = "y", IF(?part = "label", STR(?ny + 20), ?unset), IF(?an = "text-anchor", IF(?part = "label", "middle", ?unset), ?unset)))))))) AS ?av) FILTER(BOUND(?av)) BIND(IRI(CONCAT(?me, "/~", ?local0, "-a-", ?an)) AS ?attr)
+    }
+  } UNION {
+    # The diagram's text alternative: a sentence per link, in order.
+    ?link c:walkLinkIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:linkLabel ?label .
+    ?from c:nodeTerm ?fromTerm ; c:nodeLabel ?fromLabel ; c:nodeOrder ?fromOrder . ?to c:nodeTerm ?toTerm ; c:nodeLabel ?toLabel ; c:nodeOrder ?toOrder .
+    BIND(?fromOrder * 1000 + ?toOrder AS ?linkOrder)
+    BIND(IRI(CONCAT(?me, "/~diagram-text")) AS ?el)
+    BIND(IRI(CONCAT(?me, "/~diagram-caption-", STR(?linkOrder))) AS ?textNode) BIND(?linkOrder AS ?textKey)
+    BIND(EXISTS { ?earlier c:walkLinkIn $this ; c:linkFrom/c:nodeOrder ?eo ; c:linkTo/c:nodeOrder ?et FILTER(?eo * 1000 + ?et < ?linkOrder) } AS ?notFirst)
+    BIND(CONCAT(IF(?notFirst, " ", ""), ?fromLabel, " ", ?label, " ", ?toLabel, ".") AS ?data)
+  } UNION {
+    # and the terms no link reaches.
+    { SELECT ?lone ?loneLabel ?loneOrder WHERE {
+        ?lone c:walkNodeIn $this ; c:nodeLabel ?loneLabel ; c:nodeOrder ?loneOrder .
+        FILTER NOT EXISTS { ?ll c:walkLinkIn $this { ?ll c:linkFrom ?lone } UNION { ?ll c:linkTo ?lone } }
+      } }
+    { SELECT (COUNT(?lone2) AS ?lonely) (MAX(?lo2) AS ?lastLone) WHERE {
+        ?lone2 c:walkNodeIn $this ; c:nodeOrder ?lo2 .
+        FILTER NOT EXISTS { ?ll2 c:walkLinkIn $this { ?ll2 c:linkFrom ?lone2 } UNION { ?ll2 c:linkTo ?lone2 } }
+      } }
+    { SELECT (MIN(?lo3) AS ?firstLone) WHERE {
+        ?lone3 c:walkNodeIn $this ; c:nodeOrder ?lo3 .
+        FILTER NOT EXISTS { ?ll3 c:walkLinkIn $this { ?ll3 c:linkFrom ?lone3 } UNION { ?ll3 c:linkTo ?lone3 } }
+      } }
+    BIND(IRI(CONCAT(?me, "/~diagram-text")) AS ?el)
+    BIND(IRI(CONCAT(?me, "/~diagram-lone-", STR(?loneOrder))) AS ?textNode) BIND(1000000000 + ?loneOrder AS ?textKey)
+    BIND(CONCAT(IF(?loneOrder = ?firstLone, IF(?linked, " ", ""), ", "), ?loneLabel, IF(?loneOrder = ?lastLone, ".", "")) AS ?data)
+  }
+  }
+}""" .
+c:WalkthroughAsText-sparql a sem:Rule ;
+    sem:implements c:WalkthroughRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:readsMinted true ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:id ?id ; rdfhtml:type ?type ; sem:orderKey ?key ; sem:tooltip ?tip ; c:term ?term ; c:edgeFrom ?edgeFrom ; c:edgeTo ?edgeTo ;
+      c:showsStep ?showsStep ; c:mentions ?mentions ; fs:toggles ?toggles ; fs:property ?fact ; rdfhtml:hasChild ?textNode ; rdfhtml:attribute ?attr .
+  ?parent rdfhtml:hasChild ?el .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?el ord:immediatelyPrecedes ?after .
+  ?textNode ord:immediatelyPrecedes ?afterText .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Walkthrough .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  BIND(IRI(CONCAT(?me, "/~wp")) AS ?parts)
+  # Its title in the viewer's language (l10n:Labels, on the component), else the one it has.
+  OPTIONAL { { $this l10n:label ?title0 } UNION { ?titleAt l10n:of $this ; l10n:label ?title0 } }
+  OPTIONAL { FILTER(!BOUND(?title0)) $this c:label ?title1 FILTER(isLiteral(?title1)) }
+  BIND(COALESCE(STR(COALESCE(?title0, ?title1)), "") AS ?title)
+  BIND(EXISTS { ?anyLink c:walkLinkIn $this } AS ?linked)
+  LATERAL {
+  {
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
+  } UNION {
+    FILTER(?title != "")
+    BIND(IRI(CONCAT(?me, "/~title")) AS ?el) BIND(rdfhtml:Div AS ?tag) BIND(?root AS ?parent) BIND(-1 AS ?key)
+    BIND(IRI(CONCAT(?me, "/~title-text")) AS ?textNode) BIND(CONCAT("── ", ?title, " ──") AS ?data)
+  } UNION {
+    { SELECT ?step (COUNT(?smid) - 1 AS ?i) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step FILTER(isIRI(?step)) } GROUP BY ?step }
+    OPTIONAL { ?stepNameAt l10n:of ?step ; l10n:name ?stepName0 } OPTIONAL { FILTER(!BOUND(?stepName0)) ?step rdfs:label ?stepName1 FILTER(isLiteral(?stepName1)) }
+    BIND(COALESCE(STR(COALESCE(?stepName0, ?stepName1)), "") AS ?stepName)
+    BIND(IRI(CONCAT(?me, "/~step-", STR(?i))) AS ?el) BIND(rdfhtml:Div AS ?tag) BIND(?root AS ?parent) BIND(?i AS ?key)
+    BIND(IRI(CONCAT(?me, "/~step-", STR(?i), "-num")) AS ?textNode) BIND(CONCAT(STR(?i + 1), ". ", IF(?stepName != "", CONCAT(?stepName, " — "), "")) AS ?data)
+    BIND(?step AS ?afterText)
+  } UNION {
+    { SELECT ?step (COUNT(?smid) - 1 AS ?i) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step FILTER(isIRI(?step)) } GROUP BY ?step }
+    OPTIONAL { ?stepNameAt l10n:of ?step ; l10n:name ?stepName0 } OPTIONAL { FILTER(!BOUND(?stepName0)) ?step rdfs:label ?stepName1 FILTER(isLiteral(?stepName1)) }
+    BIND(COALESCE(STR(COALESCE(?stepName0, ?stepName1)), "") AS ?stepName)
+    BIND(?step AS ?el) BIND(IRI(CONCAT(?me, "/~step-", STR(?i))) AS ?parent)
+  } UNION {
+    FILTER(?linked)
+    BIND(IRI(CONCAT(?me, "/~diagram")) AS ?el) BIND(rdfhtml:Div AS ?tag) BIND(?root AS ?parent) BIND(1000000 AS ?key)
+  } UNION {
+    # A sentence a link, a line each.
+    ?link c:walkLinkIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:linkLabel ?label .
+    ?from c:nodeTerm ?fromTerm ; c:nodeLabel ?fromLabel ; c:nodeOrder ?fromOrder . ?to c:nodeTerm ?toTerm ; c:nodeLabel ?toLabel ; c:nodeOrder ?toOrder .
+    BIND(?fromOrder * 1000 + ?toOrder AS ?linkOrder)
+    BIND(IRI(CONCAT(?me, "/~diagram")) AS ?el)
+    BIND(IRI(CONCAT(?me, "/~diagram-text-", STR(?linkOrder))) AS ?textNode) BIND(?linkOrder AS ?textKey)
+    BIND(EXISTS { ?earlier c:walkLinkIn $this ; c:linkFrom/c:nodeOrder ?eo ; c:linkTo/c:nodeOrder ?et FILTER(?eo * 1000 + ?et < ?linkOrder) } AS ?notFirst)
+    BIND(CONCAT(IF(?notFirst, "\\n", ""), ?fromLabel, " ", ?label, " ", ?toLabel, ".") AS ?data)
+  }
+  }
+}""" .

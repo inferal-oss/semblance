@@ -70,6 +70,7 @@ export const ONTOLOGY_FILES = [
   'components/outline.ttl',
   'components/connector.ttl',
   'components/walkthrough.ttl',
+  'components/walkthrough-diagram.ttl',
   'components/typeahead.ttl',
   'components/rdf-editor.ttl',
   'components/dates.ttl',

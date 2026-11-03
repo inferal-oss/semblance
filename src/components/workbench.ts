@@ -912,7 +912,7 @@ const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 const byText = (a: GNode, b: GNode) => byCode(a.sort, b.sort) || byCode(a.key, b.key)
 
 /** A number with k decimals, as ROUND(x × 10^k) with the point put in (also below zero). */
-function fixed(v: number, k: number): string {
+export function fixed(v: number, k: number): string {
   const r = Math.round(v * 10 ** k)
   const d = String(Math.abs(r))
   const p = d.length <= k ? '0'.repeat(k + 1 - d.length) + d : d

@@ -96,9 +96,8 @@ c:toLine a owl:DatatypeProperty ; rdfs:domain c:SourceSpan ; rdfs:range xsd:inte
 
 # Not the reading state: moving between steps must not lay the diagram out again.
 c:WalkthroughRendering a sem:Rendering ; sem:targets c:Walkthrough ; sem:stratum 0 ;
-    sem:watches rdf:type , c:label , c:note , c:steps , c:sourceView , c:diagramIncludes , c:diagramExcludes ;
-    sem:functionOnly "awaits sx:Math (sx:sqrt, sx:atan2) and sx:Matches (sx:matches): it lays the diagram out (bands, rows, curved links with arrowheads) and finds links in query text." ;
-    sem:needsExtension sx:Math , sx:Matches .
+    sem:watches rdf:type , c:label , c:note , c:steps , c:sourceView , c:diagramIncludes , c:diagramExcludes .
+# Its SPARQL side, and the diagram's building blocks it reads, are in walkthrough-diagram.ttl.
 c:WalkthroughRendering-fn a sem:Rule ; sem:implements c:WalkthroughRendering ; sem:function "walkthrough" .
 
 c:MentionRendering a sem:Rendering ; sem:targets c:Mention ; sem:stratum 0 .
