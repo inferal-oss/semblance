@@ -52,8 +52,8 @@ class FakeSelection {
   }
 }
 
-export function mount(prefer: 'sparql' | 'function', kind: 'wat' | 'oxigraph' = 'wat') {
-  const store = loadStore(kind, DOC)
+export function mount(prefer: 'sparql' | 'function', kind: 'wat' | 'oxigraph' = 'wat', extra = '') {
+  const store = loadStore(kind, DOC + extra)
   const runtime = new Runtime(store)
   const fail = (e: Error) => {
     throw e
@@ -99,12 +99,13 @@ export function mount(prefer: 'sparql' | 'function', kind: 'wat' | 'oxigraph' = 
   const click = (label: string) => [...app.querySelectorAll('button')].find((b) => b.textContent === label)!.dispatchEvent(new window.Event('click', { bubbles: true }))
   const caret = () => region().getAttribute('data-sem-text-root')
   const blocks = () => objects('doc', NS.po + 'contains')
-  return { bus, store, runtime, screen, app, value, objects, select, input, type, press, click, caret, blocks, html: () => app.innerHTML, text: () => toText(text.index, EX + 'editor'), selection }
+  return { bus, renderer, store, runtime, screen, app, value, objects, select, input, type, press, click, caret, blocks, html: () => app.innerHTML, text: () => toText(text.index, EX + 'editor'), selection }
 }
 
 describe('editing block documents (c:BlockEditor)', () => {
-  it('edits within and across blocks, with marks, shortcuts, undo and redo, the same with SPARQL and function rules', () => {
-    const both = [mount('sparql'), mount('function')] as const
+  for (const kind of ['wat', 'oxigraph'] as const)
+  it(`edits within and across blocks, with marks, shortcuts, undo and redo, the same with SPARQL and function rules (${kind})`, () => {
+    const both = [mount('sparql', kind), mount('function', kind)] as const
     const [m] = both
     const step = (what: string, act: (h: ReturnType<typeof mount>) => void) => {
       for (const h of both) act(h)
@@ -236,5 +237,78 @@ describe('editing block documents (c:BlockEditor)', () => {
       h.input('deleteContentBackward')
     })
     expect(m.blocks()).not.toContain(EX + 'hr')
+
+    step('Mod+Z undoes through the editor\'s undoer', (h) => {
+      h.select('p3', 0)
+      h.press('z', { ctrlKey: true })
+    })
+    expect(m.blocks()).toContain(EX + 'hr')
+    step('Mod+Shift+Z redoes', (h) => h.press('z', { ctrlKey: true, shiftKey: true }))
+    expect(m.blocks()).not.toContain(EX + 'hr')
   })
+
+  it('checks off a to-do and opens a toggle by their controls', () => {
+    const extra = `
+<${EX}doc> <${NS.po}contains> <${EX}todo> , <${EX}toggle> .
+<${EX}p3> <${NS.co}nextItem> <${EX}todos> .
+<${EX}todos> a <${NS.blk}TodoList> ; <${NS.po}contains> <${EX}todo> ; <${NS.co}nextItem> <${EX}toggle> .
+<${EX}doc> <${NS.po}contains> <${EX}todos> .
+<${EX}todo> a <${NS.blk}TodoItem> ; <${NS.rdf}value> "Ship" .
+<${EX}toggle> a <${NS.blk}Toggle> ; <${NS.rdf}value> "More" ; <${NS.po}contains> <${EX}inside> .
+<${EX}inside> a <${NS.blk}Paragraph> ; <${NS.rdf}value> "Inside" .`.replace(`<${EX}doc> <${NS.po}contains> <${EX}todo> , <${EX}toggle> .`, `<${EX}doc> <${NS.po}contains> <${EX}toggle> .`)
+    const h = mount('sparql', 'wat', extra)
+    const check = h.app.querySelector(`[id="${EX}todo/~root"] input`) as HTMLInputElement
+    check.dispatchEvent(new (check.ownerDocument.defaultView!.Event)('click', { bubbles: true }))
+    expect(h.objects('todo', NS.blk + 'checked')).toEqual(['true'])
+    expect(h.app.querySelector(`[id="${EX}todo/~root"]`)!.getAttribute('data-sem-done')).toBe('true')
+    const twisty = h.app.querySelector(`[id="${EX}toggle/~root"] button`)!
+    expect(twisty.getAttribute('aria-expanded')).toBe('false')
+    twisty.dispatchEvent(new (twisty.ownerDocument.defaultView!.Event)('click', { bubbles: true }))
+    expect(h.app.querySelector(`[id="${EX}toggle/~root"] button`)!.getAttribute('aria-expanded')).toBe('true')
+    expect(h.app.querySelector(`[id="${EX}toggle/~children"]`)!.hasAttribute('hidden')).toBe(false)
+  })
+
+  it('records what a composition typed once it ends, and renders the block from the graph again', () => {
+    const h = mount('sparql')
+    h.select('p2', 6)
+    const target = h.selection.anchorNode!.parentElement!
+    const win = target.ownerDocument.defaultView!
+    target.dispatchEvent(new win.Event('compositionstart', { bubbles: true }))
+    // The browser edits the text itself while composing.
+    const node = h.selection.anchorNode as Text
+    node.data = 'Second ありがとう line'
+    target.dispatchEvent(new win.Event('compositionend', { bubbles: true }))
+    expect(h.value('p2')).toBe('Second ありがとう line')
+    expect(h.app.querySelector(`[id="${EX}p2/~text"]`)!.textContent).toBe('Second ありがとう line')
+  })
+})
+
+describe('the cost of typing in a block (c:BlockEditor)', () => {
+  /** A document of `n` more paragraphs after the editor's own, in its chain. */
+  const longer = (n: number) => {
+    const ex = (i: number) => `<${EX}more-${i}>`
+    const lines = [`<${EX}p3> <${NS.co}nextItem> ${ex(0)} .`]
+    for (let i = 0; i < n; i++) {
+      lines.push(`<${EX}doc> <${NS.po}contains> ${ex(i)} .`, `${ex(i)} a <${NS.blk}Paragraph> ; <${NS.rdf}value> "Paragraph ${i} of a long document." .`)
+      if (i + 1 < n) lines.push(`${ex(i)} <${NS.co}nextItem> ${ex(i + 1)} .`)
+    }
+    return lines.join('\n')
+  }
+  const keystroke = (n: number, prefer: 'sparql' | 'function') => {
+    const h = mount(prefer, 'wat', longer(n))
+    h.select('p1', 5)
+    h.type('a')
+    const stats = h.screen.engine.stats
+    const before = { runs: stats.ruleRuns, written: stats.derivedAdded + stats.derivedRemoved, dom: h.renderer.ops }
+    h.type('b')
+    return { runs: stats.ruleRuns - before.runs, written: stats.derivedAdded + stats.derivedRemoved - before.written, dom: h.renderer.ops - before.dom }
+  }
+  for (const prefer of ['sparql', 'function'] as const) {
+    it(`costs the same in a document of three thousand blocks as in one of four (${prefer})`, () => {
+      const short = keystroke(0, prefer)
+      const long = keystroke(3000, prefer)
+      expect(long).toEqual(short)
+      expect(short.runs).toBeLessThanOrEqual(6)
+    })
+  }
 })

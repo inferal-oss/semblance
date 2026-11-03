@@ -13,7 +13,7 @@ What the established vocabularies say, used as they are:
 | what a block is (structurally) | Pattern Ontology (`po:` = `http://www.essepuntato.it/2008/12/pattern#`): `po:Block` (text and inline elements), `po:Container` (blocks only), `po:HeadedContainer`, `po:Atom`, `po:Milestone`, `po:Table` |
 | what a block is (rhetorically) | DoCo (`doco:` = `http://purl.org/spar/doco/`): `doco:Paragraph`, `doco:SectionTitle`, `doco:List`, `doco:BlockQuotation`, `doco:TextBox`, `doco:Formula`, `doco:Figure`, `doco:Table`, `doco:TableOfContents`, `doco:BodyMatter` |
 | containment | `po:contains` (a container to each block in it); a toggle's line is its header (`po:containsAsHeader` is not needed: its text is its own) |
-| order of siblings | `co:nextItem` (the RDF/HTML ordering module): a block to the next block in the same container. A linked chain, so inserting, removing and moving cost what they touch; the last block has none |
+| order of siblings | the Collections Ontology's `co:nextItem` (`co:` = `http://purl.org/co/`): a block to the next block in the same container. A linked chain, so inserting, removing and moving cost what they touch; the last block has none. Not `ord:`: that is the rendered output's placement, which the engine never follows as data |
 | text | `rdf:value`: a block's plain text (an `xsd:string`) |
 | inline ranges | Web Annotation (`oa:` = `http://www.w3.org/ns/oa#`): every mark is an `oa:TextPositionSelector` with `oa:start` and `oa:end` (offsets into `rdf:value`) |
 | media and embeds | schema.org: `schema:contentUrl`, `schema:url`, `schema:name`, `schema:caption`, `schema:encodingFormat`, `schema:programmingLanguage`, `schema:contentSize` |
@@ -94,9 +94,10 @@ The editor's region is `contenteditable`. The browser does not edit it: the bus 
   writing direction; the graph decides what that means.
 
 Event classes are chosen by input type, the way key events are chosen by key (`beh:inputType` on the
-class, as `beh:key`): `c:InsertText`, `c:DeleteContent` (every `delete…` type), `c:InsertParagraph`,
-`c:InsertLineBreak`, `c:HistoryUndo`/`c:HistoryRedo`, `c:InsertFromPaste`, `c:InsertFromDrop`. Keys
-that are not input are `c:BlockEditorKey` presses (`tab`, `shift+tab`, `alt+arrowup`/`down`,
+class, as `beh:key`): `c:InsertText` (`insertText`, `insertReplacementText`, `insertLineBreak`),
+`c:DeleteText` (every `delete…` type), `c:SplitBlock` (`insertParagraph`), `c:HistoryStep`
+(`historyUndo`, `historyRedo`), `c:FormatText` (`formatBold` …), and, for paste, `c:InsertFromPaste`.
+Keys that are not input are `c:BlockEditorKey` presses (`tab`, `shift+tab`, `alt+arrowup`/`down`,
 `mod+b`/`i`/`e`/`k`, `mod+shift+s`, `escape`, and the menu's arrows and Enter), carrying the selection.
 
 Each event is handled by exactly one reaction (they filter one another out), every one `beh:undoable`
@@ -105,8 +106,8 @@ with a SPARQL pair and a function twin:
 | event | reaction |
 |---|---|
 | text typed into one block | splice `rdf:value`, shift marks, add the pending marks |
-| text typed that completes a Markdown shortcut at the start of a block (`# `, `## `, `### `, `- `, `* `, `1. `, `[] `, `> `, ```` ``` ````, `---`) | turn the block into that type (a list item into a list: joined to the list before it, else a new one) |
-| text typed that closes an inline shortcut (`**a**`, `_a_`, `` `a` ``, `~~a~~`) | drop the markers, mark what they enclosed |
+| text typed that completes a Markdown shortcut at the start of a block (`# `, `## `, `### `, `- `, `* `, `1. `, `[] `, `> `, ```` ``` ````, `---`) | turn the block into that type (a list item into a list: joined to the list before it, else a new one). The shortcuts are data (`blk:BlockShortcut`: a trigger character, a pattern over the text before the caret, the class it makes), so a site adds its own |
+| text typed that closes an inline shortcut (`**a**`, `_a_`, `` `a` ``, `~~a~~`) | drop the markers, mark what they enclosed (`blk:InlineShortcut`, data too) |
 | a deletion inside one block | splice, shift marks |
 | a deletion across blocks | the start block keeps its text before the range and takes the end block's after it (with its marks, shifted); covered blocks and the end block go (the end block's children join the start block, or follow it); the chains are relinked |
 | Backspace at the start of a list item, heading, quote, callout | it becomes a paragraph (out of its list) |
@@ -115,7 +116,7 @@ with a SPARQL pair and a function twin:
 | Tab / Shift+Tab | into the previous sibling's children (when its class `blk:nests`; a list item into a nested list of its kind) / out to follow its parent |
 | Alt+Up / Alt+Down, a drop | move the block in its chain (the `dnd:` layer for the pointer and its keyboard drag) |
 | Mod+B, I, E, Shift+S, K | toggle a mark over the selection (or the pending marks at a caret); K asks for a link's address |
-| undo / redo | the change log's latest undoable change (a redo reaction is added beside `beh:UndoLatest`); typing within a block in one breath is one step (`beh:coalesce`) |
+| undo / redo | Mod+Z, Mod+Shift+Z (or the browser's own history) activate the editor's `c:undoer` (a `beh:Undoer`) and `c:redoer` (a `beh:Redoer`, beside `beh:UndoLatest`: `beh:RedoLatest` applies again the change undone last). Each event is one step for now; typing in one breath as one step is to come |
 
 Composition (IME, many phone keyboards) cannot be cancelled. Then the browser edits the block, and on
 `compositionend` (or an `input` whose `beforeinput` was not cancellable) the host reads that block's
