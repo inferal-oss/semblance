@@ -11,6 +11,10 @@
 @prefix schema: <https://schema.org/> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix doco: <http://purl.org/spar/doco/> .
 @prefix ui: <https://semblance.dev/demo#> .
 
 # Gallery page: Documents (c:DocumentsGroup). A document is a tree of blocks in DoCo and the Pattern
@@ -18,7 +22,7 @@
 # (co:nextItem), a text block's text is its rdf:value with standoff marks.
 
 ui:gallery-documents a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-documents-intro ui:gallery-documents-lede ui:doc-text ui:doc-structure ui:doc-media ) .
+    c:children ( ui:gallery-documents-intro ui:gallery-documents-lede ui:doc-text ui:doc-structure ui:doc-media ui:doc-custom ) .
 ui:gallery-documents-intro a c:Heading ; c:label "Documents" .
 ui:gallery-documents-lede a c:Text ;
     c:label "Documents of blocks: every block a DoCo or Pattern Ontology class that is also a component, its text and marks graph state, rendered as plain semantic HTML and, in the Text modality, as Markdown." .
@@ -120,3 +124,35 @@ ui:dm-file a blk:File ; schema:contentUrl "/llms.txt" ; schema:name "llms.txt" ;
 ui:dm-bookmark a blk:Bookmark ; schema:url "http://purl.org/spar/doco" ; schema:name "DoCo, the Document Components Ontology" ;
     schema:description "Structural and rhetorical components of documents: paragraphs, sections, lists, figures, tables." ; co:nextItem ui:dm-link .
 ui:dm-link a blk:DocumentLink ; blk:target ui:doc-text-doc .
+
+# --- a block type of the site's own ----------------------------------------------------------------
+# Turtle only: a class (a paragraph that is an aside, rendered by the shared rendering because it names
+# its element), how it looks, what it must say, its / entry and a Markdown shortcut of its own. It is in
+# the / menu of every editor on the site, and edits like a paragraph.
+
+ui:KeyPoint a owl:Class ; rdfs:subClassOf blk:Paragraph , doco:TextBox ; sem:slug "ui-key-point" ;
+    blk:element rdfhtml:Aside ; blk:prefix "! " ;
+    rdfs:label "Key point"@en , "Головне"@uk , "Kernpunkt"@de , "نقطة أساسية"@ar ;
+    rdfs:comment "A sentence to remember, set apart."@en ;
+    c:help "A sentence to remember, set apart."@en , "Речення, яке варто запам’ятати."@uk , "Ein Satz zum Merken, hervorgehoben."@de , "جملة تستحق التذكر، مميزة."@ar ;
+    c:icon "!" ; blk:keyword "highlight important remember" ; blk:menuOrder 30 .
+ui:KeyPointShortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^!$" ; blk:makes ui:KeyPoint .
+ui:KeyPointShape a sh:NodeShape ; sh:targetClass ui:KeyPoint ;
+    sh:property [ sh:path rdf:value ; sh:maxLength 280 ; sh:message "A key point is one sentence (280 characters at most)." ] .
+[] a sty:StyleRule ; sty:appliesTo ui:KeyPoint ;
+    sty:declares [ sty:property "padding" ; sty:raw "var(--sem-space-2) var(--sem-space-3)" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "4px solid var(--sem-accent-9)" ] ,
+                 [ sty:property "background" ; sty:token tok:accent-3 ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "font-weight" ; sty:raw "550" ] .
+
+ui:doc-custom a c:Flippable ; c:front ui:doc-custom-spec .
+ui:doc-custom-spec a c:Specimen ; c:label "A block type of your own" ;
+    c:demonstrates blk:Block , blk:BlockShortcut ;
+    c:help "A site adds a block type in Turtle: a class (here a paragraph that is an aside: it names its element, so the shared rendering draws it), its style, its shape, its / entry and a Markdown shortcut (\"! \"). Type / and find it, or start a line with \"! \"." ;
+    c:children ( ui:doc-custom-editor ) .
+ui:doc-custom-editor a c:BlockEditor ; c:label "Notes"@en , "Нотатки"@uk , "Notizen"@de , "ملاحظات"@ar ; c:of ui:doc-custom-doc ; c:editable true .
+ui:doc-custom-doc a blk:Document ; po:contains ui:dc-p , ui:dc-key , ui:dc-empty .
+ui:dc-p a blk:Paragraph ; rdf:value "Blocks are classes, so a site's own is one more class." ; co:nextItem ui:dc-key .
+ui:dc-key a ui:KeyPoint ; rdf:value "No host code: the class, its look, its shape and its menu entry are all Turtle." ; co:nextItem ui:dc-empty .
+ui:dc-empty a blk:Paragraph ; rdf:value "" .

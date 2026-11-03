@@ -172,6 +172,9 @@ ex:RecipeShape a sh:NodeShape ; sh:targetClass ex:Recipe ; sh:property [ sh:path
 4. **Its `/` entry**: label, description, icon, keywords, `blk:menuOrder`, `blk:template`.
 
 Editing, the menu, moving, nesting, undo, copy and paste come from the superclass; there is no host code.
+A type can bring its own Markdown shortcut too (a `blk:BlockShortcut`). The Documents page of the site has
+one: `ui:KeyPoint` (`demo/gallery/documents.ttl`), a paragraph that is an aside, with its style, its shape,
+its `/` entry and the shortcut `! `.
 
 ## Server rendering and the Text modality
 
@@ -193,3 +196,19 @@ Reactions map that to blocks in SPARQL (`p`, `h1`–`h3`, `ul`/`ol`/`li`, `block
 `img`, `table`; `strong`/`b`, `em`/`i`, `code`, `s`, `a` to marks; everything else to its text), and
 Markdown text line by line (`sx:matches`), minting blocks from the event and splicing them in at the
 caret, one undoable change.
+
+## Where it stands
+
+Done: the model, shapes and every primitive's rendering (Screen and Text); editing within and across
+blocks, marks, Markdown shortcuts, undo and redo, composition; the `/` menu and templates; nesting by Tab
+and Shift+Tab, moving by Alt+Up and Alt+Down; plain text pasted; site block types in Turtle.
+
+To come:
+- dragging a block by a handle: the drag-and-drop layer makes a draggable's whole root its handle, which
+  in an editable region would turn every text selection into a drag; it needs a handle part of its own;
+- copying out as Markdown and Turtle, and HTML or Markdown pasted as blocks (the event's HTML in RDF/HTML,
+  mapped by reactions), as designed above;
+- a floating toolbar for a selection, links by Mod+K, mentions of the graph's resources by a menu of their own;
+- typing in one breath as one undo step;
+- editing an atom's address (an image's, a bookmark's) in place;
+- the Examples page's walkthrough of a site block type.

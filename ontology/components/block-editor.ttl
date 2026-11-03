@@ -60,8 +60,8 @@ c:redoer a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; rdfs:range beh:Redoe
 
 c:TextEdit a owl:Class ; rdfs:subClassOf beh:Event ;
     rdfs:comment "An edit the browser would make in a rich text region (a beforeinput), which it does not: the reactions make it."@en .
-c:InsertText a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ; beh:inputType "insertText" , "insertReplacementText" , "insertLineBreak" ;
-    rdfs:comment "Text typed over a range (a line break, for insertLineBreak)."@en .
+c:InsertText a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ; beh:inputType "insertText" , "insertReplacementText" , "insertLineBreak" , "insertFromPaste" , "insertFromDrop" , "insertFromYank" ;
+    rdfs:comment "Text typed over a range (a line break, for insertLineBreak), or pasted or dropped there as plain text."@en .
 c:DeleteText a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ;
     beh:inputType "deleteContentBackward" , "deleteContentForward" , "deleteWordBackward" , "deleteWordForward" ,
         "deleteSoftLineBackward" , "deleteSoftLineForward" , "deleteHardLineBackward" , "deleteHardLineForward" ,

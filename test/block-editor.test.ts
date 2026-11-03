@@ -455,3 +455,22 @@ describe('nesting and moving blocks (c:BlockEditor)', () => {
     expect(e.defaultPrevented).toBe(false)
   })
 })
+
+describe('pasting into a block (c:BlockEditor)', () => {
+  it('inserts pasted plain text where the selection is, as typing does', () => {
+    const h = mount('sparql')
+    h.select('p2', 7, 'p2', 11)
+    const range = h.selection.getRangeAt()
+    const target = h.selection.anchorNode!.parentElement!
+    const e = Object.assign(new (target.ownerDocument.defaultView!.Event)('beforeinput', { bubbles: true, cancelable: true }), {
+      inputType: 'insertFromPaste',
+      data: null,
+      dataTransfer: { getData: (type: string) => (type === 'text/plain' ? 'paste' : '') },
+      getTargetRanges: () => [range],
+    })
+    target.dispatchEvent(e)
+    expect(e.defaultPrevented).toBe(true)
+    expect(h.value('p2')).toBe('Second paste')
+    expect(h.caret()).toBe(`${EX}p2 12 ${EX}p2 12`)
+  })
+})
