@@ -154,8 +154,30 @@
                  [ sty:property "font-size" ; sty:token tok:text-xs ] ,
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "margin-block-end" ; sty:token tok:space-1 ] .
+# The language field: where the document is edited (a read-only one shows the language as a label).
+[] a sty:StyleRule ; sty:appliesTo blk:Code ; sty:part "> .sem-language-field" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "inline-size" ; sty:raw "16ch" ] ,
+                 [ sty:property "max-inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "block-size" ; sty:raw "24px" ] ,
+                 [ sty:property "margin-block-end" ; sty:token tok:space-1 ] ,
+                 [ sty:property "padding" ; sty:raw "0 6px" ] ,
+                 [ sty:property "border" ; sty:raw "1px dashed var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] .
+[] a sty:StyleRule ; sty:appliesTo blk:Code ; sty:part "> .sem-language-field:focus" ;
+    sty:declares [ sty:property "border-style" ; sty:raw "solid" ] , [ sty:property "color" ; sty:token tok:text ] , [ sty:property "outline" ; sty:raw "2px solid var(--sem-ring)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[role=document] .sem-language-field" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body:not([role=document]) [data-sem-c=blk-code] > .sem-language" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo blk:Math ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "justify-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:token tok:space-1 ] ,
                  [ sty:property "padding" ; sty:token tok:space-2 ] ,
@@ -172,6 +194,14 @@
                  [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[role=document] [data-sem-c=blk-math]:has(math) > code" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
+# Folded (the caret is elsewhere): out of sight, but still where the caret can go (a click on the formula, the arrows).
+[] a sty:StyleRule ; sty:appliesTo blk:Math ; sty:state ":has(math)" ; sty:part "> code[data-sem-folded]" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inline-size" ; sty:raw "1px" ] ,
+                 [ sty:property "block-size" ; sty:raw "1px" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
 
 # --- table ---
 [] a sty:StyleRule ; sty:appliesTo blk:Table ;

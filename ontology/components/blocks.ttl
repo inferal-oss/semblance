@@ -167,7 +167,12 @@ blk:Code a owl:Class ; rdfs:subClassOf blk:PlainTextBlock , po:Block ; sem:slug 
     rdfs:label "Code"@en , "Код"@uk , "Code"@de , "شيفرة"@ar ;
     rdfs:comment "Code in a language (schema:programmingLanguage), as written (rdf:value)."@en ;
     c:help "Code in a language, as written."@en , "Код мовою програмування."@uk , "Code in einer Programmiersprache."@de , "شيفرة بلغة برمجة."@ar ;
-    blk:menuOrder 12 ; c:icon "</>" ; blk:keyword "pre program snippet" ; blk:template blk:CodeTemplate .
+    blk:menuOrder 12 ; c:icon "</>" ; blk:keyword "pre program snippet" ; blk:template blk:CodeTemplate ;
+    blk:languageOption "bash" , "c" , "cpp" , "css" , "go" , "html" , "java" , "javascript" , "json" , "kotlin" , "markdown" ,
+        "python" , "ruby" , "rust" , "shacl" , "sparql" , "sql" , "swift" , "turtle" , "typescript" , "yaml" .
+blk:languageOption a owl:DatatypeProperty ; rdfs:domain owl:Class ;
+    rdfs:comment "On a code block class: a language its language field offers (any other can be typed)."@en .
+c:LanguagePhrase a c:Phrase ; rdfs:label "Language"@en , "Мова"@uk , "Sprache"@de , "اللغة"@ar .
 blk:PlainTextBlock a owl:Class ; rdfs:subClassOf blk:Block ;
     rdfs:label "Plain text block"@en , "Блок простого тексту"@uk , "Klartextblock"@de , "كتلة نص عادي"@ar ;
     rdfs:comment "A block whose content is text as written (rdf:value), without marks: code, a formula. Enter starts a new line in it."@en .
@@ -640,9 +645,14 @@ blk:CodeRendering-fn a sem:Rule ; sem:implements blk:CodeRendering ; sem:functio
 blk:CodeRendering-sparql-screen a sem:Rule ; sem:implements blk:CodeRendering ; sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?language , ?pre .
-  ?language a rdfhtml:Span ; rdfhtml:class "sem-language" ; rdfhtml:hasChild ?languageText ; ord:immediatelyPrecedes ?pre .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?language , ?field , ?options , ?pre .
+  ?language a rdfhtml:Span ; rdfhtml:class "sem-language" ; rdfhtml:hasChild ?languageText ; ord:immediatelyPrecedes ?field .
   ?languageText a rdfhtml:Text ; rdfhtml:data ?languageName .
+  ?field a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-language-field" ; rdfhtml:value ?fieldValue ; rdfhtml:placeholder ?hint ;
+         rdfhtml:list ?optionsId ; rdfhtml:spellcheck "false" ; rdfhtml:attribute ?fieldName ; ord:immediatelyPrecedes ?options .
+  ?fieldName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?hint .
+  ?options a rdfhtml:Datalist ; rdfhtml:id ?optionsId ; rdfhtml:hasChild ?option ; ord:immediatelyPrecedes ?pre .
+  ?option a rdfhtml:Option ; rdfhtml:value ?offered ; sem:orderKey ?offered .
   ?pre a rdfhtml:Pre ; rdfhtml:hasChild ?code .
   ?code a rdfhtml:Code ; rdfhtml:hasChild ?source , ?br ; rdfhtml:attribute ?languageAttr , ?holder .
   ?languageAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-language" ; rdfhtml:attributeValue ?languageName .
@@ -661,6 +671,17 @@ WHERE {
   BIND(IF(BOUND(?languageName), IRI(CONCAT(STR($this), "/~language")), ?none) AS ?language)
   BIND(IF(BOUND(?languageName), IRI(CONCAT(STR($this), "/~language-text")), ?none) AS ?languageText)
   BIND(IF(BOUND(?languageName), IRI(CONCAT(STR($this), "/~code-data-language")), ?none) AS ?languageAttr)
+  # The language field, offering its class's languages (any other can be typed).
+  BIND(COALESCE(?languageName, "") AS ?fieldValue)
+  OPTIONAL { ?hintAt l10n:of c:LanguagePhrase ; l10n:name ?hintPicked } OPTIONAL { c:LanguagePhrase rdfs:label ?hintEn FILTER(LANGMATCHES(LANG(?hintEn), "en")) }
+  BIND(STR(COALESCE(?hintPicked, ?hintEn)) AS ?hint)
+  BIND(IRI(CONCAT(STR($this), "/~language-field")) AS ?field)
+  BIND(IRI(CONCAT(STR($this), "/~language-field-aria-label")) AS ?fieldName)
+  BIND(IRI(CONCAT(STR($this), "/~languages")) AS ?options)
+  BIND(STR(?options) AS ?optionsId)
+  OPTIONAL { $this a ?codeClass . ?codeClass rdfs:subClassOf* ?offering . ?offering blk:languageOption ?offered0 }
+  BIND(STR(?offered0) AS ?offered)
+  BIND(IF(BOUND(?offered), IRI(CONCAT(STR($this), "/~language-", ENCODE_FOR_URI(?offered))), ?none) AS ?option)
   BIND(IRI(CONCAT(STR($this), "/~pre")) AS ?pre)
   BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
   BIND(IRI(CONCAT(STR($this), "/~source")) AS ?source)
@@ -680,7 +701,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~source")) AS ?source)
 }""" .
 
-blk:MathRendering a sem:Rendering ; sem:targets blk:Math ; sem:stratum 0 ; sem:watches rdf:type , rdf:value .
+# Its TeX is folded (data-sem-folded) unless an editor's caret is in it (c:focusBlock): the formula alone shows.
+blk:MathRendering a sem:Rendering ; sem:targets blk:Math ; sem:stratum 0 ; sem:follows ( [ sem:inverse c:focusBlock ] ) ; sem:watches rdf:type , rdf:value , c:focusBlock .
 blk:MathRendering-fn a sem:Rule ; sem:implements blk:MathRendering ; sem:function "blk:math" .
 blk:MathRendering-sparql-screen a sem:Rule ; sem:implements blk:MathRendering ; sem:modality mod:Screen ;
     sem:construct """
@@ -689,13 +711,15 @@ CONSTRUCT {
   ?typeset a blk:Typeset ; c:of $this ; ord:immediatelyPrecedes ?code .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "math" .
   ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?value .
-  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source , ?br ; rdfhtml:attribute ?holder .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source , ?br ; rdfhtml:attribute ?holder , ?folded .
   ?holder a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-text" ; rdfhtml:attributeValue ?block .
+  ?folded a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-folded" ; rdfhtml:attributeValue "" .
   ?source a rdfhtml:Text ; rdfhtml:data ?value ; ord:immediatelyPrecedes ?br .
   ?br a rdfhtml:Br .
 }
 WHERE {
   $this a/rdfs:subClassOf* blk:Math .
+  BIND(EXISTS { ?editor c:focusBlock $this } AS ?editing)
   OPTIONAL { $this rdf:value ?raw }
   BIND(COALESCE(STR(?raw), "") AS ?value)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -707,6 +731,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~code-data-sem-text")) AS ?holder)
   BIND(STR($this) AS ?block)
   BIND(IRI(CONCAT(STR($this), "/~typeset")) AS ?typeset)
+  BIND(IF(?editing || ?value = "", ?none, IRI(CONCAT(STR($this), "/~code-data-sem-folded"))) AS ?folded)
   BIND(IF(?value = "" || STRENDS(?value, "\\n"), IRI(CONCAT(STR($this), "/~br")), ?none) AS ?br)
 }""" .
 blk:MathRendering-sparql-text a sem:Rule ; sem:implements blk:MathRendering ; sem:modality mod:Text ;
@@ -1318,6 +1343,12 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~address-field-aria-label")) AS ?name)
   BIND(IRI(CONCAT(STR($this), IF(EXISTS { $this a/rdfs:subClassOf* blk:Image }, "/~img", IF(EXISTS { $this a/rdfs:subClassOf* blk:Embed }, "/~frame", "/~link")))) AS ?before)
 }""" .
+# A code block's language field: typing there, or picking an offered language, sets it.
+blk:EditLanguage a beh:Reaction ;
+    rdfs:label "Change the language"@en ;
+    beh:when beh:Input ; beh:sourceClass blk:Code ; beh:undoable true ;
+    beh:deletes """CONSTRUCT { $this schema:programmingLanguage ?old } WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~language-field"))) $this schema:programmingLanguage ?old }""" ;
+    beh:inserts """CONSTRUCT { $this schema:programmingLanguage ?language } WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~language-field"))) $event beh:value ?language FILTER(?language != "") }""" .
 c:AddressPhrase a c:Phrase ; rdfs:label "Address (https://…)"@en , "Адреса (https://…)"@uk , "Adresse (https://…)"@de , "العنوان (https://…)"@ar .
 blk:EditAddress a beh:Reaction ;
     rdfs:label "Change the address"@en ;

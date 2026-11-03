@@ -9,7 +9,7 @@ import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
 import { type Clock, systemClock } from './clock.ts'
-import { before, holderText, placeSelection, rangeOf, regionOf, selectionIn, type TextPoint } from './text.ts'
+import { before, holderOf, holderText, placeSelection, rangeOf, regionOf, selectionIn, type TextPoint } from './text.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 /** Distinguishes event IRIs across page loads sharing a store snapshot. */
@@ -717,6 +717,8 @@ export class EventBus {
           const rich = this.textDetail(new (doc.defaultView?.Event ?? Event)('selectionchange'), region)
           const handled = this.emit(type, focus, { node: key, about: rich.about, numbers: rich.numbers }, reactions)
           if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) onHandled(handled)
+          // A caret outside any text (in something not editable, as a typeset formula) goes where the graph put it.
+          if (sel && sel.isCollapsed && !holderOf(sel.anchorNode)) this.placeIn(region)
           return
         }
       }

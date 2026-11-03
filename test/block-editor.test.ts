@@ -46,6 +46,9 @@ class FakeSelection {
   get rangeCount() {
     return this.anchorNode ? 1 : 0
   }
+  get isCollapsed() {
+    return this.anchorNode === this.focusNode && this.anchorOffset === this.focusOffset
+  }
   setBaseAndExtent(a: Node, ao: number, f: Node, fo: number) {
     Object.assign(this, { anchorNode: a, anchorOffset: ao, focusNode: f, focusOffset: fo })
   }
@@ -674,5 +677,48 @@ describe('pasting files (c:BlockEditor)', () => {
       await files.ready
       off()
     }
+  })
+})
+
+describe('formulas and code (c:BlockEditor)', () => {
+  const extra = `<${EX}doc> <${NS.po}contains> <${EX}m> , <${EX}code> . <${EX}p3> <${NS.co}nextItem> <${EX}m> . <${EX}m> <${NS.co}nextItem> <${EX}code> .
+<${EX}m> a <${NS.blk}Math> ; <${NS.rdf}value> "x^2" .
+<${EX}code> a <${NS.blk}Code> ; <${NS.rdf}value> "let a = 1" .`
+
+  it('folds a formula\'s TeX unless the caret is in it', () => {
+    const both = [mount('sparql', 'wat', extra), mount('function', 'wat', extra)] as const
+    const folded = (h: (typeof both)[number]) => h.app.querySelector(`[id="${EX}m/~root"] code`)!.hasAttribute('data-sem-folded')
+    for (const h of both) expect(folded(h)).toBe(true)
+    for (const h of both) h.select('m', 1)
+    for (const h of both) expect(folded(h)).toBe(false)
+    sameHtml(both[1].html(), both[0].html(), "after the step")
+    for (const h of both) h.select('p1', 0)
+    for (const h of both) expect(folded(h)).toBe(true)
+    sameHtml(both[1].html(), both[0].html(), "after the step")
+  })
+
+  it('moves a caret put on the typeset formula into its TeX', () => {
+    const h = mount('sparql', 'wat', extra)
+    const typeset = h.app.querySelector(`[id="${EX}m/~root"] [data-sem-c=blk-typeset]`)!
+    expect(typeset.getAttribute('contenteditable')).toBe('false')
+    h.selection.setBaseAndExtent(typeset, 0, typeset, 0)
+    h.app.ownerDocument.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('selectionchange'))
+    expect(h.caret()).toBe(`${EX}m 0 ${EX}m 0`)
+    expect(h.selection.anchorNode!.parentElement!.closest('[data-sem-text]')!.getAttribute('data-sem-text')).toBe(EX + 'm')
+  })
+
+  it('sets a code block\'s language by typing it or picking an offered one', () => {
+    const both = [mount('sparql', 'wat', extra), mount('function', 'wat', extra)] as const
+    for (const h of both) {
+      const field = h.app.querySelector(`[id="${EX}code/~root"] .sem-language-field`) as HTMLInputElement
+      expect(field.value).toBe('')
+      const list = h.app.querySelector(`[id="${field.getAttribute('list')}"]`)!
+      expect([...list.querySelectorAll('option')].map((x) => x.getAttribute('value'))).toContain('turtle')
+      field.value = 'turtle'
+      field.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('input', { bubbles: true }))
+      expect(h.objects('code', NS.schema + 'programmingLanguage')).toEqual(['turtle'])
+      expect(h.app.querySelector(`[id="${EX}code/~root"] code`)!.getAttribute('data-language')).toBe('turtle')
+    }
+    sameHtml(both[1].html(), both[0].html(), "after the step")
   })
 })

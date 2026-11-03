@@ -42,7 +42,8 @@ const island: FnRule = (ctx, focus) => {
       for (const v of values) o.t(input, EXT.value, v)
     }
   }
-  const root = o.el('root', 'Div', {}, [mount])
+  // Not editable: inside a rich text region, the caret goes around it.
+  const root = o.el('root', 'Div', { contenteditable: 'false' }, [mount])
   o.renders(root)
   return o.quads
 }

@@ -278,7 +278,18 @@ const code: FnRule = (ctx, focus) => {
   }
   const pre = o.el('pre', 'Pre', {}, [o.el('code', 'Code', { 'data-language': language, 'data-sem-text': focus.value }, plainText(o, value))])
   const label = language === undefined ? [] : [o.el('language', 'Span', { class: 'sem-language' }, [o.text('language-text', language)])]
-  o.renders(o.el('root', 'Div', { id: o.node('root').value }, [...label, pre]))
+  // The language field, offering its class's languages (any other can be typed).
+  const hint = text(ctx, ctx.nn(NS.c + 'LanguagePhrase'), NS.rdfs + 'label') ?? ''
+  const options = o.node('languages')
+  const field = o.el('language-field', 'Input', { type: 'text', class: 'sem-language-field', value: language ?? '', placeholder: hint, list: options.value, spellcheck: 'false', 'aria-label': hint })
+  o.el('languages', 'Datalist', { id: options.value })
+  const offered = new Set<string>()
+  for (const cls of classes(ctx, focus)) for (const v of ctx.objects(cls, NS.blk + 'languageOption')) offered.add(v.value)
+  for (const v of offered) {
+    const opt = o.el('language-' + encodeURIComponent(v), 'Option', { value: v })
+    o.t(options, H.hasChild, opt).t(opt, SEM.orderKey, v)
+  }
+  o.renders(o.el('root', 'Div', { id: o.node('root').value }, [...label, field, options, pre]))
   return o.quads
 }
 
@@ -290,7 +301,9 @@ const math: FnRule = (ctx, focus) => {
     // Typeset by the island (blk:Typeset), the TeX editable beneath it.
     const typeset = o.node('typeset')
     o.t(typeset, RDF_TYPE, ctx.nn(NS.blk + 'Typeset')).t(typeset, C.of, focus)
-    o.renders(o.el('root', 'Div', { id: o.node('root').value, role: 'math', 'aria-label': value }, [typeset, o.el('code', 'Code', { 'data-sem-text': focus.value }, plainText(o, value))]))
+    // The TeX is folded unless an editor's caret is in the formula.
+    const folded = value !== '' && !ctx.match(null, NS.c + 'focusBlock', focus).length ? '' : undefined
+    o.renders(o.el('root', 'Div', { id: o.node('root').value, role: 'math', 'aria-label': value }, [typeset, o.el('code', 'Code', { 'data-sem-text': focus.value, 'data-sem-folded': folded }, plainText(o, value))]))
   }
   return o.quads
 }

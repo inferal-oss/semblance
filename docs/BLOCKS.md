@@ -201,14 +201,19 @@ caret, one undoable change.
 
 Done: the model, shapes and every primitive's rendering (Screen and Text); editing within and across
 blocks, marks, Markdown shortcuts, undo and redo, composition; the `/` menu and templates; nesting by Tab
-and Shift+Tab, moving by Alt+Up and Alt+Down; plain text pasted; site block types in Turtle.
+and Shift+Tab (where the shapes allow it), moving by Alt+Up and Alt+Down; plain text pasted; site block
+types in Turtle; a selection toolbar with marks and links (Mod+K, an editable address); tables whose
+rows and columns are added and removed; every atom's address in a field; images and files uploaded
+(kept in the browser, `blk:Uploads`), dropped, or pasted into the editor as new blocks (the editor is a
+`file:Receiver`); formulas typeset, their TeX shown only while the caret is in them (it is folded,
+`data-sem-folded`, but stays where the caret can go: a typeset island is not editable, and a caret put
+on it goes into the TeX); a code block's language typed or picked from its class's `blk:languageOption`.
 
 To come:
 - dragging a block by a handle: the drag-and-drop layer makes a draggable's whole root its handle, which
   in an editable region would turn every text selection into a drag; it needs a handle part of its own;
 - copying out as Markdown and Turtle, and HTML or Markdown pasted as blocks (the event's HTML in RDF/HTML,
   mapped by reactions), as designed above;
-- a floating toolbar for a selection, links by Mod+K, mentions of the graph's resources by a menu of their own;
+- mentions of the graph's resources by a menu of their own;
 - typing in one breath as one undo step;
-- editing an atom's address (an image's, a bookmark's) in place;
 - the Examples page's walkthrough of a site block type.
