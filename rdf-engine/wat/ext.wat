@@ -53,6 +53,7 @@
     (if (call $sx_is (local.get $p) (@str "utf8Hex")) (then (local.set $c (i32.const F_SX_UTF8HEX)) (br $found)))
     (if (call $sx_is (local.get $p) (@str "decodeURI")) (then (local.set $c (i32.const F_SX_DECODEURI)) (br $found)))
     (if (call $sx_is (local.get $p) (@str "fnv1a")) (then (local.set $c (i32.const F_SX_FNV1A)) (br $found)))
+    (if (call $sx_is (local.get $p) (@str "jsonString")) (then (local.set $c (i32.const F_SX_JSONSTRING)) (br $found)))
     (if (call $sx_is (local.get $p) (@str "formatNumber")) (then (local.set $c (i32.const F_SX_FORMATNUMBER)) (local.set $min (i32.const 2)) (local.set $max (i32.const 3)) (br $found)))
     (if (call $sx_is (local.get $p) (@str "formatDateTime")) (then (local.set $c (i32.const F_SX_FORMATDATETIME)) (local.set $min (i32.const 2)) (local.set $max (i32.const 3)) (br $found)))
     (if (call $sx_is (local.get $p) (@str "collated")) (then (local.set $c (i32.const F_SX_COLLATED)) (local.set $min (i32.const 2)) (local.set $max (i32.const 2)) (br $found)))
@@ -286,6 +287,20 @@
         (call $hex_lower (i32.and (i32.shr_u (local.get $h) (i32.sub (i32.const 28) (i32.shl (local.get $i) (i32.const 2)))) (i32.const 15))))
       (br_if $digits (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1))) (i32.const 8))))
     (return (call $simple (global.get $nbuf) (i32.const 8)))))
+  (if (i32.eq (local.get $f) (i32.const F_SX_JSONSTRING)) (then
+    (if (i32.eqz (call $is_str (local.get $a))) (then (return (i32.const 0))))
+    (if (i32.eqz (global.get $js_jstr)) (then (global.set $js_jstr (call $gb_new))))
+    (i32.store offset=4 (global.get $js_jstr) (i32.const 0))
+    (call $gb_byte (global.get $js_jstr) (i32.const '"'))
+    (local.set $p (call $tval (local.get $a)))
+    (local.set $e (i32.add (local.get $p) (call $tlen (local.get $a))))
+    (loop $cps
+      (if (i32.lt_u (local.get $p) (local.get $e)) (then
+        (call $js_escape (call $decode (local.get $p)))
+        (local.set $p (i32.add (local.get $p) (global.get $cplen)))
+        (br $cps))))
+    (call $gb_byte (global.get $js_jstr) (i32.const '"'))
+    (return (call $simple (i32.load (global.get $js_jstr)) (i32.load offset=4 (global.get $js_jstr))))))
   ;; sx:Locale
   (if (i32.eq (local.get $f) (i32.const F_SX_COLLATED)) (then (return (local.get $a))))
   (if (i32.eqz (call $is_str (local.get $b))) (then (return (i32.const 0))))

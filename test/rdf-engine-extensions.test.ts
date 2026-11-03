@@ -183,6 +183,12 @@ const TEXT: [string, string | undefined][] = [
   ['sx:fnv1a("€")', fnv1a('€') + '^^string'],
   ['sx:fnv1a("x"@en)', fnv1a('x') + '^^string'],
   ['sx:fnv1a(1)', undefined],
+  ['sx:jsonString("")', '""^^string'],
+  ['sx:jsonString("a\\"b\\\\c/")', JSON.stringify('a"b\\c/') + '^^string'],
+  ['sx:jsonString("t\\tn\\nr\\rb\\bf\\f")', JSON.stringify('t\tn\nr\rb\bf\f') + '^^string'],
+  ['sx:jsonString(CONCAT("x", sx:char(1), sx:char(31), sx:char(127), "é😀"))', JSON.stringify('x\u0001\u001f\u007fé😀') + '^^string'],
+  ['sx:jsonString("hi"@en)', '"hi"^^string'],
+  ['sx:jsonString(1)', undefined],
   ['sx:unknown("x")', undefined],
 ]
 
