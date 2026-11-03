@@ -35,6 +35,7 @@ import { reactions as walkthroughReactions } from '../components/walkthrough.ts'
 import { reactions as liveReactions } from '../components/live.ts'
 import { reactions as formsReactions } from '../components/forms.ts'
 import { reactions as sheetReactions } from '../components/sheet.ts'
+import { conversionReactions } from '../components/conversions.ts'
 import { reactions as stallReactions } from '../components/stall.ts'
 import { reactions as galleryReactions } from '../components/gallery.ts'
 
@@ -177,5 +178,6 @@ export const reactions: Record<string, ReactionFn> = {
   ...liveReactions,
   ...formsReactions,
   ...sheetReactions,
+  ...conversionReactions,
   ...stallReactions,
 }

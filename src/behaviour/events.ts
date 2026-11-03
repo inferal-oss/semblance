@@ -9,6 +9,7 @@ import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
 import { type Clock, systemClock } from './clock.ts'
+import { before, holderOf, holderText, placeSelection, rangeOf, regionOf, selectionIn, type TextPoint } from './text.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 /** Distinguishes event IRIs across page loads sharing a store snapshot. */
@@ -150,18 +151,37 @@ export class EventBus {
 
   private reactions(): Reaction[] {
     const nn = (iri: string) => this.f.namedNode(iri)
-    return this.runtime.store.match(null, nn(RDF_TYPE), nn(BEH.Reaction), this.f.defaultGraph()).map(({ subject: r }) => ({
+    const g = this.f.defaultGraph()
+    // Instances of beh:Reaction and of its subclasses (a block conversion, say).
+    const kinds = new Set([BEH.Reaction])
+    for (let grew = true; grew; ) {
+      grew = false
+      for (const k of [...kinds]) for (const q of this.runtime.store.match(null, nn(RDFS_SUBCLASS), nn(k), g)) if (!kinds.has(q.subject.value)) kinds.add(q.subject.value), (grew = true)
+    }
+    const seen = new Set<string>()
+    const all = [...kinds].flatMap((k) => this.runtime.store.match(null, nn(RDF_TYPE), nn(k), g).map((q) => q.subject)).filter((r) => !seen.has(r.value) && seen.add(r.value))
+    return all.map((r) => ({
       iri: r.value,
       when: this.value(r, BEH.when)?.value ?? '',
-      whens: this.runtime.store.match(r, nn(BEH.when), null, this.f.defaultGraph()).map((q) => q.object.value),
+      // Its beh:when classes, and its own IRI: raising a reaction (`?node beh:raise ?reaction`) runs it on the node.
+      whens: [...this.runtime.store.match(r, nn(BEH.when), null, g).map((q) => q.object.value), r.value],
       source: this.value(r, BEH.source)?.value,
       sourceClass: this.value(r, BEH.sourceClass)?.value,
-      deletes: this.value(r, BEH.deletes)?.value,
-      inserts: this.value(r, BEH.inserts)?.value,
-      fn: this.value(r, SEM.function)?.value,
-      needs: this.runtime.store.match(r, nn(SEM.needsExtension), null, this.f.defaultGraph()).map((q) => q.object.value),
-      undoable: this.value(r, BEH.undoable)?.value === 'true',
+      // Its queries, function and undoability, else those of the reaction it is like (beh:like).
+      deletes: this.liked(r, BEH.deletes)?.value,
+      inserts: this.liked(r, BEH.inserts)?.value,
+      fn: this.liked(r, SEM.function)?.value,
+      needs: this.runtime.store.match(r, nn(SEM.needsExtension), null, g).map((q) => q.object.value),
+      undoable: this.liked(r, BEH.undoable)?.value === 'true',
     }))
+  }
+
+  /** A reaction's own value of a property, else that of the one it is like (beh:like). */
+  private liked(r: Term, p: string): Term | undefined {
+    const own = this.value(r, p)
+    if (own) return own
+    const like = this.value(r, NS.beh + 'like')
+    return like ? this.value(like, p) : undefined
   }
 
   /** Classes of a node, with superclasses. */
@@ -301,7 +321,9 @@ export class EventBus {
       forget()
       return { recorded: false, event, type, target: nn(target), reactions: [], delta }
     }
-    const handled = this.record(type, target, event, quads, delta, reactions, forget, undoable)
+    // A raised event's change is part of the change that raised it: one step to undo.
+    const raisedBy = detail.about?.find(([p]) => p === BEH.raisedBy)?.[1] as NamedNode | undefined
+    const handled = this.record(type, target, event, quads, delta, reactions, forget, undoable, raisedBy)
     this.raise(raised, event)
     return handled
   }
@@ -329,7 +351,7 @@ export class EventBus {
   }
 
   /** Apply an event's change and append it to the change log, as one tick. */
-  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void, undoable: { add: Set<string>; remove: Set<string> }): Handled {
+  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode): Handled {
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
     // The state change and the member that records it are one tick: views over the log and
@@ -347,11 +369,12 @@ export class EventBus {
       const int = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
       const remove = this.expired()
       const head = this.runtime.store.match(this.stream, nn(BEH.latest), null, this.graph)
+      const change = this.statements(event, applied, undoable, raisedBy)
       this.runtime.log({
-        remove: [...remove, ...head],
+        remove: [...remove, ...head, ...change.remove],
         add: [
           ...quads,
-          ...this.statements(event, applied, undoable),
+          ...change.add,
           f.quad(event, nn(BEH.added), int(applied.add.length)),
           f.quad(event, nn(BEH.removed), int(applied.remove.length)),
           ...head.map((q) => f.quad(event, nn(BEH.previous), q.object)),
@@ -366,20 +389,37 @@ export class EventBus {
 
   /**
    * The effective change of an event's undoable reactions, as rdf:Statement nodes minted under its
-   * member: beh:asserted (added), beh:retracted (removed). Only what actually changed is recorded.
+   * member - or, for a raised event, under the member that raised it -: beh:asserted (added),
+   * beh:retracted (removed). Only what actually changed is recorded.
    */
-  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }): Quad[] {
-    if (!undoable.add.size && !undoable.remove.size) return []
+  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode): Delta {
+    if (!undoable.add.size && !undoable.remove.size) return { add: [], remove: [] }
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
+    const store = this.runtime.store
+    // A raised event's change goes on the member that raised it (when it recorded one), as its own
+    // statements; one that takes back what that member changed cancels its statement instead.
+    const owner = raisedBy && store.match(raisedBy, nn(BEH.asserted), null, this.graph).length + store.match(raisedBy, nn(BEH.retracted), null, this.graph).length ? raisedBy : event
     const out: Quad[] = []
+    const cancelled: Quad[] = []
+    const recorded = (p: string, q: Quad) =>
+      store
+        .match(owner, nn(p), null, this.graph)
+        .map((x) => x.object)
+        .find((st) => [['subject', q.subject], ['predicate', q.predicate], ['object', q.object]].every(([k, t]) => store.match(st as NamedNode, nn(NS.rdf + k), t as Term, this.graph).length))
     let i = 0
-    for (const [p, qs, keep] of [[BEH.asserted, applied.add, undoable.add], [BEH.retracted, applied.remove, undoable.remove]] as const) {
+    const tag = owner === event ? '' : `${event.value.replace(/^.*[:/]/, '')}-`
+    for (const [p, qs, keep, opposite] of [[BEH.asserted, applied.add, undoable.add, BEH.retracted], [BEH.retracted, applied.remove, undoable.remove, BEH.asserted]] as const) {
       for (const q of qs) {
         if (!keep.has(quadKey(q))) continue
-        const st = nn(`${event.value}/~change-${i++}`)
+        const back = owner === event ? undefined : recorded(opposite, q)
+        if (back) {
+          cancelled.push(...store.match(owner, nn(opposite), back, this.graph), ...store.match(back as NamedNode, null, null, this.graph))
+          continue
+        }
+        const st = nn(`${owner.value}/~change-${tag}${i++}`)
         out.push(
-          f.quad(event, nn(p), st),
+          f.quad(owner, nn(p), st),
           f.quad(st, nn(RDF_TYPE), nn(NS.rdf + 'Statement')),
           f.quad(st, nn(NS.rdf + 'subject'), q.subject as NamedNode),
           f.quad(st, nn(NS.rdf + 'predicate'), q.predicate as NamedNode),
@@ -387,7 +427,7 @@ export class EventBus {
         )
       }
     }
-    return out
+    return { add: out, remove: cancelled }
   }
 
   /**
@@ -511,11 +551,23 @@ export class EventBus {
         }
       }
     const listener = guarded((e: Event) => {
+      // A selection is reported by its own handler (below), from the document's; a field's own
+      // selectionchange (browsers fire one at inputs too) is not a rich text region's.
+      if (e.type === 'selectionchange') return
       if (renderer.inSlot(e.target as Node)) return
+      // In a rich text region (data-sem-text-root) the browser edits nothing: every edit it would make
+      // is an event, and the rendering of the graph's change is what shows (docs/BLOCKS.md).
+      // A form control inside a region edits itself.
+      const region = (e.target as Element).closest?.('input, textarea') ? null : regionOf(e.target as Node)
+      if (region && e.type === 'beforeinput' && e.cancelable) e.preventDefault()
+      // Keys pressed to compose (an IME's Enter) are the composition's, not the editor's.
+      if (region && e.type === 'keydown' && (e as KeyboardEvent).isComposing) return
       // Key events carry their combination; an event class may name the keys it is for (beh:key).
       const combo = e.type.startsWith('key') && (e as KeyboardEvent).key ? comboOf(e as KeyboardEvent, apple) : undefined
-      const types = combo === undefined ? this.eventClasses(e.type) : this.eventClasses(e.type).filter((t) => this.forKey(t, combo))
+      const inputType = e.type === 'beforeinput' ? (e as InputEvent).inputType : undefined
+      const types = this.eventClasses(e.type).filter((t) => (combo === undefined || this.forKey(t, combo)) && (inputType === undefined || this.forInputType(t, inputType)))
       if (!types.length) return
+      const rich = region ? this.textDetail(e, region) : undefined
       let node: string | undefined
       for (let el = e.target as Node | null; el && el !== renderer.host; el = el.parentNode) {
         const key = renderer.keyOf(el)
@@ -534,13 +586,18 @@ export class EventBus {
           // A press that types a character (no Mod or Alt held) says which, as typed.
           const typed = e as KeyboardEvent
           if (combo !== undefined && typed.key.length === 1 && !typed.ctrlKey && !typed.metaKey && !typed.altKey) detail.text = typed.key
+          if (rich) {
+            detail.about = [...(detail.about ?? []), ...rich.about]
+            detail.numbers = { ...detail.numbers, ...rich.numbers }
+            if (rich.text !== undefined) detail.text = rich.text
+          }
           if (e.type === 'focusin') detail.modifiers = pressed
           else if (combo === undefined && 'shiftKey' in e) detail.modifiers = modifiersOf(e as MouseEvent, apple)
           const custom = (e as CustomEvent).detail
           if (custom && typeof custom === 'object') {
             // Numbers are beh:* integers (a measure the host could not take is left out); a string names a
             // rendered node (beh:onto: where a move was let go).
-            detail.numbers = {}
+            detail.numbers = { ...detail.numbers }
             for (const [name, v] of Object.entries(custom as Record<string, unknown>)) {
               if (typeof v === 'number' && Number.isFinite(v)) detail.numbers[name] = v
               else if (typeof v === 'string') (detail.about ??= []).push([NS.beh + name, this.f.namedNode(v)])
@@ -555,6 +612,7 @@ export class EventBus {
           if (combo !== undefined || e.type === 'contextmenu') e.preventDefault(), consumed.add(e)
           onHandled(handled)
           this.placeCaret(renderer, focus)
+          this.placeText(renderer, focus)
           this.placeFocus(renderer, focus, before)
           return
         }
@@ -674,6 +732,76 @@ export class EventBus {
       this.pointer = { x: p.clientX, y: p.clientY }
     }
     doc.addEventListener('pointermove', track, { passive: true })
+    // Where the selection is in a rich text region is graph state (unrecorded events, as a hover is):
+    // the region's component hears where it went, after the browser moved it (arrows, a click).
+    const selected = guarded(() => {
+      const sel = doc.getSelection?.()
+      // The selection the bus itself just placed is not news (selectionchange comes in a later task).
+      const placed = this.placed
+      this.placed = undefined
+      if (placed && sel && sel.anchorNode === placed.anchorNode && sel.anchorOffset === placed.anchorOffset && sel.focusNode === placed.focusNode && sel.focusOffset === placed.focusOffset) return
+      const region = sel?.anchorNode ? regionOf(sel.anchorNode) : null
+      if (!region || !renderer.host.contains(region) || renderer.inSlot(region)) return
+      // Only while the region has the focus: a toolbar's field or button taking it leaves the selection where it was.
+      const active = doc.activeElement
+      if ((active !== region && !region.contains(active)) || active?.matches?.('input, textarea')) return
+      const types = this.eventClasses('selectionchange')
+      for (let el: Node | null = region; el && el !== renderer.host; el = el.parentNode) {
+        const key = renderer.keyOf(el)
+        const focus = key && renderer.index.focusOf(key)
+        if (!focus) continue
+        for (const type of types) {
+          const reactions = this.reactionsFor(type, focus)
+          if (!reactions.length) continue
+          const rich = this.textDetail(new (doc.defaultView?.Event ?? Event)('selectionchange'), region)
+          const handled = this.emit(type, focus, { node: key, about: rich.about, numbers: rich.numbers }, reactions)
+          if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) onHandled(handled)
+          // A caret outside any text (in something not editable, as a typeset formula) goes where the graph put it.
+          if (sel && sel.isCollapsed && !holderOf(sel.anchorNode)) this.placeIn(region)
+          return
+        }
+      }
+    })
+    doc.addEventListener('selectionchange', selected)
+    // Composition (an IME, many phone keyboards) cannot be cancelled: the browser edits the text, and
+    // when it is done the difference is recorded as the text typed over the range it replaced, then the
+    // holder is rendered from the graph again.
+    const composing = new WeakMap<Element, { node: string; before: string; wide: boolean }>()
+    const compositionStart = guarded((e: Event) => {
+      const region = regionOf(e.target as Node)
+      const sel = region && selectionIn(region)
+      const before = sel && holderText(region, sel.anchor.node)
+      // A composition over a selection of several blocks: the browser changes them all.
+      if (region && sel && typeof before === 'string') composing.set(region, { node: sel.anchor.node, before, wide: sel.anchor.node !== sel.focus.node })
+    })
+    const compositionEnd = guarded((e: Event) => {
+      const region = regionOf(e.target as Node)
+      const started = region && composing.get(region)
+      if (!region || !started) return
+      composing.delete(region)
+      const after = holderText(region, started.node) ?? started.before
+      const a = [...started.before]
+      const b = [...after]
+      let head = 0
+      while (head < a.length && head < b.length && a[head] === b[head]) head++
+      let tail = 0
+      while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
+      const inserted = b.slice(head, b.length - tail).join('')
+      const range = { start: { node: started.node, offset: head }, end: { node: started.node, offset: a.length - tail }, covers: [] }
+      const holder = region.querySelector(`[data-sem-text="${started.node.replace(/["\\]/g, '\\$&')}"]`)
+      const target = holder ?? region
+      const synthetic = Object.assign(new (doc.defaultView?.Event ?? Event)('beforeinput', { bubbles: true, cancelable: false }), {
+        inputType: 'insertText',
+        data: inserted,
+        semRange: range,
+      })
+      target.dispatchEvent(synthetic)
+      // What the browser changed: the block composed in (or the region, when it spanned several).
+      renderer.resync(started.wide || !holder ? region : holder)
+      this.placeIn(region)
+    })
+    renderer.host.addEventListener('compositionstart', compositionStart)
+    renderer.host.addEventListener('compositionend', compositionEnd)
     // Entering a navigable component by Tab puts the rest of its parts out of the tab order.
     const entered = (e: Event) => {
       const part = e.target as HTMLElement
@@ -696,9 +824,94 @@ export class EventBus {
       doc.removeEventListener('keydown', keys)
       doc.removeEventListener('pointerdown', outside, true)
       doc.removeEventListener('pointermove', track)
+      doc.removeEventListener('selectionchange', selected)
+      renderer.host.removeEventListener('compositionstart', compositionStart)
+      renderer.host.removeEventListener('compositionend', compositionEnd)
       renderer.host.removeEventListener('focusin', entered)
       unpatched()
     }
+  }
+
+  /** Whether an event class is recorded for an input type: any, unless it names some (beh:inputType). */
+  private forInputType(type: string, inputType: string): boolean {
+    const types = this.runtime.store.match(this.f.namedNode(type), this.f.namedNode(NS.beh + 'inputType'), null, this.f.defaultGraph())
+    return !types.length || types.some((q) => q.object.value === inputType)
+  }
+
+  /**
+   * What an event in a rich text region says about the text (src/behaviour/text.ts): an edit
+   * (beforeinput) its input type, its data and the range it acts on - the browser's target range,
+   * else the selection - with the holders wholly inside it (beh:covers); any other event the
+   * selection, as a range and as its anchor and focus.
+   */
+  private textDetail(e: Event, region: Element): { about: [string, Term][]; numbers: Record<string, number>; text?: string } {
+    const f = this.f
+    const about: [string, Term][] = []
+    const numbers: Record<string, number> = {}
+    const point = (name: string, p: TextPoint) => {
+      about.push([NS.beh + name + 'Block', f.namedNode(p.node)])
+      numbers[name + 'Offset'] = p.offset
+    }
+    const sel = selectionIn(region)
+    let range = (e as Event & { semRange?: ReturnType<typeof rangeOf> }).semRange
+    let text: string | undefined
+    if (e.type === 'beforeinput') {
+      const input = e as InputEvent
+      about.push([NS.beh + 'inputType', f.literal(input.inputType)])
+      text = input.data ?? input.dataTransfer?.getData?.('text/plain') ?? undefined
+      const target = input.getTargetRanges?.()?.[0]
+      if (!range && target) range = rangeOf(region, target)
+    }
+    if (!range && sel) {
+      const backward = sel.anchor.node === sel.focus.node ? sel.focus.offset < sel.anchor.offset : this.precedes(region, sel.focus.node, sel.anchor.node)
+      const [start, end] = backward ? [sel.focus, sel.anchor] : [sel.anchor, sel.focus]
+      const doc = region.ownerDocument
+      const r = doc.getSelection?.()?.rangeCount ? doc.getSelection()!.getRangeAt(0) : undefined
+      range = r ? rangeOf(region, r) : { start, end, covers: [] }
+    }
+    if (range) {
+      point('start', range.start)
+      point('end', range.end)
+      for (const c of range.covers) about.push([NS.beh + 'covers', f.namedNode(c)])
+    }
+    if (sel) {
+      point('anchor', sel.anchor)
+      point('focus', sel.focus)
+    }
+    return { about, numbers, text }
+  }
+
+  /** Whether one text holder of a region comes before another in document order. */
+  private precedes(region: Element, a: string, b: string): boolean {
+    const holder = (n: string) => region.querySelector(`[data-sem-text="${n.replace(/["\\]/g, '\\$&')}"]`)
+    const x = holder(a)
+    const y = holder(b)
+    return !!x && !!y && before(x, y)
+  }
+
+  /** The selection the bus placed last (its selectionchange is not news). */
+  private placed?: { anchorNode: Node | null; anchorOffset: number; focusNode: Node | null; focusOffset: number }
+
+  /** Put the browser's selection where a region says, and remember it. */
+  private placeIn(region: Element) {
+    if (!placeSelection(region)) return
+    const sel = region.ownerDocument.getSelection?.()
+    if (sel) this.placed = { anchorNode: sel.anchorNode, anchorOffset: sel.anchorOffset, focusNode: sel.focusNode, focusOffset: sel.focusOffset }
+  }
+
+  /**
+   * After an event a component with a rich text region handled, the browser's selection goes where
+   * the region's rendering says (data-sem-text-root), if the focus is in the region.
+   */
+  private placeText(renderer: DomRenderer, focus: string) {
+    const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
+    const region = root?.matches?.('[data-sem-text-root]') ? root : root?.querySelector?.('[data-sem-text-root]')
+    if (!region || owningFocus(renderer.keyOf(region) ?? '') !== focus) return
+    const active = region.ownerDocument.activeElement
+    if (active !== region && !region.contains(active)) return
+    // A field inside the region (a block's address) keeps its own caret.
+    if (active?.matches?.('input, textarea')) return
+    this.placeIn(region)
   }
 
   /** Whether an event class is recorded for a key combination: any key, unless it names some (beh:key). */
@@ -754,7 +967,7 @@ export class EventBus {
     // opener): not lost. Only the page, or the renderer's guess at a nearby control, is.
     const now = active.ownerDocument.activeElement
     if (lost && now && now !== now.ownerDocument.body && now !== renderer.refocused && shown(now)) return
-    if (!lost && active.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]')) return
+    if (!lost && active.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]:not([contenteditable=false])')) return
     const marked = (scope: Element) => [...scope.querySelectorAll<HTMLElement>('[data-sem-takes-focus]')].filter(shown).map((el) => controlIn(el, shown)).find((el) => el)
     let target = root?.isConnected ? marked(root) : undefined
     if (!target && lost) for (const scope of around) if (scope.isConnected && (target = marked(scope))) break
@@ -1038,14 +1251,28 @@ function sizedBy(handle: HTMLElement, renderer: DomRenderer): HTMLElement | null
   return box
 }
 
+/**
+ * A handle's axis, direction and bounds. Its sign is said in the inline direction (toward the end
+ * grows, unless -1), so along x it turns around where the text runs right to left.
+ */
 function sizing(handle: HTMLElement) {
   const n = (v: string | undefined, fallback: number) => (v !== undefined && Number.isFinite(Number(v)) ? Number(v) : fallback)
+  const axis = handle.dataset.semAxis === 'y' ? ('y' as const) : ('x' as const)
+  const sign = n(handle.dataset.semSign, 1) < 0 ? -1 : 1
   return {
-    axis: handle.dataset.semAxis === 'y' ? ('y' as const) : ('x' as const),
-    sign: n(handle.dataset.semSign, 1) < 0 ? -1 : 1,
+    axis,
+    sign: axis === 'x' && rtl(handle) ? -sign : sign,
     min: n(handle.dataset.semMin, 0),
     max: n(handle.dataset.semMax, Infinity),
     step: n(handle.dataset.semStep, 16),
+  }
+}
+
+const rtl = (el: HTMLElement) => {
+  try {
+    return el.ownerDocument.defaultView?.getComputedStyle(el).direction === 'rtl'
+  } catch {
+    return false
   }
 }
 
@@ -1059,9 +1286,13 @@ const extentOf = (el: HTMLElement, axis: 'x' | 'y') => (el.parentElement ? measu
 const sizeEvent = (handle: HTMLElement, size: number, extent: number) =>
   new (handle.ownerDocument.defaultView?.CustomEvent ?? CustomEvent)('sem-size', { bubbles: true, detail: { size, extent } })
 
-/** The transient view of a size being dragged: pinned along its axis (flex items too). */
+/**
+ * The transient view of a size being dragged: pinned along its axis (flex items too; a table cell,
+ * whose width is only a preference in a table laid out by its content, by its minimum as well).
+ */
 function setSize(el: HTMLElement, axis: 'x' | 'y', size: number) {
   Object.assign(el.style, axis === 'x' ? { width: `${size}px`, flex: `0 0 ${size}px` } : { height: `${size}px`, flex: `0 0 ${size}px` })
+  if (axis === 'x' && (el.localName === 'td' || el.localName === 'th')) el.style.minWidth = `${size}px`
 }
 
 /**

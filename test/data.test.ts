@@ -152,8 +152,9 @@ describe('c:Table', () => {
     const counts = rows.map((r) => Number(r.querySelectorAll('td')[2]!.textContent))
     expect(counts).toEqual([...counts].sort((a, b) => b - a))
     expect(rows[0]!.querySelectorAll('td')[2]!.className).toBe('sem-end')
-    const slug = rows.find((r) => r.querySelector('th')!.textContent === 'Table')!.querySelector('code')!
-    expect(slug.textContent).toBe('table')
+    // c:Table, and the block editor's blk:Table, which is labelled "Table" too
+    const slugs = rows.filter((r) => r.querySelector('th')!.textContent === 'Table').map((r) => r.querySelector('code')!.textContent)
+    expect(slugs).toContain('table')
     expect(document.querySelector('[data-sem-c=table] .sem-sort-icon')!.getAttribute('aria-hidden')).toBe('true')
   })
 

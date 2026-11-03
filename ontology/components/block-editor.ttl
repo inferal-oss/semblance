@@ -1,0 +1,2331 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix blk: <https://semblance.dev/ns/block#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix po: <http://www.essepuntato.it/2008/12/pattern#> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix co: <http://purl.org/co/> .
+@prefix file: <https://semblance.dev/ns/file#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix schema: <https://schema.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Editing block documents (docs/BLOCKS.md). The editor's region is contenteditable but the browser edits
+# nothing in it: every edit it would make is an event (beforeinput, recorded with the range it acts on,
+# src/behaviour/text.ts), handled by exactly one of the reactions below, all addressed to the editor
+# (c:BlockEditor) and undoable. The selection is view state on the editor; the editor's rendering states
+# it (data-sem-text-root) and the bus puts the browser's selection there after each event.
+
+# --- what an edit event says (the behaviour layer records it: src/behaviour/events.ts) ------------------
+
+beh:inputType a owl:DatatypeProperty ;
+    rdfs:comment """On an event recorded from a beforeinput: its input type ("insertText", "deleteContentBackward",
+"insertParagraph" …). On an event class recorded from beforeinput: an input type it is for (none: every one)."""@en .
+beh:startBlock a owl:ObjectProperty ; rdfs:comment "On an event in a rich text region: the node (data-sem-text) whose text the range it acts on starts in."@en .
+beh:startOffset a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Where in beh:startBlock's text the range starts (characters, as SPARQL counts them)."@en .
+beh:endBlock a owl:ObjectProperty ; rdfs:comment "On an event in a rich text region: the node whose text the range ends in."@en .
+beh:endOffset a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Where in beh:endBlock's text the range ends."@en .
+beh:covers a owl:ObjectProperty ; rdfs:comment "On an event in a rich text region: a node whose text is wholly inside the range, between its start and its end."@en .
+beh:anchorBlock a owl:ObjectProperty ; rdfs:comment "On an event in a rich text region: where the selection is anchored (the browser's anchor)."@en .
+beh:anchorOffset a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:focusBlock a owl:ObjectProperty ; rdfs:comment "On an event in a rich text region: the selection's moving end (the browser's focus)."@en .
+beh:focusOffset a owl:DatatypeProperty ; rdfs:range xsd:integer .
+
+# --- the editor's state ------------------------------------------------------------------------------
+
+c:editable a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On an editor: whether it edits what it shows (otherwise it only shows it)."@en .
+c:anchorBlock a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; beh:viewState true ;
+    rdfs:comment "Where the selection is anchored: a block."@en .
+c:anchorOffset a owl:DatatypeProperty ; rdfs:domain c:BlockEditor ; rdfs:range xsd:integer ; beh:viewState true ;
+    rdfs:comment "Where in c:anchorBlock's text the selection is anchored."@en .
+c:focusBlock a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; beh:viewState true ;
+    rdfs:comment "The selection's moving end: a block."@en .
+c:focusOffset a owl:DatatypeProperty ; rdfs:domain c:BlockEditor ; rdfs:range xsd:integer ; beh:viewState true ;
+    rdfs:comment "Where in c:focusBlock's text the selection's moving end is."@en .
+c:pendingMark a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; rdfs:range owl:Class ; beh:viewState true ;
+    rdfs:comment "A kind of mark (blk:Strong …) the text typed next at the caret takes."@en .
+c:undoer a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; rdfs:range beh:Undoer ;
+    rdfs:comment "What the editor's Mod+Z activates: a beh:Undoer (a button)."@en .
+c:redoer a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; rdfs:range beh:Redoer ;
+    rdfs:comment "What the editor's Mod+Shift+Z activates: a beh:Redoer (a button)."@en .
+
+# --- events -----------------------------------------------------------------------------------------
+
+c:TextEdit a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:comment "An edit the browser would make in a rich text region (a beforeinput), which it does not: the reactions make it."@en .
+c:InsertText a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ; beh:inputType "insertText" , "insertReplacementText" , "insertLineBreak" , "insertFromPaste" , "insertFromDrop" , "insertFromYank" ;
+    rdfs:comment "Text typed over a range (a line break, for insertLineBreak), or pasted or dropped there as plain text."@en .
+c:DeleteText a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ;
+    beh:inputType "deleteContentBackward" , "deleteContentForward" , "deleteWordBackward" , "deleteWordForward" ,
+        "deleteSoftLineBackward" , "deleteSoftLineForward" , "deleteHardLineBackward" , "deleteHardLineForward" ,
+        "deleteEntireSoftLine" , "deleteByCut" , "deleteByDrag" , "deleteContent" ;
+    rdfs:comment "A range deleted: what the key deletes (a character, a word, a line, a boundary between blocks) is the browser's target range."@en .
+c:SplitBlock a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ; beh:inputType "insertParagraph" ;
+    rdfs:comment "Enter."@en .
+c:HistoryStep a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ; beh:inputType "historyUndo" , "historyRedo" ;
+    rdfs:comment "The browser's own undo or redo (a menu, a gesture)."@en .
+c:FormatText a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ; beh:inputType "formatBold" , "formatItalic" , "formatStrikeThrough" ;
+    rdfs:comment "The browser's own formatting command (a menu)."@en .
+c:BlockEditorKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ;
+    beh:key "mod+b" , "mod+i" , "mod+e" , "mod+shift+s" , "mod+shift+x" , "mod+z" , "mod+shift+z" , "mod+y" ;
+    rdfs:comment "A key press in a block editor that marks text or steps through history."@en .
+c:BlockSelect a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "selectionchange" ; beh:recorded false ;
+    rdfs:comment "The selection moved in a rich text region (beh:anchorBlock … beh:focusOffset)."@en .
+
+# --- Markdown shortcuts: data, so a site adds its own ---------------------------------------------
+
+blk:Shortcut a owl:Class ;
+    rdfs:comment """Text typed that turns into something: a typed character (blk:trigger) after text matching
+blk:pattern (an XPath regular expression over the text before the caret) makes blk:makes."""@en .
+blk:BlockShortcut a owl:Class ; rdfs:subClassOf blk:Shortcut ;
+    rdfs:comment "At the start of a paragraph: the paragraph becomes a block of blk:makes (a list item: in a list of its blk:within)."@en .
+blk:InlineShortcut a owl:Class ; rdfs:subClassOf blk:Shortcut ;
+    rdfs:comment """Closing a delimiter (blk:delimiter): blk:pattern matches the text before the caret, its first group what
+comes before the opening delimiter and its second what the delimiters enclose, which gets a mark of blk:makes."""@en .
+blk:trigger a owl:DatatypeProperty ; rdfs:domain blk:Shortcut .
+blk:pattern a owl:DatatypeProperty ; rdfs:domain blk:Shortcut .
+blk:makes a owl:ObjectProperty ; rdfs:domain blk:Shortcut ; rdfs:range owl:Class .
+blk:delimiter a owl:DatatypeProperty ; rdfs:domain blk:InlineShortcut .
+blk:whole a owl:DatatypeProperty ; rdfs:domain blk:BlockShortcut ; rdfs:range xsd:boolean ;
+    rdfs:comment "True: the shortcut is the paragraph's whole text (\"---\")."@en .
+blk:within a owl:ObjectProperty ; rdfs:domain blk:BlockShortcut ; rdfs:range owl:Class ;
+    rdfs:comment "On a shortcut that makes an item: the kind of list it puts it in."@en .
+blk:continues a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a text block class: Enter in a block of it (of it itself, not of a subclass) makes another of it (a paragraph, a list item), not a paragraph."@en .
+
+blk:Paragraph blk:continues true . blk:ListItem blk:continues true . blk:TodoItem blk:continues true . blk:Quote blk:continues true .
+
+blk:Heading1Shortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^#$" ; blk:makes blk:Heading1 .
+blk:Heading2Shortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^##$" ; blk:makes blk:Heading2 .
+blk:Heading3Shortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^###$" ; blk:makes blk:Heading3 .
+blk:QuoteShortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^>$" ; blk:makes blk:Quote .
+blk:CodeShortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^```$" ; blk:makes blk:Code .
+blk:DividerShortcut a blk:BlockShortcut ; blk:trigger "-" ; blk:pattern "^--$" ; blk:whole true ; blk:makes blk:Divider .
+blk:BulletShortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^[-*+]$" ; blk:makes blk:ListItem ; blk:within blk:BulletedList .
+blk:NumberShortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^1[.)]$" ; blk:makes blk:ListItem ; blk:within blk:NumberedList .
+blk:TodoShortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^\\[ ?\\]$" ; blk:makes blk:TodoItem ; blk:within blk:TodoList .
+
+blk:StrongShortcut a blk:InlineShortcut ; blk:trigger "*" ; blk:delimiter "**" ; blk:makes blk:Strong ; blk:pattern "^(.*)\\*\\*([^*\\s][^*]*)\\*$" .
+blk:EmphasisShortcut a blk:InlineShortcut ; blk:trigger "_" ; blk:delimiter "_" ; blk:makes blk:Emphasis ; blk:pattern "^(|.*[\\s(])_([^_\\s][^_]*)$" .
+blk:CodeMarkShortcut a blk:InlineShortcut ; blk:trigger "`" ; blk:delimiter "`" ; blk:makes blk:InlineCode ; blk:pattern "^(.*)`([^`]+)$" .
+blk:StrikeShortcut a blk:InlineShortcut ; blk:trigger "~" ; blk:delimiter "~~" ; blk:makes blk:Strike ; blk:pattern "^(.*)~~([^~\\s][^~]*)~$" .
+
+# --- reactions ---------------------------------------------------------------------------------------
+
+c:EditText a beh:Reaction ;
+    rdfs:label "Edit the text"@en ;
+    rdfs:comment """Text typed over, or deleted from, a range of one block: its rdf:value spliced, its marks moved (a mark
+grows when text is typed at its end, not at its start; a link at neither), a mark left empty removed, the
+pending marks put on what was typed, the caret after it. Not text that completes a Markdown shortcut."""@en ;
+    beh:when c:InsertText , c:DeleteText , c:SplitBlock ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?a rdf:value ?raw . ?m oa:start ?ms ; oa:end ?me . ?a blk:mark ?gone . ?gone ?gp ?go . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak" || ?it = "insertParagraph", "\\n", COALESCE(STR(?t0), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+  BIND(SUBSTR(?old, 1, ?s) AS ?before)
+  # Enter is a new line only in plain text (code, a formula); elsewhere it splits the block.
+  FILTER(?it != "insertParagraph" || EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock })
+  FILTER(?s < ?e || (?s = ?e && (EXISTS { $event a c:InsertText } || EXISTS { $event a c:SplitBlock }) && ?L > 0))
+  FILTER NOT EXISTS { ?bsc a blk:BlockShortcut ; blk:trigger ?typed ; blk:pattern ?bp . ?a a/rdfs:subClassOf* blk:Paragraph
+    FILTER(?s = ?e && REGEX(?before, ?bp) && (NOT EXISTS { ?bsc blk:whole true } || ?s = STRLEN(?old))) }
+  FILTER NOT EXISTS { ?isc a blk:InlineShortcut ; blk:trigger ?typed ; blk:pattern ?ip FILTER(?s = ?e && REGEX(?before, ?ip)) FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock } }
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(NOT EXISTS { ?mk a blk:Link } && NOT EXISTS { ?mk a blk:Mention } AS ?incl)
+  BIND(IF(?ms0 < ?s, ?ms0, IF(?ms0 >= ?e, ?ms0 - (?e - ?s) + ?L, ?s)) AS ?ns)
+  BIND(IF(?me0 < ?s, ?me0, IF(?me0 > ?e, ?me0 - (?e - ?s) + ?L, IF(?incl && ?me0 = ?e, ?s + ?L, ?s))) AS ?ne)
+  BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
+  BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?m)
+  BIND(IF(BOUND(?m), ?ms0, ?none) AS ?ms) BIND(IF(BOUND(?m), ?me0, ?none) AS ?me)
+  OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+}""" ;
+    beh:inserts """CONSTRUCT { ?a rdf:value ?new . ?m oa:start ?ns ; oa:end ?ne . ?a blk:mark ?pnew . ?pnew a ?pm ; oa:start ?s ; oa:end ?pend . $this c:anchorBlock ?a ; c:anchorOffset ?caret ; c:focusBlock ?a ; c:focusOffset ?caret . }
+WHERE {
+  $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak" || ?it = "insertParagraph", "\\n", COALESCE(STR(?t0), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+  BIND(SUBSTR(?old, 1, ?s) AS ?before)
+  # Enter is a new line only in plain text (code, a formula); elsewhere it splits the block.
+  FILTER(?it != "insertParagraph" || EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock })
+  FILTER(?s < ?e || (?s = ?e && (EXISTS { $event a c:InsertText } || EXISTS { $event a c:SplitBlock }) && ?L > 0))
+  FILTER NOT EXISTS { ?bsc a blk:BlockShortcut ; blk:trigger ?typed ; blk:pattern ?bp . ?a a/rdfs:subClassOf* blk:Paragraph
+    FILTER(?s = ?e && REGEX(?before, ?bp) && (NOT EXISTS { ?bsc blk:whole true } || ?s = STRLEN(?old))) }
+  FILTER NOT EXISTS { ?isc a blk:InlineShortcut ; blk:trigger ?typed ; blk:pattern ?ip FILTER(?s = ?e && REGEX(?before, ?ip)) FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock } }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(CONCAT(?before, ?typed, SUBSTR(?old, ?e + 1)) AS ?new)
+  BIND(?s + ?L AS ?caret)
+  OPTIONAL { $this c:pendingMark ?pm0 } BIND(IF(?L > 0, ?pm0, ?none) AS ?pm)
+  BIND(IF(BOUND(?pm), IRI(CONCAT(STR(?a), "/~mark-", ?ev, "-", REPLACE(STR(?pm), "^.*[#/]", ""))), ?none) AS ?pnew)
+  BIND(IF(BOUND(?pm), ?s + ?L, ?none) AS ?pend)
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(NOT EXISTS { ?mk a blk:Link } && NOT EXISTS { ?mk a blk:Mention } AS ?incl)
+  BIND(IF(?ms0 < ?s, ?ms0, IF(?ms0 >= ?e, ?ms0 - (?e - ?s) + ?L, ?s)) AS ?ns)
+  BIND(IF(?me0 < ?s, ?me0, IF(?me0 > ?e, ?me0 - (?e - ?s) + ?L, IF(?incl && ?me0 = ?e, ?s + ?L, ?s))) AS ?ne)
+  BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
+  BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?m)
+  BIND(IF(BOUND(?m), ?ms0, ?none) AS ?ms) BIND(IF(BOUND(?m), ?me0, ?none) AS ?me)
+  OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+}""" .
+
+c:EditAcross a beh:Reaction ;
+    rdfs:label "Edit across blocks"@en ;
+    rdfs:comment """An edit whose range starts in one block (?a) and ends in another (?b): the first keeps its text before
+the range, then what was typed, then the last's text after it, with the marks of both; the last block, the
+blocks wholly inside the range (beh:covers) and the containers left empty by that go, and every chain they
+were in closes over the gap. A range ending in a block that holds blocks is left alone."""@en ;
+    beh:when c:InsertText , c:DeleteText , c:SplitBlock ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Blocks joined"@en , "Блоки об’єднано"@uk , "Blöcke verbunden"@de , "تم دمج الكتل"@ar ;
+    beh:deletes """CONSTRUCT {
+  ?a rdf:value ?rawA . ?am oa:end ?ame .
+  ?a blk:mark ?agone . ?agone ?agp ?ago .
+  ?x ?xp ?xo . ?xs ?xsp ?x . ?xmark ?xmp ?xmo .
+  ?p co:nextItem ?pn .
+  $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm .
+}
+WHERE {
+  $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+  {
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+    ?a blk:mark ?amk . ?amk oa:start ?ams0 ; oa:end ?ame .
+    BIND(IF(?ams0 >= ?s, ?amk, ?none) AS ?agone)
+    BIND(IF(?ams0 < ?s && ?ame > ?s, ?amk, ?none) AS ?am)
+    OPTIONAL { ?amk ?agp0 ?ago0 } BIND(IF(BOUND(?agone), ?agp0, ?none) AS ?agp) BIND(IF(BOUND(?agone), ?ago0, ?none) AS ?ago)
+  } UNION {
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+    { $event beh:endBlock ?x } UNION { $event beh:covers ?x } UNION { $event beh:startBlock ?a ; beh:endBlock ?b . { $event beh:covers ?cv } UNION { $event beh:endBlock ?cv } ?x po:contains ?cv FILTER((?x = ?b || EXISTS { $event beh:covers ?x } || (EXISTS { ?x po:contains ?w0_x FILTER(?w0_x = ?b || EXISTS { $event beh:covers ?w0_x }) } && NOT EXISTS { ?x po:contains ?w1_x FILTER(?w1_x != ?b && NOT EXISTS { $event beh:covers ?w1_x }) } && NOT EXISTS { ?x po:contains+ ?a }))) }
+    ?x ?xp ?xo .
+  } UNION {
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+    { $event beh:endBlock ?x } UNION { $event beh:covers ?x } UNION { $event beh:startBlock ?a ; beh:endBlock ?b . { $event beh:covers ?cv } UNION { $event beh:endBlock ?cv } ?x po:contains ?cv FILTER((?x = ?b || EXISTS { $event beh:covers ?x } || (EXISTS { ?x po:contains ?w0_x FILTER(?w0_x = ?b || EXISTS { $event beh:covers ?w0_x }) } && NOT EXISTS { ?x po:contains ?w1_x FILTER(?w1_x != ?b && NOT EXISTS { $event beh:covers ?w1_x }) } && NOT EXISTS { ?x po:contains+ ?a }))) }
+    ?xs ?xsp ?x FILTER(?xsp IN (po:contains, co:nextItem))
+  } UNION {
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+    { $event beh:endBlock ?x } UNION { $event beh:covers ?x } UNION { $event beh:startBlock ?a ; beh:endBlock ?b . { $event beh:covers ?cv } UNION { $event beh:endBlock ?cv } ?x po:contains ?cv FILTER((?x = ?b || EXISTS { $event beh:covers ?x } || (EXISTS { ?x po:contains ?w0_x FILTER(?w0_x = ?b || EXISTS { $event beh:covers ?w0_x }) } && NOT EXISTS { ?x po:contains ?w1_x FILTER(?w1_x != ?b && NOT EXISTS { $event beh:covers ?w1_x }) } && NOT EXISTS { ?x po:contains+ ?a }))) }
+    ?x blk:mark ?xmark . ?xmark oa:end ?xme FILTER(?x != ?b || ?xme <= ?e) ?xmark ?xmp ?xmo .
+  } UNION {
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+    { $event beh:endBlock ?pn } UNION { $event beh:covers ?pn } UNION { $event beh:startBlock ?a ; beh:endBlock ?b . { $event beh:covers ?cv } UNION { $event beh:endBlock ?cv } ?pn po:contains ?cv FILTER((?pn = ?b || EXISTS { $event beh:covers ?pn } || (EXISTS { ?pn po:contains ?w0_pn FILTER(?w0_pn = ?b || EXISTS { $event beh:covers ?w0_pn }) } && NOT EXISTS { ?pn po:contains ?w1_pn FILTER(?w1_pn != ?b && NOT EXISTS { $event beh:covers ?w1_pn }) } && NOT EXISTS { ?pn po:contains+ ?a }))) }
+    ?p co:nextItem ?pn . FILTER(!(?p = ?b || EXISTS { $event beh:covers ?p } || (EXISTS { ?p po:contains ?w0_p FILTER(?w0_p = ?b || EXISTS { $event beh:covers ?w0_p }) } && NOT EXISTS { ?p po:contains ?w1_p FILTER(?w1_p != ?b && NOT EXISTS { $event beh:covers ?w1_p }) } && NOT EXISTS { ?p po:contains+ ?a })))
+  }
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?a rdf:value ?newA . ?am oa:end ?s .
+  ?a blk:mark ?bm . ?bm oa:start ?bns ; oa:end ?bne .
+  ?p co:nextItem ?survivor .
+  $this c:anchorBlock ?a ; c:anchorOffset ?caret ; c:focusBlock ?a ; c:focusOffset ?caret .
+}
+WHERE {
+  $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+  BIND(CONCAT(SUBSTR(?oldA, 1, ?s), ?typed, SUBSTR(?oldB, ?e + 1)) AS ?newA)
+  BIND(?s + ?L AS ?caret)
+  OPTIONAL { {
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+    ?a blk:mark ?am . ?am oa:start ?ams0 ; oa:end ?ame0 FILTER(?ams0 < ?s && ?ame0 > ?s)
+  } UNION {
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+    ?b blk:mark ?bm . ?bm oa:start ?bms0 ; oa:end ?bme0 FILTER(?bme0 > ?e)
+    BIND(IF(?bms0 > ?e, ?bms0, ?e) - ?e + ?s + ?L AS ?bns)
+    BIND(?bme0 - ?e + ?s + ?L AS ?bne)
+  } UNION {
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e . FILTER(?a != ?b)
+  FILTER NOT EXISTS { ?b po:contains ?bChild }
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?b rdf:value ?rawB } BIND(COALESCE(STR(?rawB), "") AS ?oldB)
+  OPTIONAL { $event beh:text ?t0 } OPTIONAL { $event beh:inputType ?it0 } BIND(COALESCE(STR(?it0), "") AS ?it)
+  BIND(IF(?it = "insertLineBreak", "\\n", IF(EXISTS { $event a c:InsertText }, COALESCE(STR(?t0), ""), "")) AS ?typed)
+  BIND(STRLEN(?typed) AS ?L)
+    { $event beh:endBlock ?pn } UNION { $event beh:covers ?pn } UNION { $event beh:startBlock ?a ; beh:endBlock ?b . { $event beh:covers ?cv } UNION { $event beh:endBlock ?cv } ?pn po:contains ?cv FILTER((?pn = ?b || EXISTS { $event beh:covers ?pn } || (EXISTS { ?pn po:contains ?w0_pn FILTER(?w0_pn = ?b || EXISTS { $event beh:covers ?w0_pn }) } && NOT EXISTS { ?pn po:contains ?w1_pn FILTER(?w1_pn != ?b && NOT EXISTS { $event beh:covers ?w1_pn }) } && NOT EXISTS { ?pn po:contains+ ?a }))) }
+    ?p co:nextItem ?pn . FILTER(!(?p = ?b || EXISTS { $event beh:covers ?p } || (EXISTS { ?p po:contains ?w0_p FILTER(?w0_p = ?b || EXISTS { $event beh:covers ?w0_p }) } && NOT EXISTS { ?p po:contains ?w1_p FILTER(?w1_p != ?b && NOT EXISTS { $event beh:covers ?w1_p }) } && NOT EXISTS { ?p po:contains+ ?a })))
+    ?pn co:nextItem+ ?survivor FILTER(!(?survivor = ?b || EXISTS { $event beh:covers ?survivor } || (EXISTS { ?survivor po:contains ?w0_survivor FILTER(?w0_survivor = ?b || EXISTS { $event beh:covers ?w0_survivor }) } && NOT EXISTS { ?survivor po:contains ?w1_survivor FILTER(?w1_survivor != ?b && NOT EXISTS { $event beh:covers ?w1_survivor }) } && NOT EXISTS { ?survivor po:contains+ ?a })))
+    FILTER NOT EXISTS { ?pn co:nextItem+ ?mid . ?mid co:nextItem+ ?survivor FILTER(!(?mid = ?b || EXISTS { $event beh:covers ?mid } || (EXISTS { ?mid po:contains ?w0_mid FILTER(?w0_mid = ?b || EXISTS { $event beh:covers ?w0_mid }) } && NOT EXISTS { ?mid po:contains ?w1_mid FILTER(?w1_mid != ?b && NOT EXISTS { $event beh:covers ?w1_mid }) } && NOT EXISTS { ?mid po:contains+ ?a }))) }
+  } }
+}""" .
+
+c:ToParagraph a beh:Reaction ;
+    rdfs:label "Make it a paragraph"@en ;
+    rdfs:comment """Backspace at the start of a heading, a quote, a callout or a toggle with nothing in it: it becomes a paragraph."""@en ;
+    beh:when c:DeleteText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?a a ?type ; sty:tone ?tone ; c:icon ?icon ; c:expanded ?open . }
+WHERE {
+  $event beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 .
+  FILTER(STRENDS(STR(?it), "Backward"))
+  ?a a/rdfs:subClassOf* blk:TextBlock .
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Paragraph } FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Item }
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Cell } FILTER NOT EXISTS { ?a po:contains ?child }
+  ?a a ?type . OPTIONAL { ?a sty:tone ?tone } OPTIONAL { ?a c:icon ?icon } OPTIONAL { ?a c:expanded ?open }
+}""" ;
+    beh:inserts """CONSTRUCT { ?a a blk:Paragraph . }
+WHERE {
+  $event beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 .
+  FILTER(STRENDS(STR(?it), "Backward"))
+  ?a a/rdfs:subClassOf* blk:TextBlock .
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Paragraph } FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Item }
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Cell } FILTER NOT EXISTS { ?a po:contains ?child }
+}""" .
+
+c:JoinPrevious a beh:Reaction ;
+    rdfs:label "Join the block before"@en ;
+    rdfs:comment """Backspace at the start of a paragraph: its text (and marks) join the end of the text block before it, or
+of the last item of the list before it, and the caret is where they meet."""@en ;
+    beh:when c:DeleteText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?t rdf:value ?rawT . ?a ?ap ?ao . ?parent po:contains ?a . ?q co:nextItem ?a . ?am oa:start ?ms0 ; oa:end ?me0 . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  $event beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 .
+  FILTER(STRENDS(STR(?it), "Backward"))
+  ?a a/rdfs:subClassOf* blk:Paragraph . FILTER NOT EXISTS { ?a po:contains ?own }
+  ?q co:nextItem ?a .
+  { ?q a/rdfs:subClassOf* blk:TextBlock BIND(?q AS ?t) }
+  UNION { ?q a/rdfs:subClassOf* blk:List ; po:contains ?t . FILTER NOT EXISTS { ?t co:nextItem ?afterT } ?t a/rdfs:subClassOf* blk:TextBlock }
+  OPTIONAL { ?t rdf:value ?rawT } BIND(COALESCE(STR(?rawT), "") AS ?oldT)
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?a co:nextItem ?n }
+  OPTIONAL { ?parent po:contains ?a }
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+  OPTIONAL { ?a ?ap ?ao }
+  OPTIONAL { ?a blk:mark ?am . ?am oa:start ?ms0 ; oa:end ?me0 }
+}""" ;
+    beh:inserts """CONSTRUCT { ?t rdf:value ?newT ; blk:mark ?am . ?am oa:start ?ns ; oa:end ?ne . ?q co:nextItem ?n . $this c:anchorBlock ?t ; c:anchorOffset ?at ; c:focusBlock ?t ; c:focusOffset ?at . }
+WHERE {
+  $event beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 .
+  FILTER(STRENDS(STR(?it), "Backward"))
+  ?a a/rdfs:subClassOf* blk:Paragraph . FILTER NOT EXISTS { ?a po:contains ?own }
+  ?q co:nextItem ?a .
+  { ?q a/rdfs:subClassOf* blk:TextBlock BIND(?q AS ?t) }
+  UNION { ?q a/rdfs:subClassOf* blk:List ; po:contains ?t . FILTER NOT EXISTS { ?t co:nextItem ?afterT } ?t a/rdfs:subClassOf* blk:TextBlock }
+  OPTIONAL { ?t rdf:value ?rawT } BIND(COALESCE(STR(?rawT), "") AS ?oldT)
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA)
+  OPTIONAL { ?a co:nextItem ?n }
+  OPTIONAL { ?parent po:contains ?a }
+  BIND(CONCAT(?oldT, ?oldA) AS ?newT)
+  BIND(STRLEN(?oldT) AS ?at)
+  OPTIONAL { ?a blk:mark ?am . ?am oa:start ?ms0 ; oa:end ?me0 }
+  BIND(?ms0 + ?at AS ?ns) BIND(?me0 + ?at AS ?ne)
+}""" .
+
+c:RemovePrevious a beh:Reaction ;
+    rdfs:label "Remove the block before"@en ;
+    rdfs:comment """Backspace at the start of a block after an atom (a divider, an image, a file …): the atom goes."""@en ;
+    beh:when c:DeleteText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Block removed"@en , "Блок вилучено"@uk , "Block entfernt"@de , "تمت إزالة الكتلة"@ar ;
+    beh:deletes """CONSTRUCT { ?q ?qp ?qo . ?qs ?qsp ?q . }
+WHERE {
+  $event beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 .
+  FILTER(STRENDS(STR(?it), "Backward"))
+  ?a a/rdfs:subClassOf* blk:TextBlock .
+  ?q co:nextItem ?a .
+  FILTER NOT EXISTS { ?q a/rdfs:subClassOf* blk:TextBlock } FILTER NOT EXISTS { ?q a/rdfs:subClassOf* blk:Container }
+  ?q ?qp ?qo . OPTIONAL { ?qs ?qsp ?q FILTER(?qsp = po:contains || ?qsp = co:nextItem) }
+}""" ;
+    beh:inserts """CONSTRUCT { ?before co:nextItem ?a . }
+WHERE {
+  $event beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 .
+  FILTER(STRENDS(STR(?it), "Backward"))
+  ?a a/rdfs:subClassOf* blk:TextBlock .
+  ?q co:nextItem ?a .
+  FILTER NOT EXISTS { ?q a/rdfs:subClassOf* blk:TextBlock } FILTER NOT EXISTS { ?q a/rdfs:subClassOf* blk:Container }
+  OPTIONAL { ?before co:nextItem ?q }
+}""" .
+
+c:JoinNext a beh:Reaction ;
+    rdfs:label "Join the block after"@en ;
+    rdfs:comment """Delete at the end of a text block: the text block after it (holding no blocks) joins it."""@en ;
+    beh:when c:DeleteText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?a rdf:value ?rawA ; co:nextItem ?n . ?n ?np ?no . ?parent po:contains ?n . ?nm oa:start ?ms0 ; oa:end ?me0 . }
+WHERE {
+  $event beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s .
+  FILTER(STRENDS(STR(?it), "Forward"))
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA) FILTER(?s = STRLEN(?oldA))
+  ?a co:nextItem ?n . ?n a/rdfs:subClassOf* blk:TextBlock . FILTER NOT EXISTS { ?n po:contains ?nChild }
+  OPTIONAL { ?n rdf:value ?rawN } BIND(COALESCE(STR(?rawN), "") AS ?oldN)
+  OPTIONAL { ?n co:nextItem ?nn }
+  OPTIONAL { ?parent po:contains ?n }
+  OPTIONAL { ?n ?np ?no }
+  OPTIONAL { ?n blk:mark ?nm . ?nm oa:start ?ms0 ; oa:end ?me0 }
+}""" ;
+    beh:inserts """CONSTRUCT { ?a rdf:value ?newA ; co:nextItem ?nn ; blk:mark ?nm . ?nm oa:start ?ns ; oa:end ?ne . }
+WHERE {
+  $event beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s .
+  FILTER(STRENDS(STR(?it), "Forward"))
+  OPTIONAL { ?a rdf:value ?rawA } BIND(COALESCE(STR(?rawA), "") AS ?oldA) FILTER(?s = STRLEN(?oldA))
+  ?a co:nextItem ?n . ?n a/rdfs:subClassOf* blk:TextBlock . FILTER NOT EXISTS { ?n po:contains ?nChild }
+  OPTIONAL { ?n rdf:value ?rawN } BIND(COALESCE(STR(?rawN), "") AS ?oldN)
+  OPTIONAL { ?n co:nextItem ?nn }
+  BIND(CONCAT(?oldA, ?oldN) AS ?newA)
+  OPTIONAL { ?n blk:mark ?nm . ?nm oa:start ?ms0 ; oa:end ?me0 }
+  BIND(?ms0 + ?s AS ?ns) BIND(?me0 + ?s AS ?ne)
+}""" .
+
+c:SplitBlock a beh:Reaction ;
+    rdfs:label "Split the block"@en ;
+    rdfs:comment """Enter: the block is split at the caret (what was selected goes). The new block, minted from the event
+in the editor's document, follows it in its container: of its type when its class blk:continues (a
+paragraph, a list item, a to-do, a quote: the block's own class, not a superclass, so a site's paragraph-like
+type is followed by a paragraph) and not at the end of a heading, else a paragraph; with the
+marks after the caret. The caret goes to its start."""@en ;
+    beh:when c:SplitBlock ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?a rdf:value ?raw ; co:nextItem ?next . ?m oa:start ?ms0 ; oa:end ?me0 . ?a blk:mark ?moved . ?gone ?gp ?go . ?a blk:mark ?gone . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+  ?a a/rdfs:subClassOf* blk:TextBlock . FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Cell }
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Item FILTER(?old = "") }
+  $this c:of ?doc .
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?doc), "/~b-", ?ev)) AS ?nb)
+  OPTIONAL { ?parent po:contains ?a } OPTIONAL { ?a co:nextItem ?next }
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(?ms0 < ?s AS ?left) BIND(?me0 > ?e AS ?right)
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+  BIND(IF(BOUND(?mk) && (?left || ?right), ?mk, ?none) AS ?m)
+  BIND(IF(BOUND(?mk) && !?left && ?right, ?mk, ?none) AS ?moved)
+  BIND(IF(BOUND(?mk) && !?left && !?right, ?mk, ?none) AS ?gone)
+  OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?a rdf:value ?head ; co:nextItem ?nb .
+  ?nb a ?type ; rdf:value ?tail ; co:nextItem ?next ; blk:checked ?unchecked .
+  ?parent po:contains ?nb .
+  ?keep oa:start ?ms0 ; oa:end ?leftEnd .
+  ?nb blk:mark ?onNew . ?onNew a ?mtype ; oa:start ?rs ; oa:end ?re ; schema:url ?url ; oa:hasBody ?body .
+  $this c:anchorBlock ?nb ; c:anchorOffset 0 ; c:focusBlock ?nb ; c:focusOffset 0 .
+}
+WHERE {
+  $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e .
+  ?a a/rdfs:subClassOf* blk:TextBlock . FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Cell }
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:Item FILTER(?old = "") }
+  $this c:of ?doc .
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?doc), "/~b-", ?ev)) AS ?nb)
+  OPTIONAL { ?parent po:contains ?a } OPTIONAL { ?a co:nextItem ?next }
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(?ms0 < ?s AS ?left) BIND(?me0 > ?e AS ?right)
+  BIND(SUBSTR(?old, 1, ?s) AS ?head)
+  BIND(SUBSTR(?old, ?e + 1) AS ?tail)
+  BIND(EXISTS { ?a a ?cont . ?cont blk:continues true } && (?s < STRLEN(?old) || NOT EXISTS { ?a a/rdfs:subClassOf* blk:Heading }) AS ?same)
+  ?a a ?own . BIND(IF(?same, ?own, blk:Paragraph) AS ?type)
+  BIND(IF(EXISTS { ?a a/rdfs:subClassOf* blk:TodoItem }, false, ?none) AS ?unchecked)
+  BIND(IF(BOUND(?mk) && ?left && IF(?me0 < ?s, ?me0, ?s) != ?me0, ?mk, ?none) AS ?keep)
+  BIND(IF(?me0 < ?s, ?me0, ?s) AS ?leftEnd)
+  BIND(IF(BOUND(?mk) && ?right, IF(?left, IRI(CONCAT(STR(?mk), "-", ?ev)), ?mk), ?none) AS ?onNew)
+  BIND(IF(?ms0 > ?e, ?ms0, ?e) - ?e AS ?rs) BIND(?me0 - ?e AS ?re)
+  OPTIONAL { ?a blk:mark ?mk . ?mk a ?mtype }
+  OPTIONAL { ?a blk:mark ?mk . ?mk schema:url ?url } OPTIONAL { ?a blk:mark ?mk . ?mk oa:hasBody ?body }
+}""" .
+
+c:Outdent a beh:Reaction ;
+    rdfs:label "Move up a level"@en ;
+    rdfs:comment """Enter on an empty item, Backspace at the start of an item or Shift+Tab, in a list nested in an item: the
+item moves up a level, to follow that item. A nested list it leaves empty goes."""@en ;
+    beh:when c:SplitBlock , c:DeleteText , c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Moved up a level"@en , "Рівнем вище"@uk , "Eine Ebene höher"@de , "نُقل مستوى للأعلى"@ar ;
+    beh:deletes """CONSTRUCT {
+  ?list po:contains ?a . ?pv co:nextItem ?a . ?a co:nextItem ?nx . ?outer co:nextItem ?afterOuter .
+  ?dropList ?lp ?lo . ?outer po:contains ?dropList . ?prevList co:nextItem ?dropList .
+}
+WHERE {
+  { $event a c:SplitBlock ; beh:startBlock ?a ; beh:endBlock ?a . OPTIONAL { ?a rdf:value ?raw0 } FILTER(COALESCE(STR(?raw0), "") = "") }
+  UNION { $event a c:BlockStructureKey ; beh:key "shift+tab" ; beh:startBlock ?a . FILTER NOT EXISTS { $this c:menuOpen true } }
+  UNION { $event a c:DeleteText ; beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 . FILTER(STRENDS(STR(?it), "Backward")) }
+  ?a a/rdfs:subClassOf* blk:Item .
+  ?list po:contains ?a . ?outer po:contains ?list .
+  OPTIONAL { ?pv co:nextItem ?a } OPTIONAL { ?a co:nextItem ?nx }
+  OPTIONAL { ?prevList co:nextItem ?list } OPTIONAL { ?list co:nextItem ?nextList }
+  ?outer a/rdfs:subClassOf* blk:Item . ?home po:contains ?outer .
+  OPTIONAL { ?outer co:nextItem ?afterOuter }
+  BIND(IF(!BOUND(?pv) && !BOUND(?nx), ?list, ?none) AS ?dropList)
+  OPTIONAL { ?list ?lp0 ?lo0 } BIND(IF(BOUND(?dropList), ?lp0, ?none) AS ?lp) BIND(IF(BOUND(?dropList), ?lo0, ?none) AS ?lo)
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?home po:contains ?a . ?outer co:nextItem ?a . ?a co:nextItem ?afterOuter . ?pv co:nextItem ?nx .
+  ?prevList co:nextItem ?nextListKept .
+  $this c:anchorBlock ?a ; c:anchorOffset 0 ; c:focusBlock ?a ; c:focusOffset 0 .
+}
+WHERE {
+  { $event a c:SplitBlock ; beh:startBlock ?a ; beh:endBlock ?a . OPTIONAL { ?a rdf:value ?raw0 } FILTER(COALESCE(STR(?raw0), "") = "") }
+  UNION { $event a c:BlockStructureKey ; beh:key "shift+tab" ; beh:startBlock ?a . FILTER NOT EXISTS { $this c:menuOpen true } }
+  UNION { $event a c:DeleteText ; beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 . FILTER(STRENDS(STR(?it), "Backward")) }
+  ?a a/rdfs:subClassOf* blk:Item .
+  ?list po:contains ?a . ?outer po:contains ?list .
+  OPTIONAL { ?pv co:nextItem ?a } OPTIONAL { ?a co:nextItem ?nx }
+  OPTIONAL { ?prevList co:nextItem ?list } OPTIONAL { ?list co:nextItem ?nextList }
+  ?outer a/rdfs:subClassOf* blk:Item . ?home po:contains ?outer .
+  OPTIONAL { ?outer co:nextItem ?afterOuter }
+  BIND(IF(!BOUND(?pv) && !BOUND(?nx), ?nextList, ?none) AS ?nextListKept)
+}""" .
+
+c:LeaveList a beh:Reaction ;
+    rdfs:label "Leave the list"@en ;
+    rdfs:comment """Enter on an empty item, or Backspace at the start of an item, in a list that is not nested: the item
+becomes a paragraph, out of the list, in its place - before the list when it was the first item, after it
+when it was the last, between its two halves (the second a new list, minted from the event) when it was in
+the middle, and instead of it when it was the only one."""@en ;
+    beh:when c:SplitBlock , c:DeleteText , c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Left the list"@en , "Поза списком"@uk , "Liste verlassen"@de , "خارج القائمة"@ar ;
+    beh:deletes """CONSTRUCT {
+  ?a a ?type ; blk:checked ?done ; co:nextItem ?nx .
+  ?list po:contains ?a ; po:contains ?moving . ?pv co:nextItem ?a .
+  ?prevList co:nextItem ?listIfFirst . ?list co:nextItem ?nextListIfLast .
+  ?dropList ?lp ?lo . ?outer po:contains ?dropList .
+}
+WHERE {
+  { $event a c:SplitBlock ; beh:startBlock ?a ; beh:endBlock ?a . OPTIONAL { ?a rdf:value ?raw0 } FILTER(COALESCE(STR(?raw0), "") = "") }
+  UNION { $event a c:BlockStructureKey ; beh:key "shift+tab" ; beh:startBlock ?a . FILTER NOT EXISTS { $this c:menuOpen true } }
+  UNION { $event a c:DeleteText ; beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 . FILTER(STRENDS(STR(?it), "Backward")) }
+  ?a a/rdfs:subClassOf* blk:Item .
+  ?list po:contains ?a . ?outer po:contains ?list .
+  OPTIONAL { ?pv co:nextItem ?a } OPTIONAL { ?a co:nextItem ?nx }
+  OPTIONAL { ?prevList co:nextItem ?list } OPTIONAL { ?list co:nextItem ?nextList }
+  FILTER NOT EXISTS { ?outer a/rdfs:subClassOf* blk:Item }
+  ?a a ?type . OPTIONAL { ?a blk:checked ?done }
+  OPTIONAL { ?a co:nextItem+ ?moving0 } BIND(IF(BOUND(?pv) && BOUND(?nx), ?moving0, ?none) AS ?moving)
+  BIND(IF(!BOUND(?pv), ?list, ?none) AS ?listIfFirst) BIND(IF(BOUND(?pv), ?nextList, ?none) AS ?nextListIfLast)
+  BIND(IF(!BOUND(?pv) && !BOUND(?nx), ?list, ?none) AS ?dropList)
+  OPTIONAL { ?list ?lp0 ?lo0 } BIND(IF(BOUND(?dropList), ?lp0, ?none) AS ?lp) BIND(IF(BOUND(?dropList), ?lo0, ?none) AS ?lo)
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?a a blk:Paragraph . ?outer po:contains ?a .
+  ?prevList co:nextItem ?aIfFirst . ?aIfFirst co:nextItem ?list .
+  ?list co:nextItem ?aIfLast . ?aIfLast co:nextItem ?nextList .
+  ?aIfMiddle co:nextItem ?newList . ?newList a ?listType ; po:contains ?moving ; co:nextItem ?nextList . ?outer po:contains ?newList .
+  ?prevList co:nextItem ?aIfOnly . ?aIfOnly co:nextItem ?nextList .
+  $this c:anchorBlock ?a ; c:anchorOffset 0 ; c:focusBlock ?a ; c:focusOffset 0 .
+}
+WHERE {
+  { $event a c:SplitBlock ; beh:startBlock ?a ; beh:endBlock ?a . OPTIONAL { ?a rdf:value ?raw0 } FILTER(COALESCE(STR(?raw0), "") = "") }
+  UNION { $event a c:BlockStructureKey ; beh:key "shift+tab" ; beh:startBlock ?a . FILTER NOT EXISTS { $this c:menuOpen true } }
+  UNION { $event a c:DeleteText ; beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset 0 ; beh:endOffset 0 . FILTER(STRENDS(STR(?it), "Backward")) }
+  ?a a/rdfs:subClassOf* blk:Item .
+  ?list po:contains ?a . ?outer po:contains ?list .
+  OPTIONAL { ?pv co:nextItem ?a } OPTIONAL { ?a co:nextItem ?nx }
+  OPTIONAL { ?prevList co:nextItem ?list } OPTIONAL { ?list co:nextItem ?nextList }
+  FILTER NOT EXISTS { ?outer a/rdfs:subClassOf* blk:Item }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IF(!BOUND(?pv) && BOUND(?nx), ?a, ?none) AS ?aIfFirst)
+  BIND(IF(BOUND(?pv) && !BOUND(?nx), ?a, ?none) AS ?aIfLast)
+  BIND(IF(BOUND(?pv) && BOUND(?nx), ?a, ?none) AS ?aIfMiddle)
+  BIND(IF(!BOUND(?pv) && !BOUND(?nx), ?a, ?none) AS ?aIfOnly)
+  BIND(IF(BOUND(?aIfMiddle), IRI(CONCAT(STR(?list), "-", ?ev)), ?none) AS ?newList)
+  OPTIONAL { ?list a ?listType0 } BIND(IF(BOUND(?newList), ?listType0, ?none) AS ?listType)
+  OPTIONAL { ?a co:nextItem+ ?moving0 } BIND(IF(BOUND(?newList), ?moving0, ?none) AS ?moving)
+}""" .
+
+c:ShortcutType a beh:Reaction ;
+    rdfs:label "Turn into"@en ;
+    rdfs:comment """A Markdown shortcut typed at the start of a paragraph (blk:BlockShortcut: "# ", "## ", "### ", "> ", "``` ", "- ",
+"1. ", "[] "): the shortcut goes and the conversion from the block's type to what it makes (a list: blk:within) is raised
+on it - one change with it, undone in one step; a list's conversion joins the list before it when that is one of its kind."""@en ;
+    beh:when c:InsertText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar ;
+    beh:deletes """CONSTRUCT { ?a rdf:value ?raw . ?mk oa:start ?ms0 ; oa:end ?me0 . ?a blk:mark ?gone . ?gone ?gp ?go . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  $event a c:InsertText ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s ; beh:text ?t0 .
+  ?a a/rdfs:subClassOf* blk:Paragraph .
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(SUBSTR(?old, 1, ?s) AS ?before)
+  ?sc a blk:BlockShortcut ; blk:trigger ?trigger ; blk:pattern ?pattern ; blk:makes ?makes .
+  FILTER(STR(?t0) = ?trigger && REGEX(?before, ?pattern) && (NOT EXISTS { ?sc blk:whole true } || ?s = STRLEN(?old)))
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  FILTER NOT EXISTS { ?makes rdfs:subClassOf* blk:Divider }
+  OPTIONAL { ?sc blk:within ?within0 }
+  BIND(COALESCE(?within0, ?makes) AS ?target)
+  ?conv a blk:Conversion .
+  FILTER EXISTS { ?conv blk:to ?target ; beh:sourceClass ?convFrom . ?a a/rdfs:subClassOf* ?convFrom .
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?target ; beh:sourceClass ?convOf . ?a a/rdfs:subClassOf* ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+  BIND(IF(BOUND(?mk) && ?me0 <= ?s, ?mk, ?none) AS ?gone)
+  OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+}""" ;
+    beh:inserts """CONSTRUCT { ?a rdf:value ?rest . ?kept oa:start ?ns ; oa:end ?ne . ?a beh:raise ?conv . $this c:anchorBlock ?a ; c:anchorOffset 0 ; c:focusBlock ?a ; c:focusOffset 0 . }
+WHERE {
+  $event a c:InsertText ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s ; beh:text ?t0 .
+  ?a a/rdfs:subClassOf* blk:Paragraph .
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(SUBSTR(?old, 1, ?s) AS ?before)
+  ?sc a blk:BlockShortcut ; blk:trigger ?trigger ; blk:pattern ?pattern ; blk:makes ?makes .
+  FILTER(STR(?t0) = ?trigger && REGEX(?before, ?pattern) && (NOT EXISTS { ?sc blk:whole true } || ?s = STRLEN(?old)))
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  FILTER NOT EXISTS { ?makes rdfs:subClassOf* blk:Divider }
+  OPTIONAL { ?sc blk:within ?within0 }
+  BIND(COALESCE(?within0, ?makes) AS ?target)
+  ?conv a blk:Conversion .
+  FILTER EXISTS { ?conv blk:to ?target ; beh:sourceClass ?convFrom . ?a a/rdfs:subClassOf* ?convFrom .
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?target ; beh:sourceClass ?convOf . ?a a/rdfs:subClassOf* ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }
+  BIND(SUBSTR(?old, ?s + 1) AS ?rest)
+  BIND(IF(BOUND(?mk) && ?me0 > ?s, ?mk, ?none) AS ?kept)
+  BIND(IF(?ms0 > ?s, ?ms0, ?s) - ?s AS ?ns) BIND(?me0 - ?s AS ?ne)
+}""" .
+
+c:ShortcutDivider a beh:Reaction ;
+    rdfs:label "Make a divider"@en ;
+    rdfs:comment """"---" at the start of a paragraph: it becomes a divider, followed by a new paragraph (minted from the event), where the
+caret goes."""@en ;
+    beh:when c:InsertText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar ;
+    beh:deletes """CONSTRUCT { ?a a ?type ; rdf:value ?raw . ?a blk:mark ?mk . ?mk ?gp ?go . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  $event a c:InsertText ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s ; beh:text ?t0 .
+  ?a a/rdfs:subClassOf* blk:Paragraph .
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(SUBSTR(?old, 1, ?s) AS ?before)
+  ?sc a blk:BlockShortcut ; blk:trigger ?trigger ; blk:pattern ?pattern ; blk:makes ?makes .
+  FILTER(STR(?t0) = ?trigger && REGEX(?before, ?pattern) && (NOT EXISTS { ?sc blk:whole true } || ?s = STRLEN(?old)))
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  ?makes rdfs:subClassOf* blk:Divider .
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+  OPTIONAL { ?a a ?type }
+  OPTIONAL { ?a blk:mark ?mk . ?mk ?gp ?go }
+}""" ;
+    beh:inserts """CONSTRUCT { ?a a ?makes . ?a co:nextItem ?after . ?after a blk:Paragraph ; rdf:value "" ; co:nextItem ?next . ?parent po:contains ?after . $this c:anchorBlock ?after ; c:anchorOffset 0 ; c:focusBlock ?after ; c:focusOffset 0 . }
+WHERE {
+  $event a c:InsertText ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s ; beh:text ?t0 .
+  ?a a/rdfs:subClassOf* blk:Paragraph .
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(SUBSTR(?old, 1, ?s) AS ?before)
+  ?sc a blk:BlockShortcut ; blk:trigger ?trigger ; blk:pattern ?pattern ; blk:makes ?makes .
+  FILTER(STR(?t0) = ?trigger && REGEX(?before, ?pattern) && (NOT EXISTS { ?sc blk:whole true } || ?s = STRLEN(?old)))
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  ?makes rdfs:subClassOf* blk:Divider .
+  $this c:of ?doc . BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?doc), "/~b-", ?ev)) AS ?after)
+  OPTIONAL { ?a co:nextItem ?next } OPTIONAL { ?parent po:contains ?a }
+}""" .
+
+c:ShortcutMark a beh:Reaction ;
+    rdfs:label "Mark the text"@en ;
+    rdfs:comment """A closing Markdown delimiter typed (blk:InlineShortcut: **bold**, _italic_, `code`, ~~struck~~): the
+delimiters go and what they enclosed is marked; the caret stays after it."""@en ;
+    beh:when c:InsertText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?a rdf:value ?raw . ?mk oa:start ?ms0 ; oa:end ?me0 . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  $event a c:InsertText ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s ; beh:text ?t0 .
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(SUBSTR(?old, 1, ?s) AS ?before)
+  ?sc a blk:InlineShortcut ; blk:trigger ?trigger ; blk:pattern ?pattern ; blk:delimiter ?delim ; blk:makes ?makes .
+  FILTER(STR(?t0) = ?trigger && REGEX(?before, ?pattern))
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock }
+  BIND(STRLEN(REPLACE(?before, ?pattern, "$1")) AS ?o)
+  BIND(STRLEN(REPLACE(?before, ?pattern, "$2")) AS ?n)
+  BIND(STRLEN(?delim) AS ?k)
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(IF(?ms0 <= ?o, ?ms0, IF(?ms0 <= ?o + ?k, ?o, IF(?ms0 <= ?o + ?k + ?n, ?ms0 - ?k, IF(?ms0 <= ?s, ?o + ?n, ?ms0 - 2 * ?k + 1)))) AS ?ns)
+  BIND(IF(?me0 <= ?o, ?me0, IF(?me0 <= ?o + ?k, ?o, IF(?me0 <= ?o + ?k + ?n, ?me0 - ?k, IF(?me0 <= ?s, ?o + ?n, ?me0 - 2 * ?k + 1)))) AS ?ne)
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+}""" ;
+    beh:inserts """CONSTRUCT { ?a rdf:value ?new ; blk:mark ?made . ?made a ?makes ; oa:start ?o ; oa:end ?end . ?mk oa:start ?ns ; oa:end ?ne . $this c:anchorBlock ?a ; c:anchorOffset ?end ; c:focusBlock ?a ; c:focusOffset ?end . }
+WHERE {
+  $event a c:InsertText ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s ; beh:text ?t0 .
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(SUBSTR(?old, 1, ?s) AS ?before)
+  ?sc a blk:InlineShortcut ; blk:trigger ?trigger ; blk:pattern ?pattern ; blk:delimiter ?delim ; blk:makes ?makes .
+  FILTER(STR(?t0) = ?trigger && REGEX(?before, ?pattern))
+  FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock }
+  BIND(STRLEN(REPLACE(?before, ?pattern, "$1")) AS ?o)
+  BIND(STRLEN(REPLACE(?before, ?pattern, "$2")) AS ?n)
+  BIND(STRLEN(?delim) AS ?k)
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(IF(?ms0 <= ?o, ?ms0, IF(?ms0 <= ?o + ?k, ?o, IF(?ms0 <= ?o + ?k + ?n, ?ms0 - ?k, IF(?ms0 <= ?s, ?o + ?n, ?ms0 - 2 * ?k + 1)))) AS ?ns)
+  BIND(IF(?me0 <= ?o, ?me0, IF(?me0 <= ?o + ?k, ?o, IF(?me0 <= ?o + ?k + ?n, ?me0 - ?k, IF(?me0 <= ?s, ?o + ?n, ?me0 - 2 * ?k + 1)))) AS ?ne)
+  BIND(CONCAT(SUBSTR(?before, 1, ?o), REPLACE(?before, ?pattern, "$2"), SUBSTR(?old, ?s + 1)) AS ?new)
+  BIND(?o + ?n AS ?end)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?a), "/~mark-", ?ev)) AS ?made)
+}""" .
+
+c:MarkOn a beh:Reaction ;
+    rdfs:label "Mark the selection"@en ;
+    rdfs:comment """Mod+B (bold), Mod+I (italic), Mod+E (code), Mod+Shift+S (struck out) over a selection in one block that
+is not all marked so: one mark of the kind over it and every mark of the kind it touches."""@en ;
+    beh:when c:BlockEditorKey , c:FormatText , beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?a blk:mark ?old . ?old ?op ?oo . }
+WHERE {
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+  BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
+  FILTER(?s < ?e && !?covered)
+  ?a blk:mark ?old . ?old a ?kind ; oa:start ?os ; oa:end ?oe FILTER(?os <= ?e && ?oe >= ?s)
+  ?old ?op ?oo .
+}""" ;
+    beh:inserts """CONSTRUCT { ?a blk:mark ?made . ?made a ?kind ; oa:start ?from ; oa:end ?to . }
+WHERE {
+  { SELECT ?a ?kind (MIN(?bs) AS ?from) (MAX(?be) AS ?to) WHERE {
+    { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+        $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+      UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+        $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+      UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+        $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+        BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+      BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
+    FILTER(?s < ?e && !?covered)
+    OPTIONAL { ?a blk:mark ?old . ?old a ?kind ; oa:start ?os ; oa:end ?oe }
+    BIND(BOUND(?os) && ?os <= ?e && ?oe >= ?s AS ?touches)
+    BIND(IF(?touches && ?os < ?s, ?os, ?s) AS ?bs)
+    BIND(IF(?touches && ?oe > ?e, ?oe, ?e) AS ?be)
+  } GROUP BY ?a ?kind }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?a), "/~mark-", ?ev)) AS ?made)
+}""" .
+
+c:MarkOff a beh:Reaction ;
+    rdfs:label "Unmark the selection"@en ;
+    rdfs:comment """The same keys over a selection all marked so: the marks of the kind lose the selected part (one over it
+splits in two)."""@en ;
+    beh:when c:BlockEditorKey , c:FormatText , beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?m oa:start ?ms ; oa:end ?me . ?a blk:mark ?gone . ?gone ?gp ?go . }
+WHERE {
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+  BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
+  FILTER(?s < ?e && ?covered)
+  ?a blk:mark ?m . ?m a ?kind ; oa:start ?ms ; oa:end ?me FILTER(?ms < ?e && ?me > ?s)
+  BIND(IF(?ms >= ?s && ?me <= ?e, ?m, ?none) AS ?gone)
+  OPTIONAL { ?m ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+}""" ;
+    beh:inserts """CONSTRUCT { ?left oa:start ?ms ; oa:end ?s . ?right a ?kind ; oa:start ?e ; oa:end ?me . ?a blk:mark ?right . }
+WHERE {
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+  BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
+  FILTER(?s < ?e && ?covered)
+  ?a blk:mark ?m . ?m a ?kind ; oa:start ?ms ; oa:end ?me FILTER(?ms < ?e && ?me > ?s)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IF(?ms < ?s, ?m, ?none) AS ?left)
+  BIND(IF(?me > ?e, IF(?ms < ?s, IRI(CONCAT(STR(?m), "-", ?ev)), ?m), ?none) AS ?right)
+}""" .
+
+c:PendingMark a beh:Reaction ;
+    rdfs:label "Mark what is typed next"@en ;
+    rdfs:comment """The same keys at a caret: what is typed next takes the mark (c:pendingMark), or not, if it was to."""@en ;
+    beh:when c:BlockEditorKey , c:FormatText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:pendingMark ?kind . }
+WHERE {
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+  BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
+  FILTER(?s = ?e)
+  $this c:pendingMark ?kind .
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:pendingMark ?kind . }
+WHERE {
+  { $event beh:key ?key . VALUES (?key ?kind) { ("mod+b" blk:Strong) ("mod+i" blk:Emphasis) ("mod+e" blk:InlineCode) ("mod+shift+s" blk:Strike) ("mod+shift+x" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event beh:inputType ?fit . VALUES (?fit ?kind) { ("formatBold" blk:Strong) ("formatItalic" blk:Emphasis) ("formatStrikeThrough" blk:Strike) }
+    $event beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles ?kind FILTER(?kind != blk:Link)
+    $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+    BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+  BIND(EXISTS { ?a blk:mark ?cm . ?cm a ?kind ; oa:start ?cs ; oa:end ?ce FILTER(?cs <= ?s && ?ce >= ?e) } AS ?covered)
+  FILTER(?s = ?e)
+  FILTER NOT EXISTS { $this c:pendingMark ?kind }
+}""" .
+
+c:BlockSelect a beh:Reaction ;
+    rdfs:label "Select"@en ;
+    rdfs:comment """Where the selection is (the browser moved it): its anchor and focus. A pending mark is dropped when the
+caret moves."""@en ;
+    beh:when c:BlockSelect ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?moved . }
+WHERE {
+  $event beh:anchorBlock ?ab ; beh:anchorOffset ?ao ; beh:focusBlock ?fb ; beh:focusOffset ?fo .
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+  BIND(IF(?xab != ?ab || ?xao != ?ao || ?xfb != ?fb || ?xfo != ?fo, ?xpm, ?none) AS ?moved)
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:anchorBlock ?ab ; c:anchorOffset ?ao ; c:focusBlock ?fb ; c:focusOffset ?fo . }
+WHERE { $event beh:anchorBlock ?ab ; beh:anchorOffset ?ao ; beh:focusBlock ?fb ; beh:focusOffset ?fo . }""" .
+
+c:BlockUndo a beh:Reaction ;
+    rdfs:label "Undo"@en ;
+    rdfs:comment """Mod+Z (or the browser's undo) in the editor: its c:undoer (a beh:Undoer) is activated."""@en ;
+    beh:when c:HistoryStep , c:BlockEditorKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:inserts """CONSTRUCT { ?step beh:raise beh:Click . }
+WHERE {
+  { $event beh:inputType "historyUndo" } UNION { $event beh:key "mod+z" }
+  $this c:undoer ?step .
+}""" .
+
+c:BlockRedo a beh:Reaction ;
+    rdfs:label "Redo"@en ;
+    rdfs:comment """Mod+Shift+Z or Mod+Y (or the browser's redo) in the editor: its c:redoer (a beh:Redoer) is activated."""@en ;
+    beh:when c:HistoryStep , c:BlockEditorKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:inserts """CONSTRUCT { ?step beh:raise beh:Click . }
+WHERE {
+  { $event beh:inputType "historyRedo" } UNION { $event beh:key "mod+shift+z" } UNION { $event beh:key "mod+y" }
+  $this c:redoer ?step .
+}""" .
+
+# --- the / menu ---------------------------------------------------------------------------------------
+# "/" typed at the start of a text block or after a space opens it at the caret (c:menuBlock, c:menuFrom:
+# where the "/" is). It is open while the caret stays after that "/" in that block (c:menuOpen, derived),
+# filtered by the text between them (c:foldedQuery). Its options are the block types: every class with a
+# blk:menuOrder, as typeahead options (c:TypeaheadOption) of the editor - its label, description
+# (c:help), icon (c:icon) and keywords (blk:keyword) in the viewer's language. Up and Down move through
+# them (c:activeOption), Enter, Tab or a click picks one, Escape closes it.
+
+c:menuBlock a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; beh:viewState true ;
+    rdfs:comment "The block the / menu was opened in."@en .
+c:menuFrom a owl:DatatypeProperty ; rdfs:domain c:BlockEditor ; rdfs:range xsd:integer ; beh:viewState true ;
+    rdfs:comment "Where in c:menuBlock's text the / that opened the menu is."@en .
+c:menuOpen a owl:DatatypeProperty ; rdfs:domain c:BlockEditor ; rdfs:range xsd:boolean ;
+    rdfs:comment "Derived: the / menu is open (the caret is after its / in its block)."@en .
+c:menuBlank a owl:DatatypeProperty ; rdfs:domain c:BlockEditor ; rdfs:range xsd:boolean ;
+    rdfs:comment "Derived, while the / menu is open: its block has no text but the / and what is typed after it."@en .
+blk:menuOrder a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:decimal ;
+    rdfs:comment "On a block type: its place in the / menu. Every class with one is offered there."@en .
+blk:keyword a owl:DatatypeProperty ; rdfs:domain owl:Class ;
+    rdfs:comment "On a block type: another word the / menu finds it by (any language)."@en .
+blk:itemClass a owl:ObjectProperty ; rdfs:domain owl:Class ; rdfs:range owl:Class ;
+    rdfs:comment "On a list type: the class of its items, which the / menu makes."@en .
+blk:template a owl:ObjectProperty ; rdfs:domain owl:Class ;
+    rdfs:comment """On a block type: a node whose statements a new block of the type starts with, and the blocks it
+holds (po:contains), copied with IRIs minted from the new block (a table's rows and cells)."""@en .
+c:BlockMenuKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "arrowdown" , "arrowup" , "enter" , "tab" , "escape" ;
+    rdfs:comment "A key press in a block editor that moves through, picks from or closes its / menu (only while it is open)."@en .
+c:BlockMenuPhrase a c:Phrase ; rdfs:label "Blocks"@en , "Блоки"@uk , "Blöcke"@de , "الكتل"@ar .
+c:NoBlocksPhrase a c:Phrase ; rdfs:label "No matching blocks"@en , "Немає таких блоків"@uk , "Keine passenden Blöcke"@de , "لا توجد كتل مطابقة"@ar .
+c:TypeSlashPhrase a c:Phrase ; rdfs:label "Type / for blocks"@en , "Введіть / для блоків"@uk , "„/“ tippen für Blöcke"@de , "اكتب / لإدراج كتلة"@ar .
+
+c:BlockMenuState a sem:Rendering ; sem:targets c:BlockEditor ; sem:modality mod:Screen ; sem:stratum -6 ; sem:inputOnly true ;
+    sem:requires c:menuBlock ;
+    sem:follows c:menuBlock ;
+    sem:watches c:menuBlock , c:menuFrom , c:focusBlock , c:focusOffset , rdf:value .
+c:BlockMenuState-fn a sem:Rule ; sem:implements c:BlockMenuState ; sem:function "blk:menu-state" .
+c:BlockMenuState-sparql a sem:Rule ; sem:implements c:BlockMenuState ;
+    sem:construct """
+CONSTRUCT { $this c:menuOpen true ; c:foldedQuery ?q ; c:menuBlank ?blank . }
+WHERE {
+  $this c:menuBlock ?b ; c:menuFrom ?from ; c:focusBlock ?b ; c:focusOffset ?at FILTER(?at > ?from)
+  ?b rdf:value ?v FILTER(SUBSTR(STR(?v), ?from + 1, 1) = "/")
+  BIND(LCASE(SUBSTR(STR(?v), ?from + 2, ?at - ?from - 1)) AS ?q)
+  FILTER(!STRSTARTS(?q, " "))
+  BIND(CONCAT(SUBSTR(STR(?v), 1, ?from), SUBSTR(STR(?v), ?at + 1)) = "" AS ?blank)
+}""" .
+
+c:BlockMenuOptions a sem:Rendering ; sem:targets c:BlockEditor ; sem:modality mod:Screen ; sem:stratum -5 ;
+    sem:requires c:menuBlock ;
+    sem:follows c:menuBlock ;
+    sem:watches rdf:type , c:menuBlock , c:menuBlank .
+c:BlockMenuOptions-fn a sem:Rule ; sem:implements c:BlockMenuOptions ; sem:function "blk:menu-options" .
+c:BlockMenuOptions-sparql a sem:Rule ; sem:implements c:BlockMenuOptions ;
+    sem:bulk false ;  # its subqueries read no $this, but each editor mints its own
+    sem:construct """
+CONSTRUCT {
+  ?list rdfhtml:hasChild ?item .
+  ?item a c:TypeaheadOption ; c:of $this ; c:option ?cls ; c:label ?label ; c:searchKey ?key ; c:matchKey ?mk ; c:help ?help ; c:icon ?icon ;
+        c:rank ?order ; sem:orderKey ?orderKey .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:BlockEditor ; c:menuBlock ?anyBlock .
+  {
+    ?cls blk:menuOrder ?order .
+    BIND(?cls AS ?type)
+    { SELECT ?cls (GROUP_CONCAT(LCASE(STR(?word)); separator=" ") AS ?words) WHERE { ?cls blk:menuOrder ?o . OPTIONAL { ?cls blk:keyword ?word } } GROUP BY ?cls }
+    BIND("" AS ?lead)
+  } UNION {
+    # On a block with text: what it can turn into (the most specific conversion to each type), first.
+    $this c:menuBlank false ; c:menuBlock ?mblock .
+    ?cls a blk:Conversion ; blk:to ?type ; beh:sourceClass ?from . ?mblock a/rdfs:subClassOf* ?from .
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?type ; beh:sourceClass ?of . ?mblock a/rdfs:subClassOf* ?of . ?of rdfs:subClassOf+ ?from }
+    ?type blk:menuOrder ?typeOrder .
+    BIND(?typeOrder - 100 AS ?order)
+    { SELECT ?type (GROUP_CONCAT(LCASE(STR(?tword)); separator=" ") AS ?words) WHERE { ?type blk:menuOrder ?to2 . OPTIONAL { ?type blk:keyword ?tword } } GROUP BY ?type }
+    OPTIONAL { ?leadAt l10n:of c:TurnIntoPhrase ; l10n:name ?leadPicked }
+    OPTIONAL { c:TurnIntoPhrase rdfs:label ?leadEn FILTER(LANGMATCHES(LANG(?leadEn), "en")) }
+    BIND(CONCAT(STR(COALESCE(?leadPicked, ?leadEn)), " ") AS ?lead)
+  }
+  OPTIONAL { ?labelAt l10n:of ?type ; l10n:name ?labelPicked }
+  OPTIONAL { ?type rdfs:label ?labelPlain FILTER(LANG(?labelPlain) = "") }
+  OPTIONAL { ?type rdfs:label ?labelEn FILTER(LANGMATCHES(LANG(?labelEn), "en")) }
+  BIND(CONCAT(?lead, STR(COALESCE(?labelPicked, ?labelPlain, ?labelEn))) AS ?label)
+  OPTIONAL { ?helpAt l10n:of ?type ; l10n:help ?helpPicked }
+  OPTIONAL { ?type c:help ?helpPlain FILTER(LANG(?helpPlain) = "") }
+  OPTIONAL { ?type c:help ?helpEn FILTER(LANGMATCHES(LANG(?helpEn), "en")) }
+  BIND(STR(COALESCE(?helpPicked, ?helpPlain, ?helpEn)) AS ?help)
+  OPTIONAL { ?type c:icon ?icon }
+  BIND(LCASE(?label) AS ?key)
+  BIND(CONCAT(?key, " ", ?words) AS ?mk)
+  BIND(STR(?order) AS ?orderKey)
+  BIND(IRI(CONCAT(STR($this), "/~menu-list")) AS ?list)
+  BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?cls)))) AS ?item)
+}""" .
+
+c:OpenBlockMenu a beh:Reaction ;
+    rdfs:label "Open the / menu"@en ;
+    rdfs:comment """"/" typed at the start of a text block or after a space: the / menu opens there (the "/" itself is typed, by c:EditText)."""@en ;
+    beh:when c:InsertText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:menuBlock ?ob ; c:menuFrom ?of ; c:activeOption ?oa ; c:handleMenuBlock ?hm ; c:handleMenuReturn ?hr . }
+WHERE {
+  $event a c:InsertText ; beh:text "/" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s .
+  ?a a/rdfs:subClassOf* blk:TextBlock .
+  OPTIONAL { ?a rdf:value ?raw } BIND(SUBSTR(COALESCE(STR(?raw), ""), 1, ?s) AS ?before)
+  FILTER(?before = "" || REGEX(?before, "\\\\s$"))
+  OPTIONAL { $this c:menuBlock ?ob } OPTIONAL { $this c:menuFrom ?of } OPTIONAL { $this c:activeOption ?oa }
+  OPTIONAL { $this c:handleMenuBlock ?hm } OPTIONAL { $this c:handleMenuReturn ?hr }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:menuBlock ?a ; c:menuFrom ?s . }
+WHERE {
+  $event a c:InsertText ; beh:text "/" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s .
+  ?a a/rdfs:subClassOf* blk:TextBlock .
+  OPTIONAL { ?a rdf:value ?raw } BIND(SUBSTR(COALESCE(STR(?raw), ""), 1, ?s) AS ?before)
+  FILTER(?before = "" || REGEX(?before, "\\\\s$"))
+}""" .
+
+c:BlockMenuNext a beh:Reaction ;
+    rdfs:label "Next block type"@en ;
+    rdfs:comment """Down in the open / menu: the next block type shown becomes active (round to the first)."""@en ;
+    beh:when c:BlockMenuKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:activeOption ?old . }
+WHERE { $event beh:key "arrowdown" . $this c:menuOpen true ; c:activeOption ?old . }""" ;
+    beh:inserts """CONSTRUCT { $this c:activeOption ?next . }
+WHERE {
+  $event beh:key "arrowdown" .
+  $this c:menuOpen true .
+  OPTIONAL { $this c:foldedQuery ?q0 } BIND(COALESCE(STR(?q0), "") AS ?q)
+  { SELECT (MIN(xsd:decimal(?fr)) AS ?firstRank) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq0 } BIND(COALESCE(STR(?fq0), "") AS ?fq)
+      ?fo c:of $this ; c:matchKey ?fmk ; c:rank ?fr . FILTER(?fq = "" || CONTAINS(STR(?fmk), ?fq)) } }
+  OPTIONAL { $this c:activeOption ?chosen . ?co c:of $this ; c:option ?chosen ; c:matchKey ?cmk ; c:rank ?cr FILTER(?q = "" || CONTAINS(STR(?cmk), ?q)) }
+  BIND(COALESCE(xsd:decimal(?cr), ?firstRank) AS ?activeRank)
+  { SELECT (MIN(xsd:decimal(?r1)) AS ?beyond) (MIN(xsd:decimal(?r2)) AS ?around) WHERE {
+      $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?q1 } BIND(COALESCE(STR(?q1), "") AS ?qq)
+      { SELECT (MIN(xsd:decimal(?fr2)) AS ?first2) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq2 } BIND(COALESCE(STR(?fq2), "") AS ?fqq)
+          ?fo2 c:of $this ; c:matchKey ?fmk2 ; c:rank ?fr2 . FILTER(?fqq = "" || CONTAINS(STR(?fmk2), ?fqq)) } }
+      OPTIONAL { $this c:activeOption ?ch2 . ?co2 c:of $this ; c:option ?ch2 ; c:matchKey ?cmk2 ; c:rank ?cr2 FILTER(?qq = "" || CONTAINS(STR(?cmk2), ?qq)) }
+      BIND(COALESCE(xsd:decimal(?cr2), ?first2) AS ?at2)
+      ?o c:of $this ; c:matchKey ?omk ; c:rank ?r . FILTER(?qq = "" || CONTAINS(STR(?omk), ?qq))
+      BIND(IF(xsd:decimal(?r) > ?at2, ?r, ?none) AS ?r1)
+      BIND(?r AS ?r2)
+  } }
+  BIND(COALESCE(?beyond, ?around) AS ?nextRank)
+  ?n c:of $this ; c:option ?next ; c:rank ?nr . FILTER(xsd:decimal(?nr) = ?nextRank)
+}""" .
+
+c:BlockMenuPrevious a beh:Reaction ;
+    rdfs:label "Previous block type"@en ;
+    rdfs:comment """Up in the open / menu: the previous block type shown becomes active (round to the last)."""@en ;
+    beh:when c:BlockMenuKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:activeOption ?old . }
+WHERE { $event beh:key "arrowup" . $this c:menuOpen true ; c:activeOption ?old . }""" ;
+    beh:inserts """CONSTRUCT { $this c:activeOption ?next . }
+WHERE {
+  $event beh:key "arrowup" .
+  $this c:menuOpen true .
+  OPTIONAL { $this c:foldedQuery ?q0 } BIND(COALESCE(STR(?q0), "") AS ?q)
+  { SELECT (MIN(xsd:decimal(?fr)) AS ?firstRank) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq0 } BIND(COALESCE(STR(?fq0), "") AS ?fq)
+      ?fo c:of $this ; c:matchKey ?fmk ; c:rank ?fr . FILTER(?fq = "" || CONTAINS(STR(?fmk), ?fq)) } }
+  OPTIONAL { $this c:activeOption ?chosen . ?co c:of $this ; c:option ?chosen ; c:matchKey ?cmk ; c:rank ?cr FILTER(?q = "" || CONTAINS(STR(?cmk), ?q)) }
+  BIND(COALESCE(xsd:decimal(?cr), ?firstRank) AS ?activeRank)
+  { SELECT (MAX(xsd:decimal(?r1)) AS ?beyond) (MAX(xsd:decimal(?r2)) AS ?around) WHERE {
+      $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?q1 } BIND(COALESCE(STR(?q1), "") AS ?qq)
+      { SELECT (MIN(xsd:decimal(?fr2)) AS ?first2) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq2 } BIND(COALESCE(STR(?fq2), "") AS ?fqq)
+          ?fo2 c:of $this ; c:matchKey ?fmk2 ; c:rank ?fr2 . FILTER(?fqq = "" || CONTAINS(STR(?fmk2), ?fqq)) } }
+      OPTIONAL { $this c:activeOption ?ch2 . ?co2 c:of $this ; c:option ?ch2 ; c:matchKey ?cmk2 ; c:rank ?cr2 FILTER(?qq = "" || CONTAINS(STR(?cmk2), ?qq)) }
+      BIND(COALESCE(xsd:decimal(?cr2), ?first2) AS ?at2)
+      ?o c:of $this ; c:matchKey ?omk ; c:rank ?r . FILTER(?qq = "" || CONTAINS(STR(?omk), ?qq))
+      BIND(IF(xsd:decimal(?r) < ?at2, ?r, ?none) AS ?r1)
+      BIND(?r AS ?r2)
+  } }
+  BIND(COALESCE(?beyond, ?around) AS ?nextRank)
+  ?n c:of $this ; c:option ?next ; c:rank ?nr . FILTER(xsd:decimal(?nr) = ?nextRank)
+}""" .
+
+c:BlockMenuClose a beh:Reaction ;
+    rdfs:label "Close the / menu"@en ;
+    rdfs:comment """Escape in the open / menu closes it (the text typed stays)."""@en ;
+    beh:when c:BlockMenuKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:menuBlock ?mb ; c:menuFrom ?mf ; c:activeOption ?ma . }
+WHERE { $event beh:key "escape" . $this c:menuOpen true . OPTIONAL { $this c:menuBlock ?mb } OPTIONAL { $this c:menuFrom ?mf } OPTIONAL { $this c:activeOption ?ma } }""" ;
+    beh:inserts """CONSTRUCT { } WHERE { }""" .
+
+c:BlockMenuTurnInto a beh:Reaction ;
+    rdfs:label "Turn into"@en ;
+    rdfs:comment """Picking a conversion ("Turn into ...", offered on a block with text), or a type in an empty block (the "/" and what follows it
+were all it had) that the block's type converts to: the "/" and what follows it go and the conversion is raised on the block
+(one change with it, undone in one step)."""@en ;
+    beh:when c:BlockMenuKey , beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?a rdf:value ?raw . ?moved oa:start ?ms0 ; oa:end ?me0 . ?a blk:mark ?gone . ?gone ?gp ?go . $this c:menuBlock ?a ; c:menuFrom ?from ; c:activeOption ?ma . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  $this c:menuOpen true ; c:menuBlock ?a ; c:menuFrom ?from ; c:focusOffset ?at ; c:of ?doc .
+  OPTIONAL { $this c:foldedQuery ?q0 } BIND(COALESCE(STR(?q0), "") AS ?q)
+  {
+    { $event beh:key ?key FILTER(?key IN ("enter", "tab")) }
+    { SELECT (MIN(xsd:decimal(?fr)) AS ?firstRank) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq0 } BIND(COALESCE(STR(?fq0), "") AS ?fq)
+        ?fo c:of $this ; c:matchKey ?fmk ; c:rank ?fr . FILTER(?fq = "" || CONTAINS(STR(?fmk), ?fq)) } }
+    OPTIONAL { $this c:activeOption ?chosen . OPTIONAL { $this c:foldedQuery ?q1 } BIND(COALESCE(STR(?q1), "") AS ?qa) ?co c:of $this ; c:option ?chosen ; c:matchKey ?cmk ; c:rank ?cr FILTER(?qa = "" || CONTAINS(STR(?cmk), ?qa)) }
+    BIND(COALESCE(xsd:decimal(?cr), ?firstRank) AS ?activeRank)
+    ?picked c:of $this ; c:option ?cls ; c:rank ?pr . FILTER(xsd:decimal(?pr) = ?activeRank)
+  } UNION {
+    $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?cls .
+  }
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(CONCAT(SUBSTR(?old, 1, ?from), SUBSTR(?old, ?at + 1)) AS ?rest)
+  BIND(?rest = "" AS ?empty)
+  BIND(EXISTS { ?cls rdfs:subClassOf* blk:List } AS ?isList)
+  BIND(EXISTS { ?cls rdfs:subClassOf* blk:TextBlock } && NOT EXISTS { ?cls rdfs:subClassOf* blk:Item } AS ?isText)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(IF(?ms0 < ?from, ?ms0, IF(?ms0 >= ?at, ?ms0 - (?at - ?from), ?from)) AS ?ns)
+  BIND(IF(?me0 < ?from, ?me0, IF(?me0 >= ?at, ?me0 - (?at - ?from), ?from)) AS ?ne)
+  BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
+  BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
+  BIND(EXISTS { ?cls a blk:Conversion } AS ?isConv)
+  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a a/rdfs:subClassOf* ?cvFrom } AS ?convertible)
+  ?conv a blk:Conversion .
+  FILTER(?conv = ?cls || (?empty && EXISTS { ?conv blk:to ?cls ; beh:sourceClass ?convFrom . ?a a/rdfs:subClassOf* ?convFrom .
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?convOf . ?a a/rdfs:subClassOf* ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }))
+  OPTIONAL { $this c:activeOption ?ma }
+  OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+}""" ;
+    beh:inserts """CONSTRUCT { ?a rdf:value ?rest . ?moved oa:start ?ns ; oa:end ?ne . ?a beh:raise ?conv . $this c:anchorBlock ?a ; c:anchorOffset ?from ; c:focusBlock ?a ; c:focusOffset ?from . }
+WHERE {
+  $this c:menuOpen true ; c:menuBlock ?a ; c:menuFrom ?from ; c:focusOffset ?at ; c:of ?doc .
+  OPTIONAL { $this c:foldedQuery ?q0 } BIND(COALESCE(STR(?q0), "") AS ?q)
+  {
+    { $event beh:key ?key FILTER(?key IN ("enter", "tab")) }
+    { SELECT (MIN(xsd:decimal(?fr)) AS ?firstRank) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq0 } BIND(COALESCE(STR(?fq0), "") AS ?fq)
+        ?fo c:of $this ; c:matchKey ?fmk ; c:rank ?fr . FILTER(?fq = "" || CONTAINS(STR(?fmk), ?fq)) } }
+    OPTIONAL { $this c:activeOption ?chosen . OPTIONAL { $this c:foldedQuery ?q1 } BIND(COALESCE(STR(?q1), "") AS ?qa) ?co c:of $this ; c:option ?chosen ; c:matchKey ?cmk ; c:rank ?cr FILTER(?qa = "" || CONTAINS(STR(?cmk), ?qa)) }
+    BIND(COALESCE(xsd:decimal(?cr), ?firstRank) AS ?activeRank)
+    ?picked c:of $this ; c:option ?cls ; c:rank ?pr . FILTER(xsd:decimal(?pr) = ?activeRank)
+  } UNION {
+    $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?cls .
+  }
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(CONCAT(SUBSTR(?old, 1, ?from), SUBSTR(?old, ?at + 1)) AS ?rest)
+  BIND(?rest = "" AS ?empty)
+  BIND(EXISTS { ?cls rdfs:subClassOf* blk:List } AS ?isList)
+  BIND(EXISTS { ?cls rdfs:subClassOf* blk:TextBlock } && NOT EXISTS { ?cls rdfs:subClassOf* blk:Item } AS ?isText)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(IF(?ms0 < ?from, ?ms0, IF(?ms0 >= ?at, ?ms0 - (?at - ?from), ?from)) AS ?ns)
+  BIND(IF(?me0 < ?from, ?me0, IF(?me0 >= ?at, ?me0 - (?at - ?from), ?from)) AS ?ne)
+  BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
+  BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
+  BIND(EXISTS { ?cls a blk:Conversion } AS ?isConv)
+  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a a/rdfs:subClassOf* ?cvFrom } AS ?convertible)
+  ?conv a blk:Conversion .
+  FILTER(?conv = ?cls || (?empty && EXISTS { ?conv blk:to ?cls ; beh:sourceClass ?convFrom . ?a a/rdfs:subClassOf* ?convFrom .
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?convOf . ?a a/rdfs:subClassOf* ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }))
+}""" .
+
+c:BlockMenuInsert a beh:Reaction ;
+    rdfs:label "Insert a block"@en ;
+    rdfs:comment """Picking a type otherwise (in a block with text, or one the block's type does not convert to): a new block of it,
+minted from the event (with what its blk:template says and holds; a list with one empty item), after the block - or
+before it, when the block is empty, so the caret stays on that empty line. The "/" and what follows it go."""@en ;
+    beh:when c:BlockMenuKey , beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Block inserted"@en , "Блок вставлено"@uk , "Block eingefügt"@de , "تم إدراج الكتلة"@ar ;
+    beh:deletes """CONSTRUCT { ?a rdf:value ?raw . ?moved oa:start ?ms0 ; oa:end ?me0 . ?a blk:mark ?gone . ?gone ?gp ?go . $this c:menuBlock ?a ; c:menuFrom ?from ; c:activeOption ?ma . ?a co:nextItem ?next . ?prev co:nextItem ?a . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  $this c:menuOpen true ; c:menuBlock ?a ; c:menuFrom ?from ; c:focusOffset ?at ; c:of ?doc .
+  OPTIONAL { $this c:foldedQuery ?q0 } BIND(COALESCE(STR(?q0), "") AS ?q)
+  {
+    { $event beh:key ?key FILTER(?key IN ("enter", "tab")) }
+    { SELECT (MIN(xsd:decimal(?fr)) AS ?firstRank) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq0 } BIND(COALESCE(STR(?fq0), "") AS ?fq)
+        ?fo c:of $this ; c:matchKey ?fmk ; c:rank ?fr . FILTER(?fq = "" || CONTAINS(STR(?fmk), ?fq)) } }
+    OPTIONAL { $this c:activeOption ?chosen . OPTIONAL { $this c:foldedQuery ?q1 } BIND(COALESCE(STR(?q1), "") AS ?qa) ?co c:of $this ; c:option ?chosen ; c:matchKey ?cmk ; c:rank ?cr FILTER(?qa = "" || CONTAINS(STR(?cmk), ?qa)) }
+    BIND(COALESCE(xsd:decimal(?cr), ?firstRank) AS ?activeRank)
+    ?picked c:of $this ; c:option ?cls ; c:rank ?pr . FILTER(xsd:decimal(?pr) = ?activeRank)
+  } UNION {
+    $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?cls .
+  }
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(CONCAT(SUBSTR(?old, 1, ?from), SUBSTR(?old, ?at + 1)) AS ?rest)
+  BIND(?rest = "" AS ?empty)
+  BIND(EXISTS { ?cls rdfs:subClassOf* blk:List } AS ?isList)
+  BIND(EXISTS { ?cls rdfs:subClassOf* blk:TextBlock } && NOT EXISTS { ?cls rdfs:subClassOf* blk:Item } AS ?isText)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(IF(?ms0 < ?from, ?ms0, IF(?ms0 >= ?at, ?ms0 - (?at - ?from), ?from)) AS ?ns)
+  BIND(IF(?me0 < ?from, ?me0, IF(?me0 >= ?at, ?me0 - (?at - ?from), ?from)) AS ?ne)
+  BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
+  BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
+  BIND(EXISTS { ?cls a blk:Conversion } AS ?isConv)
+  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a a/rdfs:subClassOf* ?cvFrom } AS ?convertible)
+  FILTER(!?isConv && (!?empty || !?convertible))
+  OPTIONAL { $this c:activeOption ?ma }
+  OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+  OPTIONAL { ?a co:nextItem ?next0 } BIND(IF(!?empty, ?next0, ?none) AS ?next)
+  OPTIONAL { ?prev0 co:nextItem ?a } BIND(IF(?empty, ?prev0, ?none) AS ?prev)
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?a rdf:value ?rest . ?moved oa:start ?ns ; oa:end ?ne .
+  ?parent po:contains ?n . ?n a ?made ; rdf:value ?blank ; blk:checked ?unchecked .
+  ?a co:nextItem ?nAfter . ?nAfter co:nextItem ?next .
+  ?prev co:nextItem ?nBefore . ?nBefore co:nextItem ?a .
+  ?n po:contains ?item . ?item a ?itemType ; rdf:value ?itemBlank ; blk:checked ?itemUnchecked .
+  ?ts ?tp ?to .
+  ?xab0 c:anchorBlock ?caretBlock ; c:anchorOffset ?caretAt ; c:focusBlock ?caretBlock ; c:focusOffset ?caretAt .
+}
+WHERE {
+  $this c:menuOpen true ; c:menuBlock ?a ; c:menuFrom ?from ; c:focusOffset ?at ; c:of ?doc .
+  OPTIONAL { $this c:foldedQuery ?q0 } BIND(COALESCE(STR(?q0), "") AS ?q)
+  {
+    { $event beh:key ?key FILTER(?key IN ("enter", "tab")) }
+    { SELECT (MIN(xsd:decimal(?fr)) AS ?firstRank) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq0 } BIND(COALESCE(STR(?fq0), "") AS ?fq)
+        ?fo c:of $this ; c:matchKey ?fmk ; c:rank ?fr . FILTER(?fq = "" || CONTAINS(STR(?fmk), ?fq)) } }
+    OPTIONAL { $this c:activeOption ?chosen . OPTIONAL { $this c:foldedQuery ?q1 } BIND(COALESCE(STR(?q1), "") AS ?qa) ?co c:of $this ; c:option ?chosen ; c:matchKey ?cmk ; c:rank ?cr FILTER(?qa = "" || CONTAINS(STR(?cmk), ?qa)) }
+    BIND(COALESCE(xsd:decimal(?cr), ?firstRank) AS ?activeRank)
+    ?picked c:of $this ; c:option ?cls ; c:rank ?pr . FILTER(xsd:decimal(?pr) = ?activeRank)
+  } UNION {
+    $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?cls .
+  }
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(CONCAT(SUBSTR(?old, 1, ?from), SUBSTR(?old, ?at + 1)) AS ?rest)
+  BIND(?rest = "" AS ?empty)
+  BIND(EXISTS { ?cls rdfs:subClassOf* blk:List } AS ?isList)
+  BIND(EXISTS { ?cls rdfs:subClassOf* blk:TextBlock } && NOT EXISTS { ?cls rdfs:subClassOf* blk:Item } AS ?isText)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(IF(?ms0 < ?from, ?ms0, IF(?ms0 >= ?at, ?ms0 - (?at - ?from), ?from)) AS ?ns)
+  BIND(IF(?me0 < ?from, ?me0, IF(?me0 >= ?at, ?me0 - (?at - ?from), ?from)) AS ?ne)
+  BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
+  BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
+  BIND(EXISTS { ?cls a blk:Conversion } AS ?isConv)
+  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a a/rdfs:subClassOf* ?cvFrom } AS ?convertible)
+  FILTER(!?isConv && (!?empty || !?convertible))
+  OPTIONAL { ?parent po:contains ?a }
+  BIND(IRI(CONCAT(STR(?doc), "/~b-", ?ev)) AS ?n)
+  BIND(IF(?isList, ?cls, ?cls) AS ?made)
+  BIND(IF(?isText, "", ?none) AS ?blank)
+  BIND(IF(EXISTS { ?cls rdfs:subClassOf* blk:TodoItem }, false, ?none) AS ?unchecked)
+  OPTIONAL { ?a co:nextItem ?next0 } OPTIONAL { ?prev0 co:nextItem ?a }
+  BIND(IF(?empty, ?none, ?n) AS ?nAfter) BIND(IF(?empty, ?none, ?next0) AS ?next)
+  BIND(IF(?empty, ?n, ?none) AS ?nBefore) BIND(IF(?empty, ?prev0, ?none) AS ?prev)
+  OPTIONAL { ?cls blk:itemClass ?itemType0 }
+  BIND(IF(?isList, IRI(CONCAT(STR(?n), "-item")), ?none) AS ?item)
+  BIND(IF(?isList, ?itemType0, ?none) AS ?itemType)
+  BIND(IF(?isList, "", ?none) AS ?itemBlank)
+  BIND(IF(?isList && EXISTS { ?itemType0 rdfs:subClassOf* blk:TodoItem }, false, ?none) AS ?itemUnchecked)
+  OPTIONAL {
+    $this c:of ?tdoc . BIND(IRI(CONCAT(STR(?tdoc), "/~b-", STRAFTER(STR($event), "event:"))) AS ?nT)
+    { ?cls blk:template ?t . ?t ?tp ?to0 FILTER(?tp != rdf:type) BIND(?t AS ?subject) }
+    UNION { ?cls blk:template ?t . ?t po:contains+ ?part . ?part ?tp ?to0 BIND(?part AS ?subject) }
+    BIND(IF(?subject = ?t, ?nT, IRI(CONCAT(STR(?nT), "-", REPLACE(STR(?subject), "^.*[#/]", "")))) AS ?ts)
+    BIND(IF(isIRI(?to0) && EXISTS { ?t po:contains+ ?to0 }, IRI(CONCAT(STR(?nT), "-", REPLACE(STR(?to0), "^.*[#/]", ""))), ?to0) AS ?to)
+  }
+  BIND(IF(?isList, ?item, IF(?isText, ?n, ?a)) AS ?caretBlock)
+  BIND(IF(?isList || ?isText, 0, ?from) AS ?caretAt)
+  BIND($this AS ?xab0)
+}""" .
+
+c:BlockMenuLeave a beh:Reaction ;
+    rdfs:label "Close the / menu"@en ;
+    rdfs:comment """The caret left the / menu's block, or went before its "/": the menu is forgotten."""@en ;
+    beh:when c:BlockSelect ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:menuBlock ?mb ; c:menuFrom ?mf ; c:activeOption ?ma . }
+WHERE {
+  $event beh:focusBlock ?fb ; beh:focusOffset ?fo .
+  $this c:menuBlock ?mb ; c:menuFrom ?mf . OPTIONAL { $this c:activeOption ?ma }
+  FILTER(?fb != ?mb || ?fo <= ?mf)
+}""" ;
+    beh:inserts """CONSTRUCT { } WHERE { }""" .
+
+# --- nesting and moving -------------------------------------------------------------------------------
+# Tab puts the block with the caret into the block before it (an item into a nested list of its list's
+# kind; any other block into a text block that holds blocks: a toggle, a callout, an item); Shift+Tab
+# takes it out to follow the block it was in (an item of a nested list up a level, of a list that is not
+# nested out of it, as Enter on an empty item does). Alt+Up and Alt+Down move it past its neighbour.
+# Where nothing can nest, Tab is not used, so the focus moves on.
+
+c:BlockStructureKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "tab" , "shift+tab" , "alt+arrowup" , "alt+arrowdown" ;
+    rdfs:comment "A key press in a block editor that nests a block, takes it out, or moves it."@en .
+
+c:IndentItem a beh:Reaction ;
+    rdfs:label "Indent"@en ;
+    rdfs:comment """Tab in an item after an item: it goes into the item before it, as the last item of its nested list of the
+same kind (a new one, minted from the event, when it has none)."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Indented"@en , "Відступ збільшено"@uk , "Eingerückt"@de , "تمت الإزاحة للداخل"@ar ;
+    beh:deletes """CONSTRUCT { ?p co:nextItem ?b . ?b co:nextItem ?n . ?x po:contains ?b . }
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . ?x po:contains ?b .
+  OPTIONAL { ?b co:nextItem ?n }
+  ?b a/rdfs:subClassOf* blk:Item . ?p a/rdfs:subClassOf* blk:Item .
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?p co:nextItem ?n . ?last co:nextItem ?b . ?into po:contains ?b .
+  ?newList a ?listType ; po:contains ?b . ?p po:contains ?newList . ?lastChild co:nextItem ?newList .
+}
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . ?x po:contains ?b .
+  OPTIONAL { ?b co:nextItem ?n }
+  ?b a/rdfs:subClassOf* blk:Item . ?p a/rdfs:subClassOf* blk:Item .
+  ?x a ?listType . ?listType rdfs:subClassOf* blk:List .
+  OPTIONAL { ?p po:contains ?lastChild0 FILTER NOT EXISTS { ?lastChild0 co:nextItem ?anyAfter } }
+  BIND(IF(BOUND(?lastChild0) && EXISTS { ?lastChild0 a ?listType }, ?lastChild0, ?none) AS ?into)
+  OPTIONAL { ?p po:contains ?l2 . ?l2 a ?listType FILTER NOT EXISTS { ?l2 co:nextItem ?anyAfter2 } ?l2 po:contains ?last FILTER NOT EXISTS { ?last co:nextItem ?anyAfter3 } }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IF(BOUND(?into), ?none, IRI(CONCAT(STR(?p), "/~list-", ?ev))) AS ?newList)
+  BIND(IF(BOUND(?into), ?none, ?lastChild0) AS ?lastChild)
+}""" .
+
+c:IndentBlock a beh:Reaction ;
+    rdfs:label "Put inside"@en ;
+    rdfs:comment """Tab in a block that is not an item: it goes into the block before it (or the last item of the list before it), as
+its last block, when that is a container whose shapes allow it (sh:class on po:contains): a toggle, a callout, a
+quote or an item takes any block, a table only rows."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Moved inside"@en , "Переміщено всередину"@uk , "Hineinverschoben"@de , "نُقل إلى الداخل"@ar ;
+    beh:deletes """CONSTRUCT { ?p co:nextItem ?b . ?b co:nextItem ?n . ?x po:contains ?b . }
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . ?x po:contains ?b .
+  OPTIONAL { ?b co:nextItem ?n }
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
+  # Into the block before it, or into the last item of the list before it.
+  OPTIONAL { ?p a/rdfs:subClassOf* blk:List ; po:contains ?lastItem FILTER NOT EXISTS { ?lastItem co:nextItem ?anyAfterItem } }
+  BIND(COALESCE(?lastItem, ?p) AS ?target)
+  ?target a/rdfs:subClassOf* blk:Container .
+  FILTER NOT EXISTS {
+    ?shape sh:targetClass ?tc ; sh:property ?ps . ?target a/rdfs:subClassOf* ?tc .
+    ?ps sh:path po:contains ; sh:class ?required .
+    FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?required }
+  }
+}""" ;
+    beh:inserts """CONSTRUCT { ?p co:nextItem ?n . ?target po:contains ?b . ?last co:nextItem ?b . }
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . ?x po:contains ?b .
+  OPTIONAL { ?b co:nextItem ?n }
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
+  # Into the block before it, or into the last item of the list before it.
+  OPTIONAL { ?p a/rdfs:subClassOf* blk:List ; po:contains ?lastItem FILTER NOT EXISTS { ?lastItem co:nextItem ?anyAfterItem } }
+  BIND(COALESCE(?lastItem, ?p) AS ?target)
+  ?target a/rdfs:subClassOf* blk:Container .
+  FILTER NOT EXISTS {
+    ?shape sh:targetClass ?tc ; sh:property ?ps . ?target a/rdfs:subClassOf* ?tc .
+    ?ps sh:path po:contains ; sh:class ?required .
+    FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?required }
+  }
+  OPTIONAL { ?target po:contains ?last FILTER NOT EXISTS { ?last co:nextItem ?anyAfter } }
+}""" .
+
+c:Unnest a beh:Reaction ;
+    rdfs:label "Take out"@en ;
+    rdfs:comment """Shift+Tab in a block (not an item) inside a toggle, a callout or an item: it comes out, to follow that block."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Moved out"@en , "Винесено назовні"@uk , "Herausgenommen"@de , "نُقل إلى الخارج"@ar ;
+    beh:deletes """CONSTRUCT { ?x po:contains ?b ; co:nextItem ?afterX . ?pv co:nextItem ?b . ?b co:nextItem ?nx . }
+WHERE {
+  $event beh:key "shift+tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
+  ?x po:contains ?b . ?x a/rdfs:subClassOf* blk:TextBlock . ?y po:contains ?x .
+  OPTIONAL { ?pv co:nextItem ?b } OPTIONAL { ?b co:nextItem ?nx } OPTIONAL { ?x co:nextItem ?afterX }
+}""" ;
+    beh:inserts """CONSTRUCT { ?y po:contains ?b . ?x co:nextItem ?b . ?b co:nextItem ?afterX . ?pv co:nextItem ?nx . }
+WHERE {
+  $event beh:key "shift+tab" ; beh:startBlock ?b ; beh:endBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* blk:Item }
+  ?x po:contains ?b . ?x a/rdfs:subClassOf* blk:TextBlock . ?y po:contains ?x .
+  OPTIONAL { ?pv co:nextItem ?b } OPTIONAL { ?b co:nextItem ?nx } OPTIONAL { ?x co:nextItem ?afterX }
+}""" .
+
+c:MoveBlockUp a beh:Reaction ;
+    rdfs:label "Move up"@en ;
+    rdfs:comment """Alt+Up: the block with the caret moves past the block before it in its container."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Moved up"@en , "Переміщено вгору"@uk , "Nach oben verschoben"@de , "نُقل للأعلى"@ar ;
+    beh:deletes """CONSTRUCT { ?q co:nextItem ?p . ?p co:nextItem ?b . ?b co:nextItem ?n . }
+WHERE {
+  $event beh:key "alt+arrowup" ; beh:startBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . OPTIONAL { ?q co:nextItem ?p } OPTIONAL { ?b co:nextItem ?n }
+}""" ;
+    beh:inserts """CONSTRUCT { ?q co:nextItem ?b . ?b co:nextItem ?p . ?p co:nextItem ?n . }
+WHERE {
+  $event beh:key "alt+arrowup" ; beh:startBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?p co:nextItem ?b . OPTIONAL { ?q co:nextItem ?p } OPTIONAL { ?b co:nextItem ?n }
+}""" .
+
+c:MoveBlockDown a beh:Reaction ;
+    rdfs:label "Move down"@en ;
+    rdfs:comment """Alt+Down: the block with the caret moves past the block after it in its container."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Moved down"@en , "Переміщено вниз"@uk , "Nach unten verschoben"@de , "نُقل للأسفل"@ar ;
+    beh:deletes """CONSTRUCT { ?p co:nextItem ?b . ?b co:nextItem ?n . ?n co:nextItem ?m . }
+WHERE {
+  $event beh:key "alt+arrowdown" ; beh:startBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?b co:nextItem ?n . OPTIONAL { ?p co:nextItem ?b } OPTIONAL { ?n co:nextItem ?m }
+}""" ;
+    beh:inserts """CONSTRUCT { ?p co:nextItem ?n . ?n co:nextItem ?b . ?b co:nextItem ?m . }
+WHERE {
+  $event beh:key "alt+arrowdown" ; beh:startBlock ?b .
+  FILTER NOT EXISTS { $this c:menuOpen true }
+  ?b co:nextItem ?n . OPTIONAL { ?p co:nextItem ?b } OPTIONAL { ?n co:nextItem ?m }
+}""" .
+
+# --- the selection toolbar and links -------------------------------------------------------------------
+# A selection in one block shows a toolbar over it: bold, italic, code, strikethrough and link. Mod+K or
+# its link button makes the selection a link (to "https://", to be edited); with the caret or the
+# selection in a link (c:linkMark), the toolbar shows its address in a field, which edits it, and a
+# button that takes the link off.
+
+c:linkMark a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; rdfs:range blk:Link ; beh:viewState true ;
+    rdfs:comment "The link the caret or the selection is in: the toolbar edits its address."@en .
+blk:toggles a owl:ObjectProperty ; rdfs:range owl:Class ;
+    rdfs:comment "On a rendered toolbar button: the kind of mark it puts on or takes off the selection."@en .
+c:BlockLinkKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "mod+k" ;
+    rdfs:comment "Mod+K in a block editor: make the selection a link."@en .
+c:TextToolbarPhrase a c:Phrase ; rdfs:label "Format"@en , "Формат"@uk , "Format"@de , "تنسيق"@ar .
+c:LinkAddressPhrase a c:Phrase ; rdfs:label "Link address"@en , "Адреса посилання"@uk , "Linkadresse"@de , "عنوان الرابط"@ar .
+c:RemoveLinkPhrase a c:Phrase ; rdfs:label "Remove link"@en , "Прибрати посилання"@uk , "Link entfernen"@de , "إزالة الرابط"@ar .
+
+c:FindLink a beh:Reaction ;
+    rdfs:label "Find the link"@en ;
+    rdfs:comment """Where the selection moved: the link its moving end is in, if any, is the one the toolbar edits."""@en ;
+    beh:when c:BlockSelect ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:linkMark ?old . }
+WHERE { $this c:linkMark ?old . FILTER NOT EXISTS { $event beh:focusBlock ?b ; beh:focusOffset ?fo .
+  ?b blk:mark ?m . ?m a blk:Link ; oa:start ?ms ; oa:end ?me . FILTER(?ms <= ?fo && ?fo <= ?me) FILTER(?m = ?old) } }""" ;
+    beh:inserts """CONSTRUCT { $this c:linkMark ?m . }
+WHERE { $event beh:focusBlock ?b ; beh:focusOffset ?fo .
+  ?b blk:mark ?m . ?m a blk:Link ; oa:start ?ms ; oa:end ?me . FILTER(?ms <= ?fo && ?fo <= ?me) }""" .
+
+c:MakeLink a beh:Reaction ;
+    rdfs:label "Make a link"@en ;
+    rdfs:comment """Mod+K, or the toolbar's link button, over a selection in one block that is no link yet: it becomes a link to
+"https://", whose address the toolbar then edits."""@en ;
+    beh:when c:BlockLinkKey , beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Link added"@en , "Посилання додано"@uk , "Link hinzugefügt"@de , "تمت إضافة الرابط"@ar ;
+    beh:deletes """CONSTRUCT { $this c:linkMark ?old . }
+WHERE { { $event beh:key "mod+k" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles blk:Link .
+          $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+          BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+  FILTER(?s < ?e)
+  FILTER NOT EXISTS { ?a blk:mark ?other . ?other a blk:Link ; oa:start ?os ; oa:end ?oe FILTER(?os < ?e && ?oe > ?s) } $this c:linkMark ?old . }""" ;
+    beh:inserts """CONSTRUCT { ?a blk:mark ?made . ?made a blk:Link ; oa:start ?s ; oa:end ?e ; schema:url "https://" . $this c:linkMark ?made . }
+WHERE {
+  { $event beh:key "mod+k" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e . }
+  UNION { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:toggles blk:Link .
+          $this c:anchorBlock ?a ; c:focusBlock ?a ; c:anchorOffset ?ao ; c:focusOffset ?fo .
+          BIND(IF(?ao < ?fo, ?ao, ?fo) AS ?s) BIND(IF(?ao < ?fo, ?fo, ?ao) AS ?e) }
+  FILTER(?s < ?e)
+  FILTER NOT EXISTS { ?a blk:mark ?other . ?other a blk:Link ; oa:start ?os ; oa:end ?oe FILTER(?os < ?e && ?oe > ?s) }
+  BIND(IRI(CONCAT(STR(?a), "/~mark-", STRAFTER(STR($event), "event:"))) AS ?made)
+}""" .
+
+c:LinkAddress a beh:Reaction ;
+    rdfs:label "Change the address"@en ;
+    rdfs:comment """Typing in the toolbar's address field: the link goes there."""@en ;
+    beh:when beh:Input ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?m schema:url ?old . }
+WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~link-url"))) $this c:linkMark ?m . ?m schema:url ?old . }""" ;
+    beh:inserts """CONSTRUCT { ?m schema:url ?url . }
+WHERE { $event beh:node ?node FILTER(?node = IRI(CONCAT(STR($this), "/~link-url"))) $this c:linkMark ?m . $event beh:value ?url . }""" .
+
+c:RemoveLink a beh:Reaction ;
+    rdfs:label "Remove the link"@en ;
+    rdfs:comment """The toolbar's remove button: the link goes (its text stays)."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Link removed"@en , "Посилання прибрано"@uk , "Link entfernt"@de , "تمت إزالة الرابط"@ar ;
+    beh:deletes """CONSTRUCT { ?b blk:mark ?m . ?m ?p ?o . $this c:linkMark ?m . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . FILTER(?btn = IRI(CONCAT(STR($this), "/~link-remove"))) $this c:linkMark ?m . ?b blk:mark ?m . ?m ?p ?o . }""" ;
+    beh:inserts """CONSTRUCT { } WHERE { }""" .
+
+# --- tables -----------------------------------------------------------------------------------------
+# In a cell, Tab goes to the next cell (past the last one, to a new row) and Shift+Tab to the one before.
+# With the caret in a cell, the editor's table toolbar adds a row above or below, a column before or
+# after, and removes the row or the column (blk:tableAction on its buttons). A column is the cells at
+# one place in their rows (as many cells before them).
+
+blk:tableAction a owl:ObjectProperty ; rdfs:comment "On a rendered table toolbar button: what it does to the table (blk:RowAbove …)."@en .
+blk:TableAction a owl:Class ; rdfs:comment "Something a table toolbar button does to the table the caret is in."@en .
+blk:RowAbove a blk:TableAction ; rdfs:label "Row above"@en , "Рядок вище"@uk , "Zeile darüber"@de , "صف أعلاه"@ar .
+blk:RowBelow a blk:TableAction ; rdfs:label "Row below"@en , "Рядок нижче"@uk , "Zeile darunter"@de , "صف أدناه"@ar .
+blk:ColumnBefore a blk:TableAction ; rdfs:label "Column before"@en , "Стовпець перед"@uk , "Spalte davor"@de , "عمود قبل"@ar .
+blk:ColumnAfter a blk:TableAction ; rdfs:label "Column after"@en , "Стовпець після"@uk , "Spalte danach"@de , "عمود بعد"@ar .
+blk:RemoveRow a blk:TableAction ; rdfs:label "Remove row"@en , "Вилучити рядок"@uk , "Zeile entfernen"@de , "إزالة الصف"@ar .
+blk:RemoveColumn a blk:TableAction ; rdfs:label "Remove column"@en , "Вилучити стовпець"@uk , "Spalte entfernen"@de , "إزالة العمود"@ar .
+c:TableToolsPhrase a c:Phrase ; rdfs:label "Table"@en , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar .
+
+c:NextCell a beh:Reaction ;
+    rdfs:label "Next cell"@en ;
+    rdfs:comment """Tab in a cell: the caret goes to the next cell, in the row or the next one."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:key "tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?c co:nextItem ?sameRow }
+  OPTIONAL { ?row co:nextItem ?nextRow . ?nextRow po:contains ?nextRowFirst FILTER NOT EXISTS { ?anyBefore co:nextItem ?nextRowFirst } }
+  BIND(COALESCE(?sameRow, ?nextRowFirst) AS ?to) FILTER(BOUND(?to)) OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { $this c:anchorBlock ?to ; c:anchorOffset 0 ; c:focusBlock ?to ; c:focusOffset 0 . }
+WHERE { $event beh:key "tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?c co:nextItem ?sameRow }
+  OPTIONAL { ?row co:nextItem ?nextRow . ?nextRow po:contains ?nextRowFirst FILTER NOT EXISTS { ?anyBefore co:nextItem ?nextRowFirst } }
+  BIND(COALESCE(?sameRow, ?nextRowFirst) AS ?to) FILTER(BOUND(?to)) }""" .
+
+c:NewRowByTab a beh:Reaction ;
+    rdfs:label "Add a row"@en ;
+    rdfs:comment """Tab in the last cell of a table: a new row (as many cells as the last one) and the caret in its first cell."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Row added"@en , "Рядок додано"@uk , "Zeile hinzugefügt"@de , "تمت إضافة صف"@ar ;
+    beh:deletes """CONSTRUCT { $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:key "tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?c co:nextItem ?sameRow }
+  OPTIONAL { ?row co:nextItem ?nextRow . ?nextRow po:contains ?nextRowFirst FILTER NOT EXISTS { ?anyBefore co:nextItem ?nextRowFirst } }
+  BIND(COALESCE(?sameRow, ?nextRowFirst) AS ?to) FILTER(!BOUND(?to)) OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?table po:contains ?newRow . ?row co:nextItem ?newRow . ?newRow a blk:Row ; po:contains ?newCell . ?newCell a blk:Cell ; rdf:value "" ; co:nextItem ?newNext .
+  $this c:anchorBlock ?first ; c:anchorOffset 0 ; c:focusBlock ?first ; c:focusOffset 0 . }
+WHERE {
+  $event beh:key "tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?c co:nextItem ?sameRow }
+  OPTIONAL { ?row co:nextItem ?nextRow . ?nextRow po:contains ?nextRowFirst FILTER NOT EXISTS { ?anyBefore co:nextItem ?nextRowFirst } }
+  BIND(COALESCE(?sameRow, ?nextRowFirst) AS ?to)
+  FILTER(!BOUND(?to))
+  ?table po:contains ?row .
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow)
+  ?row po:contains ?cell . BIND(IRI(CONCAT(STR(?cell), "-", ?ev)) AS ?newCell)
+  OPTIONAL { ?cell co:nextItem ?next } BIND(IRI(CONCAT(STR(?next), "-", ?ev)) AS ?newNext)
+  ?row po:contains ?head FILTER NOT EXISTS { ?anyBefore co:nextItem ?head } BIND(IRI(CONCAT(STR(?head), "-", ?ev)) AS ?first)
+}""" .
+
+c:PreviousCell a beh:Reaction ;
+    rdfs:label "Previous cell"@en ;
+    rdfs:comment """Shift+Tab in a cell: the caret goes to the end of the cell before it."""@en ;
+    beh:when c:BlockStructureKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:key "shift+tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?sameRow co:nextItem ?c }
+  OPTIONAL { ?prevRow co:nextItem ?row . ?prevRow po:contains ?prevRowLast FILTER NOT EXISTS { ?prevRowLast co:nextItem ?anyAfter } }
+  BIND(COALESCE(?sameRow, ?prevRowLast) AS ?to) FILTER(BOUND(?to))
+  OPTIONAL { ?to rdf:value ?toValue } BIND(STRLEN(COALESCE(STR(?toValue), "")) AS ?end) OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { $this c:anchorBlock ?to ; c:anchorOffset ?end ; c:focusBlock ?to ; c:focusOffset ?end . }
+WHERE { $event beh:key "shift+tab" ; beh:startBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c .
+  OPTIONAL { ?sameRow co:nextItem ?c }
+  OPTIONAL { ?prevRow co:nextItem ?row . ?prevRow po:contains ?prevRowLast FILTER NOT EXISTS { ?prevRowLast co:nextItem ?anyAfter } }
+  BIND(COALESCE(?sameRow, ?prevRowLast) AS ?to) FILTER(BOUND(?to))
+  OPTIONAL { ?to rdf:value ?toValue } BIND(STRLEN(COALESCE(STR(?toValue), "")) AS ?end) }""" .
+
+c:TableRowAbove a beh:Reaction ;
+    rdfs:label "Add a row"@en ;
+    rdfs:comment """The table toolbar's "row above": a new row of as many cells as the caret's row, before it."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Row added"@en , "Рядок додано"@uk , "Zeile hinzugefügt"@de , "تمت إضافة صف"@ar ;
+    beh:deletes """CONSTRUCT { ?prev co:nextItem ?row . } WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  FILTER(?action = blk:RowAbove)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow) ?prev co:nextItem ?row . }""" ;
+    beh:inserts """CONSTRUCT { ?table po:contains ?newRow . ?prev co:nextItem ?newRow . ?newRow co:nextItem ?row ; a blk:Row ; po:contains ?newCell . ?newCell a blk:Cell ; rdf:value "" ; co:nextItem ?newNext . }
+WHERE {
+  $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  FILTER(?action = blk:RowAbove)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow)
+  OPTIONAL { ?prev co:nextItem ?row }
+  ?row po:contains ?cell . BIND(IRI(CONCAT(STR(?cell), "-", ?ev)) AS ?newCell)
+  OPTIONAL { ?cell co:nextItem ?next } BIND(IRI(CONCAT(STR(?next), "-", ?ev)) AS ?newNext)
+}""" .
+
+c:TableRowBelow a beh:Reaction ;
+    rdfs:label "Add a row"@en ;
+    rdfs:comment """The table toolbar's "row below": a new row of as many cells as the caret's row, after it."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Row added"@en , "Рядок додано"@uk , "Zeile hinzugefügt"@de , "تمت إضافة صف"@ar ;
+    beh:deletes """CONSTRUCT { ?row co:nextItem ?after . } WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  FILTER(?action = blk:RowBelow)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow) ?row co:nextItem ?after . }""" ;
+    beh:inserts """CONSTRUCT { ?table po:contains ?newRow . ?row co:nextItem ?newRow . ?newRow co:nextItem ?after ; a blk:Row ; po:contains ?newCell . ?newCell a blk:Cell ; rdf:value "" ; co:nextItem ?newNext . }
+WHERE {
+  $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  FILTER(?action = blk:RowBelow)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?row), "-", ?ev)) AS ?newRow)
+  OPTIONAL { ?row co:nextItem ?after }
+  ?row po:contains ?cell . BIND(IRI(CONCAT(STR(?cell), "-", ?ev)) AS ?newCell)
+  OPTIONAL { ?cell co:nextItem ?next } BIND(IRI(CONCAT(STR(?next), "-", ?ev)) AS ?newNext)
+}""" .
+
+c:TableColumnBefore a beh:Reaction ;
+    rdfs:label "Add a column"@en ;
+    rdfs:comment """The table toolbar's "column before": in every row a new cell before the cell at the caret's place."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column added"@en , "Стовпець додано"@uk , "Spalte hinzugefügt"@de , "تمت إضافة عمود"@ar ;
+    beh:deletes """CONSTRUCT { ?prev co:nextItem ?at . } WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:ColumnBefore) ?prev co:nextItem ?at . }""" ;
+    beh:inserts """CONSTRUCT { ?r po:contains ?new . ?new a blk:Cell ; rdf:value "" ; co:nextItem ?at . ?prev co:nextItem ?new . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:ColumnBefore) OPTIONAL { ?prev co:nextItem ?at } }""" .
+
+c:TableColumnAfter a beh:Reaction ;
+    rdfs:label "Add a column"@en ;
+    rdfs:comment """The table toolbar's "column after": in every row a new cell after the cell at the caret's place."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column added"@en , "Стовпець додано"@uk , "Spalte hinzugefügt"@de , "تمت إضافة عمود"@ar ;
+    beh:deletes """CONSTRUCT { ?at co:nextItem ?after . } WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:ColumnAfter) ?at co:nextItem ?after . }""" ;
+    beh:inserts """CONSTRUCT { ?r po:contains ?new . ?new a blk:Cell ; rdf:value "" ; co:nextItem ?after . ?at co:nextItem ?new . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:ColumnAfter) OPTIONAL { ?at co:nextItem ?after } }""" .
+
+c:TableRemoveColumn a beh:Reaction ;
+    rdfs:label "Remove the column"@en ;
+    rdfs:comment """The table toolbar's "remove column": the cell at the caret's place goes from every row (not a table's last column)."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column removed"@en , "Стовпець вилучено"@uk , "Spalte entfernt"@de , "تمت إزالة العمود"@ar ;
+    beh:deletes """CONSTRUCT { ?at ?p ?o . ?r po:contains ?at . ?prev co:nextItem ?at . ?at blk:mark ?m . ?m ?mp ?mo . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:RemoveColumn)
+  FILTER EXISTS { ?row po:contains ?otherCell FILTER(?otherCell != ?c) }
+  ?at ?p ?o . OPTIONAL { ?prev co:nextItem ?at } OPTIONAL { ?at blk:mark ?m . ?m ?mp ?mo } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?prev co:nextItem ?after . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  ?table po:contains ?r . ?r po:contains ?at .
+  { SELECT ?at (COUNT(?b) AS ?j) WHERE { ?r2 po:contains ?at . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?at } } GROUP BY ?at }
+  FILTER(?j = ?i)
+  BIND(IRI(CONCAT(STR(?at), "-", ?ev)) AS ?new) FILTER(?action = blk:RemoveColumn)
+  FILTER EXISTS { ?row po:contains ?otherCell FILTER(?otherCell != ?c) }
+  ?prev co:nextItem ?at . ?at co:nextItem ?after . }""" .
+
+c:TableRemoveRow a beh:Reaction ;
+    rdfs:label "Remove the row"@en ;
+    rdfs:comment """The table toolbar's "remove row": the caret's row goes (not a table's last row)."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Row removed"@en , "Рядок вилучено"@uk , "Zeile entfernt"@de , "تمت إزالة الصف"@ar ;
+    beh:deletes """CONSTRUCT { ?row ?rp ?ro . ?table po:contains ?row . ?prev co:nextItem ?row . ?cell ?p ?o . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c } FILTER(?action = blk:RemoveRow)
+  FILTER EXISTS { ?table po:contains ?otherRow FILTER(?otherRow != ?row) }
+  ?row ?rp ?ro . OPTIONAL { ?row po:contains ?cell . ?cell ?p ?o } OPTIONAL { ?prev co:nextItem ?row } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?prev co:nextItem ?after . }
+WHERE { $this c:focusBlock ?c . ?c a/rdfs:subClassOf* blk:Cell . ?row po:contains ?c . ?table po:contains ?row .
+  $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:tableAction ?action .
+  { SELECT ?c (COUNT(?before) AS ?i) WHERE { $this c:focusBlock ?c . OPTIONAL { ?before co:nextItem+ ?c } } GROUP BY ?c } FILTER(?action = blk:RemoveRow)
+  FILTER EXISTS { ?table po:contains ?otherRow FILTER(?otherRow != ?row) }
+  ?prev co:nextItem ?row . ?row co:nextItem ?after . }""" .
+
+# --- columns ------------------------------------------------------------------------------------------
+# With the caret in a layout column (not in a table's cell), the editor's columns toolbar adds an empty
+# column before or after it, or removes it with what it holds; removing one of the last two leaves the
+# other's blocks in the columns' place (blk:columnsAction on its buttons). The caret's column is the
+# innermost one around it.
+
+blk:columnsAction a owl:ObjectProperty ; rdfs:comment "On a rendered columns toolbar button: what it does to the columns (blk:LayoutColumnBefore …)."@en .
+blk:ColumnsAction a owl:Class ; rdfs:comment "Something a columns toolbar button does to the columns the caret is in."@en .
+blk:LayoutColumnBefore a blk:ColumnsAction ; rdfs:label "Column before"@en , "Колонка перед"@uk , "Spalte davor"@de , "عمود قبل"@ar .
+blk:LayoutColumnAfter a blk:ColumnsAction ; rdfs:label "Column after"@en , "Колонка після"@uk , "Spalte danach"@de , "عمود بعد"@ar .
+blk:RemoveLayoutColumn a blk:ColumnsAction ; rdfs:label "Remove column"@en , "Вилучити колонку"@uk , "Spalte entfernen"@de , "إزالة العمود"@ar .
+c:ColumnsToolsPhrase a c:Phrase ; rdfs:label "Columns"@en , "Колонки"@uk , "Spalten"@de , "أعمدة"@ar .
+
+c:LayoutColumnBefore a beh:Reaction ;
+    rdfs:label "Add a column"@en ;
+    rdfs:comment """The columns toolbar's "column before": an empty column (a paragraph) before the caret's, and the caret in it."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column added"@en , "Колонку додано"@uk , "Spalte hinzugefügt"@de , "تمت إضافة عمود"@ar ;
+    beh:deletes """CONSTRUCT { ?prev co:nextItem ?column . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:LayoutColumnBefore)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column .
+  OPTIONAL { ?prev co:nextItem ?column } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo } OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?columns po:contains ?new . ?new a blk:Column ; po:contains ?para . ?new co:nextItem ?column . ?prev co:nextItem ?new . ?para a blk:Paragraph ; rdf:value "" .
+  $this c:anchorBlock ?para ; c:anchorOffset 0 ; c:focusBlock ?para ; c:focusOffset 0 . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:LayoutColumnBefore)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column .
+  OPTIONAL { ?prev co:nextItem ?column }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?column), "-", ?ev)) AS ?new) BIND(IRI(CONCAT(STR(?column), "-", ?ev, "-p")) AS ?para) }""" .
+
+c:LayoutColumnAfter a beh:Reaction ;
+    rdfs:label "Add a column"@en ;
+    rdfs:comment """The columns toolbar's "column after": an empty column (a paragraph) after the caret's, and the caret in it."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column added"@en , "Колонку додано"@uk , "Spalte hinzugefügt"@de , "تمت إضافة عمود"@ar ;
+    beh:deletes """CONSTRUCT { ?column co:nextItem ?after . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:LayoutColumnAfter)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column .
+  OPTIONAL { ?column co:nextItem ?after } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo } OPTIONAL { $this c:pendingMark ?xpm } }""" ;
+    beh:inserts """CONSTRUCT { ?columns po:contains ?new . ?new a blk:Column ; po:contains ?para . ?new co:nextItem ?after . ?column co:nextItem ?new . ?para a blk:Paragraph ; rdf:value "" .
+  $this c:anchorBlock ?para ; c:anchorOffset 0 ; c:focusBlock ?para ; c:focusOffset 0 . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:LayoutColumnAfter)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column .
+  OPTIONAL { ?column co:nextItem ?after }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?column), "-", ?ev)) AS ?new) BIND(IRI(CONCAT(STR(?column), "-", ?ev, "-p")) AS ?para) }""" .
+
+c:RemoveLayoutColumn a beh:Reaction ;
+    rdfs:label "Remove the column"@en ;
+    rdfs:comment """The columns toolbar's "remove column", with three columns or more: the caret's column goes with what it holds (and
+their marks); the caret goes to the start of the column after it (else before it)."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column removed"@en , "Колонку вилучено"@uk , "Spalte entfernt"@de , "تمت إزالة العمود"@ar ;
+    beh:deletes """CONSTRUCT { ?n ?p ?o . ?columns po:contains ?column . ?prev co:nextItem ?column . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?column po:contains* ?n . ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?column po:contains* ?holder . ?holder blk:mark ?n . ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    OPTIONAL { ?prev co:nextItem ?column } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo } OPTIONAL { $this c:pendingMark ?xpm } }
+}""" ;
+    beh:inserts """CONSTRUCT { ?prev co:nextItem ?after . $this c:anchorBlock ?to ; c:anchorOffset 0 ; c:focusBlock ?to ; c:focusOffset 0 . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+  OPTIONAL { ?prev co:nextItem ?column } OPTIONAL { ?column co:nextItem ?after }
+  BIND(COALESCE(?after, ?prev) AS ?near) ?near po:contains ?to FILTER NOT EXISTS { ?earlier co:nextItem ?to } }""" .
+
+c:DissolveColumns a beh:Reaction ;
+    rdfs:label "Remove the column"@en ;
+    rdfs:comment """The columns toolbar's "remove column", with two columns: the caret's column goes with what it holds, and the
+other one's blocks take the columns' place; the caret goes to the first of them."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Column removed"@en , "Колонку вилучено"@uk , "Spalte entfernt"@de , "تمت إزالة العمود"@ar ;
+    beh:deletes """CONSTRUCT { ?n ?p ?o . ?parent po:contains ?columns . ?outerPrev co:nextItem ?columns . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?column po:contains* ?n . ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?column po:contains* ?holder . ?holder blk:mark ?n . ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?columns ?p ?o BIND(?columns AS ?n) FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?columns po:contains ?n FILTER(?n != ?column) ?n ?p ?o FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+    ?parent po:contains ?columns . OPTIONAL { ?outerPrev co:nextItem ?columns } OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo } OPTIONAL { $this c:pendingMark ?xpm } }
+}""" ;
+    beh:inserts """CONSTRUCT { ?parent po:contains ?child . ?outerPrev co:nextItem ?first . ?last co:nextItem ?outerNext . $this c:anchorBlock ?first ; c:anchorOffset 0 ; c:focusBlock ?first ; c:focusOffset 0 . }
+WHERE { $event beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:columnsAction ?action . FILTER(?action = blk:RemoveLayoutColumn)
+  $this c:editable true ; c:focusBlock ?f . ?column po:contains+ ?f . ?column a/rdfs:subClassOf* blk:Column .
+  FILTER NOT EXISTS { ?column po:contains+ ?inner . ?inner po:contains+ ?f . ?inner a/rdfs:subClassOf* blk:Column }
+  ?columns po:contains ?column . FILTER NOT EXISTS { ?columns po:contains ?x , ?y FILTER(?x != ?column && ?y != ?column && ?x != ?y) }
+  ?parent po:contains ?columns .
+  ?columns po:contains ?other FILTER(?other != ?column)
+  ?other po:contains ?child .
+  ?other po:contains ?first FILTER NOT EXISTS { ?earlier co:nextItem ?first }
+  ?other po:contains ?last FILTER NOT EXISTS { ?last co:nextItem ?later }
+  OPTIONAL { ?outerPrev co:nextItem ?columns } OPTIONAL { ?columns co:nextItem ?outerNext } }""" .
+
+# --- files pasted or dropped on the editor --------------------------------------------------------------
+# An editor takes files (file:Receiver): one pasted into it, or dropped on it but not on a block that takes
+# files itself, becomes a new block after the caret's top-level block (else the last one): an image for an
+# image/*, else a file, which shows it once it is kept (the editor's file:keepIn) or uploaded.
+
+c:EditorTakesFile a beh:Reaction ;
+    rdfs:label "Insert a pasted or dropped file"@en ;
+    rdfs:comment """A file pasted into the editor, or dropped on it: a new image (an image/*) or file block that holds it,
+after the caret's top-level block, else the last block."""@en ;
+    beh:when file:Added ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "File inserted"@en , "Файл вставлено"@uk , "Datei eingefügt"@de , "تم إدراج الملف"@ar ;
+    beh:deletes """CONSTRUCT { ?top co:nextItem ?next . }
+WHERE {
+  $event file:file ?file .
+  $this c:editable true ; c:of ?doc .
+  OPTIONAL { $this c:focusBlock ?fb . ?fb ^po:contains* ?topF . ?doc po:contains ?topF . OPTIONAL { ?topF co:nextItem ?nextF } }
+  BIND(?nextF AS ?next) BIND(?topF AS ?top)
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?doc po:contains ?n . ?n a ?cls ; blk:file ?file ; dnd:members blk:file ; file:keepIn ?store ; file:accept ?accept .
+  ?top co:nextItem ?n . ?n co:nextItem ?next .
+}
+WHERE {
+  $event file:file ?file .
+  $this c:editable true ; c:of ?doc .
+  OPTIONAL { ?file file:mediaType ?type }
+  OPTIONAL { $this file:keepIn ?store }
+  BIND(COALESCE(STRSTARTS(STR(?type), "image/"), false) AS ?isImage)
+  BIND(IF(?isImage, blk:Image, blk:File) AS ?cls)
+  BIND(IF(?isImage, "image/*", ?none) AS ?accept)
+  OPTIONAL { $this c:focusBlock ?fb . ?fb ^po:contains* ?topF . ?doc po:contains ?topF . OPTIONAL { ?topF co:nextItem ?nextF } }
+  OPTIONAL { ?doc po:contains ?topL FILTER NOT EXISTS { ?topL co:nextItem ?anyNext } }
+  BIND(COALESCE(?topF, ?topL) AS ?top)
+  BIND(?nextF AS ?next)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?doc), "/~b-", ?ev)) AS ?n)
+}""" .
+
+# --- conversions ------------------------------------------------------------------------------------------
+# A conversion turns a block of one type into another (blk:to), keeping its identity and place where it can.
+# It is a term of its own, one per direction: a reaction (blk:Conversion) whose source class is the type
+# it converts from (beh:sourceClass) and whose queries rewrite the block ($this; $event a <the conversion>).
+# Raising it on a block (`?block beh:raise ?conversion`) runs it, as one change undone in one step; what a
+# block can turn into is the conversions whose source class it has. The built-in ones take their queries
+# from one of four kinds (beh:like); a site writes its own the same way, with queries of its own or a kind.
+
+blk:Conversion a owl:Class ; rdfs:subClassOf beh:Reaction ;
+    rdfs:label "Conversion"@en , "Перетворення"@uk , "Umwandlung"@de , "تحويل"@ar ;
+    rdfs:comment """Turns a block of its source class (beh:sourceClass) into one of blk:to, as one undoable change.
+Raised on the block by its IRI; its queries read the target type as `$event a ?conversion . ?conversion blk:to ?to`."""@en .
+blk:to a owl:ObjectProperty ; rdfs:domain blk:Conversion ; rdfs:range owl:Class ;
+    rdfs:comment "What a conversion turns a block into."@en .
+blk:ConversionKind a owl:Class ;
+    rdfs:comment "A conversion's queries and function, shared by the conversions like it (beh:like): not a reaction itself."@en .
+c:TurnIntoPhrase a c:Phrase ; rdfs:label "Turn into"@en , "Перетворити на"@uk , "Umwandeln in"@de , "تحويل إلى"@ar .
+
+blk:Retype a blk:ConversionKind ;
+    rdfs:comment """The block becomes the type, its text and marks kept (a plain text type drops the marks); what only the old
+type had goes (a toggle's c:expanded, a callout's c:icon, code's language), what the new one's template starts with
+comes. Blocks it held, when the new type holds none, follow it instead."""@en ;
+    beh:undoable true ;
+    sem:function "blk:retype" ;
+    beh:deletes """CONSTRUCT {
+  $this a ?old . $this blk:mark ?m . ?m ?mp ?mo . $this c:expanded ?expanded . $this c:icon ?icon . $this schema:programmingLanguage ?lang .
+  $this po:contains ?child . $this co:nextItem ?next .
+}
+WHERE {
+  { $event a ?c1 . ?c1 blk:to ?to1 . $this a ?old . ?old rdfs:subClassOf* blk:Block . FILTER(?old != ?to1) }
+  UNION { $event a ?c2 . ?c2 blk:to ?to2 . ?to2 rdfs:subClassOf* blk:PlainTextBlock . $this blk:mark ?m . ?m ?mp ?mo }
+  UNION { $event a ?c3 . ?c3 blk:to ?to3 . FILTER NOT EXISTS { ?to3 rdfs:subClassOf* blk:Toggle } $this c:expanded ?expanded }
+  UNION { $event a ?c4 . ?c4 blk:to ?to4 . FILTER NOT EXISTS { ?to4 rdfs:subClassOf* blk:Callout } $this c:icon ?icon }
+  UNION { $event a ?c5 . ?c5 blk:to ?to5 . FILTER NOT EXISTS { ?to5 rdfs:subClassOf* blk:Code } $this schema:programmingLanguage ?lang }
+  UNION { $event a ?c6 . ?c6 blk:to ?to6 . FILTER NOT EXISTS { ?to6 rdfs:subClassOf* blk:Container } $this po:contains ?child . OPTIONAL { $this co:nextItem ?next } }
+}""" ;
+    beh:inserts """CONSTRUCT { $this a ?to ; ?tp ?tv . ?parent po:contains ?child . $this co:nextItem ?first . ?lastChild co:nextItem ?next . }
+WHERE {
+  { $event a ?c1 . ?c1 blk:to ?to .
+    OPTIONAL { ?to blk:template ?t . ?t ?tp ?tv FILTER(?tp NOT IN (rdf:type, po:contains, rdf:value)) FILTER NOT EXISTS { $this ?tp ?anyValue } } }
+  UNION { $event a ?c2 . ?c2 blk:to ?to2 . FILTER NOT EXISTS { ?to2 rdfs:subClassOf* blk:Container } ?parent po:contains $this . $this po:contains ?child }
+  UNION { $event a ?c3 . ?c3 blk:to ?to3 . FILTER NOT EXISTS { ?to3 rdfs:subClassOf* blk:Container }
+          $this po:contains ?first . FILTER NOT EXISTS { ?p0 co:nextItem ?first . $this po:contains ?p0 } }
+  UNION { $event a ?c4 . ?c4 blk:to ?to4 . FILTER NOT EXISTS { ?to4 rdfs:subClassOf* blk:Container }
+          $this po:contains ?lastChild . FILTER NOT EXISTS { ?lastChild co:nextItem ?y } $this co:nextItem ?next }
+}""" .
+
+blk:Wrap a blk:ConversionKind ;
+    rdfs:comment """The block becomes an item (the list type's blk:itemClass) of a list of the type, in its place: the last item of the
+list before it when that is one of the type, else the first of the list after it when that is, else the only item of
+a new list minted from the event."""@en ;
+    beh:undoable true ;
+    sem:function "blk:wrap" ;
+    beh:deletes """CONSTRUCT { $this a ?old . ?parent po:contains $this . ?prev co:nextItem $this . $this co:nextItem ?next . $this c:expanded ?e . $this c:icon ?i . }
+WHERE {
+  { $this a ?old . ?old rdfs:subClassOf* blk:Block } UNION { ?parent po:contains $this } UNION { ?prev co:nextItem $this }
+  UNION { $this co:nextItem ?next } UNION { $this c:expanded ?e } UNION { $this c:icon ?i }
+  FILTER EXISTS { $event a ?c . ?c blk:to ?t . ?t blk:itemClass ?ic }
+}""" ;
+    beh:inserts """CONSTRUCT {
+  $this a ?item ; blk:checked ?unchecked .
+  ?list a ?to ; po:contains $this ; co:nextItem ?next . ?parent po:contains ?list . ?prev co:nextItem ?list .
+  ?joined po:contains $this . ?lastItem co:nextItem $this . ?joined co:nextItem ?next .
+  ?joinedNext po:contains $this . $this co:nextItem ?firstItem . ?prevOfNext co:nextItem ?joinedNext .
+}
+WHERE {
+  $event a ?conv . ?conv blk:to ?to . ?to blk:itemClass ?item .
+  OPTIONAL { ?parent0 po:contains $this } OPTIONAL { ?prev0 co:nextItem $this } OPTIONAL { $this co:nextItem ?next }
+  # After a list of the kind it becomes, it joins it as its last item; else before one, as its first; else
+  # it is the only item of a new one.
+  BIND(BOUND(?prev0) && EXISTS { ?prev0 a ?to } AS ?joins)
+  BIND(!?joins && BOUND(?next) && EXISTS { ?next a ?to } AS ?joinsNext)
+  OPTIONAL { ?p2 co:nextItem $this . ?p2 po:contains ?lastItem0 FILTER NOT EXISTS { ?lastItem0 co:nextItem ?z } }
+  OPTIONAL { $this co:nextItem ?n2 . ?n2 po:contains ?firstItem0 FILTER NOT EXISTS { ?n2 po:contains ?before0 . ?before0 co:nextItem ?firstItem0 } }
+  BIND(IF(?joins, ?lastItem0, ?none) AS ?lastItem)
+  BIND(IF(?joins, ?prev0, ?none) AS ?joined)
+  BIND(IF(?joinsNext, ?next, ?none) AS ?joinedNext)
+  BIND(IF(?joinsNext, ?firstItem0, ?none) AS ?firstItem)
+  BIND(IF(?joinsNext, ?prev0, ?none) AS ?prevOfNext)
+  BIND(IF(?joins || ?joinsNext, ?none, ?prev0) AS ?prev)
+  BIND(IF(?joins || ?joinsNext, ?none, ?parent0) AS ?parent)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IF(?joins || ?joinsNext, ?none, IRI(CONCAT(STR($this), "-list-", ?ev))) AS ?list)
+  BIND(IF(EXISTS { ?item rdfs:subClassOf* blk:TodoItem }, false, ?none) AS ?unchecked)
+}""" .
+
+blk:Unwrap a blk:ConversionKind ;
+    rdfs:comment """An item becomes a block of the type, out of its list, in its place: before the list when it was the first item, after
+it when the last, between its two halves (the second a new list, minted from the event) when in the middle, and
+instead of the list when it was the only one."""@en ;
+    beh:undoable true ;
+    sem:function "blk:unwrap" ;
+    beh:deletes """CONSTRUCT {
+  ?a a ?type ; blk:checked ?done ; co:nextItem ?nx .
+  ?list po:contains ?a ; po:contains ?moving . ?pv co:nextItem ?a .
+  ?prevList co:nextItem ?listIfFirst . ?list co:nextItem ?nextListIfLast .
+  ?dropList ?lp ?lo . ?outer po:contains ?dropList .
+}
+WHERE {
+  $event a ?conv . ?conv blk:to ?to . FILTER NOT EXISTS { ?to rdfs:subClassOf* blk:Item }
+  BIND($this AS ?a) ?a a/rdfs:subClassOf* blk:Item .
+  ?list po:contains ?a . ?outer po:contains ?list .
+  OPTIONAL { ?pv co:nextItem ?a } OPTIONAL { ?a co:nextItem ?nx }
+  OPTIONAL { ?prevList co:nextItem ?list } OPTIONAL { ?list co:nextItem ?nextList }
+  ?a a ?type . OPTIONAL { ?a blk:checked ?done }
+  OPTIONAL { ?a co:nextItem+ ?moving0 } BIND(IF(BOUND(?pv) && BOUND(?nx), ?moving0, ?none) AS ?moving)
+  BIND(IF(!BOUND(?pv), ?list, ?none) AS ?listIfFirst) BIND(IF(BOUND(?pv), ?nextList, ?none) AS ?nextListIfLast)
+  BIND(IF(!BOUND(?pv) && !BOUND(?nx), ?list, ?none) AS ?dropList)
+  OPTIONAL { ?list ?lp0 ?lo0 } BIND(IF(BOUND(?dropList), ?lp0, ?none) AS ?lp) BIND(IF(BOUND(?dropList), ?lo0, ?none) AS ?lo)
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?a a ?to ; ?tp ?tv . ?outer po:contains ?a .
+  ?prevList co:nextItem ?aIfFirst . ?aIfFirst co:nextItem ?list .
+  ?list co:nextItem ?aIfLast . ?aIfLast co:nextItem ?nextList .
+  ?aIfMiddle co:nextItem ?newList . ?newList a ?listType ; po:contains ?moving ; co:nextItem ?nextList . ?outer po:contains ?newList .
+  ?prevList co:nextItem ?aIfOnly . ?aIfOnly co:nextItem ?nextList .
+}
+WHERE {
+  $event a ?conv . ?conv blk:to ?to . FILTER NOT EXISTS { ?to rdfs:subClassOf* blk:Item }
+  BIND($this AS ?a) ?a a/rdfs:subClassOf* blk:Item .
+  ?list po:contains ?a . ?outer po:contains ?list .
+  OPTIONAL { ?pv co:nextItem ?a } OPTIONAL { ?a co:nextItem ?nx }
+  OPTIONAL { ?prevList co:nextItem ?list } OPTIONAL { ?list co:nextItem ?nextList }
+  OPTIONAL { ?to blk:template ?t . ?t ?tp ?tv FILTER(?tp NOT IN (rdf:type, po:contains, rdf:value)) }
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IF(!BOUND(?pv) && BOUND(?nx), ?a, ?none) AS ?aIfFirst)
+  BIND(IF(BOUND(?pv) && !BOUND(?nx), ?a, ?none) AS ?aIfLast)
+  BIND(IF(BOUND(?pv) && BOUND(?nx), ?a, ?none) AS ?aIfMiddle)
+  BIND(IF(!BOUND(?pv) && !BOUND(?nx), ?a, ?none) AS ?aIfOnly)
+  BIND(IF(BOUND(?aIfMiddle), IRI(CONCAT(STR(?list), "-", ?ev)), ?none) AS ?newList)
+  OPTIONAL { ?list a ?listType0 } BIND(IF(BOUND(?newList), ?listType0, ?none) AS ?listType)
+  OPTIONAL { ?a co:nextItem+ ?moving0 } BIND(IF(BOUND(?newList), ?moving0, ?none) AS ?moving)
+}""" .
+
+blk:Relist a blk:ConversionKind ;
+    rdfs:comment """The list (or the list an item is in) becomes one of the type, and its items the type's item class (a to-do item
+starts unchecked; others drop the check)."""@en ;
+    beh:undoable true ;
+    sem:function "blk:relist" ;
+    beh:deletes """CONSTRUCT { ?L a ?oldList . ?i a ?oldItem . ?ci blk:checked ?c . }
+WHERE {
+  $event a ?conv . ?conv blk:to ?to . ?to blk:itemClass ?newItem .
+  { BIND($this AS ?L) $this a/rdfs:subClassOf* blk:List } UNION { ?L po:contains $this . ?L a/rdfs:subClassOf* blk:List }
+  FILTER NOT EXISTS { ?L a ?to }
+  { ?L a ?oldList . ?oldList rdfs:subClassOf* blk:List }
+  UNION { $event a ?c2 . ?c2 blk:to ?to2 . ?to2 blk:itemClass ?newItem2 . ?L po:contains ?i . ?i a ?oldItem . ?oldItem rdfs:subClassOf* blk:Item FILTER(?oldItem != ?newItem2) }
+  UNION { $event a ?c3 . ?c3 blk:to ?to3 . ?to3 blk:itemClass ?newItem3 . FILTER NOT EXISTS { ?newItem3 rdfs:subClassOf* blk:TodoItem } ?L po:contains ?ci . ?ci blk:checked ?c }
+}""" ;
+    beh:inserts """CONSTRUCT { ?L a ?to . ?i a ?newItem ; blk:checked ?unchecked . }
+WHERE {
+  $event a ?conv . ?conv blk:to ?to . ?to blk:itemClass ?newItem .
+  { BIND($this AS ?L) $this a/rdfs:subClassOf* blk:List } UNION { ?L po:contains $this . ?L a/rdfs:subClassOf* blk:List }
+  FILTER NOT EXISTS { ?L a ?to }
+  OPTIONAL { ?L po:contains ?i }
+  BIND(IF(BOUND(?i) && EXISTS { ?newItem rdfs:subClassOf* blk:TodoItem } && NOT EXISTS { ?i blk:checked ?anyChecked }, false, ?none) AS ?unchecked)
+}""" .
+
+# The built-in conversions: between text types, to and from code and math, into and out of lists, between list kinds.
+blk:ParagraphToHeading1 a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:Heading1 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToHeading2 a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:Heading2 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToHeading3 a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:Heading3 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToQuote a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:Quote ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToCallout a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:Callout ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToToggle a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:Toggle ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToCode a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:Code ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToMath a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:Math ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToBulletedList a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:BulletedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToNumberedList a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:NumberedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ParagraphToTodoList a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to blk:TodoList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToParagraph a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:Paragraph ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToHeading2 a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:Heading2 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToHeading3 a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:Heading3 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToQuote a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:Quote ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToCallout a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:Callout ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToToggle a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:Toggle ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToCode a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:Code ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToMath a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:Math ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToBulletedList a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:BulletedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToNumberedList a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:NumberedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading1ToTodoList a blk:Conversion ; beh:sourceClass blk:Heading1 ; blk:to blk:TodoList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToParagraph a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:Paragraph ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToHeading1 a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:Heading1 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToHeading3 a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:Heading3 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToQuote a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:Quote ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToCallout a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:Callout ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToToggle a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:Toggle ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToCode a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:Code ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToMath a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:Math ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToBulletedList a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:BulletedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToNumberedList a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:NumberedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading2ToTodoList a blk:Conversion ; beh:sourceClass blk:Heading2 ; blk:to blk:TodoList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToParagraph a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:Paragraph ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToHeading1 a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:Heading1 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToHeading2 a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:Heading2 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToQuote a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:Quote ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToCallout a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:Callout ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToToggle a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:Toggle ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToCode a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:Code ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToMath a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:Math ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToBulletedList a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:BulletedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToNumberedList a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:NumberedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:Heading3ToTodoList a blk:Conversion ; beh:sourceClass blk:Heading3 ; blk:to blk:TodoList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToParagraph a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:Paragraph ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToHeading1 a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:Heading1 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToHeading2 a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:Heading2 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToHeading3 a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:Heading3 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToCallout a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:Callout ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToToggle a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:Toggle ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToCode a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:Code ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToMath a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:Math ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToBulletedList a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:BulletedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToNumberedList a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:NumberedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:QuoteToTodoList a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to blk:TodoList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToParagraph a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:Paragraph ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToHeading1 a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:Heading1 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToHeading2 a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:Heading2 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToHeading3 a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:Heading3 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToQuote a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:Quote ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToToggle a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:Toggle ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToCode a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:Code ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToMath a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:Math ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToBulletedList a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:BulletedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToNumberedList a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:NumberedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CalloutToTodoList a blk:Conversion ; beh:sourceClass blk:Callout ; blk:to blk:TodoList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToParagraph a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:Paragraph ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToHeading1 a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:Heading1 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToHeading2 a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:Heading2 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToHeading3 a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:Heading3 ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToQuote a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:Quote ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToCallout a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:Callout ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToCode a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:Code ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToMath a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:Math ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToBulletedList a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:BulletedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToNumberedList a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:NumberedList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ToggleToTodoList a blk:Conversion ; beh:sourceClass blk:Toggle ; blk:to blk:TodoList ; beh:like blk:Wrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CodeToParagraph a blk:Conversion ; beh:sourceClass blk:Code ; blk:to blk:Paragraph ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:CodeToMath a blk:Conversion ; beh:sourceClass blk:Code ; blk:to blk:Math ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:MathToParagraph a blk:Conversion ; beh:sourceClass blk:Math ; blk:to blk:Paragraph ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:MathToCode a blk:Conversion ; beh:sourceClass blk:Math ; blk:to blk:Code ; beh:like blk:Retype ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ListItemToParagraph a blk:Conversion ; beh:sourceClass blk:ListItem ; blk:to blk:Paragraph ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ListItemToHeading1 a blk:Conversion ; beh:sourceClass blk:ListItem ; blk:to blk:Heading1 ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ListItemToHeading2 a blk:Conversion ; beh:sourceClass blk:ListItem ; blk:to blk:Heading2 ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ListItemToHeading3 a blk:Conversion ; beh:sourceClass blk:ListItem ; blk:to blk:Heading3 ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ListItemToQuote a blk:Conversion ; beh:sourceClass blk:ListItem ; blk:to blk:Quote ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ListItemToCallout a blk:Conversion ; beh:sourceClass blk:ListItem ; blk:to blk:Callout ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ListItemToToggle a blk:Conversion ; beh:sourceClass blk:ListItem ; blk:to blk:Toggle ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoItemToParagraph a blk:Conversion ; beh:sourceClass blk:TodoItem ; blk:to blk:Paragraph ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoItemToHeading1 a blk:Conversion ; beh:sourceClass blk:TodoItem ; blk:to blk:Heading1 ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoItemToHeading2 a blk:Conversion ; beh:sourceClass blk:TodoItem ; blk:to blk:Heading2 ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoItemToHeading3 a blk:Conversion ; beh:sourceClass blk:TodoItem ; blk:to blk:Heading3 ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoItemToQuote a blk:Conversion ; beh:sourceClass blk:TodoItem ; blk:to blk:Quote ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoItemToCallout a blk:Conversion ; beh:sourceClass blk:TodoItem ; blk:to blk:Callout ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoItemToToggle a blk:Conversion ; beh:sourceClass blk:TodoItem ; blk:to blk:Toggle ; beh:like blk:Unwrap ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:BulletedListToNumberedList a blk:Conversion ; beh:sourceClass blk:BulletedList ; blk:to blk:NumberedList ; beh:like blk:Relist ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:BulletedListToTodoList a blk:Conversion ; beh:sourceClass blk:BulletedList ; blk:to blk:TodoList ; beh:like blk:Relist ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:NumberedListToBulletedList a blk:Conversion ; beh:sourceClass blk:NumberedList ; blk:to blk:BulletedList ; beh:like blk:Relist ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:NumberedListToTodoList a blk:Conversion ; beh:sourceClass blk:NumberedList ; blk:to blk:TodoList ; beh:like blk:Relist ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoListToBulletedList a blk:Conversion ; beh:sourceClass blk:TodoList ; blk:to blk:BulletedList ; beh:like blk:Relist ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoListToNumberedList a blk:Conversion ; beh:sourceClass blk:TodoList ; blk:to blk:NumberedList ; beh:like blk:Relist ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:ListItemToTodoList a blk:Conversion ; beh:sourceClass blk:ListItem ; blk:to blk:TodoList ; beh:like blk:Relist ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoItemToBulletedList a blk:Conversion ; beh:sourceClass blk:TodoItem ; blk:to blk:BulletedList ; beh:like blk:Relist ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+blk:TodoItemToNumberedList a blk:Conversion ; beh:sourceClass blk:TodoItem ; blk:to blk:NumberedList ; beh:like blk:Relist ; ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+
+# --- a block's handle and its menu --------------------------------------------------------------------------
+# A click on a block's handle, or Enter on it, opens its menu (c:handleMenuBlock), or closes it; Escape closes it
+# and the focus goes back to the handle (c:handleMenuReturn); the caret moving closes it. Its items turn the block
+# into another type (raising the conversion), duplicate it (also Mod+D, on the caret's block) or delete it.
+
+c:BlockHandleKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "enter" ;
+    rdfs:comment "Enter on a block's handle: opens its menu."@en .
+c:BlockHandleMenuKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "escape" ;
+    rdfs:comment "Escape while a block's handle menu is open: closes it."@en .
+c:BlockDuplicateKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "mod+d" ;
+    rdfs:comment "Mod+D in a block editor: duplicates the caret's block."@en .
+
+c:OpenHandleMenu a beh:Reaction ;
+    rdfs:label "Open a block's menu"@en ;
+    rdfs:comment """A click on a block's handle, or Enter on it: its menu opens (or, open, closes, the focus staying on the handle)."""@en ;
+    beh:when beh:Click , c:BlockHandleKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:handleMenuBlock ?open ; c:handleMenuReturn ?ret . $this c:menuBlock ?sb ; c:menuFrom ?sf ; c:activeOption ?sa . }
+WHERE {
+  $event beh:node ?hit . ?hroot rdfhtml:hasChild* ?hit . ?hroot sem:renders ?handle . ?handle a blk:BlockHandle ; dnd:carries ?b .
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER(EXISTS { $event a beh:Click } || EXISTS { $event a c:BlockHandleKey })
+  OPTIONAL { $this c:handleMenuBlock ?open } OPTIONAL { $this c:handleMenuReturn ?ret }
+  OPTIONAL { $this c:menuBlock ?sb } OPTIONAL { $this c:menuFrom ?sf } OPTIONAL { $this c:activeOption ?sa }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:handleMenuBlock ?opening ; c:handleMenuReturn ?closing . }
+WHERE {
+  $event beh:node ?hit . ?hroot rdfhtml:hasChild* ?hit . ?hroot sem:renders ?handle . ?handle a blk:BlockHandle ; dnd:carries ?b .
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER(EXISTS { $event a beh:Click } || EXISTS { $event a c:BlockHandleKey })
+  OPTIONAL { $this c:handleMenuBlock ?open }
+  BIND(IF(BOUND(?open) && ?open = ?b, ?none, ?b) AS ?opening)
+  BIND(IF(BOUND(?open) && ?open = ?b, ?b, ?none) AS ?closing)
+}""" .
+
+c:CloseHandleMenu a beh:Reaction ;
+    rdfs:label "Close a block's menu"@en ;
+    rdfs:comment """Escape closes an open handle menu, the focus going back to its handle; the caret moving closes it too (and the
+handle no longer takes the focus back)."""@en ;
+    beh:when c:BlockHandleMenuKey , c:BlockSelect ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:handleMenuBlock ?open ; c:handleMenuReturn ?ret . }
+WHERE { { $this c:handleMenuBlock ?anyOpen } UNION { $this c:handleMenuReturn ?anyReturn } OPTIONAL { $this c:handleMenuBlock ?open } OPTIONAL { $this c:handleMenuReturn ?ret } }""" ;
+    beh:inserts """CONSTRUCT { $this c:handleMenuReturn ?open . }
+WHERE { $event a c:BlockHandleMenuKey . $this c:handleMenuBlock ?open . }""" .
+
+c:HandleMenuConvert a beh:Reaction ;
+    rdfs:label "Turn a block into another type"@en ;
+    rdfs:comment """An item of a handle's menu that turns the block into another type: the conversion is raised on the block, the menu
+closes and the focus goes back to the handle."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:handleMenuBlock ?open ; c:handleMenuReturn ?ret . }
+WHERE { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit .
+  $this c:editable true ; c:handleMenuBlock ?b . ?btn c:converts ?conv . OPTIONAL { $this c:handleMenuBlock ?open } OPTIONAL { $this c:handleMenuReturn ?ret } }""" ;
+    beh:inserts """CONSTRUCT { ?b beh:raise ?conv . $this c:handleMenuReturn ?b . }
+WHERE { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit .
+  $this c:editable true ; c:handleMenuBlock ?b . ?btn c:converts ?conv . }""" .
+
+c:DuplicateBlock a beh:Reaction ;
+    rdfs:label "Duplicate a block"@en ;
+    rdfs:comment """Duplicate, from a block's handle menu, or Mod+D on the caret's block: a copy of the block and of what it holds (and
+their marks), every node minted from its original and the event, right after it."""@en ;
+    beh:when beh:Click , c:BlockDuplicateKey ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Block duplicated"@en , "Блок продубльовано"@uk , "Block dupliziert"@de , "تم تكرار الكتلة"@ar ;
+    beh:deletes """CONSTRUCT { ?b co:nextItem ?next . $this c:handleMenuBlock ?open ; c:handleMenuReturn ?ret . }
+WHERE {
+  { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
+  UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER(?action = "duplicate")
+  OPTIONAL { ?b co:nextItem ?next }
+  OPTIONAL { $this c:handleMenuBlock ?open } OPTIONAL { $this c:handleMenuReturn ?ret }
+}""" ;
+    beh:inserts """CONSTRUCT { ?copy ?p ?copied . ?parent po:contains ?rootCopy . ?b co:nextItem ?rootCopy . ?rootCopy co:nextItem ?next . $this c:handleMenuReturn ?returnTo . }
+WHERE {
+  { { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
+  UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER(?action = "duplicate")
+    ?b po:contains* ?n . ?n ?p ?o . FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
+  UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER(?action = "duplicate")
+    ?b po:contains* ?holder . ?holder blk:mark ?n . ?n ?p ?o . FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+    BIND(STRAFTER(STR($event), "event:") AS ?ev)
+    FILTER(?n != ?b || ?p != co:nextItem)
+    BIND(IRI(CONCAT(STR(?n), "-", ?ev)) AS ?copy)
+    BIND(IF(isIRI(?o) && (EXISTS { ?b po:contains* ?o } || EXISTS { ?b po:contains*/blk:mark ?o }), IRI(CONCAT(STR(?o), "-", ?ev)), ?o) AS ?copied) }
+  UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
+  UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER(?action = "duplicate")
+    BIND(STRAFTER(STR($event), "event:") AS ?ev2)
+    ?parent po:contains ?b . OPTIONAL { ?b co:nextItem ?next }
+    BIND(IRI(CONCAT(STR(?b), "-", ?ev2)) AS ?rootCopy)
+    BIND(IF(EXISTS { $event a beh:Click }, ?b, ?none) AS ?returnTo) }
+}""" .
+
+c:DeleteBlock a beh:Reaction ;
+    rdfs:label "Delete a block"@en ;
+    rdfs:comment """Delete, from a block's handle menu: the block and what it holds (and their marks) go, its neighbours join; the
+caret, when it was in it, goes to the block after it (else before it). The document's only block leaves an empty
+paragraph."""@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Block deleted"@en , "Блок видалено"@uk , "Block gelöscht"@de , "تم حذف الكتلة"@ar ;
+    beh:deletes """CONSTRUCT { ?n ?p ?o . ?parent po:contains ?b . ?prev co:nextItem ?b . $this c:handleMenuBlock ?open ; c:handleMenuReturn ?ret . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  { { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
+  UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER(?action = "delete")
+    ?b po:contains* ?n . ?n ?p ?o . FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
+  UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
+  UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER(?action = "delete")
+    ?b po:contains* ?holder . ?holder blk:mark ?n . ?n ?p ?o . FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) } }
+  UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
+  UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER(?action = "delete") ?parent po:contains ?b . OPTIONAL { ?prev co:nextItem ?b } OPTIONAL { $this c:handleMenuBlock ?open } OPTIONAL { $this c:handleMenuReturn ?ret } }
+  UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
+  UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER(?action = "delete") $this c:focusBlock ?inside . ?b po:contains* ?inside . OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm } }
+}""" ;
+    beh:inserts """CONSTRUCT { ?prev co:nextItem ?next . ?parent po:contains ?fresh . ?fresh a blk:Paragraph ; rdf:value "" . $this c:anchorBlock ?caretBlock ; c:anchorOffset ?caretAt ; c:focusBlock ?caretBlock ; c:focusOffset ?caretAt . }
+WHERE {
+  { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
+  UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
+  $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
+  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER(?action = "delete")
+  ?parent po:contains ?b .
+  OPTIONAL { ?prev co:nextItem ?b } OPTIONAL { ?b co:nextItem ?next }
+  # The document's only block: an empty paragraph takes its place.
+  BIND(IF(!BOUND(?prev) && !BOUND(?next) && ?parent = ?doc, IRI(CONCAT(STR(?doc), "/~b-", STRAFTER(STR($event), "event:"))), ?none) AS ?fresh)
+  # The caret was in it: it goes to the start of the block after it, else before it.
+  BIND(EXISTS { $this c:focusBlock ?inside . ?b po:contains* ?inside } AS ?moves)
+  BIND(IF(?moves, COALESCE(?fresh, ?next, ?prev), ?none) AS ?caretBlock)
+  BIND(IF(?moves, 0, ?none) AS ?caretAt)
+}""" .

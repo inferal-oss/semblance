@@ -11,6 +11,7 @@ const CHART_JS = CDN + 'chart.js@4.4.7/+esm'
 const LEAFLET = CDN + 'leaflet@1.9.4/+esm'
 const LEAFLET_CSS = CDN + 'leaflet@1.9.4/dist/leaflet.css'
 const FLATPICKR = CDN + 'flatpickr@4.6.13/+esm'
+const TEMML = CDN + 'temml@0.13.5/+esm'
 const FLATPICKR_CSS = CDN + 'flatpickr@4.6.13/dist/flatpickr.min.css'
 const FLATPICKR_LOCALES: Record<string, [string, string]> = {
   uk: [CDN + 'flatpickr@4.6.13/dist/l10n/uk.js/+esm', 'Ukrainian'],
@@ -437,4 +438,29 @@ function flatpickrWidget(make: (input: HTMLInputElement, options: object) => any
       }
     },
   }
+}
+
+// --- Temml -------------------------------------------------------------------------------------------
+
+/**
+ * Temml as a widget: TeX (`tex`) typeset as MathML, which the browser draws. A block editor's formulas
+ * (blk:Typeset) are typeset with it; what Temml cannot read is shown as its error, in place.
+ */
+export const tex: { load(): Promise<Widget> } = {
+  async load() {
+    const m = (await load(TEMML)) as { default?: { renderToString(tex: string, options: object): string }; renderToString?(tex: string, options: object): string }
+    const temml = (m.default ?? m) as { renderToString(tex: string, options: object): string }
+    return {
+      mount(element, inputs) {
+        const draw = (source: unknown) => {
+          element.innerHTML = temml.renderToString(String(source ?? ''), { displayMode: true, throwOnError: false })
+        }
+        draw(inputs.tex)
+        return {
+          update: (changed) => ('tex' in changed ? draw(changed.tex) : undefined),
+          destroy: () => void (element.textContent = ''),
+        }
+      },
+    }
+  },
 }

@@ -540,13 +540,15 @@ export class Files {
 
   /** The zone of a target that takes files (a file:Receiver: one with a reaction to file:Arrive) an event is over. */
   private zoneOf(renderer: DomRenderer, at: EventTarget | null): Zone | undefined {
-    const el = (at as Element | null)?.closest?.('[data-sem-drop-zone]')
-    if (!el || !renderer.host.contains(el) || el.closest('[hidden], [inert]')) return undefined
-    const key = renderer.keyOf(el)
-    if (!key) return undefined
-    const drop = zoneTarget(this.bus.runtime.store, this.bus.projection.engine.graph, key)
-    if (!this.bus.reactionsFor(FILE.Arrive, drop).length) return undefined
-    return { drop, receptacle: el.getAttribute('data-sem-drop-zone')! }
+    // The nearest zone that takes files (a zone that only takes dragged blocks is passed over).
+    for (let el = (at as Element | null)?.closest?.('[data-sem-drop-zone]'); el; el = el.parentElement?.closest('[data-sem-drop-zone]')) {
+      if (!renderer.host.contains(el) || el.closest('[hidden], [inert]')) return undefined
+      const key = renderer.keyOf(el)
+      if (!key) continue
+      const drop = zoneTarget(this.bus.runtime.store, this.bus.projection.engine.graph, key)
+      if (this.bus.reactionsFor(FILE.Arrive, drop).length) return { drop, receptacle: el.getAttribute('data-sem-drop-zone')! }
+    }
+    return undefined
   }
 
   /** Whether a zone refuses the drag in progress, and why (its reception). */
@@ -618,15 +620,26 @@ export class Files {
       end()
       this.receive(zone.drop, files, zone.receptacle)
     }
+    // Files pasted where a target takes them arrive as if dropped there (its refusals still apply).
+    const paste = (e: Event) => {
+      const files = [...((e as ClipboardEvent).clipboardData?.files ?? [])]
+      if (!files.length) return
+      const zone = this.zoneOf(renderer, e.target)
+      if (!zone) return
+      e.preventDefault()
+      this.receive(zone.drop, files, zone.receptacle)
+    }
     doc.addEventListener('dragenter', enter)
     doc.addEventListener('dragover', over)
     doc.addEventListener('dragleave', leave)
     doc.addEventListener('drop', drop)
+    doc.addEventListener('paste', paste)
     return () => {
       doc.removeEventListener('dragenter', enter)
       doc.removeEventListener('dragover', over)
       doc.removeEventListener('dragleave', leave)
       doc.removeEventListener('drop', drop)
+      doc.removeEventListener('paste', paste)
       end()
     }
   }

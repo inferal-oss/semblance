@@ -94,9 +94,24 @@ export class DragHost {
     return key && this.renderer.index.focusOf(key)
   }
 
+  /** Which zones take drops (their target reacts to dnd:Drop), by zone: found when a drag starts, so a move reads nothing. */
+  private takes = new Map<string, boolean>()
+
+  private takesDrops(zone: HTMLElement): boolean {
+    const key = this.renderer.keyOf(zone)
+    if (!key) return false
+    let takes = this.takes.get(key)
+    if (takes === undefined) this.takes.set(key, (takes = this.bus.reactionsFor(DND.Drop, zoneTarget(this.bus.runtime.store, this.bus.projection.engine.graph, key)).length > 0))
+    return takes
+  }
+
+  /** The zone an element is in that takes drops (a zone that only takes files is passed over). */
   private zoneOf(el: Element | null): HTMLElement | undefined {
-    const zone = el?.closest?.('[data-sem-drop-zone]') as HTMLElement | null
-    return zone && this.renderer.host.contains(zone) && !zone.closest('[hidden], [inert]') ? zone : undefined
+    for (let zone = el?.closest?.('[data-sem-drop-zone]') as HTMLElement | null; zone; zone = zone.parentElement?.closest('[data-sem-drop-zone]') as HTMLElement | null) {
+      if (!this.renderer.host.contains(zone) || zone.closest('[hidden], [inert]')) return undefined
+      if (this.takesDrops(zone)) return zone
+    }
+    return undefined
   }
 
   /** The draggables placed in a zone (not in a zone nested in it), but the one held. */
@@ -147,6 +162,8 @@ export class DragHost {
 
   /** Pick up a draggable element (an RDF dnd:Start); returns the session or nothing. */
   private lift(el: HTMLElement, mode: Session['mode'], copy: boolean, end: () => void): Session | undefined {
+    this.takes.clear()
+    for (const zone of this.renderer.host.querySelectorAll('[data-sem-drop-zone]')) this.takesDrops(zone as HTMLElement)
     const draggable = this.draggableOf(el)
     const carried = el.getAttribute('data-sem-drag')
     if (!draggable || !carried) return undefined
@@ -380,9 +397,9 @@ export class DragHost {
     return best
   }
 
-  /** The zones shown, in document order. */
+  /** The zones shown that take drops, in document order. */
   private zones(): HTMLElement[] {
-    return ([...this.renderer.host.querySelectorAll('[data-sem-drop-zone]')] as HTMLElement[]).filter((z) => !z.closest('[hidden], [inert]'))
+    return ([...this.renderer.host.querySelectorAll('[data-sem-drop-zone]')] as HTMLElement[]).filter((z) => this.zoneOf(z) === z)
   }
 
   dispose() {

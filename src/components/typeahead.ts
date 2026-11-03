@@ -4,7 +4,7 @@
 // character, sx:chars).
 import type { Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { C, L10N, NS, RDF_TYPE, RDFS_RANGE, XSD_BOOLEAN } from '../ns.ts'
+import { C, H, L10N, NS, ORD, RDF_TYPE, RDFS_RANGE, XSD_BOOLEAN } from '../ns.ts'
 import { aria, shortcutLabels } from '../layers/keyboard.ts'
 import { compact } from './reference.ts'
 import { isTrue, labelOf, RDFS_LABEL, rdfList, str, text, encodeForUri } from './util.ts'
@@ -210,4 +210,14 @@ const option: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const typeaheadFunctions: Record<string, FnRule> = { 'typeahead:texts': texts, 'typeahead:values': values, 'typeahead:query': query, 'typeahead:option': option }
+/** An option's icon (c:icon), before its label, hidden from screen readers. */
+const optionIcon: FnRule = (ctx, focus) => {
+  const glyph = str(ctx.object(focus, C.icon))
+  if (glyph === undefined || !ctx.match(focus, RDF_TYPE, c('TypeaheadOption')).length) return []
+  const o = ctx.out(focus)
+  const icon = o.el('icon', 'Span', { class: 'sem-ta-icon', 'aria-hidden': 'true' }, [o.text('icon-text', glyph)])
+  o.t(o.node('root'), H.hasChild, icon).t(icon, ORD.immediatelyPrecedes, o.node('text'))
+  return o.quads
+}
+
+export const typeaheadFunctions: Record<string, FnRule> = { 'typeahead:texts': texts, 'typeahead:values': values, 'typeahead:query': query, 'typeahead:option': option, 'typeahead:option-icon': optionIcon }

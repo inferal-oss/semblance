@@ -140,6 +140,35 @@ export class DomRenderer {
     return { nodes, mismatches }
   }
 
+  /**
+   * Make a subtree the browser changed itself (composition in an editable region: src/behaviour/text.ts)
+   * what the index says again: every text node's data, every element's children, nodes the browser
+   * added removed and nodes it removed put back.
+   */
+  resync(el: Node): void {
+    const top = this.keys.get(el)
+    if (top === undefined) return
+    this.pendingPrune.clear()
+    const walk = (k: string) => {
+      const dom = this.els.get(k)
+      const n = this.index.nodes.get(k)
+      if (!dom || !n) return
+      if (n.cls === 'Text') {
+        const data = n.data ?? ''
+        if ((dom as Text).data !== data) ((dom as Text).data = data), this.ops++
+        return
+      }
+      if (dom.nodeType !== 1 || this.index.isVoid(k) || n.slot !== undefined) return
+      this.reconcile(dom, this.desired(k), true)
+      for (const slot of this.index.childrenOf(k)) {
+        const r = this.index.resolve(slot)
+        if (r) walk(r)
+      }
+    }
+    walk(top)
+    this.prune([])
+  }
+
   /** Call `listener` after every patch (host effects that act on what was rendered: islands). */
   onPatched(listener: () => void): () => void {
     this.patched.add(listener)
@@ -343,10 +372,14 @@ export class DomRenderer {
 /**
  * Insert `n` before `anchor`: with moveBefore where both are connected, which keeps an iframe's
  * document, the focus and running animations; else (older browsers, detached trees) insertBefore.
+ * An ordered list's item is inserted, not moved: Chrome counts an item moveBefore moves again
+ * without uncounting it, so two items swapped twice read "5. 6.", until the list is laid out anew
+ * (the patch gives a moved node its focus back).
  */
 function move(parent: Node, n: Node, anchor: Node | null) {
   const p = parent as Node & { moveBefore?: (node: Node, child: Node | null) => void }
-  if (p.moveBefore && parent.isConnected && n.isConnected) {
+  const numbered = n.nodeName === 'LI' && (parent.nodeName === 'OL' || n.parentNode?.nodeName === 'OL')
+  if (p.moveBefore && parent.isConnected && n.isConnected && !numbered) {
     try {
       return p.moveBefore(n, anchor)
     } catch {

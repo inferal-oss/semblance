@@ -1,0 +1,224 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix file: <https://semblance.dev/ns/file#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix blk: <https://semblance.dev/ns/block#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix po: <http://www.essepuntato.it/2008/12/pattern#> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix co: <http://purl.org/co/> .
+@prefix schema: <https://schema.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix doco: <http://purl.org/spar/doco/> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# Gallery page: Documents (c:DocumentsGroup). A document is a tree of blocks in DoCo and the Pattern
+# Ontology (docs/BLOCKS.md): containers hold blocks (po:contains), siblings are a chain
+# (co:nextItem), a text block's text is its rdf:value with standoff marks.
+
+ui:gallery-documents a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:gallery-documents-intro ui:gallery-documents-lede ui:doc-rdf ui:doc-text ui:doc-structure ui:doc-media ui:doc-custom ) .
+ui:gallery-documents-intro a c:Heading ; c:label "Documents" .
+ui:gallery-documents-lede a c:Text ;
+    c:label "Documents of blocks: every block a DoCo or Pattern Ontology class that is also a component, its text and marks graph state, rendered as plain semantic HTML and, in the Text modality, as Markdown." .
+
+# --- text and marks ---------------------------------------------------------------------------------
+
+ui:doc-text a c:Flippable ; c:front ui:doc-text-spec .
+ui:doc-text-spec a c:Specimen ; c:label "Text, headings and marks" ;
+    c:demonstrates c:BlockEditor , blk:Document , blk:Paragraph , blk:Heading1 , blk:Heading2 , blk:Quote , blk:Callout , blk:Strong , blk:Emphasis , blk:InlineCode , blk:Strike , blk:Link , blk:Mention , blk:Contents ;
+    c:help "A block editor (c:of a blk:Document). Marks are ranges of a block's text (oa:start, oa:end) that may overlap: the text is split into runs at their boundaries." ;
+    c:children ( ui:doc-text-actions ui:doc-text-sides ) .
+ui:doc-text-editor a c:BlockEditor ; c:label "About blocks"@en , "Про блоки"@uk , "Über Blöcke"@de , "عن الكتل"@ar ; c:of ui:doc-text-doc ; file:keepIn blk:Uploads ;
+    c:editable true ; c:undoer ui:doc-text-undo ; c:redoer ui:doc-text-redo .
+ui:doc-text-actions a c:Toolbar ; c:label "History"@en , "Історія"@uk , "Verlauf"@de , "السجل"@ar ; c:children ( ui:doc-text-undo ui:doc-text-redo ) .
+ui:doc-text-undo a c:Button , beh:Undoer ; c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar ; sty:size sty:Small .
+ui:doc-text-redo a c:Button , beh:Redoer ; c:label "Redo"@en , "Повторити"@uk , "Wiederholen"@de , "إعادة"@ar ; sty:size sty:Small .
+ui:doc-text-doc a blk:Document ; schema:name "About blocks" ;
+    po:contains ui:dt-h , ui:dt-toc , ui:dt-p1 , ui:dt-h2 , ui:dt-p2 , ui:dt-quote , ui:dt-callout .
+ui:dt-h a blk:Heading1 ; rdf:value "A document is a graph" ; co:nextItem ui:dt-toc .
+ui:dt-toc a blk:Contents ; co:nextItem ui:dt-p1 .
+ui:dt-p1 a blk:Paragraph ; co:nextItem ui:dt-h2 ;
+    rdf:value "Every block is a resource, its text is a literal and its marks are ranges: bold, italic, code, struck out, a link, or a mention of Ada." ;
+    blk:mark ui:dt-p1-b , ui:dt-p1-i , ui:dt-p1-c , ui:dt-p1-s , ui:dt-p1-l , ui:dt-p1-m .
+ui:dt-p1-b a blk:Strong ; oa:start 75 ; oa:end 79 .
+ui:dt-p1-i a blk:Emphasis ; oa:start 81 ; oa:end 87 .
+ui:dt-p1-c a blk:InlineCode ; oa:start 89 ; oa:end 93 .
+ui:dt-p1-s a blk:Strike ; oa:start 95 ; oa:end 105 .
+ui:dt-p1-l a blk:Link ; oa:start 109 ; oa:end 113 ; schema:url "https://www.w3.org/TR/annotation-vocab/" .
+ui:dt-p1-m a blk:Mention ; oa:start 131 ; oa:end 134 ; oa:hasBody <https://semblance.dev/demo#ada> .
+ui:dt-h2 a blk:Heading2 ; rdf:value "In DoCo" ; co:nextItem ui:dt-p2 .
+ui:dt-p2 a blk:Paragraph ; co:nextItem ui:dt-quote ;
+    rdf:value "A paragraph is a doco:Paragraph, a heading a doco:SectionTitle, a quote a doco:BlockQuotation." ;
+    blk:mark ui:dt-p2-c1 , ui:dt-p2-c2 , ui:dt-p2-c3 .
+ui:dt-p2-c1 a blk:InlineCode ; oa:start 17 ; oa:end 31 .
+ui:dt-p2-c2 a blk:InlineCode ; oa:start 45 ; oa:end 62 .
+ui:dt-p2-c3 a blk:InlineCode ; oa:start 74 ; oa:end 93 .
+ui:dt-quote a blk:Quote ; rdf:value "Simple things should be simple, complex things should be possible." ; co:nextItem ui:dt-callout .
+ui:dt-callout a blk:Callout ; c:icon "💡" ; sty:tone sty:Info ; rdf:value "Turn this card over to see the rules that render it." .
+
+# --- lists, toggles, tables, columns ---------------------------------------------------------------
+
+ui:doc-structure a c:Flippable ; c:front ui:doc-structure-spec .
+ui:doc-structure-spec a c:Specimen ; c:label "Lists, toggles, tables and columns" ;
+    c:demonstrates blk:BulletedList , blk:NumberedList , blk:TodoList , blk:ListItem , blk:TodoItem , blk:Toggle , blk:Table , blk:Row , blk:Cell , blk:Columns , blk:Column , blk:Divider ;
+    c:help "Containers hold blocks (po:contains) in a chain (co:nextItem): a list its items, an item its nested list, a toggle what it hides, a table its rows, columns their blocks." ;
+    c:children ( ui:doc-structure-sides ) .
+ui:doc-structure-editor a c:BlockEditor ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo ; c:label "Plan"@en , "План"@uk , "Plan"@de , "خطة"@ar ; c:of ui:doc-structure-doc ; file:keepIn blk:Uploads ; c:editable true .
+ui:doc-structure-doc a blk:Document ;
+    po:contains ui:ds-bullets , ui:ds-numbers , ui:ds-todos , ui:ds-toggle , ui:ds-hr , ui:ds-table , ui:ds-columns .
+ui:ds-bullets a blk:BulletedList ; po:contains ui:ds-b1 , ui:ds-b2 ; co:nextItem ui:ds-numbers .
+ui:ds-b1 a blk:ListItem ; rdf:value "The model" ; co:nextItem ui:ds-b2 ; po:contains ui:ds-b1-list .
+ui:ds-b1-list a blk:BulletedList ; po:contains ui:ds-b1a , ui:ds-b1b .
+ui:ds-b1a a blk:ListItem ; rdf:value "Blocks and their chain" ; co:nextItem ui:ds-b1b .
+ui:ds-b1b a blk:ListItem ; rdf:value "Text and marks" .
+ui:ds-b2 a blk:ListItem ; rdf:value "The renderings" .
+ui:ds-numbers a blk:NumberedList ; po:contains ui:ds-n1 , ui:ds-n2 , ui:ds-n3 ; co:nextItem ui:ds-todos .
+ui:ds-n1 a blk:ListItem ; rdf:value "Read the document" ; co:nextItem ui:ds-n2 .
+ui:ds-n2 a blk:ListItem ; rdf:value "Edit it in place" ; co:nextItem ui:ds-n3 .
+ui:ds-n3 a blk:ListItem ; rdf:value "Add a block type of your own" .
+ui:ds-todos a blk:TodoList ; po:contains ui:ds-t1 , ui:ds-t2 ; co:nextItem ui:ds-toggle .
+ui:ds-t1 a blk:TodoItem ; rdf:value "Render every primitive" ; blk:checked true ; co:nextItem ui:ds-t2 .
+ui:ds-t2 a blk:TodoItem ; rdf:value "Edit within and across blocks" ; blk:checked false .
+ui:ds-toggle a blk:Toggle ; rdf:value "Why a chain?" ; po:contains ui:ds-toggle-p ; co:nextItem ui:ds-hr .
+ui:ds-toggle-p a blk:Paragraph ; rdf:value "Inserting, removing and moving a block changes the links around it, not every block after it." .
+ui:ds-hr a blk:Divider ; co:nextItem ui:ds-table .
+ui:ds-table a blk:Table ; po:contains ui:ds-r1 , ui:ds-r2 , ui:ds-r3 ; co:nextItem ui:ds-columns .
+ui:ds-r1 a blk:Row ; blk:header true ; po:contains ui:ds-r1a , ui:ds-r1b ; co:nextItem ui:ds-r2 .
+ui:ds-r1a a blk:Cell ; rdf:value "Block" ; co:nextItem ui:ds-r1b .
+ui:ds-r1b a blk:Cell ; rdf:value "Its class" .
+ui:ds-r2 a blk:Row ; po:contains ui:ds-r2a , ui:ds-r2b ; co:nextItem ui:ds-r3 .
+ui:ds-r2a a blk:Cell ; rdf:value "List" ; co:nextItem ui:ds-r2b .
+ui:ds-r2b a blk:Cell ; rdf:value "doco:List" .
+ui:ds-r3 a blk:Row ; po:contains ui:ds-r3a , ui:ds-r3b .
+ui:ds-r3a a blk:Cell ; rdf:value "Toggle" ; co:nextItem ui:ds-r3b .
+ui:ds-r3b a blk:Cell ; rdf:value "po:HeadedContainer" .
+ui:ds-columns a blk:Columns ; po:contains ui:ds-left , ui:ds-right .
+ui:ds-left a blk:Column ; po:contains ui:ds-left-p ; co:nextItem ui:ds-right .
+ui:ds-left-p a blk:Paragraph ; rdf:value "Columns sit side by side, and one under the other on a phone." .
+ui:ds-right a blk:Column ; po:contains ui:ds-right-p .
+ui:ds-right-p a blk:Paragraph ; rdf:value "Each column is a container of blocks like any other." .
+
+# --- code, math, media and links ---------------------------------------------------------------------
+
+ui:doc-media a c:Flippable ; c:front ui:doc-media-spec .
+ui:doc-media-spec a c:Specimen ; c:label "Code, math, media and links" ;
+    c:demonstrates blk:Code , blk:Math , blk:Image , blk:File , blk:Bookmark , blk:Embed , blk:DocumentLink ;
+    c:help "Atoms of a document: code as written, a formula in TeX, an image with its caption, a file, a bookmark of a page, an embedded page in a sandboxed frame, and a link to another document. Their details are schema.org." ;
+    c:children ( ui:doc-media-sides ) .
+ui:doc-media-editor a c:BlockEditor ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo ; c:label "Attachments"@en , "Вкладення"@uk , "Anhänge"@de , "مرفقات"@ar ; c:of ui:doc-media-doc ; file:keepIn blk:Uploads ; c:editable true .
+ui:doc-media-doc a blk:Document ;
+    po:contains ui:dm-code , ui:dm-math , ui:dm-image , ui:dm-file , ui:dm-bookmark , ui:dm-link .
+ui:dm-code a blk:Code ; schema:programmingLanguage "turtle" ; co:nextItem ui:dm-math ;
+    rdf:value """ex:p a blk:Paragraph ;
+    rdf:value "Hello" ;
+    blk:mark [ a blk:Strong ; oa:start 0 ; oa:end 5 ] .""" .
+ui:dm-math a blk:Math ; rdf:value "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}" ; co:nextItem ui:dm-image .
+ui:dm-image a blk:Image ; dnd:members blk:file ; file:keepIn blk:Uploads ; file:accept "image/*" ; schema:contentUrl "photos/harbour.jpg" ; schema:description "A harbour at dusk, boats moored along the quay" ; schema:caption "An image block: the picture (schema:contentUrl), its description and its caption." ; co:nextItem ui:dm-file .
+ui:dm-file a blk:File ; dnd:members blk:file ; file:keepIn blk:Uploads ; schema:contentUrl "/llms.txt" ; schema:name "llms.txt" ; schema:contentSize "4 KB" ; co:nextItem ui:dm-bookmark .
+ui:dm-bookmark a blk:Bookmark ; schema:url "http://purl.org/spar/doco" ; schema:name "DoCo, the Document Components Ontology" ;
+    schema:description "Structural and rhetorical components of documents: paragraphs, sections, lists, figures, tables." ; co:nextItem ui:dm-link .
+ui:dm-link a blk:DocumentLink ; blk:target ui:doc-text-doc .
+
+# --- a block type of the site's own ----------------------------------------------------------------
+# Turtle only: a class (a paragraph that is an aside, rendered by the shared rendering because it names
+# its element), how it looks, what it must say, its / entry and a Markdown shortcut of its own. It is in
+# the / menu of every editor on the site, and edits like a paragraph.
+
+ui:KeyPoint a owl:Class ; rdfs:subClassOf blk:Paragraph , doco:TextBox ; sem:slug "ui-key-point" ;
+    blk:element rdfhtml:Aside ; blk:prefix "! " ;
+    rdfs:label "Key point"@en , "Головне"@uk , "Kernpunkt"@de , "نقطة أساسية"@ar ;
+    rdfs:comment "A sentence to remember, set apart."@en ;
+    c:help "A sentence to remember, set apart."@en , "Речення, яке варто запам’ятати."@uk , "Ein Satz zum Merken, hervorgehoben."@de , "جملة تستحق التذكر، مميزة."@ar ;
+    c:icon "!" ; blk:keyword "highlight important remember" ; blk:menuOrder 30 .
+ui:KeyPointShortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^!$" ; blk:makes ui:KeyPoint .
+# Its conversions, one term per direction: to and from a paragraph and a quote. Those of a paragraph apply to it
+# already (it is one); one from it is preferred. Three take the built-in queries (beh:like blk:Retype), the last
+# has its own.
+ui:ParagraphToKeyPoint a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to ui:KeyPoint ; beh:like blk:Retype ;
+    ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+ui:KeyPointToParagraph a blk:Conversion ; beh:sourceClass ui:KeyPoint ; blk:to blk:Paragraph ; beh:like blk:Retype ;
+    ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+ui:KeyPointToQuote a blk:Conversion ; beh:sourceClass ui:KeyPoint ; blk:to blk:Quote ; beh:like blk:Retype ;
+    ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+ui:QuoteToKeyPoint a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to ui:KeyPoint ; beh:undoable true ;
+    rdfs:comment "A quote becomes a key point: its text and marks kept; the blocks it held follow it (a key point holds none)."@en ;
+    ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar ;
+    beh:deletes """CONSTRUCT { $this a ?old . $this po:contains ?child . $this co:nextItem ?next . }
+WHERE { { $this a ?old . ?old rdfs:subClassOf* blk:Block } UNION { $this po:contains ?child . OPTIONAL { $this co:nextItem ?next } } }""" ;
+    beh:inserts """CONSTRUCT { $this a ?to . ?parent po:contains ?child . $this co:nextItem ?first . ?last co:nextItem ?next . }
+WHERE {
+  { $event a ?conversion . ?conversion blk:to ?to }
+  UNION { ?parent po:contains $this . $this po:contains ?child }
+  UNION { $this po:contains ?first . FILTER NOT EXISTS { $this po:contains ?before . ?before co:nextItem ?first } }
+  UNION { $this po:contains ?last . FILTER NOT EXISTS { ?last co:nextItem ?after } $this co:nextItem ?next }
+}""" .
+ui:KeyPointShape a sh:NodeShape ; sh:targetClass ui:KeyPoint ;
+    sh:property [ sh:path rdf:value ; sh:maxLength 280 ; sh:message "A key point is one sentence (280 characters at most)." ] .
+[] a sty:StyleRule ; sty:appliesTo ui:KeyPoint ;
+    sty:declares [ sty:property "padding" ; sty:raw "var(--sem-space-2) var(--sem-space-3)" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "4px solid var(--sem-accent-9)" ] ,
+                 [ sty:property "background" ; sty:token tok:accent-3 ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "font-weight" ; sty:raw "550" ] .
+
+ui:doc-custom a c:Flippable ; c:front ui:doc-custom-spec .
+ui:doc-custom-spec a c:Specimen ; c:label "A block type of your own" ;
+    c:demonstrates blk:Block , blk:BlockShortcut , blk:Conversion ;
+    c:help "A site adds a block type in Turtle: a class (here a paragraph that is an aside: it names its element, so the shared rendering draws it), its style, its shape, its / entry, a Markdown shortcut (\"! \") and its conversions to and from a paragraph and a quote. Type / and find it, start a line with \"! \", or turn a block into one from its handle's menu." ;
+    c:children ( ui:doc-custom-sides ) .
+ui:doc-custom-editor a c:BlockEditor ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo ; c:label "Notes"@en , "Нотатки"@uk , "Notizen"@de , "ملاحظات"@ar ; c:of ui:doc-custom-doc ; file:keepIn blk:Uploads ; c:editable true .
+ui:doc-custom-doc a blk:Document ; po:contains ui:dc-p , ui:dc-key , ui:dc-empty .
+ui:dc-p a blk:Paragraph ; rdf:value "Blocks are classes, so a site's own is one more class." ; co:nextItem ui:dc-key .
+ui:dc-key a ui:KeyPoint ; rdf:value "No host code: the class, its look, its shape and its menu entry are all Turtle." ; co:nextItem ui:dc-empty .
+ui:dc-empty a blk:Paragraph ; rdf:value "" .
+
+# --- the document as RDF, both ways ----------------------------------------------------------------
+# One document in two editors: as blocks, and as the RDF it is (c:RdfEditor). They edit the same graph,
+# so an edit in either shows in the other at once, and one Undo takes back either's.
+
+ui:doc-rdf a c:Flippable ; c:front ui:doc-rdf-spec .
+ui:doc-rdf-spec a c:Specimen ; c:label "The document as RDF" ;
+    c:demonstrates c:BlockEditor , blk:Document , blk:Mark ;
+    c:help "The same document as blocks and as the RDF it is. Type in the blocks and the triples change; change a triple (Enter on a value in the RDF editor) and the block shows it. One Undo takes back either." ;
+    c:children ( ui:doc-rdf-actions ui:doc-rdf-sides ) .
+ui:doc-rdf-actions a c:Toolbar ; c:label "History"@en , "Історія"@uk , "Verlauf"@de , "السجل"@ar ; c:children ( ui:doc-rdf-undo ui:doc-rdf-redo ) .
+ui:doc-rdf-undo a c:Button , beh:Undoer ; c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar ; sty:size sty:Small .
+ui:doc-rdf-redo a c:Button , beh:Redoer ; c:label "Redo"@en , "Повторити"@uk , "Wiederholen"@de , "إعادة"@ar ; sty:size sty:Small .
+ui:doc-rdf-sides a c:Grid ; c:columns 2 ; c:minWidth "260px" ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-rdf-blocks ui:doc-rdf-triples ) .
+ui:doc-rdf-blocks a c:BlockEditor ; c:label "Recipe"@en , "Рецепт"@uk , "Rezept"@de , "وصفة"@ar ; c:of ui:dr-doc ; file:keepIn blk:Uploads ;
+    c:editable true ; c:undoer ui:doc-rdf-undo ; c:redoer ui:doc-rdf-redo .
+ui:doc-rdf-triples a c:RdfEditor ; c:label "Recipe as RDF"@en , "Рецепт як RDF"@uk , "Rezept als RDF"@de , "الوصفة بصيغة RDF"@ar ;
+    c:entry ui:dr-doc , ui:dr-title , ui:dr-intro , ui:dr-steps , ui:dr-s1 , ui:dr-s2 ; c:editable true .
+ui:dr-doc a blk:Document ; schema:name "Bread" ; po:contains ui:dr-title , ui:dr-intro , ui:dr-steps .
+ui:dr-title a blk:Heading2 ; rdf:value "Bread" ; co:nextItem ui:dr-intro .
+ui:dr-intro a blk:Paragraph ; rdf:value "Flour, water, salt and time." ; blk:mark ui:dr-intro-time ; co:nextItem ui:dr-steps .
+ui:dr-intro-time a blk:Emphasis ; oa:start 23 ; oa:end 27 .
+ui:dr-steps a blk:NumberedList ; po:contains ui:dr-s1 , ui:dr-s2 .
+ui:dr-s1 a blk:ListItem ; rdf:value "Mix and rest overnight." ; co:nextItem ui:dr-s2 .
+ui:dr-s2 a blk:ListItem ; rdf:value "Bake hot." .
+
+ui:doc-text-sides a c:Grid ; c:columns 2 ; c:minWidth "260px" ; pos:gap tok:space-4 ; c:children ( ui:doc-text-editor ui:doc-text-rdf ) .
+ui:doc-text-rdf a c:RdfEditor ; c:label "About blocks as RDF"@en , "About blocks як RDF"@uk , "About blocks als RDF"@de , "About blocks بصيغة RDF"@ar ;
+    c:entry ui:doc-text-doc , ui:dt-h , ui:dt-toc , ui:dt-p1 , ui:dt-h2 , ui:dt-p2 , ui:dt-quote , ui:dt-callout ; c:editable true .
+
+ui:doc-structure-sides a c:Grid ; c:columns 2 ; c:minWidth "260px" ; pos:gap tok:space-4 ; c:children ( ui:doc-structure-editor ui:doc-structure-rdf ) .
+ui:doc-structure-rdf a c:RdfEditor ; c:label "Plan as RDF"@en , "Plan як RDF"@uk , "Plan als RDF"@de , "Plan بصيغة RDF"@ar ;
+    c:entry ui:doc-structure-doc , ui:ds-bullets , ui:ds-numbers , ui:ds-todos , ui:ds-toggle , ui:ds-hr , ui:ds-table , ui:ds-columns ; c:editable true .
+
+ui:doc-media-sides a c:Grid ; c:columns 2 ; c:minWidth "260px" ; pos:gap tok:space-4 ; c:children ( ui:doc-media-editor ui:doc-media-rdf ) .
+ui:doc-media-rdf a c:RdfEditor ; c:label "Attachments as RDF"@en , "Attachments як RDF"@uk , "Attachments als RDF"@de , "Attachments بصيغة RDF"@ar ;
+    c:entry ui:doc-media-doc , ui:dm-code , ui:dm-math , ui:dm-image , ui:dm-file , ui:dm-bookmark , ui:dm-link ; c:editable true .
+
+ui:doc-custom-sides a c:Grid ; c:columns 2 ; c:minWidth "260px" ; pos:gap tok:space-4 ; c:children ( ui:doc-custom-editor ui:doc-custom-rdf ) .
+ui:doc-custom-rdf a c:RdfEditor ; c:label "Notes as RDF"@en , "Notes як RDF"@uk , "Notes als RDF"@de , "Notes بصيغة RDF"@ar ;
+    c:entry ui:doc-custom-doc , ui:dc-p , ui:dc-key , ui:dc-empty ; c:editable true .

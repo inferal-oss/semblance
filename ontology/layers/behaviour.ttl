@@ -84,7 +84,8 @@ beh:Due a owl:Class ; rdfs:subClassOf beh:Event ;
 # bus takes it out of the reaction's change, applies the rest, records the event, and then records
 # the raised one (beh:raisedBy the first), handled by the node's own reactions like any other. A
 # raised click is addressed to the component's root (beh:node), so reactions that ask which part was
-# hit do not take it for one of theirs.
+# hit do not take it for one of theirs. A raised event's undoable change is recorded on the member of
+# the event that raised it: one change, one step to undo.
 
 beh:raise a owl:ObjectProperty ; rdfs:range owl:Class ;
     rdfs:label "Raises"@en , "Викликає"@uk , "Löst aus"@de , "يُطلق"@ar ;
@@ -195,6 +196,11 @@ beh:source a owl:ObjectProperty ; rdfs:domain beh:Reaction .
 beh:sourceClass a owl:ObjectProperty ; rdfs:domain beh:Reaction .
 beh:deletes a owl:DatatypeProperty ; rdfs:domain beh:Reaction .
 beh:inserts a owl:DatatypeProperty ; rdfs:domain beh:Reaction .
+# A reaction is also raised by its own IRI (`?node beh:raise ?reaction` runs it on the node), instances of
+# subclasses of beh:Reaction are reactions too, and one may take its queries, function and undoability
+# from another (beh:like): the block editor's conversions are reactions of one kind each, raised on a block.
+beh:like a owl:ObjectProperty ; rdfs:domain beh:Reaction ;
+    rdfs:comment "A node (not itself a reaction) whose beh:deletes, beh:inserts, sem:function and beh:undoable this reaction uses when it has none of its own; raised by its IRI, its event says which reaction it is ($event a ?reaction)."@en .
 
 # --- Undo (docs/IVM.md §16) ------------------------------------------------------------
 # A reaction marked beh:undoable has its effective change recorded on the event's member:
@@ -217,7 +223,7 @@ beh:viewState a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
 beh:Undoer a owl:Class ;
     rdfs:label "undo"@en , "скасувати"@uk , "rückgängig"@de , "تراجع"@ar ;
     rdfs:comment "A component (e.g. a c:Button that is also a beh:Undoer, with key:shortcut \"mod+z\") that undoes, when clicked, the latest undoable change of its beh:log (default beh:ChangeLog)."@en .
-beh:log a owl:ObjectProperty ; rdfs:domain beh:Undoer ; rdfs:range ldes:EventStream .
+beh:log a owl:ObjectProperty ; rdfs:range ldes:EventStream ; rdfs:comment "On a beh:Undoer or a beh:Redoer: the log whose changes it undoes or redoes."@en .
 
 beh:UndoLatest a beh:Reaction ;
     rdfs:label "Undo the latest change"@en ;
@@ -256,3 +262,37 @@ beh:UndoLatest a beh:Reaction ;
   OPTIONAL { ?m beh:retracted ?st . ?st rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o }
 }""" ;
     sem:function "beh:undo-latest" .
+
+# Redo: activating a beh:Redoer applies again the change of the undone member that was undone last (the
+# undone member with the lowest sequence, since undo goes back from the newest) when it still can be -
+# what it added all absent, what it removed all there - and forgets that it was undone.
+beh:Redoer a owl:Class ;
+    rdfs:label "redo"@en , "повторити"@uk , "wiederholen"@de , "إعادة"@ar ;
+    rdfs:comment "A component (e.g. a c:Button that is also a beh:Redoer, with key:shortcut \"mod+shift+z\") that applies again, when clicked, the change of its beh:log (default beh:ChangeLog) undone last."@en .
+beh:RedoLatest a beh:Reaction ;
+    rdfs:label "Redo the change undone last"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass beh:Redoer ;
+    beh:deletes """CONSTRUCT { ?s ?p ?o . ?log beh:undone ?m } WHERE {
+  { SELECT ?log (MIN(?n) AS ?first) WHERE {
+      $this a beh:Redoer .
+      OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
+      ?log beh:undone ?m . ?m beh:sequence ?n .
+      FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . ?as ?ap ?ao }
+      FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . FILTER NOT EXISTS { ?rs ?rp ?ro } }
+  } GROUP BY ?log }
+  ?log beh:undone ?m . ?m beh:sequence ?first .
+  OPTIONAL { ?m beh:retracted ?st . ?st rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o }
+}""" ;
+    beh:inserts """CONSTRUCT { ?s ?p ?o } WHERE {
+  { SELECT ?log (MIN(?n) AS ?first) WHERE {
+      $this a beh:Redoer .
+      OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
+      ?log beh:undone ?m . ?m beh:sequence ?n .
+      FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . ?as ?ap ?ao }
+      FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . FILTER NOT EXISTS { ?rs ?rp ?ro } }
+  } GROUP BY ?log }
+  ?log beh:undone ?m . ?m beh:sequence ?first .
+  ?m beh:asserted ?st . ?st rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o .
+}""" ;
+    sem:function "beh:redo-latest" .

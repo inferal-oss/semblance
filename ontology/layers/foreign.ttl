@@ -100,7 +100,7 @@ ext:Output a owl:Class ; rdfs:subClassOf beh:Event ;
 # --- renderings ------------------------------------------------------------------------------------
 
 ext:IslandRendering a sem:Rendering ;
-    rdfs:comment "An island: a wrapper, the host-owned slot the foreign component is mounted in, and its inputs' current values."@en ;
+    rdfs:comment "An island: a wrapper, the host-owned slot the foreign component is mounted in, and its inputs' current values. The wrapper is not editable (contenteditable=false): inside a rich text region, the caret goes around it, not into what the foreign component shows."@en ;
     sem:targets ext:Island ;
     sem:stratum 0 ;
     sem:follows c:of .
@@ -110,7 +110,7 @@ ext:IslandRendering-sparql a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?mount .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?mount ; rdfhtml:contenteditable "false" .
   ?mount a rdfhtml:Div ; rdfhtml:class "sem-island-mount" ; sem:slot "island" ; ext:island $this ; ext:tag ?tag ; ext:input ?in .
   ?in ext:name ?name ; ext:value ?value ; ext:as ?as .
 }

@@ -112,7 +112,7 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   whose `val:requires` fields are invalid.
 - **Dependency**: views that depend on another view's value. A component follows a
   value (`dep:follows` a node, `dep:property` of it) and takes the properties of the profile
-  that value selects - carried by the value itself (`dep:takes`: a country's `co:postalField`)
+  that value selects - carried by the value itself (`dep:takes`: a country's `ck:postalField`)
   or listed by the component (`dep:case`), else `dep:otherwise` - before validation and the
   components run, so a field's label, placeholder, SHACL shape, options, `c:disabled` or
   `c:hidden` follow it. Choosing a value also applies its `dep:defaults` (a country's
@@ -241,8 +241,8 @@ the component set. The demo's **Components** page shows all of it.
   rule aggregates that stream.
 
 ### Components
-About 140 component classes in eleven groups (layout, type, actions, inputs,
-feedback, data, navigation, overlays, disclosure, windows, inspection), each
+About 140 component classes in twelve groups (layout, type, actions, inputs,
+feedback, data, navigation, overlays, disclosure, windows, inspection, documents), each
 class with its mixins and parts in one group (`sem:group`,
 `ontology/components/groups.ttl`). The parts an in-app inspector is made of are
 general and live in their groups - a data grid with a time axis and filters, a
@@ -360,7 +360,7 @@ unpurged deletions and how the hybrid store works around them.
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
 | `ontology/domain/` | domain vocabularies the demo views (network activity) |
-| `ontology/vendor/` | RDF/HTML vocabulary snapshot (`npm run gen:vocab` regenerates `src/vocab`) |
+| `ontology/vendor/` | RDF/HTML vocabulary snapshot (`npm run gen:vocab` regenerates `src/vocab`); DoCo and the Pattern Ontology (CC BY 4.0, `SPAR-LICENSE.md`) |
 | `src/engine/` | rule registry and incremental engine |
 | `src/render/` | HtmlIndex, ordering, DOM patcher, serializers |
 | `src/behaviour/` | event bus (LDES), reaction functions |

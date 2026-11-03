@@ -12,6 +12,7 @@
 // source of truth: a reaction that changes the value it was told (clamps, refuses) is pushed back.
 import type { Term } from '@rdfjs/types'
 import type { EventBus, Handled } from './behaviour/events.ts'
+import type { Quad_Graph } from '@rdfjs/types'
 import { EXT, NS, RDFS_SUBCLASS, RDF_TYPE } from './ns.ts'
 import type { DomRenderer } from './render/dom.ts'
 import type { IslandInput } from './render/html-index.ts'
@@ -422,12 +423,13 @@ export class Islands {
     else console.error(`island <${island}>:`, e)
   }
 
-  /** The island's classes and their superclasses, most specific first. */
+  /** The island's classes and their superclasses, most specific first (an island a rendering minted is typed in its derived graph). */
   private classesOf(island: string): string[] {
     const store = this.bus.runtime.store
     const f = store.factory
     const out: string[] = []
-    const todo = store.match(f.namedNode(island), f.namedNode(RDF_TYPE), null, f.defaultGraph()).map((q) => q.object.value)
+    const typed = (g: Quad_Graph) => store.match(f.namedNode(island), f.namedNode(RDF_TYPE), null, g).map((q) => q.object.value)
+    const todo = [...typed(f.defaultGraph()), ...typed(this.bus.projection.engine.graph)]
     while (todo.length) {
       const c = todo.shift()!
       if (out.includes(c)) continue
