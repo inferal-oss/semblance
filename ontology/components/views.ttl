@@ -1042,23 +1042,65 @@ c:dataQuery a owl:ObjectProperty ; rdfs:comment "Links a component to a query or
 # --- ElementMarkup ---------------------------------------------------------------------------------
 
 c:ElementMarkup a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TurtleView ;
     rdfs:comment """The rendered element held in c:bindProperty of c:bindFrom without its RDF/HTML encoding:
 the component that rendered it (the IRI before the node's first /~), as Turtle, and the HTML the
 element becomes - its subtree with attribute nodes and ordering triples taken off and nested
 components resolved, one element per line - both syntax-colored. Shown while c:active is true (a
 check box can drive it: c:controls it, c:property c:active); otherwise it renders an empty, hidden root."""@en ;
-    sem:slug "element-markup" .
+    sem:slug "element-markup" ;
+    c:turtleInto "root" ;
+    c:turtleHeader true .
 c:active a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether a component that can be switched on (c:ElementMarkup) is."@en .
+# What it prints as Turtle (the Turtle printer, turtle.ttl): the component that rendered the node,
+# under "# the component"; the HTML is markup.ttl's.
+c:ElementMarkupTurtle a sem:BuildingBlock ; sem:targets c:ElementMarkup ; sem:stratum 97 ; sem:follows c:bindFrom .
+c:ElementMarkupTurtle-fn a sem:Rule ; sem:implements c:ElementMarkupTurtle ; sem:function "element-markup:turtle" .
+c:ElementMarkupTurtle-sparql a sem:Rule ;
+    sem:implements c:ElementMarkupTurtle ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?head a c:TurtleHead ; c:turtleView $this .
+  ?section a c:TurtleSection ; c:turtleView $this ; c:turtleIndex 0 ; c:turtleTitle "the component" .
+  ?node a c:TurtleNode ; c:turtleView $this ; c:turtleTerm ?component ; c:turtleKey ?key ; c:turtleBody 1 ; c:turtleTop "named" ; c:turtleSection ?section .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ElementMarkup ; c:active ?active FILTER(STR(?active) = "true")
+  $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?bound FILTER(isIRI(?bound))
+  BIND(IF(CONTAINS(STR(?bound), "/~"), IRI(STRBEFORE(STR(?bound), "/~")), ?bound) AS ?component)
+  BIND(IRI(CONCAT(STR($this), "/~th")) AS ?head)
+  BIND(IRI(CONCAT(STR($this), "/~ts-0")) AS ?section)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", SUBSTR(MD5(CONCAT("0 ", STR(?component))), 1, 12))) AS ?node)
+  BIND(CONCAT("\\u0001n1\\u0001n0\\u0001n1\\u0001n0\\u0001n0\\u0001s", STR(?component)) AS ?key)
+}""" .
+# Its element: hidden while off; a sentence when bound to nothing; else the element its tokens go into.
 c:ElementMarkupRendering a sem:Rendering ;
     sem:targets c:ElementMarkup ;
     sem:modality mod:Screen ;
     sem:stratum 40 ;
-    sem:follows c:bindFrom ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it prints the component's triples as Turtle and the element as HTML, colored token by token; the HTML's order is the HTML index's (a building block could state it)." ;
-    sem:needsExtension sx:Matches .
+    sem:follows c:bindFrom .
 c:ElementMarkupRendering-fn a sem:Rule ; sem:implements c:ElementMarkupRendering ; sem:function "element-markup" .
+c:ElementMarkupRendering-sparql a sem:Rule ;
+    sem:implements c:ElementMarkupRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:class ?class ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?message .
+  ?message a rdfhtml:Text ; rdfhtml:data ?text .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ElementMarkup .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(EXISTS { $this c:active ?active FILTER(STR(?active) = "true") } AS ?on)
+  BIND(EXISTS { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?bound FILTER(isIRI(?bound)) } AS ?bound)
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?empty0 } OPTIONAL { FILTER(!BOUND(?empty0)) $this c:emptyText ?empty1 FILTER(isLiteral(?empty1)) }
+  BIND(IF(?on && !?bound, STR(COALESCE(?empty0, ?empty1, "Nothing selected.")), ?none) AS ?text)
+  BIND(IF(?on && ?bound, rdfhtml:Pre, rdfhtml:Div) AS ?element)
+  BIND(IF(!?on, ?none, IF(?bound, "sem-turtle sem-markup", "sem-empty")) AS ?class)
+  BIND(IF(?on, ?none, "") AS ?hidden)
+  BIND(IF(BOUND(?text), IRI(CONCAT(STR($this), "/~empty")), ?none) AS ?message)
+}""" .
 
 # --- Highlight ------------------------------------------------------------------------------------
 

@@ -1,15 +1,14 @@
 // Function rules for general view components and the tooltip layer.
-import type { NamedNode, Quad, Term } from '@rdfjs/types'
+import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
-import { MINT_SEPARATOR, owningFocus } from '../rdf.ts'
-import { HtmlIndex } from '../render/html-index.ts'
-import { toIndentedHTML } from '../render/serialize.ts'
-import { matchTokens, tokenizeSparql } from '../sparql-tokens.ts'
-import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
+import { owningFocus } from '../rdf.ts'
+import { matchTokens } from '../sparql-tokens.ts'
+import type { Token } from '../turtle.ts'
 import { section, topNode } from './turtle.ts'
+import { componentOf, shownNode } from './markup.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
-import { labelOf as textLabelOf, text, declaredPrefixes, fnv, named, rdfList, str } from './util.ts'
+import { labelOf as textLabelOf, text, named, rdfList, str } from './util.ts'
 import { md5Key } from './data.ts'
 import { formatNumber } from '../../rdf-engine/host/intl.ts'
 
@@ -315,67 +314,6 @@ const NUMERIC = new Set(['integer', 'decimal', 'double', 'float', 'long', 'int',
 const isNumericLiteral = (v: Term) => v.termType === 'Literal' && NUMERIC.has(v.datatype.value)
 
 /**
- * Turtle tokens as RDF/HTML nodes. Nodes are keyed by the content of their line
- * (and position in it), not by their position in the document: when results
- * shift, unchanged lines keep their nodes and only what changed is written.
- */
-function turtleNodes(o: ReturnType<RuleContext['out']>, tokens: ReturnType<typeof turtleTokens>): NamedNode[] {
-  const lines: (typeof tokens)[] = [[]]
-  for (const t of tokens) {
-    lines[lines.length - 1]!.push(t)
-    if (t.kind === 'space' && t.text.includes('\n')) lines.push([])
-  }
-  const seen = new Map<string, number>()
-  const nodes: NamedNode[] = []
-  for (const line of lines) {
-    const text = line.map((t) => t.text).join('')
-    const n = seen.get(text) ?? 0
-    seen.set(text, n + 1)
-    const key = `${fnv(text)}${n ? '-' + n : ''}`
-    // Whitespace and punctuation merge into plain text runs; only colored tokens get spans.
-    let plain = ''
-    let j = 0
-    const flushPlain = () => {
-      if (plain) nodes.push(o.text(`l${key}-${j++}`, plain))
-      plain = ''
-    }
-    for (const t of line) {
-      if (t.kind === 'space' || t.kind === 'punct') {
-        plain += t.text
-        continue
-      }
-      flushPlain()
-      const id = `l${key}-${j++}`
-      nodes.push(o.el(id + 's', 'Span', { class: 'ttl-' + t.kind }, [o.text(id, t.text)]))
-    }
-    flushPlain()
-  }
-  return nodes
-}
-
-/** The triples of a rendered element's subtree that the HTML index reads (no provenance, no input). */
-function renderedSubtree(ctx: RuleContext, start: NamedNode): Quad[] {
-  const html = (iri: string) => iri.startsWith(H.ns) || iri.startsWith(NS.svg) || iri.startsWith(NS.ord)
-  const keep = (q: Quad) => html(q.predicate.value) || q.predicate.value === SEM.renders || q.predicate.value === SEM.orderKey || q.predicate.value === SEM.slot || (q.predicate.value === RDF_TYPE && html(q.object.value))
-  const out: Quad[] = []
-  const seen = new Set<string>()
-  const queue: Term[] = [start]
-  while (queue.length) {
-    const n = queue.pop()!
-    if (seen.has(n.value)) continue
-    seen.add(n.value)
-    // A child that is a component stands for its rendered root.
-    for (const q of ctx.match(null, SEM.renders, n)) out.push(q), queue.push(q.subject)
-    for (const q of ctx.match(n, null, null)) {
-      if (!keep(q)) continue
-      out.push(q)
-      if ((q.predicate.value === H.hasChild || q.predicate.value === H.attribute) && named(q.object)) queue.push(q.object)
-    }
-  }
-  return out
-}
-
-/**
  * Source text as lines of tokens of the Turtle highlighter's kinds (Turtle and SPARQL share their
  * lexical forms), each with where it starts (in code points, as c:SourceViewRendering-sparql keys
  * them). A token over several lines (a long string) is cut at the line breaks, each piece keeping
@@ -434,47 +372,10 @@ const sourceView: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** HTML as tokens of the Turtle highlighter's kinds: tag names, attribute names, values; text plain. */
-function htmlTokens(markup: string): Token[] {
-  const out: Token[] = []
-  const t = (kind: Token['kind'], text: string) => text && out.push({ kind, text })
-  let i = 0
-  while (i < markup.length) {
-    if (markup[i] === '\n') {
-      const m = /^\n */.exec(markup.slice(i))![0]
-      t('space', m)
-      i += m.length
-    } else if (markup[i] === '<') {
-      const open = /^<\/?([A-Za-z][\w-]*)/.exec(markup.slice(i))
-      if (!open) {
-        t('punct', '<')
-        i++
-        continue
-      }
-      t('punct', open[0].slice(0, open[0].length - open[1]!.length))
-      t('keyword', open[1]!)
-      i += open[0].length
-      // Attributes up to the end of the tag.
-      for (let m; (m = /^(\s+)([^\s=>/]+)(?:(=)("[^"]*"))?/.exec(markup.slice(i))); i += m[0].length) {
-        t('punct', m[1]!)
-        t('pname', m[2]!)
-        if (m[3]) t('punct', m[3]), t('literal', m[4]!)
-      }
-      const close = /^\s*\/?>/.exec(markup.slice(i))?.[0] ?? ''
-      t('punct', close)
-      i += close.length || 1
-    } else {
-      const text = /^[^<\n]+/.exec(markup.slice(i))![0]
-      t('punct', text)
-      i += text.length
-    }
-  }
-  return out
-}
-
 /**
- * The bound element without its RDF/HTML encoding, while c:active: the component that rendered it
- * (the IRI before the node's first /~), as Turtle, and the HTML the element becomes.
+ * The bound element without its RDF/HTML encoding, while c:active: hidden while off, a sentence when
+ * bound to nothing, else the element the Turtle printer (the component, turtle.ts) and the markup
+ * blocks (the HTML, markup.ts) put their tokens in.
  */
 const elementMarkup: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
@@ -482,33 +383,21 @@ const elementMarkup: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', { hidden: '' }))
     return o.quads
   }
-  const from = ctx.object(focus, C.bindFrom)
-  const property = ctx.object(focus, C.bindProperty)
-  const node = from && property ? ctx.object(from, property) : undefined
-  if (!named(node)) {
+  if (!shownNode(ctx, focus)) {
     o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text(ctx, focus, C.emptyText) ?? 'Nothing selected.')]))
     return o.quads
   }
-  const at = node.value.indexOf(MINT_SEPARATOR)
-  const component = ctx.nn(at < 0 ? node.value : node.value.slice(0, at))
-  const seen = new Set<string>()
-  const own = ctx.match(component, null, null).filter((q) => {
-    const key = q.predicate.value + ' ' + q.object.value + ' ' + (q.object.termType === 'Literal' ? q.object.language + q.object.datatype.value : '')
-    if (q.predicate.value.startsWith(NS.prov) || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-  // Without the mark the inspector itself puts on what it inspects (c:Highlight).
-  const index = new HtmlIndex(() => {})
-  const quads = renderedSubtree(ctx, node)
-  const marks = new Set(quads.filter((q) => q.predicate.value === H.attributeName && q.object.value === 'data-sem-highlighted').map((q) => q.subject.value))
-  index.apply({ add: quads.filter((q) => !marks.has(q.subject.value) && !marks.has(q.object.value)), remove: [] })
-  const markup = toIndentedHTML(index, node.value)
-  const tokens: Token[] = [
-    ...(own.length ? turtleTokens([{ title: 'the component', quads: own }], declaredPrefixes(ctx), str(ctx.object(focus, C.baseIri))) : []),
-    ...(markup ? [...(own.length ? [{ kind: 'space' as const, text: '\n\n' }] : []), { kind: 'comment' as const, text: '# the element as HTML' }, { kind: 'space' as const, text: '\n' }, ...htmlTokens(markup)] : []),
-  ]
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle sem-markup' }, turtleNodes(o, tokens)))
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle sem-markup' }))
+  return o.quads
+}
+
+/** What an element markup prints as Turtle: the component that rendered the node, under "# the component". */
+const elementMarkupTurtle: FnRule = (ctx, focus) => {
+  const node = shownNode(ctx, focus)
+  if (!node) return []
+  const o = ctx.out(focus)
+  section(ctx, o, 0, 'the component')
+  topNode(ctx, o, 0, componentOf(ctx, node))
   return o.quads
 }
 
@@ -641,6 +530,7 @@ export const viewFunctions: Record<string, FnRule> = {
   graphmark,
   emblem,
   'element-markup': elementMarkup,
+  'element-markup:turtle': elementMarkupTurtle,
   'source-view': sourceView,
   metrics,
   toggle,
