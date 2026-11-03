@@ -230,6 +230,33 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
     sty:declares [ sty:property "margin-block" ; sty:raw "0" ] ,
                  [ sty:property "padding-block" ; sty:raw "0" ] .
 
+# --- one-axis size handles: a column's edge (a data grid's, a table block's) ---------------------
+# A separator to drag (or move with arrow keys) at its cell's end edge, a line while pointed at or focused.
+[] a sty:StyleRule ; sty:part ".sem-resize" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "top" ; sty:raw "0" ] ,
+                 [ sty:property "bottom" ; sty:raw "0" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "-4px" ] ,
+                 [ sty:property "width" ; sty:raw "8px" ] ,
+                 [ sty:property "z-index" ; sty:raw "2" ] ,
+                 [ sty:property "cursor" ; sty:raw "col-resize" ] ,
+                 [ sty:property "touch-action" ; sty:raw "none" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:part ".sem-resize::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "top" ; sty:raw "20%" ] ,
+                 [ sty:property "bottom" ; sty:raw "20%" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "3px" ] ,
+                 [ sty:property "width" ; sty:raw "2px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:token tok:border ] ,
+                 [ sty:property "transition" ; sty:raw "background var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:part ".sem-resize:is(:hover, :focus-visible)::after" ;
+    sty:declares [ sty:property "top" ; sty:raw "0" ] ,
+                 [ sty:property "bottom" ; sty:raw "0" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent)" ] .
+
 # --- text field ---------------------------------------------------------------------
 
 [] a sty:StyleRule ; sty:appliesTo c:TextField ;

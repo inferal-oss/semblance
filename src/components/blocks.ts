@@ -460,7 +460,26 @@ const cell: FnRule = (ctx, focus) => {
   const row = parentOf(ctx, focus)
   const head = !!row && isTrue(ctx.object(row, BLK.header))
   if (ctx.modality !== MOD.Text) {
-    o.renders(o.el('root', head ? 'Th' : 'Td', { id: o.node('root').value, scope: head ? 'col' : undefined }, [o.node('text')]))
+    // Its column's edge (blk:ResizeColumn), reached by Tab in the first row.
+    const raw = str(ctx.object(focus, NS.c + 'width'))
+    const width = raw === undefined ? undefined : String(Math.round(Number(raw)))
+    const first = !!row && ctx.match(null, CO.nextItem, row).length === 0
+    const edge = o.el('edge', 'Span', {
+      class: 'sem-resize',
+      contenteditable: 'false',
+      tabIndex: first ? '0' : '-1',
+      role: 'separator',
+      'aria-orientation': 'vertical',
+      'aria-label': text(ctx, ctx.nn(NS.c + 'ColumnWidthPhrase'), NS.rdfs + 'label') ?? '',
+      'aria-valuenow': width,
+      'aria-valuemin': '48',
+      'data-sem-gesture': 'size',
+      'data-sem-axis': 'x',
+      'data-sem-sizes': 'th, td',
+      'data-sem-min': '48',
+    })
+    const attrs = { id: o.node('root').value, scope: head ? 'col' : undefined, style: width === undefined ? undefined : `width: ${width}px; min-width: ${width}px` }
+    o.renders(o.el('root', head ? 'Th' : 'Td', attrs, [o.node('text'), edge]))
     return o.quads
   }
   const last = !has(ctx, focus, CO.nextItem)

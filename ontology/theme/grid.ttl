@@ -89,31 +89,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part ".sem-head-label" ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] ,
                  [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] .
-# The column's edge: a separator to drag (or move with arrow keys), a line while pointed at or focused.
-[] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part ".sem-resize" ;
-    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
-                 [ sty:property "top" ; sty:raw "0" ] ,
-                 [ sty:property "bottom" ; sty:raw "0" ] ,
-                 [ sty:property "inset-inline-end" ; sty:raw "-4px" ] ,
-                 [ sty:property "width" ; sty:raw "8px" ] ,
-                 [ sty:property "z-index" ; sty:raw "2" ] ,
-                 [ sty:property "cursor" ; sty:raw "col-resize" ] ,
-                 [ sty:property "touch-action" ; sty:raw "none" ] ,
-                 [ sty:property "outline" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part ".sem-resize::after" ;
-    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
-                 [ sty:property "position" ; sty:raw "absolute" ] ,
-                 [ sty:property "top" ; sty:raw "20%" ] ,
-                 [ sty:property "bottom" ; sty:raw "20%" ] ,
-                 [ sty:property "inset-inline-start" ; sty:raw "3px" ] ,
-                 [ sty:property "width" ; sty:raw "2px" ] ,
-                 [ sty:property "border-radius" ; sty:raw "1px" ] ,
-                 [ sty:property "background" ; sty:token tok:border ] ,
-                 [ sty:property "transition" ; sty:raw "background var(--sem-duration-fast) var(--sem-ease)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part ".sem-resize:is(:hover, :focus-visible)::after" ;
-    sty:declares [ sty:property "top" ; sty:raw "0" ] ,
-                 [ sty:property "bottom" ; sty:raw "0" ] ,
-                 [ sty:property "background" ; sty:raw "var(--sem-accent)" ] .
+# The column's edge is the shared .sem-resize (default.ttl); the last one sits inside the grid.
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part "thead th:last-child .sem-resize" ;
     sty:declares [ sty:property "inset-inline-end" ; sty:raw "0" ] .
 

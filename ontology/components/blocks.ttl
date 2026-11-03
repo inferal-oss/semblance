@@ -1023,25 +1023,79 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~children")) AS ?children)
 }""" .
 
-# A cell: a column header (th, scope col) in a header row, else a data cell. In the Text modality
+# A cell: a column header (th, scope col) in a header row, else a data cell. On a screen it ends
+# with its column's edge (data-sem-gesture="size", role=separator): dragged, or moved with the arrow
+# keys where it is in the first row (the one reached by Tab), it sets the column's c:width
+# (blk:ResizeColumn), which every cell of the column carries and renders as its width. In the Text modality
 # "| text ", the last of its row closing it ("|"), and a header row's last cell adding the rule
 # under it.
 blk:CellRendering a sem:Rendering ; sem:targets blk:Cell ; sem:stratum 0 ;
     sem:follows ( [ sem:inverse po:contains ] ) ;
-    sem:watches rdf:type , blk:header , po:contains , co:nextItem .
+    sem:watches rdf:type , blk:header , po:contains , co:nextItem , c:width .
 blk:CellRendering-fn a sem:Rule ; sem:implements blk:CellRendering ; sem:function "blk:cell" .
 blk:CellRendering-sparql-screen a sem:Rule ; sem:implements blk:CellRendering ; sem:modality mod:Screen ;
     sem:construct """
-CONSTRUCT { ?root a ?element ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:scope ?scope ; rdfhtml:hasChild ?text . }
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:scope ?scope ; rdfhtml:style ?style ; rdfhtml:hasChild ?text , ?edge .
+  ?text ord:immediatelyPrecedes ?edge .
+  ?edge a rdfhtml:Span ; rdfhtml:class "sem-resize" ; rdfhtml:contenteditable "false" ; rdfhtml:tabIndex ?tabIndex ;
+        rdfhtml:attribute ?role , ?orientation , ?label , ?now , ?min , ?gesture , ?axis , ?sizes , ?minPx .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "separator" .
+  ?orientation a rdfhtml:Attribute ; rdfhtml:attributeName "aria-orientation" ; rdfhtml:attributeValue "vertical" .
+  ?label a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?labelText .
+  ?now a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuenow" ; rdfhtml:attributeValue ?width .
+  ?min a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuemin" ; rdfhtml:attributeValue "48" .
+  ?gesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "size" .
+  ?axis a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-axis" ; rdfhtml:attributeValue "x" .
+  ?sizes a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-sizes" ; rdfhtml:attributeValue "th, td" .
+  ?minPx a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-min" ; rdfhtml:attributeValue "48" .
+}
 WHERE {
   $this a/rdfs:subClassOf* blk:Cell .
   BIND(EXISTS { ?row po:contains $this ; blk:header true } AS ?head)
+  BIND(EXISTS { ?firstRow po:contains $this FILTER NOT EXISTS { ?earlier co:nextItem ?firstRow } } AS ?first)
   BIND(IF(?head, rdfhtml:Th, rdfhtml:Td) AS ?element)
   BIND(IF(?head, "col", ?none) AS ?scope)
+  OPTIONAL { $this c:width ?widthRaw }
+  BIND(STR(xsd:integer(ROUND(xsd:double(STR(?widthRaw))))) AS ?width)
+  BIND(IF(BOUND(?width), CONCAT("width: ", ?width, "px; min-width: ", ?width, "px"), ?none) AS ?style)
+  BIND(IF(?first, "0", "-1") AS ?tabIndex)
+  OPTIONAL { ?phraseAt l10n:of c:ColumnWidthPhrase ; l10n:name ?phrasePicked } OPTIONAL { c:ColumnWidthPhrase rdfs:label ?phraseEn FILTER(LANGMATCHES(LANG(?phraseEn), "en")) }
+  BIND(STR(COALESCE(?phrasePicked, ?phraseEn)) AS ?labelText)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(STR(?root) AS ?rootId)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+  BIND(IRI(CONCAT(STR($this), "/~edge")) AS ?edge)
+  BIND(IRI(CONCAT(STR($this), "/~edge-role")) AS ?role)
+  BIND(IRI(CONCAT(STR($this), "/~edge-aria-orientation")) AS ?orientation)
+  BIND(IRI(CONCAT(STR($this), "/~edge-aria-label")) AS ?label)
+  BIND(IF(BOUND(?width), IRI(CONCAT(STR($this), "/~edge-aria-valuenow")), ?none) AS ?now)
+  BIND(IRI(CONCAT(STR($this), "/~edge-aria-valuemin")) AS ?min)
+  BIND(IRI(CONCAT(STR($this), "/~edge-data-sem-gesture")) AS ?gesture)
+  BIND(IRI(CONCAT(STR($this), "/~edge-data-sem-axis")) AS ?axis)
+  BIND(IRI(CONCAT(STR($this), "/~edge-data-sem-sizes")) AS ?sizes)
+  BIND(IRI(CONCAT(STR($this), "/~edge-data-sem-min")) AS ?minPx)
 }""" .
+c:ColumnWidthPhrase a c:Phrase ; rdfs:label "Column width"@en , "Ширина стовпця"@uk , "Spaltenbreite"@de , "عرض العمود"@ar .
+
+# A column's edge, dragged or moved by the arrow keys: the width of every cell in its column (at
+# least 48px), one undoable change.
+blk:ResizeColumn a beh:Reaction ;
+    rdfs:label "Resize a column"@en ;
+    beh:when beh:Size ; beh:sourceClass blk:Cell ; beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?cell c:width ?old } WHERE {
+  ?row po:contains $this . ?table po:contains ?row .
+  { SELECT (COUNT(DISTINCT ?before) AS ?i) WHERE { $this a ?type . OPTIONAL { ?before co:nextItem+ $this } } }
+  ?table po:contains ?r . ?r po:contains ?cell .
+  { SELECT ?cell (COUNT(DISTINCT ?b) AS ?j) WHERE { ?r2 po:contains ?cell . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?cell } } GROUP BY ?cell }
+  FILTER(?j = ?i) ?cell c:width ?old }""" ;
+    beh:inserts """CONSTRUCT { ?cell c:width ?width } WHERE {
+  ?row po:contains $this . ?table po:contains ?row . $event beh:size ?size .
+  { SELECT (COUNT(DISTINCT ?before) AS ?i) WHERE { $this a ?type . OPTIONAL { ?before co:nextItem+ $this } } }
+  ?table po:contains ?r . ?r po:contains ?cell .
+  { SELECT ?cell (COUNT(DISTINCT ?b) AS ?j) WHERE { ?r2 po:contains ?cell . ?r2 a/rdfs:subClassOf* blk:Row . OPTIONAL { ?b co:nextItem+ ?cell } } GROUP BY ?cell }
+  FILTER(?j = ?i)
+  BIND(xsd:integer(IF(?size < 48, 48, ROUND(?size))) AS ?width) }""" .
 blk:CellRendering-sparql-text a sem:Rule ; sem:implements blk:CellRendering ; sem:modality mod:Text ;
     sem:bulk false ;  # its subqueries read $this
     sem:construct """

@@ -1251,14 +1251,28 @@ function sizedBy(handle: HTMLElement, renderer: DomRenderer): HTMLElement | null
   return box
 }
 
+/**
+ * A handle's axis, direction and bounds. Its sign is said in the inline direction (toward the end
+ * grows, unless -1), so along x it turns around where the text runs right to left.
+ */
 function sizing(handle: HTMLElement) {
   const n = (v: string | undefined, fallback: number) => (v !== undefined && Number.isFinite(Number(v)) ? Number(v) : fallback)
+  const axis = handle.dataset.semAxis === 'y' ? ('y' as const) : ('x' as const)
+  const sign = n(handle.dataset.semSign, 1) < 0 ? -1 : 1
   return {
-    axis: handle.dataset.semAxis === 'y' ? ('y' as const) : ('x' as const),
-    sign: n(handle.dataset.semSign, 1) < 0 ? -1 : 1,
+    axis,
+    sign: axis === 'x' && rtl(handle) ? -sign : sign,
     min: n(handle.dataset.semMin, 0),
     max: n(handle.dataset.semMax, Infinity),
     step: n(handle.dataset.semStep, 16),
+  }
+}
+
+const rtl = (el: HTMLElement) => {
+  try {
+    return el.ownerDocument.defaultView?.getComputedStyle(el).direction === 'rtl'
+  } catch {
+    return false
   }
 }
 
@@ -1272,9 +1286,13 @@ const extentOf = (el: HTMLElement, axis: 'x' | 'y') => (el.parentElement ? measu
 const sizeEvent = (handle: HTMLElement, size: number, extent: number) =>
   new (handle.ownerDocument.defaultView?.CustomEvent ?? CustomEvent)('sem-size', { bubbles: true, detail: { size, extent } })
 
-/** The transient view of a size being dragged: pinned along its axis (flex items too). */
+/**
+ * The transient view of a size being dragged: pinned along its axis (flex items too; a table cell,
+ * whose width is only a preference in a table laid out by its content, by its minimum as well).
+ */
 function setSize(el: HTMLElement, axis: 'x' | 'y', size: number) {
   Object.assign(el.style, axis === 'x' ? { width: `${size}px`, flex: `0 0 ${size}px` } : { height: `${size}px`, flex: `0 0 ${size}px` })
+  if (axis === 'x' && (el.localName === 'td' || el.localName === 'th')) el.style.minWidth = `${size}px`
 }
 
 /**

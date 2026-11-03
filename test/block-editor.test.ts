@@ -605,6 +605,23 @@ describe('tables (c:BlockEditor)', () => {
       tool(h, 'remove-row')
     })
     expect(grid()).toEqual([['', ''], ['', 'b1'], ['', '']])
+    // A column's edge: in every cell, reached by Tab in the first row (the one a row above made).
+    const edges = () => [...m.app.querySelectorAll(`[id="${EX}t/~root"] tr`)].map((tr) => [...tr.children].map((c) => c.querySelector(':scope > .sem-resize')!.getAttribute('tabindex')))
+    expect(edges()).toEqual([['0', '0'], ['-1', '-1'], ['-1', '-1']])
+    const widths = () => [...m.app.querySelectorAll(`[id="${EX}t/~root"] tr`)].map((tr) => [...tr.children].map((c) => c.getAttribute('style')))
+    step('a column resized by its edge in another row', (h) => {
+      const edge = h.app.querySelector(`[id="${EX}b1/~root"] > .sem-resize`)!
+      edge.dispatchEvent(new (h.app.ownerDocument.defaultView!.CustomEvent)('sem-size', { bubbles: true, detail: { size: 150.4, extent: 600 } }))
+    })
+    const wide = 'width: 150px; min-width: 150px'
+    expect(widths()).toEqual([[null, wide], [null, wide], [null, wide]])
+    expect(m.app.querySelector(`[id="${EX}b1/~root"] > .sem-resize`)!.getAttribute('aria-valuenow')).toBe('150')
+    step('no narrower than 48px', (h) => {
+      h.app.querySelector(`[id="${EX}b1/~root"] > .sem-resize`)!.dispatchEvent(new (h.app.ownerDocument.defaultView!.CustomEvent)('sem-size', { bubbles: true, detail: { size: 10, extent: 600 } }))
+    })
+    expect(widths()[0]).toEqual([null, 'width: 48px; min-width: 48px'])
+    step('undo', (h) => h.click('Undo'))
+    expect(widths()[2]).toEqual([null, wide])
   })
 })
 

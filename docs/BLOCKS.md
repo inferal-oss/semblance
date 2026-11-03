@@ -253,7 +253,9 @@ Done: the model, shapes and every primitive's rendering (Screen and Text); editi
 blocks, marks, Markdown shortcuts, undo and redo, composition; the `/` menu and templates; nesting by Tab
 and Shift+Tab (where the shapes allow it), moving by Alt+Up and Alt+Down; plain text pasted; site block
 types in Turtle; a selection toolbar with marks and links (Mod+K, an editable address); tables whose
-rows and columns are added and removed; every atom's address in a field; images and files uploaded
+rows and columns are added and removed (the table toolbar, with the caret in a cell) and whose columns
+are resized by their edges (dragged, or the arrow keys on a first-row edge; every cell of the column
+carries its `c:width`, `blk:ResizeColumn`); every atom's address in a field; images and files uploaded
 (kept in the browser, `blk:Uploads`), dropped, or pasted into the editor as new blocks (the editor is a
 `file:Receiver`); formulas typeset, their TeX shown only while the caret is in them (it is folded,
 `data-sem-folded`, but stays where the caret can go: a typeset island is not editable, and a caret put
