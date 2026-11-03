@@ -7,6 +7,8 @@ export interface SparqlToken {
 /** A token as the pattern matches it: where it starts (1-based, in code points, as sx:matches counts). */
 export interface MatchedToken extends SparqlToken {
   start: number
+  /** The pattern's group that matched it (a text tail has none). */
+  group?: (typeof GROUPS)[number]
 }
 
 /**
@@ -93,7 +95,7 @@ export function matchTokens(source: string, turtle = false): MatchedToken[] {
     last = m.index!
     const g = m.slice(1).findIndex((x) => x !== undefined)
     const { kind, head } = classify(GROUPS[g], m[0], turtle)
-    out.push({ kind, text: m[0].slice(0, head), start: at })
+    out.push({ kind, text: m[0].slice(0, head), start: at, group: GROUPS[g] })
     // A tail is ASCII (it follows an ASCII head), so its start is the head's length on.
     if (head < m[0].length) out.push({ kind: 'text', text: m[0].slice(head), start: at + head })
   }

@@ -10,7 +10,7 @@ import { emitTokens, section, topNode } from './turtle.ts'
 import { maintainedRows } from '../view/rows.ts'
 import { cpCompare } from '../turtle.ts'
 import { TUPLE } from '../render/order-key.ts'
-import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text, declaredPrefixes, fnv } from './util.ts'
+import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text, declaredPrefixes } from './util.ts'
 import { hitToggles } from './actions.ts'
 import { md5 } from './data.ts'
 import { formatLocale } from '../engine/context.ts'
@@ -135,50 +135,6 @@ function display(ctx: RuleContext, t: Term | undefined): string {
 const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
 const firstSentence = (s: string) => s.replace(/\s+/g, ' ').replace(/^(.*?[.!?])\s.*$/, '$1')
 
-/**
- * Code as RDF/HTML: one run of nodes per line, keyed by the line's content (and how many
- * identical lines precede it), so editing one line rewrites only that line's nodes.
- * Tokens whose kind is in `plain` merge into text runs; others become spans of class
- * `${cls}${kind}`.
- */
-function codeNodes(o: Out, tokens: { kind: string; text: string }[], plain: ReadonlySet<string>, cls: string): NamedNode[] {
-  const lines: { kind: string; text: string }[][] = [[]]
-  for (const t of tokens) {
-    const parts = t.text.split('\n')
-    parts.forEach((part, i) => {
-      const piece = i < parts.length - 1 ? part + '\n' : part
-      if (piece) lines[lines.length - 1]!.push({ kind: t.kind, text: piece })
-      if (i < parts.length - 1) lines.push([])
-    })
-  }
-  const seen = new Map<string, number>()
-  const out: NamedNode[] = []
-  for (const line of lines) {
-    if (!line.length) continue
-    // The line break is not part of the key: adding a line after this one leaves its nodes alone.
-    const content = line.map((t) => t.text).join('').replace(/\n$/, '')
-    const n = seen.get(content) ?? 0
-    seen.set(content, n + 1)
-    const key = `l${fnv(content)}${n ? '-' + n : ''}`
-    let run = ''
-    let j = 0
-    const flush = () => {
-      if (run) out.push(o.text(`${key}-${j++}`, run))
-      run = ''
-    }
-    for (const t of line) {
-      if (plain.has(t.kind)) {
-        run += t.text
-        continue
-      }
-      flush()
-      const id = `${key}-${j++}`
-      out.push(o.el(id + 's', 'Span', { class: cls + t.kind }, [o.text(id, t.text)]))
-    }
-    flush()
-  }
-  return out
-}
 
 // --- the query form ---------------------------------------------------------------------------
 
@@ -325,20 +281,26 @@ interface Word {
 
 
 /**
- * Every class and property the graph declares or uses (c:TermIndex: a row each, maintained), by
- * prefixed name, a class before a property; in no particular order.
+ * Every class and property the graph declares or uses (c:DeclaredTerms, c:UsedClasses,
+ * c:UsedProperties: a row each, maintained), by prefixed name, a class before a property; in no
+ * particular order.
  */
 function termIndex(ctx: RuleContext): TermEntry[] {
-  const byIri = new Map<string, TermEntry>()
-  const prefixes = prefixMap(ctx)
-  for (const row of maintainedRows(ctx, ctx.nn(NS.c + 'TermIndex'), true) ?? []) {
-    const t = row.get('term')
-    const kind = row.get('kind')?.value === 'class' ? 'class' : 'property'
-    if (t?.termType !== 'NamedNode' || byIri.get(t.value)?.kind === 'class') continue
-    const hit = prefixes.find(([, ns]) => t.value.startsWith(ns) && PN_LOCAL.test(t.value.slice(ns.length)))
-    if (hit) byIri.set(t.value, { iri: t.value, prefix: hit[0], local: t.value.slice(hit[1].length), kind })
+  const kinds = new Map<string, 'class' | 'property'>()
+  const add = (t: Term | undefined, kind: 'class' | 'property') => {
+    if (t?.termType === 'NamedNode' && kinds.get(t.value) !== 'class') kinds.set(t.value, kind)
   }
-  return [...byIri.values()]
+  const CLASSES = new Set([OWL + 'Class', RDFS + 'Class'])
+  for (const row of maintainedRows(ctx, ctx.nn(NS.c + 'DeclaredTerms'), true) ?? []) add(row.get('term'), CLASSES.has(row.get('declared')?.value ?? '') ? 'class' : 'property')
+  for (const row of maintainedRows(ctx, ctx.nn(NS.c + 'UsedClasses'), true) ?? []) add(row.get('term'), 'class')
+  for (const row of maintainedRows(ctx, ctx.nn(NS.c + 'UsedProperties'), true) ?? []) add(row.get('term'), 'property')
+  const prefixes = prefixMap(ctx)
+  const out: TermEntry[] = []
+  for (const [iri, kind] of kinds) {
+    const hit = prefixes.find(([, ns]) => iri.startsWith(ns) && PN_LOCAL.test(iri.slice(ns.length)))
+    if (hit) out.push({ iri, prefix: hit[0], local: iri.slice(hit[1].length), kind })
+  }
+  return out
 }
 
 /** A language's own words (c:CodeWord individuals of the classes that say c:language it, and their subclasses). */
@@ -367,41 +329,6 @@ function languageWords(ctx: RuleContext, language: string): Word[] {
       )
     }),
   )
-}
-
-/** SPARQL's own words (c:SparqlWord individuals). */
-const sparqlWords = (ctx: RuleContext): Word[] => languageWords(ctx, 'sparql')
-
-/** Words to color as keywords that the tokenizer leaves as text (lower case, ASK, HAVING...). */
-function wordPattern(ctx: RuleContext): RegExp | undefined {
-  return ctx.memo('workbench:word-pattern', () => {
-    const words = sparqlWords(ctx)
-      .map((w) => w.label)
-      .sort((a, b) => b.length - a.length)
-      .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+'))
-    return words.length ? new RegExp(`(?<![\\w:?$-])(?:${words.join('|')})(?![\\w:-])`, 'gi') : undefined
-  })
-}
-
-/** SPARQL tokens with the vocabulary's words colored too; another language's tokens as they are (plain text: none). */
-function highlight(ctx: RuleContext, query: string, language = 'sparql'): { kind: string; text: string }[] {
-  if (language !== 'sparql') return tokenizeCode(query, language) ?? [{ kind: 'text', text: query }]
-  const pattern = wordPattern(ctx)
-  const out: { kind: string; text: string }[] = []
-  for (const t of tokenizeSparql(query)) {
-    if (t.kind !== 'text' || !pattern) {
-      out.push(t)
-      continue
-    }
-    let last = 0
-    for (const m of t.text.matchAll(pattern)) {
-      if (m.index! > last) out.push({ kind: 'text', text: t.text.slice(last, m.index) })
-      out.push({ kind: 'keyword', text: m[0] })
-      last = m.index! + m[0].length
-    }
-    if (last < t.text.length) out.push({ kind: 'text', text: t.text.slice(last) })
-  }
-  return out
 }
 
 /** Whether the caret (at the end of `before`) sits in a comment, a string or an IRI. */
@@ -476,7 +403,7 @@ export function suggest(ctx: RuleContext, value: string, caret: number, language
       items.push({ completion: upper && /^[A-Z_ ]+$/.test(w.label) ? w.label.toLowerCase() : w.label, kind: w.kind, about: w.node })
     for (const [p, ns] of Object.entries(prefixRecord(ctx)).sort((a, b) => a[0].length - b[0].length || collate(a[0], b[0])))
       if (starts(p, word)) items.push({ completion: p + ':', kind: 'prefix', detail: ns })
-    const used = new Set([...value.matchAll(/(?<![\w?$])([A-Za-z][\w-]*):/g)].map((u) => u[1]!))
+    const used = new Set([...value.matchAll(/(?:^|[^\w?$])([A-Za-z][\w-]*):/g)].map((u) => u[1]!))
     if (word.length >= 3) items.push(...rankTerms(termIndex(ctx).filter((t) => starts(t.local, word)), word, used))
   }
   const shown = items.filter((it, i) => items.findIndex((x) => x.completion === it.completion) === i).slice(0, SUGGESTIONS)
@@ -486,19 +413,87 @@ export function suggest(ctx: RuleContext, value: string, caret: number, language
 // --- the editor ------------------------------------------------------------------------------------
 
 const KIND_GLYPHS: Record<Kind, string> = { keyword: 'K', function: 'ƒ', prefix: ':', class: 'C', property: 'P', variable: '?' }
-const SPARQL_PLAIN = new Set(['text'])
+
+/** What an editor's suggestions say (c:EditorSuggestions): where the word starts and ends, its place, and the items. */
+const SG = {
+  suggested: NS.c + 'suggested',
+  item: NS.c + 'suggestionItem',
+  line: NS.c + 'suggestionLine',
+  column: NS.c + 'suggestionColumn',
+  kind: NS.c + 'suggestionKind',
+  detail: NS.c + 'suggestionDetail',
+  sort: NS.c + 'suggestionSort',
+} as const
+
+/** The text an editor shows, its caret (in the text, clamped). */
+function editorState(ctx: RuleContext, focus: NamedNode) {
+  const value = str(ctx.object(focus, C.value)) ?? str(ctx.object(focus, W.original)) ?? ''
+  const language = str(ctx.object(focus, W.language))?.toLowerCase() ?? (ctx.match(focus, RDF_TYPE, W.QueryEditor).length ? 'sparql' : 'text')
+  const caret = Math.max(0, Math.min(value.length, Math.round(num(ctx, focus, W.caret, value.length))))
+  return { value, language, caret }
+}
+
+/**
+ * The suggestions an editor shows while c:suggesting: for the word before the caret (suggest), where
+ * it starts and ends, its line and column, and each item - its completion, kind and detail (a prefix's
+ * namespace, else the first sentence of what it is about's rdfs:comment) - by its place.
+ */
+const editorSuggestions: FnRule = (ctx, focus) => {
+  if (!isTrue(ctx.object(focus, W.suggesting))) return []
+  const { value, language, caret } = editorState(ctx, focus)
+  const open = suggest(ctx, value, caret, language)
+  if (!open) return []
+  const o = ctx.out(focus)
+  const sg = o.node('sg')
+  const before = value.slice(0, open.from)
+  o.t(focus, SG.suggested, sg)
+  o.t(sg, W.replaceFrom, int(ctx, open.from))
+  o.t(sg, W.replaceTo, int(ctx, open.to))
+  o.t(sg, SG.line, int(ctx, before.split('\n').length))
+  o.t(sg, SG.column, int(ctx, open.from - (before.lastIndexOf('\n') + 1)))
+  open.items.forEach((s, i) => {
+    const item = o.node(`sg-${md5(s.completion).slice(0, 12)}`)
+    o.t(sg, SG.item, item)
+    o.t(item, SG.sort, String(i).padStart(2, '0'))
+    o.t(item, W.completion, s.completion)
+    o.t(item, SG.kind, s.kind)
+    const detail = s.detail ?? (s.about ? commentOf(ctx, s.about) : undefined)
+    if (detail !== undefined) o.t(item, SG.detail, truncate(firstSentence(detail), 90))
+  })
+  return o.quads
+}
+
+/** What a node's rdfs:comment says: an untagged one, else one in English, else any; the least by code point. */
+function commentOf(ctx: RuleContext, n: Term): string | undefined {
+  const rank = (t: Term) => (t.termType !== 'Literal' ? 3 : t.language === '' ? 0 : t.language === 'en' || t.language.startsWith('en-') ? 1 : 2)
+  const ranked = ctx
+    .objects(n, RDFS_COMMENT)
+    .filter((t) => t.termType === 'Literal')
+    .map((t) => rank(t) + t.value)
+    .sort(cpCompare)
+  return ranked[0]?.slice(1)
+}
+
+/** An editor's suggestions as data: where the word is, and the items by place. */
+function suggestionsOf(ctx: RuleContext, focus: NamedNode) {
+  const sg = ctx.object(focus, SG.suggested)
+  if (!sg) return undefined
+  const n = (s: Term, p: string) => Number(ctx.object(s, p)?.value ?? NaN)
+  const items = ctx
+    .objects(sg, SG.item)
+    .map((it) => ({ sort: str(ctx.object(it, SG.sort)) ?? '', completion: str(ctx.object(it, W.completion)) ?? '', kind: (str(ctx.object(it, SG.kind)) ?? 'keyword') as Kind, detail: str(ctx.object(it, SG.detail)) }))
+    .sort((a, b) => cpCompare(a.sort, b.sort))
+  return { from: n(sg, W.replaceFrom), to: n(sg, W.replaceTo), line: n(sg, SG.line), column: n(sg, SG.column), items }
+}
 
 const editor: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  // The text as edited, else as written (c:original: a live example's source until it is edited).
-  const value = str(ctx.object(focus, C.value)) ?? str(ctx.object(focus, W.original)) ?? ''
-  // A SPARQL editor (c:QueryEditor) is in SPARQL unless it says otherwise; any other code editor is plain text.
-  const language = str(ctx.object(focus, W.language))?.toLowerCase() ?? (ctx.match(focus, RDF_TYPE, W.QueryEditor).length ? 'sparql' : 'text')
-  const caret = Math.max(0, Math.min(value.length, Math.round(num(ctx, focus, W.caret, value.length))))
+  const { value } = editorState(ctx, focus)
   const label = text(ctx, focus, C.label) ?? labelOf(ctx, focus)
-  const open = isTrue(ctx.object(focus, W.suggesting)) ? suggest(ctx, value, caret, language) : undefined
+  const open = suggestionsOf(ctx, focus)
   const active = open ? Math.max(0, Math.min(open.items.length - 1, Math.round(num(ctx, focus, W.activeSuggestion, 0)))) : 0
   const lineCount = value.split('\n').length
+  const caret = editorState(ctx, focus).caret
 
   if (ctx.modality === MOD.Text) {
     const lines = value.split('\n').map((l, i) => o.el(`line${i}`, 'Div', {}, [o.text(`line${i}-text`, `${String(i + 1).padStart(3)} │ ${l}`)]))
@@ -514,11 +509,10 @@ const editor: FnRule = (ctx, focus) => {
   const gutter = o.el('gutter', 'Pre', { class: 'sem-gutter', 'aria-hidden': 'true' }, [
     o.text('gutter-text', Array.from({ length: lineCount }, (_, i) => String(i + 1)).join('\n')),
   ])
-  const highlighted = o.el('highlight', 'Pre', { class: 'sem-highlight', 'aria-hidden': 'true' }, [
-    ...codeNodes(o, highlight(ctx, value, language), SPARQL_PLAIN, 'tok-'),
-    // A last, empty line still has a height (as it has in the text area).
-    o.text('tail', ' '),
-  ])
+  // Its lines are the line blocks' (editor.ts); a last, empty line still has a height (as in the text area).
+  const tail = o.text('tail', ' ')
+  o.t(tail, SEM.orderKey, TUPLE + 'n1')
+  const highlighted = o.el('highlight', 'Pre', { class: 'sem-highlight', 'aria-hidden': 'true' }, [tail])
   // The value attribute keeps the live value in line with the graph (the renderer reflects it);
   // the text is the default value, for serialized HTML.
   const input = o.el(
@@ -535,16 +529,12 @@ const editor: FnRule = (ctx, focus) => {
   let list: NamedNode | undefined
   if (open) {
     o.attr(input, 'aria-controls', listId).attr(input, 'aria-activedescendant', mint(focus.value, `s-${active}`))
-    const before = value.slice(0, open.from)
-    const line = before.split('\n').length
-    const col = open.from - (before.lastIndexOf('\n') + 1)
     const options = open.items.map((s, i) => {
       const id = `s-${i}`
-      const detail = s.detail ?? (s.about ? ctx.untraced(() => text(ctx, s.about!, RDFS_COMMENT)) : undefined)
       const li = o.el(id, 'Li', { id: mint(focus.value, id), class: 'sem-option' }, [
         o.el(`${id}-kind`, 'Span', { class: `sem-kind sem-kind-${s.kind}`, 'aria-hidden': 'true' }, [o.text(`${id}-kind-text`, KIND_GLYPHS[s.kind])]),
         o.el(`${id}-name`, 'Code', {}, [o.text(`${id}-name-text`, s.completion)]),
-        ...(detail ? [o.el(`${id}-detail`, 'Span', { class: 'sem-detail' }, [o.text(`${id}-detail-text`, truncate(firstSentence(detail), 90))])] : []),
+        ...(s.detail ? [o.el(`${id}-detail`, 'Span', { class: 'sem-detail' }, [o.text(`${id}-detail-text`, s.detail)])] : []),
       ])
       o.attr(li, 'role', 'option').attr(li, 'aria-selected', String(i === active))
       o.t(li, W.suggestionIndex, int(ctx, i))
@@ -552,7 +542,7 @@ const editor: FnRule = (ctx, focus) => {
       return li
     })
     // Placed by line, column and the width of the line numbers (the editor grows with its text, so it never scrolls vertically).
-    const style = `--line: ${line}; --col: ${col}; --digits: ${String(lineCount).length}`
+    const style = `--line: ${open.line}; --col: ${open.column}; --digits: ${String(lineCount).length}`
     list = o.el('suggestions', 'Ul', { id: listId, class: 'sem-suggestions', style }, options)
     o.attr(list, 'role', 'listbox').attr(list, 'aria-label', say(ctx, P.suggestions, 'Suggestions'))
     o.t(list, W.suggestionsOf, focus)
@@ -1402,6 +1392,7 @@ const turtlePrint: FnRule = (ctx, focus) => {
 export const functions: Record<string, FnRule> = {
   'workbench:workbench': workbench,
   'workbench:editor': editor,
+  'editor:suggestions': editorSuggestions,
   'workbench:table': table,
   'workbench:table-text': tableText,
   'workbench:table-markdown': tableMarkdown,

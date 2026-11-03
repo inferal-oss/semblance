@@ -8,6 +8,7 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix iv: <https://semblance.dev/ns/view#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
 
 # A code editor: the text is graph state (c:value, c:caret), written by the input reaction on every
 # keystroke, which re-renders the editor (its highlighted lines and suggestions) and nothing else.
@@ -51,23 +52,525 @@ c:completion a owl:DatatypeProperty ;
 # The terms an editor suggests: every class and property the graph declares (owl:Class, rdfs:Class,
 # rdf:Property, owl:ObjectProperty, owl:DatatypeProperty, owl:AnnotationProperty) or uses (as a class,
 # as a predicate), a row each, maintained as the graph changes - a declaration or a use costs what it
-# changes, and a keystroke reads the rows, not the store.
-c:TermIndex a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ;
-    rdfs:label "the classes and properties the graph declares or uses"@en ;
-    sem:select """SELECT DISTINCT ?term ?kind WHERE {
-  {
-    VALUES (?declared ?kind) { (owl:Class "class") (rdfs:Class "class") (rdf:Property "property") (owl:ObjectProperty "property") (owl:DatatypeProperty "property") (owl:AnnotationProperty "property") }
-    ?term a ?declared .
-  }
-  UNION { ?anyInstance a ?term BIND("class" AS ?kind) }
-  UNION { ?anySubject ?term ?anyObject BIND("property" AS ?kind) }
-  FILTER(isIRI(?term))
+# changes, and a keystroke reads the rows, not the store. Three views, each one pattern: a union of
+# them would be evaluated again for every change, not maintained.
+c:DeclaredTerms a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ;
+    rdfs:label "the classes and properties the graph declares"@en ;
+    sem:select """SELECT DISTINCT ?term ?declared WHERE {
+  VALUES ?declared { owl:Class rdfs:Class rdf:Property owl:ObjectProperty owl:DatatypeProperty owl:AnnotationProperty }
+  ?term a ?declared .
+}""" .
+c:UsedClasses a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ;
+    rdfs:label "the classes the graph's nodes have"@en ;
+    sem:select """SELECT DISTINCT ?term WHERE { ?anyInstance a ?term }""" .
+# Partitioned by subject and object: a node with many statements (a list's members) is many small
+# partitions, so a statement added to it costs that statement.
+c:UsedProperties a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ; iv:partitionBy "anySubject anyObject" ;
+    rdfs:label "the predicates the graph uses"@en ;
+    sem:select """SELECT DISTINCT ?term WHERE { ?anySubject ?term ?anyObject }""" .
+
+# --- highlighting, line by line ----------------------------------------------------------------------
+# An editor's text as a line node per line (a span in its highlighted text), keyed by the line's content
+# (its MD5, then how many lines before it have that content), placed by its number, with where long
+# strings cross it; then each line's tokens, read from the line alone. A keystroke changes one line's
+# content: that line's node is new and only it is tokenized; the others keep their nodes.
+c:EditorLine a owl:Class ; rdfs:comment "Derived: a line of a code editor's text (c:EditorLines), a span of its highlighted text."@en .
+c:lineOf a owl:ObjectProperty ; rdfs:comment "Derived: the editor a c:EditorLine is a line of."@en .
+c:lineText a owl:DatatypeProperty ; rdfs:comment "Derived: a c:EditorLine's content, without its line break."@en .
+c:lineNumber a owl:DatatypeProperty ; rdfs:comment "Derived: a c:EditorLine's place, from 1."@en .
+c:lineStringTo a owl:DatatypeProperty ; rdfs:comment "Derived: a long string open where the line starts ends this many code points into it (it may run past the line)."@en .
+c:lineStringFrom a owl:DatatypeProperty ; rdfs:comment "Derived: a long string opens at this column (from 1) and runs past the line's end."@en .
+c:lineLast a owl:DatatypeProperty ; rdfs:comment "Derived: the editor's last line (no line break after it)."@en .
+
+c:EditorLines a sem:BuildingBlock ; sem:targets c:CodeEditor ; sem:stratum 106 ; sem:watches rdf:type , c:value , c:original , c:language .
+c:EditorLines-fn a sem:Rule ; sem:implements c:EditorLines ; sem:function "editor:lines" .
+c:EditorLines-sparql a sem:Rule ;
+    sem:implements c:EditorLines ;
+    sem:bulk false ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?highlight rdfhtml:hasChild ?line .
+  ?line a c:EditorLine , rdfhtml:Span ; sem:orderKey ?key ; c:lineOf $this ; c:lineText ?text ; c:lineNumber ?k ;
+    c:lineStringTo ?stringTo ; c:lineStringFrom ?stringFrom ; c:lineLast ?last .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:CodeEditor .
+  OPTIONAL { $this c:value ?v0 } OPTIONAL { $this c:original ?o0 }
+  BIND(STR(COALESCE(?v0, ?o0, "")) AS ?value)
+  BIND(IRI(CONCAT(STR($this), "/~highlight")) AS ?highlight)
+  # Its lines as fixed-width records (start, length without the break), and the empty line after a last break.
+  OPTIONAL { SELECT (GROUP_CONCAT(?lineRecord; separator="") AS ?lines0) WHERE {
+    { SELECT ?lineRecord WHERE {
+      OPTIONAL { $this c:value ?lv0 } OPTIONAL { $this c:original ?lo0 }
+      BIND(STR(COALESCE(?lv0, ?lo0, "")) AS ?lineText)
+      LATERAL { (?lineText "[^\\n]*\\n|[^\\n]+$") sx:matches (?lineMatch ?lineAt) }
+      BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
+      BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
+    } ORDER BY ?lineRecord }
+  } }
+  BIND(STR(STRLEN(?value) + 1) AS ?endAt)
+  BIND(CONCAT(COALESCE(?lines0, ""), IF(?value = "" || STRENDS(?value, "\\n"), CONCAT(SUBSTR(CONCAT("0000000", ?endAt), STRLEN(?endAt) + 1), "0000000"), "")) AS ?lines)
+  BIND(STRLEN(?lines) / 14 AS ?lineCount)
+  # Long strings over lines (where they start and end), past comments, short strings and IRIs.
+  OPTIONAL { SELECT (GROUP_CONCAT(?stringRecord; separator="") AS ?strings0) WHERE {
+    { SELECT ?stringRecord WHERE {
+      OPTIONAL { $this c:value ?sv0 } OPTIONAL { $this c:original ?so0 }
+      BIND(STR(COALESCE(?sv0, ?so0, "")) AS ?stringText)
+      c:SparqlLexicon c:quotedPattern ?quoted .
+      LATERAL { (?stringText ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
+      FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
+      BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
+      BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
+    } ORDER BY ?stringRecord }
+  } }
+  BIND(COALESCE(?strings0, "") AS ?strings)
+  # Each line's content hash and number, sorted, so a line's rank among those with its content is read off.
+  OPTIONAL { SELECT (GROUP_CONCAT(?hashRecord; separator="") AS ?hashes0) WHERE {
+    { SELECT ?hashRecord WHERE {
+      OPTIONAL { $this c:value ?hv0 } OPTIONAL { $this c:original ?ho0 }
+      BIND(STR(COALESCE(?hv0, ?ho0, "")) AS ?hashText)
+      LATERAL { (?hashText "[^\\n]*\\n|[^\\n]+$") sx:matches (?hashMatch ?hashAt) }
+      BIND(IF(STRENDS(?hashMatch, "\\n"), SUBSTR(?hashMatch, 1, STRLEN(?hashMatch) - 1), ?hashMatch) AS ?hashLine)
+      BIND(CONCAT("|", SUBSTR(MD5(?hashLine), 1, 12), ":", SUBSTR(CONCAT("0000000", STR(?hashAt)), STRLEN(STR(?hashAt)) + 1)) AS ?hashRecord)
+    } ORDER BY ?hashRecord }
+  } }
+  BIND(COALESCE(?hashes0, "") AS ?hashes)
+  LATERAL { (?lines "[0-9]{14}") sx:matches (?record ?recordAt) }
+  BIND(xsd:integer(FLOOR((?recordAt - 1) / 14)) + 1 AS ?k)
+  BIND(xsd:integer(SUBSTR(?record, 1, 7)) AS ?ls)
+  BIND(xsd:integer(SUBSTR(?record, 8, 7)) AS ?length)
+  BIND(?ls + ?length AS ?le)
+  BIND(SUBSTR(?value, ?ls, ?length) AS ?text)
+  BIND(SUBSTR(MD5(?text), 1, 12) AS ?hash)
+  # (The empty line after a last break is in no record: every line with its content comes before it.)
+  BIND(CONCAT("|", ?hash, ":", SUBSTR(?record, 1, 7)) AS ?own)
+  BIND(xsd:integer(IF(CONTAINS(?hashes, ?own), (STRLEN(STRBEFORE(?hashes, ?own)) - STRLEN(STRBEFORE(?hashes, CONCAT("|", ?hash, ":")))) / 21,
+    (STRLEN(?hashes) - STRLEN(REPLACE(?hashes, CONCAT("[|]", ?hash, ":"), ""))) / 14)) AS ?rank)
+  BIND(IRI(CONCAT(STR($this), "/~l", ?hash, "-", STR(?rank))) AS ?line)
+  BIND(CONCAT("\\u0001n0\\u0001n", STR(?k)) AS ?key)
+  BIND(IF(?k = ?lineCount, true, ?none) AS ?last)
+  LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?openRecord)
+    BIND(xsd:integer(SUBSTR(?openRecord, 1, 7)) AS ?openStart) BIND(xsd:integer(SUBSTR(?openRecord, 8, 7)) AS ?openEnd)
+    FILTER(?openStart < ?ls && ?openEnd > ?ls) } }
+  LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?leftRecord)
+    BIND(xsd:integer(SUBSTR(?leftRecord, 1, 7)) AS ?leftStart) BIND(xsd:integer(SUBSTR(?leftRecord, 8, 7)) AS ?leftEnd)
+    FILTER(?leftStart >= ?ls && ?leftStart < ?le && ?leftEnd > ?le) } }
+  BIND(?openEnd - ?ls AS ?stringTo)
+  BIND(?leftStart - ?ls + 1 AS ?stringFrom)
 }""" .
 
-c:CodeEditorRendering a sem:Rendering ; sem:targets c:CodeEditor ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it tokenizes the text for highlighting and finds the word before the caret to complete." ;
-    sem:needsExtension sx:Matches .
+c:EditorLineTokens a sem:BuildingBlock ; sem:targets c:EditorLine ; sem:stratum 107 ; sem:always true ; sem:follows c:lineOf ;
+    sem:watches rdf:type , c:lineOf , c:lineText , c:lineStringTo , c:lineStringFrom , c:lineLast , c:language .
+c:EditorLineTokens-fn a sem:Rule ; sem:implements c:EditorLineTokens ; sem:function "editor:line-tokens" .
+c:EditorLineTokens-sparql a sem:Rule ;
+    sem:implements c:EditorLineTokens ;
+    sem:bulk false ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  $this rdfhtml:hasChild ?tok .
+  ?tok a ?element ; rdfhtml:data ?plain ; rdfhtml:class ?class ; rdfhtml:hasChild ?tokText ; sem:orderKey ?order .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+}
+WHERE {
+  $this a c:EditorLine ; c:lineOf ?editor ; c:lineText ?text0 .
+  BIND(STR(?text0) AS ?text)
+  BIND(STRLEN(?text) AS ?len)
+  OPTIONAL { $this c:lineStringTo ?st }
+  OPTIONAL { $this c:lineStringFrom ?sf }
+  BIND(EXISTS { $this c:lineLast true } AS ?last)
+  OPTIONAL { ?editor c:language ?language0 }
+  BIND(IF(BOUND(?language0), LCASE(STR(?language0)), IF(EXISTS { ?editor a c:QueryEditor }, "sparql", "text")) AS ?language)
+  BIND(?language = "sparql" || ?language = "turtle" AS ?coded)
+  BIND(?language = "turtle" AS ?turtle)
+  LATERAL {
+    { FILTER(!?coded && ?len > 0) BIND(1 AS ?pos) BIND(?text AS ?piece) BIND("text" AS ?kind) }
+    UNION { FILTER(?coded && BOUND(?st)) BIND(1 AS ?pos) BIND(SUBSTR(?text, 1, IF(?st < ?len, ?st, ?len)) AS ?piece) BIND("string" AS ?kind) FILTER(?piece != "") }
+    UNION { FILTER(?coded && BOUND(?sf)) BIND(?sf AS ?pos) BIND(SUBSTR(?text, ?sf) AS ?piece) BIND("string" AS ?kind) }
+    UNION {
+      FILTER(?coded)
+      BIND(COALESCE(?st, 0) AS ?fs)
+      BIND(IF(BOUND(?sf), ?sf - 1, ?len) AS ?fe)
+      FILTER(?fe > ?fs)
+      BIND(SUBSTR(?text, ?fs + 1, ?fe - ?fs) AS ?src)
+      c:SparqlLexicon c:tokenPattern ?pattern .
+      LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+      BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
+      BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
+      BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+        IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
+        IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
+        IF(BOUND(?g7), IF(?turtle && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
+        IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
+        IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text"))))))))) AS ?kind0)
+      BIND(IF(BOUND(?g6) && ?kind0 = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind0 = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m))) AS ?headLen)
+      BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
+      BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
+      BIND(?fs + ?at AS ?headPos)
+      # SPARQL's own words, in any case, standing alone.
+      BIND(?language = "sparql" && ?kind0 = "text" && (BOUND(?g9) || BOUND(?g5))
+        && !REGEX(SUBSTR(?text, ?headPos - 1, 1), "[A-Za-z0-9_:?$-]") && !REGEX(SUBSTR(?text, ?headPos + STRLEN(?head), 1), "[A-Za-z0-9_:-]")
+        && EXISTS { ?word a ?wordClass . ?wordClass rdfs:subClassOf* c:SparqlWord . ?word rdfs:label ?wordLabel FILTER(LCASE(STR(?wordLabel)) = LCASE(REPLACE(?head, "[ \\t]+", " "))) } AS ?sparqlWord)
+      VALUES ?half { 0 1 }
+      FILTER(?half = 0 || BOUND(?tailText))
+      BIND(?headPos + IF(?half = 0, 0, ?headLen) AS ?pos)
+      BIND(IF(?half = 0, ?head, ?tailText) AS ?piece)
+      BIND(IF(?half = 0, IF(?sparqlWord, "keyword", ?kind0), "text") AS ?kind)
+    }
+    UNION { FILTER(!?last) BIND(?len + 1 AS ?pos) BIND("\\n" AS ?piece) BIND("text" AS ?kind) BIND(true AS ?isBreak) }
+  }
+  BIND(IRI(CONCAT(STR($this), "-", IF(BOUND(?isBreak), "nl", STR(?pos)))) AS ?tok)
+  BIND(STR(?pos) AS ?order)
+  BIND(?kind = "text" AS ?isPlain)
+  BIND(IF(?isPlain, rdfhtml:Text, rdfhtml:Span) AS ?element)
+  BIND(IF(?isPlain, ?piece, ?none) AS ?plain)
+  BIND(IF(?isPlain, ?none, CONCAT("tok-", ?kind)) AS ?class)
+  BIND(IF(?isPlain, ?none, IRI(CONCAT(STR(?tok), "-x"))) AS ?tokText)
+  BIND(IF(?isPlain, ?none, ?piece) AS ?spanned)
+}""" .
+
+# --- suggestions -----------------------------------------------------------------------------------
+# While c:suggesting, the suggestions for the word before the caret, as data the editor's renderings
+# read: <editor>/~sg says where the word starts and ends (c:replaceFrom, c:replaceTo), its line and
+# column; each item <editor>/~sg-<md5(completion)> its place (c:suggestionSort), completion, kind and detail.
+c:suggested a owl:ObjectProperty ; rdfs:range c:CodeEditor ; rdfs:comment "Derived: an editor's open suggestions (<editor>/~sg)."@en .
+c:suggestionItem a owl:ObjectProperty ; rdfs:comment "Derived: a suggestion of an editor's open suggestions."@en .
+c:suggestionLine a owl:DatatypeProperty ; rdfs:comment "Derived: the line the suggested word starts on, from 1."@en .
+c:suggestionColumn a owl:DatatypeProperty ; rdfs:comment "Derived: the column the suggested word starts at, from 0."@en .
+c:suggestionKind a owl:DatatypeProperty ; rdfs:comment "Derived: a suggestion's kind: keyword, function, prefix, class, property, variable."@en .
+c:suggestionSort a owl:DatatypeProperty ; rdfs:comment "Derived: a suggestion's place among them, as a key (by code point)."@en .
+c:suggestionDetail a owl:DatatypeProperty ; rdfs:comment "Derived: what a suggestion says beside it (a prefix's namespace, the first sentence of a term's comment)."@en .
+c:EditorSuggestions a sem:BuildingBlock ; sem:targets c:CodeEditor ; sem:stratum -1 ;
+    sem:watches rdf:type , c:value , c:original , c:language , c:caret , c:suggesting .
+c:EditorSuggestions-fn a sem:Rule ; sem:implements c:EditorSuggestions ; sem:function "editor:suggestions" .
+c:EditorSuggestions-sparql a sem:Rule ;
+    sem:implements c:EditorSuggestions ;
+    sem:bulk false ;
+    sem:needsExtension sx:Matches , sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  $this c:suggested ?sg .
+  ?sg c:replaceFrom ?from ; c:replaceTo ?caret ; c:suggestionLine ?line ; c:suggestionColumn ?column ; c:suggestionItem ?item .
+  ?item c:suggestionSort ?entry ; c:completion ?completion ; c:suggestionKind ?kind ; c:suggestionDetail ?detail .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:CodeEditor ; c:suggesting ?suggesting FILTER(STR(?suggesting) = "true")
+  OPTIONAL { $this c:value ?v0 } OPTIONAL { $this c:original ?o0 }
+  BIND(STR(COALESCE(?v0, ?o0, "")) AS ?value)
+  OPTIONAL { $this c:language ?language0 }
+  BIND(IF(BOUND(?language0), LCASE(STR(?language0)), IF(EXISTS { $this a c:QueryEditor }, "sparql", "text")) AS ?language)
+  FILTER(?language = "sparql" || ?language = "turtle")
+  BIND(?language = "sparql" AS ?sparql)
+  OPTIONAL { $this c:caret ?caret0 }
+  BIND(xsd:integer(ROUND(COALESCE(xsd:double(?caret0), STRLEN(?value)))) AS ?caret1)
+  BIND(IF(?caret1 < 0, 0, IF(?caret1 > STRLEN(?value), STRLEN(?value), ?caret1)) AS ?caret)
+  BIND(SUBSTR(?value, 1, ?caret) AS ?before)
+  # Not in a comment, a string or an IRI: an open long string; on the caret's line, a comment, an odd
+  # quote outside strings, a < not closed.
+  FILTER((STRLEN(?before) - STRLEN(REPLACE(?before, '"{3}', ""))) / 3 = xsd:integer(FLOOR((STRLEN(?before) - STRLEN(REPLACE(?before, '"{3}', ""))) / 6)) * 2)
+  BIND(REPLACE(?before, "^[\\\\s\\\\S]*\\n", "") AS ?caretLine)
+  FILTER(!REGEX(?caretLine, "<[^<>\\\\s]*$"))
+  c:SparqlLexicon c:tokenPattern ?pattern .
+  LATERAL { SELECT ?caretLine ?pattern (SUM(IF(BOUND(?lg1), 1, 0)) AS ?comments) (SUM(IF(!BOUND(?lg1) && !BOUND(?lg2) && !BOUND(?lg3) && !BOUND(?lg4) && !BOUND(?lg5) && !BOUND(?lg6) && !BOUND(?lg7) && !BOUND(?lg8) && !BOUND(?lg9),
+        STRLEN(?lm) - STRLEN(REPLACE(?lm, '"', "")), 0)) AS ?doubles) (SUM(IF(!BOUND(?lg1) && !BOUND(?lg2) && !BOUND(?lg3) && !BOUND(?lg4) && !BOUND(?lg5) && !BOUND(?lg6) && !BOUND(?lg7) && !BOUND(?lg8) && !BOUND(?lg9),
+        STRLEN(?lm) - STRLEN(REPLACE(?lm, "'", "")), 0)) AS ?singles) WHERE {
+      LATERAL { (?caretLine ?pattern) sx:matches (?lm ?lat ?lg1 ?lg2 ?lg3 ?lg4 ?lg5 ?lg6 ?lg7 ?lg8 ?lg9) }
+    } GROUP BY ?caretLine ?pattern }
+  FILTER(COALESCE(?comments, 0) = 0 && xsd:integer(COALESCE(?doubles, 0)) - xsd:integer(FLOOR(COALESCE(?doubles, 0) / 2)) * 2 = 0 && xsd:integer(COALESCE(?singles, 0)) - xsd:integer(FLOOR(COALESCE(?singles, 0) / 2)) * 2 = 0)
+  # The word before the caret: a variable, a prefixed name (or its part), a word.
+  FILTER(REGEX(?before, "([?$][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z0-9_-]*|:[A-Za-z0-9_-]*|[A-Za-z_][A-Za-z0-9_-]*)$"))
+  BIND(REPLACE(?before, "^[\\\\s\\\\S]*?([?$][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z0-9_-]*|:[A-Za-z0-9_-]*|[A-Za-z_][A-Za-z0-9_-]*)$", "$1") AS ?typed0)
+  BIND(?caret - STRLEN(?typed0) AS ?from0)
+  FILTER(?from0 = 0 || !REGEX(SUBSTR(?value, ?from0, 1), "[A-Za-z0-9_:?$-]"))
+  # Turtle's directives start with @ (@prefix).
+  BIND(!?sparql && !STRSTARTS(?typed0, "?") && !STRSTARTS(?typed0, "$") && !CONTAINS(?typed0, ":") && ?from0 > 0 && SUBSTR(?value, ?from0, 1) = "@" AS ?directive)
+  BIND(IF(?directive, CONCAT("@", ?typed0), ?typed0) AS ?typed)
+  BIND(IF(?directive, ?from0 - 1, ?from0) AS ?from)
+  BIND(IF(STRSTARTS(?typed, "?") || STRSTARTS(?typed, "$"), "variable", IF(CONTAINS(?typed, ":"), "prefixed", "bare")) AS ?mode)
+  FILTER(?mode != "variable" || ?sparql)
+  FILTER(?mode != "bare" || STRLEN(?typed) >= 2)
+  BIND(LCASE(?typed) AS ?lower)
+  BIND(STRBEFORE(?typed, ":") AS ?typedPrefix)
+  BIND(STRAFTER(?typed, ":") AS ?typedLocal)
+  FILTER(?mode != "prefixed" || EXISTS { { ?pdx sem:prefixName ?ppx ; sem:namespace ?pnx } UNION { ?pdx sh:prefix ?ppx ; sh:namespace ?pnx FILTER NOT EXISTS { ?pex sem:prefixName ?ppx } } FILTER(STR(?ppx) = ?typedPrefix) })
+  # The prefixes the text uses.
+  LATERAL { SELECT ?value (CONCAT("|", GROUP_CONCAT(DISTINCT ?usedPrefix; separator="|"), "|") AS ?used) (COUNT(DISTINCT ?usedPrefix) AS ?usedCount) WHERE {
+      OPTIONAL { LATERAL { (?value "(^|[^A-Za-z0-9_?$])([A-Za-z][A-Za-z0-9_-]*):") sx:matches (?um ?uat ?ub ?usedPrefix) } }
+    } GROUP BY ?value }
+  # The candidates, each a sort key, completion, kind and what it says (a namespace, or what it is about),
+  # the first of each completion kept, the first eight.
+  LATERAL { SELECT ?value ?language ?sparql ?caret ?from ?typed ?mode ?lower ?typedPrefix ?typedLocal ?used ?usedCount ?completion (MIN(?candidate) AS ?entry) WHERE {
+   LATERAL {
+        {
+          # Variables of the text but the word itself, by name.
+          FILTER(?mode = "variable")
+          BIND(CONCAT(SUBSTR(?value, 1, ?from), SUBSTR(?value, ?caret + 1)) AS ?rest)
+          LATERAL { (?rest "[?$]([A-Za-z_][A-Za-z0-9_]*)") sx:matches (?vm ?vat ?vname) }
+          FILTER(STRSTARTS(?vname, SUBSTR(?typed, 2)) && ?vname != SUBSTR(?typed, 2))
+          BIND(CONCAT(SUBSTR(?typed, 1, 1), ?vname) AS ?completion)
+          BIND(CONCAT("0", ?vname, "\\u0002", ?completion, "\\u0002variable\\u0002") AS ?candidate)
+        } UNION {
+          # The language's words (classes saying c:language it, and theirs): keywords first, shorter first.
+          FILTER(?mode = "bare")
+          ?wordClass c:language ?wordLanguage ; a owl:Class . FILTER(LCASE(STR(?wordLanguage)) = ?language)
+          ?wc rdfs:subClassOf* ?wordClass . ?word a ?wc . FILTER(isIRI(?word))
+          ?word rdfs:label ?wordLabel0 . BIND(STR(?wordLabel0) AS ?wordLabel)
+          FILTER(STRSTARTS(LCASE(?wordLabel), ?lower) && LCASE(?wordLabel) != ?lower)
+          BIND(EXISTS { ?wc rdfs:subClassOf* c:CodeFunction } AS ?isFunction)
+          BIND(IF(?typed = ?lower && REGEX(?wordLabel, "^[A-Z_ ]+$"), LCASE(?wordLabel), ?wordLabel) AS ?completion)
+          BIND(CONCAT("1", IF(?isFunction, "1", "0"), SUBSTR(CONCAT("0000", STR(STRLEN(?wordLabel))), STRLEN(STR(STRLEN(?wordLabel))) + 1), sx:sortKey(?wordLabel, "en"), "\\u0001", ?wordLabel, "\\u0002", ?completion, "\\u0002", IF(?isFunction, "function", "keyword"), "\\u0002a", STR(?word)) AS ?candidate)
+        } UNION {
+          # The prefixes it knows, shorter first.
+          FILTER(?mode = "bare")
+          { ?pdp sem:prefixName ?ppp ; sem:namespace ?pnp } UNION { ?pdp sh:prefix ?ppp ; sh:namespace ?pnp FILTER NOT EXISTS { ?pep sem:prefixName ?ppp } }
+          BIND(STR(?ppp) AS ?prefixName)
+          FILTER(STRSTARTS(LCASE(?prefixName), ?lower))
+          BIND(CONCAT(?prefixName, ":") AS ?completion)
+          BIND(CONCAT("2", SUBSTR(CONCAT("0000", STR(STRLEN(?prefixName))), STRLEN(STR(STRLEN(?prefixName))) + 1), sx:sortKey(?prefixName, "en"), "\\u0001", ?prefixName, "\\u0002", ?completion, "\\u0002prefix\\u0002n", STR(?pnp)) AS ?candidate)
+        } UNION {
+          # Terms (c:TermIndex) by prefixed name: of the namespace typed, or whose local name starts with
+          # the word (three letters or more); the namespaces the text uses first, the case typed first,
+          # classes before properties, shorter first.
+          FILTER(?mode = "prefixed" || STRLEN(?typed) >= 3)
+          LATERAL { SELECT ?mode ?typedLocal ?lower ?t (MIN(?nameCandidate) AS ?best) WHERE {
+            VALUES ?termView { c:DeclaredTerms c:UsedClasses c:UsedProperties } ?termView rs:solution ?tr . ?tr rs:binding ?trb . ?trb rs:variable "term" ; rs:value ?t . FILTER(isIRI(?t))
+            FILTER(IF(?mode = "prefixed", CONTAINS(LCASE(STR(?t)), LCASE(?typedLocal)), CONTAINS(LCASE(STR(?t)), ?lower)))
+            { ?pdn sem:prefixName ?ppn ; sem:namespace ?pnn } UNION { ?pdn sh:prefix ?ppn ; sh:namespace ?pnn FILTER NOT EXISTS { ?pen sem:prefixName ?ppn } }
+            BIND(STR(?pnn) AS ?ns)
+            FILTER(STRSTARTS(STR(?t), ?ns) && REGEX(SUBSTR(STR(?t), STRLEN(?ns) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$"))
+            BIND(STR(10000 - STRLEN(?ns)) AS ?nsRank)
+            BIND(CONCAT(SUBSTR("00000", STRLEN(?nsRank) + 1), ?nsRank, " ", STR(?ppn)) AS ?nameCandidate)
+          } GROUP BY ?mode ?typedLocal ?lower ?t }
+          BIND(SUBSTR(?best, 7) AS ?termPrefix)
+          BIND(SUBSTR(STR(?t), 10000 - xsd:integer(SUBSTR(?best, 1, 5)) + 1) AS ?local)
+          FILTER(IF(?mode = "prefixed", ?termPrefix = ?typedPrefix && STRSTARTS(LCASE(?local), LCASE(?typedLocal)) && ?local != ?typedLocal, STRSTARTS(LCASE(?local), ?lower)))
+          BIND(EXISTS { c:UsedClasses rs:solution ?cr . ?cr rs:binding ?crb . ?crb rs:variable "term" ; rs:value ?t }
+            || EXISTS { c:DeclaredTerms rs:solution ?dr . ?dr rs:binding ?drb , ?drk . ?drb rs:variable "term" ; rs:value ?t . ?drk rs:variable "declared" ; rs:value ?dk FILTER(?dk IN (owl:Class, rdfs:Class)) } AS ?isClass)
+          BIND(IF(?mode = "prefixed", ?typedLocal, ?typed) AS ?against)
+          BIND(?mode = "bare" && ?usedCount > 0 && !CONTAINS(?used, CONCAT("|", ?termPrefix, "|")) AS ?unused)
+          BIND(CONCAT(?termPrefix, ":", ?local) AS ?completion)
+          BIND(CONCAT(IF(?mode = "prefixed", "0", "3"), IF(?unused, "1", "0"), IF(STRSTARTS(?local, ?against), "0", "1"), IF(?isClass, "0", "1"), SUBSTR(CONCAT("0000", STR(STRLEN(?local))), STRLEN(STR(STRLEN(?local))) + 1),
+            sx:sortKey(?local, "en"), "\\u0001", ?local, "\\u0001", sx:sortKey(?termPrefix, "en"), "\\u0001", ?termPrefix, "\\u0002", ?completion, "\\u0002", IF(?isClass, "class", "property"), "\\u0002a", STR(?t)) AS ?candidate)
+        }
+   }
+  } GROUP BY ?value ?language ?sparql ?caret ?from ?typed ?mode ?lower ?typedPrefix ?typedLocal ?used ?usedCount ?completion ORDER BY ?entry LIMIT 8 }
+  BIND(SUBSTR(?value, 1, ?from) AS ?upTo)
+  BIND(STRLEN(?upTo) - STRLEN(REPLACE(?upTo, "\\n", "")) + 1 AS ?line)
+  BIND(STRLEN(REPLACE(?upTo, "^[\\\\s\\\\S]*\\n", "")) AS ?column)
+  BIND(IRI(CONCAT(STR($this), "/~sg")) AS ?sg)
+  BIND(STRAFTER(?entry, "\\u0002") AS ?afterKey)
+  BIND(STRBEFORE(STRAFTER(?afterKey, "\\u0002"), "\\u0002") AS ?kind)
+  BIND(STRAFTER(STRAFTER(?afterKey, "\\u0002"), "\\u0002") AS ?says)
+  BIND(IF(STRSTARTS(?says, "a"), IRI(SUBSTR(?says, 2)), c:none) AS ?about)
+  # What it is about's comment: untagged, else in English, else any; the least.
+  LATERAL { OPTIONAL { SELECT ?about (MIN(?ranked) AS ?comment) WHERE {
+      ?about rdfs:comment ?c0 FILTER(isLiteral(?c0))
+      BIND(CONCAT(IF(LANG(?c0) = "", "0", IF(langMatches(LANG(?c0), "en"), "1", "2")), STR(?c0)) AS ?ranked)
+    } GROUP BY ?about } }
+  BIND(REPLACE(REPLACE(SUBSTR(?comment, 2), "\\\\s+", " "), "^(.*?[.!?])\\\\s.*$", "$1") AS ?sentence)
+  BIND(IF(STRSTARTS(?says, "n"), SUBSTR(?says, 2), IF(STRLEN(?sentence) > 90, CONCAT(SUBSTR(?sentence, 1, 89), "…"), ?sentence)) AS ?detail)
+  BIND(IRI(CONCAT(STR($this), "/~sg-", SUBSTR(MD5(?completion), 1, 12))) AS ?item)
+}""" .
+
+
+c:CodeEditorRendering a sem:Rendering ; sem:targets c:CodeEditor ; sem:stratum 0 ; sem:follows c:suggested , ( c:suggested c:suggestionItem ) ;
+    sem:watches rdf:type , c:value , c:original , c:caret , c:label , rdfs:label , c:activeSuggestion , c:suggested , c:suggestionItem ,
+      c:replaceFrom , c:replaceTo , c:suggestionLine , c:suggestionColumn , c:suggestionSort , c:completion , c:suggestionKind , c:suggestionDetail .
 c:CodeEditorRendering-fn a sem:Rule ; sem:implements c:CodeEditorRendering ; sem:function "workbench:editor" .
+# The editor: on screen its lines' numbers, its highlighted text (the line blocks fill it) under the text
+# area, the suggestions placed at the word, the keys' hint; as text its numbered lines and the suggestions.
+c:CodeEditorRendering-sparql-screen a sem:Rule ;
+    sem:implements c:CodeEditorRendering ;
+    sem:modality mod:Screen ;
+    sem:bulk false ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this .
+  ?el a ?tag ; rdfhtml:id ?id ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:value ?elValue ; rdfhtml:rows ?rows ;
+      rdfhtml:spellcheck ?spellcheck ; rdfhtml:autocomplete ?autocomplete ; rdfhtml:autocapitalize ?autocapitalize ; rdfhtml:wrap ?wrap ;
+      c:suggestionsOf ?suggestionsOf ; c:replaceFrom ?listFrom ; c:replaceTo ?listTo ; c:suggestionCount ?listCount ; c:suggestionIndex ?index ; c:completion ?liCompletion ;
+      rdfhtml:hasChild ?textNode ; rdfhtml:attribute ?attr ; ord:immediatelyPrecedes ?after .
+  ?parent rdfhtml:hasChild ?el .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:CodeEditor .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL {{ $this c:value ?v0 }} OPTIONAL {{ $this c:original ?o0 }}
+  BIND(STR(COALESCE(?v0, ?o0, "")) AS ?value)
+  BIND(STRLEN(?value) - STRLEN(REPLACE(?value, "\\n", "")) + 1 AS ?lineCount)
+  OPTIONAL {{ $this l10n:label ?labelPicked }}
+  OPTIONAL {{ FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }}
+  OPTIONAL {{ FILTER(!BOUND(?labelPicked) && !BOUND(?labelOnly)) ?nameAt l10n:of $this ; l10n:name ?namePicked }}
+  OPTIONAL {{ FILTER(!BOUND(?labelPicked) && !BOUND(?labelOnly) && !BOUND(?namePicked)) $this rdfs:label ?nameOnly FILTER(isLiteral(?nameOnly)) }}
+  BIND(COALESCE(STR(COALESCE(?labelPicked, ?labelOnly, ?namePicked, ?nameOnly)), REPLACE(STR($this), "^.*[#/]", "")) AS ?label)
+  OPTIONAL {{ ?suggestionsAt l10n:of c:SuggestionsPhrase ; l10n:name ?sp0 }} OPTIONAL {{ FILTER(!BOUND(?sp0)) c:SuggestionsPhrase rdfs:label ?sp1 }}
+  BIND(COALESCE(STR(COALESCE(?sp0, ?sp1)), "Suggestions") AS ?suggestionsPhrase)
+  OPTIONAL {{ $this c:suggested ?sg . ?sg c:replaceFrom ?from ; c:replaceTo ?to ; c:suggestionLine ?sgLine ; c:suggestionColumn ?sgColumn }}
+  OPTIONAL {{ SELECT (COUNT(?anyItem) AS ?count0) WHERE {{ $this c:suggested ?csg . ?csg c:suggestionItem ?anyItem }} }}
+  BIND(COALESCE(?count0, 0) AS ?count)
+  BIND(BOUND(?sg) && ?count > 0 AS ?open)
+  OPTIONAL {{ $this c:activeSuggestion ?active0 }}
+  BIND(xsd:integer(ROUND(COALESCE(xsd:double(?active0), 0))) AS ?active1)
+  BIND(IF(?active1 > ?count - 1, ?count - 1, ?active1) AS ?active2)
+  BIND(IF(?active2 < 0, 0, ?active2) AS ?active)
+  OPTIONAL { $this c:caret ?caret0 }
+  BIND(xsd:integer(ROUND(COALESCE(xsd:double(?caret0), STRLEN(?value)))) AS ?caret1)
+  BIND(IF(?caret1 < 0, 0, IF(?caret1 > STRLEN(?value), STRLEN(?value), ?caret1)) AS ?caret)
+  OPTIONAL { ?keysAt l10n:of c:EditorKeysPhrase ; l10n:name ?kp0 } OPTIONAL { FILTER(!BOUND(?kp0)) c:EditorKeysPhrase rdfs:label ?kp1 }
+  BIND(COALESCE(STR(COALESCE(?kp0, ?kp1)), "Tab or Enter accepts a suggestion · Esc closes") AS ?keysPhrase)
+  # The line numbers: 1 to the line count.
+  OPTIONAL { SELECT (GROUP_CONCAT(STR(?ln); separator="\\n") AS ?numbers0) WHERE {
+      { SELECT ?ln WHERE {
+        OPTIONAL { $this c:value ?nv0 } OPTIONAL { $this c:original ?no0 }
+        BIND(CONCAT(STR(COALESCE(?nv0, ?no0, "")), "\\n") AS ?nText)
+        LATERAL { (?nText "\\n") sx:matches (?nm ?nat) }
+        BIND(STRLEN(REPLACE(SUBSTR(?nText, 1, ?nat), "[^\\n]", "")) AS ?ln)
+      } ORDER BY ?ln }
+    } }
+  LATERAL {
+  {
+    VALUES (?local ?tag0 ?cls0 ?parentLocal ?afterLocal) {
+      ("scroll" rdfhtml:Div "sem-scroll" "root" "next") ("code" rdfhtml:Div "sem-code" "scroll" UNDEF) ("gutter" rdfhtml:Pre "sem-gutter" "code" "text")
+      ("text" rdfhtml:Div "sem-text" "code" UNDEF) ("highlight" rdfhtml:Pre "sem-highlight" "text" "input") ("input" rdfhtml:Textarea "sem-input" "text" UNDEF)
+      ("suggestions" rdfhtml:Ul "sem-suggestions" "root" "hint") ("hint" rdfhtml:P "sem-hint" "root" UNDEF)
+    }
+    FILTER(?local != "suggestions" || ?open)
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~", ?parentLocal)) AS ?parent)
+    BIND(IF(?afterLocal = "next", IRI(CONCAT(?me, IF(?open, "/~suggestions", "/~hint"))), IF(BOUND(?afterLocal), IRI(CONCAT(?me, "/~", ?afterLocal)), ?unset)) AS ?after)
+    BIND(IF(?local IN ("input", "suggestions", "hint"), CONCAT(?me, "/~", ?local), ?unset) AS ?id)
+    BIND(IF(?local = "input", ?value, ?unset) AS ?elValue)
+    BIND(IF(?local = "input", STR(IF(?lineCount < 1, 1, ?lineCount)), ?unset) AS ?rows)
+    BIND(IF(?local = "input", "false", ?unset) AS ?spellcheck)
+    BIND(IF(?local = "input", "off", ?unset) AS ?autocomplete)
+    BIND(IF(?local = "input", "off", ?unset) AS ?autocapitalize)
+    BIND(IF(?local = "input", "off", ?unset) AS ?wrap)
+    BIND(IF(?local = "suggestions", CONCAT("--line: ", STR(?sgLine), "; --col: ", STR(?sgColumn), "; --digits: ", STR(STRLEN(STR(?lineCount)))), ?unset) AS ?style)
+    BIND(IF(?local = "suggestions", $this, ?unset) AS ?suggestionsOf)
+    BIND(IF(?local = "suggestions", ?from, ?unset) AS ?listFrom)
+    BIND(IF(?local = "suggestions", ?to, ?unset) AS ?listTo)
+    BIND(IF(?local = "suggestions", ?count, ?unset) AS ?listCount)
+    BIND(IF(?local IN ("gutter", "input", "hint"), IRI(CONCAT(?me, "/~", ?local, IF(?local = "hint", "-text", "-text"))), ?unset) AS ?textNode)
+    BIND(IF(?local = "gutter", COALESCE(?numbers0, "1"), IF(?local = "input", ?value, IF(?local = "hint", ?keysPhrase, ?unset))) AS ?data)
+  } UNION {
+    # The highlighted text's last line: a space (its lines are the line blocks').
+    BIND(IRI(CONCAT(?me, "/~highlight")) AS ?el)
+    BIND(IRI(CONCAT(?me, "/~tail")) AS ?textNode) BIND(" " AS ?data) BIND("\\u0001n1" AS ?textKey)
+  } UNION {
+    # Attributes: aria-hidden on the gutter and the highlighted text; the input's names and state.
+    VALUES (?local ?an) { ("gutter" "aria-hidden") ("highlight" "aria-hidden") ("input" "aria-label") ("input" "aria-autocomplete") ("input" "aria-describedby")
+      ("input" "data-sem-caret") ("input" "aria-controls") ("input" "aria-activedescendant") ("suggestions" "role") ("suggestions" "aria-label") }
+    FILTER(?open || !(?an IN ("aria-controls", "aria-activedescendant") || ?local = "suggestions"))
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el)
+    BIND(IRI(CONCAT(?me, "/~", ?local, "-", ?an)) AS ?attr)
+    BIND(IF(?an = "aria-hidden", "true", IF(?an = "aria-label", IF(?local = "input", ?label, ?suggestionsPhrase), IF(?an = "aria-autocomplete", "list",
+      IF(?an = "aria-describedby", CONCAT(?me, "/~hint"), IF(?an = "data-sem-caret", STR(?caret), IF(?an = "aria-controls", CONCAT(?me, "/~suggestions"),
+      IF(?an = "aria-activedescendant", CONCAT(?me, "/~s-", STR(?active)), IF(?an = "role", "listbox", ?unset)))))))) AS ?av)
+  } UNION {
+    # The suggestions, by place: a kind glyph, the completion, what it says.
+    FILTER(?open)
+      $this c:suggested ?isg . ?isg c:suggestionItem ?item . ?item c:suggestionSort ?sort ; c:completion ?completion0 ; c:suggestionKind ?kind0 .
+      OPTIONAL {{ ?item c:suggestionDetail ?detail0 }}
+      {{ SELECT ?item (SUM(IF(?otherSort < ?mySort, 1, 0)) AS ?itemIndex) WHERE {{
+          $this c:suggested ?rsg . ?rsg c:suggestionItem ?item , ?other . ?item c:suggestionSort ?mySort . ?other c:suggestionSort ?otherSort .
+        }} GROUP BY ?item }}
+    BIND(STR(?completion0) AS ?completion)
+    BIND(STR(?kind0) AS ?kind)
+    BIND(CONCAT(?me, "/~s-", STR(?itemIndex)) AS ?sid)
+    VALUES ?part { "li" "kind" "name" "detail" "role" "selected" "hidden" }
+    FILTER(?part != "detail" || BOUND(?detail0))
+    BIND(IF(?part IN ("li", "role", "selected"), IRI(?sid), IRI(CONCAT(?sid, "-", IF(?part = "hidden", "kind", ?part)))) AS ?el)
+    BIND(IF(?part = "li", rdfhtml:Li, IF(?part = "kind", rdfhtml:Span, IF(?part = "name", rdfhtml:Code, IF(?part = "detail", rdfhtml:Span, ?unset)))) AS ?tag)
+    BIND(IF(?part = "li", "sem-option", IF(?part = "kind", CONCAT("sem-kind sem-kind-", ?kind), IF(?part = "detail", "sem-detail", ?unset))) AS ?cls)
+    BIND(IF(?part = "li", IRI(CONCAT(?me, "/~suggestions")), IF(?part IN ("kind", "name", "detail"), IRI(?sid), ?unset)) AS ?parent)
+    BIND(IF(?part = "li", ?sid, ?unset) AS ?id)
+    BIND(IF(?part = "li", ?itemIndex, ?unset) AS ?index1)
+    BIND(IF(?part = "li", ?completion, ?unset) AS ?liCompletion)
+    BIND(IF(?part = "li", IF(?itemIndex < ?count - 1, IRI(CONCAT(?me, "/~s-", STR(?itemIndex + 1))), ?unset),
+      IF(?part = "kind", IRI(CONCAT(?sid, "-name")), IF(?part = "name" && BOUND(?detail0), IRI(CONCAT(?sid, "-detail")), ?unset))) AS ?after)
+    BIND(IF(?part IN ("kind", "name", "detail"), IRI(CONCAT(?sid, "-", ?part, "-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "kind", IF(?kind = "keyword", "K", IF(?kind = "function", "ƒ", IF(?kind = "prefix", ":", IF(?kind = "class", "C", IF(?kind = "property", "P", "?"))))),
+      IF(?part = "name", ?completion, IF(?part = "detail", STR(?detail0), ?unset))) AS ?data)
+    BIND(IF(?part = "role", IRI(CONCAT(?sid, "-role")), IF(?part = "selected", IRI(CONCAT(?sid, "-aria-selected")), IF(?part = "hidden", IRI(CONCAT(?sid, "-kind-aria-hidden")), ?unset))) AS ?attr)
+    BIND(IF(?part = "role", "role", IF(?part = "selected", "aria-selected", IF(?part = "hidden", "aria-hidden", ?unset))) AS ?an)
+    BIND(IF(?part = "role", "option", IF(?part = "selected", IF(?itemIndex = ?active, "true", "false"), IF(?part = "hidden", "true", ?unset))) AS ?av)
+  }
+  }
+  BIND(IF(BOUND(?index1), ?index1, ?unset) AS ?index)
+}""" .
+c:CodeEditorRendering-sparql-text a sem:Rule ;
+    sem:implements c:CodeEditorRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?el .
+  ?el a rdfhtml:Div ; rdfhtml:hasChild ?textNode ; ord:immediatelyPrecedes ?after .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:CodeEditor .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL {{ $this c:value ?v0 }} OPTIONAL {{ $this c:original ?o0 }}
+  BIND(STR(COALESCE(?v0, ?o0, "")) AS ?value)
+  BIND(STRLEN(?value) - STRLEN(REPLACE(?value, "\\n", "")) + 1 AS ?lineCount)
+  OPTIONAL {{ $this l10n:label ?labelPicked }}
+  OPTIONAL {{ FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }}
+  OPTIONAL {{ FILTER(!BOUND(?labelPicked) && !BOUND(?labelOnly)) ?nameAt l10n:of $this ; l10n:name ?namePicked }}
+  OPTIONAL {{ FILTER(!BOUND(?labelPicked) && !BOUND(?labelOnly) && !BOUND(?namePicked)) $this rdfs:label ?nameOnly FILTER(isLiteral(?nameOnly)) }}
+  BIND(COALESCE(STR(COALESCE(?labelPicked, ?labelOnly, ?namePicked, ?nameOnly)), REPLACE(STR($this), "^.*[#/]", "")) AS ?label)
+  OPTIONAL {{ ?suggestionsAt l10n:of c:SuggestionsPhrase ; l10n:name ?sp0 }} OPTIONAL {{ FILTER(!BOUND(?sp0)) c:SuggestionsPhrase rdfs:label ?sp1 }}
+  BIND(COALESCE(STR(COALESCE(?sp0, ?sp1)), "Suggestions") AS ?suggestionsPhrase)
+  OPTIONAL {{ $this c:suggested ?sg . ?sg c:replaceFrom ?from ; c:replaceTo ?to ; c:suggestionLine ?sgLine ; c:suggestionColumn ?sgColumn }}
+  OPTIONAL {{ SELECT (COUNT(?anyItem) AS ?count0) WHERE {{ $this c:suggested ?csg . ?csg c:suggestionItem ?anyItem }} }}
+  BIND(COALESCE(?count0, 0) AS ?count)
+  BIND(BOUND(?sg) && ?count > 0 AS ?open)
+  OPTIONAL {{ $this c:activeSuggestion ?active0 }}
+  BIND(xsd:integer(ROUND(COALESCE(xsd:double(?active0), 0))) AS ?active1)
+  BIND(IF(?active1 > ?count - 1, ?count - 1, ?active1) AS ?active2)
+  BIND(IF(?active2 < 0, 0, ?active2) AS ?active)
+  LATERAL {
+  {
+    BIND(IRI(CONCAT(?me, "/~head")) AS ?el) BIND(IRI(CONCAT(?me, "/~head-text")) AS ?textNode) BIND(CONCAT(?label, ":") AS ?data)
+    BIND(IRI(CONCAT(?me, "/~line0")) AS ?after)
+  } UNION {
+    # Each line, numbered.
+    BIND(CONCAT(?value, "\\n") AS ?lined)
+    LATERAL { (?lined "[^\\n]*\\n") sx:matches (?lm ?lat) }
+    BIND(SUBSTR(?lm, 1, STRLEN(?lm) - 1) AS ?lineText)
+    BIND(STRLEN(REPLACE(SUBSTR(?lined, 1, ?lat - 1), "[^\\n]", "")) AS ?i)
+    BIND(IRI(CONCAT(?me, "/~line", STR(?i))) AS ?el)
+    BIND(IRI(CONCAT(?me, "/~line", STR(?i), "-text")) AS ?textNode)
+    BIND(STR(?i + 1) AS ?n)
+    BIND(CONCAT(SUBSTR("   ", 1, 3 - STRLEN(?n)), ?n, " │ ", ?lineText) AS ?data)
+    BIND(IF(?i + 1 < ?lineCount, IRI(CONCAT(?me, "/~line", STR(?i + 1))), IF(?open, IRI(CONCAT(?me, "/~suggestions")), ?unset)) AS ?after)
+  } UNION {
+    # The suggestions on a line, the active one in brackets.
+    FILTER(?open)
+    { SELECT (GROUP_CONCAT(?shown; separator="  ") AS ?all) WHERE {
+      { SELECT ?shown WHERE {
+        $this c:suggested ?tsg . ?tsg c:suggestionItem ?titem . ?titem c:suggestionSort ?tsort ; c:completion ?tcompletion .
+        { SELECT (SUM(IF(?ts2 < ?ts1, 1, 0)) AS ?tindex) ?titem WHERE { $this c:suggested ?tsg2 . ?tsg2 c:suggestionItem ?titem , ?tother . ?titem c:suggestionSort ?ts1 . ?tother c:suggestionSort ?ts2 } GROUP BY ?titem }
+        OPTIONAL { $this c:activeSuggestion ?tactive0 }
+        { SELECT (COUNT(?tany) AS ?tcount) WHERE { $this c:suggested ?tsg3 . ?tsg3 c:suggestionItem ?tany } }
+        BIND(xsd:integer(ROUND(COALESCE(xsd:double(?tactive0), 0))) AS ?ta1)
+        BIND(IF(?ta1 > ?tcount - 1, ?tcount - 1, IF(?ta1 < 0, 0, ?ta1)) AS ?tactive)
+        BIND(IF(?tindex = ?tactive, CONCAT("[", STR(?tcompletion), "]"), STR(?tcompletion)) AS ?shown)
+      } ORDER BY ?tsort }
+    } }
+    BIND(IRI(CONCAT(?me, "/~suggestions")) AS ?el) BIND(IRI(CONCAT(?me, "/~suggestions-text")) AS ?textNode)
+    BIND(CONCAT("    ", ?suggestionsPhrase, ": ", ?all) AS ?data)
+  }
+  }
+}""" .
+
 
 # Key presses the editor reacts to. Other keys are not events (the text area handles them), and a
 # key a reaction used does nothing else (no focus move on Tab, no new line on Enter).

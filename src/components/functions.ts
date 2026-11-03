@@ -50,6 +50,7 @@ import { containerFunctions } from './containers.ts'
 import { viewFunctions } from './views.ts'
 import { turtleFunctions } from './turtle.ts'
 import { markupFunctions } from './markup.ts'
+import { editorFunctions } from './editor.ts'
 import { functions as walkthroughFunctions } from './walkthrough.ts'
 import { functions as liveFunctions } from './live.ts'
 import { functions as formsFunctions } from './forms.ts'
@@ -883,6 +884,7 @@ export const functions: Record<string, FnRule> = {
   ...viewFunctions,
   ...turtleFunctions,
   ...markupFunctions,
+  ...editorFunctions,
   ...chartFunctions,
   ...ganttFunctions,
   ...formulaFunctions,

@@ -100,7 +100,7 @@ describe('the code editor (c:CodeEditor)', () => {
     expect(h.options('sparql')).toEqual(['?subject'])
     expect([...h.editor('sparql').querySelectorAll('.tok-keyword')].map((s) => s.textContent)).toContain('SELECT')
     // A code editor in no language it knows highlights nothing and suggests no words.
-    expect(h.editor('plain').querySelectorAll('.sem-highlight span')).toHaveLength(0)
+    expect(h.editor('plain').querySelectorAll('.sem-highlight [class^=tok-]')).toHaveLength(0)
     h.type('plain', 'SELE')
     expect(h.options('plain')).toEqual([])
   })
