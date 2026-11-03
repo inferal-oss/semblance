@@ -941,10 +941,11 @@ c:baseIri a owl:DatatypeProperty ; rdfs:comment "Base IRI for relative display o
 # the graph changes when the view follows updates (c:followUpdates). Its result is a result set in the
 # views graph (iv:ResultSet: a CONSTRUCT's triples as rows ?subject ?predicate ?object), which the view
 # names by iv:run and tells apart by iv:runOf. A view that binds a variable (c:bindVariable) runs its
-# own, <view>/~run-n for its nth query. A run reads what a rule's query would, rendered elements
-# included, but not provenance.
+# own, <view>/~run-n for its nth query. A change to the node it names by c:of runs it again
+# (iv:refreshedBy). A run reads what a rule's query would, rendered elements included, but not
+# provenance.
 c:QueryViewRuns a iv:View ;
-    iv:perQuery c:queries ; iv:listed true ; iv:referrerClass c:QueryView ; iv:followedBy c:followUpdates ; iv:bindsBy c:QueryRunBinding ;
+    iv:perQuery c:queries ; iv:listed true ; iv:referrerClass c:QueryView ; iv:followedBy c:followUpdates ; iv:refreshedBy c:of ; iv:bindsBy c:QueryRunBinding ;
     iv:strategy iv:OnRequest ; iv:materialize iv:ResultSet .
 # What it prints (the Turtle printer, turtle.ttl): a section per query (by its place in c:queries,
 # under its label) with the subjects of its run (c:QueryViewRuns, iv:runOf it) - in the order of the

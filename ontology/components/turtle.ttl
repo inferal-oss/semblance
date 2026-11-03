@@ -136,7 +136,8 @@ WHERE {
   LATERAL {
     { FILTER(!BOUND(?rows) && !BOUND(?results))
        ?t ?p ?o0 FILTER(!STRSTARTS(STR(?p), "http://www.w3.org/ns/prov#"))
-       BIND(IF(EXISTS { ?view a/rdfs:subClassOf* ?vc . ?vc c:turtleElides ?p }, "…", ?o0) AS ?o) }
+       OPTIONAL { ?view a/rdfs:subClassOf* ?elidingClass . ?elidingClass c:turtleElides ?p }
+       BIND(IF(BOUND(?elidingClass), "…", ?o0) AS ?o) }
     UNION
     { FILTER(BOUND(?rows)) ?rows rs:solution ?r . ?r rs:index ?ri FILTER(!BOUND(?limit) || ?ri <= ?limit)
        ?r rs:binding ?sb , ?pb , ?ob . ?sb rs:variable "subject" ; rs:value ?t . ?pb rs:variable "predicate" ; rs:value ?p . ?ob rs:variable "object" ; rs:value ?o FILTER(isIRI(?p)) }
@@ -392,7 +393,8 @@ WHERE {
   $this a c:TurtleHead ; c:turtleView ?view .
   ?view a/rdfs:subClassOf* ?vc . ?vc c:turtleInto ?local .
   BIND(IRI(CONCAT(STR(?view), "/~", ?local)) AS ?into)
-  BIND(EXISTS { ?view a/rdfs:subClassOf* ?hc . ?hc c:turtleHeader true } AS ?header)
+  OPTIONAL { ?view a/rdfs:subClassOf* ?hc . ?hc c:turtleHeader ?headerFlag FILTER(STR(?headerFlag) = "true") }
+  BIND(BOUND(?hc) AS ?header)
   OPTIONAL { ?view c:baseIri ?base0 }
   BIND(IF(?header, STR(?base0), ?none) AS ?base)
   BIND(?header && (BOUND(?base) || EXISTS { $this c:turtleUses ?anyUse }) AS ?headed)
