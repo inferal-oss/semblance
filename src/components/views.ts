@@ -7,6 +7,7 @@ import { HtmlIndex } from '../render/html-index.ts'
 import { toIndentedHTML } from '../render/serialize.ts'
 import { matchTokens, tokenizeSparql } from '../sparql-tokens.ts'
 import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
+import { section, topNode } from './turtle.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { labelOf as textLabelOf, text, declaredPrefixes, fnv, named, rdfList, str } from './util.ts'
 import { md5Key } from './data.ts'
@@ -550,12 +551,21 @@ const streammembers: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** The element the Turtle printer puts the node's tokens in (turtle.ttl). */
 const triplesview: FnRule = (ctx, focus) => {
-  const subject = ctx.object(focus, C.of)
-  if (!named(subject)) return []
-  const quads = ctx.match(subject, null, null)
+  if (!named(ctx.object(focus, C.of))) return []
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, turtleNodes(o, turtleTokens([{ quads }], declaredPrefixes(ctx), undefined, false))))
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }))
+  return o.quads
+}
+
+/** What a triples view prints: the node, when it has triples, at the top of its one section. */
+const triplesviewTurtle: FnRule = (ctx, focus) => {
+  const subject = ctx.object(focus, C.of)
+  if (!named(subject) || !ctx.match(subject, null, null).some((q) => !q.predicate.value.startsWith(NS.prov))) return []
+  const o = ctx.out(focus)
+  topNode(ctx, o, 0, subject)
+  section(ctx, o, 0)
   return o.quads
 }
 
@@ -599,4 +609,5 @@ export const viewFunctions: Record<string, FnRule> = {
   hostslot,
   streammembers,
   triplesview,
+  'triplesview:turtle': triplesviewTurtle,
 }

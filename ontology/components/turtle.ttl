@@ -1,0 +1,428 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
+
+# The Turtle printer (#284): triples as syntax-colored Turtle, each token its own node with its place
+# (sem:orderKey), stated step by step by building blocks, so a changed triple re-keys only its own
+# tokens. A view that prints Turtle (c:TriplesView, c:QueryView, c:ResultTurtle, c:ClassDoc,
+# c:ElementMarkup) says what to print by a block of its own, which mints its top nodes:
+#
+#   c:TurtleNode      what prints a body: a subject at the top of a section (c:turtleTop "named"), a
+#                     blank node there ("root": [ … ] .), or an inline object - a blank node, a result
+#                     set's solution or binding - under its parent's entry (<entry>-n)
+#   c:TurtleSection   a section of the view: its place (c:turtleIndex) and # title (c:turtleTitle)
+#   c:TurtleHead      the view's header (<view>/~th)
+#
+# then the printer's blocks, each a stratum above the last:
+#
+#   c:TurtleEntries   per node: an entry per (predicate, object) it prints, <node>-e<md5(p, key)>, and a
+#                     node for each inline object that no ancestor prints (a cycle prints []): one node
+#                     per place a blank node prints, which runs the block again (the stratum's fixpoint)
+#   c:TurtleNames     per entry: its predicate's name and sort key, its object's text, its place among
+#                     its node's entries (an order key from content), read from its node's (top-down)
+#   c:TurtleLists     per node: whether it prints as a list - an rdf:first / rdf:rest cell whose rest
+#                     is rdf:nil or a list (bottom-up) - said on the entry that points to it
+#
+# Only the entries block writes about nodes (it reads every statement of a node's term); the blocks
+# above it write about entries, views and tokens.
+#   c:TurtleTokens    per node: its tokens - subject, brackets, predicates, separators, objects - put
+#                     in the view's element (c:turtleInto)
+#   c:TurtleHeader    per head: @base and the @prefix lines of the prefixes its tokens use, and each
+#                     section's blank line and # title
+#
+# What a node prints comes from its source: the store (the default), a run's rows (c:turtleRows: a
+# CONSTRUCT's triples) or a run as a result set (c:turtleResults). The function twins
+# (src/components/turtle.ts) state the same with the model in src/turtle.ts; a test checks that both
+# render the same, byte for byte.
+
+c:TurtleView a owl:Class ; rdfs:comment """A component that prints Turtle: a subclass says where its tokens go (c:turtleInto), what it elides
+(c:turtleElides) and whether it prints a header (c:turtleHeader); a block of its own mints its top c:TurtleNode s and
+c:TurtleSection s."""@en .
+c:TurtleNode a owl:Class ; rdfs:comment "Derived: what prints a Turtle body - a subject at the top of a section, or an inline object (a blank node) under its parent's entry."@en .
+c:TurtleEntry a owl:Class ; rdfs:comment "Derived: a (predicate, object) pair a c:TurtleNode prints."@en .
+c:TurtleHead a owl:Class ; rdfs:comment "Derived: a view's header (<view>/~th), which the prefixes its tokens use are said on."@en .
+c:TurtleSection a owl:Class ; rdfs:comment "Derived: a section of a view that prints Turtle, with its place and # title."@en .
+c:turtleView a owl:ObjectProperty ; rdfs:comment "Derived: the view a c:TurtleNode, c:TurtleEntry or c:TurtleSection belongs to."@en .
+c:turtleTerm a rdf:Property ; rdfs:comment "Derived: the term a c:TurtleNode prints the statements of."@en .
+c:turtleTop a owl:DatatypeProperty ; rdfs:comment "Derived: \"named\" for a subject at the top of a section, \"root\" for a blank node there."@en .
+c:turtleKey a owl:DatatypeProperty ; rdfs:comment "Derived: a top c:TurtleNode's order key (a tuple: its section, then its subject's place)."@en .
+c:turtleSection a owl:ObjectProperty ; rdfs:comment "Derived: the c:TurtleSection a top c:TurtleNode is in."@en .
+c:turtleIndex a owl:DatatypeProperty ; rdfs:comment "Derived: a c:TurtleSection's place, from 0."@en .
+c:turtleTitle a owl:DatatypeProperty ; rdfs:comment "Derived: a c:TurtleSection's title, printed as a # comment."@en .
+c:turtleBody a owl:DatatypeProperty ; rdfs:comment "Derived: how deep a top c:TurtleNode's predicates are indented (four spaces a step)."@en .
+c:turtleChildBody a owl:DatatypeProperty ; rdfs:comment "Derived, on a c:TurtleEntry: how deep its object's node indents its predicates."@en .
+c:turtleChild a owl:ObjectProperty ; rdfs:comment "Derived: the c:TurtleNode a c:TurtleEntry's inline object prints as (<entry>-n)."@en .
+c:turtleUp a owl:ObjectProperty ; rdfs:comment "Derived: the c:TurtleNode an inline one is printed under."@en .
+c:turtleRestOf a owl:ObjectProperty ; rdfs:comment "Derived: the list cell (c:turtleCell) an inline c:TurtleNode is the rdf:rest of."@en .
+c:turtleCell a owl:DatatypeProperty ; rdfs:comment "Derived: an inline c:TurtleNode with one rdf:first and one rdf:rest, the rest rdf:nil or a node of its own."@en .
+c:turtleListy a owl:DatatypeProperty ; rdfs:comment "Derived, on a c:TurtleEntry: its object's node is a list cell whose rest chain is cells ending in rdf:nil, so it prints as ( … )."@en .
+c:turtleRows a owl:ObjectProperty ; rdfs:comment "Derived: the run (a CONSTRUCT's triples as rows) a c:TurtleNode reads its statements from."@en .
+c:turtleResults a owl:ObjectProperty ; rdfs:comment "Derived: the run a c:TurtleNode prints as a result set (rdf:type and the rs: triples of its nodes)."@en .
+c:turtleLimit a owl:DatatypeProperty ; rdfs:comment "Derived: how many rows (c:turtleRows) or solutions (c:turtleResults) are printed, by rs:index."@en .
+c:turtleIn a owl:ObjectProperty ; rdfs:comment "Derived: the c:TurtleNode a c:TurtleEntry is printed under."@en .
+c:turtlePredicate a owl:ObjectProperty ; rdfs:comment "Derived: a c:TurtleEntry's predicate."@en .
+c:turtleObject a rdf:Property ; rdfs:comment "Derived: a c:TurtleEntry's object."@en .
+c:turtleInline a owl:DatatypeProperty ; rdfs:comment "Derived: a c:TurtleEntry whose object prints inline ([ … ], ( … ))."@en .
+c:turtlePredText a owl:DatatypeProperty ; rdfs:comment "Derived: how a c:TurtleEntry's predicate prints: a, a prefixed name or <iri>."@en .
+c:turtlePredSort a owl:DatatypeProperty ; rdfs:comment "Derived: the predicate's name's sx:sortKey (\"\" for rdf:type, which comes first)."@en .
+c:turtlePredName a owl:DatatypeProperty ; rdfs:comment "Derived: the predicate's name (\"\" for rdf:type)."@en .
+c:turtleSort a owl:DatatypeProperty ; rdfs:comment "Derived: a c:TurtleEntry's place among its predicate's objects: the object's text (naturals padded to 20 digits), an inline object's first-level statements."@en .
+c:turtleEntryKey a owl:DatatypeProperty ; rdfs:comment "Derived: a c:TurtleEntry's order key: its node's, then (predicate sort key, name, object sort)."@en .
+c:turtleText a owl:DatatypeProperty ; rdfs:comment "Derived: how a c:TurtleEntry's object prints (a name, a literal's text)."@en .
+c:turtleKind a owl:DatatypeProperty ; rdfs:comment "Derived: the token kind of c:turtleText (pname, iri, literal, number, keyword)."@en .
+c:turtleLang a owl:DatatypeProperty ; rdfs:comment "Derived: a literal object's @language."@en .
+c:turtleDatatype a owl:DatatypeProperty ; rdfs:comment "Derived: a literal object's datatype's name (printed after ^^)."@en .
+c:turtleUses a owl:DatatypeProperty ; rdfs:comment "Derived, on a c:TurtleHead: a prefix its view's tokens use."@en .
+c:turtleInto a owl:DatatypeProperty ; rdfs:comment "On a class that prints Turtle: the local name of the element its tokens go into (<view>/~<local>)."@en .
+c:turtleElides a owl:ObjectProperty ; rdfs:comment "On a class that prints Turtle: a predicate whose objects it prints as …"@en .
+c:turtleHeader a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "On a class that prints Turtle: true when it prints @base and @prefix lines."@en .
+
+# Entries: what a node prints, from its source, each (predicate, object) once; a node of its own for
+# each inline object no ancestor prints (a list cell's rest: the list's next cell).
+c:TurtleEntries a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum -6 ; sem:always true ;
+    sem:follows c:turtleTerm , ( c:turtleRows rs:solution rs:binding ) , ( c:turtleResults rs:solution ) .
+c:TurtleEntries-fn a sem:Rule ; sem:implements c:TurtleEntries ; sem:function "turtle:entries" .
+c:TurtleEntries-sparql a sem:Rule ;
+    sem:implements c:TurtleEntries ;
+    sem:bulk false ;
+    sem:needsExtension sx:Text ;
+    sem:construct """
+CONSTRUCT {
+  $this c:turtleCell ?cell .
+  ?e a c:TurtleEntry ; c:turtleIn $this ; c:turtleView ?view ; c:turtlePredicate ?p ; c:turtleObject ?o ; c:turtleInline ?inline ; c:turtleChild ?child .
+  ?child a c:TurtleNode ; c:turtleView ?view ; c:turtleTerm ?o ; c:turtleUp $this ; c:turtleRestOf ?restOf ;
+    c:turtleRows ?rows ; c:turtleResults ?results ; c:turtleLimit ?limit .
+}
+WHERE {
+  $this a c:TurtleNode ; c:turtleView ?view ; c:turtleTerm ?t .
+  OPTIONAL { $this c:turtleTop ?top }
+  OPTIONAL { $this c:turtleRows ?rows }
+  OPTIONAL { $this c:turtleResults ?results }
+  OPTIONAL { $this c:turtleLimit ?limit }
+  # A list cell: one rdf:first, one rdf:rest, nothing else; the rest rdf:nil, or inline and no ancestor's.
+  BIND(!BOUND(?top) && EXISTS { $this c:turtleTerm ?ct . ?ct rdf:first ?cf ; rdf:rest ?cr } AS ?maybeCell)
+  { SELECT (COUNT(*) AS ?count) (SUM(IF(?sp = rdf:first, 1, 0)) AS ?firsts) (SUM(IF(?sp = rdf:rest && (sameTerm(?so, rdf:nil) || ?soInline && !?soCycle), 1, 0)) AS ?rests) WHERE {
+      $this c:turtleTerm ?st .
+      OPTIONAL { $this c:turtleRows ?srows }
+      OPTIONAL { $this c:turtleResults ?sresults }
+      OPTIONAL { $this c:turtleLimit ?slimit }
+      { SELECT DISTINCT ?sp ?so WHERE {
+        $this c:turtleTerm ?st2 .
+        OPTIONAL { $this c:turtleRows ?rows2 }
+        OPTIONAL { $this c:turtleResults ?results2 }
+        OPTIONAL { $this c:turtleLimit ?limit2 }
+        LATERAL {
+          { FILTER(!BOUND(?rows2) && !BOUND(?results2)) ?st2 ?sp ?so FILTER(!STRSTARTS(STR(?sp), "http://www.w3.org/ns/prov#")) }
+          UNION
+          { FILTER(BOUND(?rows2)) ?rows2 rs:solution ?sr . ?sr rs:index ?sri FILTER(!BOUND(?limit2) || ?sri <= ?limit2)
+             ?sr rs:binding ?ssb , ?spb , ?sob . ?ssb rs:variable "subject" ; rs:value ?st2 . ?spb rs:variable "predicate" ; rs:value ?sp . ?sob rs:variable "object" ; rs:value ?so FILTER(isIRI(?sp)) }
+          UNION
+          { FILTER(BOUND(?results2)) ?st2 ?sp ?so FILTER(sameTerm(?sp, rdf:type) || STRSTARTS(STR(?sp), STR(rs:)))
+             FILTER(!sameTerm(?sp, rs:solution) || !BOUND(?limit2) || NOT EXISTS { ?so rs:index ?soi FILTER(?soi > ?limit2) }) }
+        }
+      } }
+      BIND(isBlank(?so) || (BOUND(?sresults) && (sameTerm(?sp, rs:solution) || sameTerm(?sp, rs:binding))) AS ?soInline)
+      BIND(EXISTS { $this c:turtleUp* ?sanc . ?sanc c:turtleTerm ?so } AS ?soCycle)
+    } }
+  BIND(IF(?maybeCell && ?count = 2 && ?firsts = 1 && ?rests = 1, true, ?none) AS ?cell)
+  LATERAL {
+    { FILTER(!BOUND(?rows) && !BOUND(?results))
+       ?t ?p ?o0 FILTER(!STRSTARTS(STR(?p), "http://www.w3.org/ns/prov#"))
+       BIND(IF(EXISTS { ?view a/rdfs:subClassOf* ?vc . ?vc c:turtleElides ?p }, "…", ?o0) AS ?o) }
+    UNION
+    { FILTER(BOUND(?rows)) ?rows rs:solution ?r . ?r rs:index ?ri FILTER(!BOUND(?limit) || ?ri <= ?limit)
+       ?r rs:binding ?sb , ?pb , ?ob . ?sb rs:variable "subject" ; rs:value ?t . ?pb rs:variable "predicate" ; rs:value ?p . ?ob rs:variable "object" ; rs:value ?o FILTER(isIRI(?p)) }
+    UNION
+    { FILTER(BOUND(?results)) ?t ?p ?o FILTER(sameTerm(?p, rdf:type) || STRSTARTS(STR(?p), STR(rs:)))
+       FILTER(!sameTerm(?p, rs:solution) || !BOUND(?limit) || NOT EXISTS { ?o rs:index ?oi FILTER(?oi > ?limit) }) }
+  }
+  BIND(isBlank(?o) || (BOUND(?results) && (sameTerm(?p, rs:solution) || sameTerm(?p, rs:binding))) AS ?isInline)
+  BIND(IF(?isInline, true, ?none) AS ?inline)
+  BIND(IF(isBlank(?o), CONCAT("_:", sx:blankLabel(?o)), IF(isLiteral(?o), CONCAT(STR(?o), "@", LANG(?o), "^^", STR(DATATYPE(?o))), STR(?o))) AS ?key)
+  BIND(IRI(CONCAT(STR($this), "-e", SUBSTR(MD5(CONCAT(STR(?p), " ", ?key)), 1, 12))) AS ?e)
+  BIND(?isInline && NOT EXISTS { $this c:turtleUp* ?anc . ?anc c:turtleTerm ?o } AS ?hasChild)
+  BIND(IF(?hasChild, IRI(CONCAT(STR(?e), "-n")), ?none) AS ?child)
+  BIND(IF(BOUND(?cell) && sameTerm(?p, rdf:rest), $this, ?none) AS ?restOf)
+}""" .
+
+# Names, sorts, order keys and depths, per entry: its predicate's name and sort key (rdf:type first),
+# its object's text in tokens (a name; a literal bare, as JSON.stringify writes it, or in triple
+# quotes when it has lines; @language or ^^datatype), its place among its predicate's objects, its
+# order key - its node's, read from the entry above (top-down), then (predicate sort key, name, sort)
+# - and its object's node's depth.
+c:TurtleNames a sem:BuildingBlock ; sem:targets c:TurtleEntry ; sem:stratum -4 ; sem:always true ;
+    sem:follows c:turtleIn , ( c:turtleIn [ sem:inverse c:turtleChild ] ) , ( c:turtleIn c:turtleRestOf [ sem:inverse c:turtleChild ] ) , ( c:turtleIn [ sem:inverse c:turtleIn ] ) ,
+      c:turtleChild , ( c:turtleChild [ sem:inverse c:turtleIn ] ) , c:turtleView .
+c:TurtleNames-fn a sem:Rule ; sem:implements c:TurtleNames ; sem:function "turtle:names" .
+c:TurtleNames-sparql a sem:Rule ;
+    sem:implements c:TurtleNames ;
+    sem:bulk false ;
+    sem:needsExtension sx:Text , sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  $this c:turtlePredText ?predText ; c:turtlePredSort ?predSort ; c:turtlePredName ?predName ; c:turtleSort ?sort ; c:turtleEntryKey ?entryKey ;
+    c:turtleText ?text ; c:turtleKind ?kind ; c:turtleLang ?lang ; c:turtleDatatype ?dtText ; c:turtleChildBody ?childBody .
+}
+WHERE {
+  $this a c:TurtleEntry ; c:turtleIn ?node ; c:turtleView ?view ; c:turtlePredicate ?p ; c:turtleObject ?o .
+  OPTIONAL { ?view c:baseIri ?base }
+  OPTIONAL { ?node c:turtleKey ?topKey }
+  OPTIONAL { ?upEntry c:turtleChild ?node ; c:turtleEntryKey ?upKey }
+  BIND(COALESCE(?topKey, CONCAT(?upKey, "\\u0001n1")) AS ?nodeKey)
+  FILTER(BOUND(?nodeKey))
+  OPTIONAL { ?node c:turtleResults ?results }
+  BIND(EXISTS { $this c:turtleInline true } AS ?isInline)
+  OPTIONAL { SELECT (MIN(?cand_p) AS ?best_p) WHERE {
+      $this c:turtlePredicate ?iri_p .
+      { ?d_p sem:prefixName ?pfx_p ; sem:namespace ?ns0_p } UNION { ?d_p sh:prefix ?pfx_p ; sh:namespace ?ns0_p FILTER NOT EXISTS { ?e_p sem:prefixName ?pfx_p } }
+      BIND(STR(?ns0_p) AS ?ns_p)
+      FILTER(STRSTARTS(STR(?iri_p), ?ns_p) && REGEX(SUBSTR(STR(?iri_p), STRLEN(?ns_p) + 1), "^([A-Za-z_][A-Za-z0-9_.-]*)?$"))
+      BIND(STR(10000 - STRLEN(?ns_p)) AS ?rank_p)
+      BIND(CONCAT(SUBSTR("00000", STRLEN(?rank_p) + 1), ?rank_p, " ", STR(?pfx_p), ":", SUBSTR(STR(?iri_p), STRLEN(?ns_p) + 1)) AS ?cand_p)
+    } }
+    BIND(SUBSTR(?best_p, 7) AS ?pName)
+  BIND(IF(sameTerm(?p, rdf:type), "a", COALESCE(?pName, CONCAT("<", IF(BOUND(?base) && STRSTARTS(STR(?p), STR(?base)), SUBSTR(STR(?p), STRLEN(STR(?base)) + 1), STR(?p)), ">"))) AS ?predText)
+  BIND(IF(sameTerm(?p, rdf:type), "", sx:sortKey(?predText, "en")) AS ?predSort)
+  BIND(IF(sameTerm(?p, rdf:type), "", ?predText) AS ?predName)
+  OPTIONAL { SELECT (MIN(?cand_o) AS ?best_o) WHERE {
+      $this c:turtleObject ?iri_o . FILTER(isIRI(?iri_o))
+      { ?d_o sem:prefixName ?pfx_o ; sem:namespace ?ns0_o } UNION { ?d_o sh:prefix ?pfx_o ; sh:namespace ?ns0_o FILTER NOT EXISTS { ?e_o sem:prefixName ?pfx_o } }
+      BIND(STR(?ns0_o) AS ?ns_o)
+      FILTER(STRSTARTS(STR(?iri_o), ?ns_o) && REGEX(SUBSTR(STR(?iri_o), STRLEN(?ns_o) + 1), "^([A-Za-z_][A-Za-z0-9_.-]*)?$"))
+      BIND(STR(10000 - STRLEN(?ns_o)) AS ?rank_o)
+      BIND(CONCAT(SUBSTR("00000", STRLEN(?rank_o) + 1), ?rank_o, " ", STR(?pfx_o), ":", SUBSTR(STR(?iri_o), STRLEN(?ns_o) + 1)) AS ?cand_o)
+    } }
+    BIND(SUBSTR(?best_o, 7) AS ?oName)
+  OPTIONAL { SELECT (MIN(?cand_d) AS ?best_d) WHERE {
+      $this c:turtleObject ?lit_d . FILTER(isLiteral(?lit_d)) BIND(DATATYPE(?lit_d) AS ?iri_d)
+      { ?d_d sem:prefixName ?pfx_d ; sem:namespace ?ns0_d } UNION { ?d_d sh:prefix ?pfx_d ; sh:namespace ?ns0_d FILTER NOT EXISTS { ?e_d sem:prefixName ?pfx_d } }
+      BIND(STR(?ns0_d) AS ?ns_d)
+      FILTER(STRSTARTS(STR(?iri_d), ?ns_d) && REGEX(SUBSTR(STR(?iri_d), STRLEN(?ns_d) + 1), "^([A-Za-z_][A-Za-z0-9_.-]*)?$"))
+      BIND(STR(10000 - STRLEN(?ns_d)) AS ?rank_d)
+      BIND(CONCAT(SUBSTR("00000", STRLEN(?rank_d) + 1), ?rank_d, " ", STR(?pfx_d), ":", SUBSTR(STR(?iri_d), STRLEN(?ns_d) + 1)) AS ?cand_d)
+    } }
+    BIND(SUBSTR(?best_d, 7) AS ?dName)
+  BIND(isLiteral(?o) && LANG(?o) = "" && (
+    (sameTerm(DATATYPE(?o), xsd:integer) && REGEX(STR(?o), "^[+-]?[0-9]+$")) ||
+    (sameTerm(DATATYPE(?o), xsd:decimal) && REGEX(STR(?o), "^[+-]?[0-9]*[.][0-9]+$")) ||
+    (sameTerm(DATATYPE(?o), xsd:boolean) && REGEX(STR(?o), "^(true|false)$"))) AS ?bare)
+  BIND(IF(?isInline, ?none, IF(isIRI(?o), COALESCE(?oName, CONCAT("<", IF(BOUND(?base) && STRSTARTS(STR(?o), STR(?base)), SUBSTR(STR(?o), STRLEN(STR(?base)) + 1), STR(?o)), ">")),
+    IF(?bare, STR(?o), IF(CONTAINS(STR(?o), "\\n"), CONCAT('\"\"\"', REPLACE(STR(?o), '"{3}', '\\\\\\\\"\\\\\\\\"\\\\\\\\"'), '\"\"\"'), sx:jsonString(STR(?o)))))) AS ?text)
+  BIND(IF(?isInline, ?none, IF(isIRI(?o), IF(STRSTARTS(?text, "<"), "iri", "pname"), IF(?bare, IF(sameTerm(DATATYPE(?o), xsd:boolean), "keyword", "number"), "literal"))) AS ?kind)
+  BIND(IF(isLiteral(?o) && LANG(?o) != "", CONCAT("@", LANG(?o)), ?none) AS ?lang)
+  BIND(IF(isLiteral(?o) && !?bare && LANG(?o) = "" && !sameTerm(DATATYPE(?o), xsd:string), COALESCE(?dName, CONCAT("<", IF(BOUND(?base) && STRSTARTS(STR(DATATYPE(?o)), STR(?base)), SUBSTR(STR(DATATYPE(?o)), STRLEN(STR(?base)) + 1), STR(DATATYPE(?o))), ">")), ?none) AS ?dtText)
+  BIND(CONCAT(?text, COALESCE(?lang, ""), IF(BOUND(?dtText), CONCAT("^^", ?dtText), "")) AS ?printed)
+  # An inline object: its first-level statements (inline objects as []), or a solution by its rs:index.
+  OPTIONAL { { SELECT (GROUP_CONCAT(?item; separator="\\n") AS ?sig) WHERE {
+      { SELECT ?item WHERE {
+          $this c:turtleChild ?own . ?y c:turtleIn ?own ; c:turtlePredicate ?yp ; c:turtleObject ?yo .
+          BIND(IF(EXISTS { ?y c:turtleInline true }, "[]", IF(isLiteral(?yo), CONCAT(STR(?yo), "@", LANG(?yo), "^^", STR(DATATYPE(?yo))), STR(?yo))) AS ?yk)
+          BIND(CONCAT(STR(?yp), " ", ?yk) AS ?item)
+        } ORDER BY ?item }
+    } } }
+  OPTIONAL { $this c:turtleChild ?ownNode . ?iy c:turtleIn ?ownNode ; c:turtlePredicate rs:index ; c:turtleObject ?index0 }
+  BIND(IF(?isInline && BOUND(?results) && sameTerm(?p, rs:solution), ?index0, ?none) AS ?index)
+  BIND(IF(isBlank(?o), CONCAT("_:", sx:blankLabel(?o)), STR(?o)) AS ?inlineKey)
+  BIND(IF(?isInline,
+    IF(BOUND(?index), CONCAT(SUBSTR("00000000000000000000", 1, 20 - STRLEN(STR(?index))), STR(?index), " ", ?inlineKey), CONCAT("[", COALESCE(?sig, ""), " ", ?inlineKey)),
+    IF(isLiteral(?o) && LANG(?o) = "" && sameTerm(DATATYPE(?o), xsd:integer) && REGEX(STR(?o), "^[0-9]+$"),
+      CONCAT(SUBSTR("00000000000000000000", 1, 20 - STRLEN(STR(?o))), STR(?o), " ", ?printed), ?printed)) AS ?sort)
+  BIND(CONCAT(?nodeKey, "\\u0001n1\\u0001s", ?predSort, "\\u0001s", ?predName, "\\u0001s", ?sort) AS ?entryKey)
+  # Its object's node's depth: one below its node's, one more for [ … ] on a line of its own (its
+  # predicate's objects wrap); a list's next cell, as its list.
+  OPTIONAL { ?node c:turtleBody ?topBody }
+  OPTIONAL { ?bodyEntry c:turtleChild ?node ; c:turtleChildBody ?upBody }
+  BIND(COALESCE(?topBody, ?upBody) AS ?nodeBody)
+  OPTIONAL { $this c:turtleChild ?myChild }
+  BIND(BOUND(?myChild) && EXISTS { ?myChild c:turtleRestOf ?node } AS ?continues)
+  BIND(EXISTS { ?headEntry c:turtleChild ?node ; c:turtleListy true } || EXISTS { ?node c:turtleRestOf ?cellAbove . ?aboveEntry c:turtleChild ?cellAbove ; c:turtleListy true } AS ?nodeListy)
+  BIND(BOUND(?myChild) && NOT EXISTS { $this c:turtleListy true } AS ?bracket)
+  { SELECT (COUNT(?ge) AS ?m) (SUM(IF(?gWide, 1, 0)) AS ?wide) WHERE {
+      $this c:turtleIn ?gn ; c:turtlePredicate ?gp . ?ge c:turtleIn ?gn ; c:turtlePredicate ?gp .
+      BIND(EXISTS { ?ge c:turtleInline true } && NOT EXISTS { ?ge c:turtleListy true } AS ?gWide)
+    } }
+  BIND(IF(BOUND(?myChild), IF(?continues, ?nodeBody, ?nodeBody + 1 + IF(!?nodeListy && ?bracket && ?m > 1 && (?m > 2 || ?wide > 0), 1, 0)), ?none) AS ?childBody)
+}""" .
+
+# Lists: a cell whose rest is rdf:nil, or a node that is a list (read from it: bottom-up).
+c:TurtleLists a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum -5 ; sem:always true ;
+    sem:follows ( [ sem:inverse c:turtleIn ] ) ; sem:watches rdf:type , c:turtleCell , c:turtleListy , c:turtlePredicate , c:turtleObject , c:turtleIn , c:turtleChild .
+c:TurtleLists-fn a sem:Rule ; sem:implements c:TurtleLists ; sem:function "turtle:lists" .
+c:TurtleLists-sparql a sem:Rule ;
+    sem:implements c:TurtleLists ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?pointer c:turtleListy true }
+WHERE {
+  $this a c:TurtleNode ; c:turtleCell true .
+  ?pointer c:turtleChild $this .
+  ?rest c:turtleIn $this ; c:turtlePredicate rdf:rest ; c:turtleObject ?ro .
+  FILTER(sameTerm(?ro, rdf:nil) || EXISTS { ?rest c:turtleListy true })
+}""" .
+
+# Tokens, per node: its opening and closing, and each entry's: ' ;' and the predicate before its
+# first object (a new line, but the first predicate of a subject), ',' between objects, each on a
+# line of its own when there are more than two or one prints as [ … ], then the object. A list's
+# cells print only their rdf:first, after a space. Plain tokens (spaces, punctuation) are text, the
+# others spans of class ttl-<kind>.
+c:TurtleTokens a sem:BuildingBlock ; sem:targets c:TurtleNode ; sem:stratum -3 ; sem:always true ;
+    sem:follows ( [ sem:inverse c:turtleIn ] ) , ( [ sem:inverse c:turtleChild ] ) , ( c:turtleRestOf [ sem:inverse c:turtleChild ] ) , c:turtleView .
+c:TurtleTokens-fn a sem:Rule ; sem:implements c:TurtleTokens ; sem:function "turtle:tokens" .
+c:TurtleTokens-sparql a sem:Rule ;
+    sem:implements c:TurtleTokens ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?into rdfhtml:hasChild ?tok .
+  ?tok a ?element ; rdfhtml:data ?plain ; rdfhtml:class ?class ; rdfhtml:hasChild ?tokText ; sem:orderKey ?key .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+  ?head c:turtleUses ?prefix .
+}
+WHERE {
+  $this a c:TurtleNode ; c:turtleView ?view ; c:turtleTerm ?term .
+  OPTIONAL { $this c:turtleBody ?topBody }
+  OPTIONAL { ?bodyEntry c:turtleChild $this ; c:turtleChildBody ?upBody }
+  BIND(COALESCE(?topBody, ?upBody) AS ?body)
+  FILTER(BOUND(?body))
+  ?view a/rdfs:subClassOf* ?vc . ?vc c:turtleInto ?local .
+  BIND(IRI(CONCAT(STR(?view), "/~", ?local)) AS ?into)
+  BIND(IRI(CONCAT(STR(?view), "/~th")) AS ?head)
+  OPTIONAL { ?view c:baseIri ?base }
+  OPTIONAL { $this c:turtleTop ?top }
+  OPTIONAL { $this c:turtleKey ?topKey }
+  OPTIONAL { ?ownEntry c:turtleChild $this ; c:turtleEntryKey ?ownKey }
+  BIND(COALESCE(?topKey, CONCAT(?ownKey, "\\u0001n1")) AS ?K)
+  FILTER(BOUND(?K))
+  BIND(COALESCE(?top, IF(EXISTS { $this c:turtleRestOf ?cellAbove . ?aboveEntry c:turtleChild ?cellAbove ; c:turtleListy true }, "cont",
+    IF(EXISTS { ?listEntry c:turtleChild $this ; c:turtleListy true }, "head", "bracket"))) AS ?nodeKind)
+  BIND(?nodeKind = "head" || ?nodeKind = "cont" AS ?listy)
+  BIND(EXISTS { ?any c:turtleIn $this } AS ?hasEntries)
+  OPTIONAL { SELECT (MIN(?cand_s) AS ?best_s) WHERE {
+      $this c:turtleTerm ?iri_s . FILTER(isIRI(?iri_s))
+      { ?d_s sem:prefixName ?pfx_s ; sem:namespace ?ns0_s } UNION { ?d_s sh:prefix ?pfx_s ; sh:namespace ?ns0_s FILTER NOT EXISTS { ?e_s sem:prefixName ?pfx_s } }
+      BIND(STR(?ns0_s) AS ?ns_s)
+      FILTER(STRSTARTS(STR(?iri_s), ?ns_s) && REGEX(SUBSTR(STR(?iri_s), STRLEN(?ns_s) + 1), "^([A-Za-z_][A-Za-z0-9_.-]*)?$"))
+      BIND(STR(10000 - STRLEN(?ns_s)) AS ?rank_s)
+      BIND(CONCAT(SUBSTR("00000", STRLEN(?rank_s) + 1), ?rank_s, " ", STR(?pfx_s), ":", SUBSTR(STR(?iri_s), STRLEN(?ns_s) + 1)) AS ?cand_s)
+    } }
+    BIND(SUBSTR(?best_s, 7) AS ?sName)
+  BIND(COALESCE(?sName, CONCAT("<", IF(BOUND(?base) && STRSTARTS(STR(?term), STR(?base)), SUBSTR(STR(?term), STRLEN(STR(?base)) + 1), STR(?term)), ">")) AS ?subject)
+  LATERAL {
+    {
+      VALUES (?slot ?n) { ("a0" "\\u0001n0\\u0001n0") ("z0" "\\u0001n2\\u0001n0") ("z1" "\\u0001n2\\u0001n1") ("z2" "\\u0001n2\\u0001n2") ("z3" "\\u0001n2\\u0001n3") }
+      BIND(IF(?slot = "a0", IF(?nodeKind = "named", ?subject, IF(?nodeKind = "head", "(", IF(?nodeKind = "cont", ?none, "["))),
+        IF(?slot = "z0", IF(?nodeKind = "named", " .", IF(?nodeKind = "root", "\\n", IF(?nodeKind = "head", " )", IF(?nodeKind = "bracket" && ?hasEntries, CONCAT("\\n", SUBSTR("                                                                                ", 1, 4 * (?body - 1))), ?none)))),
+        IF(?slot = "z1", IF(?nodeKind = "named", "\\n", IF(?nodeKind = "root" || ?nodeKind = "bracket", "]", ?none)),
+        IF(?nodeKind = "root", IF(?slot = "z2", " .", "\\n"), ?none)))) AS ?text)
+      BIND(IF(?slot = "a0" && ?nodeKind = "named", IF(STRSTARTS(?subject, "<"), "iri", "pname"), IF(STRSTARTS(?text, "\\n"), "space", "punct")) AS ?tokKind)
+      BIND(IRI(CONCAT(STR($this), "-", ?slot)) AS ?tok)
+      BIND(CONCAT(?K, ?n) AS ?key)
+    }
+    UNION
+    {
+      ?e c:turtleIn $this ; c:turtlePredicate ?p ; c:turtlePredText ?predText ; c:turtlePredSort ?ps ; c:turtlePredName ?pn ; c:turtleSort ?sort ; c:turtleEntryKey ?E .
+      OPTIONAL { ?e c:turtleText ?otext ; c:turtleKind ?okind }
+      OPTIONAL { ?e c:turtleLang ?olang }
+      OPTIONAL { ?e c:turtleDatatype ?odt }
+      BIND(IF(EXISTS { ?e c:turtleInline true }, IF(EXISTS { ?e c:turtleChild ?ec }, IF(EXISTS { ?e c:turtleListy true }, "list", "bracket"), "empty"), "simple") AS ?object)
+      { SELECT ?p (COUNT(?ge) AS ?m) (SUM(IF(?gWide, 1, 0)) AS ?wide) WHERE {
+          ?ge c:turtleIn $this ; c:turtlePredicate ?p .
+          BIND(EXISTS { ?ge c:turtleInline true } && NOT EXISTS { ?ge c:turtleListy true } AS ?gWide)
+        } GROUP BY ?p }
+      BIND(NOT EXISTS { ?e2 c:turtleIn $this ; c:turtlePredSort ?ps2 ; c:turtlePredName ?pn2 FILTER(?ps2 < ?ps || (?ps2 = ?ps && ?pn2 < ?pn)) } AS ?firstPred)
+      BIND(NOT EXISTS { ?e3 c:turtleIn $this ; c:turtlePredicate ?p ; c:turtleSort ?s3 FILTER(?s3 < ?sort) } AS ?firstInGroup)
+      BIND(?m > 2 || ?wide > 0 AS ?wrap)
+      VALUES (?slot ?n) { ("k0" "\\u0001n0\\u0001n0") ("k1" "\\u0001n0\\u0001n1") ("k2" "\\u0001n0\\u0001n2") ("k3" "\\u0001n0\\u0001n3") ("k4" "\\u0001n0\\u0001n4")
+                         ("o0" "\\u0001n1\\u0001n0\\u0001n0") ("o1" "\\u0001n1\\u0001n0\\u0001n1") ("o2" "\\u0001n1\\u0001n0\\u0001n2") }
+      BIND(?listy && !sameTerm(?p, rdf:first) AS ?silent)
+      BIND(IF(?silent, ?none,
+        IF(?slot = "k0", IF(!?listy && ?firstInGroup && !?firstPred, " ;", ?none),
+        IF(?slot = "k1", IF(!?listy && ?firstInGroup, IF(?nodeKind = "named" && ?firstPred, " ", CONCAT("\\n", SUBSTR("                                                                                ", 1, 4 * (?body)))), ?none),
+        IF(?slot = "k2", IF(!?listy && ?firstInGroup, ?predText, ?none),
+        IF(?slot = "k3", IF(!?listy && !?firstInGroup, ",", ?none),
+        IF(?slot = "k4", IF(!?listy && ?wrap && ?m > 1, CONCAT("\\n", SUBSTR("                                                                                ", 1, 4 * (?body + 1))), " "),
+        IF(?slot = "o0", IF(?object = "simple", ?otext, IF(?object = "empty", "[]", ?none)),
+        IF(?slot = "o1", IF(BOUND(?olang), ?olang, IF(BOUND(?odt), "^^", ?none)),
+        IF(BOUND(?olang), ?none, ?odt))))))))) AS ?text)
+      BIND(IF(?slot = "k2", IF(sameTerm(?p, rdf:type), "keyword", IF(STRSTARTS(?predText, "<"), "iri", "pname")),
+        IF(?slot = "o0" && ?object = "simple", ?okind,
+        IF(?slot = "o1" && BOUND(?olang), "lang",
+        IF(?slot = "o2", IF(STRSTARTS(?odt, "<"), "iri", "pname"),
+        IF(?slot = "k1" || ?slot = "k4", "space", "punct"))))) AS ?tokKind)
+      BIND(IRI(CONCAT(STR(?e), "-", ?slot)) AS ?tok)
+      BIND(CONCAT(?E, ?n) AS ?key)
+    }
+  }
+  FILTER(BOUND(?text))
+  BIND(?tokKind = "space" || ?tokKind = "punct" AS ?plainKind)
+  BIND(IF(?plainKind, rdfhtml:Text, rdfhtml:Span) AS ?element)
+  BIND(IF(?plainKind, ?text, ?none) AS ?plain)
+  BIND(IF(?plainKind, ?none, CONCAT("ttl-", ?tokKind)) AS ?class)
+  BIND(IF(?plainKind, ?none, IRI(CONCAT(STR(?tok), "-x"))) AS ?tokText)
+  BIND(IF(?plainKind, ?none, ?text) AS ?spanned)
+  BIND(IF(?tokKind = "pname", STRBEFORE(?text, ":"), ?none) AS ?prefix)
+}""" .
+
+# The header and the sections, per view: @base (c:baseIri) and the @prefix line of each prefix its
+# tokens use, by prefix, when its class prints a header; a section's blank line, unless nothing comes
+# before it, and its # title.
+c:TurtleHeader a sem:BuildingBlock ; sem:targets c:TurtleHead ; sem:stratum -2 ; sem:always true ;
+    sem:follows c:turtleView , ( c:turtleView [ sem:inverse c:turtleView ] ) ;
+    sem:watches rdf:type , c:turtleUses , c:baseIri , c:turtleIndex , c:turtleTitle , c:turtleSection , c:turtleView .
+c:TurtleHeader-fn a sem:Rule ; sem:implements c:TurtleHeader ; sem:function "turtle:header" .
+c:TurtleHeader-sparql a sem:Rule ;
+    sem:implements c:TurtleHeader ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?into rdfhtml:hasChild ?tok .
+  ?tok a ?element ; rdfhtml:data ?plain ; rdfhtml:class ?class ; rdfhtml:hasChild ?tokText ; sem:orderKey ?key .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+}
+WHERE {
+  $this a c:TurtleHead ; c:turtleView ?view .
+  ?view a/rdfs:subClassOf* ?vc . ?vc c:turtleInto ?local .
+  BIND(IRI(CONCAT(STR(?view), "/~", ?local)) AS ?into)
+  BIND(EXISTS { ?view a/rdfs:subClassOf* ?hc . ?hc c:turtleHeader true } AS ?header)
+  OPTIONAL { ?view c:baseIri ?base0 }
+  BIND(IF(?header, STR(?base0), ?none) AS ?base)
+  BIND(?header && (BOUND(?base) || EXISTS { $this c:turtleUses ?anyUse }) AS ?headed)
+  {
+    FILTER(?header && BOUND(?base))
+    VALUES (?slot ?text ?tokKind) { (0 "@base" "keyword") (1 " " "space") (3 " ." "punct") (4 "\\n" "space") (2 "" "iri") }
+    BIND(IF(?slot = 2, CONCAT("<", ?base, ">"), ?text) AS ?t)
+    BIND(IRI(CONCAT(STR(?view), "/~th-b", STR(?slot))) AS ?tok)
+    BIND(CONCAT("\\u0001n0\\u0001n0\\u0001n", STR(?slot)) AS ?key)
+  } UNION {
+    FILTER(?header)
+    $this c:turtleUses ?pfx .
+    { ?d sem:prefixName ?pfx0 ; sem:namespace ?ns0 } UNION { ?d sh:prefix ?pfx0 ; sh:namespace ?ns0 FILTER NOT EXISTS { ?e sem:prefixName ?pfx0 } }
+    FILTER(STR(?pfx0) = ?pfx)
+    VALUES (?slot ?text ?tokKind) { (0 "@prefix" "keyword") (1 " " "space") (2 "" "pname") (3 " " "space") (4 "" "iri") (5 " ." "punct") (6 "\\n" "space") }
+    BIND(IF(?slot = 2, CONCAT(?pfx, ":"), IF(?slot = 4, CONCAT("<", STR(?ns0), ">"), ?text)) AS ?t)
+    BIND(IRI(CONCAT(STR(?view), "/~th-p", SUBSTR(MD5(?pfx), 1, 12), "-", STR(?slot))) AS ?tok)
+    BIND(CONCAT("\\u0001n0\\u0001n1\\u0001s", ?pfx, "\\u0001n", STR(?slot)) AS ?key)
+  } UNION {
+    ?sec a c:TurtleSection ; c:turtleView ?view ; c:turtleIndex ?i .
+    FILTER EXISTS { ?top c:turtleSection ?sec }
+    OPTIONAL { ?sec c:turtleTitle ?title }
+    BIND(?headed || EXISTS { ?sec2 a c:TurtleSection ; c:turtleView ?view ; c:turtleIndex ?i2 FILTER(?i2 < ?i) FILTER EXISTS { ?top2 c:turtleSection ?sec2 } } AS ?after)
+    VALUES (?slot ?tokKind) { (0 "space") (1 "comment") (2 "space") }
+    BIND(IF(?slot = 0, IF(?after, "\\n", ?none), IF(BOUND(?title), IF(?slot = 1, CONCAT("# ", STR(?title)), "\\n"), ?none)) AS ?t)
+    BIND(IRI(CONCAT(STR(?view), "/~ts-", STR(?i), "-k", STR(?slot))) AS ?tok)
+    BIND(CONCAT("\\u0001n1\\u0001n", STR(?i), "\\u0001n0\\u0001n", STR(?slot)) AS ?key)
+  }
+  FILTER(BOUND(?t))
+  BIND(?tokKind = "space" || ?tokKind = "punct" AS ?plainKind)
+  BIND(IF(?plainKind, rdfhtml:Text, rdfhtml:Span) AS ?element)
+  BIND(IF(?plainKind, ?t, ?none) AS ?plain)
+  BIND(IF(?plainKind, ?none, CONCAT("ttl-", ?tokKind)) AS ?class)
+  BIND(IF(?plainKind, ?none, IRI(CONCAT(STR(?tok), "-x"))) AS ?tokText)
+  BIND(IF(?plainKind, ?none, ?t) AS ?spanned)
+}""" .

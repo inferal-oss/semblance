@@ -48,6 +48,7 @@ import { functions as toolbarFunctions } from './toolbar.ts'
 import { functions as messagesFunctions } from './messages.ts'
 import { containerFunctions } from './containers.ts'
 import { viewFunctions } from './views.ts'
+import { turtleFunctions } from './turtle.ts'
 import { functions as walkthroughFunctions } from './walkthrough.ts'
 import { functions as liveFunctions } from './live.ts'
 import { functions as formsFunctions } from './forms.ts'
@@ -879,6 +880,7 @@ export const functions: Record<string, FnRule> = {
   ...stallFunctions,
   ...containerFunctions,
   ...viewFunctions,
+  ...turtleFunctions,
   ...chartFunctions,
   ...ganttFunctions,
   ...formulaFunctions,

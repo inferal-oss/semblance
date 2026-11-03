@@ -1153,10 +1153,36 @@ WHERE {
 }""" .
 
 c:TriplesView a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TurtleView ;
     rdfs:comment "The triples about one node (c:of) as syntax-colored Turtle."@en ;
-    sem:slug "triples-view" .
-c:TriplesViewRendering a sem:Rendering ; sem:targets c:TriplesView ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it colors the Turtle it prints for the node's triples, token by token." ;
-    sem:needsExtension sx:Matches .
+    sem:slug "triples-view" ;
+    c:turtleInto "root" .
+# What it prints (the Turtle printer, turtle.ttl): the node, when it has triples, at the top of its
+# one section; its blank nodes inline.
+c:TriplesViewTurtle a sem:BuildingBlock ; sem:targets c:TriplesView ; sem:stratum -7 ; sem:follows c:of .
+c:TriplesViewTurtle-fn a sem:Rule ; sem:implements c:TriplesViewTurtle ; sem:function "triplesview:turtle" .
+c:TriplesViewTurtle-sparql a sem:Rule ;
+    sem:implements c:TriplesViewTurtle ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?node a c:TurtleNode ; c:turtleView $this ; c:turtleTerm ?s ; c:turtleKey ?key ; c:turtleBody 1 ; c:turtleTop "named" ; c:turtleSection ?section .
+  ?section a c:TurtleSection ; c:turtleView $this ; c:turtleIndex 0 .
+  ?head a c:TurtleHead ; c:turtleView $this .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:TriplesView ; c:of ?s FILTER(isIRI(?s))
+  FILTER EXISTS { ?s ?p ?o FILTER(!STRSTARTS(STR(?p), "http://www.w3.org/ns/prov#")) }
+  BIND(IRI(CONCAT(STR($this), "/~ts-0")) AS ?section)
+  BIND(IRI(CONCAT(STR($this), "/~th")) AS ?head)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", SUBSTR(MD5(CONCAT("0 ", STR(?s))), 1, 12))) AS ?node)
+  BIND(CONCAT("\\u0001n1\\u0001n0\\u0001n1\\u0001n0\\u0001n0\\u0001s", STR(?s)) AS ?key)
+}""" .
+# The element its tokens go into.
+c:TriplesViewRendering a sem:Rendering ; sem:targets c:TriplesView ; sem:stratum 0 .
 c:TriplesViewRendering-fn a sem:Rule ; sem:implements c:TriplesViewRendering ; sem:function "triplesview" .
+c:TriplesViewRendering-sparql a sem:Rule ;
+    sem:implements c:TriplesViewRendering ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle" . }
+WHERE { $this a/rdfs:subClassOf* c:TriplesView ; c:of ?s FILTER(isIRI(?s)) BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .
