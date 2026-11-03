@@ -140,8 +140,10 @@ describe('block documents (blk:)', () => {
     expect(root('other').querySelector('a')!.getAttribute('href')).toBe('/docs/retro')
     expect(root('empty').querySelector('.sem-text')!.innerHTML).toBe('<br>')
     expect([...root('toc').querySelectorAll('li')].map((li) => li.textContent)).toEqual(['Plans', 'Later'])
-    // Blocks come in the order of their chain.
-    const order = [...d.querySelector('[data-sem-c=blk-document]')!.children].map((el) => el.id.replace(EX, '').replace('/~root', ''))
+    // Blocks come in the order of their chain, each after its handle.
+    const children = [...d.querySelector('[data-sem-c=blk-document]')!.children]
+    expect(children.filter((_, i) => i % 2 === 0).every((el) => el.getAttribute('data-sem-c') === 'blk-handle')).toBe(true)
+    const order = children.filter((_, i) => i % 2 === 1).map((el) => el.id.replace(EX, '').replace('/~root', ''))
     expect(order).toEqual(['toc', 'h1', 'p', 'bullets', 'numbers', 'todos', 'toggle', 'quote', 'callout', 'hr', 'code', 'math', 'table', 'image', 'file', 'bookmark', 'embed', 'columns', 'other', 'h2', 'empty'])
   })
 

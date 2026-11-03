@@ -563,8 +563,10 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   }
 }
 
-/** What renderings write about a node (its placement in the rendered output), never the data a document says. */
-const RENDERED = (p: string) => p.startsWith(H.ns) || p.startsWith(NS.ord) || p === SEM.orderKey || p === SEM.renders
+/** The drag layer's state a projection derives on a node (where it takes drops, what is offered to it), not its data. */
+const DRAG_STATE = new Set(['members', 'orderBy', 'zone', 'offered', 'hovered', 'lifted', 'refusedBy'].map((p) => NS.dnd + p))
+/** What renderings write about a node (its placement in the rendered output, its drag state), never the data a document says. */
+const RENDERED = (p: string) => p.startsWith(H.ns) || p.startsWith(NS.ord) || p === SEM.orderKey || p === SEM.renders || DRAG_STATE.has(p)
 
 /** The rows under an open term: its list's members, its predicates, the reifiers of its statement. */
 function children(ctx: RuleContext, o: Out, focus: NamedNode, f: TermFacts): NamedNode[] {

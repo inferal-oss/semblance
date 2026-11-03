@@ -188,7 +188,7 @@ c:TermMembers sem:group c:InspectionGroup . c:TermCard sem:group c:InspectionGro
 c:InverseFacet sem:group c:InspectionGroup .
 
 # --- Documents ---
-c:BlockEditor sem:group c:DocumentsGroup . blk:Block sem:group c:DocumentsGroup . blk:TextBlock sem:group c:DocumentsGroup . blk:Container sem:group c:DocumentsGroup .
+c:BlockEditor sem:group c:DocumentsGroup . blk:BlockHandle sem:group c:DocumentsGroup . blk:Block sem:group c:DocumentsGroup . blk:TextBlock sem:group c:DocumentsGroup . blk:Container sem:group c:DocumentsGroup .
 blk:Document sem:group c:DocumentsGroup . blk:Paragraph sem:group c:DocumentsGroup . blk:Heading sem:group c:DocumentsGroup . blk:Heading1 sem:group c:DocumentsGroup .
 blk:Heading2 sem:group c:DocumentsGroup . blk:Heading3 sem:group c:DocumentsGroup . blk:Quote sem:group c:DocumentsGroup . blk:List sem:group c:DocumentsGroup .
 blk:BulletedList sem:group c:DocumentsGroup . blk:NumberedList sem:group c:DocumentsGroup . blk:TodoList sem:group c:DocumentsGroup . blk:Item sem:group c:DocumentsGroup .
@@ -204,6 +204,8 @@ c:HistoryStep sem:group c:DocumentsGroup . c:FormatText sem:group c:DocumentsGro
 blk:Shortcut sem:group c:DocumentsGroup . blk:BlockShortcut sem:group c:DocumentsGroup . blk:InlineShortcut sem:group c:DocumentsGroup .
 c:BlockMenuKey sem:group c:DocumentsGroup .
 c:BlockStructureKey sem:group c:DocumentsGroup .
+c:BlockHandleKey sem:group c:DocumentsGroup . c:BlockHandleMenuKey sem:group c:DocumentsGroup . c:BlockDuplicateKey sem:group c:DocumentsGroup .
+blk:Conversion sem:group c:DocumentsGroup .
 blk:PlainTextBlock sem:group c:DocumentsGroup .
 blk:Typeset sem:group c:DocumentsGroup .
 c:BlockLinkKey sem:group c:DocumentsGroup .

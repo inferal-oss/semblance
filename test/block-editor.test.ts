@@ -314,7 +314,9 @@ describe('the cost of typing in a block (c:BlockEditor)', () => {
       const short = keystroke(0, prefer)
       const long = keystroke(3000, prefer)
       expect(long).toEqual(short)
-      expect(short.runs).toBeLessThanOrEqual(8)
+      // The block's text, marks and caret, and its handle, whose name follows the text (the handle's
+      // rendering, the drag layer's description of it and its style hooks).
+      expect(short.runs).toBeLessThanOrEqual(11)
     })
   }
 })
@@ -734,5 +736,245 @@ describe('formulas and code (c:BlockEditor)', () => {
       expect(h.app.querySelector(`[id="${EX}code/~root"] code`)!.getAttribute('data-language')).toBe('turtle')
     }
     sameHtml(both[1].html(), both[0].html(), "after the step")
+  })
+})
+
+describe('moving blocks by their handles (c:BlockEditor)', () => {
+  const extra = `<${EX}doc> <${NS.po}contains> <${EX}q> , <${EX}l> . <${EX}p3> <${NS.co}nextItem> <${EX}q> . <${EX}q> <${NS.co}nextItem> <${EX}l> .
+<${EX}q> a <${NS.blk}Quote> ; <${NS.rdf}value> "Said" ; <${NS.po}contains> <${EX}q1> . <${EX}q1> a <${NS.blk}Paragraph> ; <${NS.rdf}value> "Inside" .
+<${EX}l> a <${NS.blk}BulletedList> ; <${NS.po}contains> <${EX}i1> . <${EX}i1> a <${NS.blk}BulletedItem> ; <${NS.rdf}value> "One" .`
+  /** The keyboard drag: focus a block's handle, Space, then the given keys, then Space. */
+  const drag = (h: ReturnType<typeof mount>, block: string, keys: string[]) => {
+    const handle = h.app.querySelector(`[data-sem-c=blk-handle][data-sem-drag="${EX}${block}"]`) as HTMLElement
+    const key = (el: Element, k: string) => {
+      const e = Object.assign(new (h.app.ownerDocument.defaultView!.Event)('keydown', { bubbles: true, cancelable: true }), { key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
+      el.dispatchEvent(e)
+    }
+    key(handle, ' ')
+    for (const k of keys) key(h.app.querySelector(`[data-sem-c=blk-handle][data-sem-drag="${EX}${block}"]`)!, k)
+    key(h.app.querySelector(`[data-sem-c=blk-handle][data-sem-drag="${EX}${block}"]`)!, ' ')
+  }
+  const chain = (h: ReturnType<typeof mount>, container: string) => {
+    const members = h.objects(container, NS.po + 'contains')
+    let at = members.find((m) => !members.some((o) => h.objects(o, NS.co + 'nextItem').includes(m)))
+    const out: string[] = []
+    while (at) out.push(at.replace(EX, '')), (at = h.objects(at, NS.co + 'nextItem').find((n) => members.includes(n)))
+    return out
+  }
+
+  it('puts a handle before each block, carrying it, and moves the block where it is dropped', () => {
+    const both = [mount('sparql', 'wat', extra), mount('function', 'wat', extra)] as const
+    for (const h of both) {
+      expect(h.app.querySelectorAll('[data-sem-c=blk-handle]').length).toBe(8)
+      // Within the document: after the next block.
+      drag(h, 'p1', ['ArrowDown'])
+      expect(chain(h, 'doc')).toEqual(['p2', 'p1', 'hr', 'p3', 'q', 'l'])
+    }
+    sameHtml(both[1].html(), both[0].html(), 'moved')
+    for (const h of both) {
+      // Into the quote's blocks (the next zone), at the same place in it (second: after its first).
+      drag(h, 'p1', ['ArrowRight'])
+      expect(chain(h, 'doc')).toEqual(['p2', 'hr', 'p3', 'q', 'l'])
+      expect(chain(h, 'q')).toEqual(['q1', 'p1'])
+    }
+    sameHtml(both[1].html(), both[0].html(), 'nested')
+    for (const h of both) {
+      // A list takes only items: refused there, nothing changes.
+      drag(h, 'p2', ['ArrowRight', 'ArrowRight'])
+      expect(chain(h, 'l')).toEqual(['i1'])
+      expect(chain(h, 'doc')).toEqual(['p2', 'hr', 'p3', 'q', 'l'])
+      // One change each: undo puts it back.
+      h.click('Undo')
+      expect(chain(h, 'doc')).toEqual(['p2', 'p1', 'hr', 'p3', 'q', 'l'])
+      expect(chain(h, 'q')).toEqual(['q1'])
+    }
+    sameHtml(both[1].html(), both[0].html(), 'undone')
+  })
+})
+
+describe('conversions (blk:Conversion)', () => {
+  const B = NS.blk
+  const SH_FOCUS = 'http://www.w3.org/ns/shacl#focusNode'
+  const TEXT = ['Paragraph', 'Heading1', 'Heading2', 'Heading3', 'Quote', 'Callout', 'Toggle', 'Code', 'Math']
+  const LISTS = { BulletedList: 'ListItem', NumberedList: 'ListItem', TodoList: 'TodoItem' } as const
+  /** A document with one block of each type a conversion starts from, each after a divider (so no list joins another). */
+  const specimens = () => {
+    const lines: string[] = []
+    const chain: string[] = []
+    const add = (name: string, turtle: string) => (chain.push(`ex:hr-${name}`, `ex:${name}`), lines.push(`ex:hr-${name} a blk:Divider .`, turtle))
+    // As made: a toggle starts open (its template).
+    for (const t of TEXT) add(t, `ex:${t} a blk:${t} ; rdf:value "Hello world"${t === 'Toggle' ? ' ; c:expanded true' : ''} .`)
+    for (const [list, item] of Object.entries(LISTS)) {
+      add(list, `ex:${list} a blk:${list} ; po:contains ex:${list}-a , ex:${list}-b . ex:${list}-a a blk:${item} ; rdf:value "One" ; co:nextItem ex:${list}-b . ex:${list}-b a blk:${item} ; rdf:value "Two" .`)
+      if (item === 'TodoItem') lines.push(`ex:${list}-a blk:checked false . ex:${list}-b blk:checked true .`)
+    }
+    // Marks where nothing drops them (a plain text type drops marks).
+    lines.push(`ex:Paragraph blk:mark ex:Paragraph-b . ex:Paragraph-b a blk:Strong ; oa:start 0 ; oa:end 5 .`)
+    const doc = [`<${EX}doc> <${NS.po}contains> ${chain.map((c) => c.replace('ex:', `<${EX}`) + '>').join(' , ')} .`]
+    for (let i = 0; i + 1 < chain.length; i++) doc.push(`${chain[i]} co:nextItem ${chain[i + 1]} .`)
+    return `<${EX}p3> <${NS.co}nextItem> ex:hr-${TEXT[0]} .\n` + [...doc, ...lines].join('\n')
+  }
+  /** Everything the document says: the triples of its blocks, what they hold and their marks. */
+  const snapshot = (h: ReturnType<typeof mount>) => {
+    const seen = new Set<string>()
+    const todo = [EX + 'doc']
+    const out: string[] = []
+    while (todo.length) {
+      const s = todo.pop()!
+      if (seen.has(s)) continue
+      seen.add(s)
+      for (const q of h.store.match(h.store.factory.namedNode(s), null, null, h.store.factory.defaultGraph())) {
+        out.push(`${q.subject.value} ${q.predicate.value} ${q.object.termType === 'Literal' ? JSON.stringify(q.object.value) : q.object.value}`)
+        if ((q.predicate.value === NS.po + 'contains' || q.predicate.value === B + 'mark') && q.object.termType === 'NamedNode') todo.push(q.object.value)
+      }
+    }
+    return out.sort()
+  }
+  const convert = (h: ReturnType<typeof mount>, conv: string, block: string) => (h.bus.emit(conv, block), h.renderer.flush())
+  const typeOf = (h: ReturnType<typeof mount>, block: string) => h.objects(block, NS.rdf + 'type').find((t) => t.startsWith(B))!
+  const findings = (h: ReturnType<typeof mount>) => h.store.match(null, h.store.factory.namedNode(SH_FOCUS), null).map((q) => q.object.value).filter((v) => v.startsWith(EX))
+
+  it('round-trips every built-in conversion whose reverse exists, the same with SPARQL and function rules, and the shapes still hold', () => {
+    const extra = specimens()
+    const both = [mount('sparql', 'wat', extra), mount('function', 'wat', extra)] as const
+    const conversions = both[0].store
+      .match(null, both[0].store.factory.namedNode(NS.rdf + 'type'), both[0].store.factory.namedNode(B + 'Conversion'))
+      .map((q) => q.subject.value)
+      .filter((c) => c.startsWith(B))
+    const from = (c: string) => both[0].objects(c, NS.beh + 'sourceClass')[0]!
+    const to = (c: string) => both[0].objects(c, B + 'to')[0]!
+    const original = snapshot(both[0])
+    expect(snapshot(both[1])).toEqual(original)
+    expect(findings(both[0])).toEqual([])
+    let roundTrips = 0
+    for (const conv of conversions) {
+      // The specimen of its source type: a block of it, or a list's first item.
+      const source = from(conv).replace(B, '')
+      const block = TEXT.includes(source) || source in LISTS ? EX + source : source === 'ListItem' ? EX + 'BulletedList-a' : EX + 'TodoList-a'
+      for (const h of both) convert(h, conv, block)
+      sameHtml(both[1].html(), both[0].html(), conv)
+      expect(snapshot(both[1]), conv).toEqual(snapshot(both[0]))
+      expect(findings(both[0]), conv).toEqual([])
+      // Back: the conversion from what it became to where it started, when there is one; it gives the original
+      // unless a plain text type dropped something (the marks).
+      const now = typeOf(both[0], block)
+      const back = conversions.find((c) => from(c) === now && (to(c) === from(conv) || both[0].objects(to(c), B + 'itemClass')[0] === from(conv)))
+      let steps = 1
+      if (back) {
+        for (const h of both) convert(h, back, block)
+        steps++
+        sameHtml(both[1].html(), both[0].html(), back)
+        expect(snapshot(both[1]), back).toEqual(snapshot(both[0]))
+        expect(findings(both[0]), back).toEqual([])
+        // What a conversion drops: marks under a plain text type, checks out of a to-do list.
+        const dropped = (source === 'Paragraph' && [to(conv), now].some((t) => t === B + 'Code' || t === B + 'Math')) || source.startsWith('Todo')
+        if (!dropped) expect(snapshot(both[0]), `${conv} and back`).toEqual(original), roundTrips++
+      }
+      // Each is one step to undo: undoing them gives the original.
+      for (let i = 0; i < steps; i++) for (const h of both) h.click('Undo')
+      expect(snapshot(both[0]), `${conv} undone`).toEqual(original)
+      expect(snapshot(both[1]), `${conv} undone`).toEqual(original)
+    }
+    expect(roundTrips).toBeGreaterThanOrEqual(79)
+  })
+
+  it('offers what a block can turn into, by its type, in the / menu of a block with text, and turns it in one undoable step', () => {
+    const h = mount('sparql')
+    const options = () => [...h.app.querySelectorAll('.sem-block-menu [role=option]:not([hidden])')].map((o) => o.querySelector('.sem-ta-label')!.textContent!)
+    h.select('p2', 11)
+    h.type(' /')
+    const offered = options().filter((o) => o.startsWith('Turn into'))
+    expect(offered).toContain('Turn into Heading 1')
+    expect(offered).toContain('Turn into Bulleted list')
+    expect(offered).not.toContain('Turn into Text')
+    h.type('turn into heading 2')
+    expect(options()).toEqual(['Turn into Heading 2'])
+    h.press('Enter')
+    expect(h.objects('p2', NS.rdf + 'type')).toEqual([B + 'Heading2'])
+    expect(h.value('p2')).toBe('Second line ')
+    // One step back: the type and the text as they were before the pick.
+    h.click('Undo')
+    expect(h.objects('p2', NS.rdf + 'type')).toEqual([B + 'Paragraph'])
+    expect(h.value('p2')).toBe('Second line /turn into heading 2')
+  })
+})
+
+describe('a block\'s handle menu (c:BlockEditor)', () => {
+  it('turns a block into another type, duplicates it (also Mod+D) and deletes it, each one undoable step, the same with SPARQL and function rules', () => {
+    const both = [mount('sparql'), mount('function')] as const
+    const step = (what: string, act: (h: ReturnType<typeof mount>) => void) => {
+      for (const h of both) act(h)
+      sameHtml(both[1].html(), both[0].html(), what)
+    }
+    const click = (h: ReturnType<typeof mount>, el: Element) => el.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true }))
+    const handle = (h: ReturnType<typeof mount>, b: string) => h.app.querySelector(`[data-sem-c=blk-handle][data-sem-drag="${EX}${b}"]`)!
+    const items = (h: ReturnType<typeof mount>) => [...h.app.querySelectorAll('.sem-handle-menu [role=menuitem]')].map((i) => i.textContent)
+    const item = (h: ReturnType<typeof mount>, label: string) => [...h.app.querySelectorAll('.sem-handle-menu [role=menuitem]')].find((i) => i.textContent === label)!
+    const [m] = both
+
+    step('a click on the handle opens its menu', (h) => click(h, handle(h, 'p2')))
+    expect(handle(m, 'p2').getAttribute('aria-expanded')).toBe('true')
+    expect(m.app.querySelector('.sem-handle-menu')!.getAttribute('data-sem-anchor')).toBe(`${EX}doc/~handle-${encodeURIComponent(EX + 'p2')}/~root`)
+    expect(items(m)).toContain('Turn into Heading 1')
+    expect(items(m).slice(-2)).toEqual(['Duplicate', 'Delete'])
+    step('picking a type turns the block into it, closing the menu', (h) => click(h, item(h, 'Turn into Heading 1')))
+    expect(m.objects('p2', NS.rdf + 'type')).toEqual([NS.blk + 'Heading1'])
+    expect(m.app.querySelector('.sem-handle-menu')).toBeNull()
+    expect(handle(m, 'p2').hasAttribute('data-sem-takes-focus')).toBe(true)
+    step('undo turns it back', (h) => h.click('Undo'))
+    expect(m.objects('p2', NS.rdf + 'type')).toEqual([NS.blk + 'Paragraph'])
+
+    step('Duplicate copies it right after it', (h) => (click(h, handle(h, 'p1')), click(h, item(h, 'Duplicate'))))
+    const copy = m.objects('p1', NS.co + 'nextItem')[0]!
+    expect(copy).not.toBe(EX + 'p2')
+    expect(m.objects(copy, NS.rdf + 'value')).toEqual(['Hello world'])
+    expect(m.objects(copy, NS.co + 'nextItem')).toEqual([EX + 'p2'])
+    // Its mark is a copy too, not the original's.
+    const mark = m.objects(copy, NS.blk + 'mark')[0]!
+    expect(mark).not.toBe(EX + 'p1-b')
+    expect(m.objects(mark, NS.oa + 'start')).toEqual(['6'])
+    step('undo takes the copy away', (h) => h.click('Undo'))
+    expect(m.objects('p1', NS.co + 'nextItem')).toEqual([EX + 'p2'])
+    expect(m.objects(copy, NS.rdf + 'value')).toEqual([])
+
+    step('Mod+D duplicates the caret\'s block', (h) => (h.select('p3', 2), h.press('d', { ctrlKey: true })))
+    expect(m.objects(m.objects('p3', NS.co + 'nextItem')[0]!, NS.rdf + 'value')).toEqual(['After the rule'])
+    step('undo takes it away', (h) => h.click('Undo'))
+    expect(m.objects('p3', NS.co + 'nextItem')).toEqual([])
+
+    step('Delete takes the block away, its neighbours joining', (h) => (click(h, handle(h, 'p2')), click(h, item(h, 'Delete'))))
+    expect(m.blocks()).not.toContain(EX + 'p2')
+    expect(m.objects('p1', NS.co + 'nextItem')).toEqual([EX + 'hr'])
+    expect(m.value('p2')).toBeUndefined()
+    step('undo brings it back', (h) => h.click('Undo'))
+    expect(m.objects('p1', NS.co + 'nextItem')).toEqual([EX + 'p2'])
+    expect(m.value('p2')).toBe('Second line')
+  })
+})
+
+describe('a site\'s block type with its own shortcut and conversions (c:BlockEditor)', () => {
+  const extra = `
+@prefix blk: <${NS.blk}> . @prefix beh: <${NS.beh}> . @prefix ex: <${EX}> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . @prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+ex:Point rdfs:subClassOf blk:Paragraph ; blk:element rdfhtml:Aside ; rdfs:label "Point"@en ; blk:menuOrder 30 .
+ex:PointShortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^!$" ; blk:makes ex:Point .
+ex:ParagraphToPoint a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to ex:Point ; beh:like blk:Retype .
+ex:PointToQuote a blk:Conversion ; beh:sourceClass ex:Point ; blk:to blk:Quote ; beh:undoable true ;
+  beh:deletes """CONSTRUCT { $this a ?old } WHERE { $this a ?old . ?old rdfs:subClassOf* blk:Block }""" ;
+  beh:inserts """CONSTRUCT { $this a ?to ; <${EX}from> "a point" } WHERE { $event a ?c . ?c blk:to ?to }""" .`
+  it('turns a paragraph into it by its shortcut, and it into a quote by its own conversion (preferred to its superclass\'s)', () => {
+    const h = mount('sparql', 'wat', extra)
+    h.select('p3', 0)
+    h.type('! ')
+    expect(h.objects('p3', NS.rdf + 'type')).toEqual([EX + 'Point'])
+    expect(h.value('p3')).toBe('After the rule')
+    // Its handle's menu offers its own conversion to a quote, not its superclass's.
+    const click = (el: Element) => el.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true }))
+    click(h.app.querySelector(`[data-sem-c=blk-handle][data-sem-drag="${EX}p3"]`)!)
+    const quote = [...h.app.querySelectorAll('.sem-handle-menu [role=menuitem]')].filter((i) => i.textContent === 'Turn into Quote')
+    expect(quote.map((i) => i.id || h.renderer.keyOf(i))).toEqual([`${EX}editor/~hm-${encodeURIComponent(EX + 'PointToQuote')}`])
+    click(quote[0]!)
+    expect(h.objects('p3', NS.rdf + 'type')).toEqual([NS.blk + 'Quote'])
+    expect(h.objects('p3', EX + 'from')).toEqual(['a point'])
   })
 })

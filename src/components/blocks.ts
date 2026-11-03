@@ -3,7 +3,7 @@
 // characters as SPARQL does (code points), so text is sliced as an array of them.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { BLK, C, CO, H, L10N, MOD, NS, OA, ORD, PO, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
+import { BLK, C, CO, DND, H, L10N, MOD, NS, OA, ORD, PO, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { encodeForUri, isA, isTrue, named, str, text } from './util.ts'
 
 const RDF_VALUE = NS.rdf + 'value'
@@ -106,10 +106,143 @@ const entered: FnRule = (ctx, focus) => {
 const members: FnRule = (ctx, focus, member) => {
   if (!member) return []
   const o = ctx.out(focus)
-  const region = isA(ctx, focus, BLK.TextBlock) || isA(ctx, focus, BLK.Table) ? 'children' : 'root'
-  o.t(o.node(region), H.hasChild, member)
+  const region = o.node(isA(ctx, focus, BLK.TextBlock) || isA(ctx, focus, BLK.Table) ? 'children' : 'root')
+  o.t(region, H.hasChild, member)
   const next = ctx.object(member, CO.nextItem)
-  if (next && ctx.match(focus, PO.contains, next).length) o.t(member, ORD.immediatelyPrecedes, next)
+  const sibling = next && ctx.match(focus, PO.contains, next).length ? next : undefined
+  if (ctx.modality === MOD.Text) {
+    if (sibling) o.t(member, ORD.immediatelyPrecedes, sibling)
+    return o.quads
+  }
+  // On the screen, a handle before it (inside it, ahead of its first part, for a list's item; none
+  // for a table's rows and cells or a layout's columns), carrying it.
+  const fixed = [BLK.Row, BLK.Cell, NS.blk + 'Column'].some((c) => isA(ctx, member, c))
+  const item = isA(ctx, member, BLK.Item)
+  const handleOf = (b: Term) => o.node('handle-' + encodeForUri(b.value))
+  if (!fixed) {
+    const handle = handleOf(member)
+    const first = item ? ctx.nn(member.value + '/~' + (isA(ctx, member, BLK.TodoItem) ? 'check' : 'text')) : member
+    o.t(item ? ctx.nn(member.value + '/~root') : region, H.hasChild, handle).t(handle, ORD.immediatelyPrecedes, first)
+    o.t(handle, RDF_TYPE, ctx.nn(NS.blk + 'BlockHandle')).t(handle, DND.carries, member)
+  }
+  if (sibling) o.t(member, ORD.immediatelyPrecedes, fixed || item ? sibling : handleOf(sibling))
+  return o.quads
+}
+
+/** What to call a block's type: the label of its first class (by IRI) that is a block's. */
+function typeName(ctx: RuleContext, block: Term): string | undefined {
+  const type = ctx
+    .objects(block, RDF_TYPE)
+    .map((c) => c.value)
+    .filter((c) => c === BLK.Block || below(ctx, c, BLK.Block))
+    .sort()[0]
+  return type === undefined ? undefined : picked(ctx, ctx.nn(type), NS.rdfs + 'label')
+}
+
+/** A block's handle: a grip named after its block (its text's start, else its type), which the drag status says. */
+const handle: FnRule = (ctx, focus) => {
+  const block = ctx.object(focus, DND.carries)
+  if (!block) return []
+  const o = ctx.out(focus)
+  const start = [...valueOf(ctx, block)].slice(0, 40).join('').replace(/[ \t\n\r]+/g, ' ')
+  const name = start !== '' && start !== ' ' ? start : (typeName(ctx, block) ?? '')
+  o.t(focus, DND.name, name)
+  const label = `${text(ctx, ctx.nn(NS.c + 'BlockHandlePhrase'), NS.rdfs + 'label') ?? ''}: ${name}`
+  // Its menu: open, or just closed (the focus comes back to it).
+  const open = ctx.match(null, NS.c + 'handleMenuBlock', block).length > 0
+  const returning = ctx.match(null, NS.c + 'handleMenuReturn', block).length > 0
+  const attrs = { class: 'sem-block-handle', contenteditable: 'false', role: 'button', 'aria-label': label, 'aria-haspopup': 'menu', 'aria-expanded': String(open), 'data-sem-takes-focus': returning ? '' : undefined }
+  o.renders(o.el('root', 'Span', attrs, [o.el('grip', 'Span', { class: 'sem-grip', 'aria-hidden': 'true' })]))
+  return o.quads
+}
+
+/** A handle's menu: what the block can turn into, Duplicate and Delete, anchored to the handle. */
+const handleMenu: FnRule = (ctx, focus) => {
+  const b = ctx.object(focus, NS.c + 'handleMenuBlock')
+  const parent = b && ctx.match(null, PO.contains, b)[0]?.subject
+  if (!isTrue(ctx.object(focus, NS.c + 'editable')) || !b || !parent) return []
+  const o = ctx.out(focus)
+  const phrase = (p: string) => text(ctx, ctx.nn(NS.c + p), NS.rdfs + 'label') ?? ''
+  const items: NamedNode[] = []
+  for (const conv of convertsTo(ctx, classes(ctx, b))) {
+    const type = ctx.object(conv, NS.blk + 'to')!
+    const order = ctx.object(type, NS.blk + 'menuOrder')
+    if (!order) continue
+    const local = 'hm-' + encodeForUri(conv.value)
+    const item = o.el(local, 'Button', { type: 'button', tabIndex: '-1', role: 'menuitem', 'data-sem-takes-focus': '' }, [o.text(local + '-text', `${phrase('TurnIntoPhrase')} ${picked(ctx, type, NS.rdfs + 'label') ?? ''}`)])
+    o.t(item, SEM.orderKey, order.value).t(item, NS.c + 'converts', conv)
+    items.push(item)
+  }
+  for (const [action, p, key, keys] of [['duplicate', 'DuplicatePhrase', '1000', 'Control+D'], ['delete', 'DeletePhrase', '1001', undefined]] as const) {
+    const local = 'hm-' + action
+    const item = o.el(local, 'Button', { type: 'button', tabIndex: '-1', role: 'menuitem', 'data-sem-takes-focus': '', 'aria-keyshortcuts': keys }, [o.text(local + '-text', phrase(p))])
+    o.t(item, SEM.orderKey, key).t(item, NS.blk + 'handleAction', action)
+    items.push(item)
+  }
+  const handleRoot = `${parent.value}/~handle-${encodeForUri(b.value)}/~root`
+  const menu = o.el('handle-menu', 'Div', { class: 'sem-handle-menu', role: 'menu', 'aria-label': phrase('BlockHandlePhrase'), 'data-sem-nav-items': '[role=menuitem]', 'data-sem-nav-orientation': 'vertical', 'data-sem-nav-wrap': '', 'data-sem-anchor': handleRoot })
+  for (const item of items) o.t(menu, H.hasChild, item)
+  o.t(o.node('root'), H.hasChild, menu).t(o.node('body'), ORD.immediatelyPrecedes, menu)
+  return o.quads
+}
+
+/** A container takes blocks dragged by their handles, into the region its blocks are in, ordered by the chain. */
+const dropZone: FnRule = (ctx, focus) => {
+  if (isA(ctx, focus, BLK.Table)) return []
+  const o = ctx.out(focus)
+  o.t(focus, DND.members, ctx.nn(PO.contains)).t(focus, DND.orderBy, ctx.nn(CO.nextItem))
+  // A text block's: its children region, shown once it holds blocks (never its whole root, its text).
+  const zone = o.node(isA(ctx, focus, BLK.TextBlock) ? 'children' : 'root')
+  o.t(focus, DND.zone, zone).t(zone, DND.receptacle, focus)
+  // Named by its type, which the drag status says ("Numbered list refuses it").
+  const name = typeName(ctx, focus)
+  if (name !== undefined) o.t(zone, C.label, name)
+  return o.quads
+}
+
+/** Objections to a drag into a container: a block its shapes do not allow, or one that would go inside itself. */
+const dropObjections: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const word = (phrase: string) => text(ctx, ctx.nn(phrase), NS.rdfs + 'label') ?? ''
+  for (const drag of ctx.objects(focus, DND.offered)) {
+    const reasons: string[] = []
+    for (const b of ctx.objects(drag, DND.carrying)) {
+      // Inside itself: the carried block holds the container (or is it).
+      const seen = new Set<string>()
+      const todo: Term[] = [focus]
+      while (todo.length) {
+        const x = todo.pop()!
+        if (x.value === b.value) {
+          reasons.push(word(NS.c + 'InsideItselfPhrase'))
+          break
+        }
+        if (seen.has(x.value)) continue
+        seen.add(x.value)
+        for (const q of ctx.match(null, PO.contains, x)) todo.push(q.subject)
+      }
+      const types = classes(ctx, b)
+      for (const tc of classes(ctx, focus)) {
+        for (const q of ctx.match(null, NS.sh + 'targetClass', tc)) {
+          for (const ps of ctx.objects(q.subject, NS.sh + 'property')) {
+            if (ctx.object(ps, NS.sh + 'path')?.value !== PO.contains) continue
+            for (const required of ctx.objects(ps, NS.sh + 'class')) {
+              if (types.has(required.value)) continue
+              const said = ctx
+                .objects(ps, NS.sh + 'message')
+                .filter((m) => m.termType === 'Literal' && (m.language === '' || m.language.toLowerCase().startsWith('en')))
+                .map((m) => m.value)
+                .sort()[0]
+              reasons.push(said ?? word(NS.dnd + 'UnfitPhrase'))
+            }
+          }
+        }
+      }
+    }
+    if (!reasons.length) continue
+    const objection = o.node('objection')
+    o.t(objection, RDF_TYPE, ctx.nn(NS.dnd + 'Objection')).t(objection, DND.receptacle, focus).t(objection, NS.dnd + 'against', drag)
+    o.t(objection, DND.reason, reasons.sort()[0]!)
+  }
   return o.quads
 }
 
@@ -507,7 +640,10 @@ const menuState: FnRule = (ctx, focus) => {
   if (!v || substr(v.value, from, 1) !== '/') return []
   const q = substr(v.value, from + 1, at - from - 1).toLowerCase()
   if (q.startsWith(' ')) return []
-  return ctx.out(focus).t(focus, NS.c + 'menuOpen', ctx.f.literal('true', ctx.nn(NS.xsd + 'boolean'))).t(focus, NS.c + 'foldedQuery', q).quads
+  const chars = [...v.value]
+  const blank = chars.slice(0, from).length + chars.slice(at).length === 0
+  const bool = (b: boolean) => ctx.f.literal(String(b), ctx.nn(NS.xsd + 'boolean'))
+  return ctx.out(focus).t(focus, NS.c + 'menuOpen', bool(true)).t(focus, NS.c + 'foldedQuery', q).t(focus, NS.c + 'menuBlank', bool(blank)).quads
 }
 
 /** A text of a class in the viewer's language as the SPARQL rules pick it: its twin, else the untagged one, else English. */
@@ -538,7 +674,56 @@ const menuOptions: FnRule = (ctx, focus) => {
     if (icon) o.t(item, C.icon, icon)
     o.t(item, NS.c + 'rank', q.object).t(item, SEM.orderKey, q.object.value)
   }
+  // On a block with text: what it can turn into (the most specific conversion to each type), first.
+  const block = ctx.object(focus, NS.c + 'menuBlock')
+  if (block && ctx.object(focus, NS.c + 'menuBlank')?.value === 'false') {
+    const kinds = classes(ctx, block)
+    const lead = text(ctx, ctx.nn(NS.c + 'TurnIntoPhrase'), NS.rdfs + 'label') ?? ''
+    for (const conv of convertsTo(ctx, kinds)) {
+      const type = ctx.object(conv, NS.blk + 'to')!
+      const order = ctx.object(type, NS.blk + 'menuOrder')
+      const name = picked(ctx, type, NS.rdfs + 'label')
+      if (!order || name === undefined) continue
+      const label = `${lead} ${name}`
+      const key = label.toLowerCase()
+      const words = ctx.objects(type, NS.blk + 'keyword').map((w) => w.value.toLowerCase())
+      const item = o.node('opt-' + encodeForUri(conv.value))
+      o.t(list, H.hasChild, item)
+      o.t(item, RDF_TYPE, ctx.nn(NS.c + 'TypeaheadOption')).t(item, NS.c + 'of', focus).t(item, NS.c + 'option', conv)
+      o.t(item, C.label, label).t(item, NS.c + 'searchKey', key).t(item, NS.c + 'matchKey', [key, ...words].join(' '))
+      const help = picked(ctx, type, C.help)
+      if (help !== undefined) o.t(item, C.help, help)
+      const icon = ctx.object(type, C.icon)
+      if (icon) o.t(item, C.icon, icon)
+      const rank = rankLiteral(ctx, order, -100)
+      o.t(item, NS.c + 'rank', rank).t(item, SEM.orderKey, rank.value)
+    }
+  }
   return o.quads
+}
+
+/** The conversions a block of these classes has: for each type, the most specific one (its source class lowest). */
+function convertsTo(ctx: RuleContext, kinds: Set<string>): Term[] {
+  const out: Term[] = []
+  const all = ctx.match(null, RDF_TYPE, NS.blk + 'Conversion').map((q) => q.subject)
+  for (const conv of all) {
+    const to = ctx.object(conv, NS.blk + 'to')
+    const from = ctx.object(conv, NS.beh + 'sourceClass')
+    if (!to || !from || !kinds.has(from.value)) continue
+    const better = all.some((other) => {
+      const of = ctx.object(other, NS.beh + 'sourceClass')
+      return other.value !== conv.value && ctx.object(other, NS.blk + 'to')?.value === to.value && !!of && kinds.has(of.value) && below(ctx, of.value, from.value)
+    })
+    if (!better) out.push(conv)
+  }
+  return out
+}
+
+/** An order plus a shift, as SPARQL adds them: an integer stays one, a decimal a decimal. */
+function rankLiteral(ctx: RuleContext, order: Term, shift: number): Term {
+  const integer = order.termType === 'Literal' && order.datatype.value === NS.xsd + 'integer'
+  const n = Number(order.value) + shift
+  return ctx.f.literal(String(n), ctx.nn(NS.xsd + (integer ? 'integer' : 'decimal')))
 }
 
 /** The menu's options shown, by rank, and the active one (c:activeOption when shown, else the first). */
@@ -734,6 +919,10 @@ export const functions: Record<string, FnRule> = {
   'blk:toolbar': toolbar,
   'blk:address-field': addressField,
   'blk:entered': entered,
+  'blk:handle': handle,
+  'blk:handle-menu': handleMenu,
+  'blk:drop-zone': dropZone,
+  'blk:drop-objections': dropObjections,
   'blk:table-tools': tableTools,
   'blk:upload-button': uploadButton,
   'blk:menu-state': menuState,

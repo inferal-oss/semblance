@@ -84,7 +84,8 @@ beh:Due a owl:Class ; rdfs:subClassOf beh:Event ;
 # bus takes it out of the reaction's change, applies the rest, records the event, and then records
 # the raised one (beh:raisedBy the first), handled by the node's own reactions like any other. A
 # raised click is addressed to the component's root (beh:node), so reactions that ask which part was
-# hit do not take it for one of theirs.
+# hit do not take it for one of theirs. A raised event's undoable change is recorded on the member of
+# the event that raised it: one change, one step to undo.
 
 beh:raise a owl:ObjectProperty ; rdfs:range owl:Class ;
     rdfs:label "Raises"@en , "Викликає"@uk , "Löst aus"@de , "يُطلق"@ar ;
@@ -195,6 +196,11 @@ beh:source a owl:ObjectProperty ; rdfs:domain beh:Reaction .
 beh:sourceClass a owl:ObjectProperty ; rdfs:domain beh:Reaction .
 beh:deletes a owl:DatatypeProperty ; rdfs:domain beh:Reaction .
 beh:inserts a owl:DatatypeProperty ; rdfs:domain beh:Reaction .
+# A reaction is also raised by its own IRI (`?node beh:raise ?reaction` runs it on the node), instances of
+# subclasses of beh:Reaction are reactions too, and one may take its queries, function and undoability
+# from another (beh:like): the block editor's conversions are reactions of one kind each, raised on a block.
+beh:like a owl:ObjectProperty ; rdfs:domain beh:Reaction ;
+    rdfs:comment "A node (not itself a reaction) whose beh:deletes, beh:inserts, sem:function and beh:undoable this reaction uses when it has none of its own; raised by its IRI, its event says which reaction it is ($event a ?reaction)."@en .
 
 # --- Undo (docs/IVM.md §16) ------------------------------------------------------------
 # A reaction marked beh:undoable has its effective change recorded on the event's member:

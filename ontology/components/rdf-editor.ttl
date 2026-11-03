@@ -582,7 +582,7 @@ WHERE {
     FILTER(?nest && !?list)
     { SELECT DISTINCT ?childPredicate WHERE { $this c:term ?t2 . ?t2 ?childPredicate ?o2 .
         FILTER(!sameTerm(?childPredicate, rdf:reifies) || NOT EXISTS { $this c:reifierOf ?of2 })
-        FILTER(!STRSTARTS(STR(?childPredicate), STR(rdfhtml:)) && !STRSTARTS(STR(?childPredicate), STR(ord:)) && ?childPredicate NOT IN (sem:orderKey, sem:renders)) } }
+        FILTER(!STRSTARTS(STR(?childPredicate), STR(rdfhtml:)) && !STRSTARTS(STR(?childPredicate), STR(ord:)) && ?childPredicate NOT IN (sem:orderKey, sem:renders, dnd:members, dnd:orderBy, dnd:zone, dnd:offered, dnd:hovered, dnd:lifted, dnd:refusedBy)) } }
     BIND(?t AS ?childSubject)
     BIND(c:RdfProperty AS ?childClass)
     BIND(?dropType AS ?childDrop)
@@ -769,7 +769,7 @@ WHERE {
     FILTER(?nest && !?list)
     { SELECT DISTINCT ?childPredicate WHERE { $this c:term ?t2 . ?t2 ?childPredicate ?o2 .
         FILTER(!sameTerm(?childPredicate, rdf:reifies) || NOT EXISTS { $this c:reifierOf ?of2 })
-        FILTER(!STRSTARTS(STR(?childPredicate), STR(rdfhtml:)) && !STRSTARTS(STR(?childPredicate), STR(ord:)) && ?childPredicate NOT IN (sem:orderKey, sem:renders)) } }
+        FILTER(!STRSTARTS(STR(?childPredicate), STR(rdfhtml:)) && !STRSTARTS(STR(?childPredicate), STR(ord:)) && ?childPredicate NOT IN (sem:orderKey, sem:renders, dnd:members, dnd:orderBy, dnd:zone, dnd:offered, dnd:hovered, dnd:lifted, dnd:refusedBy)) } }
     BIND(?t AS ?childSubject)
     BIND(c:RdfProperty AS ?childClass)
     BIND(REPLACE(STR(?childPredicate), "[^#/]*$", "") AS ?pns)

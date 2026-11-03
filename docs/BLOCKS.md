@@ -145,7 +145,56 @@ language). It is a `c:Typeahead` (combobox over a listbox; the region keeps the 
 active option with `aria-activedescendant`): Up/Down move, Enter or a click picks, Escape or a space
 after no match closes. Its options are minted from the block type classes, so a site's own type is
 offered like a built-in one. Picking replaces the `/query` text and turns the block into the type (an
-empty block), or inserts a block of the type after it, with its `blk:template`.
+empty block, by the conversion to it), or inserts a block of the type after it, with its `blk:template`.
+In a block with text the menu also offers what the block can turn into ("Turn into Heading 1"), first.
+
+## Handles: moving, turning into, duplicating, deleting
+
+Each block but a table's rows and cells and a layout's columns has a handle at its leading edge (`blk:BlockHandle`,
+minted by its container's placement rule, inside a list's item): a `dnd:Draggable` carrying the block. It shows on
+hover, on focus and while the block is entered, and always at phone width. Dragging it (a long press on touch;
+Space, the arrows and Space from the keyboard) moves the block, with what it holds, to another place: every
+container is an ordered drop target (`dnd:orderBy co:nextItem`) whose zone is the region its blocks are in, and a
+container's shapes object (`dnd:Objection`) to a block they do not allow, or one that would go inside itself.
+`blk:DropBlock` splices the chain in one undoable change, as Alt+Up and Alt+Down do; the drag layer draws the
+line where it would land, scrolls near the edges and says where it is going.
+
+A click on the handle or Enter opens its menu (the WAI-ARIA menu button pattern; `c:handleMenuBlock`): what the
+block can turn into, Duplicate (also Mod+D on the caret's block: a copy of the block and what it holds, every
+node minted from its original and the event) and Delete. The focus goes back to the handle when it closes.
+
+## Sources show while their block is entered
+
+A block an editor's caret is in (`c:focusBlock`) is entered (`data-sem-entered`); the theme shows sources only
+then: a typeset formula's TeX (folded out of sight otherwise, but still where the arrows and a click reach),
+an atom's address field and upload button once it shows something, a code block's language field (its label
+otherwise). An atom with an address is not editable text: a click, or focusing its handle, enters it.
+
+## Conversions: the contract
+
+Turning a block of one type into another is a term of its own, one per direction: a `blk:Conversion`, which is
+a reaction (`beh:Reaction`) whose source class (`beh:sourceClass`) is the type it converts from and whose
+`blk:to` is the type it makes. Its queries rewrite the block (`$this`), reading the target type as
+`$event a ?conversion . ?conversion blk:to ?to` (a conversion is raised on a block by its IRI:
+`?block beh:raise ?conversion`). What a block can turn into is the conversions whose source class it has
+(the most specific one per target type); the `/` menu, the handle's menu and the Markdown shortcuts all raise
+them, and a raised conversion is one change with what raised it, undone in one step.
+
+```turtle
+ex:KeyPointToQuote a blk:Conversion ; beh:sourceClass ex:KeyPoint ; blk:to blk:Quote ; beh:like blk:Retype .
+ex:QuoteToKeyPoint a blk:Conversion ; beh:sourceClass blk:Quote ; blk:to ex:KeyPoint ; beh:undoable true ;
+    beh:deletes """CONSTRUCT { $this a ?old } WHERE { $this a ?old . ?old rdfs:subClassOf* blk:Block }""" ;
+    beh:inserts """CONSTRUCT { $this a ?to } WHERE { $event a ?c . ?c blk:to ?to }""" .
+```
+
+A conversion keeps the block's identity, and its place where it can. It has its own queries (and, if it likes,
+a `sem:function` twin), or takes them from one of four kinds (`beh:like`), each with a function twin:
+`blk:Retype` (the text and marks kept, a plain text type dropping marks, what only the old type had dropped,
+the new type's template applied, blocks it held following it when the new type holds none), `blk:Wrap` (the
+block becomes the item of a list of the type: joining the list before or after it when that is one), `blk:Unwrap`
+(an item leaves its list in its place, splitting it when in the middle) and `blk:Relist` (a list, or an item's
+list, becomes another kind). The built-in ones convert between the text types, to and from code and math, into
+and out of lists, and between list kinds; every one with a reverse round-trips (`test/block-editor.test.ts`).
 
 ## Custom block types: the contract
 
@@ -172,9 +221,10 @@ ex:RecipeShape a sh:NodeShape ; sh:targetClass ex:Recipe ; sh:property [ sh:path
 4. **Its `/` entry**: label, description, icon, keywords, `blk:menuOrder`, `blk:template`.
 
 Editing, the menu, moving, nesting, undo, copy and paste come from the superclass; there is no host code.
-A type can bring its own Markdown shortcut too (a `blk:BlockShortcut`). The Documents page of the site has
-one: `ui:KeyPoint` (`demo/gallery/documents.ttl`), a paragraph that is an aside, with its style, its shape,
-its `/` entry and the shortcut `! `.
+A type can bring its own Markdown shortcut too (a `blk:BlockShortcut`), and its own conversions (above): those
+of its superclass apply to it already, and one from it is preferred to its superclass's. The Documents page of
+the site has one: `ui:KeyPoint` (`demo/gallery/documents.ttl`), a paragraph that is an aside, with its style,
+its shape, its `/` entry, the shortcut `! ` and conversions to and from a quote.
 
 ## Server rendering and the Text modality
 

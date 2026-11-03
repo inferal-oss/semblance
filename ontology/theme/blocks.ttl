@@ -23,7 +23,7 @@
 [] a sty:StyleRule ; sty:appliesTo blk:Block ;
     sty:declares [ sty:property "margin-block" ; sty:raw "var(--sem-space-2) 0" ] ,
                  [ sty:property "margin-inline" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:appliesTo blk:Block ; sty:state ":first-child" ;
+[] a sty:StyleRule ; sty:appliesTo blk:Block ; sty:state ":is(:first-child, .sem-block-handle:first-child + *)" ;
     sty:declares [ sty:property "margin-block-start" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:appliesTo blk:Document ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] .
@@ -488,3 +488,111 @@
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[role=document] .sem-upload" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
+
+# --- block handles: a grip at a block's leading edge, shown on hover, on focus, while the block is entered,
+# and always at phone width; the line where a dragged block would land is on the block after the mark ---
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body" ;
+    sty:declares [ sty:property "padding-inline-start" ; sty:raw "1.75rem" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:Container ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:TextBlock ; sty:part ".sem-children" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state ".sem-block-handle" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "-1.6rem" ] ,
+                 [ sty:property "margin-block-start" ; sty:raw "var(--sem-space-2)" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "justify-content" ; sty:raw "center" ] ,
+                 [ sty:property "inline-size" ; sty:raw "1.25rem" ] ,
+                 [ sty:property "block-size" ; sty:raw "1.5rem" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "line-height" ; sty:raw "1" ] ,
+                 [ sty:property "cursor" ; sty:raw "grab" ] ,
+                 [ sty:property "user-select" ; sty:raw "none" ] ,
+                 [ sty:property "-webkit-user-select" ; sty:raw "none" ] ,
+                 [ sty:property "touch-action" ; sty:raw "none" ] ,
+                 [ sty:property "opacity" ; sty:raw "0" ] ,
+                 [ sty:property "transition" ; sty:raw "opacity var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:part "> .sem-grip::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"⠿\"" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state ".sem-block-handle:not(:first-child):has(+ [data-sem-c^=blk-heading])" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:raw "var(--sem-space-5)" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state ".sem-block-handle:first-child" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state ":is(:hover, :focus-visible, [data-sem-lifted], :has(+ :hover), :has(+ [data-sem-entered]), li:hover > *, li[data-sem-entered] > *)" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "1" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state ":is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "background" ; sty:token tok:surface-sunken ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:atWidth sty:CompactWidth ; sty:state ".sem-block-handle" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.5" ] .
+# In a read-only document there is nothing to move.
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[role=document] .sem-block-handle" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[role=document]" ;
+    sty:declares [ sty:property "padding-inline-start" ; sty:raw "0" ] .
+# The block being carried, dimmed; the line where it would land (the drag layer's own line is on the handle).
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state "[data-sem-lifted]" ; sty:part "+ *" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.4" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state "[data-sem-drop-before]::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state "[data-sem-drop-after]::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state "[data-sem-drop-before]" ; sty:part "+ *" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "0 -4px 0 -1px var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:BlockHandle ; sty:state "[data-sem-drop-after]" ; sty:part "+ *" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "0 4px 0 -1px var(--sem-accent-9)" ] .
+# Only the zone it is over is outlined (every container takes blocks; outlining them all is noise).
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "[data-sem-drop-zone][data-sem-drop=accepts]:not([data-sem-drop-over])" ;
+    sty:declares [ sty:property "outline-color" ; sty:raw "transparent" ] .
+# A list's item holds its own handle: the line and the dimming are on the item.
+[] a sty:StyleRule ; sty:appliesTo blk:Item ; sty:state ":has(> [data-sem-lifted])" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.4" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:Item ; sty:state ":has(> [data-sem-drop-before])" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "0 -4px 0 -1px var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:Item ; sty:state ":has(> [data-sem-drop-after])" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "0 4px 0 -1px var(--sem-accent-9)" ] .
+
+# --- a block's handle menu: a popup like the / menu's, anchored to the handle ---
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-handle-menu" ;
+    sty:declares [ sty:property "z-index" ; sty:raw "40" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "inline-size" ; sty:raw "min(16rem, calc(100vw - 32px))" ] ,
+                 [ sty:property "max-block-size" ; sty:raw "min(360px, 50vh)" ] ,
+                 [ sty:property "overflow-y" ; sty:raw "auto" ] ,
+                 [ sty:property "overscroll-behavior" ; sty:raw "contain" ] ,
+                 [ sty:property "padding" ; sty:raw "5px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
+                 [ sty:property "background" ; sty:token tok:surface-overlay ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-handle-menu > [role=menuitem]" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "min-block-size" ; sty:raw "36px" ] ,
+                 [ sty:property "padding" ; sty:raw "4px 10px" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:raw "inherit" ] ,
+                 [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-handle-menu > [role=menuitem]:is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-handle-menu > [role=menuitem]:nth-last-child(2)" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:raw "4px" ] ,
+                 [ sty:property "border-block-start" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-start-start-radius" ; sty:raw "0" ] ,
+                 [ sty:property "border-start-end-radius" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-handle-menu > [role=menuitem]:last-child" ;
+    sty:declares [ sty:property "color" ; sty:token tok:danger-11 ] .

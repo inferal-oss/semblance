@@ -540,13 +540,15 @@ export class Files {
 
   /** The zone of a target that takes files (a file:Receiver: one with a reaction to file:Arrive) an event is over. */
   private zoneOf(renderer: DomRenderer, at: EventTarget | null): Zone | undefined {
-    const el = (at as Element | null)?.closest?.('[data-sem-drop-zone]')
-    if (!el || !renderer.host.contains(el) || el.closest('[hidden], [inert]')) return undefined
-    const key = renderer.keyOf(el)
-    if (!key) return undefined
-    const drop = zoneTarget(this.bus.runtime.store, this.bus.projection.engine.graph, key)
-    if (!this.bus.reactionsFor(FILE.Arrive, drop).length) return undefined
-    return { drop, receptacle: el.getAttribute('data-sem-drop-zone')! }
+    // The nearest zone that takes files (a zone that only takes dragged blocks is passed over).
+    for (let el = (at as Element | null)?.closest?.('[data-sem-drop-zone]'); el; el = el.parentElement?.closest('[data-sem-drop-zone]')) {
+      if (!renderer.host.contains(el) || el.closest('[hidden], [inert]')) return undefined
+      const key = renderer.keyOf(el)
+      if (!key) continue
+      const drop = zoneTarget(this.bus.runtime.store, this.bus.projection.engine.graph, key)
+      if (this.bus.reactionsFor(FILE.Arrive, drop).length) return { drop, receptacle: el.getAttribute('data-sem-drop-zone')! }
+    }
+    return undefined
   }
 
   /** Whether a zone refuses the drag in progress, and why (its reception). */

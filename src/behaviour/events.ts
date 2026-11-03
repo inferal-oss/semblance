@@ -151,18 +151,37 @@ export class EventBus {
 
   private reactions(): Reaction[] {
     const nn = (iri: string) => this.f.namedNode(iri)
-    return this.runtime.store.match(null, nn(RDF_TYPE), nn(BEH.Reaction), this.f.defaultGraph()).map(({ subject: r }) => ({
+    const g = this.f.defaultGraph()
+    // Instances of beh:Reaction and of its subclasses (a block conversion, say).
+    const kinds = new Set([BEH.Reaction])
+    for (let grew = true; grew; ) {
+      grew = false
+      for (const k of [...kinds]) for (const q of this.runtime.store.match(null, nn(RDFS_SUBCLASS), nn(k), g)) if (!kinds.has(q.subject.value)) kinds.add(q.subject.value), (grew = true)
+    }
+    const seen = new Set<string>()
+    const all = [...kinds].flatMap((k) => this.runtime.store.match(null, nn(RDF_TYPE), nn(k), g).map((q) => q.subject)).filter((r) => !seen.has(r.value) && seen.add(r.value))
+    return all.map((r) => ({
       iri: r.value,
       when: this.value(r, BEH.when)?.value ?? '',
-      whens: this.runtime.store.match(r, nn(BEH.when), null, this.f.defaultGraph()).map((q) => q.object.value),
+      // Its beh:when classes, and its own IRI: raising a reaction (`?node beh:raise ?reaction`) runs it on the node.
+      whens: [...this.runtime.store.match(r, nn(BEH.when), null, g).map((q) => q.object.value), r.value],
       source: this.value(r, BEH.source)?.value,
       sourceClass: this.value(r, BEH.sourceClass)?.value,
-      deletes: this.value(r, BEH.deletes)?.value,
-      inserts: this.value(r, BEH.inserts)?.value,
-      fn: this.value(r, SEM.function)?.value,
-      needs: this.runtime.store.match(r, nn(SEM.needsExtension), null, this.f.defaultGraph()).map((q) => q.object.value),
-      undoable: this.value(r, BEH.undoable)?.value === 'true',
+      // Its queries, function and undoability, else those of the reaction it is like (beh:like).
+      deletes: this.liked(r, BEH.deletes)?.value,
+      inserts: this.liked(r, BEH.inserts)?.value,
+      fn: this.liked(r, SEM.function)?.value,
+      needs: this.runtime.store.match(r, nn(SEM.needsExtension), null, g).map((q) => q.object.value),
+      undoable: this.liked(r, BEH.undoable)?.value === 'true',
     }))
+  }
+
+  /** A reaction's own value of a property, else that of the one it is like (beh:like). */
+  private liked(r: Term, p: string): Term | undefined {
+    const own = this.value(r, p)
+    if (own) return own
+    const like = this.value(r, NS.beh + 'like')
+    return like ? this.value(like, p) : undefined
   }
 
   /** Classes of a node, with superclasses. */
@@ -302,7 +321,9 @@ export class EventBus {
       forget()
       return { recorded: false, event, type, target: nn(target), reactions: [], delta }
     }
-    const handled = this.record(type, target, event, quads, delta, reactions, forget, undoable)
+    // A raised event's change is part of the change that raised it: one step to undo.
+    const raisedBy = detail.about?.find(([p]) => p === BEH.raisedBy)?.[1] as NamedNode | undefined
+    const handled = this.record(type, target, event, quads, delta, reactions, forget, undoable, raisedBy)
     this.raise(raised, event)
     return handled
   }
@@ -330,7 +351,7 @@ export class EventBus {
   }
 
   /** Apply an event's change and append it to the change log, as one tick. */
-  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void, undoable: { add: Set<string>; remove: Set<string> }): Handled {
+  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode): Handled {
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
     // The state change and the member that records it are one tick: views over the log and
@@ -348,11 +369,12 @@ export class EventBus {
       const int = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
       const remove = this.expired()
       const head = this.runtime.store.match(this.stream, nn(BEH.latest), null, this.graph)
+      const change = this.statements(event, applied, undoable, raisedBy)
       this.runtime.log({
-        remove: [...remove, ...head],
+        remove: [...remove, ...head, ...change.remove],
         add: [
           ...quads,
-          ...this.statements(event, applied, undoable),
+          ...change.add,
           f.quad(event, nn(BEH.added), int(applied.add.length)),
           f.quad(event, nn(BEH.removed), int(applied.remove.length)),
           ...head.map((q) => f.quad(event, nn(BEH.previous), q.object)),
@@ -367,20 +389,37 @@ export class EventBus {
 
   /**
    * The effective change of an event's undoable reactions, as rdf:Statement nodes minted under its
-   * member: beh:asserted (added), beh:retracted (removed). Only what actually changed is recorded.
+   * member - or, for a raised event, under the member that raised it -: beh:asserted (added),
+   * beh:retracted (removed). Only what actually changed is recorded.
    */
-  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }): Quad[] {
-    if (!undoable.add.size && !undoable.remove.size) return []
+  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode): Delta {
+    if (!undoable.add.size && !undoable.remove.size) return { add: [], remove: [] }
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
+    const store = this.runtime.store
+    // A raised event's change goes on the member that raised it (when it recorded one), as its own
+    // statements; one that takes back what that member changed cancels its statement instead.
+    const owner = raisedBy && store.match(raisedBy, nn(BEH.asserted), null, this.graph).length + store.match(raisedBy, nn(BEH.retracted), null, this.graph).length ? raisedBy : event
     const out: Quad[] = []
+    const cancelled: Quad[] = []
+    const recorded = (p: string, q: Quad) =>
+      store
+        .match(owner, nn(p), null, this.graph)
+        .map((x) => x.object)
+        .find((st) => [['subject', q.subject], ['predicate', q.predicate], ['object', q.object]].every(([k, t]) => store.match(st as NamedNode, nn(NS.rdf + k), t as Term, this.graph).length))
     let i = 0
-    for (const [p, qs, keep] of [[BEH.asserted, applied.add, undoable.add], [BEH.retracted, applied.remove, undoable.remove]] as const) {
+    const tag = owner === event ? '' : `${event.value.replace(/^.*[:/]/, '')}-`
+    for (const [p, qs, keep, opposite] of [[BEH.asserted, applied.add, undoable.add, BEH.retracted], [BEH.retracted, applied.remove, undoable.remove, BEH.asserted]] as const) {
       for (const q of qs) {
         if (!keep.has(quadKey(q))) continue
-        const st = nn(`${event.value}/~change-${i++}`)
+        const back = owner === event ? undefined : recorded(opposite, q)
+        if (back) {
+          cancelled.push(...store.match(owner, nn(opposite), back, this.graph), ...store.match(back as NamedNode, null, null, this.graph))
+          continue
+        }
+        const st = nn(`${owner.value}/~change-${tag}${i++}`)
         out.push(
-          f.quad(event, nn(p), st),
+          f.quad(owner, nn(p), st),
           f.quad(st, nn(RDF_TYPE), nn(NS.rdf + 'Statement')),
           f.quad(st, nn(NS.rdf + 'subject'), q.subject as NamedNode),
           f.quad(st, nn(NS.rdf + 'predicate'), q.predicate as NamedNode),
@@ -388,7 +427,7 @@ export class EventBus {
         )
       }
     }
-    return out
+    return { add: out, remove: cancelled }
   }
 
   /**
@@ -928,7 +967,7 @@ export class EventBus {
     // opener): not lost. Only the page, or the renderer's guess at a nearby control, is.
     const now = active.ownerDocument.activeElement
     if (lost && now && now !== now.ownerDocument.body && now !== renderer.refocused && shown(now)) return
-    if (!lost && active.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]')) return
+    if (!lost && active.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]:not([contenteditable=false])')) return
     const marked = (scope: Element) => [...scope.querySelectorAll<HTMLElement>('[data-sem-takes-focus]')].filter(shown).map((el) => controlIn(el, shown)).find((el) => el)
     let target = root?.isConnected ? marked(root) : undefined
     if (!target && lost) for (const scope of around) if (scope.isConnected && (target = marked(scope))) break
