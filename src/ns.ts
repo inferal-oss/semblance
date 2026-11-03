@@ -49,6 +49,10 @@ export const NS = {
   file: 'https://semblance.dev/ns/file#',
   ol: 'https://semblance.dev/ns/outline#',
   lc: 'https://semblance.dev/ns/layout-constraints#',
+  blk: 'https://semblance.dev/ns/block#',
+  po: 'http://www.essepuntato.it/2008/12/pattern#',
+  doco: 'http://purl.org/spar/doco/',
+  oa: 'http://www.w3.org/ns/oa#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -510,3 +514,15 @@ export const DEP = {
 
 /** The layers an app gets unless it names its own: what every page needs, none of the tools'. */
 export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.TooltipLayer, FS.Layer, LC.Layer]
+
+/** Block documents (ontology/components/blocks.ttl): DoCo, the Pattern Ontology, Web Annotation, and what Semblance adds. */
+export const PO = { contains: NS.po + 'contains' } as const
+export const OA = { start: NS.oa + 'start', end: NS.oa + 'end', hasBody: NS.oa + 'hasBody' } as const
+export const BLK = Object.fromEntries(
+  [
+    'Block', 'TextBlock', 'Container', 'Document', 'Paragraph', 'Heading', 'Quote', 'List', 'BulletedList', 'NumberedList', 'TodoList',
+    'Item', 'ListItem', 'TodoItem', 'Toggle', 'Callout', 'Divider', 'Code', 'Math', 'Table', 'Row', 'Cell', 'Columns', 'Column', 'Image',
+    'File', 'Bookmark', 'Embed', 'Linked', 'DocumentLink', 'Contents', 'Mark', 'Strong', 'Emphasis', 'Strike', 'InlineCode', 'Link',
+    'Mention', 'element', 'textElement', 'mark', 'level', 'checked', 'header', 'target', 'prefix', 'linePrefix',
+  ].map((n) => [n, NS.blk + n]),
+) as Record<string, string>

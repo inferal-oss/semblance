@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix blk: <https://semblance.dev/ns/block#> .
 @prefix clip: <https://semblance.dev/ns/clipboard#> .
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -43,6 +44,9 @@ c:WindowsGroup a sem:ComponentGroup ; sem:order 10 ;
 c:InspectionGroup a sem:ComponentGroup ; sem:order 11 ;
     rdfs:label "Inspection"@en , "Інспекція"@uk , "Inspektion"@de , "الفحص"@ar ;
     rdfs:comment "Looking at the graph itself: the SPARQL workbench and its results, query, triples and stream views, the element markup inspector, the reference."@en .
+c:DocumentsGroup a sem:ComponentGroup ; sem:order 12 ;
+    rdfs:label "Documents"@en , "Документи"@uk , "Dokumente"@de , "المستندات"@ar ;
+    rdfs:comment "Documents of blocks in DoCo, edited in place: the block editor, its block types and marks."@en .
 
 # --- Layout ---
 c:Stack sem:group c:LayoutGroup . c:HostSlot sem:group c:LayoutGroup . c:Surface sem:group c:LayoutGroup . c:Divider sem:group c:LayoutGroup .
@@ -92,7 +96,7 @@ c:MonthGrid sem:group c:InputsGroup . c:DateField sem:group c:InputsGroup . c:Da
 c:TimeField sem:group c:InputsGroup . c:MonthGridKey sem:group c:InputsGroup . c:TimeFieldKey sem:group c:InputsGroup .
 # A code editor's text is its value, like any field's; the SPARQL editor is one in SPARQL. The
 # words of the languages they know (c:CodeWord) and their key event are their parts.
-c:CodeEditor sem:group c:InputsGroup . c:QueryEditor sem:group c:InputsGroup . c:EditorKey sem:group c:InputsGroup .
+c:CodeEditor sem:group c:InputsGroup . c:CodeLexicon sem:group c:InputsGroup . c:QueryEditor sem:group c:InputsGroup . c:EditorKey sem:group c:InputsGroup .
 c:CodeWord sem:group c:InputsGroup . c:CodeKeyword sem:group c:InputsGroup . c:CodeFunction sem:group c:InputsGroup .
 c:TurtleKeyword sem:group c:InputsGroup .
 c:SparqlWord sem:group c:InputsGroup . c:SparqlKeyword sem:group c:InputsGroup . c:SparqlFunction sem:group c:InputsGroup .
@@ -182,3 +186,16 @@ c:TermSection sem:group c:InspectionGroup . c:TermOverview sem:group c:Inspectio
 c:TermAlignment sem:group c:InspectionGroup . c:TermKind sem:group c:InspectionGroup .
 c:TermMembers sem:group c:InspectionGroup . c:TermCard sem:group c:InspectionGroup . c:TermRole sem:group c:InspectionGroup .
 c:InverseFacet sem:group c:InspectionGroup .
+
+# --- Documents ---
+c:BlockEditor sem:group c:DocumentsGroup . blk:Block sem:group c:DocumentsGroup . blk:TextBlock sem:group c:DocumentsGroup . blk:Container sem:group c:DocumentsGroup .
+blk:Document sem:group c:DocumentsGroup . blk:Paragraph sem:group c:DocumentsGroup . blk:Heading sem:group c:DocumentsGroup . blk:Heading1 sem:group c:DocumentsGroup .
+blk:Heading2 sem:group c:DocumentsGroup . blk:Heading3 sem:group c:DocumentsGroup . blk:Quote sem:group c:DocumentsGroup . blk:List sem:group c:DocumentsGroup .
+blk:BulletedList sem:group c:DocumentsGroup . blk:NumberedList sem:group c:DocumentsGroup . blk:TodoList sem:group c:DocumentsGroup . blk:Item sem:group c:DocumentsGroup .
+blk:ListItem sem:group c:DocumentsGroup . blk:TodoItem sem:group c:DocumentsGroup . blk:Toggle sem:group c:DocumentsGroup . blk:Callout sem:group c:DocumentsGroup .
+blk:Divider sem:group c:DocumentsGroup . blk:Code sem:group c:DocumentsGroup . blk:Math sem:group c:DocumentsGroup . blk:Table sem:group c:DocumentsGroup .
+blk:Row sem:group c:DocumentsGroup . blk:Cell sem:group c:DocumentsGroup . blk:Columns sem:group c:DocumentsGroup . blk:Column sem:group c:DocumentsGroup .
+blk:Image sem:group c:DocumentsGroup . blk:File sem:group c:DocumentsGroup . blk:Bookmark sem:group c:DocumentsGroup . blk:Embed sem:group c:DocumentsGroup .
+blk:Linked sem:group c:DocumentsGroup . blk:DocumentLink sem:group c:DocumentsGroup . blk:Contents sem:group c:DocumentsGroup . blk:Mark sem:group c:DocumentsGroup .
+blk:Strong sem:group c:DocumentsGroup . blk:Emphasis sem:group c:DocumentsGroup . blk:Strike sem:group c:DocumentsGroup . blk:InlineCode sem:group c:DocumentsGroup .
+blk:Link sem:group c:DocumentsGroup . blk:Mention sem:group c:DocumentsGroup .

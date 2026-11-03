@@ -82,6 +82,7 @@ Thin vocabularies. Every component
 | **Windows** | Frame · Window · Palette · Desktop · Taskbar (+ Draggable, Resizable, Raisable, Restorable, Minimizable, Maximizable, Dockable mixins) |
 | **Disclosure** | Accordion / AccordionItem · Flippable |
 | **Inspection** | QueryWorkbench (RunQueryButton) · ResultTable · ResultGraph · ResultTurtle · QueryView · TriplesView · StreamMembers · StreamStats · ElementMarkup · Highlight · ProjectionView · ShapeReport · ClassDoc · the Reference's TermTree, TermOverview, TermAlignment, TermMembers |
+| **Documents** | BlockEditor · block types (Document, Paragraph, Heading 1–3, Quote, lists and items, Toggle, Callout, Divider, Code, Math, Table, Columns, Image, File, Bookmark, Embed, DocumentLink, Contents) · marks (Strong, Emphasis, InlineCode, Strike, Link, Mention) |
 
 A class's group is its `sem:group` (`ontology/components/groups.ttl`), and its parts - the events
 it handles, the kinds and words it uses, the nodes it mints - are in the same group. The

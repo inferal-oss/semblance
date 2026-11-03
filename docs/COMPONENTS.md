@@ -79,6 +79,21 @@ ex:changes a c:RdfEditor ; c:label "What changed" ; c:entry ex:book , ex:author 
 ex:undo a c:Button , beh:Undoer ; c:label "Undo" .
 ```
 
+A `c:BlockEditor` shows a document of blocks (`c:of` a `blk:Document`): a tree in DoCo and the
+Pattern Ontology, where containers hold blocks (`po:contains`) in a chain (`ord:immediatelyPrecedes`)
+and a text block's text is its `rdf:value` with standoff marks (`blk:Strong`, `blk:Link`, … each an
+`oa:TextPositionSelector` with `oa:start` and `oa:end`). Every block type is a class that is also a
+component: a text block class that names its element (`blk:element rdfhtml:Aside`) is rendered by the
+shared rendering, any other brings its own. Documents render as semantic HTML and, in the Text
+modality, as Markdown. [Block documents](BLOCKS.md) has the model and the design of the editor.
+
+```turtle
+ex:notes a c:BlockEditor ; c:label "Notes" ; c:of ex:doc .
+ex:doc a blk:Document ; po:contains ex:h , ex:p .
+ex:h a blk:Heading1 ; rdf:value "Plans" ; ord:immediatelyPrecedes ex:p .
+ex:p a blk:Paragraph ; rdf:value "Ship it." ; blk:mark [ a blk:Strong ; oa:start 0 ; oa:end 4 ] .
+```
+
 ## SPARQL first; functions are the escape hatch
 
 Every rendering is implemented by one or more `sem:Rule`s. A rule is either a SPARQL `CONSTRUCT`

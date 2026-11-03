@@ -1,0 +1,1010 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix blk: <https://semblance.dev/ns/block#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix po: <http://www.essepuntato.it/2008/12/pattern#> .
+@prefix doco: <http://purl.org/spar/doco/> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix schema: <https://schema.org/> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Block documents (docs/BLOCKS.md). A document is a tree of blocks: containers hold blocks
+# (po:contains), siblings are a chain (ord:immediatelyPrecedes), a text block's text is its
+# rdf:value with standoff marks (Web Annotation text position selectors). Every block type is a
+# subclass of its DoCo or Pattern Ontology class and of blk:Block, a component, so a block type is a
+# class with a rendering. This file has the model and the renderings; the editor is in
+# block-editor.ttl.
+
+blk: a owl:Ontology ;
+    rdfs:label "Semblance blocks"@en ;
+    rdfs:comment "Documents as trees of blocks, in DoCo and the Pattern Ontology; only what they do not say."@en .
+
+# --- what a block is --------------------------------------------------------------------------------
+
+blk:Block a owl:Class ; rdfs:subClassOf sem:Component ;
+    rdfs:label "Block"@en , "Блок"@uk , "Block"@de , "كتلة"@ar ;
+    rdfs:comment "A part of a document shown as a block: a component, so a block type is a class with a rendering."@en .
+blk:TextBlock a owl:Class ; rdfs:subClassOf blk:Block , po:Block ;
+    rdfs:label "Text block"@en , "Текстовий блок"@uk , "Textblock"@de , "كتلة نصية"@ar ;
+    rdfs:comment """A block whose content is text (rdf:value) with marks (blk:mark). Its text is rendered by
+the shared text rule into <block>/~text, which the block's own rendering places."""@en .
+blk:Container a owl:Class ; rdfs:subClassOf blk:Block ;
+    rdfs:label "Container"@en , "Контейнер"@uk , "Container"@de , "حاوية"@ar ;
+    rdfs:comment """A block that holds blocks (po:contains), in a chain (ord:immediatelyPrecedes). A text block
+that is also a container places them in <block>/~children (a list item's nested list, a toggle's
+content); a pure container (a document, a list, a column) in its root."""@en .
+
+blk:element a owl:ObjectProperty ; rdfs:domain owl:Class ;
+    rdfs:comment """On a text block class: the RDF/HTML element its blocks are (rdfhtml:P, rdfhtml:H2,
+rdfhtml:Blockquote). A class that says it is rendered by the shared block rendering; a more specific
+class's element wins. A class with a rendering of its own says none."""@en .
+blk:mark a owl:ObjectProperty ; rdfs:domain blk:TextBlock ; rdfs:range blk:Mark ;
+    rdfs:comment "A mark over part of the block's text."@en .
+blk:level a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "On a heading class: its level (1 is the top)."@en .
+blk:checked a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a to-do item: whether it is done."@en .
+blk:header a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a table row: whether it is the header row (its cells are column headers)."@en .
+blk:target a owl:ObjectProperty ;
+    rdfs:comment "On a link to a document: the document (a blk:Document) it goes to."@en .
+blk:textElement a owl:ObjectProperty ; rdfs:domain owl:Class ;
+    rdfs:comment "On a container class: the element of its blocks in the Text modality (rdfhtml:Pre: one line; default rdfhtml:Div)."@en .
+blk:linePrefix a owl:DatatypeProperty ;
+    rdfs:comment "Derived, in the Text modality: what a text block's line starts with (its class's blk:prefix; an item's marker, indented; a toggle's or a callout's sign)."@en .
+blk:prefix a owl:DatatypeProperty ; rdfs:domain owl:Class ;
+    rdfs:comment "On a text block class: what its line starts with in the Text modality (Markdown: \"# \", \"> \")."@en .
+
+# --- marks (Web Annotation text position selectors) -------------------------------------------------
+
+blk:Mark a owl:Class ; rdfs:subClassOf oa:TextPositionSelector ;
+    rdfs:label "Mark"@en , "Позначка"@uk , "Auszeichnung"@de , "تنسيق"@ar ;
+    rdfs:comment """A range of a block's text (oa:start inclusive, oa:end exclusive, in characters) shown
+some way. Marks may overlap; the text is split at their boundaries into runs, each wrapped in the
+elements of the marks over it, in a fixed order (link, strong, emphasis, strike, code)."""@en .
+blk:Strong a owl:Class ; rdfs:subClassOf blk:Mark ; rdfs:label "Bold"@en , "Жирний"@uk , "Fett"@de , "عريض"@ar .
+blk:Emphasis a owl:Class ; rdfs:subClassOf blk:Mark ; rdfs:label "Italic"@en , "Курсив"@uk , "Kursiv"@de , "مائل"@ar .
+blk:Strike a owl:Class ; rdfs:subClassOf blk:Mark ; rdfs:label "Strikethrough"@en , "Закреслений"@uk , "Durchgestrichen"@de , "يتوسطه خط"@ar .
+blk:InlineCode a owl:Class ; rdfs:subClassOf blk:Mark ; rdfs:label "Code"@en , "Код"@uk , "Code"@de , "شيفرة"@ar .
+blk:Link a owl:Class ; rdfs:subClassOf blk:Mark ; rdfs:label "Link"@en , "Посилання"@uk , "Link"@de , "رابط"@ar ;
+    rdfs:comment "A link: the range goes to schema:url (http, https, mailto, or a path on the site)."@en .
+blk:Mention a owl:Class ; rdfs:subClassOf blk:Mark ; rdfs:label "Mention"@en , "Згадка"@uk , "Erwähnung"@de , "إشارة"@ar ;
+    rdfs:comment "A mention of a resource of the graph (oa:hasBody): the range names it."@en .
+
+# --- block types --------------------------------------------------------------------------------------
+# Each with its labels and description, which the / menu shows (block-editor.ttl).
+
+blk:Document a owl:Class ; rdfs:subClassOf blk:Container , doco:BodyMatter ; sem:slug "blk-document" ; blk:element rdfhtml:Div ;
+    rdfs:label "Document"@en , "Документ"@uk , "Dokument"@de , "مستند"@ar ;
+    rdfs:comment "A document: the blocks it holds (po:contains), in order."@en .
+
+blk:Paragraph a owl:Class ; rdfs:subClassOf blk:TextBlock , doco:Paragraph ; sem:slug "blk-paragraph" ;
+    blk:element rdfhtml:P ;
+    rdfs:label "Text"@en , "Текст"@uk , "Text"@de , "نص"@ar ;
+    rdfs:comment "Plain text."@en , "Звичайний текст."@uk , "Einfacher Text."@de , "نص عادي."@ar .
+blk:Heading a owl:Class ; rdfs:subClassOf blk:TextBlock , doco:SectionTitle ;
+    rdfs:label "Heading"@en , "Заголовок"@uk , "Überschrift"@de , "عنوان"@ar ;
+    rdfs:comment "A heading of a level (blk:level on its class). Level 1 is an h2: the page has its own h1."@en .
+blk:Heading1 a owl:Class ; rdfs:subClassOf blk:Heading ; sem:slug "blk-heading-1" ; blk:level 1 ; blk:element rdfhtml:H2 ; blk:prefix "# " ;
+    rdfs:label "Heading 1"@en , "Заголовок 1"@uk , "Überschrift 1"@de , "عنوان 1"@ar ;
+    rdfs:comment "A section heading."@en , "Заголовок розділу."@uk , "Abschnittsüberschrift."@de , "عنوان قسم."@ar .
+blk:Heading2 a owl:Class ; rdfs:subClassOf blk:Heading ; sem:slug "blk-heading-2" ; blk:level 2 ; blk:element rdfhtml:H3 ; blk:prefix "## " ;
+    rdfs:label "Heading 2"@en , "Заголовок 2"@uk , "Überschrift 2"@de , "عنوان 2"@ar ;
+    rdfs:comment "A subsection heading."@en , "Заголовок підрозділу."@uk , "Unterabschnittsüberschrift."@de , "عنوان قسم فرعي."@ar .
+blk:Heading3 a owl:Class ; rdfs:subClassOf blk:Heading ; sem:slug "blk-heading-3" ; blk:level 3 ; blk:element rdfhtml:H4 ; blk:prefix "### " ;
+    rdfs:label "Heading 3"@en , "Заголовок 3"@uk , "Überschrift 3"@de , "عنوان 3"@ar ;
+    rdfs:comment "A small heading."@en , "Малий заголовок."@uk , "Kleine Überschrift."@de , "عنوان صغير."@ar .
+blk:Quote a owl:Class ; rdfs:subClassOf blk:TextBlock , doco:BlockQuotation ; sem:slug "blk-quote" ; blk:element rdfhtml:Blockquote ; blk:prefix "> " ;
+    rdfs:label "Quote"@en , "Цитата"@uk , "Zitat"@de , "اقتباس"@ar ;
+    rdfs:comment "A quotation."@en , "Цитата з джерела."@uk , "Ein Zitat."@de , "اقتباس من مصدر."@ar .
+
+blk:List a owl:Class ; rdfs:subClassOf blk:Container , doco:List ;
+    rdfs:label "List"@en , "Список"@uk , "Liste"@de , "قائمة"@ar ;
+    rdfs:comment "A list: the items it holds, in order."@en .
+blk:BulletedList a owl:Class ; rdfs:subClassOf blk:List ; sem:slug "blk-bulleted-list" ; blk:element rdfhtml:Ul ;
+    rdfs:label "Bulleted list"@en , "Маркований список"@uk , "Aufzählung"@de , "قائمة نقطية"@ar ;
+    rdfs:comment "A list of points."@en , "Список пунктів."@uk , "Eine Liste von Punkten."@de , "قائمة نقاط."@ar .
+blk:NumberedList a owl:Class ; rdfs:subClassOf blk:List ; sem:slug "blk-numbered-list" ; blk:element rdfhtml:Ol ;
+    rdfs:label "Numbered list"@en , "Нумерований список"@uk , "Nummerierte Liste"@de , "قائمة مرقمة"@ar ;
+    rdfs:comment "A list of steps, numbered."@en , "Список кроків із номерами."@uk , "Eine nummerierte Liste von Schritten."@de , "قائمة خطوات مرقمة."@ar .
+blk:TodoList a owl:Class ; rdfs:subClassOf blk:List ; sem:slug "blk-todo-list" ; blk:element rdfhtml:Ul ;
+    rdfs:label "To-do list"@en , "Список справ"@uk , "Aufgabenliste"@de , "قائمة مهام"@ar ;
+    rdfs:comment "Things to do, each checked off when done."@en , "Справи, які позначають, коли виконано."@uk , "Aufgaben zum Abhaken."@de , "مهام تُعلَّم عند إنجازها."@ar .
+blk:Item a owl:Class ; rdfs:subClassOf blk:TextBlock , blk:Container ;
+    rdfs:label "Item"@en , "Пункт"@uk , "Eintrag"@de , "عنصر"@ar ;
+    rdfs:comment "An item of a list: its text, and the blocks nested in it (a nested list)."@en .
+blk:ListItem a owl:Class ; rdfs:subClassOf blk:Item ; sem:slug "blk-list-item" ; blk:element rdfhtml:Li ;
+    rdfs:label "List item"@en , "Пункт списку"@uk , "Listeneintrag"@de , "عنصر قائمة"@ar .
+blk:TodoItem a owl:Class ; rdfs:subClassOf blk:Item ; sem:slug "blk-todo-item" ;
+    rdfs:label "To-do"@en , "Справа"@uk , "Aufgabe"@de , "مهمة"@ar ;
+    rdfs:comment "A thing to do (blk:checked when done)."@en .
+
+blk:Toggle a owl:Class ; rdfs:subClassOf blk:TextBlock , blk:Container , po:HeadedContainer ; sem:slug "blk-toggle" ;
+    rdfs:label "Toggle"@en , "Розгортання"@uk , "Aufklapper"@de , "قسم قابل للطي"@ar ;
+    rdfs:comment "A line that shows or hides the blocks under it (c:expanded)."@en , "Рядок, що показує або ховає блоки під ним."@uk , "Eine Zeile, die die Blöcke darunter ein- und ausblendet."@de , "سطر يُظهر الكتل تحته أو يخفيها."@ar .
+blk:Callout a owl:Class ; rdfs:subClassOf blk:TextBlock , blk:Container , doco:TextBox ; sem:slug "blk-callout" ;
+    rdfs:label "Callout"@en , "Виноска"@uk , "Hinweis"@de , "تنبيه"@ar ;
+    rdfs:comment "Text set apart, with an icon (c:icon) and a tone (sty:tone)."@en , "Виділений текст зі значком."@uk , "Hervorgehobener Text mit Symbol."@de , "نص مميز مع أيقونة."@ar .
+blk:Divider a owl:Class ; rdfs:subClassOf blk:Block , po:Milestone ; sem:slug "blk-divider" ;
+    rdfs:label "Divider"@en , "Розділювач"@uk , "Trennlinie"@de , "فاصل"@ar ;
+    rdfs:comment "A line between parts."@en , "Лінія між частинами."@uk , "Eine Linie zwischen Teilen."@de , "خط بين الأجزاء."@ar .
+blk:Code a owl:Class ; rdfs:subClassOf blk:Block , po:Block ; sem:slug "blk-code" ;
+    rdfs:label "Code"@en , "Код"@uk , "Code"@de , "شيفرة"@ar ;
+    rdfs:comment "Code in a language (schema:programmingLanguage), as written (rdf:value)."@en , "Код мовою програмування."@uk , "Code in einer Programmiersprache."@de , "شيفرة بلغة برمجة."@ar .
+blk:Math a owl:Class ; rdfs:subClassOf blk:Block , doco:Formula ; sem:slug "blk-math" ;
+    rdfs:label "Math"@en , "Формула"@uk , "Formel"@de , "معادلة"@ar ;
+    rdfs:comment "A formula, in TeX (rdf:value)."@en , "Формула в TeX."@uk , "Eine Formel in TeX."@de , "معادلة بصيغة TeX."@ar .
+
+blk:Table a owl:Class ; rdfs:subClassOf blk:Container , doco:Table ; sem:slug "blk-table" ;
+    rdfs:label "Table"@en , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar ;
+    rdfs:comment "Rows of cells (blk:Row, blk:Cell)."@en , "Рядки клітинок."@uk , "Zeilen aus Zellen."@de , "صفوف من الخلايا."@ar .
+blk:Row a owl:Class ; rdfs:subClassOf blk:Container ; sem:slug "blk-row" ; blk:element rdfhtml:Tr ; blk:textElement rdfhtml:Pre ;
+    rdfs:label "Row"@en , "Рядок"@uk , "Zeile"@de , "صف"@ar ;
+    rdfs:comment "A row of a table: its cells (blk:header true: the header row)."@en .
+blk:Cell a owl:Class ; rdfs:subClassOf blk:TextBlock ; sem:slug "blk-cell" ;
+    rdfs:label "Cell"@en , "Клітинка"@uk , "Zelle"@de , "خلية"@ar ;
+    rdfs:comment "A cell of a table row: text."@en .
+
+blk:Columns a owl:Class ; rdfs:subClassOf blk:Container ; sem:slug "blk-columns" ; blk:element rdfhtml:Div ;
+    rdfs:label "Columns"@en , "Колонки"@uk , "Spalten"@de , "أعمدة"@ar ;
+    rdfs:comment "Blocks side by side, in columns (blk:Column); one under the other on a narrow screen."@en , "Блоки поруч, у колонках."@uk , "Blöcke nebeneinander, in Spalten."@de , "كتل متجاورة في أعمدة."@ar .
+blk:Column a owl:Class ; rdfs:subClassOf blk:Container ; sem:slug "blk-column" ; blk:element rdfhtml:Div ;
+    rdfs:label "Column"@en , "Колонка"@uk , "Spalte"@de , "عمود"@ar ;
+    rdfs:comment "A column of blocks."@en .
+
+blk:Image a owl:Class ; rdfs:subClassOf blk:Block , doco:Figure , po:Atom ; sem:slug "blk-image" ;
+    rdfs:label "Image"@en , "Зображення"@uk , "Bild"@de , "صورة"@ar ;
+    rdfs:comment "A picture (schema:contentUrl), described (schema:description) and captioned (schema:caption)."@en , "Зображення з підписом."@uk , "Ein Bild mit Bildunterschrift."@de , "صورة مع تعليق."@ar .
+blk:File a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-file" ;
+    rdfs:label "File"@en , "Файл"@uk , "Datei"@de , "ملف"@ar ;
+    rdfs:comment "A file to download (schema:contentUrl, schema:name, schema:contentSize)."@en , "Файл для завантаження."@uk , "Eine Datei zum Herunterladen."@de , "ملف للتنزيل."@ar .
+blk:Bookmark a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-bookmark" ;
+    rdfs:label "Bookmark"@en , "Закладка"@uk , "Lesezeichen"@de , "إشارة مرجعية"@ar ;
+    rdfs:comment "A page elsewhere (schema:url), with its title (schema:name) and summary (schema:description)."@en , "Сторінка деінде, з назвою."@uk , "Eine Seite anderswo, mit Titel."@de , "صفحة في مكان آخر مع عنوانها."@ar .
+blk:Embed a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-embed" ;
+    rdfs:label "Embed"@en , "Вбудоване"@uk , "Einbettung"@de , "تضمين"@ar ;
+    rdfs:comment "A page shown in the document (schema:embedUrl), in a sandboxed frame named schema:name."@en , "Сторінка, показана в документі."@uk , "Eine im Dokument gezeigte Seite."@de , "صفحة معروضة داخل المستند."@ar .
+blk:Linked a owl:Class ; rdfs:subClassOf blk:Block ;
+    rdfs:label "Linked block"@en , "Блок-посилання"@uk , "Verweisblock"@de , "كتلة رابط"@ar ;
+    rdfs:comment "A block that stands for something at an address: a file, a bookmark, an embed, a link to a document."@en .
+blk:DocumentLink a owl:Class ; rdfs:subClassOf blk:Linked , po:Atom ; sem:slug "blk-document-link" ;
+    rdfs:label "Link to page"@en , "Посилання на сторінку"@uk , "Link zur Seite"@de , "رابط إلى صفحة"@ar ;
+    rdfs:comment "A link to another document (blk:target, named by its schema:name; or schema:url)."@en , "Посилання на інший документ."@uk , "Ein Link zu einem anderen Dokument."@de , "رابط إلى مستند آخر."@ar .
+blk:Contents a owl:Class ; rdfs:subClassOf blk:Block , doco:TableOfContents ; sem:slug "blk-contents" ;
+    rdfs:label "Table of contents"@en , "Зміст"@uk , "Inhaltsverzeichnis"@de , "جدول المحتويات"@ar ;
+    rdfs:comment "The headings of the document it is in, linked."@en , "Заголовки документа з посиланнями."@uk , "Die Überschriften des Dokuments, verlinkt."@de , "عناوين المستند مع روابطها."@ar .
+
+# --- the shared renderings ----------------------------------------------------------------------------
+
+# A container places its blocks member-wise: one evaluation per (container, block), which reads the
+# block's place in the chain and nothing of its content, so typing in a block never runs it. Its order
+# is stated backwards (ord:immediatelyFollows), so the derived graph never repeats the document's own
+# ord:immediatelyPrecedes.
+blk:Members a sem:Rendering ; sem:targets blk:Container ; sem:stratum 0 ;
+    sem:forEach po:contains ;
+    sem:watches rdf:type , po:contains .
+blk:Members-fn a sem:Rule ; sem:implements blk:Members ; sem:function "blk:members" .
+blk:Members-sparql a sem:Rule ; sem:implements blk:Members ;
+    sem:memberWatches ord:immediatelyPrecedes ;
+    sem:construct """
+CONSTRUCT { ?region rdfhtml:hasChild $member . ?next ord:immediatelyFollows $member . }
+WHERE {
+  $this po:contains $member .
+  BIND(IRI(CONCAT(STR($this), IF(EXISTS { $this a/rdfs:subClassOf* blk:TextBlock } || EXISTS { $this a/rdfs:subClassOf* blk:Table }, "/~children", "/~root"))) AS ?region)
+  OPTIONAL { $member ord:immediatelyPrecedes ?next . $this po:contains ?next }
+}""" .
+
+# A text block's text: <block>/~text, a span of runs split at every mark boundary. A run is minted
+# from its block and start (<block>/~run-12), wrapped in the elements of the marks over it; a link's
+# address is kept only when it is http(s), mailto or a path. An empty text, or one ending in a line
+# break, ends with a <br> (an empty line has height and takes the caret).
+blk:TextRendering a sem:Rendering ; sem:targets blk:TextBlock ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows blk:mark ;
+    sem:watches rdf:value , blk:mark , rdf:type , oa:start , oa:end , schema:url , oa:hasBody .
+blk:TextRendering-fn a sem:Rule ; sem:implements blk:TextRendering ; sem:function "blk:text" .
+blk:TextRendering-sparql a sem:Rule ; sem:implements blk:TextRendering ;
+    sem:bulk false ;  # its subqueries read $this
+    sem:construct """
+CONSTRUCT {
+  ?text a rdfhtml:Span ; rdfhtml:class "sem-text" ; rdfhtml:id ?textId ; rdfhtml:hasChild ?top , ?br .
+  ?br a rdfhtml:Br ; sem:orderKey ?brKey .
+  ?top sem:orderKey ?key .
+  ?a a rdfhtml:A ; rdfhtml:href ?href ; rdfhtml:hasChild ?aChild ; rdfhtml:attribute ?aMark .
+  ?aMark a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-mark" ; rdfhtml:attributeValue ?kind .
+  ?strong a rdfhtml:Strong ; rdfhtml:hasChild ?strongChild .
+  ?em a rdfhtml:Em ; rdfhtml:hasChild ?emChild .
+  ?s a rdfhtml:S ; rdfhtml:hasChild ?sChild .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?t .
+  ?t a rdfhtml:Text ; rdfhtml:data ?data .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:TextBlock .
+  OPTIONAL { $this rdf:value ?raw }
+  BIND(COALESCE(STR(?raw), "") AS ?value)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+  BIND(STR(?text) AS ?textId)
+  { BIND(true AS ?tail) }
+  UNION
+  { SELECT ?b (MIN(?c) AS ?n) WHERE {
+      { BIND(0 AS ?b) } UNION { $this blk:mark/oa:start ?b } UNION { $this blk:mark/oa:end ?b }
+      { $this rdf:value ?v BIND(STRLEN(STR(?v)) AS ?c) } UNION { $this blk:mark/oa:start ?c } UNION { $this blk:mark/oa:end ?c }
+      FILTER(?c > ?b)
+    } GROUP BY ?b }
+  BIND(IF(BOUND(?tail) && (?value = "" || STRENDS(?value, "\\n")), IRI(CONCAT(STR($this), "/~text-br")), ?none) AS ?br)
+  BIND(IF(BOUND(?br), STR(STRLEN(?value)), ?none) AS ?brKey)
+  BIND(IF(BOUND(?n), CONCAT(STR($this), "/~run-", STR(?b)), ?none) AS ?base)
+  BIND(SUBSTR(?value, ?b + 1, ?n - ?b) AS ?data)
+  BIND(STR(?b) AS ?key)
+  BIND(EXISTS { $this blk:mark ?m1 . ?m1 a blk:Strong ; oa:start ?s1 ; oa:end ?e1 FILTER(?s1 <= ?b && ?e1 >= ?n) } AS ?isStrong)
+  BIND(EXISTS { $this blk:mark ?m2 . ?m2 a blk:Emphasis ; oa:start ?s2 ; oa:end ?e2 FILTER(?s2 <= ?b && ?e2 >= ?n) } AS ?isEm)
+  BIND(EXISTS { $this blk:mark ?m3 . ?m3 a blk:Strike ; oa:start ?s3 ; oa:end ?e3 FILTER(?s3 <= ?b && ?e3 >= ?n) } AS ?isStrike)
+  BIND(EXISTS { $this blk:mark ?m4 . ?m4 a blk:InlineCode ; oa:start ?s4 ; oa:end ?e4 FILTER(?s4 <= ?b && ?e4 >= ?n) } AS ?isCode)
+  OPTIONAL {
+    { SELECT ?b ?n (MIN(?linkKind) AS ?kind) (MIN(?target) AS ?linked) WHERE {
+        $this blk:mark ?lm . ?lm oa:start ?ls ; oa:end ?le .
+        { ?lm a blk:Link ; schema:url ?target0 BIND("link" AS ?linkKind) } UNION { ?lm a blk:Mention ; oa:hasBody ?target0 BIND("mention" AS ?linkKind) }
+        BIND(STR(?target0) AS ?target)
+        { SELECT ?b (MIN(?c) AS ?n) WHERE {
+            { BIND(0 AS ?b) } UNION { $this blk:mark/oa:start ?b } UNION { $this blk:mark/oa:end ?b }
+            { $this rdf:value ?v BIND(STRLEN(STR(?v)) AS ?c) } UNION { $this blk:mark/oa:start ?c } UNION { $this blk:mark/oa:end ?c }
+            FILTER(?c > ?b)
+          } GROUP BY ?b }
+        FILTER(?ls <= ?b && ?le >= ?n)
+      } GROUP BY ?b ?n }
+  }
+  BIND(IF(REGEX(STR(?linked), "^(https?:|mailto:|/|#|[^:]*$)"), STR(?linked), ?none) AS ?href)
+  BIND(IF(BOUND(?kind), IRI(CONCAT(?base, "-a")), ?none) AS ?a)
+  BIND(IF(BOUND(?a), IRI(CONCAT(?base, "-a-data-sem-mark")), ?none) AS ?aMark)
+  BIND(IF(?isStrong, IRI(CONCAT(?base, "-strong")), ?none) AS ?strong)
+  BIND(IF(?isEm, IRI(CONCAT(?base, "-em")), ?none) AS ?em)
+  BIND(IF(?isStrike, IRI(CONCAT(?base, "-s")), ?none) AS ?s)
+  BIND(IF(?isCode, IRI(CONCAT(?base, "-code")), ?none) AS ?code)
+  BIND(IF(BOUND(?base), IRI(CONCAT(?base, "-t")), ?none) AS ?t)
+  BIND(COALESCE(?strong, ?em, ?s, ?code, ?t) AS ?aChild)
+  BIND(COALESCE(?em, ?s, ?code, ?t) AS ?strongChild)
+  BIND(COALESCE(?s, ?code, ?t) AS ?emChild)
+  BIND(COALESCE(?code, ?t) AS ?sChild)
+  BIND(COALESCE(?a, ?strong, ?em, ?s, ?code, ?t) AS ?top)
+}""" .
+
+# In the Text modality a text block's text is Markdown: each run's text escaped (but in code), the
+# marks that start at it opened before it and those that end at it closed after it.
+blk:TextAsText a sem:Rendering ; sem:targets blk:TextBlock ; sem:modality mod:Text ; sem:stratum 0 ;
+    sem:follows blk:mark ;
+    sem:watches rdf:value , blk:mark , rdf:type , oa:start , oa:end , schema:url , oa:hasBody .
+blk:TextAsText-fn a sem:Rule ; sem:implements blk:TextAsText ; sem:function "blk:text-text" .
+blk:TextAsText-sparql a sem:Rule ; sem:implements blk:TextAsText ;
+    sem:bulk false ;  # its subqueries read $this
+    sem:construct """
+CONSTRUCT {
+  ?text a rdfhtml:Span ; rdfhtml:hasChild ?t .
+  ?t a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?key .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:TextBlock .
+  OPTIONAL { $this rdf:value ?raw }
+  BIND(COALESCE(STR(?raw), "") AS ?value)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+  OPTIONAL {
+    { SELECT ?b (MIN(?c) AS ?n) WHERE {
+        { BIND(0 AS ?b) } UNION { $this blk:mark/oa:start ?b } UNION { $this blk:mark/oa:end ?b }
+        { $this rdf:value ?v BIND(STRLEN(STR(?v)) AS ?c) } UNION { $this blk:mark/oa:start ?c } UNION { $this blk:mark/oa:end ?c }
+        FILTER(?c > ?b)
+      } GROUP BY ?b }
+  }
+  BIND(SUBSTR(?value, ?b + 1, ?n - ?b) AS ?chunk)
+  BIND(EXISTS { $this blk:mark ?m4 . ?m4 a blk:InlineCode ; oa:start ?s4 ; oa:end ?e4 FILTER(?s4 <= ?b && ?e4 >= ?n) } AS ?isCode)
+  BIND(IF(?isCode, ?chunk, REPLACE(?chunk, "([*_`~\\\\[\\\\]\\\\\\\\])", "\\\\\\\\$1")) AS ?escaped)
+  BIND(IF(EXISTS { $this blk:mark ?o1 . ?o1 a blk:Link ; oa:start ?b } || EXISTS { $this blk:mark ?o1 . ?o1 a blk:Mention ; oa:start ?b }, "[", "") AS ?openA)
+  BIND(IF(EXISTS { $this blk:mark ?o2 . ?o2 a blk:Strong ; oa:start ?b }, "**", "") AS ?openStrong)
+  BIND(IF(EXISTS { $this blk:mark ?o3 . ?o3 a blk:Emphasis ; oa:start ?b }, "_", "") AS ?openEm)
+  BIND(IF(EXISTS { $this blk:mark ?o4 . ?o4 a blk:Strike ; oa:start ?b }, "~~", "") AS ?openS)
+  BIND(IF(EXISTS { $this blk:mark ?o5 . ?o5 a blk:InlineCode ; oa:start ?b }, "`", "") AS ?openCode)
+  BIND(IF(EXISTS { $this blk:mark ?c5 . ?c5 a blk:InlineCode ; oa:end ?n }, "`", "") AS ?closeCode)
+  BIND(IF(EXISTS { $this blk:mark ?c4 . ?c4 a blk:Strike ; oa:end ?n }, "~~", "") AS ?closeS)
+  BIND(IF(EXISTS { $this blk:mark ?c3 . ?c3 a blk:Emphasis ; oa:end ?n }, "_", "") AS ?closeEm)
+  BIND(IF(EXISTS { $this blk:mark ?c2 . ?c2 a blk:Strong ; oa:end ?n }, "**", "") AS ?closeStrong)
+  OPTIONAL { $this blk:mark ?c1 . ?c1 oa:end ?n . { ?c1 a blk:Link ; schema:url ?closeTarget } UNION { ?c1 a blk:Mention ; oa:hasBody ?closeTarget } }
+  BIND(IF(BOUND(?closeTarget), CONCAT("](", STR(?closeTarget), ")"), "") AS ?closeA)
+  BIND(CONCAT(?openA, ?openStrong, ?openEm, ?openS, ?openCode, ?escaped, ?closeCode, ?closeS, ?closeEm, ?closeStrong, ?closeA) AS ?data)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~run-", STR(?b))), ?none) AS ?t)
+  BIND(STR(?b) AS ?key)
+}""" .
+
+# Text blocks whose class names an element (blk:element): that element, with the text, and the
+# blocks it holds after it. The most specific class's element wins.
+blk:TextBlockRendering a sem:Rendering ; sem:targets blk:TextBlock ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , po:contains .
+blk:TextBlockRendering-fn a sem:Rule ; sem:implements blk:TextBlockRendering ; sem:function "blk:text-block" .
+blk:TextBlockRendering-sparql a sem:Rule ; sem:implements blk:TextBlockRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?text , ?children .
+  ?text ord:immediatelyPrecedes ?children .
+  ?children a rdfhtml:Div ; rdfhtml:class "sem-children" .
+}
+WHERE {
+  $this a/rdfs:subClassOf* ?cls . ?cls blk:element ?element .
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?more . ?more rdfs:subClassOf+ ?cls . ?more blk:element ?other }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+  BIND(IF(EXISTS { $this po:contains ?anyChild }, IRI(CONCAT(STR($this), "/~children")), ?none) AS ?children)
+}""" .
+
+# In the Text modality a text block is a line - what it starts with (blk:linePrefix), then its text -
+# then the blocks it holds (but a closed toggle's). One rendering for every text block but a cell;
+# what a line starts with is derived below it, by kind.
+blk:LinePrefix a sem:Rendering ; sem:targets blk:TextBlock ; sem:modality mod:Text ; sem:stratum -5 ; sem:inputOnly true ;
+    sem:follows ( [ sem:inverse po:contains ] [ sem:inverse po:contains ] [ sem:inverse po:contains ] [ sem:inverse po:contains ] [ sem:inverse po:contains ] [ sem:inverse po:contains ] ) ;
+    sem:watches rdf:type , po:contains , blk:checked , c:expanded , c:icon .
+blk:LinePrefix-fn a sem:Rule ; sem:implements blk:LinePrefix ; sem:function "blk:line-prefix" .
+blk:LinePrefix-sparql a sem:Rule ; sem:implements blk:LinePrefix ;
+    sem:bulk false ;  # its subquery reads $this
+    sem:construct """
+CONSTRUCT { $this blk:linePrefix ?prefix . }
+WHERE {
+  $this a/rdfs:subClassOf* blk:TextBlock .
+  { SELECT (COUNT(?outer) AS ?depth) WHERE { ?outer po:contains+ $this . ?outer a/rdfs:subClassOf* blk:List } }
+  OPTIONAL { $this a/rdfs:subClassOf* ?pc . ?pc blk:prefix ?own
+    FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?pmore . ?pmore rdfs:subClassOf+ ?pc . ?pmore blk:prefix ?pother } }
+  OPTIONAL { $this c:icon ?iconValue }
+  BIND(IF(EXISTS { ?list po:contains $this . ?list a/rdfs:subClassOf* blk:NumberedList }, "1. ",
+       IF(EXISTS { $this a/rdfs:subClassOf* blk:TodoItem }, IF(EXISTS { $this blk:checked true }, "- [x] ", "- [ ] "), "- ")) AS ?marker)
+  BIND(IF(EXISTS { $this a/rdfs:subClassOf* blk:Item }, CONCAT(SUBSTR("                    ", 1, 2 * IF(?depth > 0, ?depth - 1, 0)), ?marker),
+       IF(EXISTS { $this a/rdfs:subClassOf* blk:Toggle }, IF(EXISTS { $this c:expanded true }, "▾ ", "▸ "),
+       IF(EXISTS { $this a/rdfs:subClassOf* blk:Callout }, CONCAT("> ", COALESCE(STR(?iconValue), "💡"), " "),
+       STR(?own)))) AS ?prefix)
+}""" .
+blk:TextBlockAsText a sem:Rendering ; sem:targets blk:TextBlock ; sem:modality mod:Text ; sem:stratum 0 ;
+    sem:watches rdf:type , po:contains , c:expanded , blk:linePrefix .
+blk:TextBlockAsText-fn a sem:Rule ; sem:implements blk:TextBlockAsText ; sem:function "blk:text-block-text" .
+blk:TextBlockAsText-sparql a sem:Rule ; sem:implements blk:TextBlockAsText ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line , ?children .
+  ?line a rdfhtml:Pre ; rdfhtml:hasChild ?lead , ?text ; ord:immediatelyPrecedes ?children .
+  ?lead a rdfhtml:Text ; rdfhtml:data ?prefix ; ord:immediatelyPrecedes ?text .
+  ?children a rdfhtml:Div .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:TextBlock .
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:Cell }
+  OPTIONAL { $this blk:linePrefix ?prefix }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+  BIND(IF(BOUND(?prefix), IRI(CONCAT(STR($this), "/~lead")), ?none) AS ?lead)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+  BIND(EXISTS { $this a/rdfs:subClassOf* blk:Toggle } && NOT EXISTS { $this c:expanded true } AS ?closed)
+  BIND(IF(EXISTS { $this po:contains ?anyChild } && !?closed, IRI(CONCAT(STR($this), "/~children")), ?none) AS ?children)
+}""" .
+
+# Containers that are not text: their class's element, holding their blocks (a list's items, a
+# column's blocks). In the Text modality a line (blk:textElement rdfhtml:Pre: a table row) or not.
+blk:ContainerRendering a sem:Rendering ; sem:targets blk:Container ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type .
+blk:ContainerRendering-fn a sem:Rule ; sem:implements blk:ContainerRendering ; sem:function "blk:container" .
+blk:ContainerRendering-sparql a sem:Rule ; sem:implements blk:ContainerRendering ;
+    sem:construct """
+CONSTRUCT { ?root a ?element ; sem:renders $this ; rdfhtml:id ?rootId . }
+WHERE {
+  $this a/rdfs:subClassOf* ?cls . ?cls blk:element ?element .
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?more . ?more rdfs:subClassOf+ ?cls . ?more blk:element ?other }
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:TextBlock }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+}""" .
+blk:ContainerAsText a sem:Rendering ; sem:targets blk:Container ; sem:modality mod:Text ; sem:stratum 0 ;
+    sem:watches rdf:type .
+blk:ContainerAsText-fn a sem:Rule ; sem:implements blk:ContainerAsText ; sem:function "blk:container-text" .
+blk:ContainerAsText-sparql a sem:Rule ; sem:implements blk:ContainerAsText ;
+    sem:construct """
+CONSTRUCT { ?root a ?element ; sem:renders $this . }
+WHERE {
+  $this a/rdfs:subClassOf* ?cls . ?cls blk:element ?screen .
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?more . ?more rdfs:subClassOf+ ?cls . ?more blk:element ?other }
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:TextBlock }
+  OPTIONAL { ?cls blk:textElement ?textElement }
+  BIND(COALESCE(?textElement, rdfhtml:Div) AS ?element)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+}""" .
+
+# A to-do: a checkbox named by its text, the text, the blocks nested in it.
+blk:TodoItemRendering a sem:Rendering ; sem:targets blk:TodoItem ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , po:contains , blk:checked .
+blk:TodoItemRendering-fn a sem:Rule ; sem:implements blk:TodoItemRendering ; sem:function "blk:todo-item" .
+blk:TodoItemRendering-sparql a sem:Rule ; sem:implements blk:TodoItemRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?check , ?text , ?children ; rdfhtml:attribute ?doneAttr .
+  ?doneAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-done" ; rdfhtml:attributeValue ?done .
+  ?check a rdfhtml:Input ; rdfhtml:type "checkbox" ; rdfhtml:class "sem-check" ; rdfhtml:checked ?checked ; rdfhtml:attribute ?checkLabel ;
+         ord:immediatelyPrecedes ?text .
+  ?checkLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?textId .
+  ?text ord:immediatelyPrecedes ?children .
+  ?children a rdfhtml:Div ; rdfhtml:class "sem-children" .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:TodoItem .
+  BIND(EXISTS { $this blk:checked true } AS ?isDone)
+  BIND(STR(?isDone) AS ?done)
+  BIND(IF(?isDone, "", ?none) AS ?checked)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-done")) AS ?doneAttr)
+  BIND(IRI(CONCAT(STR($this), "/~check")) AS ?check)
+  BIND(IRI(CONCAT(STR($this), "/~check-aria-labelledby")) AS ?checkLabel)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+  BIND(STR(?text) AS ?textId)
+  BIND(IF(EXISTS { $this po:contains ?anyChild }, IRI(CONCAT(STR($this), "/~children")), ?none) AS ?children)
+}""" .
+
+# A toggle: the disclosure pattern - a button (aria-expanded, aria-controls) named by the toggle's
+# text, the text, and the blocks under it, hidden while it is closed.
+blk:ToggleRendering a sem:Rendering ; sem:targets blk:Toggle ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , c:expanded .
+blk:ToggleRendering-fn a sem:Rule ; sem:implements blk:ToggleRendering ; sem:function "blk:toggle" .
+blk:ToggleRendering-sparql a sem:Rule ; sem:implements blk:ToggleRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?twisty , ?text , ?children ; rdfhtml:attribute ?expandedAttr .
+  ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-expanded" ; rdfhtml:attributeValue ?expanded .
+  ?twisty a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-twisty" ; c:toggles $this ; ord:immediatelyPrecedes ?text ;
+          rdfhtml:attribute ?ariaExpanded , ?ariaControls , ?ariaLabelled .
+  ?ariaExpanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?expanded .
+  ?ariaControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?childrenId .
+  ?ariaLabelled a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?textId .
+  ?text ord:immediatelyPrecedes ?children .
+  ?children a rdfhtml:Div ; rdfhtml:class "sem-children" ; rdfhtml:id ?childrenId ; rdfhtml:hidden ?hidden .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Toggle .
+  BIND(EXISTS { $this c:expanded true } AS ?open)
+  BIND(STR(?open) AS ?expanded)
+  BIND(IF(?open, ?none, "") AS ?hidden)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-expanded")) AS ?expandedAttr)
+  BIND(IRI(CONCAT(STR($this), "/~twisty")) AS ?twisty)
+  BIND(IRI(CONCAT(STR($this), "/~twisty-aria-expanded")) AS ?ariaExpanded)
+  BIND(IRI(CONCAT(STR($this), "/~twisty-aria-controls")) AS ?ariaControls)
+  BIND(IRI(CONCAT(STR($this), "/~twisty-aria-labelledby")) AS ?ariaLabelled)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+  BIND(STR(?text) AS ?textId)
+  BIND(IRI(CONCAT(STR($this), "/~children")) AS ?children)
+  BIND(STR(?children) AS ?childrenId)
+}""" .
+# A callout: a note (role=note) with its icon (c:icon, a glyph; 💡 by default), its text and the
+# blocks in it; its tone (sty:tone) is the style layer's.
+blk:CalloutRendering a sem:Rendering ; sem:targets blk:Callout ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , po:contains , c:icon .
+blk:CalloutRendering-fn a sem:Rule ; sem:implements blk:CalloutRendering ; sem:function "blk:callout" .
+blk:CalloutRendering-sparql a sem:Rule ; sem:implements blk:CalloutRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?icon , ?body ; rdfhtml:attribute ?role .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "note" .
+  ?icon a rdfhtml:Span ; rdfhtml:class "sem-icon" ; rdfhtml:hasChild ?iconText ; rdfhtml:attribute ?iconHidden ; ord:immediatelyPrecedes ?body .
+  ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?iconText a rdfhtml:Text ; rdfhtml:data ?glyph .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?text , ?children .
+  ?text ord:immediatelyPrecedes ?children .
+  ?children a rdfhtml:Div ; rdfhtml:class "sem-children" .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Callout .
+  OPTIONAL { $this c:icon ?iconValue }
+  BIND(COALESCE(STR(?iconValue), "💡") AS ?glyph)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
+  BIND(IRI(CONCAT(STR($this), "/~icon")) AS ?icon)
+  BIND(IRI(CONCAT(STR($this), "/~icon-aria-hidden")) AS ?iconHidden)
+  BIND(IRI(CONCAT(STR($this), "/~icon-text")) AS ?iconText)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+  BIND(IF(EXISTS { $this po:contains ?anyChild }, IRI(CONCAT(STR($this), "/~children")), ?none) AS ?children)
+}""" .
+# Atoms: one element each, from their own statements.
+blk:DividerRendering a sem:Rendering ; sem:targets blk:Divider ; sem:stratum 0 ; sem:watches rdf:type .
+blk:DividerRendering-fn a sem:Rule ; sem:implements blk:DividerRendering ; sem:function "blk:divider" .
+blk:DividerRendering-sparql-screen a sem:Rule ; sem:implements blk:DividerRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Hr ; sem:renders $this ; rdfhtml:id ?rootId . }
+WHERE { $this a/rdfs:subClassOf* blk:Divider . BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) BIND(STR(?root) AS ?rootId) }""" .
+blk:DividerRendering-sparql-text a sem:Rule ; sem:implements blk:DividerRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line . ?line a rdfhtml:Text ; rdfhtml:data "---" . }
+WHERE { $this a/rdfs:subClassOf* blk:Divider . BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line) }""" .
+
+blk:CodeRendering a sem:Rendering ; sem:targets blk:Code ; sem:stratum 0 ; sem:watches rdf:type , rdf:value , schema:programmingLanguage .
+blk:CodeRendering-fn a sem:Rule ; sem:implements blk:CodeRendering ; sem:function "blk:code" .
+blk:CodeRendering-sparql-screen a sem:Rule ; sem:implements blk:CodeRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?language , ?pre .
+  ?language a rdfhtml:Span ; rdfhtml:class "sem-language" ; rdfhtml:hasChild ?languageText ; ord:immediatelyPrecedes ?pre .
+  ?languageText a rdfhtml:Text ; rdfhtml:data ?languageName .
+  ?pre a rdfhtml:Pre ; rdfhtml:hasChild ?code .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source ; rdfhtml:attribute ?languageAttr .
+  ?languageAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-language" ; rdfhtml:attributeValue ?languageName .
+  ?source a rdfhtml:Text ; rdfhtml:data ?value .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Code .
+  OPTIONAL { $this rdf:value ?raw }
+  BIND(COALESCE(STR(?raw), "") AS ?value)
+  OPTIONAL { $this schema:programmingLanguage ?lang }
+  BIND(STR(?lang) AS ?languageName)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IF(BOUND(?languageName), IRI(CONCAT(STR($this), "/~language")), ?none) AS ?language)
+  BIND(IF(BOUND(?languageName), IRI(CONCAT(STR($this), "/~language-text")), ?none) AS ?languageText)
+  BIND(IF(BOUND(?languageName), IRI(CONCAT(STR($this), "/~code-data-language")), ?none) AS ?languageAttr)
+  BIND(IRI(CONCAT(STR($this), "/~pre")) AS ?pre)
+  BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
+  BIND(IRI(CONCAT(STR($this), "/~source")) AS ?source)
+}""" .
+blk:CodeRendering-sparql-text a sem:Rule ; sem:implements blk:CodeRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:hasChild ?source . ?source a rdfhtml:Text ; rdfhtml:data ?fenced . }
+WHERE {
+  $this a/rdfs:subClassOf* blk:Code .
+  OPTIONAL { $this rdf:value ?raw }
+  OPTIONAL { $this schema:programmingLanguage ?lang }
+  BIND(CONCAT("```", COALESCE(STR(?lang), ""), "\\n", COALESCE(STR(?raw), ""), "\\n```") AS ?fenced)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~source")) AS ?source)
+}""" .
+
+blk:MathRendering a sem:Rendering ; sem:targets blk:Math ; sem:stratum 0 ; sem:watches rdf:type , rdf:value .
+blk:MathRendering-fn a sem:Rule ; sem:implements blk:MathRendering ; sem:function "blk:math" .
+blk:MathRendering-sparql-screen a sem:Rule ; sem:implements blk:MathRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?code ; rdfhtml:attribute ?role , ?name .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "math" .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?value .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source .
+  ?source a rdfhtml:Text ; rdfhtml:data ?value .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Math .
+  OPTIONAL { $this rdf:value ?raw }
+  BIND(COALESCE(STR(?raw), "") AS ?value)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
+  BIND(IRI(CONCAT(STR($this), "/~source")) AS ?source)
+}""" .
+blk:MathRendering-sparql-text a sem:Rule ; sem:implements blk:MathRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:hasChild ?source . ?source a rdfhtml:Text ; rdfhtml:data ?line . }
+WHERE {
+  $this a/rdfs:subClassOf* blk:Math .
+  OPTIONAL { $this rdf:value ?raw }
+  BIND(CONCAT("$$ ", COALESCE(STR(?raw), ""), " $$") AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~source")) AS ?source)
+}""" .
+
+# A table: its rows in a tbody (the member rule places them in <table>/~children).
+blk:TableRendering a sem:Rendering ; sem:targets blk:Table ; sem:stratum 0 ; sem:watches rdf:type .
+blk:TableRendering-fn a sem:Rule ; sem:implements blk:TableRendering ; sem:function "blk:table" .
+blk:TableRendering-sparql-screen a sem:Rule ; sem:implements blk:TableRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Table ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?children . ?children a rdfhtml:Tbody . }
+WHERE {
+  $this a/rdfs:subClassOf* blk:Table .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~children")) AS ?children)
+}""" .
+blk:TableRendering-sparql-text a sem:Rule ; sem:implements blk:TableRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?children . ?children a rdfhtml:Div . }
+WHERE {
+  $this a/rdfs:subClassOf* blk:Table .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~children")) AS ?children)
+}""" .
+
+# A cell: a column header (th, scope col) in a header row, else a data cell. In the Text modality
+# "| text ", the last of its row closing it ("|"), and a header row's last cell adding the rule
+# under it.
+blk:CellRendering a sem:Rendering ; sem:targets blk:Cell ; sem:stratum 0 ;
+    sem:follows ( [ sem:inverse po:contains ] ) ;
+    sem:watches rdf:type , blk:header , po:contains , ord:immediatelyPrecedes .
+blk:CellRendering-fn a sem:Rule ; sem:implements blk:CellRendering ; sem:function "blk:cell" .
+blk:CellRendering-sparql-screen a sem:Rule ; sem:implements blk:CellRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT { ?root a ?element ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:scope ?scope ; rdfhtml:hasChild ?text . }
+WHERE {
+  $this a/rdfs:subClassOf* blk:Cell .
+  BIND(EXISTS { ?row po:contains $this ; blk:header true } AS ?head)
+  BIND(IF(?head, rdfhtml:Th, rdfhtml:Td) AS ?element)
+  BIND(IF(?head, "col", ?none) AS ?scope)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+}""" .
+blk:CellRendering-sparql-text a sem:Rule ; sem:implements blk:CellRendering ; sem:modality mod:Text ;
+    sem:bulk false ;  # its subqueries read $this
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:hasChild ?lead , ?text , ?tail .
+  ?lead a rdfhtml:Text ; rdfhtml:data "| " ; ord:immediatelyPrecedes ?text .
+  ?text ord:immediatelyPrecedes ?tail .
+  ?tail a rdfhtml:Text ; rdfhtml:data ?end .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Cell .
+  BIND(NOT EXISTS { $this ord:immediatelyPrecedes ?next } AS ?last)
+  { SELECT (COUNT(?cell) AS ?cells) WHERE { ?r po:contains $this ; po:contains ?cell } }
+  BIND(EXISTS { ?row po:contains $this ; blk:header true } AS ?head)
+  BIND(SUBSTR("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|", 1, 4 * ?cells + 1) AS ?rule)
+  BIND(IF(?last, IF(?head, CONCAT(" |\\n", ?rule), " |"), " ") AS ?end)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~lead")) AS ?lead)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+  BIND(IRI(CONCAT(STR($this), "/~tail")) AS ?tail)
+}""" .
+
+# An image: a figure, the picture (its schema:description the alternative text, else none: its
+# caption names it) and the caption.
+blk:ImageRendering a sem:Rendering ; sem:targets blk:Image ; sem:stratum 0 ;
+    sem:watches rdf:type , schema:contentUrl , schema:caption , schema:description .
+blk:ImageRendering-fn a sem:Rule ; sem:implements blk:ImageRendering ; sem:function "blk:image" .
+blk:ImageRendering-sparql-screen a sem:Rule ; sem:implements blk:ImageRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Figure ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?img , ?caption .
+  ?img a rdfhtml:Img ; rdfhtml:src ?src ; rdfhtml:alt ?alt ; rdfhtml:loading "lazy" ; ord:immediatelyPrecedes ?caption .
+  ?caption a rdfhtml:Figcaption ; rdfhtml:hasChild ?captionText .
+  ?captionText a rdfhtml:Text ; rdfhtml:data ?captionData .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Image .
+  OPTIONAL { $this schema:contentUrl ?url }
+  OPTIONAL { $this schema:caption ?captionRaw }
+  OPTIONAL { $this schema:description ?description }
+  BIND(IF(REGEX(STR(?url), "^(https?:|/|data:image/|[^:]*$)"), STR(?url), ?none) AS ?src)
+  BIND(COALESCE(STR(?description), "") AS ?alt)
+  BIND(STR(?captionRaw) AS ?captionData)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~img")) AS ?img)
+  BIND(IF(BOUND(?captionData), IRI(CONCAT(STR($this), "/~caption")), ?none) AS ?caption)
+  BIND(IF(BOUND(?captionData), IRI(CONCAT(STR($this), "/~caption-text")), ?none) AS ?captionText)
+}""" .
+blk:ImageRendering-sparql-text a sem:Rule ; sem:implements blk:ImageRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:hasChild ?line . ?line a rdfhtml:Text ; rdfhtml:data ?data . }
+WHERE {
+  $this a/rdfs:subClassOf* blk:Image .
+  OPTIONAL { $this schema:contentUrl ?url }
+  OPTIONAL { $this schema:caption ?captionRaw }
+  OPTIONAL { $this schema:description ?description }
+  BIND(CONCAT("![", COALESCE(STR(?description), STR(?captionRaw), ""), "](", COALESCE(STR(?url), ""), ")") AS ?data)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+}""" .
+
+# A file: a link that downloads it, with its name and size.
+blk:FileRendering a sem:Rendering ; sem:targets blk:File ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , schema:contentUrl , schema:name , schema:contentSize .
+blk:FileRendering-fn a sem:Rule ; sem:implements blk:FileRendering ; sem:function "blk:file" .
+blk:FileRendering-sparql-screen a sem:Rule ; sem:implements blk:FileRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?link .
+  ?link a rdfhtml:A ; rdfhtml:href ?href ; rdfhtml:download "" ; rdfhtml:class "sem-file" ; rdfhtml:hasChild ?icon , ?name , ?size .
+  ?icon a rdfhtml:Span ; rdfhtml:class "sem-icon" ; rdfhtml:hasChild ?iconText ; rdfhtml:attribute ?iconHidden ; ord:immediatelyPrecedes ?name .
+  ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?iconText a rdfhtml:Text ; rdfhtml:data "📎" .
+  ?name a rdfhtml:Span ; rdfhtml:class "sem-name" ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?size .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?nameData .
+  ?size a rdfhtml:Span ; rdfhtml:class "sem-size" ; rdfhtml:hasChild ?sizeText .
+  ?sizeText a rdfhtml:Text ; rdfhtml:data ?sizeData .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:File .
+  OPTIONAL { $this schema:contentUrl ?url }
+  OPTIONAL { $this schema:name ?nameRaw }
+  OPTIONAL { $this schema:contentSize ?sizeRaw }
+  BIND(IF(REGEX(STR(?url), "^(https?:|/|[^:]*$)"), STR(?url), ?none) AS ?href)
+  BIND(COALESCE(STR(?nameRaw), REPLACE(STR(?url), "^.*/", ""), "") AS ?nameData)
+  BIND(STR(?sizeRaw) AS ?sizeData)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~link")) AS ?link)
+  BIND(IRI(CONCAT(STR($this), "/~icon")) AS ?icon)
+  BIND(IRI(CONCAT(STR($this), "/~icon-aria-hidden")) AS ?iconHidden)
+  BIND(IRI(CONCAT(STR($this), "/~icon-text")) AS ?iconText)
+  BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+  BIND(IF(BOUND(?sizeData), IRI(CONCAT(STR($this), "/~size")), ?none) AS ?size)
+  BIND(IF(BOUND(?sizeData), IRI(CONCAT(STR($this), "/~size-text")), ?none) AS ?sizeText)
+}""" .
+
+# A bookmark: a link that is a card - the page's title, its summary and its address.
+blk:BookmarkRendering a sem:Rendering ; sem:targets blk:Bookmark ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , schema:url , schema:name , schema:description .
+blk:BookmarkRendering-fn a sem:Rule ; sem:implements blk:BookmarkRendering ; sem:function "blk:bookmark" .
+blk:BookmarkRendering-sparql-screen a sem:Rule ; sem:implements blk:BookmarkRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?link .
+  ?link a rdfhtml:A ; rdfhtml:href ?href ; rdfhtml:class "sem-card" ; rdfhtml:hasChild ?title , ?summary , ?address .
+  ?title a rdfhtml:Span ; rdfhtml:class "sem-title" ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?summary , ?address .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?titleData .
+  ?summary a rdfhtml:Span ; rdfhtml:class "sem-summary" ; rdfhtml:hasChild ?summaryText ; ord:immediatelyPrecedes ?address .
+  ?summaryText a rdfhtml:Text ; rdfhtml:data ?summaryData .
+  ?address a rdfhtml:Span ; rdfhtml:class "sem-address" ; rdfhtml:hasChild ?addressText .
+  ?addressText a rdfhtml:Text ; rdfhtml:data ?addressData .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Bookmark .
+  OPTIONAL { $this schema:url ?url }
+  OPTIONAL { $this schema:name ?nameRaw }
+  OPTIONAL { $this schema:description ?descriptionRaw }
+  BIND(IF(REGEX(STR(?url), "^(https?:|/|[^:]*$)"), STR(?url), ?none) AS ?href)
+  BIND(REPLACE(REPLACE(STR(?url), "^[a-z]+://", ""), "/$", "") AS ?addressData)
+  BIND(COALESCE(STR(?nameRaw), ?addressData, "") AS ?titleData)
+  BIND(STR(?descriptionRaw) AS ?summaryData)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~link")) AS ?link)
+  BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~title-text")) AS ?titleText)
+  BIND(IF(BOUND(?summaryData), IRI(CONCAT(STR($this), "/~summary")), ?none) AS ?summary)
+  BIND(IF(BOUND(?summaryData), IRI(CONCAT(STR($this), "/~summary-text")), ?none) AS ?summaryText)
+  BIND(IF(BOUND(?addressData), IRI(CONCAT(STR($this), "/~address")), ?none) AS ?address)
+  BIND(IF(BOUND(?addressData), IRI(CONCAT(STR($this), "/~address-text")), ?none) AS ?addressText)
+}""" .
+
+# An embed: a sandboxed frame, named (its title) by schema:name.
+blk:EmbedRendering a sem:Rendering ; sem:targets blk:Embed ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , schema:embedUrl , schema:name .
+blk:EmbedRendering-fn a sem:Rule ; sem:implements blk:EmbedRendering ; sem:function "blk:embed" .
+blk:EmbedRendering-sparql-screen a sem:Rule ; sem:implements blk:EmbedRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Figure ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?frame .
+  ?frame a rdfhtml:Iframe ; rdfhtml:src ?src ; rdfhtml:title ?title ; rdfhtml:loading "lazy" ; rdfhtml:sandbox "allow-scripts allow-same-origin allow-popups" .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Embed .
+  OPTIONAL { $this schema:embedUrl ?url }
+  OPTIONAL { $this schema:name ?nameRaw }
+  BIND(IF(REGEX(STR(?url), "^https:"), STR(?url), ?none) AS ?src)
+  BIND(COALESCE(STR(?nameRaw), STR(?url), "") AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~frame")) AS ?frame)
+}""" .
+
+# A link to a document: the document's name (schema:name) after a page glyph; its address is the
+# document's schema:url, or the block's.
+blk:DocumentLinkRendering a sem:Rendering ; sem:targets blk:DocumentLink ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows blk:target ;
+    sem:watches rdf:type , blk:target , schema:url , schema:name .
+blk:DocumentLinkRendering-fn a sem:Rule ; sem:implements blk:DocumentLinkRendering ; sem:function "blk:document-link" .
+blk:DocumentLinkRendering-sparql-screen a sem:Rule ; sem:implements blk:DocumentLinkRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?link .
+  ?link a rdfhtml:A ; rdfhtml:href ?href ; rdfhtml:class "sem-page" ; rdfhtml:hasChild ?icon , ?name .
+  ?icon a rdfhtml:Span ; rdfhtml:class "sem-icon" ; rdfhtml:hasChild ?iconText ; rdfhtml:attribute ?iconHidden ; ord:immediatelyPrecedes ?name .
+  ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?iconText a rdfhtml:Text ; rdfhtml:data "📄" .
+  ?name a rdfhtml:Span ; rdfhtml:class "sem-name" ; rdfhtml:hasChild ?nameText .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?nameData .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:DocumentLink .
+  OPTIONAL { $this blk:target ?doc }
+  OPTIONAL { ?doc schema:url ?docUrl }
+  OPTIONAL { ?doc schema:name ?docName }
+  OPTIONAL { $this schema:url ?ownUrl }
+  OPTIONAL { $this schema:name ?ownName }
+  BIND(COALESCE(STR(?docUrl), STR(?ownUrl)) AS ?url)
+  BIND(IF(REGEX(?url, "^(https?:|/|#)"), ?url, ?none) AS ?href)
+  BIND(COALESCE(STR(?docName), STR(?ownName), ?url, REPLACE(STR(?doc), "^.*[#/]", ""), "") AS ?nameData)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~link")) AS ?link)
+  BIND(IRI(CONCAT(STR($this), "/~icon")) AS ?icon)
+  BIND(IRI(CONCAT(STR($this), "/~icon-aria-hidden")) AS ?iconHidden)
+  BIND(IRI(CONCAT(STR($this), "/~icon-text")) AS ?iconText)
+  BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+}""" .
+
+# The Text modality of the links and embeds: Markdown links.
+blk:LinkAsText a sem:Rendering ; sem:targets blk:Linked ; sem:modality mod:Text ; sem:stratum 0 ;
+    sem:follows blk:target ;
+    sem:watches rdf:type , blk:target , schema:url , schema:embedUrl , schema:contentUrl , schema:name .
+blk:LinkAsText-fn a sem:Rule ; sem:implements blk:LinkAsText ; sem:function "blk:link-text" .
+blk:LinkAsText-sparql a sem:Rule ; sem:implements blk:LinkAsText ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:hasChild ?line . ?line a rdfhtml:Text ; rdfhtml:data ?data . }
+WHERE {
+  $this a/rdfs:subClassOf* blk:Linked .
+  OPTIONAL { $this blk:target ?doc . OPTIONAL { ?doc schema:url ?docUrl } OPTIONAL { ?doc schema:name ?docName } }
+  OPTIONAL { $this schema:url ?ownUrl }
+  OPTIONAL { $this schema:embedUrl ?embedUrl }
+  OPTIONAL { $this schema:contentUrl ?contentUrl }
+  OPTIONAL { $this schema:name ?ownName }
+  BIND(COALESCE(STR(?docUrl), STR(?ownUrl), STR(?embedUrl), STR(?contentUrl), "") AS ?url)
+  BIND(COALESCE(STR(?docName), STR(?ownName), ?url) AS ?name)
+  BIND(CONCAT(IF(EXISTS { $this a/rdfs:subClassOf* blk:DocumentLink }, "→ ", ""), "[", ?name, "](", ?url, ")") AS ?data)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+}""" .
+
+# A table of contents: the headings that are blocks of its document, linked, in their order (by how
+# many blocks come before each). Each heading renders its own entry (blk:ContentsEntry), so typing in
+# a heading re-runs that entry only; the contents re-run when the document's blocks change places.
+blk:ContentsEntry a sem:Rendering ; sem:targets blk:Heading ; sem:stratum 0 ;
+    sem:watches rdf:type , rdf:value .
+blk:ContentsEntry-fn a sem:Rule ; sem:implements blk:ContentsEntry ; sem:function "blk:contents-entry" .
+blk:ContentsEntry-sparql-screen a sem:Rule ; sem:implements blk:ContentsEntry ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?entry a rdfhtml:Li ; rdfhtml:class ?levelClass ; rdfhtml:hasChild ?link .
+  ?link a rdfhtml:A ; rdfhtml:href ?href ; rdfhtml:hasChild ?label .
+  ?label a rdfhtml:Text ; rdfhtml:data ?value .
+}
+WHERE {
+  $this a/rdfs:subClassOf* ?cls . ?cls blk:level ?level .
+  OPTIONAL { $this rdf:value ?raw }
+  BIND(COALESCE(STR(?raw), "") AS ?value)
+  BIND(CONCAT("sem-level-", STR(?level)) AS ?levelClass)
+  BIND(CONCAT("#", ENCODE_FOR_URI(CONCAT(STR($this), "/~root"))) AS ?href)
+  BIND(IRI(CONCAT(STR($this), "/~contents-entry")) AS ?entry)
+  BIND(IRI(CONCAT(STR($this), "/~contents-link")) AS ?link)
+  BIND(IRI(CONCAT(STR($this), "/~contents-label")) AS ?label)
+}""" .
+blk:ContentsEntry-sparql-text a sem:Rule ; sem:implements blk:ContentsEntry ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?entry a rdfhtml:Div ; rdfhtml:hasChild ?label . ?label a rdfhtml:Text ; rdfhtml:data ?line . }
+WHERE {
+  $this a/rdfs:subClassOf* ?cls . ?cls blk:level ?level .
+  OPTIONAL { $this rdf:value ?raw }
+  BIND(CONCAT(SUBSTR("        ", 1, 2 * (?level - 1)), "- ", COALESCE(STR(?raw), "")) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~contents-entry")) AS ?entry)
+  BIND(IRI(CONCAT(STR($this), "/~contents-label")) AS ?label)
+}""" .
+blk:ContentsRendering a sem:Rendering ; sem:targets blk:Contents ; sem:stratum 0 ;
+    sem:inputOnly true ;
+    sem:watchesAnywhere po:contains , ord:immediatelyPrecedes , rdf:type .
+blk:ContentsRendering-fn a sem:Rule ; sem:implements blk:ContentsRendering ; sem:function "blk:contents" .
+blk:ContentsRendering-sparql-screen a sem:Rule ; sem:implements blk:ContentsRendering ; sem:modality mod:Screen ;
+    sem:bulk false ;  # its subqueries read $this
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Nav ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?list ; rdfhtml:attribute ?role .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "doc-toc" .
+  ?list a rdfhtml:Ol ; rdfhtml:hasChild ?entry .
+  ?entry sem:orderKey ?key .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Contents .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
+  BIND(IRI(CONCAT(STR($this), "/~list")) AS ?list)
+  OPTIONAL {
+    { SELECT ?heading (COUNT(?before) AS ?at) WHERE { ?d po:contains+ $this ; po:contains ?heading . ?d a/rdfs:subClassOf* blk:Document . ?heading a/rdfs:subClassOf* blk:Heading . OPTIONAL { ?before ord:immediatelyPrecedes+ ?heading } } GROUP BY ?heading }
+  }
+  BIND(IF(BOUND(?heading), IRI(CONCAT(STR(?heading), "/~contents-entry")), ?none) AS ?entry)
+  BIND(STR(?at) AS ?key)
+}""" .
+blk:ContentsRendering-sparql-text a sem:Rule ; sem:implements blk:ContentsRendering ; sem:modality mod:Text ;
+    sem:bulk false ;  # its subqueries read $this
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?entry .
+  ?entry sem:orderKey ?key .
+}
+WHERE {
+  $this a/rdfs:subClassOf* blk:Contents .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    { SELECT ?heading (COUNT(?before) AS ?at) WHERE { ?d po:contains+ $this ; po:contains ?heading . ?d a/rdfs:subClassOf* blk:Document . ?heading a/rdfs:subClassOf* blk:Heading . OPTIONAL { ?before ord:immediatelyPrecedes+ ?heading } } GROUP BY ?heading }
+  }
+  BIND(IF(BOUND(?heading), IRI(CONCAT(STR(?heading), "/~contents-entry")), ?none) AS ?entry)
+  BIND(STR(?at) AS ?key)
+}""" .
+
+# --- the editor ---------------------------------------------------------------------------------------
+
+c:BlockEditor a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "block-editor" ;
+    rdfs:label "Block editor"@en , "Блоковий редактор"@uk , "Block-Editor"@de , "محرر الكتل"@ar ;
+    rdfs:comment """A document (c:of, a blk:Document) shown as its blocks, edited in place when c:editable
+is true (block-editor.ttl). c:label is its accessible name."""@en .
+
+c:BlockEditorRendering a sem:Rendering ; sem:targets c:BlockEditor ; sem:stratum 0 ;
+    sem:watches rdf:type , c:of , c:label , l10n:label , c:editable .
+c:BlockEditorRendering-fn a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:function "blk:editor" .
+c:BlockEditorRendering-sparql-screen a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?body .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?doc ; rdfhtml:attribute ?role , ?name .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "document" .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:BlockEditor .
+  OPTIONAL { $this c:of ?doc FILTER(isIRI(?doc)) }
+  OPTIONAL { $this l10n:label ?picked }
+  OPTIONAL { $this c:label ?own FILTER(NOT EXISTS { $this l10n:label ?anyPicked }) }
+  BIND(STR(COALESCE(?picked, ?own)) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~body-role")) AS ?role)
+  BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~body-aria-label")), ?none) AS ?name)
+}""" .
+c:BlockEditorRendering-sparql-text a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?doc . }
+WHERE {
+  $this a/rdfs:subClassOf* c:BlockEditor .
+  OPTIONAL { $this c:of ?doc FILTER(isIRI(?doc)) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+}""" .
+
+# --- shapes --------------------------------------------------------------------------------------------
+
+blk:BlockEditorShape a sh:NodeShape ; sh:targetClass c:BlockEditor ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A block editor needs an accessible name (c:label)." ] ,
+                [ sh:path c:of ; sh:minCount 1 ; sh:maxCount 1 ; sh:class blk:Document ; sh:message "A block editor shows one document (c:of, a blk:Document)." ] .
+blk:TextBlockShape a sh:NodeShape ; sh:targetClass blk:TextBlock ;
+    sh:property [ sh:path rdf:value ; sh:maxCount 1 ; sh:datatype xsd:string ; sh:message "A text block has one text (rdf:value), a string." ] ,
+                [ sh:path blk:mark ; sh:class blk:Mark ] .
+blk:MarkShape a sh:NodeShape ; sh:targetClass blk:Mark ;
+    sh:property [ sh:path oa:start ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ; sh:message "A mark starts somewhere (oa:start, a character offset)." ] ,
+                [ sh:path oa:end ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ; sh:message "A mark ends somewhere (oa:end, a character offset)." ] ;
+    sh:sparql [ sh:message "A mark ends after it starts." ; sh:select "SELECT $this WHERE { $this oa:start ?s ; oa:end ?e FILTER(?e <= ?s) }" ] .
+blk:LinkShape a sh:NodeShape ; sh:targetClass blk:Link ;
+    sh:property [ sh:path schema:url ; sh:minCount 1 ; sh:maxCount 1 ; sh:message "A link goes somewhere (schema:url)." ] .
+blk:MentionShape a sh:NodeShape ; sh:targetClass blk:Mention ;
+    sh:property [ sh:path oa:hasBody ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ; sh:message "A mention names a resource (oa:hasBody)." ] .
+blk:ContainerShape a sh:NodeShape ; sh:targetClass blk:Container ;
+    sh:property [ sh:path po:contains ; sh:class blk:Block ; sh:message "A container holds blocks." ] .
+blk:BlockShape a sh:NodeShape ; sh:targetClass blk:Block ;
+    sh:property [ sh:path ord:immediatelyPrecedes ; sh:maxCount 1 ; sh:class blk:Block ; sh:message "A block has one next block." ] .
+blk:ListShape a sh:NodeShape ; sh:targetClass blk:List ;
+    sh:property [ sh:path po:contains ; sh:class blk:Item ; sh:message "A list holds items." ] .
+blk:TodoItemShape a sh:NodeShape ; sh:targetClass blk:TodoItem ;
+    sh:property [ sh:path blk:checked ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+blk:TableShape a sh:NodeShape ; sh:targetClass blk:Table ;
+    sh:property [ sh:path po:contains ; sh:class blk:Row ; sh:message "A table holds rows." ] .
+blk:RowShape a sh:NodeShape ; sh:targetClass blk:Row ;
+    sh:property [ sh:path po:contains ; sh:class blk:Cell ; sh:message "A row holds cells." ] .
+blk:ColumnsShape a sh:NodeShape ; sh:targetClass blk:Columns ;
+    sh:property [ sh:path po:contains ; sh:class blk:Column ; sh:minCount 2 ; sh:message "Columns are two or more columns." ] .
+blk:ImageShape a sh:NodeShape ; sh:targetClass blk:Image ;
+    sh:property [ sh:path schema:contentUrl ; sh:minCount 1 ; sh:maxCount 1 ; sh:message "An image needs its picture (schema:contentUrl)." ] .
+blk:FileShape a sh:NodeShape ; sh:targetClass blk:File ;
+    sh:property [ sh:path schema:contentUrl ; sh:minCount 1 ; sh:maxCount 1 ; sh:message "A file needs its address (schema:contentUrl)." ] .
+blk:BookmarkShape a sh:NodeShape ; sh:targetClass blk:Bookmark ;
+    sh:property [ sh:path schema:url ; sh:minCount 1 ; sh:maxCount 1 ; sh:message "A bookmark needs its address (schema:url)." ] .
+blk:EmbedShape a sh:NodeShape ; sh:targetClass blk:Embed ;
+    sh:property [ sh:path schema:embedUrl ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^https:" ; sh:message "An embed needs a secure address (schema:embedUrl, https)." ] .
+blk:DocumentLinkShape a sh:NodeShape ; sh:targetClass blk:DocumentLink ;
+    sh:or ( [ sh:path blk:target ; sh:minCount 1 ] [ sh:path schema:url ; sh:minCount 1 ] ) ;
+    sh:message "A link to a page names the document (blk:target) or its address (schema:url)." .
