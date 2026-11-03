@@ -204,3 +204,5 @@ c:HistoryStep sem:group c:DocumentsGroup . c:FormatText sem:group c:DocumentsGro
 blk:Shortcut sem:group c:DocumentsGroup . blk:BlockShortcut sem:group c:DocumentsGroup . blk:InlineShortcut sem:group c:DocumentsGroup .
 c:BlockMenuKey sem:group c:DocumentsGroup .
 c:BlockStructureKey sem:group c:DocumentsGroup .
+blk:PlainTextBlock sem:group c:DocumentsGroup .
+blk:Typeset sem:group c:DocumentsGroup .

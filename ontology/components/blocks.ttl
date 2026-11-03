@@ -1,4 +1,5 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix ext: <https://semblance.dev/ns/foreign#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix blk: <https://semblance.dev/ns/block#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -160,12 +161,22 @@ blk:Divider a owl:Class ; rdfs:subClassOf blk:Block , po:Milestone ; sem:slug "b
     rdfs:comment "A line between parts."@en ;
     c:help "A line between parts."@en , "Лінія між частинами."@uk , "Eine Linie zwischen Teilen."@de , "خط بين الأجزاء."@ar ;
     blk:menuOrder 11 ; c:icon "—" ; blk:keyword "hr rule separator line" .
-blk:Code a owl:Class ; rdfs:subClassOf blk:Block , po:Block ; sem:slug "blk-code" ;
+blk:Code a owl:Class ; rdfs:subClassOf blk:PlainTextBlock , po:Block ; sem:slug "blk-code" ;
     rdfs:label "Code"@en , "Код"@uk , "Code"@de , "شيفرة"@ar ;
     rdfs:comment "Code in a language (schema:programmingLanguage), as written (rdf:value)."@en ;
     c:help "Code in a language, as written."@en , "Код мовою програмування."@uk , "Code in einer Programmiersprache."@de , "شيفرة بلغة برمجة."@ar ;
     blk:menuOrder 12 ; c:icon "</>" ; blk:keyword "pre program snippet" ; blk:template blk:CodeTemplate .
-blk:Math a owl:Class ; rdfs:subClassOf blk:Block , doco:Formula ; sem:slug "blk-math" ;
+blk:PlainTextBlock a owl:Class ; rdfs:subClassOf blk:Block ;
+    rdfs:label "Plain text block"@en , "Блок простого тексту"@uk , "Klartextblock"@de , "كتلة نص عادي"@ar ;
+    rdfs:comment "A block whose content is text as written (rdf:value), without marks: code, a formula. Enter starts a new line in it."@en .
+# A formula is typeset by a foreign component the host registers as the widget "tex" (TeX to MathML: the
+# site uses Temml); without one, its TeX alone shows. Its TeX stays editable beneath it.
+blk:Typeset a owl:Class ; rdfs:subClassOf ext:Island ; sem:slug "blk-typeset" ;
+    rdfs:label "Typeset formula"@en , "Набрана формула"@uk , "Gesetzte Formel"@de , "معادلة منضدة"@ar ;
+    rdfs:comment "A formula's TeX (the rdf:value of what it is c:of) typeset by the widget \"tex\"."@en ;
+    ext:adapter ext:Widget ; ext:widget "tex" ;
+    ext:input [ ext:name "tex" ; ext:from rdf:value ; ext:through c:of ] .
+blk:Math a owl:Class ; rdfs:subClassOf blk:PlainTextBlock , doco:Formula ; sem:slug "blk-math" ;
     rdfs:label "Math"@en , "Формула"@uk , "Formel"@de , "معادلة"@ar ;
     rdfs:comment "A formula, in TeX (rdf:value)."@en ;
     c:help "A formula, in TeX."@en , "Формула в TeX."@uk , "Eine Formel in TeX."@de , "معادلة بصيغة TeX."@ar ;
@@ -493,6 +504,7 @@ CONSTRUCT { ?root rdfhtml:contenteditable "false" . }
 WHERE {
   $this a/rdfs:subClassOf* blk:Block .
   FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:TextBlock } FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:Container }
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:PlainTextBlock }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
 }""" .
 
@@ -613,9 +625,11 @@ CONSTRUCT {
   ?language a rdfhtml:Span ; rdfhtml:class "sem-language" ; rdfhtml:hasChild ?languageText ; ord:immediatelyPrecedes ?pre .
   ?languageText a rdfhtml:Text ; rdfhtml:data ?languageName .
   ?pre a rdfhtml:Pre ; rdfhtml:hasChild ?code .
-  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source ; rdfhtml:attribute ?languageAttr .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source , ?br ; rdfhtml:attribute ?languageAttr , ?holder .
   ?languageAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-language" ; rdfhtml:attributeValue ?languageName .
-  ?source a rdfhtml:Text ; rdfhtml:data ?value .
+  ?holder a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-text" ; rdfhtml:attributeValue ?block .
+  ?source a rdfhtml:Text ; rdfhtml:data ?value ; ord:immediatelyPrecedes ?br .
+  ?br a rdfhtml:Br .
 }
 WHERE {
   $this a/rdfs:subClassOf* blk:Code .
@@ -631,6 +645,9 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~pre")) AS ?pre)
   BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
   BIND(IRI(CONCAT(STR($this), "/~source")) AS ?source)
+  BIND(IRI(CONCAT(STR($this), "/~code-data-sem-text")) AS ?holder)
+  BIND(STR($this) AS ?block)
+  BIND(IF(?value = "" || STRENDS(?value, "\\n"), IRI(CONCAT(STR($this), "/~br")), ?none) AS ?br)
 }""" .
 blk:CodeRendering-sparql-text a sem:Rule ; sem:implements blk:CodeRendering ; sem:modality mod:Text ;
     sem:construct """
@@ -649,11 +666,14 @@ blk:MathRendering-fn a sem:Rule ; sem:implements blk:MathRendering ; sem:functio
 blk:MathRendering-sparql-screen a sem:Rule ; sem:implements blk:MathRendering ; sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?code ; rdfhtml:attribute ?role , ?name .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?typeset , ?code ; rdfhtml:attribute ?role , ?name .
+  ?typeset a blk:Typeset ; c:of $this ; ord:immediatelyPrecedes ?code .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "math" .
   ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?value .
-  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source .
-  ?source a rdfhtml:Text ; rdfhtml:data ?value .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?source , ?br ; rdfhtml:attribute ?holder .
+  ?holder a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-text" ; rdfhtml:attributeValue ?block .
+  ?source a rdfhtml:Text ; rdfhtml:data ?value ; ord:immediatelyPrecedes ?br .
+  ?br a rdfhtml:Br .
 }
 WHERE {
   $this a/rdfs:subClassOf* blk:Math .
@@ -665,6 +685,10 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
   BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
   BIND(IRI(CONCAT(STR($this), "/~source")) AS ?source)
+  BIND(IRI(CONCAT(STR($this), "/~code-data-sem-text")) AS ?holder)
+  BIND(STR($this) AS ?block)
+  BIND(IRI(CONCAT(STR($this), "/~typeset")) AS ?typeset)
+  BIND(IF(?value = "" || STRENDS(?value, "\\n"), IRI(CONCAT(STR($this), "/~br")), ?none) AS ?br)
 }""" .
 blk:MathRendering-sparql-text a sem:Rule ; sem:implements blk:MathRendering ; sem:modality mod:Text ;
     sem:construct """

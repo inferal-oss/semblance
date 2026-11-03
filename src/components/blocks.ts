@@ -265,6 +265,9 @@ const divider: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** A plain text block's text, and a <br> when it is empty or ends in a line break (so the line shows and takes the caret). */
+const plainText = (o: ReturnType<RuleContext['out']>, value: string) => [o.text('source', value), ...(value === '' || value.endsWith('\n') ? [o.el('br', 'Br')] : [])]
+
 const code: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const value = valueOf(ctx, focus)
@@ -273,7 +276,7 @@ const code: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Pre', {}, [o.text('source', '```' + (language ?? '') + '\n' + value + '\n```')]))
     return o.quads
   }
-  const pre = o.el('pre', 'Pre', {}, [o.el('code', 'Code', { 'data-language': language }, [o.text('source', value)])])
+  const pre = o.el('pre', 'Pre', {}, [o.el('code', 'Code', { 'data-language': language, 'data-sem-text': focus.value }, plainText(o, value))])
   const label = language === undefined ? [] : [o.el('language', 'Span', { class: 'sem-language' }, [o.text('language-text', language)])]
   o.renders(o.el('root', 'Div', { id: o.node('root').value }, [...label, pre]))
   return o.quads
@@ -283,7 +286,12 @@ const math: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const value = valueOf(ctx, focus)
   if (ctx.modality === MOD.Text) o.renders(o.el('root', 'Pre', {}, [o.text('source', `$$ ${value} $$`)]))
-  else o.renders(o.el('root', 'Div', { id: o.node('root').value, role: 'math', 'aria-label': value }, [o.el('code', 'Code', {}, [o.text('source', value)])]))
+  else {
+    // Typeset by the island (blk:Typeset), the TeX editable beneath it.
+    const typeset = o.node('typeset')
+    o.t(typeset, RDF_TYPE, ctx.nn(NS.blk + 'Typeset')).t(typeset, C.of, focus)
+    o.renders(o.el('root', 'Div', { id: o.node('root').value, role: 'math', 'aria-label': value }, [typeset, o.el('code', 'Code', { 'data-sem-text': focus.value }, plainText(o, value))]))
+  }
   return o.quads
 }
 
@@ -446,7 +454,7 @@ const contents: FnRule = (ctx, focus) => {
 
 /** An atom (neither text nor a container): the caret goes around it. */
 const atom: FnRule = (ctx, focus) => {
-  if (isA(ctx, focus, BLK.TextBlock) || isA(ctx, focus, BLK.Container)) return []
+  if (isA(ctx, focus, BLK.TextBlock) || isA(ctx, focus, BLK.Container) || isA(ctx, focus, NS.blk + 'PlainTextBlock')) return []
   const o = ctx.out(focus)
   o.t(o.node('root'), H.ns + 'contenteditable', 'false')
   return o.quads

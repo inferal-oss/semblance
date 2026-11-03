@@ -155,10 +155,23 @@
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "margin-block-end" ; sty:token tok:space-1 ] .
 [] a sty:StyleRule ; sty:appliesTo blk:Math ;
-    sty:declares [ sty:property "text-align" ; sty:raw "center" ] ,
-                 [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "justify-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-1 ] ,
                  [ sty:property "padding" ; sty:token tok:space-2 ] ,
                  [ sty:property "direction" ; sty:raw "ltr" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:Math ; sty:part "math" ;
+    sty:declares [ sty:property "font-size" ; sty:raw "1.2em" ] .
+# The TeX, beneath the formula: quiet once it is typeset, alone (as it is) when it is not.
+[] a sty:StyleRule ; sty:appliesTo blk:Math ; sty:part "> code" ;
+    sty:declares [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+                 [ sty:property "white-space" ; sty:raw "pre-wrap" ] ,
+                 [ sty:property "min-inline-size" ; sty:raw "4ch" ] .
+[] a sty:StyleRule ; sty:appliesTo blk:Math ; sty:state ":has(math)" ; sty:part "> code" ;
+    sty:declares [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[role=document] [data-sem-c=blk-math]:has(math) > code" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
 # --- table ---
 [] a sty:StyleRule ; sty:appliesTo blk:Table ;

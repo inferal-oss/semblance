@@ -35,7 +35,7 @@ import { attachAnchoredPopups } from '../src/web/anchored-popups.ts'
 import { RenderedState } from '../src/rendered.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
-import { chartJs, flatpickr, leaflet, modules } from './foreign.ts'
+import { chartJs, flatpickr, leaflet, modules, tex } from './foreign.ts'
 
 // The host: a mount point, the effects of graph state (theme on <html>,
 // engine layers, store choice, URL, benchmark runs) and nothing else. The
@@ -435,7 +435,7 @@ new Fullscreen(bus, {
 // mounted in their slots after each patch; what they report comes back as events.
 new Islands(bus, shell, {
   modules,
-  widgets: { 'chart.js': chartJs, leaflet, flatpickr },
+  widgets: { 'chart.js': chartJs, leaflet, flatpickr, tex },
   onHandled: () => {
     syncSettings()
     flush()
