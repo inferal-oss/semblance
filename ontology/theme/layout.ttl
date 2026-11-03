@@ -207,9 +207,11 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 # Its container is at least as tall as the viewport and pushes the bar to its end,
 # so the bar sits at the bottom of the window on short pages too; on long pages it
 # sticks to the bottom (above a taskbar docked there: --sem-dock-bottom, windows.ttl) while the
-# content scrolls under it.
+# content scrolls under it. What sticks to the top (pos:StickToTop) ends above it (--sem-sticky-bottom:
+# its least height and its border).
 [] a sty:StyleRule ; sty:part ":has(> [data-sem-c=status-bar])" ;
-    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+    sty:declares [ sty:property "--sem-sticky-bottom" ; sty:raw "41px" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-direction" ; sty:raw "column" ] ,
                  [ sty:property "min-height" ; sty:raw "100dvh" ] .
 [] a sty:StyleRule ; sty:appliesTo c:StatusBar ;

@@ -77,7 +77,7 @@ function mount() {
   const check = () => {
     const { page, components, states } = fromRendered(store, decl)
     const nodeOf = (iri: string | undefined) => (iri === undefined ? -1 : Math.max(components.indexOf(iri), states.indexOf(iri)))
-    const fits = (r: unknown) => r === Rel.FitsInline || r === Rel.FitsWithin
+    const fits = (r: unknown) => r === Rel.FitsInline || r === Rel.FitsWithin || r === Rel.NoOverlap
     const local = (iri: string) => iri.slice(iri.lastIndexOf('#') + 1)
     const key = (inv: string, scope: number, member: number, by: number) => `${local(inv)} ${components[scope] ?? 'page'} ${member < 0 ? '' : components[member]} ${by.toFixed(2)}`
     const fn = checkMeasured(page, decl).map((x) => key(x.instance.declaration.iri, x.instance.scope, fits(x.instance.declaration.relation) ? x.member : -1, x.by))
@@ -145,6 +145,19 @@ describe('rendered state for the layout checker (rnd:Layout)', () => {
     h.layout.place(EX + 'phone', 0, 80, 300, 70).place(EX + 'phone/~input', 0, 107.75, 300, 41.5)
     h.relayout()
     expect(h.check().fn.filter((k) => k.startsWith('fieldRow'))).toEqual([])
+  })
+
+  it('both checkers find a stack child that runs over its neighbour (a menu that sticks on its own, #299)', () => {
+    const h = mount()
+    h.place()
+    h.relayout()
+    expect(h.check().fn.filter((k) => k.startsWith('stackChildrenApart'))).toEqual([])
+    // the nav, stuck while the page scrolled, now over the top 30 px of the form after it
+    h.layout.place(EX + 'nav', 0, 250, 200, 80).place(h.nav('About'), 0, 250, 200, 40).place(h.nav('Home'), 0, 290, 200, 40)
+    h.relayout()
+    const { fn, sparql } = h.check()
+    expect(sparql).toEqual(fn)
+    expect(fn).toEqual([`stackChildrenApart ${EX}root ${EX}form 30.00`, `stackChildrenApart ${EX}root ${EX}nav 30.00`])
   })
 
   it('leaves the live store as it was, and a scope that stops observing its layout takes the parts with it', () => {

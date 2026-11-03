@@ -33,6 +33,7 @@ const RELATIONS: Record<string, Rel | 'page' | 'content'> = {
   SameBottom: Rel.SameBottom,
   FitsInline: Rel.FitsInline,
   FitsWithin: Rel.FitsWithin,
+  NoOverlap: Rel.NoOverlap,
   NoPageOverflow: 'page',
   ContentFits: 'content',
 }
@@ -56,6 +57,8 @@ export interface Declarations {
   directTypes: Map<string, string[]>
   /** the component classes lc:Field includes */
   fields: Set<string>
+  /** the component classes lc:Docked includes: chrome that lc:NoOverlap does not compare */
+  docked: Set<string>
 }
 
 const local = (iri: string) => iri.slice(iri.lastIndexOf('#') + 1)
@@ -101,7 +104,8 @@ export function readDeclarations(store: GraphStore): Declarations {
     if (!d.includes(cls)) directTypes.set(slug, [...d, cls])
   }
   const fields = new Set(store.select(PREFIXES + `SELECT ?k WHERE { lc:Field lc:includes ?k }`, g).map((r) => r.get('k')!.value))
-  return { invariants: [...byIri.values()], typesOf, directTypes, fields }
+  const docked = new Set(store.select(PREFIXES + `SELECT ?k WHERE { lc:Docked lc:includes ?k }`, g).map((r) => r.get('k')!.value))
+  return { invariants: [...byIri.values()], typesOf, directTypes, fields, docked }
 }
 
 /** One invariant over one group: what a finding's `invariant` index refers to. */
@@ -172,6 +176,8 @@ export function instantiate(page: MeasuredPage, d: Declarations): { boxes: Box[]
       }
       if (decl.members === 'EachChild')
         members = decl.part ? kids[i].map((k) => firstPart.get(k + ' ' + decl.part) ?? -1).filter((m) => m >= 0) : kids[i]
+      // chrome docked to an edge overlaps what scrolls under it by design
+      if (decl.relation === Rel.NoOverlap) members = members.filter((m) => !(d.directTypes.get(nodes[m].slug) ?? []).some((c) => d.docked.has(c)))
       else if (decl.members === 'Parts') members = nodes.flatMap((m, j) => (m.part === decl.part && within(nodes, j, i, false) ? [j] : []))
       else if (decl.members === 'Descendants') {
         if (n.scrolls) return

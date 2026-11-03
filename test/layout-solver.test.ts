@@ -118,7 +118,7 @@ describe.each(BUILDS)('checker parity (TypeScript and %s)', (kind) => {
     const rnd = random(3)
     const boxes = Array.from({ length: 400 }, () => ({ x: Math.round(rnd() * 300), y: Math.round(rnd() * 900), width: Math.round(rnd() * 100), height: 36 + Math.round(rnd() * 4) }))
     const invariants = Array.from({ length: 120 }, (_, i) => ({
-      rel: ((i % 7) + 1) as Rel,
+      rel: ((i % 8) + 1) as Rel,
       members: Array.from({ length: 2 + (i % 5) }, () => Math.floor(rnd() * 400)),
       tolerance: 0.5,
     }))

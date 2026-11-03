@@ -48,12 +48,12 @@
     sty:declares [ sty:property "box-shadow" ; sty:raw "inset -3px 0 0 var(--sem-accent)" ] .
 
 # --- nav list ---
+# Not sticky by itself: what follows it in its column would scroll under it. A layout that wants the
+# column in view says so of the whole column (pos:sticky pos:StickToTop).
 [] a sty:StyleRule ; sty:appliesTo c:NavList ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "padding" ; sty:token tok:space-2 ] ,
-                 [ sty:property "position" ; sty:raw "sticky" ] ,
-                 [ sty:property "top" ; sty:raw "88px" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-card ] ,

@@ -5,7 +5,8 @@
 //   - reports the step that crosses the reading line while the page scrolls, as an unrecorded
 //     c:StepInView event (a "sem-step" DOM event on the rendered step: the bus records it),
 //   - brings the first highlighted line of a source view into view inside its scroll box,
-//   - says how much a sticky app bar covers (--sem-sticky-top), so the diagram sticks below it.
+//   - says how much a sticky app bar covers (--sem-sticky-top), so the diagram sticks below it
+//     (and so does a side column that says pos:sticky pos:StickToTop).
 // The arrows from mentions to nodes are connectors (c:WalkthroughArrows), drawn by the connector
 // effect (src/web/connectors.ts) like any other. Motion follows mot:preference (data-sem-motion;
 // System and no preference follow the system's reduced-motion setting, src/layers/motion.ts).

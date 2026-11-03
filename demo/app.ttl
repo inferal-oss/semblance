@@ -574,7 +574,7 @@ ui:GroupInspection a ui:GalleryGroup ; rdfs:label "Inspection" ; sem:order 14 ; 
 
 ui:gallery a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:galleryAside ui:galleryPages ) .
-ui:galleryAside a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+ui:galleryAside a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:sticky pos:StickToTop ;
     c:children ( ui:galleryNav ui:display ) .
 # Display settings: each a control over one property of the shell (or the app). A column beside
 # the navigation; on a phone, where they stack above the page, two to a row (ui:Settings).

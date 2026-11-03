@@ -7,6 +7,7 @@
 (@define SAME_BOTTOM 4)
 (@define SAME_START 5)
 (@define FITS_WITHIN 7)
+(@define NO_OVERLAP 8)
 
 (func $box (param $i i32) (result i32)
   (i32.add (global.get $buf) (i32.shl (local.get $i) (i32.const 5))))
@@ -38,6 +39,12 @@
   (f64.store offset=16 (local.get $p) (local.get $by))
   (global.set $outlen (i32.add (global.get $outlen) (i32.const 3))))
 
+;; How far boxes $i and $o overlap: the smaller of the overlap's extents (not above 0 when apart).
+(func $overlap (param $i i32) (param $o i32) (result f64)
+  (f64.min
+    (f64.sub (f64.min (call $end (local.get $i)) (call $end (local.get $o))) (f64.max (call $start (local.get $i)) (call $start (local.get $o))))
+    (f64.sub (f64.min (call $bottom (local.get $i)) (call $bottom (local.get $o))) (f64.max (call $top (local.get $i)) (call $top (local.get $o))))))
+
 (func $prog_at (param $i i32) (result i32)
   (i32.load (i32.add (global.get $prog) (i32.shl (local.get $i) (i32.const 2)))))
 
@@ -45,7 +52,7 @@
 (func $check (result i32)
   (local $pc i32) (local $inv i32) (local $rel i32) (local $tolerance f64) (local $n i32) (local $m i32) (local $k i32)
   (local $v0 f64) (local $v f64) (local $lo f64) (local $hi f64) (local $worst i32) (local $far f64) (local $d f64)
-  (local $c i32) (local $i i32) (local $over f64)
+  (local $c i32) (local $i i32) (local $over f64) (local $j i32)
   (global.set $outlen (i32.const 0))
   (block $done (loop $each
     (br_if $done (i32.ge_s (local.get $pc) (global.get $proglen)))
@@ -76,6 +83,25 @@
           (br $member)))
         (if (f64.gt (f64.sub (local.get $hi) (local.get $lo)) (local.get $tolerance))
           (then (call $finding (local.get $inv) (local.get $worst) (f64.sub (local.get $hi) (local.get $lo))))))
+      (else (if (i32.eq (local.get $rel) (i32.const NO_OVERLAP))
+      (then
+        ;; no member overlaps another: each by the most it overlaps one
+        (local.set $k (i32.const 0))
+        (block $members (loop $member
+          (br_if $members (i32.ge_s (local.get $k) (local.get $n)))
+          (local.set $i (call $prog_at (i32.add (local.get $m) (local.get $k))))
+          (local.set $over (f64.const 0))
+          (local.set $j (i32.const 0))
+          (block $earlier (loop $each_earlier
+            (br_if $earlier (i32.ge_s (local.get $j) (local.get $n)))
+            (if (i32.ne (local.get $j) (local.get $k)) (then
+              (local.set $over (f64.max (local.get $over) (call $overlap (local.get $i) (call $prog_at (i32.add (local.get $m) (local.get $j))))))))
+            (local.set $j (i32.add (local.get $j) (i32.const 1)))
+            (br $each_earlier)))
+          (if (f64.gt (local.get $over) (local.get $tolerance))
+            (then (call $finding (local.get $inv) (local.get $i) (local.get $over))))
+          (local.set $k (i32.add (local.get $k) (i32.const 1)))
+          (br $member))))
       (else
         (local.set $c (call $prog_at (local.get $m)))
         (local.set $k (i32.const 1))
@@ -90,7 +116,7 @@
           (if (f64.gt (local.get $over) (local.get $tolerance))
             (then (call $finding (local.get $inv) (local.get $i) (local.get $over))))
           (local.set $k (i32.add (local.get $k) (i32.const 1)))
-          (br $member)))))
+          (br $member)))))))
     (local.set $inv (i32.add (local.get $inv) (i32.const 1)))
     (br $each)))
   (i32.div_u (global.get $outlen) (i32.const 3)))
