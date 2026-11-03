@@ -62,9 +62,281 @@ c:loads a owl:ObjectProperty ; rdfs:range sem:Query ;
     rdfs:comment "On a rendered element: the sample query that activating it loads and runs."@en .
 
 c:QueryWorkbenchRendering a sem:Rendering ; sem:targets c:QueryWorkbench ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it names each sample's query form, found by tokenizing past the prologue (comments, PREFIX and BASE), which REGEX alone only approximates." ;
-    sem:needsExtension sx:Matches .
+    sem:follows c:runs , ( c:samples [ sem:zeroOrMore rdf:rest ] rdf:first ) , ( c:actions [ sem:zeroOrMore rdf:rest ] ) .
 c:QueryWorkbenchRendering-fn a sem:Rule ; sem:implements c:QueryWorkbenchRendering ; sem:function "workbench:workbench" .
+# Each sample's form is the first word past the prologue, by the shared lexicon (c:SparqlLexicon):
+# a run of letters outside comments, IRIs and prefixed names that is not PREFIX or BASE.
+c:QueryWorkbenchRendering-sparql-screen a sem:Rule ;
+    sem:implements c:QueryWorkbenchRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:attribute ?rootLabel ; rdfhtml:hasChild ?aside , ?main .
+  ?rootLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?aside a rdfhtml:Div ; rdfhtml:class "sem-samples" ; rdfhtml:hasChild ?title , ?list ; ord:immediatelyPrecedes ?main .
+  ?title a rdfhtml:H3 ; rdfhtml:id ?titleId ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?list .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?samplesPhrase .
+  ?list a rdfhtml:Div ; rdfhtml:class "sem-sample-list" ; rdfhtml:attribute ?listRole , ?listLabel ; rdfhtml:hasChild ?button .
+  ?listRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
+  ?listLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?titleId .
+  ?button a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-sample" ; rdfhtml:hasChild ?buttonLabel , ?buttonForm ;
+    rdfhtml:attribute ?pressedAttr ; sem:tooltip ?tip ; c:loads ?sample ; ord:immediatelyPrecedes ?nextButton .
+  ?pressedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-pressed" ; rdfhtml:attributeValue ?pressed .
+  ?buttonLabel a rdfhtml:Span ; rdfhtml:class "sem-sample-label" ; rdfhtml:hasChild ?buttonLabelText ; ord:immediatelyPrecedes ?buttonForm .
+  ?buttonLabelText a rdfhtml:Text ; rdfhtml:data ?sampleLabel .
+  ?buttonForm a rdfhtml:Span ; rdfhtml:class "sem-sample-form" ; rdfhtml:hasChild ?buttonFormText .
+  ?buttonFormText a rdfhtml:Text ; rdfhtml:data ?sampleForm .
+  ?main a rdfhtml:Div ; rdfhtml:class "sem-main" ; rdfhtml:hasChild ?toolbar , ?editor , ?results .
+  ?toolbar a rdfhtml:Div ; rdfhtml:class "sem-toolbar" ; rdfhtml:attribute ?toolbarRole , ?toolbarLabel ; rdfhtml:hasChild ?action , ?formEl , ?status , ?live ;
+    ord:immediatelyPrecedes ?afterToolbar .
+  ?toolbarRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "toolbar" .
+  ?toolbarLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?action ord:immediatelyPrecedes ?afterAction .
+  ?formEl a rdfhtml:Span ; rdfhtml:class "sem-form" ; rdfhtml:hasChild ?formText ; ord:immediatelyPrecedes ?afterForm .
+  ?formText a rdfhtml:Text ; rdfhtml:data ?runForm .
+  ?status a rdfhtml:Span ; rdfhtml:class "sem-status" ; rdfhtml:hasChild ?statusText ; ord:immediatelyPrecedes ?live .
+  ?statusText a rdfhtml:Text ; rdfhtml:data ?statusData .
+  ?live a c:LiveIndicator ; c:controls $this ; c:property c:followUpdates ; c:label ?livePhrase .
+  ?editor ord:immediatelyPrecedes ?results .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:QueryWorkbench .
+  OPTIONAL { { $this l10n:label ?labelL } UNION { ?labelLAt l10n:of $this ; l10n:label ?labelL } }
+    OPTIONAL { FILTER(!BOUND(?labelL)) $this c:label ?labelLOnly FILTER(isLiteral(?labelLOnly)) }
+    OPTIONAL { ?labelNAt l10n:of $this ; l10n:name ?labelN }
+    OPTIONAL { FILTER(!BOUND(?labelN)) $this rdfs:label ?labelNOnly FILTER(isLiteral(?labelNOnly)) }
+    BIND(STR(COALESCE(?labelL, ?labelLOnly, ?labelN, ?labelNOnly, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { ?l10nAt_samplesPhrase0 l10n:of c:SamplesPhrase ; l10n:name ?samplesPhrase0 } OPTIONAL { c:SamplesPhrase rdfs:label ?samplesPhrase0 FILTER(langMatches(lang(?samplesPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:SamplesPhrase ; l10n:name ?l10nPick }) }
+  BIND(COALESCE(STR(?samplesPhrase0), "Sample queries") AS ?samplesPhrase)
+  OPTIONAL { ?l10nAt_ranSamplePhrase0 l10n:of c:RanSamplePhrase ; l10n:name ?ranSamplePhrase0 } OPTIONAL { c:RanSamplePhrase rdfs:label ?ranSamplePhrase0 FILTER(langMatches(lang(?ranSamplePhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:RanSamplePhrase ; l10n:name ?l10nPick }) }
+  BIND(COALESCE(STR(?ranSamplePhrase0), "Results of: {name}") AS ?ranSamplePhrase)
+  OPTIONAL { ?l10nAt_ranQueryPhrase0 l10n:of c:RanQueryPhrase ; l10n:name ?ranQueryPhrase0 } OPTIONAL { c:RanQueryPhrase rdfs:label ?ranQueryPhrase0 FILTER(langMatches(lang(?ranQueryPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:RanQueryPhrase ; l10n:name ?l10nPick }) }
+  BIND(COALESCE(STR(?ranQueryPhrase0), "Results of your query") AS ?ranQueryPhrase)
+  OPTIONAL { ?l10nAt_livePhrase00 l10n:of c:FollowingPhrase ; l10n:name ?livePhrase00 } OPTIONAL { c:FollowingPhrase rdfs:label ?livePhrase00 FILTER(langMatches(lang(?livePhrase00), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:FollowingPhrase ; l10n:name ?l10nPick }) }
+  BIND(COALESCE(STR(?livePhrase00), "Live") AS ?livePhrase0)
+  LATERAL { OPTIONAL { $this c:editor ?editor FILTER(isIRI(?editor)) } }
+  LATERAL { OPTIONAL { $this c:results ?results FILTER(isIRI(?results)) } }
+  BIND(EXISTS { $this c:followUpdates ?follow FILTER(STR(?follow) = "true") } AS ?following)
+  BIND(IF(?following, ?livePhrase0, ?none) AS ?livePhrase)
+  # The query it runs (c:runs): its text (sem:construct, unless blank, wins over sem:select) and its form.
+  LATERAL { OPTIONAL { $this c:runs ?query FILTER(isIRI(?query)) } }
+  BIND(COALESCE(?query, sem:Nothing) AS ?queryNode)
+  LATERAL { OPTIONAL { ?queryNode sem:construct ?runConstruct0 FILTER(REGEX(STR(?runConstruct0), "[^ \\t\\r\\n]")) } }
+  LATERAL { OPTIONAL { ?queryNode sem:select ?runSelect0 FILTER(REGEX(STR(?runSelect0), "[^ \\t\\r\\n]")) } }
+  BIND(COALESCE(STR(?runConstruct0), STR(?runSelect0)) AS ?runText0)
+  BIND(COALESCE(?runText0, "") AS ?runText)
+  LATERAL { OPTIONAL { SELECT ?runText (MIN(?runFormKey) AS ?runFormFirst) WHERE {
+      c:SparqlLexicon c:tokenPattern ?runFormPattern .
+      LATERAL { (?runText ?runFormPattern) sx:matches (?runFormM ?runFormAt ?runFormG1 ?runFormG2 ?runFormG3 ?runFormG4 ?runFormG5 ?runFormG6) }
+      BIND(STRBEFORE(COALESCE(?runFormG6, ""), ":") AS ?runFormPfx)
+      FILTER(!BOUND(?runFormG1) && !BOUND(?runFormG4) && (!BOUND(?runFormG6) || STRENDS(?runFormM, "/") || EXISTS { c:SparqlLexicon c:keyword ?runFormPfx }))
+      LATERAL { (?runFormM "[A-Za-z]+") sx:matches (?runFormW ?runFormWAt) }
+      FILTER(!(UCASE(?runFormW) IN ("PREFIX", "BASE")))
+      BIND(?runFormAt + ?runFormWAt AS ?runFormPos)
+      BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?runFormPos)), STRLEN(STR(?runFormPos)) + 1), UCASE(?runFormW)) AS ?runFormKey)
+    } GROUP BY ?runText } }
+    BIND(SUBSTR(COALESCE(?runFormFirst, ""), 8) AS ?runFormWord)
+    BIND(IF(?runFormWord IN ("SELECT", "CONSTRUCT", "DESCRIBE", "ASK"), ?runFormWord, IF(BOUND(?runConstruct0), "CONSTRUCT", "SELECT")) AS ?runForm)
+  # The sample whose text is what ran (the first), by its label.
+  LATERAL { OPTIONAL {
+    FILTER(BOUND(?runText0))
+    $this c:samples/rdf:rest* ?currentCell . ?currentCell rdf:first ?current .
+    { ?current sem:select ?currentText } UNION { ?current sem:construct ?currentText }
+    FILTER(STR(?currentText) = ?runText)
+    FILTER NOT EXISTS { $this c:samples/rdf:rest* ?earlierCell . ?earlierCell rdf:first ?earlier ; rdf:rest+ ?currentCell .
+      { ?earlier sem:select ?earlierText } UNION { ?earlier sem:construct ?earlierText } FILTER(STR(?earlierText) = ?runText) }
+    OPTIONAL { { ?current l10n:label ?currentLabelL } UNION { ?currentLabelLAt l10n:of ?current ; l10n:label ?currentLabelL } }
+    OPTIONAL { FILTER(!BOUND(?currentLabelL)) ?current c:label ?currentLabelLOnly FILTER(isLiteral(?currentLabelLOnly)) }
+    OPTIONAL { ?currentLabelNAt l10n:of ?current ; l10n:name ?currentLabelN }
+    OPTIONAL { FILTER(!BOUND(?currentLabelN)) ?current rdfs:label ?currentLabelNOnly FILTER(isLiteral(?currentLabelNOnly)) }
+    BIND(STR(COALESCE(?currentLabelL, ?currentLabelLOnly, ?currentLabelN, ?currentLabelNOnly, REPLACE(STR(?current), "^.*[#/]", ""))) AS ?currentLabel)
+  } }
+  BIND(IF(BOUND(?runText0), IF(BOUND(?current), REPLACE(?ranSamplePhrase, "\\\\{name\\\\}", REPLACE(?currentLabel, "\\\\$", "\\\\$")), ?ranQueryPhrase), ?none) AS ?statusData)
+  BIND(CONCAT(STR($this), "/~samples-title") AS ?titleId)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?rootLabel)
+  BIND(IRI(CONCAT(STR($this), "/~samples")) AS ?aside)
+  BIND(IRI(?titleId) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~samples-title-text")) AS ?titleText)
+  BIND(IRI(CONCAT(STR($this), "/~sample-list")) AS ?list)
+  BIND(IRI(CONCAT(STR($this), "/~sample-list-role")) AS ?listRole)
+  BIND(IRI(CONCAT(STR($this), "/~sample-list-aria-labelledby")) AS ?listLabel)
+  BIND(IRI(CONCAT(STR($this), "/~main")) AS ?main)
+  BIND(IRI(CONCAT(STR($this), "/~toolbar")) AS ?toolbar)
+  BIND(IRI(CONCAT(STR($this), "/~toolbar-role")) AS ?toolbarRole)
+  BIND(IRI(CONCAT(STR($this), "/~toolbar-aria-label")) AS ?toolbarLabel)
+  BIND(IF(BOUND(?runText0), IRI(CONCAT(STR($this), "/~form")), ?none) AS ?formEl)
+  BIND(IRI(CONCAT(STR($this), "/~form-text")) AS ?formText)
+  BIND(IF(BOUND(?statusData), IRI(CONCAT(STR($this), "/~status")), ?none) AS ?status)
+  BIND(IRI(CONCAT(STR($this), "/~status-text")) AS ?statusText)
+  BIND(IF(?following, IRI(CONCAT(STR($this), "/~live")), ?none) AS ?live)
+  BIND(COALESCE(?formEl, ?status, ?live) AS ?afterActions)
+  BIND(COALESCE(?editor, ?results) AS ?afterToolbar)
+  BIND(IF(BOUND(?status), ?live, ?none) AS ?afterStatus)
+  BIND(IF(BOUND(?formEl), COALESCE(?status, ?live), ?none) AS ?afterForm)
+  # Its samples: one button each, in list order, with the sample's form.
+  LATERAL { OPTIONAL {
+    $this c:samples/rdf:rest* ?cell . ?cell rdf:first ?sample .
+    { SELECT ?cell (COUNT(?before) - 1 AS ?i) WHERE { $this c:samples/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
+    OPTIONAL { ?cell rdf:rest/rdf:first ?nextSample }
+    OPTIONAL { { ?sample l10n:label ?sampleLabelL } UNION { ?sampleLabelLAt l10n:of ?sample ; l10n:label ?sampleLabelL } }
+    OPTIONAL { FILTER(!BOUND(?sampleLabelL)) ?sample c:label ?sampleLabelLOnly FILTER(isLiteral(?sampleLabelLOnly)) }
+    OPTIONAL { ?sampleLabelNAt l10n:of ?sample ; l10n:name ?sampleLabelN }
+    OPTIONAL { FILTER(!BOUND(?sampleLabelN)) ?sample rdfs:label ?sampleLabelNOnly FILTER(isLiteral(?sampleLabelNOnly)) }
+    BIND(STR(COALESCE(?sampleLabelL, ?sampleLabelLOnly, ?sampleLabelN, ?sampleLabelNOnly, REPLACE(STR(?sample), "^.*[#/]", ""))) AS ?sampleLabel)
+    LATERAL { OPTIONAL { SELECT ?sample (SAMPLE(?note0) AS ?note) WHERE { ?sample rdfs:comment ?note0 FILTER(isLiteral(?note0)) } GROUP BY ?sample } }
+    BIND(IF(BOUND(?note), REPLACE(REPLACE(STR(?note), "\\\\s+", " "), "^(.*?[.!?])\\\\s.*$", "$1"), ?none) AS ?tip)
+    LATERAL { OPTIONAL { ?sample sem:construct ?sampleConstruct0 FILTER(REGEX(STR(?sampleConstruct0), "[^ \\t\\r\\n]")) } }
+    LATERAL { OPTIONAL { ?sample sem:select ?sampleSelect0 } }
+    BIND(COALESCE(STR(?sampleConstruct0), STR(?sampleSelect0), "") AS ?sampleText)
+    LATERAL { OPTIONAL { SELECT ?sampleText (MIN(?sampleFormKey) AS ?sampleFormFirst) WHERE {
+      c:SparqlLexicon c:tokenPattern ?sampleFormPattern .
+      LATERAL { (?sampleText ?sampleFormPattern) sx:matches (?sampleFormM ?sampleFormAt ?sampleFormG1 ?sampleFormG2 ?sampleFormG3 ?sampleFormG4 ?sampleFormG5 ?sampleFormG6) }
+      BIND(STRBEFORE(COALESCE(?sampleFormG6, ""), ":") AS ?sampleFormPfx)
+      FILTER(!BOUND(?sampleFormG1) && !BOUND(?sampleFormG4) && (!BOUND(?sampleFormG6) || STRENDS(?sampleFormM, "/") || EXISTS { c:SparqlLexicon c:keyword ?sampleFormPfx }))
+      LATERAL { (?sampleFormM "[A-Za-z]+") sx:matches (?sampleFormW ?sampleFormWAt) }
+      FILTER(!(UCASE(?sampleFormW) IN ("PREFIX", "BASE")))
+      BIND(?sampleFormAt + ?sampleFormWAt AS ?sampleFormPos)
+      BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?sampleFormPos)), STRLEN(STR(?sampleFormPos)) + 1), UCASE(?sampleFormW)) AS ?sampleFormKey)
+    } GROUP BY ?sampleText } }
+    BIND(SUBSTR(COALESCE(?sampleFormFirst, ""), 8) AS ?sampleFormWord)
+    BIND(IF(?sampleFormWord IN ("SELECT", "CONSTRUCT", "DESCRIBE", "ASK"), ?sampleFormWord, IF(BOUND(?sampleConstruct0), "CONSTRUCT", "SELECT")) AS ?sampleForm)
+    BIND(IF(BOUND(?current) && ?sample = ?current, "true", "false") AS ?pressed)
+    BIND(CONCAT(STR($this), "/~sample-", STR(?i)) AS ?k)
+    BIND(IRI(?k) AS ?button)
+    BIND(IF(BOUND(?nextSample), IRI(CONCAT(STR($this), "/~sample-", STR(?i + 1))), ?none) AS ?nextButton)
+    BIND(IRI(CONCAT(?k, "-aria-pressed")) AS ?pressedAttr)
+    BIND(IRI(CONCAT(?k, "-label")) AS ?buttonLabel)
+    BIND(IRI(CONCAT(?k, "-label-text")) AS ?buttonLabelText)
+    BIND(IRI(CONCAT(?k, "-form")) AS ?buttonForm)
+    BIND(IRI(CONCAT(?k, "-form-text")) AS ?buttonFormText)
+  } }
+  # Its actions first in the toolbar, in list order.
+  LATERAL { OPTIONAL {
+    $this c:actions/rdf:rest* ?actionCell . ?actionCell rdf:first ?action . FILTER(isIRI(?action))
+    OPTIONAL { ?actionCell rdf:rest/rdf:first ?nextAction }
+    BIND(COALESCE(?nextAction, ?afterActions) AS ?afterAction)
+  } }
+}""" .
+c:QueryWorkbenchRendering-sparql-text a sem:Rule ;
+    sem:implements c:QueryWorkbenchRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?title , ?samplesEl , ?action , ?editor , ?status , ?results .
+  ?title a rdfhtml:Div ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?samplesEl .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?titleData .
+  ?samplesEl a rdfhtml:Div ; rdfhtml:hasChild ?samplesText ; ord:immediatelyPrecedes ?afterSamples .
+  ?samplesText a rdfhtml:Text ; rdfhtml:data ?samplesData .
+  ?action ord:immediatelyPrecedes ?afterAction .
+  ?editor ord:immediatelyPrecedes ?afterEditor .
+  ?status a rdfhtml:Div ; rdfhtml:hasChild ?statusText ; ord:immediatelyPrecedes ?results .
+  ?statusText a rdfhtml:Text ; rdfhtml:data ?statusLine .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:QueryWorkbench .
+  OPTIONAL { { $this l10n:label ?labelL } UNION { ?labelLAt l10n:of $this ; l10n:label ?labelL } }
+    OPTIONAL { FILTER(!BOUND(?labelL)) $this c:label ?labelLOnly FILTER(isLiteral(?labelLOnly)) }
+    OPTIONAL { ?labelNAt l10n:of $this ; l10n:name ?labelN }
+    OPTIONAL { FILTER(!BOUND(?labelN)) $this rdfs:label ?labelNOnly FILTER(isLiteral(?labelNOnly)) }
+    BIND(STR(COALESCE(?labelL, ?labelLOnly, ?labelN, ?labelNOnly, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { ?l10nAt_samplesPhrase0 l10n:of c:SamplesPhrase ; l10n:name ?samplesPhrase0 } OPTIONAL { c:SamplesPhrase rdfs:label ?samplesPhrase0 FILTER(langMatches(lang(?samplesPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:SamplesPhrase ; l10n:name ?l10nPick }) }
+  BIND(COALESCE(STR(?samplesPhrase0), "Sample queries") AS ?samplesPhrase)
+  OPTIONAL { ?l10nAt_ranSamplePhrase0 l10n:of c:RanSamplePhrase ; l10n:name ?ranSamplePhrase0 } OPTIONAL { c:RanSamplePhrase rdfs:label ?ranSamplePhrase0 FILTER(langMatches(lang(?ranSamplePhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:RanSamplePhrase ; l10n:name ?l10nPick }) }
+  BIND(COALESCE(STR(?ranSamplePhrase0), "Results of: {name}") AS ?ranSamplePhrase)
+  OPTIONAL { ?l10nAt_ranQueryPhrase0 l10n:of c:RanQueryPhrase ; l10n:name ?ranQueryPhrase0 } OPTIONAL { c:RanQueryPhrase rdfs:label ?ranQueryPhrase0 FILTER(langMatches(lang(?ranQueryPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:RanQueryPhrase ; l10n:name ?l10nPick }) }
+  BIND(COALESCE(STR(?ranQueryPhrase0), "Results of your query") AS ?ranQueryPhrase)
+  OPTIONAL { ?l10nAt_livePhrase00 l10n:of c:FollowingPhrase ; l10n:name ?livePhrase00 } OPTIONAL { c:FollowingPhrase rdfs:label ?livePhrase00 FILTER(langMatches(lang(?livePhrase00), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:FollowingPhrase ; l10n:name ?l10nPick }) }
+  BIND(COALESCE(STR(?livePhrase00), "Live") AS ?livePhrase0)
+  LATERAL { OPTIONAL { $this c:editor ?editor FILTER(isIRI(?editor)) } }
+  LATERAL { OPTIONAL { $this c:results ?results FILTER(isIRI(?results)) } }
+  BIND(EXISTS { $this c:followUpdates ?follow FILTER(STR(?follow) = "true") } AS ?following)
+  BIND(IF(?following, ?livePhrase0, ?none) AS ?livePhrase)
+  # The query it runs (c:runs): its text (sem:construct, unless blank, wins over sem:select) and its form.
+  LATERAL { OPTIONAL { $this c:runs ?query FILTER(isIRI(?query)) } }
+  BIND(COALESCE(?query, sem:Nothing) AS ?queryNode)
+  LATERAL { OPTIONAL { ?queryNode sem:construct ?runConstruct0 FILTER(REGEX(STR(?runConstruct0), "[^ \\t\\r\\n]")) } }
+  LATERAL { OPTIONAL { ?queryNode sem:select ?runSelect0 FILTER(REGEX(STR(?runSelect0), "[^ \\t\\r\\n]")) } }
+  BIND(COALESCE(STR(?runConstruct0), STR(?runSelect0)) AS ?runText0)
+  BIND(COALESCE(?runText0, "") AS ?runText)
+  LATERAL { OPTIONAL { SELECT ?runText (MIN(?runFormKey) AS ?runFormFirst) WHERE {
+      c:SparqlLexicon c:tokenPattern ?runFormPattern .
+      LATERAL { (?runText ?runFormPattern) sx:matches (?runFormM ?runFormAt ?runFormG1 ?runFormG2 ?runFormG3 ?runFormG4 ?runFormG5 ?runFormG6) }
+      BIND(STRBEFORE(COALESCE(?runFormG6, ""), ":") AS ?runFormPfx)
+      FILTER(!BOUND(?runFormG1) && !BOUND(?runFormG4) && (!BOUND(?runFormG6) || STRENDS(?runFormM, "/") || EXISTS { c:SparqlLexicon c:keyword ?runFormPfx }))
+      LATERAL { (?runFormM "[A-Za-z]+") sx:matches (?runFormW ?runFormWAt) }
+      FILTER(!(UCASE(?runFormW) IN ("PREFIX", "BASE")))
+      BIND(?runFormAt + ?runFormWAt AS ?runFormPos)
+      BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?runFormPos)), STRLEN(STR(?runFormPos)) + 1), UCASE(?runFormW)) AS ?runFormKey)
+    } GROUP BY ?runText } }
+    BIND(SUBSTR(COALESCE(?runFormFirst, ""), 8) AS ?runFormWord)
+    BIND(IF(?runFormWord IN ("SELECT", "CONSTRUCT", "DESCRIBE", "ASK"), ?runFormWord, IF(BOUND(?runConstruct0), "CONSTRUCT", "SELECT")) AS ?runForm)
+  # The sample whose text is what ran (the first), by its label.
+  LATERAL { OPTIONAL {
+    FILTER(BOUND(?runText0))
+    $this c:samples/rdf:rest* ?currentCell . ?currentCell rdf:first ?current .
+    { ?current sem:select ?currentText } UNION { ?current sem:construct ?currentText }
+    FILTER(STR(?currentText) = ?runText)
+    FILTER NOT EXISTS { $this c:samples/rdf:rest* ?earlierCell . ?earlierCell rdf:first ?earlier ; rdf:rest+ ?currentCell .
+      { ?earlier sem:select ?earlierText } UNION { ?earlier sem:construct ?earlierText } FILTER(STR(?earlierText) = ?runText) }
+    OPTIONAL { { ?current l10n:label ?currentLabelL } UNION { ?currentLabelLAt l10n:of ?current ; l10n:label ?currentLabelL } }
+    OPTIONAL { FILTER(!BOUND(?currentLabelL)) ?current c:label ?currentLabelLOnly FILTER(isLiteral(?currentLabelLOnly)) }
+    OPTIONAL { ?currentLabelNAt l10n:of ?current ; l10n:name ?currentLabelN }
+    OPTIONAL { FILTER(!BOUND(?currentLabelN)) ?current rdfs:label ?currentLabelNOnly FILTER(isLiteral(?currentLabelNOnly)) }
+    BIND(STR(COALESCE(?currentLabelL, ?currentLabelLOnly, ?currentLabelN, ?currentLabelNOnly, REPLACE(STR(?current), "^.*[#/]", ""))) AS ?currentLabel)
+  } }
+  BIND(IF(BOUND(?runText0), IF(BOUND(?current), REPLACE(?ranSamplePhrase, "\\\\{name\\\\}", REPLACE(?currentLabel, "\\\\$", "\\\\$")), ?ranQueryPhrase), ?none) AS ?statusData)
+  BIND(CONCAT("── ", ?label, " ──") AS ?titleData)
+  BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~title-text")) AS ?titleText)
+  BIND(IRI(CONCAT(STR($this), "/~samples")) AS ?samplesEl)
+  BIND(IRI(CONCAT(STR($this), "/~samples-text")) AS ?samplesText)
+  BIND(IF(BOUND(?statusData), IRI(CONCAT(STR($this), "/~status")), ?none) AS ?status)
+  BIND(IRI(CONCAT(STR($this), "/~status-text")) AS ?statusText)
+  BIND(CONCAT(?statusData, " · ", ?runForm, IF(?following, CONCAT(" · ", ?livePhrase), "")) AS ?statusLine)
+  # The samples as lines: the one that ran marked, each numbered, with its form.
+  LATERAL { OPTIONAL { SELECT ?current (GROUP_CONCAT(?line; separator="\\n") AS ?sampleLines) WHERE {
+    { SELECT ?current ?line WHERE {
+      $this c:samples/rdf:rest* ?cell . ?cell rdf:first ?sample .
+      { SELECT ?cell (COUNT(?before) AS ?n) WHERE { $this c:samples/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
+      OPTIONAL { { ?sample l10n:label ?sampleLabelL } UNION { ?sampleLabelLAt l10n:of ?sample ; l10n:label ?sampleLabelL } }
+    OPTIONAL { FILTER(!BOUND(?sampleLabelL)) ?sample c:label ?sampleLabelLOnly FILTER(isLiteral(?sampleLabelLOnly)) }
+    OPTIONAL { ?sampleLabelNAt l10n:of ?sample ; l10n:name ?sampleLabelN }
+    OPTIONAL { FILTER(!BOUND(?sampleLabelN)) ?sample rdfs:label ?sampleLabelNOnly FILTER(isLiteral(?sampleLabelNOnly)) }
+    BIND(STR(COALESCE(?sampleLabelL, ?sampleLabelLOnly, ?sampleLabelN, ?sampleLabelNOnly, REPLACE(STR(?sample), "^.*[#/]", ""))) AS ?sampleLabel)
+      LATERAL { OPTIONAL { ?sample sem:construct ?sampleConstruct0 FILTER(REGEX(STR(?sampleConstruct0), "[^ \\t\\r\\n]")) } }
+      LATERAL { OPTIONAL { ?sample sem:select ?sampleSelect0 } }
+      BIND(COALESCE(STR(?sampleConstruct0), STR(?sampleSelect0), "") AS ?sampleText)
+      LATERAL { OPTIONAL { SELECT ?sampleText (MIN(?sampleFormKey) AS ?sampleFormFirst) WHERE {
+      c:SparqlLexicon c:tokenPattern ?sampleFormPattern .
+      LATERAL { (?sampleText ?sampleFormPattern) sx:matches (?sampleFormM ?sampleFormAt ?sampleFormG1 ?sampleFormG2 ?sampleFormG3 ?sampleFormG4 ?sampleFormG5 ?sampleFormG6) }
+      BIND(STRBEFORE(COALESCE(?sampleFormG6, ""), ":") AS ?sampleFormPfx)
+      FILTER(!BOUND(?sampleFormG1) && !BOUND(?sampleFormG4) && (!BOUND(?sampleFormG6) || STRENDS(?sampleFormM, "/") || EXISTS { c:SparqlLexicon c:keyword ?sampleFormPfx }))
+      LATERAL { (?sampleFormM "[A-Za-z]+") sx:matches (?sampleFormW ?sampleFormWAt) }
+      FILTER(!(UCASE(?sampleFormW) IN ("PREFIX", "BASE")))
+      BIND(?sampleFormAt + ?sampleFormWAt AS ?sampleFormPos)
+      BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?sampleFormPos)), STRLEN(STR(?sampleFormPos)) + 1), UCASE(?sampleFormW)) AS ?sampleFormKey)
+    } GROUP BY ?sampleText } }
+    BIND(SUBSTR(COALESCE(?sampleFormFirst, ""), 8) AS ?sampleFormWord)
+    BIND(IF(?sampleFormWord IN ("SELECT", "CONSTRUCT", "DESCRIBE", "ASK"), ?sampleFormWord, IF(BOUND(?sampleConstruct0), "CONSTRUCT", "SELECT")) AS ?sampleForm)
+      BIND(CONCAT(IF(BOUND(?current) && ?sample = ?current, "•", " "), " ", STR(?n), ". ", ?sampleLabel, " (", ?sampleForm, ")") AS ?line)
+    } ORDER BY ?n }
+  } GROUP BY ?current } }
+  BIND(CONCAT(?samplesPhrase, ":\\n", COALESCE(?sampleLines, "")) AS ?samplesData)
+  # Its actions after the samples, in list order; then the editor, the status and the results.
+  BIND(COALESCE(?editor, ?status, ?results) AS ?afterEditorEtc)
+  BIND(IF(BOUND(?editor), COALESCE(?status, ?results), ?none) AS ?afterEditor)
+  OPTIONAL { $this c:actions/rdf:first ?firstAction FILTER(isIRI(?firstAction)) }
+  BIND(COALESCE(?firstAction, ?afterEditorEtc) AS ?afterSamples)
+  LATERAL { OPTIONAL {
+    $this c:actions/rdf:rest* ?actionCell . ?actionCell rdf:first ?action . FILTER(isIRI(?action))
+    OPTIONAL { ?actionCell rdf:rest/rdf:first ?nextAction }
+    BIND(COALESCE(?nextAction, ?afterEditorEtc) AS ?afterAction)
+  } }
+}""" .
 
 # Arrow keys move between the samples (focus only; Enter or Space loads one).
 c:SampleNavigation a key:Navigation ; key:items ".sem-sample-list > button" ; key:orientation key:Horizontal ; key:wrap true .

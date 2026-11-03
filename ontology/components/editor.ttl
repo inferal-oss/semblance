@@ -181,6 +181,25 @@ c:ttl-base a c:TurtleKeyword ; rdfs:label "@base" ; rdfs:comment "Declares the I
 c:ttl-true a c:TurtleKeyword ; rdfs:label "true" ; rdfs:comment "The boolean true (xsd:boolean)."@en .
 c:ttl-false a c:TurtleKeyword ; rdfs:label "false" ; rdfs:comment "The boolean false (xsd:boolean)."@en .
 
+# The lexicon the SPARQL and Turtle colorings share (src/sparql-tokens.ts states the same, and a test
+# checks they agree): one regular expression whose matches are the tokens, as whole words (an XPath
+# pattern for sx:matches: no \b, no lookaround), and the words that are keywords as written. A rule
+# splits text by (?text ?pattern) sx:matches (?match ?start ?g1 … ?g9) and classifies each match by
+# its group: 1 comment, 2 string, 3 variable, 4 IRI, 5 GROUP BY / ORDER BY (a keyword when written so),
+# 6 prefixed name (text when it ends in "/"; its prefix alone a keyword when that is one, the rest
+# text), 7 @prefix or @base (keywords in Turtle), 8 number (digits with a fraction; followed by letters
+# only the digits before the point, the rest text), 9 word (a keyword when it is one). Anything else is text.
+c:CodeLexicon a owl:Class ; rdfs:comment "How a language's text splits into tokens to color: c:tokenPattern and its c:keyword words."@en .
+c:tokenPattern a owl:DatatypeProperty ; rdfs:domain c:CodeLexicon ;
+    rdfs:comment "An XPath regular expression whose matches, left to right, are a text's tokens (every character is in one)."@en .
+c:quotedPattern a owl:DatatypeProperty ; rdfs:domain c:CodeLexicon ;
+    rdfs:comment "The tokens of c:tokenPattern that can hold a quote (comments, strings, IRIs), long strings in group 2: where they start and end, for a rule that tokenizes line by line."@en .
+c:keyword a owl:DatatypeProperty ; rdfs:domain c:CodeLexicon ; rdfs:comment "A word colored as a keyword, as written (case matters)."@en .
+c:SparqlLexicon a c:CodeLexicon ;
+    c:tokenPattern "(#[^\\n]*)|(\"\"\"[\\s\\S]*?\"\"\"|\"(?:[^\"\\\\\\n]|\\\\.)*\")|([?$][A-Za-z_][A-Za-z0-9_]*)|(<[^<>\\s]*>)|((?:[Gg][Rr][Oo][Uu][Pp]|[Oo][Rr][Dd][Ee][Rr])[ \\t]+[Bb][Yy][A-Za-z0-9_]*)|([A-Za-z][A-Za-z0-9_-]*:(?:[A-Za-z_][A-Za-z0-9_-]*|/)?)|(@(?:prefix|base)[A-Za-z0-9_]*)|([0-9]+(?:\\.[0-9]+)?[A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*)|[^#\"?$<@A-Za-z0-9_\\n]+|[\\s\\S]" ;
+    c:quotedPattern "(#[^\\n]*)|(\"\"\"[\\s\\S]*?\"\"\")|(\"(?:[^\"\\\\\\n]|\\\\.)*\")|(<[^<>\\s]*>)" ;
+    c:keyword "CONSTRUCT" , "SELECT" , "WHERE" , "PREFIX" , "LIMIT" , "OPTIONAL" , "FILTER" , "BIND" , "AS" , "UNION" , "VALUES" , "NOT" , "EXISTS" , "MINUS" , "LATERAL" , "DISTINCT" , "IF" , "COALESCE" , "CONCAT" , "STR" , "STRLEN" , "STRAFTER" , "UCASE" , "IRI" , "ENCODE_FOR_URI" , "REPLACE" , "BOUND" , "ROUND" , "MIN" , "MAX" , "AVG" , "SUM" , "COUNT" , "true" , "false" , "a" .
+
 c:SuggestionsPhrase a c:Phrase ; rdfs:label "Suggestions"@en , "Підказки"@uk , "Vorschläge"@de , "اقتراحات"@ar .
 c:EditorKeysPhrase a c:Phrase ;
     rdfs:label "Tab or Enter accepts a suggestion · Esc closes"@en , "Tab або Enter приймає підказку · Esc закриває"@uk ,

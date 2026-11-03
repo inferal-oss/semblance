@@ -428,10 +428,308 @@ c:SourceViewRendering a sem:Rendering ;
     sem:targets c:SourceView ;
     sem:stratum 0 ;
     sem:follows c:of ;
-    sem:watches rdf:type , c:of , c:label , c:emptyText ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it splits the text into lexical tokens for coloring." ;
-    sem:needsExtension sx:Matches .
+    sem:watches rdf:type , c:of , c:label , c:emptyText , c:text , c:path .
 c:SourceViewRendering-fn a sem:Rule ; sem:implements c:SourceViewRendering ; sem:function "source-view" .
+# One row per line (c:line, its number), its tokens by the shared lexicon (c:SparqlLexicon), each
+# keyed by where it starts. Lines are tokenized one by one, so a long string that spans lines is
+# found first and its lines are pieces of it.
+c:SourceViewRendering-sparql-screen a sem:Rule ;
+    sem:implements c:SourceViewRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?empty , ?headEl , ?code .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?headEl a rdfhtml:Div ; rdfhtml:class "sem-source-head" ; rdfhtml:hasChild ?name , ?path , ?toggles ; ord:immediatelyPrecedes ?code .
+  ?name a rdfhtml:Span ; rdfhtml:class "sem-source-name" ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?path .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?caption .
+  ?path a rdfhtml:Code ; rdfhtml:class "sem-source-path" ; rdfhtml:hasChild ?pathText ; ord:precedes ?toggles .
+  ?pathText a rdfhtml:Text ; rdfhtml:data ?pathData .
+  ?toggles a rdfhtml:Span ; rdfhtml:class "sem-fullscreen-toggles" ; rdfhtml:hasChild ?vpToggle , ?fsToggle .
+  ?vpToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; fs:property fs:fullViewport ; sem:tooltip ?vpPhrase ;
+            rdfhtml:attribute ?vpKind , ?vpLabel ; ord:immediatelyPrecedes ?fsToggle .
+  ?vpKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "viewport" .
+  ?vpLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?vpPhrase .
+  ?fsToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; fs:property fs:fullscreen ; sem:tooltip ?fsPhrase ;
+            rdfhtml:attribute ?fsKind , ?fsLabel .
+  ?fsKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "screen" .
+  ?fsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?fsPhrase .
+  ?code a rdfhtml:Pre ; rdfhtml:class "sem-turtle sem-source" ; rdfhtml:hasChild ?row .
+  ?row a rdfhtml:Span ; rdfhtml:class "sem-line" ; c:line ?k ; rdfhtml:hasChild ?tok , ?nl ; ord:immediatelyPrecedes ?nextRow .
+  ?nl a rdfhtml:Text ; rdfhtml:data "\\n" .
+  ?tok a ?tokTag ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterTok .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+}
+WHERE {
+  $this a c:SourceView .
+  LATERAL { OPTIONAL { $this c:of ?source FILTER(isIRI(?source)) ?source c:text ?body0 } }
+  LATERAL { OPTIONAL { $this c:of ?pathSource FILTER(isIRI(?pathSource)) ?pathSource c:path ?path0 } }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?body0))
+      BIND(rdfhtml:Div AS ?rootTag)
+      BIND("sem-empty" AS ?rootClass)
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No source.")) AS ?emptyText)
+    } UNION {
+      FILTER(BOUND(?body0))
+      BIND(rdfhtml:Figure AS ?rootTag)
+      OPTIONAL { $this l10n:label ?labelPicked }
+      OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+      BIND(STR(COALESCE(?labelPicked, ?labelOnly, "Source")) AS ?caption)
+      BIND(COALESCE(STR(?path0), "") AS ?pathData)
+      BIND(IRI(CONCAT(STR($this), "/~head")) AS ?headEl)
+      BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+      BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+      BIND(IRI(CONCAT(STR($this), "/~path")) AS ?path)
+      BIND(IRI(CONCAT(STR($this), "/~path-text")) AS ?pathText)
+      # Its own toggles (fs:Fullscreenable): fill the window, full screen; the layer says which is pressed.
+      OPTIONAL { ?l10nAt_vpPhrase0 l10n:of fs:ViewportCommand ; l10n:name ?vpPhrase0 } OPTIONAL { fs:ViewportCommand rdfs:label ?vpPhrase0 FILTER(langMatches(lang(?vpPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of fs:ViewportCommand ; l10n:name ?l10nPick }) }
+      OPTIONAL { ?l10nAt_fsPhrase0 l10n:of fs:ToggleCommand ; l10n:name ?fsPhrase0 } OPTIONAL { fs:ToggleCommand rdfs:label ?fsPhrase0 FILTER(langMatches(lang(?fsPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of fs:ToggleCommand ; l10n:name ?l10nPick }) }
+      BIND(COALESCE(STR(?vpPhrase0), "Fill the window") AS ?vpPhrase)
+      BIND(COALESCE(STR(?fsPhrase0), "Full screen") AS ?fsPhrase)
+      BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggles")) AS ?toggles)
+      BIND(IRI(CONCAT(STR($this), "/~viewport-toggle")) AS ?vpToggle)
+      BIND(IRI(CONCAT(STR($this), "/~viewport-toggle-data-sem-kind")) AS ?vpKind)
+      BIND(IRI(CONCAT(STR($this), "/~viewport-toggle-aria-label")) AS ?vpLabel)
+      BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle")) AS ?fsToggle)
+      BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle-data-sem-kind")) AS ?fsKind)
+      BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle-aria-label")) AS ?fsLabel)
+      BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
+      BIND(REPLACE(STR(?body0), "[ \\t\\n\\r]+$", "") AS ?text)
+      # Its lines as a table of fixed-width records (start, length without the break), in order, read back
+      # by sx:matches: a record's place is its line's number.
+      LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?lineRecord; separator="") AS ?lines0) WHERE {
+        { SELECT ?text ?lineRecord WHERE {
+          LATERAL { (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) }
+          BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
+          BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
+        } ORDER BY ?lineAt }
+      } GROUP BY ?text } }
+      # Long strings that span lines (where they start and end), found past comments, short strings and IRIs
+      # as the tokenizer finds them: a line inside one is a piece of it.
+      LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?stringRecord; separator="") AS ?strings0) WHERE {
+        { SELECT ?text ?stringRecord WHERE {
+          c:SparqlLexicon c:quotedPattern ?quoted .
+          LATERAL { (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
+          FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
+          BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
+          BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
+        } ORDER BY ?stringAt }
+      } GROUP BY ?text } }
+      BIND(COALESCE(?lines0, "") AS ?lines)
+      BIND(COALESCE(?strings0, "") AS ?strings)
+      BIND(STRLEN(?lines) / 14 AS ?lineCount)
+      BIND(CONCAT(STR($this), "/~L") AS ?key)
+      LATERAL { OPTIONAL {
+        LATERAL { (?lines "[0-9]{14}") sx:matches (?record ?recordAt) }
+        BIND(xsd:integer(FLOOR((?recordAt - 1) / 14)) + 1 AS ?k)
+        BIND(xsd:integer(SUBSTR(?record, 1, 7)) AS ?ls)
+        BIND(?ls + xsd:integer(SUBSTR(?record, 8, 7)) AS ?le)
+        BIND(CONCAT(?key, STR(?k)) AS ?rowKey)
+        BIND(IRI(?rowKey) AS ?row)
+        BIND(IF(?k < ?lineCount, IRI(CONCAT(?key, STR(?k + 1))), ?none) AS ?nextRow)
+        BIND(IF(?k < ?lineCount, IRI(CONCAT(?rowKey, "-nl")), ?none) AS ?nl)
+        # A long string open at the line's start (where it ends), and one opened on the line and not closed on it.
+        LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?openRecord)
+          BIND(xsd:integer(SUBSTR(?openRecord, 1, 7)) AS ?openStart) BIND(xsd:integer(SUBSTR(?openRecord, 8, 7)) AS ?openEnd)
+          FILTER(?openStart < ?ls && ?openEnd > ?ls) } }
+        LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?leftRecord)
+          BIND(xsd:integer(SUBSTR(?leftRecord, 1, 7)) AS ?leftStart) BIND(xsd:integer(SUBSTR(?leftRecord, 8, 7)) AS ?leftEnd)
+          FILTER(?leftStart >= ?ls && ?leftStart < ?le && ?leftEnd > ?le) } }
+        BIND(COALESCE(?openEnd, ?ls) AS ?fs)
+        BIND(COALESCE(?leftStart, ?le) AS ?fe)
+        LATERAL { OPTIONAL {
+          {
+            FILTER(BOUND(?openEnd))
+            BIND(?ls AS ?pos)
+            BIND(SUBSTR(?text, ?ls, IF(?openEnd < ?le, ?openEnd, ?le) - ?ls) AS ?piece)
+            BIND("string" AS ?pieceKind)
+            FILTER(?piece != "")
+          } UNION {
+            FILTER(BOUND(?leftStart))
+            BIND(?leftStart AS ?pos)
+            BIND(SUBSTR(?text, ?leftStart, ?le - ?leftStart) AS ?piece)
+            BIND("string" AS ?pieceKind)
+          } UNION {
+            FILTER(?fe > ?fs)
+            BIND(SUBSTR(?text, ?fs, ?fe - ?fs) AS ?src)
+            c:SparqlLexicon c:tokenPattern ?pattern .
+            LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+            BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
+            BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
+            BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+              IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
+              IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
+              IF(BOUND(?g7), IF(false && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
+              IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
+              IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text"))))))))) AS ?kind)
+            BIND(IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m))) AS ?headLen)
+            BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
+            BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
+            BIND(?at + STRLEN(?m) AS ?next)
+            VALUES ?half { 0 1 }
+            FILTER(?half = 0 || BOUND(?tailText))
+            BIND(?fs + ?at - 1 + IF(?half = 0, 0, ?headLen) AS ?pos)
+            BIND(IF(?half = 0, ?head, ?tailText) AS ?piece)
+            BIND(IF(?half = 0, ?kind, "text") AS ?pieceKind)
+          }
+          BIND(IRI(CONCAT(?rowKey, "-", STR(?pos))) AS ?tok)
+          BIND(?pieceKind = "text" AS ?isPlain)
+          BIND(IF(?isPlain, rdfhtml:Text, rdfhtml:Span) AS ?tokTag)
+          BIND(IF(?isPlain, ?none, CONCAT("ttl-", IF(?pieceKind = "var", "pname", IF(?pieceKind = "string", "literal", ?pieceKind)))) AS ?tokClass)
+          BIND(IF(?isPlain, ?piece, ?none) AS ?plain)
+          BIND(IF(?isPlain, ?none, IRI(CONCAT(?rowKey, "-", STR(?pos), "-text"))) AS ?tokText)
+          BIND(IF(?isPlain, ?none, ?piece) AS ?spanned)
+          BIND(?pos + STRLEN(?piece) AS ?pieceEnd)
+          BIND(IF(?pieceEnd < ?le, IRI(CONCAT(?rowKey, "-", STR(?pieceEnd))), ?nl) AS ?afterTok)
+        } }
+      } }
+    }
+  }
+}""" .
+c:SourceViewRendering-sparql-text a sem:Rule ;
+    sem:implements c:SourceViewRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?empty , ?headEl , ?code .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?headEl a rdfhtml:Div ; rdfhtml:class "sem-source-head" ; rdfhtml:hasChild ?name , ?path ; ord:immediatelyPrecedes ?code .
+  ?name a rdfhtml:Span ; rdfhtml:class "sem-source-name" ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?path .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?caption .
+  ?path a rdfhtml:Code ; rdfhtml:class "sem-source-path" ; rdfhtml:hasChild ?pathText .
+  ?pathText a rdfhtml:Text ; rdfhtml:data ?pathData .
+  ?code a rdfhtml:Pre ; rdfhtml:class "sem-turtle sem-source" ; rdfhtml:hasChild ?row .
+  ?row a rdfhtml:Span ; rdfhtml:class "sem-line" ; c:line ?k ; rdfhtml:hasChild ?tok , ?nl ; ord:immediatelyPrecedes ?nextRow .
+  ?nl a rdfhtml:Text ; rdfhtml:data "\\n" .
+  ?tok a ?tokTag ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterTok .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+}
+WHERE {
+  $this a c:SourceView .
+  LATERAL { OPTIONAL { $this c:of ?source FILTER(isIRI(?source)) ?source c:text ?body0 } }
+  LATERAL { OPTIONAL { $this c:of ?pathSource FILTER(isIRI(?pathSource)) ?pathSource c:path ?path0 } }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?body0))
+      BIND(rdfhtml:Div AS ?rootTag)
+      BIND("sem-empty" AS ?rootClass)
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No source.")) AS ?emptyText)
+    } UNION {
+      FILTER(BOUND(?body0))
+      BIND(rdfhtml:Figure AS ?rootTag)
+      OPTIONAL { $this l10n:label ?labelPicked }
+      OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+      BIND(STR(COALESCE(?labelPicked, ?labelOnly, "Source")) AS ?caption)
+      BIND(COALESCE(STR(?path0), "") AS ?pathData)
+      BIND(IRI(CONCAT(STR($this), "/~head")) AS ?headEl)
+      BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+      BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+      BIND(IRI(CONCAT(STR($this), "/~path")) AS ?path)
+      BIND(IRI(CONCAT(STR($this), "/~path-text")) AS ?pathText)
+      BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
+      BIND(REPLACE(STR(?body0), "[ \\t\\n\\r]+$", "") AS ?text)
+      # Its lines as a table of fixed-width records (start, length without the break), in order, read back
+      # by sx:matches: a record's place is its line's number.
+      LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?lineRecord; separator="") AS ?lines0) WHERE {
+        { SELECT ?text ?lineRecord WHERE {
+          LATERAL { (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) }
+          BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
+          BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
+        } ORDER BY ?lineAt }
+      } GROUP BY ?text } }
+      # Long strings that span lines (where they start and end), found past comments, short strings and IRIs
+      # as the tokenizer finds them: a line inside one is a piece of it.
+      LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?stringRecord; separator="") AS ?strings0) WHERE {
+        { SELECT ?text ?stringRecord WHERE {
+          c:SparqlLexicon c:quotedPattern ?quoted .
+          LATERAL { (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
+          FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
+          BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
+          BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
+        } ORDER BY ?stringAt }
+      } GROUP BY ?text } }
+      BIND(COALESCE(?lines0, "") AS ?lines)
+      BIND(COALESCE(?strings0, "") AS ?strings)
+      BIND(STRLEN(?lines) / 14 AS ?lineCount)
+      BIND(CONCAT(STR($this), "/~L") AS ?key)
+      LATERAL { OPTIONAL {
+        LATERAL { (?lines "[0-9]{14}") sx:matches (?record ?recordAt) }
+        BIND(xsd:integer(FLOOR((?recordAt - 1) / 14)) + 1 AS ?k)
+        BIND(xsd:integer(SUBSTR(?record, 1, 7)) AS ?ls)
+        BIND(?ls + xsd:integer(SUBSTR(?record, 8, 7)) AS ?le)
+        BIND(CONCAT(?key, STR(?k)) AS ?rowKey)
+        BIND(IRI(?rowKey) AS ?row)
+        BIND(IF(?k < ?lineCount, IRI(CONCAT(?key, STR(?k + 1))), ?none) AS ?nextRow)
+        BIND(IF(?k < ?lineCount, IRI(CONCAT(?rowKey, "-nl")), ?none) AS ?nl)
+        # A long string open at the line's start (where it ends), and one opened on the line and not closed on it.
+        LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?openRecord)
+          BIND(xsd:integer(SUBSTR(?openRecord, 1, 7)) AS ?openStart) BIND(xsd:integer(SUBSTR(?openRecord, 8, 7)) AS ?openEnd)
+          FILTER(?openStart < ?ls && ?openEnd > ?ls) } }
+        LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?leftRecord)
+          BIND(xsd:integer(SUBSTR(?leftRecord, 1, 7)) AS ?leftStart) BIND(xsd:integer(SUBSTR(?leftRecord, 8, 7)) AS ?leftEnd)
+          FILTER(?leftStart >= ?ls && ?leftStart < ?le && ?leftEnd > ?le) } }
+        BIND(COALESCE(?openEnd, ?ls) AS ?fs)
+        BIND(COALESCE(?leftStart, ?le) AS ?fe)
+        LATERAL { OPTIONAL {
+          {
+            FILTER(BOUND(?openEnd))
+            BIND(?ls AS ?pos)
+            BIND(SUBSTR(?text, ?ls, IF(?openEnd < ?le, ?openEnd, ?le) - ?ls) AS ?piece)
+            BIND("string" AS ?pieceKind)
+            FILTER(?piece != "")
+          } UNION {
+            FILTER(BOUND(?leftStart))
+            BIND(?leftStart AS ?pos)
+            BIND(SUBSTR(?text, ?leftStart, ?le - ?leftStart) AS ?piece)
+            BIND("string" AS ?pieceKind)
+          } UNION {
+            FILTER(?fe > ?fs)
+            BIND(SUBSTR(?text, ?fs, ?fe - ?fs) AS ?src)
+            c:SparqlLexicon c:tokenPattern ?pattern .
+            LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+            BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
+            BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
+            BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+              IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
+              IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
+              IF(BOUND(?g7), IF(false && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
+              IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
+              IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text"))))))))) AS ?kind)
+            BIND(IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m))) AS ?headLen)
+            BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
+            BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
+            BIND(?at + STRLEN(?m) AS ?next)
+            VALUES ?half { 0 1 }
+            FILTER(?half = 0 || BOUND(?tailText))
+            BIND(?fs + ?at - 1 + IF(?half = 0, 0, ?headLen) AS ?pos)
+            BIND(IF(?half = 0, ?head, ?tailText) AS ?piece)
+            BIND(IF(?half = 0, ?kind, "text") AS ?pieceKind)
+          }
+          BIND(IRI(CONCAT(?rowKey, "-", STR(?pos))) AS ?tok)
+          BIND(?pieceKind = "text" AS ?isPlain)
+          BIND(IF(?isPlain, rdfhtml:Text, rdfhtml:Span) AS ?tokTag)
+          BIND(IF(?isPlain, ?none, CONCAT("ttl-", IF(?pieceKind = "var", "pname", IF(?pieceKind = "string", "literal", ?pieceKind)))) AS ?tokClass)
+          BIND(IF(?isPlain, ?piece, ?none) AS ?plain)
+          BIND(IF(?isPlain, ?none, IRI(CONCAT(?rowKey, "-", STR(?pos), "-text"))) AS ?tokText)
+          BIND(IF(?isPlain, ?none, ?piece) AS ?spanned)
+          BIND(?pos + STRLEN(?piece) AS ?pieceEnd)
+          BIND(IF(?pieceEnd < ?le, IRI(CONCAT(?rowKey, "-", STR(?pieceEnd))), ?nl) AS ?afterTok)
+        } }
+      } }
+    }
+  }
+}""" .
 
 # --- Emblem ---------------------------------------------------------------------------------------
 

@@ -503,7 +503,7 @@ WHERE {
   OPTIONAL { $this c:language ?language0 }
   BIND(LCASE(STR(?language0)) AS ?language)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  # SPARQL and Turtle samples are colored token by token: c:CodeColoredRendering, a function.
+  # SPARQL and Turtle samples are colored token by token: c:CodeColoredRendering.
   FILTER(!BOUND(?language) || !(?language IN ("sparql", "turtle")))
   BIND(IF(?block, rdfhtml:Pre, rdfhtml:Code) AS ?element)
   BIND(REPLACE(?source, "^\\n+|[ \\t\\n\\r]+$", "") AS ?trimmed)
@@ -545,10 +545,80 @@ WHERE {
   BIND(IF(?block, CONCAT("    ", REPLACE(REPLACE(?source, "[ \\t\\n\\r]+$", ""), "\\n", "\\n    ")), CONCAT("`", ?source, "`")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .
-c:CodeColoredRendering a sem:Rendering ; sem:targets c:Code ; sem:modality mod:Screen ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it splits a SPARQL or Turtle sample into tokens to color each, which needs a regex-match relation." ;
-    sem:needsExtension sx:Matches .
+c:CodeColoredRendering a sem:Rendering ; sem:targets c:Code ; sem:modality mod:Screen ; sem:stratum 0 .
 c:CodeColoredRendering-fn a sem:Rule ; sem:implements c:CodeColoredRendering ; sem:function "code:colored" .
+# Its tokens by the shared lexicon (c:SparqlLexicon, sx:matches), each keyed by where it starts, so
+# both sides mint the same nodes: plain text as text, the rest as spans of class tok-<kind>.
+c:CodeColoredRendering-sparql a sem:Rule ;
+    sem:implements c:CodeColoredRendering ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:hasChild ?tag , ?blockCode ; rdfhtml:attribute ?tabAttr .
+  ?tabAttr a rdfhtml:Attribute ; rdfhtml:attributeName "tabindex" ; rdfhtml:attributeValue "0" .
+  ?tag a rdfhtml:Span ; rdfhtml:class "sem-language" ; rdfhtml:hasChild ?tagText ; ord:immediatelyPrecedes ?code ; rdfhtml:attribute ?tagHidden .
+  ?tagHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?tagText a rdfhtml:Text ; rdfhtml:data ?language .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?tok , ?tail .
+  ?tok a ?tokElement ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterHead .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+  ?tail a rdfhtml:Text ; rdfhtml:data ?tailText ; ord:immediatelyPrecedes ?afterTail .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Code .
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
+  BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
+  OPTIONAL { $this c:value ?value0 }
+  BIND(COALESCE(?label0, STR(?value0)) AS ?source)
+  FILTER(BOUND(?source))
+  OPTIONAL { $this c:language ?language0 }
+  BIND(LCASE(STR(?language0)) AS ?language)
+  FILTER(?language IN ("sparql", "turtle"))
+  BIND(EXISTS { $this c:block ?block0 FILTER(STR(?block0) = "true") } AS ?block)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?block, rdfhtml:Pre, rdfhtml:Code) AS ?element)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~root-tabindex")), ?none) AS ?tabAttr)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~language")), ?none) AS ?tag)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~language-text")), ?none) AS ?tagText)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~language-aria-hidden")), ?none) AS ?tagHidden)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~code")), ?root) AS ?code)
+  BIND(IF(?block, ?code, ?none) AS ?blockCode)
+  BIND(IF(?block, REPLACE(?source, "^\\n+|[ \\t\\n\\r]+$", ""), ?source) AS ?src)
+  BIND(?language = "turtle" AS ?turtle)
+  BIND(STRLEN(?src) AS ?length)
+  BIND(CONCAT(STR($this), "/~code-") AS ?key)
+  LATERAL { OPTIONAL {
+    c:SparqlLexicon c:tokenPattern ?pattern .
+    LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+    BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
+    BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
+    BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+      IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
+      IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
+      IF(BOUND(?g7), IF(?turtle && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
+      IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
+      IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text"))))))))) AS ?kind)
+    BIND(IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m))) AS ?headLen)
+    BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
+    BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
+    BIND(?at + STRLEN(?m) AS ?next)
+    BIND(IRI(CONCAT(?key, STR(?at))) AS ?tok)
+    BIND(IF(?kind = "text", rdfhtml:Text, rdfhtml:Span) AS ?tokElement)
+    BIND(IF(?kind = "text", ?none, CONCAT("tok-", ?kind)) AS ?tokClass)
+    BIND(IF(?kind = "text", ?head, ?none) AS ?plain)
+    BIND(IF(?kind = "text", ?none, IRI(CONCAT(?key, STR(?at), "-text"))) AS ?tokText)
+    BIND(IF(?kind = "text", ?none, ?head) AS ?spanned)
+    BIND(IF(BOUND(?tailText), IRI(CONCAT(?key, STR(?at + ?headLen))), ?none) AS ?tail)
+    BIND(IF(?next <= ?length, IRI(CONCAT(?key, STR(?next))), ?none) AS ?after)
+    BIND(COALESCE(?tail, ?after) AS ?afterHead)
+    BIND(IF(BOUND(?tail), ?after, ?none) AS ?afterTail)
+  } }
+}""" .
 
 # --- Blockquote --------------------------------------------------------------------------------
 
