@@ -68,7 +68,7 @@
 (@define F_SX_SQRT 112) (@define F_SX_PI 113) (@define F_SX_CODEPOINT 114) (@define F_SX_CHAR 115)
 (@define F_SX_UTF8HEX 116) (@define F_SX_DECODEURI 117) (@define F_SX_FNV1A 118) (@define F_SX_FORMATNUMBER 119)
 (@define F_SX_FORMATDATETIME 120) (@define F_SX_COLLATED 121) (@define F_SX_SORTKEY 122)
-(@define F_SX_JSONSTRING 123)
+(@define F_SX_JSONSTRING 123) (@define F_SX_BLANKLABEL 124)
 ;; aggregates (E_AGG a)
 (@define A_COUNT 1) (@define A_SUM 2) (@define A_MIN 3) (@define A_MAX 4) (@define A_AVG 5)
 (@define A_SAMPLE 6) (@define A_CONCAT 7)
