@@ -63,7 +63,7 @@ ex:c21 a blk:Cell ; rdf:value "Paragraph" ; ord:immediatelyPrecedes ex:c22 .
 ex:c22 a blk:Cell ; rdf:value "doco:Paragraph" .
 ex:image a blk:Image ; schema:contentUrl "/favicon.svg" ; schema:caption "The mark" ; ord:immediatelyPrecedes ex:file .
 ex:file a blk:File ; schema:contentUrl "/files/plan.pdf" ; schema:name "plan.pdf" ; schema:contentSize "12 KB" ; ord:immediatelyPrecedes ex:bookmark .
-ex:bookmark a blk:Bookmark ; schema:url "https://www.w3.org/ns/oa/" ; schema:name "Web Annotation" ; ord:immediatelyPrecedes ex:embed .
+ex:bookmark a blk:Bookmark ; schema:url "https://www.w3.org/ns/oa/" ; schema:name "Web Annotation" ; schema:description "The vocabulary." ; ord:immediatelyPrecedes ex:embed .
 ex:embed a blk:Embed ; schema:embedUrl "https://example.org/map" ; schema:name "Map" ; ord:immediatelyPrecedes ex:columns .
 ex:columns a blk:Columns ; po:contains ex:left , ex:right ; ord:immediatelyPrecedes ex:other .
 ex:left a blk:Column ; po:contains ex:lp ; ord:immediatelyPrecedes ex:right .

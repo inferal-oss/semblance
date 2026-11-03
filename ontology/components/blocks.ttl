@@ -747,7 +747,7 @@ blk:BookmarkRendering-sparql-screen a sem:Rule ; sem:implements blk:BookmarkRend
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?link .
   ?link a rdfhtml:A ; rdfhtml:href ?href ; rdfhtml:class "sem-card" ; rdfhtml:hasChild ?title , ?summary , ?address .
-  ?title a rdfhtml:Span ; rdfhtml:class "sem-title" ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?summary , ?address .
+  ?title a rdfhtml:Span ; rdfhtml:class "sem-title" ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?afterTitle .
   ?titleText a rdfhtml:Text ; rdfhtml:data ?titleData .
   ?summary a rdfhtml:Span ; rdfhtml:class "sem-summary" ; rdfhtml:hasChild ?summaryText ; ord:immediatelyPrecedes ?address .
   ?summaryText a rdfhtml:Text ; rdfhtml:data ?summaryData .
@@ -772,6 +772,7 @@ WHERE {
   BIND(IF(BOUND(?summaryData), IRI(CONCAT(STR($this), "/~summary-text")), ?none) AS ?summaryText)
   BIND(IF(BOUND(?addressData), IRI(CONCAT(STR($this), "/~address")), ?none) AS ?address)
   BIND(IF(BOUND(?addressData), IRI(CONCAT(STR($this), "/~address-text")), ?none) AS ?addressText)
+  BIND(COALESCE(?summary, ?address) AS ?afterTitle)
 }""" .
 
 # An embed: a sandboxed frame, named (its title) by schema:name.
