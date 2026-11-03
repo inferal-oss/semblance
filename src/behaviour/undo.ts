@@ -53,6 +53,7 @@ const redoLatest: ReactionFn = (ctx) => {
     const removed = ctx.match(m, BEH.retracted, null).map((q) => statement(ctx, q.object)).filter((q): q is Quad => !!q)
     if (added.some((q) => holds(ctx, q)) || !removed.every((q) => holds(ctx, q))) continue
     const n = Number(ctx.object(m, BEH.sequence)?.value ?? NaN)
+    if (!Number.isFinite(n)) continue
     if (!best || n < best.n) best = { m, n, added, removed }
   }
   if (!best) return { remove: [], add: [] }

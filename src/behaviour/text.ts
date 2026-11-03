@@ -66,19 +66,37 @@ function textNodes(holder: Element): Text[] {
   return out
 }
 
-const contains = (a: Node, b: Node) => a === b || !!(a.compareDocumentPosition(b) & 16)
-/** Whether `a` comes before `b` in document order (and is not inside it). */
-const before = (a: Node, b: Node) => !!(a.compareDocumentPosition(b) & 4)
+/** A node's ancestors, from the top down to itself. */
+const lineage = (n: Node): Node[] => {
+  const out: Node[] = []
+  for (let x: Node | null = n; x; x = x.parentNode) out.push(x)
+  return out.reverse()
+}
+const contains = (a: Node, b: Node) => a === b || lineage(b).includes(a)
+/** Whether `a` comes before `b` in document order and does not hold it (walked, not compareDocumentPosition: test DOMs get it wrong). */
+export const before = (a: Node, b: Node) => {
+  const la = lineage(a)
+  const lb = lineage(b)
+  let i = 0
+  while (i < la.length && i < lb.length && la[i] === lb[i]) i++
+  if (i === la.length || i === lb.length) return false
+  const parent = la[i - 1]
+  if (!parent) return false
+  const kids = Array.from(parent.childNodes)
+  return kids.indexOf(la[i] as ChildNode) < kids.indexOf(lb[i] as ChildNode)
+}
 
 /** The code points of a holder's text before a DOM point inside it. */
 function offsetIn(holder: Element, node: Node, offset: number): number {
   let n = 0
   for (const t of textNodes(holder)) {
     if (t === node) return n + codePoints(t.data.slice(0, offset))
-    // A point between elements: count the text nodes before the child it is at.
-    if (node.nodeType === 1 && contains(node, t)) {
-      const child = node.childNodes[offset]
-      if (child && (child === t || contains(child, t) || before(child, t))) return n
+    if (node.nodeType === 1) {
+      // A point between an element's children: the text nodes before the child it is at.
+      if (contains(node, t)) {
+        const child = node.childNodes[offset]
+        if (child && (child === t || contains(child, t) || before(child, t))) return n
+      } else if (before(node, t)) return n // past the end of an element (or in an empty one): what comes before it
     }
     n += codePoints(t.data)
   }

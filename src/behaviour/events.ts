@@ -9,7 +9,7 @@ import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
 import { type Clock, systemClock } from './clock.ts'
-import { holderText, placeSelection, rangeOf, regionOf, selectionIn, type TextPoint } from './text.ts'
+import { before, holderText, placeSelection, rangeOf, regionOf, selectionIn, type TextPoint } from './text.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 /** Distinguishes event IRIs across page loads sharing a store snapshot. */
@@ -515,8 +515,11 @@ export class EventBus {
       if (renderer.inSlot(e.target as Node)) return
       // In a rich text region (data-sem-text-root) the browser edits nothing: every edit it would make
       // is an event, and the rendering of the graph's change is what shows (docs/BLOCKS.md).
-      const region = regionOf(e.target as Node)
+      // A form control inside a region edits itself.
+      const region = (e.target as Element).closest?.('input, textarea') ? null : regionOf(e.target as Node)
       if (region && e.type === 'beforeinput' && e.cancelable) e.preventDefault()
+      // Keys pressed to compose (an IME's Enter) are the composition's, not the editor's.
+      if (region && e.type === 'keydown' && (e as KeyboardEvent).isComposing) return
       // Key events carry their combination; an event class may name the keys it is for (beh:key).
       const combo = e.type.startsWith('key') && (e as KeyboardEvent).key ? comboOf(e as KeyboardEvent, apple) : undefined
       const inputType = e.type === 'beforeinput' ? (e as InputEvent).inputType : undefined
@@ -690,8 +693,11 @@ export class EventBus {
     // Where the selection is in a rich text region is graph state (unrecorded events, as a hover is):
     // the region's component hears where it went, after the browser moved it (arrows, a click).
     const selected = guarded(() => {
-      if (this.placing) return
       const sel = doc.getSelection?.()
+      // The selection the bus itself just placed is not news (selectionchange comes in a later task).
+      const placed = this.placed
+      this.placed = undefined
+      if (placed && sel && sel.anchorNode === placed.anchorNode && sel.anchorOffset === placed.anchorOffset && sel.focusNode === placed.focusNode && sel.focusOffset === placed.focusOffset) return
       const region = sel?.anchorNode ? regionOf(sel.anchorNode) : null
       if (!region || !renderer.host.contains(region) || renderer.inSlot(region)) return
       const types = this.eventClasses('selectionchange')
@@ -713,12 +719,13 @@ export class EventBus {
     // Composition (an IME, many phone keyboards) cannot be cancelled: the browser edits the text, and
     // when it is done the difference is recorded as the text typed over the range it replaced, then the
     // holder is rendered from the graph again.
-    const composing = new WeakMap<Element, { node: string; before: string }>()
+    const composing = new WeakMap<Element, { node: string; before: string; wide: boolean }>()
     const compositionStart = guarded((e: Event) => {
       const region = regionOf(e.target as Node)
       const sel = region && selectionIn(region)
       const before = sel && holderText(region, sel.anchor.node)
-      if (region && sel && typeof before === 'string') composing.set(region, { node: sel.anchor.node, before })
+      // A composition over a selection of several blocks: the browser changes them all.
+      if (region && sel && typeof before === 'string') composing.set(region, { node: sel.anchor.node, before, wide: sel.anchor.node !== sel.focus.node })
     })
     const compositionEnd = guarded((e: Event) => {
       const region = regionOf(e.target as Node)
@@ -734,16 +741,17 @@ export class EventBus {
       while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
       const inserted = b.slice(head, b.length - tail).join('')
       const range = { start: { node: started.node, offset: head }, end: { node: started.node, offset: a.length - tail }, covers: [] }
-      const target = region.querySelector(`[data-sem-text]`) ?? region
+      const holder = region.querySelector(`[data-sem-text="${started.node.replace(/["\\]/g, '\\$&')}"]`)
+      const target = holder ?? region
       const synthetic = Object.assign(new (doc.defaultView?.Event ?? Event)('beforeinput', { bubbles: true, cancelable: false }), {
         inputType: 'insertText',
         data: inserted,
         semRange: range,
       })
       target.dispatchEvent(synthetic)
-      // Only the block the composition was in: what the browser changed is there.
-      const holder = region.querySelector(`[data-sem-text="${started.node.replace(/["\\]/g, '\\$&')}"]`)
-      if (holder) renderer.resync(holder)
+      // What the browser changed: the block composed in (or the region, when it spanned several).
+      renderer.resync(started.wide || !holder ? region : holder)
+      this.placeIn(region)
     })
     renderer.host.addEventListener('compositionstart', compositionStart)
     renderer.host.addEventListener('compositionend', compositionEnd)
@@ -831,11 +839,18 @@ export class EventBus {
     const holder = (n: string) => region.querySelector(`[data-sem-text="${n.replace(/["\\]/g, '\\$&')}"]`)
     const x = holder(a)
     const y = holder(b)
-    return !!x && !!y && !!(x.compareDocumentPosition(y) & 4)
+    return !!x && !!y && before(x, y)
   }
 
-  /** Whether the bus is placing the browser's selection itself (its selectionchange is not news). */
-  private placing = false
+  /** The selection the bus placed last (its selectionchange is not news). */
+  private placed?: { anchorNode: Node | null; anchorOffset: number; focusNode: Node | null; focusOffset: number }
+
+  /** Put the browser's selection where a region says, and remember it. */
+  private placeIn(region: Element) {
+    if (!placeSelection(region)) return
+    const sel = region.ownerDocument.getSelection?.()
+    if (sel) this.placed = { anchorNode: sel.anchorNode, anchorOffset: sel.anchorOffset, focusNode: sel.focusNode, focusOffset: sel.focusOffset }
+  }
 
   /**
    * After an event a component with a rich text region handled, the browser's selection goes where
@@ -847,12 +862,7 @@ export class EventBus {
     if (!region || owningFocus(renderer.keyOf(region) ?? '') !== focus) return
     const active = region.ownerDocument.activeElement
     if (active !== region && !region.contains(active)) return
-    this.placing = true
-    try {
-      placeSelection(region)
-    } finally {
-      this.placing = false
-    }
+    this.placeIn(region)
   }
 
   /** Whether an event class is recorded for a key combination: any key, unless it names some (beh:key). */
