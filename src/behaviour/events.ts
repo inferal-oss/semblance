@@ -9,6 +9,7 @@ import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
 import { type Clock, systemClock } from './clock.ts'
+import { holderText, placeSelection, rangeOf, regionOf, selectionIn, type TextPoint } from './text.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 /** Distinguishes event IRIs across page loads sharing a store snapshot. */
@@ -512,10 +513,16 @@ export class EventBus {
       }
     const listener = guarded((e: Event) => {
       if (renderer.inSlot(e.target as Node)) return
+      // In a rich text region (data-sem-text-root) the browser edits nothing: every edit it would make
+      // is an event, and the rendering of the graph's change is what shows (docs/BLOCKS.md).
+      const region = regionOf(e.target as Node)
+      if (region && e.type === 'beforeinput' && e.cancelable) e.preventDefault()
       // Key events carry their combination; an event class may name the keys it is for (beh:key).
       const combo = e.type.startsWith('key') && (e as KeyboardEvent).key ? comboOf(e as KeyboardEvent, apple) : undefined
-      const types = combo === undefined ? this.eventClasses(e.type) : this.eventClasses(e.type).filter((t) => this.forKey(t, combo))
+      const inputType = e.type === 'beforeinput' ? (e as InputEvent).inputType : undefined
+      const types = this.eventClasses(e.type).filter((t) => (combo === undefined || this.forKey(t, combo)) && (inputType === undefined || this.forInputType(t, inputType)))
       if (!types.length) return
+      const rich = region ? this.textDetail(e, region) : undefined
       let node: string | undefined
       for (let el = e.target as Node | null; el && el !== renderer.host; el = el.parentNode) {
         const key = renderer.keyOf(el)
@@ -534,13 +541,18 @@ export class EventBus {
           // A press that types a character (no Mod or Alt held) says which, as typed.
           const typed = e as KeyboardEvent
           if (combo !== undefined && typed.key.length === 1 && !typed.ctrlKey && !typed.metaKey && !typed.altKey) detail.text = typed.key
+          if (rich) {
+            detail.about = [...(detail.about ?? []), ...rich.about]
+            detail.numbers = { ...detail.numbers, ...rich.numbers }
+            if (rich.text !== undefined) detail.text = rich.text
+          }
           if (e.type === 'focusin') detail.modifiers = pressed
           else if (combo === undefined && 'shiftKey' in e) detail.modifiers = modifiersOf(e as MouseEvent, apple)
           const custom = (e as CustomEvent).detail
           if (custom && typeof custom === 'object') {
             // Numbers are beh:* integers (a measure the host could not take is left out); a string names a
             // rendered node (beh:onto: where a move was let go).
-            detail.numbers = {}
+            detail.numbers = { ...detail.numbers }
             for (const [name, v] of Object.entries(custom as Record<string, unknown>)) {
               if (typeof v === 'number' && Number.isFinite(v)) detail.numbers[name] = v
               else if (typeof v === 'string') (detail.about ??= []).push([NS.beh + name, this.f.namedNode(v)])
@@ -555,6 +567,7 @@ export class EventBus {
           if (combo !== undefined || e.type === 'contextmenu') e.preventDefault(), consumed.add(e)
           onHandled(handled)
           this.placeCaret(renderer, focus)
+          this.placeText(renderer, focus)
           this.placeFocus(renderer, focus, before)
           return
         }
@@ -674,6 +687,64 @@ export class EventBus {
       this.pointer = { x: p.clientX, y: p.clientY }
     }
     doc.addEventListener('pointermove', track, { passive: true })
+    // Where the selection is in a rich text region is graph state (unrecorded events, as a hover is):
+    // the region's component hears where it went, after the browser moved it (arrows, a click).
+    const selected = guarded(() => {
+      if (this.placing) return
+      const sel = doc.getSelection?.()
+      const region = sel?.anchorNode ? regionOf(sel.anchorNode) : null
+      if (!region || !renderer.host.contains(region) || renderer.inSlot(region)) return
+      const types = this.eventClasses('selectionchange')
+      for (let el: Node | null = region; el && el !== renderer.host; el = el.parentNode) {
+        const key = renderer.keyOf(el)
+        const focus = key && renderer.index.focusOf(key)
+        if (!focus) continue
+        for (const type of types) {
+          const reactions = this.reactionsFor(type, focus)
+          if (!reactions.length) continue
+          const rich = this.textDetail(new (doc.defaultView?.Event ?? Event)('selectionchange'), region)
+          const handled = this.emit(type, focus, { node: key, about: rich.about, numbers: rich.numbers }, reactions)
+          if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) onHandled(handled)
+          return
+        }
+      }
+    })
+    doc.addEventListener('selectionchange', selected)
+    // Composition (an IME, many phone keyboards) cannot be cancelled: the browser edits the text, and
+    // when it is done the difference is recorded as the text typed over the range it replaced, then the
+    // holder is rendered from the graph again.
+    const composing = new WeakMap<Element, { node: string; before: string }>()
+    const compositionStart = guarded((e: Event) => {
+      const region = regionOf(e.target as Node)
+      const sel = region && selectionIn(region)
+      const before = sel && holderText(region, sel.anchor.node)
+      if (region && sel && typeof before === 'string') composing.set(region, { node: sel.anchor.node, before })
+    })
+    const compositionEnd = guarded((e: Event) => {
+      const region = regionOf(e.target as Node)
+      const started = region && composing.get(region)
+      if (!region || !started) return
+      composing.delete(region)
+      const after = holderText(region, started.node) ?? started.before
+      const a = [...started.before]
+      const b = [...after]
+      let head = 0
+      while (head < a.length && head < b.length && a[head] === b[head]) head++
+      let tail = 0
+      while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
+      const inserted = b.slice(head, b.length - tail).join('')
+      const range = { start: { node: started.node, offset: head }, end: { node: started.node, offset: a.length - tail }, covers: [] }
+      const target = region.querySelector(`[data-sem-text]`) ?? region
+      const synthetic = Object.assign(new (doc.defaultView?.Event ?? Event)('beforeinput', { bubbles: true, cancelable: false }), {
+        inputType: 'insertText',
+        data: inserted,
+        semRange: range,
+      })
+      target.dispatchEvent(synthetic)
+      renderer.resync(region)
+    })
+    renderer.host.addEventListener('compositionstart', compositionStart)
+    renderer.host.addEventListener('compositionend', compositionEnd)
     // Entering a navigable component by Tab puts the rest of its parts out of the tab order.
     const entered = (e: Event) => {
       const part = e.target as HTMLElement
@@ -696,8 +767,89 @@ export class EventBus {
       doc.removeEventListener('keydown', keys)
       doc.removeEventListener('pointerdown', outside, true)
       doc.removeEventListener('pointermove', track)
+      doc.removeEventListener('selectionchange', selected)
+      renderer.host.removeEventListener('compositionstart', compositionStart)
+      renderer.host.removeEventListener('compositionend', compositionEnd)
       renderer.host.removeEventListener('focusin', entered)
       unpatched()
+    }
+  }
+
+  /** Whether an event class is recorded for an input type: any, unless it names some (beh:inputType). */
+  private forInputType(type: string, inputType: string): boolean {
+    const types = this.runtime.store.match(this.f.namedNode(type), this.f.namedNode(NS.beh + 'inputType'), null, this.f.defaultGraph())
+    return !types.length || types.some((q) => q.object.value === inputType)
+  }
+
+  /**
+   * What an event in a rich text region says about the text (src/behaviour/text.ts): an edit
+   * (beforeinput) its input type, its data and the range it acts on - the browser's target range,
+   * else the selection - with the holders wholly inside it (beh:covers); any other event the
+   * selection, as a range and as its anchor and focus.
+   */
+  private textDetail(e: Event, region: Element): { about: [string, Term][]; numbers: Record<string, number>; text?: string } {
+    const f = this.f
+    const about: [string, Term][] = []
+    const numbers: Record<string, number> = {}
+    const point = (name: string, p: TextPoint) => {
+      about.push([NS.beh + name + 'Block', f.namedNode(p.node)])
+      numbers[name + 'Offset'] = p.offset
+    }
+    const sel = selectionIn(region)
+    let range = (e as Event & { semRange?: ReturnType<typeof rangeOf> }).semRange
+    let text: string | undefined
+    if (e.type === 'beforeinput') {
+      const input = e as InputEvent
+      about.push([NS.beh + 'inputType', f.literal(input.inputType)])
+      text = input.data ?? input.dataTransfer?.getData?.('text/plain') ?? undefined
+      const target = input.getTargetRanges?.()?.[0]
+      if (!range && target) range = rangeOf(region, target)
+    }
+    if (!range && sel) {
+      const backward = sel.anchor.node === sel.focus.node ? sel.focus.offset < sel.anchor.offset : this.precedes(region, sel.focus.node, sel.anchor.node)
+      const [start, end] = backward ? [sel.focus, sel.anchor] : [sel.anchor, sel.focus]
+      const doc = region.ownerDocument
+      const r = doc.getSelection?.()?.rangeCount ? doc.getSelection()!.getRangeAt(0) : undefined
+      range = r ? rangeOf(region, r) : { start, end, covers: [] }
+    }
+    if (range) {
+      point('start', range.start)
+      point('end', range.end)
+      for (const c of range.covers) about.push([NS.beh + 'covers', f.namedNode(c)])
+    }
+    if (sel) {
+      point('anchor', sel.anchor)
+      point('focus', sel.focus)
+    }
+    return { about, numbers, text }
+  }
+
+  /** Whether one text holder of a region comes before another in document order. */
+  private precedes(region: Element, a: string, b: string): boolean {
+    const holder = (n: string) => region.querySelector(`[data-sem-text="${n.replace(/["\\]/g, '\\$&')}"]`)
+    const x = holder(a)
+    const y = holder(b)
+    return !!x && !!y && !!(x.compareDocumentPosition(y) & 4)
+  }
+
+  /** Whether the bus is placing the browser's selection itself (its selectionchange is not news). */
+  private placing = false
+
+  /**
+   * After an event a component with a rich text region handled, the browser's selection goes where
+   * the region's rendering says (data-sem-text-root), if the focus is in the region.
+   */
+  private placeText(renderer: DomRenderer, focus: string) {
+    const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
+    const region = root?.matches?.('[data-sem-text-root]') ? root : root?.querySelector?.('[data-sem-text-root]')
+    if (!region || owningFocus(renderer.keyOf(region) ?? '') !== focus) return
+    const active = region.ownerDocument.activeElement
+    if (active !== region && !region.contains(active)) return
+    this.placing = true
+    try {
+      placeSelection(region)
+    } finally {
+      this.placing = false
     }
   }
 

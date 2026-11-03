@@ -43,5 +43,21 @@ const undoLatest: ReactionFn = (ctx) => {
   return { remove: [...remove, ...best.added], add: [...best.removed, f.quad(log, f.namedNode(BEH.undone), best.m as NamedNode)] }
 }
 
-export const undoReactions: Record<string, ReactionFn> = { 'beh:undo-latest': undoLatest }
+/** beh:RedoLatest's twin: the change undone last (the undone member with the lowest sequence) applied again, when it can be. */
+const redoLatest: ReactionFn = (ctx) => {
+  const f = ctx.runtime.store.factory
+  const log = (ctx.object(ctx.target, BEH.log) as NamedNode | undefined) ?? f.namedNode(BEH.ChangeLog)
+  let best: { m: Term; n: number; added: Quad[]; removed: Quad[] } | undefined
+  for (const { object: m } of ctx.match(log, BEH.undone, null)) {
+    const added = ctx.match(m, BEH.asserted, null).map((q) => statement(ctx, q.object)).filter((q): q is Quad => !!q)
+    const removed = ctx.match(m, BEH.retracted, null).map((q) => statement(ctx, q.object)).filter((q): q is Quad => !!q)
+    if (added.some((q) => holds(ctx, q)) || !removed.every((q) => holds(ctx, q))) continue
+    const n = Number(ctx.object(m, BEH.sequence)?.value ?? NaN)
+    if (!best || n < best.n) best = { m, n, added, removed }
+  }
+  if (!best) return { remove: [], add: [] }
+  return { remove: [...best.removed, f.quad(log, f.namedNode(BEH.undone), best.m as NamedNode)], add: best.added }
+}
+
+export const undoReactions: Record<string, ReactionFn> = { 'beh:undo-latest': undoLatest, 'beh:redo-latest': redoLatest }
 

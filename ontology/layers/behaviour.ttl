@@ -217,7 +217,7 @@ beh:viewState a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
 beh:Undoer a owl:Class ;
     rdfs:label "undo"@en , "скасувати"@uk , "rückgängig"@de , "تراجع"@ar ;
     rdfs:comment "A component (e.g. a c:Button that is also a beh:Undoer, with key:shortcut \"mod+z\") that undoes, when clicked, the latest undoable change of its beh:log (default beh:ChangeLog)."@en .
-beh:log a owl:ObjectProperty ; rdfs:domain beh:Undoer ; rdfs:range ldes:EventStream .
+beh:log a owl:ObjectProperty ; rdfs:range ldes:EventStream ; rdfs:comment "On a beh:Undoer or a beh:Redoer: the log whose changes it undoes or redoes."@en .
 
 beh:UndoLatest a beh:Reaction ;
     rdfs:label "Undo the latest change"@en ;
@@ -256,3 +256,37 @@ beh:UndoLatest a beh:Reaction ;
   OPTIONAL { ?m beh:retracted ?st . ?st rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o }
 }""" ;
     sem:function "beh:undo-latest" .
+
+# Redo: activating a beh:Redoer applies again the change of the undone member that was undone last (the
+# undone member with the lowest sequence, since undo goes back from the newest) when it still can be -
+# what it added all absent, what it removed all there - and forgets that it was undone.
+beh:Redoer a owl:Class ;
+    rdfs:label "redo"@en , "повторити"@uk , "wiederholen"@de , "إعادة"@ar ;
+    rdfs:comment "A component (e.g. a c:Button that is also a beh:Redoer, with key:shortcut \"mod+shift+z\") that applies again, when clicked, the change of its beh:log (default beh:ChangeLog) undone last."@en .
+beh:RedoLatest a beh:Reaction ;
+    rdfs:label "Redo the change undone last"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass beh:Redoer ;
+    beh:deletes """CONSTRUCT { ?s ?p ?o . ?log beh:undone ?m } WHERE {
+  { SELECT ?log (MIN(?n) AS ?first) WHERE {
+      $this a beh:Redoer .
+      OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
+      ?log beh:undone ?m . ?m beh:sequence ?n .
+      FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . ?as ?ap ?ao }
+      FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . FILTER NOT EXISTS { ?rs ?rp ?ro } }
+  } GROUP BY ?log }
+  ?log beh:undone ?m . ?m beh:sequence ?first .
+  OPTIONAL { ?m beh:retracted ?st . ?st rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o }
+}""" ;
+    beh:inserts """CONSTRUCT { ?s ?p ?o } WHERE {
+  { SELECT ?log (MIN(?n) AS ?first) WHERE {
+      $this a beh:Redoer .
+      OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
+      ?log beh:undone ?m . ?m beh:sequence ?n .
+      FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . ?as ?ap ?ao }
+      FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . FILTER NOT EXISTS { ?rs ?rp ?ro } }
+  } GROUP BY ?log }
+  ?log beh:undone ?m . ?m beh:sequence ?first .
+  ?m beh:asserted ?st . ?st rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o .
+}""" ;
+    sem:function "beh:redo-latest" .

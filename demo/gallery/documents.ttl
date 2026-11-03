@@ -1,4 +1,5 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix blk: <https://semblance.dev/ns/block#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -6,7 +7,7 @@
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix po: <http://www.essepuntato.it/2008/12/pattern#> .
 @prefix oa: <http://www.w3.org/ns/oa#> .
-@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+@prefix co: <http://purl.org/co/> .
 @prefix schema: <https://schema.org/> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -14,7 +15,7 @@
 
 # Gallery page: Documents (c:DocumentsGroup). A document is a tree of blocks in DoCo and the Pattern
 # Ontology (docs/BLOCKS.md): containers hold blocks (po:contains), siblings are a chain
-# (ord:immediatelyPrecedes), a text block's text is its rdf:value with standoff marks.
+# (co:nextItem), a text block's text is its rdf:value with standoff marks.
 
 ui:gallery-documents a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-documents-intro ui:gallery-documents-lede ui:doc-text ui:doc-structure ui:doc-media ) .
@@ -28,13 +29,17 @@ ui:doc-text a c:Flippable ; c:front ui:doc-text-spec .
 ui:doc-text-spec a c:Specimen ; c:label "Text, headings and marks" ;
     c:demonstrates c:BlockEditor , blk:Document , blk:Paragraph , blk:Heading1 , blk:Heading2 , blk:Quote , blk:Callout , blk:Strong , blk:Emphasis , blk:InlineCode , blk:Strike , blk:Link , blk:Mention , blk:Contents ;
     c:help "A block editor (c:of a blk:Document). Marks are ranges of a block's text (oa:start, oa:end) that may overlap: the text is split into runs at their boundaries." ;
-    c:children ( ui:doc-text-editor ) .
-ui:doc-text-editor a c:BlockEditor ; c:label "About blocks"@en , "Про блоки"@uk , "Über Blöcke"@de , "عن الكتل"@ar ; c:of ui:doc-text-doc .
+    c:children ( ui:doc-text-actions ui:doc-text-editor ) .
+ui:doc-text-editor a c:BlockEditor ; c:label "About blocks"@en , "Про блоки"@uk , "Über Blöcke"@de , "عن الكتل"@ar ; c:of ui:doc-text-doc ;
+    c:editable true ; c:undoer ui:doc-text-undo ; c:redoer ui:doc-text-redo .
+ui:doc-text-actions a c:Toolbar ; c:label "History"@en , "Історія"@uk , "Verlauf"@de , "السجل"@ar ; c:children ( ui:doc-text-undo ui:doc-text-redo ) .
+ui:doc-text-undo a c:Button , beh:Undoer ; c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar ; sty:size sty:Small .
+ui:doc-text-redo a c:Button , beh:Redoer ; c:label "Redo"@en , "Повторити"@uk , "Wiederholen"@de , "إعادة"@ar ; sty:size sty:Small .
 ui:doc-text-doc a blk:Document ; schema:name "About blocks" ;
     po:contains ui:dt-h , ui:dt-toc , ui:dt-p1 , ui:dt-h2 , ui:dt-p2 , ui:dt-quote , ui:dt-callout .
-ui:dt-h a blk:Heading1 ; rdf:value "A document is a graph" ; ord:immediatelyPrecedes ui:dt-toc .
-ui:dt-toc a blk:Contents ; ord:immediatelyPrecedes ui:dt-p1 .
-ui:dt-p1 a blk:Paragraph ; ord:immediatelyPrecedes ui:dt-h2 ;
+ui:dt-h a blk:Heading1 ; rdf:value "A document is a graph" ; co:nextItem ui:dt-toc .
+ui:dt-toc a blk:Contents ; co:nextItem ui:dt-p1 .
+ui:dt-p1 a blk:Paragraph ; co:nextItem ui:dt-h2 ;
     rdf:value "Every block is a resource, its text is a literal and its marks are ranges: bold, italic, code, struck out, a link, or a mention of Ada." ;
     blk:mark ui:dt-p1-b , ui:dt-p1-i , ui:dt-p1-c , ui:dt-p1-s , ui:dt-p1-l , ui:dt-p1-m .
 ui:dt-p1-b a blk:Strong ; oa:start 75 ; oa:end 79 .
@@ -43,14 +48,14 @@ ui:dt-p1-c a blk:InlineCode ; oa:start 89 ; oa:end 93 .
 ui:dt-p1-s a blk:Strike ; oa:start 95 ; oa:end 105 .
 ui:dt-p1-l a blk:Link ; oa:start 109 ; oa:end 113 ; schema:url "https://www.w3.org/TR/annotation-vocab/" .
 ui:dt-p1-m a blk:Mention ; oa:start 131 ; oa:end 134 ; oa:hasBody <https://semblance.dev/demo#ada> .
-ui:dt-h2 a blk:Heading2 ; rdf:value "In DoCo" ; ord:immediatelyPrecedes ui:dt-p2 .
-ui:dt-p2 a blk:Paragraph ; ord:immediatelyPrecedes ui:dt-quote ;
+ui:dt-h2 a blk:Heading2 ; rdf:value "In DoCo" ; co:nextItem ui:dt-p2 .
+ui:dt-p2 a blk:Paragraph ; co:nextItem ui:dt-quote ;
     rdf:value "A paragraph is a doco:Paragraph, a heading a doco:SectionTitle, a quote a doco:BlockQuotation." ;
     blk:mark ui:dt-p2-c1 , ui:dt-p2-c2 , ui:dt-p2-c3 .
 ui:dt-p2-c1 a blk:InlineCode ; oa:start 17 ; oa:end 31 .
 ui:dt-p2-c2 a blk:InlineCode ; oa:start 45 ; oa:end 62 .
 ui:dt-p2-c3 a blk:InlineCode ; oa:start 74 ; oa:end 93 .
-ui:dt-quote a blk:Quote ; rdf:value "Simple things should be simple, complex things should be possible." ; ord:immediatelyPrecedes ui:dt-callout .
+ui:dt-quote a blk:Quote ; rdf:value "Simple things should be simple, complex things should be possible." ; co:nextItem ui:dt-callout .
 ui:dt-callout a blk:Callout ; c:icon "💡" ; sty:tone sty:Info ; rdf:value "Turn this card over to see the rules that render it." .
 
 # --- lists, toggles, tables, columns ---------------------------------------------------------------
@@ -58,39 +63,39 @@ ui:dt-callout a blk:Callout ; c:icon "💡" ; sty:tone sty:Info ; rdf:value "Tur
 ui:doc-structure a c:Flippable ; c:front ui:doc-structure-spec .
 ui:doc-structure-spec a c:Specimen ; c:label "Lists, toggles, tables and columns" ;
     c:demonstrates blk:BulletedList , blk:NumberedList , blk:TodoList , blk:ListItem , blk:TodoItem , blk:Toggle , blk:Table , blk:Row , blk:Cell , blk:Columns , blk:Column , blk:Divider ;
-    c:help "Containers hold blocks (po:contains) in a chain (ord:immediatelyPrecedes): a list its items, an item its nested list, a toggle what it hides, a table its rows, columns their blocks." ;
+    c:help "Containers hold blocks (po:contains) in a chain (co:nextItem): a list its items, an item its nested list, a toggle what it hides, a table its rows, columns their blocks." ;
     c:children ( ui:doc-structure-editor ) .
 ui:doc-structure-editor a c:BlockEditor ; c:label "Plan"@en , "План"@uk , "Plan"@de , "خطة"@ar ; c:of ui:doc-structure-doc .
 ui:doc-structure-doc a blk:Document ;
     po:contains ui:ds-bullets , ui:ds-numbers , ui:ds-todos , ui:ds-toggle , ui:ds-hr , ui:ds-table , ui:ds-columns .
-ui:ds-bullets a blk:BulletedList ; po:contains ui:ds-b1 , ui:ds-b2 ; ord:immediatelyPrecedes ui:ds-numbers .
-ui:ds-b1 a blk:ListItem ; rdf:value "The model" ; ord:immediatelyPrecedes ui:ds-b2 ; po:contains ui:ds-b1-list .
+ui:ds-bullets a blk:BulletedList ; po:contains ui:ds-b1 , ui:ds-b2 ; co:nextItem ui:ds-numbers .
+ui:ds-b1 a blk:ListItem ; rdf:value "The model" ; co:nextItem ui:ds-b2 ; po:contains ui:ds-b1-list .
 ui:ds-b1-list a blk:BulletedList ; po:contains ui:ds-b1a , ui:ds-b1b .
-ui:ds-b1a a blk:ListItem ; rdf:value "Blocks and their chain" ; ord:immediatelyPrecedes ui:ds-b1b .
+ui:ds-b1a a blk:ListItem ; rdf:value "Blocks and their chain" ; co:nextItem ui:ds-b1b .
 ui:ds-b1b a blk:ListItem ; rdf:value "Text and marks" .
 ui:ds-b2 a blk:ListItem ; rdf:value "The renderings" .
-ui:ds-numbers a blk:NumberedList ; po:contains ui:ds-n1 , ui:ds-n2 , ui:ds-n3 ; ord:immediatelyPrecedes ui:ds-todos .
-ui:ds-n1 a blk:ListItem ; rdf:value "Read the document" ; ord:immediatelyPrecedes ui:ds-n2 .
-ui:ds-n2 a blk:ListItem ; rdf:value "Edit it in place" ; ord:immediatelyPrecedes ui:ds-n3 .
+ui:ds-numbers a blk:NumberedList ; po:contains ui:ds-n1 , ui:ds-n2 , ui:ds-n3 ; co:nextItem ui:ds-todos .
+ui:ds-n1 a blk:ListItem ; rdf:value "Read the document" ; co:nextItem ui:ds-n2 .
+ui:ds-n2 a blk:ListItem ; rdf:value "Edit it in place" ; co:nextItem ui:ds-n3 .
 ui:ds-n3 a blk:ListItem ; rdf:value "Add a block type of your own" .
-ui:ds-todos a blk:TodoList ; po:contains ui:ds-t1 , ui:ds-t2 ; ord:immediatelyPrecedes ui:ds-toggle .
-ui:ds-t1 a blk:TodoItem ; rdf:value "Render every primitive" ; blk:checked true ; ord:immediatelyPrecedes ui:ds-t2 .
+ui:ds-todos a blk:TodoList ; po:contains ui:ds-t1 , ui:ds-t2 ; co:nextItem ui:ds-toggle .
+ui:ds-t1 a blk:TodoItem ; rdf:value "Render every primitive" ; blk:checked true ; co:nextItem ui:ds-t2 .
 ui:ds-t2 a blk:TodoItem ; rdf:value "Edit within and across blocks" ; blk:checked false .
-ui:ds-toggle a blk:Toggle ; rdf:value "Why a chain?" ; po:contains ui:ds-toggle-p ; ord:immediatelyPrecedes ui:ds-hr .
+ui:ds-toggle a blk:Toggle ; rdf:value "Why a chain?" ; po:contains ui:ds-toggle-p ; co:nextItem ui:ds-hr .
 ui:ds-toggle-p a blk:Paragraph ; rdf:value "Inserting, removing and moving a block changes the links around it, not every block after it." .
-ui:ds-hr a blk:Divider ; ord:immediatelyPrecedes ui:ds-table .
-ui:ds-table a blk:Table ; po:contains ui:ds-r1 , ui:ds-r2 , ui:ds-r3 ; ord:immediatelyPrecedes ui:ds-columns .
-ui:ds-r1 a blk:Row ; blk:header true ; po:contains ui:ds-r1a , ui:ds-r1b ; ord:immediatelyPrecedes ui:ds-r2 .
-ui:ds-r1a a blk:Cell ; rdf:value "Block" ; ord:immediatelyPrecedes ui:ds-r1b .
+ui:ds-hr a blk:Divider ; co:nextItem ui:ds-table .
+ui:ds-table a blk:Table ; po:contains ui:ds-r1 , ui:ds-r2 , ui:ds-r3 ; co:nextItem ui:ds-columns .
+ui:ds-r1 a blk:Row ; blk:header true ; po:contains ui:ds-r1a , ui:ds-r1b ; co:nextItem ui:ds-r2 .
+ui:ds-r1a a blk:Cell ; rdf:value "Block" ; co:nextItem ui:ds-r1b .
 ui:ds-r1b a blk:Cell ; rdf:value "Its class" .
-ui:ds-r2 a blk:Row ; po:contains ui:ds-r2a , ui:ds-r2b ; ord:immediatelyPrecedes ui:ds-r3 .
-ui:ds-r2a a blk:Cell ; rdf:value "List" ; ord:immediatelyPrecedes ui:ds-r2b .
+ui:ds-r2 a blk:Row ; po:contains ui:ds-r2a , ui:ds-r2b ; co:nextItem ui:ds-r3 .
+ui:ds-r2a a blk:Cell ; rdf:value "List" ; co:nextItem ui:ds-r2b .
 ui:ds-r2b a blk:Cell ; rdf:value "doco:List" .
 ui:ds-r3 a blk:Row ; po:contains ui:ds-r3a , ui:ds-r3b .
-ui:ds-r3a a blk:Cell ; rdf:value "Toggle" ; ord:immediatelyPrecedes ui:ds-r3b .
+ui:ds-r3a a blk:Cell ; rdf:value "Toggle" ; co:nextItem ui:ds-r3b .
 ui:ds-r3b a blk:Cell ; rdf:value "po:HeadedContainer" .
 ui:ds-columns a blk:Columns ; po:contains ui:ds-left , ui:ds-right .
-ui:ds-left a blk:Column ; po:contains ui:ds-left-p ; ord:immediatelyPrecedes ui:ds-right .
+ui:ds-left a blk:Column ; po:contains ui:ds-left-p ; co:nextItem ui:ds-right .
 ui:ds-left-p a blk:Paragraph ; rdf:value "Columns sit side by side, and one under the other on a phone." .
 ui:ds-right a blk:Column ; po:contains ui:ds-right-p .
 ui:ds-right-p a blk:Paragraph ; rdf:value "Each column is a container of blocks like any other." .
@@ -105,13 +110,13 @@ ui:doc-media-spec a c:Specimen ; c:label "Code, math, media and links" ;
 ui:doc-media-editor a c:BlockEditor ; c:label "Attachments"@en , "Вкладення"@uk , "Anhänge"@de , "مرفقات"@ar ; c:of ui:doc-media-doc .
 ui:doc-media-doc a blk:Document ;
     po:contains ui:dm-code , ui:dm-math , ui:dm-image , ui:dm-file , ui:dm-bookmark , ui:dm-link .
-ui:dm-code a blk:Code ; schema:programmingLanguage "turtle" ; ord:immediatelyPrecedes ui:dm-math ;
+ui:dm-code a blk:Code ; schema:programmingLanguage "turtle" ; co:nextItem ui:dm-math ;
     rdf:value """ex:p a blk:Paragraph ;
     rdf:value "Hello" ;
     blk:mark [ a blk:Strong ; oa:start 0 ; oa:end 5 ] .""" .
-ui:dm-math a blk:Math ; rdf:value "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}" ; ord:immediatelyPrecedes ui:dm-image .
-ui:dm-image a blk:Image ; schema:contentUrl "photos/harbour.jpg" ; schema:description "A harbour at dusk, boats moored along the quay" ; schema:caption "An image block: the picture (schema:contentUrl), its description and its caption." ; ord:immediatelyPrecedes ui:dm-file .
-ui:dm-file a blk:File ; schema:contentUrl "/llms.txt" ; schema:name "llms.txt" ; schema:contentSize "4 KB" ; ord:immediatelyPrecedes ui:dm-bookmark .
+ui:dm-math a blk:Math ; rdf:value "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}" ; co:nextItem ui:dm-image .
+ui:dm-image a blk:Image ; schema:contentUrl "photos/harbour.jpg" ; schema:description "A harbour at dusk, boats moored along the quay" ; schema:caption "An image block: the picture (schema:contentUrl), its description and its caption." ; co:nextItem ui:dm-file .
+ui:dm-file a blk:File ; schema:contentUrl "/llms.txt" ; schema:name "llms.txt" ; schema:contentSize "4 KB" ; co:nextItem ui:dm-bookmark .
 ui:dm-bookmark a blk:Bookmark ; schema:url "http://purl.org/spar/doco" ; schema:name "DoCo, the Document Components Ontology" ;
-    schema:description "Structural and rhetorical components of documents: paragraphs, sections, lists, figures, tables." ; ord:immediatelyPrecedes ui:dm-link .
+    schema:description "Structural and rhetorical components of documents: paragraphs, sections, lists, figures, tables." ; co:nextItem ui:dm-link .
 ui:dm-link a blk:DocumentLink ; blk:target ui:doc-text-doc .

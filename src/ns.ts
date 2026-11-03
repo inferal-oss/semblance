@@ -53,6 +53,7 @@ export const NS = {
   po: 'http://www.essepuntato.it/2008/12/pattern#',
   doco: 'http://purl.org/spar/doco/',
   oa: 'http://www.w3.org/ns/oa#',
+  co: 'http://purl.org/co/',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -517,6 +518,7 @@ export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer
 
 /** Block documents (ontology/components/blocks.ttl): DoCo, the Pattern Ontology, Web Annotation, and what Semblance adds. */
 export const PO = { contains: NS.po + 'contains' } as const
+export const CO = { nextItem: NS.co + 'nextItem' } as const
 export const OA = { start: NS.oa + 'start', end: NS.oa + 'end', hasBody: NS.oa + 'hasBody' } as const
 export const BLK = Object.fromEntries(
   [

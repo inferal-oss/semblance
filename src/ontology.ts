@@ -69,6 +69,7 @@ export const ONTOLOGY_FILES = [
   'components/calendar.ttl',
   'components/outline.ttl',
   'components/blocks.ttl',
+  'components/block-editor.ttl',
   'components/connector.ttl',
   'components/walkthrough.ttl',
   'components/walkthrough-diagram.ttl',

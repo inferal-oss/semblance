@@ -17,7 +17,7 @@ export const DOCUMENT = `
 @prefix blk: <${NS.blk}> .
 @prefix po: <${NS.po}> .
 @prefix oa: <${NS.oa}> .
-@prefix ord: <${NS.ord}> .
+@prefix co: <${NS.co}> .
 @prefix sty: <${NS.sty}> .
 @prefix schema: <https://schema.org/> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -26,53 +26,53 @@ ex:editor a c:BlockEditor ; c:label "Notes" ; c:of ex:doc .
 ex:doc a blk:Document ; schema:name "Plans" ;
     po:contains ex:toc , ex:h1 , ex:p , ex:bullets , ex:numbers , ex:todos , ex:toggle , ex:quote , ex:callout , ex:hr ,
                 ex:code , ex:math , ex:table , ex:image , ex:file , ex:bookmark , ex:embed , ex:columns , ex:other , ex:h2 , ex:empty .
-ex:toc a blk:Contents ; ord:immediatelyPrecedes ex:h1 .
-ex:h1 a blk:Heading1 ; rdf:value "Plans" ; ord:immediatelyPrecedes ex:p .
-ex:p a blk:Paragraph ; rdf:value "Ship the *editor* first, see docs." ; ord:immediatelyPrecedes ex:bullets ;
+ex:toc a blk:Contents ; co:nextItem ex:h1 .
+ex:h1 a blk:Heading1 ; rdf:value "Plans" ; co:nextItem ex:p .
+ex:p a blk:Paragraph ; rdf:value "Ship the *editor* first, see docs." ; co:nextItem ex:bullets ;
     blk:mark ex:p-bold , ex:p-em , ex:p-link , ex:p-code .
 ex:p-bold a blk:Strong ; oa:start 0 ; oa:end 13 .
 ex:p-em a blk:Emphasis ; oa:start 5 ; oa:end 20 .
 ex:p-link a blk:Link ; oa:start 29 ; oa:end 33 ; schema:url "https://semblance.dev/docs" .
 ex:p-code a blk:InlineCode ; oa:start 9 ; oa:end 17 .
-ex:bullets a blk:BulletedList ; po:contains ex:b1 , ex:b2 ; ord:immediatelyPrecedes ex:numbers .
-ex:b1 a blk:ListItem ; rdf:value "Model" ; ord:immediatelyPrecedes ex:b2 ; po:contains ex:nested .
+ex:bullets a blk:BulletedList ; po:contains ex:b1 , ex:b2 ; co:nextItem ex:numbers .
+ex:b1 a blk:ListItem ; rdf:value "Model" ; co:nextItem ex:b2 ; po:contains ex:nested .
 ex:nested a blk:BulletedList ; po:contains ex:b1a .
 ex:b1a a blk:ListItem ; rdf:value "Shapes" .
 ex:b2 a blk:ListItem ; rdf:value "Rendering" ; blk:mark ex:b2-strike .
 ex:b2-strike a blk:Strike ; oa:start 0 ; oa:end 9 .
-ex:numbers a blk:NumberedList ; po:contains ex:n1 , ex:n2 ; ord:immediatelyPrecedes ex:todos .
-ex:n1 a blk:ListItem ; rdf:value "First" ; ord:immediatelyPrecedes ex:n2 .
+ex:numbers a blk:NumberedList ; po:contains ex:n1 , ex:n2 ; co:nextItem ex:todos .
+ex:n1 a blk:ListItem ; rdf:value "First" ; co:nextItem ex:n2 .
 ex:n2 a blk:ListItem ; rdf:value "Second" .
-ex:todos a blk:TodoList ; po:contains ex:t1 , ex:t2 ; ord:immediatelyPrecedes ex:toggle .
-ex:t1 a blk:TodoItem ; rdf:value "Write the note" ; blk:checked true ; ord:immediatelyPrecedes ex:t2 .
+ex:todos a blk:TodoList ; po:contains ex:t1 , ex:t2 ; co:nextItem ex:toggle .
+ex:t1 a blk:TodoItem ; rdf:value "Write the note" ; blk:checked true ; co:nextItem ex:t2 .
 ex:t2 a blk:TodoItem ; rdf:value "Mention @Ada" ; blk:checked false ; blk:mark ex:t2-ada .
 ex:t2-ada a blk:Mention ; oa:start 8 ; oa:end 12 ; oa:hasBody <https://example.org/people/ada> .
-ex:toggle a blk:Toggle ; rdf:value "Details" ; po:contains ex:inside ; ord:immediatelyPrecedes ex:quote .
+ex:toggle a blk:Toggle ; rdf:value "Details" ; po:contains ex:inside ; co:nextItem ex:quote .
 ex:inside a blk:Paragraph ; rdf:value "Hidden until opened." .
-ex:quote a blk:Quote ; rdf:value "Simple things should be simple." ; ord:immediatelyPrecedes ex:callout .
-ex:callout a blk:Callout ; rdf:value "Mind the gap." ; c:icon "⚠️" ; sty:tone sty:Warning ; ord:immediatelyPrecedes ex:hr .
-ex:hr a blk:Divider ; ord:immediatelyPrecedes ex:code .
-ex:code a blk:Code ; schema:programmingLanguage "turtle" ; rdf:value "ex:a a ex:B ." ; ord:immediatelyPrecedes ex:math .
-ex:math a blk:Math ; rdf:value "e^{i\\\\pi} + 1 = 0" ; ord:immediatelyPrecedes ex:table .
-ex:table a blk:Table ; po:contains ex:r1 , ex:r2 ; ord:immediatelyPrecedes ex:image .
-ex:r1 a blk:Row ; blk:header true ; po:contains ex:c11 , ex:c12 ; ord:immediatelyPrecedes ex:r2 .
-ex:c11 a blk:Cell ; rdf:value "Block" ; ord:immediatelyPrecedes ex:c12 .
+ex:quote a blk:Quote ; rdf:value "Simple things should be simple." ; co:nextItem ex:callout .
+ex:callout a blk:Callout ; rdf:value "Mind the gap." ; c:icon "⚠️" ; sty:tone sty:Warning ; co:nextItem ex:hr .
+ex:hr a blk:Divider ; co:nextItem ex:code .
+ex:code a blk:Code ; schema:programmingLanguage "turtle" ; rdf:value "ex:a a ex:B ." ; co:nextItem ex:math .
+ex:math a blk:Math ; rdf:value "e^{i\\\\pi} + 1 = 0" ; co:nextItem ex:table .
+ex:table a blk:Table ; po:contains ex:r1 , ex:r2 ; co:nextItem ex:image .
+ex:r1 a blk:Row ; blk:header true ; po:contains ex:c11 , ex:c12 ; co:nextItem ex:r2 .
+ex:c11 a blk:Cell ; rdf:value "Block" ; co:nextItem ex:c12 .
 ex:c12 a blk:Cell ; rdf:value "DoCo" .
 ex:r2 a blk:Row ; po:contains ex:c21 , ex:c22 .
-ex:c21 a blk:Cell ; rdf:value "Paragraph" ; ord:immediatelyPrecedes ex:c22 .
+ex:c21 a blk:Cell ; rdf:value "Paragraph" ; co:nextItem ex:c22 .
 ex:c22 a blk:Cell ; rdf:value "doco:Paragraph" .
-ex:image a blk:Image ; schema:contentUrl "/favicon.svg" ; schema:caption "The mark" ; ord:immediatelyPrecedes ex:file .
-ex:file a blk:File ; schema:contentUrl "/files/plan.pdf" ; schema:name "plan.pdf" ; schema:contentSize "12 KB" ; ord:immediatelyPrecedes ex:bookmark .
-ex:bookmark a blk:Bookmark ; schema:url "https://www.w3.org/ns/oa/" ; schema:name "Web Annotation" ; schema:description "The vocabulary." ; ord:immediatelyPrecedes ex:embed .
-ex:embed a blk:Embed ; schema:embedUrl "https://example.org/map" ; schema:name "Map" ; ord:immediatelyPrecedes ex:columns .
-ex:columns a blk:Columns ; po:contains ex:left , ex:right ; ord:immediatelyPrecedes ex:other .
-ex:left a blk:Column ; po:contains ex:lp ; ord:immediatelyPrecedes ex:right .
+ex:image a blk:Image ; schema:contentUrl "/favicon.svg" ; schema:caption "The mark" ; co:nextItem ex:file .
+ex:file a blk:File ; schema:contentUrl "/files/plan.pdf" ; schema:name "plan.pdf" ; schema:contentSize "12 KB" ; co:nextItem ex:bookmark .
+ex:bookmark a blk:Bookmark ; schema:url "https://www.w3.org/ns/oa/" ; schema:name "Web Annotation" ; schema:description "The vocabulary." ; co:nextItem ex:embed .
+ex:embed a blk:Embed ; schema:embedUrl "https://example.org/map" ; schema:name "Map" ; co:nextItem ex:columns .
+ex:columns a blk:Columns ; po:contains ex:left , ex:right ; co:nextItem ex:other .
+ex:left a blk:Column ; po:contains ex:lp ; co:nextItem ex:right .
 ex:lp a blk:Paragraph ; rdf:value "Left" .
 ex:right a blk:Column ; po:contains ex:rp .
 ex:rp a blk:Paragraph ; rdf:value "Right" .
-ex:other a blk:DocumentLink ; blk:target ex:otherDoc ; ord:immediatelyPrecedes ex:h2 .
+ex:other a blk:DocumentLink ; blk:target ex:otherDoc ; co:nextItem ex:h2 .
 ex:otherDoc a blk:Document ; schema:name "Retrospective" ; schema:url "/docs/retro" .
-ex:h2 a blk:Heading2 ; rdf:value "Later" ; ord:immediatelyPrecedes ex:empty .
+ex:h2 a blk:Heading2 ; rdf:value "Later" ; co:nextItem ex:empty .
 ex:empty a blk:Paragraph ; rdf:value "" .
 `
 

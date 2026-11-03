@@ -13,7 +13,7 @@ What the established vocabularies say, used as they are:
 | what a block is (structurally) | Pattern Ontology (`po:` = `http://www.essepuntato.it/2008/12/pattern#`): `po:Block` (text and inline elements), `po:Container` (blocks only), `po:HeadedContainer`, `po:Atom`, `po:Milestone`, `po:Table` |
 | what a block is (rhetorically) | DoCo (`doco:` = `http://purl.org/spar/doco/`): `doco:Paragraph`, `doco:SectionTitle`, `doco:List`, `doco:BlockQuotation`, `doco:TextBox`, `doco:Formula`, `doco:Figure`, `doco:Table`, `doco:TableOfContents`, `doco:BodyMatter` |
 | containment | `po:contains` (a container to each block in it); a toggle's line is its header (`po:containsAsHeader` is not needed: its text is its own) |
-| order of siblings | `ord:immediatelyPrecedes` (the RDF/HTML ordering module): a block to the next block in the same container. A linked chain, so inserting, removing and moving cost what they touch; the last block has none |
+| order of siblings | `co:nextItem` (the RDF/HTML ordering module): a block to the next block in the same container. A linked chain, so inserting, removing and moving cost what they touch; the last block has none |
 | text | `rdf:value`: a block's plain text (an `xsd:string`) |
 | inline ranges | Web Annotation (`oa:` = `http://www.w3.org/ns/oa#`): every mark is an `oa:TextPositionSelector` with `oa:start` and `oa:end` (offsets into `rdf:value`) |
 | media and embeds | schema.org: `schema:contentUrl`, `schema:url`, `schema:name`, `schema:caption`, `schema:encodingFormat`, `schema:programmingLanguage`, `schema:contentSize` |
@@ -55,12 +55,12 @@ What Semblance adds (`blk:` = `https://semblance.dev/ns/block#`), only where non
 ```turtle
 ex:notes a c:BlockEditor ; c:label "Notes" ; c:of ex:doc ; c:editable true .
 ex:doc a blk:Document ; po:contains ex:h , ex:p , ex:list .
-ex:h a blk:Heading1 ; rdf:value "Plans" ; ord:immediatelyPrecedes ex:p .
-ex:p a blk:Paragraph ; rdf:value "Ship the editor first." ; ord:immediatelyPrecedes ex:list ;
+ex:h a blk:Heading1 ; rdf:value "Plans" ; co:nextItem ex:p .
+ex:p a blk:Paragraph ; rdf:value "Ship the editor first." ; co:nextItem ex:list ;
     blk:mark ex:p-m1 .
 ex:p-m1 a blk:Strong ; oa:start 5 ; oa:end 15 .
 ex:list a blk:BulletedList ; po:contains ex:i1 , ex:i2 .
-ex:i1 a blk:ListItem ; rdf:value "Model" ; ord:immediatelyPrecedes ex:i2 .
+ex:i1 a blk:ListItem ; rdf:value "Model" ; co:nextItem ex:i2 .
 ex:i2 a blk:ListItem ; rdf:value "Rendering" .
 ```
 
@@ -128,7 +128,7 @@ browser put there is replaced by what the rules render.
 - A block's renderings read its own triples and its marks (`sem:follows blk:mark`), nothing of its
   siblings or of the editor.
 - Containers place their blocks member-wise (`sem:forEach po:contains`): the member rule reads the
-  member's type and `ord:immediatelyPrecedes`, not its text. A new block runs one member rule and
+  member's type and `co:nextItem`, not its text. A new block runs one member rule and
   relinks one neighbour.
 - The selection's effects (the empty block's placeholder, the menu's anchor) are decorations a rule on
   the editor writes onto the two blocks involved, so moving the caret touches two blocks, not all.

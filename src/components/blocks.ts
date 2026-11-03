@@ -3,7 +3,7 @@
 // characters as SPARQL does (code points), so text is sliced as an array of them.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { BLK, C, H, L10N, MOD, NS, OA, ORD, PO, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
+import { BLK, C, CO, H, L10N, MOD, NS, OA, ORD, PO, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { encodeForUri, isA, isTrue, named, str, text } from './util.ts'
 
 const RDF_VALUE = NS.rdf + 'value'
@@ -99,15 +99,15 @@ const members: FnRule = (ctx, focus, member) => {
   const o = ctx.out(focus)
   const region = isA(ctx, focus, BLK.TextBlock) || isA(ctx, focus, BLK.Table) ? 'children' : 'root'
   o.t(o.node(region), H.hasChild, member)
-  const next = ctx.object(member, ORD.immediatelyPrecedes)
-  if (next && ctx.match(focus, PO.contains, next).length) o.t(next, ORD.immediatelyFollows, member)
+  const next = ctx.object(member, CO.nextItem)
+  if (next && ctx.match(focus, PO.contains, next).length) o.t(member, ORD.immediatelyPrecedes, next)
   return o.quads
 }
 
 const textRuns: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const value = valueOf(ctx, focus)
-  const textNode = o.el('text', 'Span', { class: 'sem-text', id: o.node('text').value })
+  const textNode = o.el('text', 'Span', { class: 'sem-text', id: o.node('text').value, 'data-sem-text': focus.value })
   const marks = marksOf(ctx, focus)
   for (const { b, n } of runs(ctx, focus, marks)) {
     const base = `run-${b}`
@@ -231,7 +231,7 @@ const todoItem: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const done = isTrue(ctx.object(focus, BLK.checked))
   const textId = o.node('text').value
-  const check = o.el('check', 'Input', { type: 'checkbox', class: 'sem-check', checked: done ? '' : undefined, 'aria-labelledby': textId })
+  const check = o.el('check', 'Input', { type: 'checkbox', class: 'sem-check', checked: done ? '' : undefined, 'aria-labelledby': textId, contenteditable: 'false' })
   const root = o.node('root')
   o.renders(o.el('root', 'Li', { id: root.value, 'data-sem-done': String(done) }, [check, o.node('text'), ...childrenOf(ctx, o, focus, { class: 'sem-children' })]))
   return o.quads
@@ -241,7 +241,7 @@ const toggle: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const open = isTrue(ctx.object(focus, C_EXPANDED))
   const children = o.node('children')
-  const twisty = o.el('twisty', 'Button', { type: 'button', class: 'sem-twisty', 'aria-expanded': String(open), 'aria-controls': children.value, 'aria-labelledby': o.node('text').value })
+  const twisty = o.el('twisty', 'Button', { type: 'button', class: 'sem-twisty', contenteditable: 'false', 'aria-expanded': String(open), 'aria-controls': children.value, 'aria-labelledby': o.node('text').value })
   o.t(twisty, C_TOGGLES, focus)
   const region = o.el('children', 'Div', { class: 'sem-children', id: children.value, hidden: open ? undefined : '' })
   o.renders(o.el('root', 'Div', { id: o.node('root').value, 'data-expanded': String(open) }, [twisty, o.node('text'), region]))
@@ -252,7 +252,7 @@ const glyphOf = (ctx: RuleContext, focus: Term) => str(ctx.object(focus, C.icon)
 
 const callout: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const icon = o.el('icon', 'Span', { class: 'sem-icon', 'aria-hidden': 'true' }, [o.text('icon-text', glyphOf(ctx, focus))])
+  const icon = o.el('icon', 'Span', { class: 'sem-icon', contenteditable: 'false', 'aria-hidden': 'true' }, [o.text('icon-text', glyphOf(ctx, focus))])
   const body = o.el('body', 'Div', { class: 'sem-body' }, [o.node('text'), ...childrenOf(ctx, o, focus, { class: 'sem-children' })])
   o.renders(o.el('root', 'Div', { id: o.node('root').value, role: 'note' }, [icon, body]))
   return o.quads
@@ -302,7 +302,7 @@ const cell: FnRule = (ctx, focus) => {
     o.renders(o.el('root', head ? 'Th' : 'Td', { id: o.node('root').value, scope: head ? 'col' : undefined }, [o.node('text')]))
     return o.quads
   }
-  const last = !has(ctx, focus, ORD.immediatelyPrecedes)
+  const last = !has(ctx, focus, CO.nextItem)
   const cells = row ? ctx.objects(row, PO.contains).length : 0
   const rule = '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|'.slice(0, 4 * cells + 1)
   const end = last ? (head ? ` |\n${rule}` : ' |') : ' '
@@ -433,7 +433,7 @@ const contents: FnRule = (ctx, focus) => {
       if (!named(heading) || !isA(ctx, heading, BLK.Heading)) continue
       let before = 0
       const passed = new Set<string>()
-      for (let q = ctx.match(null, ORD.immediatelyPrecedes, heading)[0]?.subject; q && !passed.has(q.value); q = ctx.match(null, ORD.immediatelyPrecedes, q)[0]?.subject) {
+      for (let q = ctx.match(null, CO.nextItem, heading)[0]?.subject; q && !passed.has(q.value); q = ctx.match(null, CO.nextItem, q)[0]?.subject) {
         passed.add(q.value)
         before++
       }
@@ -441,6 +441,14 @@ const contents: FnRule = (ctx, focus) => {
       o.t(list, H.hasChild, entry).t(entry, SEM.orderKey, String(before))
     }
   }
+  return o.quads
+}
+
+/** An atom (neither text nor a container): the caret goes around it. */
+const atom: FnRule = (ctx, focus) => {
+  if (isA(ctx, focus, BLK.TextBlock) || isA(ctx, focus, BLK.Container)) return []
+  const o = ctx.out(focus)
+  o.t(o.node('root'), H.ns + 'contenteditable', 'false')
   return o.quads
 }
 
@@ -453,7 +461,20 @@ const editor: FnRule = (ctx, focus) => {
     return o.quads
   }
   const label = str(ctx.object(focus, L10N.label)) ?? text(ctx, focus, C.label)
-  o.renders(o.el('root', 'Div', {}, [o.el('body', 'Div', { class: 'sem-body', role: 'document', 'aria-label': label }, children)]))
+  const editable = isTrue(ctx.object(focus, NS.c + 'editable'))
+  const at = (p: string) => ctx.object(focus, NS.c + p)
+  const [ab, ao, fb, fo] = [at('anchorBlock'), at('anchorOffset'), at('focusBlock'), at('focusOffset')]
+  const selection = ab && ao && fb && fo ? `${ab.value} ${ao.value} ${fb.value} ${fo.value}` : ''
+  const body = o.el('body', 'Div', {
+    class: 'sem-body',
+    role: editable ? 'textbox' : 'document',
+    'aria-label': label,
+    'aria-multiline': editable ? 'true' : undefined,
+    contenteditable: editable ? 'true' : undefined,
+    spellcheck: editable ? 'true' : undefined,
+    'data-sem-text-root': editable ? selection : undefined,
+  }, children)
+  o.renders(o.el('root', 'Div', {}, [body]))
   return o.quads
 }
 
@@ -483,4 +504,5 @@ export const functions: Record<string, FnRule> = {
   'blk:contents-entry': contentsEntry,
   'blk:contents': contents,
   'blk:editor': editor,
+  'blk:atom': atom,
 }

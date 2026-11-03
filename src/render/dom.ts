@@ -140,6 +140,35 @@ export class DomRenderer {
     return { nodes, mismatches }
   }
 
+  /**
+   * Make a subtree the browser changed itself (composition in an editable region: src/behaviour/text.ts)
+   * what the index says again: every text node's data, every element's children, nodes the browser
+   * added removed and nodes it removed put back.
+   */
+  resync(el: Node): void {
+    const top = this.keys.get(el)
+    if (top === undefined) return
+    this.pendingPrune.clear()
+    const walk = (k: string) => {
+      const dom = this.els.get(k)
+      const n = this.index.nodes.get(k)
+      if (!dom || !n) return
+      if (n.cls === 'Text') {
+        const data = n.data ?? ''
+        if ((dom as Text).data !== data) ((dom as Text).data = data), this.ops++
+        return
+      }
+      if (dom.nodeType !== 1 || this.index.isVoid(k) || n.slot !== undefined) return
+      this.reconcile(dom, this.desired(k), true)
+      for (const slot of this.index.childrenOf(k)) {
+        const r = this.index.resolve(slot)
+        if (r) walk(r)
+      }
+    }
+    walk(top)
+    this.prune([])
+  }
+
   /** Call `listener` after every patch (host effects that act on what was rendered: islands). */
   onPatched(listener: () => void): () => void {
     this.patched.add(listener)

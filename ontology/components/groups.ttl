@@ -199,3 +199,6 @@ blk:Image sem:group c:DocumentsGroup . blk:File sem:group c:DocumentsGroup . blk
 blk:Linked sem:group c:DocumentsGroup . blk:DocumentLink sem:group c:DocumentsGroup . blk:Contents sem:group c:DocumentsGroup . blk:Mark sem:group c:DocumentsGroup .
 blk:Strong sem:group c:DocumentsGroup . blk:Emphasis sem:group c:DocumentsGroup . blk:Strike sem:group c:DocumentsGroup . blk:InlineCode sem:group c:DocumentsGroup .
 blk:Link sem:group c:DocumentsGroup . blk:Mention sem:group c:DocumentsGroup .
+c:TextEdit sem:group c:DocumentsGroup . c:InsertText sem:group c:DocumentsGroup . c:DeleteText sem:group c:DocumentsGroup . c:SplitBlock sem:group c:DocumentsGroup .
+c:HistoryStep sem:group c:DocumentsGroup . c:FormatText sem:group c:DocumentsGroup . c:BlockEditorKey sem:group c:DocumentsGroup . c:BlockSelect sem:group c:DocumentsGroup .
+blk:Shortcut sem:group c:DocumentsGroup . blk:BlockShortcut sem:group c:DocumentsGroup . blk:InlineShortcut sem:group c:DocumentsGroup .

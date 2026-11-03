@@ -80,7 +80,7 @@ ex:undo a c:Button , beh:Undoer ; c:label "Undo" .
 ```
 
 A `c:BlockEditor` shows a document of blocks (`c:of` a `blk:Document`): a tree in DoCo and the
-Pattern Ontology, where containers hold blocks (`po:contains`) in a chain (`ord:immediatelyPrecedes`)
+Pattern Ontology, where containers hold blocks (`po:contains`) in a chain (`co:nextItem`)
 and a text block's text is its `rdf:value` with standoff marks (`blk:Strong`, `blk:Link`, … each an
 `oa:TextPositionSelector` with `oa:start` and `oa:end`). Every block type is a class that is also a
 component: a text block class that names its element (`blk:element rdfhtml:Aside`) is rendered by the
@@ -90,7 +90,7 @@ modality, as Markdown. [Block documents](BLOCKS.md) has the model and the design
 ```turtle
 ex:notes a c:BlockEditor ; c:label "Notes" ; c:of ex:doc .
 ex:doc a blk:Document ; po:contains ex:h , ex:p .
-ex:h a blk:Heading1 ; rdf:value "Plans" ; ord:immediatelyPrecedes ex:p .
+ex:h a blk:Heading1 ; rdf:value "Plans" ; co:nextItem ex:p .
 ex:p a blk:Paragraph ; rdf:value "Ship it." ; blk:mark [ a blk:Strong ; oa:start 0 ; oa:end 4 ] .
 ```
 
@@ -191,7 +191,7 @@ A rendering rule runs once per instance (`$this`) and constructs RDF/HTML
 - **Identity.** Mint every node from the focus: `BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)`.
   Never blank nodes. A minted IRI is stable across re-evaluation, so the DOM node is reused, and
   it doubles as the element's `id` for `label for`, `aria-labelledby` and `aria-describedby`.
-- **Order.** Siblings are ordered with `ord:immediatelyPrecedes` (or `ord:precedes`); an
+- **Order.** Siblings are ordered with `co:nextItem` (or `ord:precedes`); an
   ambiguous order is an error. Member-wise siblings carry `sem:orderKey` and are sorted instead.
 - **Optional parts.** Bind an optional node to `?none` (unbound) when its data is missing:
   `BIND(IF(BOUND(?icon), IRI(CONCAT(STR($this), "/~icon")), ?none) AS ?iconNode)`. Unbound

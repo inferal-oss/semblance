@@ -10,6 +10,7 @@
 @prefix schema: <https://schema.org/> .
 @prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
 @prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+@prefix co: <http://purl.org/co/> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -18,7 +19,7 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # Block documents (docs/BLOCKS.md). A document is a tree of blocks: containers hold blocks
-# (po:contains), siblings are a chain (ord:immediatelyPrecedes), a text block's text is its
+# (po:contains), siblings are a chain (co:nextItem), a text block's text is its
 # rdf:value with standoff marks (Web Annotation text position selectors). Every block type is a
 # subclass of its DoCo or Pattern Ontology class and of blk:Block, a component, so a block type is a
 # class with a rendering. This file has the model and the renderings; the editor is in
@@ -39,7 +40,7 @@ blk:TextBlock a owl:Class ; rdfs:subClassOf blk:Block , po:Block ;
 the shared text rule into <block>/~text, which the block's own rendering places."""@en .
 blk:Container a owl:Class ; rdfs:subClassOf blk:Block ;
     rdfs:label "Container"@en , "Контейнер"@uk , "Container"@de , "حاوية"@ar ;
-    rdfs:comment """A block that holds blocks (po:contains), in a chain (ord:immediatelyPrecedes). A text block
+    rdfs:comment """A block that holds blocks (po:contains), in a chain (co:nextItem). A text block
 that is also a container places them in <block>/~children (a list item's nested list, a toggle's
 content); a pure container (a document, a list, a column) in its root."""@en .
 
@@ -186,24 +187,25 @@ blk:Contents a owl:Class ; rdfs:subClassOf blk:Block , doco:TableOfContents ; se
 # --- the shared renderings ----------------------------------------------------------------------------
 
 # A container places its blocks member-wise: one evaluation per (container, block), which reads the
-# block's place in the chain and nothing of its content, so typing in a block never runs it. Its order
-# is stated backwards (ord:immediatelyFollows), so the derived graph never repeats the document's own
-# ord:immediatelyPrecedes.
+# block's place in the chain and nothing of its content, so typing in a block never runs it. The chain is
+# the Collections Ontology's co:nextItem: the document's own order, which the engine follows as data (ord:
+# is the rendered output's placement, never followed).
 blk:Members a sem:Rendering ; sem:targets blk:Container ; sem:stratum 0 ;
     sem:forEach po:contains ;
-    sem:watches rdf:type , po:contains .
+    sem:watches rdf:type , po:contains , co:nextItem .
 blk:Members-fn a sem:Rule ; sem:implements blk:Members ; sem:function "blk:members" .
 blk:Members-sparql a sem:Rule ; sem:implements blk:Members ;
-    sem:memberWatches ord:immediatelyPrecedes ;
+    sem:memberWatches co:nextItem ;
     sem:construct """
-CONSTRUCT { ?region rdfhtml:hasChild $member . ?next ord:immediatelyFollows $member . }
+CONSTRUCT { ?region rdfhtml:hasChild $member . $member ord:immediatelyPrecedes ?next . }
 WHERE {
   $this po:contains $member .
   BIND(IRI(CONCAT(STR($this), IF(EXISTS { $this a/rdfs:subClassOf* blk:TextBlock } || EXISTS { $this a/rdfs:subClassOf* blk:Table }, "/~children", "/~root"))) AS ?region)
-  OPTIONAL { $member ord:immediatelyPrecedes ?next . $this po:contains ?next }
+  OPTIONAL { $member co:nextItem ?next . $this po:contains ?next }
 }""" .
 
-# A text block's text: <block>/~text, a span of runs split at every mark boundary. A run is minted
+# A text block's text: <block>/~text, a span of runs split at every mark boundary, marked as the holder
+# of the block's text (data-sem-text) for the editor (src/behaviour/text.ts). A run is minted
 # from its block and start (<block>/~run-12), wrapped in the elements of the marks over it; a link's
 # address is kept only when it is http(s), mailto or a path. An empty text, or one ending in a line
 # break, ends with a <br> (an empty line has height and takes the caret).
@@ -215,7 +217,8 @@ blk:TextRendering-sparql a sem:Rule ; sem:implements blk:TextRendering ;
     sem:bulk false ;  # its subqueries read $this
     sem:construct """
 CONSTRUCT {
-  ?text a rdfhtml:Span ; rdfhtml:class "sem-text" ; rdfhtml:id ?textId ; rdfhtml:hasChild ?top , ?br .
+  ?text a rdfhtml:Span ; rdfhtml:class "sem-text" ; rdfhtml:id ?textId ; rdfhtml:hasChild ?top , ?br ; rdfhtml:attribute ?holder .
+  ?holder a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-text" ; rdfhtml:attributeValue ?block .
   ?br a rdfhtml:Br ; sem:orderKey ?brKey .
   ?top sem:orderKey ?key .
   ?a a rdfhtml:A ; rdfhtml:href ?href ; rdfhtml:hasChild ?aChild ; rdfhtml:attribute ?aMark .
@@ -232,6 +235,8 @@ WHERE {
   BIND(COALESCE(STR(?raw), "") AS ?value)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
   BIND(STR(?text) AS ?textId)
+  BIND(IRI(CONCAT(STR($this), "/~text-data-sem-text")) AS ?holder)
+  BIND(STR($this) AS ?block)
   { BIND(true AS ?tail) }
   UNION
   { SELECT ?b (MIN(?c) AS ?n) WHERE {
@@ -418,6 +423,19 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
 }""" .
 
+# Blocks that are neither text nor containers are atoms: in an editable region the caret goes around
+# them, not into them.
+blk:AtomRendering a sem:Rendering ; sem:targets blk:Block ; sem:modality mod:Screen ; sem:stratum 0 ; sem:watches rdf:type .
+blk:AtomRendering-fn a sem:Rule ; sem:implements blk:AtomRendering ; sem:function "blk:atom" .
+blk:AtomRendering-sparql a sem:Rule ; sem:implements blk:AtomRendering ;
+    sem:construct """
+CONSTRUCT { ?root rdfhtml:contenteditable "false" . }
+WHERE {
+  $this a/rdfs:subClassOf* blk:Block .
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:TextBlock } FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:Container }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+}""" .
+
 # A to-do: a checkbox named by its text, the text, the blocks nested in it.
 blk:TodoItemRendering a sem:Rendering ; sem:targets blk:TodoItem ; sem:modality mod:Screen ; sem:stratum 0 ;
     sem:watches rdf:type , po:contains , blk:checked .
@@ -427,7 +445,7 @@ blk:TodoItemRendering-sparql a sem:Rule ; sem:implements blk:TodoItemRendering ;
 CONSTRUCT {
   ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?check , ?text , ?children ; rdfhtml:attribute ?doneAttr .
   ?doneAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-done" ; rdfhtml:attributeValue ?done .
-  ?check a rdfhtml:Input ; rdfhtml:type "checkbox" ; rdfhtml:class "sem-check" ; rdfhtml:checked ?checked ; rdfhtml:attribute ?checkLabel ;
+  ?check a rdfhtml:Input ; rdfhtml:type "checkbox" ; rdfhtml:class "sem-check" ; rdfhtml:checked ?checked ; rdfhtml:attribute ?checkLabel ; rdfhtml:contenteditable "false" ;
          ord:immediatelyPrecedes ?text .
   ?checkLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?textId .
   ?text ord:immediatelyPrecedes ?children .
@@ -458,7 +476,7 @@ blk:ToggleRendering-sparql a sem:Rule ; sem:implements blk:ToggleRendering ;
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?twisty , ?text , ?children ; rdfhtml:attribute ?expandedAttr .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-expanded" ; rdfhtml:attributeValue ?expanded .
-  ?twisty a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-twisty" ; c:toggles $this ; ord:immediatelyPrecedes ?text ;
+  ?twisty a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-twisty" ; rdfhtml:contenteditable "false" ; c:toggles $this ; ord:immediatelyPrecedes ?text ;
           rdfhtml:attribute ?ariaExpanded , ?ariaControls , ?ariaLabelled .
   ?ariaExpanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?expanded .
   ?ariaControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?childrenId .
@@ -493,7 +511,7 @@ blk:CalloutRendering-sparql a sem:Rule ; sem:implements blk:CalloutRendering ;
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?icon , ?body ; rdfhtml:attribute ?role .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "note" .
-  ?icon a rdfhtml:Span ; rdfhtml:class "sem-icon" ; rdfhtml:hasChild ?iconText ; rdfhtml:attribute ?iconHidden ; ord:immediatelyPrecedes ?body .
+  ?icon a rdfhtml:Span ; rdfhtml:class "sem-icon" ; rdfhtml:contenteditable "false" ; rdfhtml:hasChild ?iconText ; rdfhtml:attribute ?iconHidden ; ord:immediatelyPrecedes ?body .
   ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?iconText a rdfhtml:Text ; rdfhtml:data ?glyph .
   ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?text , ?children .
@@ -625,7 +643,7 @@ WHERE {
 # under it.
 blk:CellRendering a sem:Rendering ; sem:targets blk:Cell ; sem:stratum 0 ;
     sem:follows ( [ sem:inverse po:contains ] ) ;
-    sem:watches rdf:type , blk:header , po:contains , ord:immediatelyPrecedes .
+    sem:watches rdf:type , blk:header , po:contains , co:nextItem .
 blk:CellRendering-fn a sem:Rule ; sem:implements blk:CellRendering ; sem:function "blk:cell" .
 blk:CellRendering-sparql-screen a sem:Rule ; sem:implements blk:CellRendering ; sem:modality mod:Screen ;
     sem:construct """
@@ -650,7 +668,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* blk:Cell .
-  BIND(NOT EXISTS { $this ord:immediatelyPrecedes ?next } AS ?last)
+  BIND(NOT EXISTS { $this co:nextItem ?next } AS ?last)
   { SELECT (COUNT(?cell) AS ?cells) WHERE { ?r po:contains $this ; po:contains ?cell } }
   BIND(EXISTS { ?row po:contains $this ; blk:header true } AS ?head)
   BIND(SUBSTR("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|", 1, 4 * ?cells + 1) AS ?rule)
@@ -890,7 +908,7 @@ WHERE {
 }""" .
 blk:ContentsRendering a sem:Rendering ; sem:targets blk:Contents ; sem:stratum 0 ;
     sem:inputOnly true ;
-    sem:watchesAnywhere po:contains , ord:immediatelyPrecedes , rdf:type .
+    sem:watchesAnywhere po:contains , co:nextItem , rdf:type .
 blk:ContentsRendering-fn a sem:Rule ; sem:implements blk:ContentsRendering ; sem:function "blk:contents" .
 blk:ContentsRendering-sparql-screen a sem:Rule ; sem:implements blk:ContentsRendering ; sem:modality mod:Screen ;
     sem:bulk false ;  # its subqueries read $this
@@ -908,7 +926,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
   BIND(IRI(CONCAT(STR($this), "/~list")) AS ?list)
   OPTIONAL {
-    { SELECT ?heading (COUNT(?before) AS ?at) WHERE { ?d po:contains+ $this ; po:contains ?heading . ?d a/rdfs:subClassOf* blk:Document . ?heading a/rdfs:subClassOf* blk:Heading . OPTIONAL { ?before ord:immediatelyPrecedes+ ?heading } } GROUP BY ?heading }
+    { SELECT ?heading (COUNT(?before) AS ?at) WHERE { ?d po:contains+ $this ; po:contains ?heading . ?d a/rdfs:subClassOf* blk:Document . ?heading a/rdfs:subClassOf* blk:Heading . OPTIONAL { ?before co:nextItem+ ?heading } } GROUP BY ?heading }
   }
   BIND(IF(BOUND(?heading), IRI(CONCAT(STR(?heading), "/~contents-entry")), ?none) AS ?entry)
   BIND(STR(?at) AS ?key)
@@ -924,13 +942,16 @@ WHERE {
   $this a/rdfs:subClassOf* blk:Contents .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   OPTIONAL {
-    { SELECT ?heading (COUNT(?before) AS ?at) WHERE { ?d po:contains+ $this ; po:contains ?heading . ?d a/rdfs:subClassOf* blk:Document . ?heading a/rdfs:subClassOf* blk:Heading . OPTIONAL { ?before ord:immediatelyPrecedes+ ?heading } } GROUP BY ?heading }
+    { SELECT ?heading (COUNT(?before) AS ?at) WHERE { ?d po:contains+ $this ; po:contains ?heading . ?d a/rdfs:subClassOf* blk:Document . ?heading a/rdfs:subClassOf* blk:Heading . OPTIONAL { ?before co:nextItem+ ?heading } } GROUP BY ?heading }
   }
   BIND(IF(BOUND(?heading), IRI(CONCAT(STR(?heading), "/~contents-entry")), ?none) AS ?entry)
   BIND(STR(?at) AS ?key)
 }""" .
 
 # --- the editor ---------------------------------------------------------------------------------------
+# Read only, a document (role=document). Editable (c:editable true), a multi-line text box whose region is
+# contenteditable and states the selection the graph holds (data-sem-text-root: "anchor offset focus
+# offset"); the editing itself is block-editor.ttl.
 
 c:BlockEditor a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "block-editor" ;
     rdfs:label "Block editor"@en , "Блоковий редактор"@uk , "Block-Editor"@de , "محرر الكتل"@ar ;
@@ -938,18 +959,29 @@ c:BlockEditor a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "block-edit
 is true (block-editor.ttl). c:label is its accessible name."""@en .
 
 c:BlockEditorRendering a sem:Rendering ; sem:targets c:BlockEditor ; sem:stratum 0 ;
-    sem:watches rdf:type , c:of , c:label , l10n:label , c:editable .
+    sem:watches rdf:type , c:of , c:label , l10n:label , c:editable , c:anchorBlock , c:anchorOffset , c:focusBlock , c:focusOffset .
 c:BlockEditorRendering-fn a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:function "blk:editor" .
 c:BlockEditorRendering-sparql-screen a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?body .
-  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?doc ; rdfhtml:attribute ?role , ?name .
-  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "document" .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?doc ; rdfhtml:attribute ?role , ?name , ?multiline , ?region ;
+        rdfhtml:contenteditable ?editableText ; rdfhtml:spellcheck ?spellcheck .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue ?roleName .
   ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?multiline a rdfhtml:Attribute ; rdfhtml:attributeName "aria-multiline" ; rdfhtml:attributeValue "true" .
+  ?region a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-text-root" ; rdfhtml:attributeValue ?selection .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:BlockEditor .
+  BIND(EXISTS { $this c:editable true } AS ?editable)
+  BIND(IF(?editable, "textbox", "document") AS ?roleName)
+  BIND(IF(?editable, "true", ?none) AS ?editableText)
+  BIND(IF(?editable, "true", ?none) AS ?spellcheck)
+  BIND(IF(?editable, IRI(CONCAT(STR($this), "/~body-aria-multiline")), ?none) AS ?multiline)
+  BIND(IF(?editable, IRI(CONCAT(STR($this), "/~body-data-sem-text-root")), ?none) AS ?region)
+  OPTIONAL { $this c:anchorBlock ?ab ; c:anchorOffset ?ao ; c:focusBlock ?fb ; c:focusOffset ?fo }
+  BIND(IF(?editable, COALESCE(CONCAT(STR(?ab), " ", STR(?ao), " ", STR(?fb), " ", STR(?fo)), ""), ?none) AS ?selection)
   OPTIONAL { $this c:of ?doc FILTER(isIRI(?doc)) }
   OPTIONAL { $this l10n:label ?picked }
   OPTIONAL { $this c:label ?own FILTER(NOT EXISTS { $this l10n:label ?anyPicked }) }
@@ -967,6 +999,20 @@ WHERE {
   OPTIONAL { $this c:of ?doc FILTER(isIRI(?doc)) }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
 }""" .
+
+
+# --- clicks on a block's own controls -----------------------------------------------------------------
+
+blk:CheckTodo a beh:Reaction ;
+    rdfs:label "Check off"@en ;
+    beh:when beh:Click ; beh:sourceClass blk:TodoItem ; beh:undoable true ;
+    beh:deletes """CONSTRUCT { $this blk:checked ?was } WHERE { $event beh:node ?hit FILTER(?hit = IRI(CONCAT(STR($this), "/~check"))) $this blk:checked ?was }""" ;
+    beh:inserts """CONSTRUCT { $this blk:checked ?now } WHERE { $event beh:node ?hit FILTER(?hit = IRI(CONCAT(STR($this), "/~check"))) OPTIONAL { $this blk:checked ?was } BIND(!COALESCE(?was, false) AS ?now) }""" .
+blk:ToggleOpen a beh:Reaction ;
+    rdfs:label "Open or close"@en ;
+    beh:when beh:Click ; beh:sourceClass blk:Toggle ; beh:undoable true ;
+    beh:deletes """CONSTRUCT { $this c:expanded ?was } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this . $this c:expanded ?was }""" ;
+    beh:inserts """CONSTRUCT { $this c:expanded ?now } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this . OPTIONAL { $this c:expanded ?was } BIND(!COALESCE(?was, false) AS ?now) }""" .
 
 # --- shapes --------------------------------------------------------------------------------------------
 
@@ -987,7 +1033,7 @@ blk:MentionShape a sh:NodeShape ; sh:targetClass blk:Mention ;
 blk:ContainerShape a sh:NodeShape ; sh:targetClass blk:Container ;
     sh:property [ sh:path po:contains ; sh:class blk:Block ; sh:message "A container holds blocks." ] .
 blk:BlockShape a sh:NodeShape ; sh:targetClass blk:Block ;
-    sh:property [ sh:path ord:immediatelyPrecedes ; sh:maxCount 1 ; sh:class blk:Block ; sh:message "A block has one next block." ] .
+    sh:property [ sh:path co:nextItem ; sh:maxCount 1 ; sh:class blk:Block ; sh:message "A block has one next block." ] .
 blk:ListShape a sh:NodeShape ; sh:targetClass blk:List ;
     sh:property [ sh:path po:contains ; sh:class blk:Item ; sh:message "A list holds items." ] .
 blk:TodoItemShape a sh:NodeShape ; sh:targetClass blk:TodoItem ;
