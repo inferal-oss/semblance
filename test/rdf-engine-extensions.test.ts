@@ -449,6 +449,16 @@ describe.skipIf(!built.length).each(built)('%s engine: SPARQL extensions', (kind
       expect(rows(s, `SELECT (COUNT(*) AS ?n) { (${JSON.stringify(deep(513))}) sx:json (?p ?parent ?key ?k ?v) }`, ['n'])).toEqual(['0^^integer'])
     })
 
+    it('sx:blankLabel: a blank node\'s label, as the host names its term', () => {
+      s.loadTurtle(`<http://x/bl> <http://x/p> [ <http://x/q> 1 ] , [ <http://x/q> 2 ] .`)
+      const host = s.match(s.factory.namedNode('http://x/bl'), s.factory.namedNode('http://x/p'), null).map((q) => q.object.value).sort()
+      expect(host).toHaveLength(2)
+      const got = s.select(`${PREFIXES}SELECT ?l { <http://x/bl> <http://x/p> ?b BIND(sx:blankLabel(?b) AS ?l) }`, [s.factory.defaultGraph()]).map((r) => r.get('l'))
+      expect(got.map(show).sort()).toEqual(host.map((l) => `${l}^^string`))
+      expect(value(s, 'sx:blankLabel(<http://x/bl>)')).toBeUndefined()
+      expect(value(s, 'sx:blankLabel("b1")')).toBeUndefined()
+    })
+
     it('extensions in CONSTRUCT rules bound per focus', () => {
       s.loadTurtle(`<http://x/doc> <http://x/json> "[10, 20]" .`)
       const q = `${PREFIXES}CONSTRUCT { ?item <http://x/value> ?v ; <http://x/log> ?l } WHERE {

@@ -32,7 +32,7 @@ has all of them.
 | group | IRI | contents |
 |---|---|---|
 | Math | `sx:Math` | `sx:log` … `sx:pi` |
-| Text | `sx:Text` | `sx:codepoint` … `sx:jsonString` |
+| Text | `sx:Text` | `sx:codepoint` … `sx:blankLabel` |
 | Locale | `sx:Locale` | `sx:formatNumber`, `sx:formatDateTime`, `sx:collated`, `sx:sortKey` |
 | Matches | `sx:Matches` | `sx:matches`, `sx:chars` |
 | JSON | `sx:Json` | `sx:json` |
@@ -97,6 +97,7 @@ literals of `xsd:integer` or a type derived from it.
 | `sx:decodeURI(s)` | `xsd:string`: `%XX` sequences (either case) decoded as UTF-8, everything else kept (`+` too); error if a `%` is not followed by two hex digits or the bytes are not UTF-8 |
 | `sx:fnv1a(s)` | `xsd:string`: FNV-1a 32-bit hash (offset basis `811c9dc5`, prime `01000193`) of the UTF-8 bytes, 8 lowercase hex digits |
 | `sx:jsonString(s)` | `xsd:string`: `s` as `JSON.stringify` writes it: in double quotes, with `"` and `\` escaped, `\b` `\t` `\n` `\f` `\r`, and the other control characters (below U+0020) as `\u00xx` (lowercase hex); everything else as it is (`"a\tb"` → `"\"a\\tb\""`) |
+| `sx:blankLabel(b)` | `xsd:string`: the label of the blank node `b` as the store names it (the value of the host's term for it, `store.match`), so a rule can mint an IRI per blank node it reads; the labels are the store's own (each engine names nodes its own way), for identity, not for showing; error if `b` is not a blank node |
 
 String results are simple literals (no language tag) whatever the input.
 
