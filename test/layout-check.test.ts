@@ -68,6 +68,10 @@ const EXPECTED: [RegExp, string[]][] = [
   // every theme, an inline choice's pill is its control where wide; nav items fit, in German and Arabic
   [/^today_examples-shape-form_/, []],
   [/^today_components-navigation_(1280|375)_/, []],
+  // #299: in a short window, scrolled, the sticky section menu runs over the settings after it in the
+  // side column; the column sticks as one since, in every theme and right to left
+  [/^299-before_/, ['stackChildrenApart']],
+  [/^299-after_/, []],
 ]
 
 describe('layout checker over recorded pages', () => {
@@ -90,7 +94,7 @@ describe('layout checker over recorded pages', () => {
     store.loadTurtle(toTurtle(p, decl))
     const key = (inv: string, scope: number, member: number, by: number) => `${local(inv)} ${scope} ${member} ${by.toFixed(2)}`
     // a group's finding names the group; a Fits finding also the box that sticks out
-    const fits = (r: unknown) => r === Rel.FitsInline || r === Rel.FitsWithin
+    const fits = (r: unknown) => r === Rel.FitsInline || r === Rel.FitsWithin || r === Rel.NoOverlap
     const fn = checkMeasured(p, decl).map((x) => key(x.instance.declaration.iri, x.instance.scope, fits(x.instance.declaration.relation) ? x.member : -1, x.by))
     const sparql = checkSparql(store).map((x) => key(x.invariant, x.scope, x.member, x.by))
     store.dispose?.()

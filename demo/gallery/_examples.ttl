@@ -37,7 +37,9 @@ ui:ExRdf a ui:Example ; rdfs:label "Editing a dataset" ; sem:order 20 ; ui:key "
 ui:ExReader a ui:Example ; rdfs:label "Reader" ; sem:order 21 ; ui:key "reader" .
 
 ui:examples a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
-    c:children ( ui:examplesNav ui:examplePages ) .
+    c:children ( ui:examplesSide ui:examplePages ) .
+# The side column stays in view while the page scrolls (the column, not the list in it).
+ui:examplesSide a c:Stack ; pos:direction pos:Column ; pos:sticky pos:StickToTop ; c:children ( ui:examplesNav ) .
 ui:examplesNav a c:NavList ; c:controls ui:app ; c:property ui:example ; c:label "Examples" ; c:compactAs c:Picker .
 ui:examplePages a c:Switch ; c:controls ui:app ; c:property ui:example ;
     c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-warehouse ui:exc-shapes ui:exc-sheet ui:exc-calendar ui:exc-dashboard ui:exc-collab ui:exc-files ui:exc-photos ui:exc-foreign ui:exc-rdf ui:exc-reader ) .

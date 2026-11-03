@@ -142,6 +142,11 @@ lc:Field a owl:Class ;
     rdfs:comment "The kinds of field that line up with each other: a label (or an inline caption) and one control."@en ;
     lc:includes c:TextField , c:Choice , c:DateField , c:TimeField , c:Typeahead , c:Field , c:ShapeField .
 
+lc:Docked a owl:Class ;
+    rdfs:label "Docked"@en , "Пристиковане"@uk , "Angedockt"@de , "مثبّت على الحافة"@ar ;
+    rdfs:comment "The kinds of chrome that stick to an edge by design, with what they are docked over scrolling under them: lc:NoOverlap does not compare them."@en ;
+    lc:includes c:AppBar , c:StatusBar , c:DockPanel .
+
 lc:FieldRow a owl:Class ;
     rdfs:label "Row of fields"@en , "Ряд полів"@uk , "Feldzeile"@de , "صف حقول"@ar ;
     rdfs:comment "A row (pos:direction pos:Row, or the pos:FieldRow layout) with two fields or more side by side (#57: the checkout's code and phone)."@en ;
@@ -203,6 +208,9 @@ lc:FitsInline a lc:Relation ;
     rdfs:label "Fits across"@en , "Вміщується вшир"@uk , "Passt in die Breite"@de , "يتسع عرضًا"@ar .
 lc:FitsWithin a lc:Relation ;
     rdfs:label "Fits inside"@en , "Вміщується всередині"@uk , "Passt hinein"@de , "يتسع داخله"@ar .
+lc:NoOverlap a lc:Relation ;
+    rdfs:label "Nothing overlaps"@en , "Ніщо не перекривається"@uk , "Nichts überlappt"@de , "لا شيء يتداخل"@ar ;
+    rdfs:comment "No member's box overlaps another member's (on the same line of a row). Each member that does is a finding, by the most it overlaps one: the overlap's smaller extent."@en .
 lc:NoPageOverflow a lc:Relation ;
     rdfs:label "Page fits its width"@en , "Сторінка вміщується в ширину"@uk , "Seite passt in die Breite"@de , "الصفحة تتسع لعرضها"@ar .
 
@@ -256,6 +264,26 @@ SELECT ?inv ?scope ?member ?by WHERE {
   BIND(IF(?a > ?b, ?a, ?b) AS ?by)
   FILTER(?by > ?tol)
  } UNION {
+  # each member against the others of its group (on its line): the most it overlaps one of them
+  {
+    SELECT ?inv ?scope ?member (MAX(?o) AS ?by) (SAMPLE(?tol) AS ?t2) WHERE {
+      ?inv a lc:Invariant ; lc:relation lc:NoOverlap ; lc:over ?cls ; lc:tolerance ?tol .
+      %groupMembers%
+      BIND(?m AS ?member)
+      ?m2 rnd:parent ?sb . FILTER(?m2 != ?m) FILTER NOT EXISTS { ?m2 lc:role ?r6 }
+      # chrome docked to an edge overlaps what scrolls under it by design
+      FILTER NOT EXISTS { ?m rnd:of ?mc . ?mc a ?mk . lc:Docked lc:includes ?mk }
+      FILTER NOT EXISTS { ?m2 rnd:of ?oc . ?oc a ?ok . lc:Docked lc:includes ?ok }
+      OPTIONAL { ?m rnd:line ?l1 } OPTIONAL { ?m2 rnd:line ?l2 } FILTER(COALESCE(?l1, 0) = COALESCE(?l2, 0))
+      ?m rnd:x ?mx ; rnd:y ?my ; rnd:width ?mw ; rnd:height ?mh .
+      ?m2 rnd:x ?ox ; rnd:y ?oy ; rnd:width ?ow ; rnd:height ?oh .
+      BIND(IF(?mx + ?mw < ?ox + ?ow, ?mx + ?mw, ?ox + ?ow) - IF(?mx > ?ox, ?mx, ?ox) AS ?across)
+      BIND(IF(?my + ?mh < ?oy + ?oh, ?my + ?mh, ?oy + ?oh) - IF(?my > ?oy, ?my, ?oy) AS ?down)
+      BIND(IF(?across < ?down, ?across, ?down) AS ?o)
+    } GROUP BY ?inv ?scope ?member
+  }
+  FILTER(?by > ?t2)
+ } UNION {
   ?inv a lc:Invariant ; lc:relation lc:ContentFits ; lc:over ?cls ; lc:members lc:Parts ; lc:part ?role ; lc:tolerance ?tol .
   ?scope a/rdfs:subClassOf* ?cls . ?sb rnd:of ?scope . FILTER NOT EXISTS { ?sb lc:role ?r5 }
   ?member lc:role ?role ; rnd:parent+ ?sb ; rnd:scrollWidth ?msw ; rnd:clientWidth ?mcw .
@@ -292,6 +320,10 @@ lc:contentStaysInCards a lc:Invariant ;
     rdfs:label "Content stays inside its card"@en , "Вміст не виходить за картку"@uk , "Inhalt bleibt in seiner Karte"@de , "المحتوى يبقى داخل بطاقته"@ar ;
     rdfs:comment "Nothing inside a card or a specimen sticks out of it, unless it is inside a scroller (the 320 px specimens, the Photo post's segmented control)."@en ;
     lc:relation lc:FitsInline ; lc:over c:Card , c:Specimen ; lc:members lc:Descendants ; lc:tolerance 1.0 .
+lc:stackChildrenApart a lc:Invariant ;
+    rdfs:label "A stack's children do not overlap"@en , "Діти стека не перекриваються"@uk , "Die Kinder eines Stapels überlappen nicht"@de , "عناصر المكدّس لا تتداخل"@ar ;
+    rdfs:comment "Nothing in a stack runs over its neighbour: a component that sticks on its own does, as the siblings after it scroll under it (#299)."@en ;
+    lc:relation lc:NoOverlap ; lc:over c:Stack ; lc:members lc:EachChild ; lc:tolerance 1.0 .
 lc:pageFits a lc:Invariant ;
     rdfs:label "The page fits its width"@en , "Сторінка вміщується в ширину"@uk , "Die Seite passt in ihre Breite"@de , "الصفحة تتسع لعرضها"@ar ;
     rdfs:comment "No sideways scrolling of the whole page, at any width (a5fc6b7, 71686f3)."@en ;

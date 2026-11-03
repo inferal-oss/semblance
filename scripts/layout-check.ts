@@ -2,7 +2,7 @@
 // fixtures test/layout-check.test.ts checks), or check them on the spot.
 //
 //   npx tsx scripts/layout-check.ts [--root <checkout>] --pages 'examples/checkout@Continue to shipping,examples/shapes' \
-//     [--widths 320,1280] [--themes semblance,doodle] [--langs en,uk,de,ar] [--dir rtl] [--out <dir>] [--check]
+//     [--widths 320,1280] [--height 900] [--scroll 0] [--themes semblance,doodle] [--langs en,uk,de,ar] [--dir rtl] [--out <dir>] [--check]
 //
 // A language is chosen the way the site remembers it: its policy (ui:rememberSettings) in the tab's
 // sessionStorage before the page loads.
@@ -17,7 +17,9 @@
 // out, before transforms (src/layout/box.ts), either way. Parts are the elements
 // the checkout's components mark (data-sem-part, from lc:role), so a checkout from before they did
 // (#193) records component boxes only.
-// A page may name buttons to click first, by their text, after an @ each.
+// A page may name buttons to click first, by their text, after an @ each. With --scroll the page is
+// scrolled down that far before it is measured (what sticks is measured where it stuck), in a
+// viewport --height tall.
 // One browser, one page at a time, at a low priority: the machine is shared.
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -37,6 +39,8 @@ const { values: args } = parseArgs({
     root: { type: 'string', default: here },
     pages: { type: 'string', default: 'examples/checkout' },
     widths: { type: 'string', default: '1280' },
+    height: { type: 'string', default: '900' },
+    scroll: { type: 'string', default: '0' },
     themes: { type: 'string', default: '' },
     dir: { type: 'string', default: '' },
     langs: { type: 'string', default: '' },
@@ -130,7 +134,7 @@ async function fromPage(cdp: Cdp, d: Declarations): Promise<MeasuredPage> {
 
 const LANGUAGES: Record<string, string> = { en: 'English', uk: 'Ukrainian', de: 'German', ar: 'Arabic' }
 
-export async function measure(base: string, pages: string[], widths: number[], themes: string[], dir: string, langs: string[] = []): Promise<MeasuredPage[]> {
+export async function measure(base: string, pages: string[], widths: number[], themes: string[], dir: string, langs: string[] = [], height = 900, scroll = 0): Promise<MeasuredPage[]> {
   const parts = partHooks()
   if (source === 'rnd') declarations ??= readDeclarations((ontology ??= loadStore('oxigraph')))
   const { cdp, stop } = await launch()
@@ -143,7 +147,7 @@ export async function measure(base: string, pages: string[], widths: number[], t
       await cdp.evaluate(`sessionStorage.setItem('semblance:https://semblance.dev/demo#rememberSettings', ${JSON.stringify(JSON.stringify({ version: '1', savedAt: Date.now(), nt }))})`)
     }
     for (const width of widths) {
-      await cdp.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false })
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
       for (const page of pages) {
         const [path, ...clicks] = page.split('@')
         await cdp.send('Page.navigate', { url: `${base}?store=hybrid#${path}` })
@@ -162,6 +166,7 @@ export async function measure(base: string, pages: string[], widths: number[], t
               for (const el of document.querySelectorAll('[data-sem-theme]')) if (${JSON.stringify(theme)} && el.getAttribute('data-sem-theme') === was) el.setAttribute('data-sem-theme', ${JSON.stringify(theme)})
               if (${JSON.stringify(dir)}) document.documentElement.dir = ${JSON.stringify(dir)}
             })()`)
+          if (scroll) await cdp.evaluate(`scrollTo(0, ${scroll})`)
           await cdp.evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`)
           await sleep(150)
           // tsx (esbuild) wraps named functions in __name(); give the page one
@@ -195,11 +200,13 @@ async function main() {
       args.themes ? args.themes.split(',') : [],
       args.dir!,
       args.langs ? args.langs.split(',') : [],
+      Number(args.height),
+      Number(args.scroll),
     )
     if (args.out) {
       mkdirSync(args.out, { recursive: true })
       for (const p of pages) {
-        const name = [args.label, pagePath(p).replace(/[/@ ]/g, '-'), p.width, p.theme, p.lang && p.lang !== 'en' ? p.lang : '', p.dir === 'rtl' ? 'rtl' : ''].filter(Boolean).join('_')
+        const name = [args.label, pagePath(p).replace(/[/@ ]/g, '-'), p.width, args.height !== '900' ? 'h' + args.height : '', args.scroll !== '0' ? 'scrolled' + args.scroll : '', p.theme, p.lang && p.lang !== 'en' ? p.lang : '', p.dir === 'rtl' ? 'rtl' : ''].filter(Boolean).join('_')
         writeFileSync(join(args.out, name + '.json'), JSON.stringify(p) + '\n')
       }
     }
