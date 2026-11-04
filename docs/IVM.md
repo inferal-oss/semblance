@@ -1786,9 +1786,21 @@ What exists (`src/engine/exact.ts`, `engine.ts`, `src/view/deps.ts`, `runtime.ts
   the change binds the key itself: `sty:HookAttributes` (`$this ?p ?v . ?p sty:hookAttribute ?name`) no
   longer re-runs for every triple about its focus. Walking through the groups beside a pattern (a sibling
   OPTIONAL or UNION branch) was tried and dropped: a solution need not match them, so a walk through one
-  can miss it (the performance page's matrix lost a new configuration's rows). So `dep:Facets` (a LATERAL
-  after a LATERAL of UNIONs) still reaches "every focus" from its last pattern; `sem:requires` makes that
-  cheap.
+  can miss it (the performance page's matrix lost a new configuration's rows). A group the solution
+  cannot do without is different (#309): a required UNION whose every branch binds the variable, or a
+  required subquery, is walked through all of its branches, and leads somewhere only if all of them do.
+- **What a change on an unrelated node reaches** (#309). Of the 262 rules of the todo app, 100 answered
+  "every focus" for some predicate on a subject they do not reach; `test/deps-walk.test.ts` holds the
+  count down. A rule's focus is substituted into its text, so it is a constant in every group: a
+  subquery shares it whether it projects it or not, and a window (LIMIT) with the focus among its own
+  patterns moves for that focus alone. A LATERAL's left side binds what it certainly bound. And a BIND
+  says what its variable can be: a variable, a constant, or an IRI minted from a head and a separator
+  (`IRI(CONCAT(STR(?x), "/~label"))`, walked back by cutting at the separator). A value outside those
+  (and outside a VALUES list) is in no solution. A BIND's constant is read by every row without a source,
+  so a change on it is global. A value read from an OPTIONAL before the BIND says that OPTIONAL matched,
+  so it is walked through. Two things stop a narrower answer, by design: a BIND that can fail leaves its
+  variable unbound to match any node (an unbound variable, an ordering, arithmetic), and a variable read
+  in a nested group without LATERAL, whose new match can stop outer rows being compatible.
 - **The measure.** `engine.test.ts`: the from-scratch test passes with exact dependencies (every step,
   screen and text, against a fresh projection), and "re-renders only what changed" is tightened in its
   exact twin: a todo's `ex:priority` changing re-runs one rule (the list's member placement), not two.

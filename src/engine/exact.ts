@@ -30,8 +30,9 @@ export function ruleDeps(f: Factory, rule: Rule): RuleDeps {
   let out: RuleDeps
   try {
     const prologue = text.slice(0, text.search(/\b(CONSTRUCT|SELECT)\b/i))
-    const q = parseQuery(text, prefixMap(prologue))
-    const deps = new Dependencies(f, q.select.where, rule.forEach ? ['this', 'member'] : ['this'], [], true)
+    const prefixes = prefixMap(prologue)
+    const q = parseQuery(text, prefixes)
+    const deps = new Dependencies(f, q.select.where, rule.forEach ? ['this', 'member'] : ['this'], [], { prefixes })
     out = deps.problem ? { problem: deps.problem } : { deps }
   } catch (e) {
     out = { problem: (e as Error).message }
