@@ -382,7 +382,9 @@ pos:CellGuides a pos:Guides ; sem:slug "cells" ; sem:order 2 ;
 # it below the anchor or, without room there, above it, at the anchor's inline start (its end in
 # right-to-left), within the viewport, and follows scrolling and resizing. A panel may say it would
 # rather be above the anchor (data-sem-anchor-side="above") and centred on it
-# (data-sem-anchor-align="center"), as the tooltip surface does (layers/tooltip.ttl).
+# (data-sem-anchor-align="center"), as the tooltip surface (layers/tooltip.ttl) and a refused drop's
+# reason (layers/dragdrop.ttl) do. Such a panel is next to what is in sight of its anchor, and over
+# it, at the top of what is in sight, when neither side has room.
 #
 # The browser's own popover style (a border, padding, Canvas colours) is reset for these panels at
 # no specificity, before every component rule, so each panel looks as its component and theme say.

@@ -33,7 +33,8 @@
 # where, by what means and where it would go. Every target is offered the drag (dnd:offered) and
 # derives its reception (dnd:Reception: accepted, or refused with the shape's sh:message), which
 # the theme shows: accepting zones are outlined, refusing ones dimmed with a not-allowed cursor
-# and the reason over them. An ordered target (dnd:orderBy) has positions between its members:
+# and the reason next to the zone the drag is over, where no scrolling list cuts it off (an
+# anchored panel, src/web/drop-reasons.ts). An ordered target (dnd:orderBy) has positions between its members:
 # the one hovered is marked on its neighbour, and the drop says where (dnd:after / dnd:before)
 # and which order key it would take (dnd:rank, half way between the neighbours' - no renumbering).
 #
