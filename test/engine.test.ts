@@ -166,6 +166,11 @@ describe('incremental updates', () => {
     expect(ran(t.set('t7', NS.rdfs + 'label', 'x'))).toBe(3)
     // The item's rendering never reads ex:priority (its patterns say so): only the list, which places the item by it.
     expect(ran(t.set('t7', 'priority', 1000))).toBe(1)
+    // A block's handle is named by its type: a label reaches it through a class of its block. The block templates
+    // hold two paragraphs: their handles and the dnd:Handle reading each one's name, and the viewer's terms.
+    const f = store.factory
+    const label = f.quad(f.namedNode(NS.blk + 'Paragraph'), f.namedNode(NS.rdfs + 'label'), f.literal('Para', 'en'))
+    expect(ran({ add: [label], remove: [] })).toBe(5)
   })
 })
 

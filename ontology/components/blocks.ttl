@@ -370,7 +370,7 @@ blk:BlockHandleRendering a sem:Rendering ; sem:targets blk:BlockHandle ; sem:mod
     sem:watches rdf:type , dnd:carries , rdf:value , c:handleMenuBlock , c:handleMenuReturn .
 blk:BlockHandleRendering-fn a sem:Rule ; sem:implements blk:BlockHandleRendering ; sem:function "blk:handle" .
 blk:BlockHandleRendering-sparql a sem:Rule ; sem:implements blk:BlockHandleRendering ;
-    sem:bulk false ;  # its subquery reads $this
+    sem:bulk false ;
     sem:construct """
 CONSTRUCT {
   $this dnd:name ?name .
@@ -388,11 +388,14 @@ WHERE {
   $this dnd:carries ?block .
   OPTIONAL { ?block rdf:value ?raw }
   BIND(REPLACE(SUBSTR(STR(COALESCE(?raw, "")), 1, 40), "\\\\s+", " ") AS ?start)
-  OPTIONAL { { SELECT (MIN(STR(?c)) AS ?typeIri) WHERE { $this dnd:carries ?b . ?b a ?c . ?c rdfs:subClassOf* blk:Block } } }
-  BIND(IRI(COALESCE(?typeIri, "urn:semblance:none")) AS ?type)
-  OPTIONAL { ?typeAt l10n:of ?type ; l10n:name ?typePicked }
-  OPTIONAL { ?type rdfs:label ?typePlain FILTER(LANG(?typePlain) = "") }
-  OPTIONAL { ?type rdfs:label ?typeEn FILTER(LANGMATCHES(LANG(?typeEn), "en")) }
+  # Its first block class by IRI, by patterns: a label reaches this handle only through a class of its block.
+  OPTIONAL {
+    ?block a ?type . ?type rdfs:subClassOf* blk:Block .
+    FILTER NOT EXISTS { ?block a ?earlier . ?earlier rdfs:subClassOf* blk:Block . FILTER(STR(?earlier) < STR(?type)) }
+    OPTIONAL { ?typeAt l10n:of ?type ; l10n:name ?typePicked }
+    OPTIONAL { ?type rdfs:label ?typePlain FILTER(LANG(?typePlain) = "") }
+    OPTIONAL { ?type rdfs:label ?typeEn FILTER(LANGMATCHES(LANG(?typeEn), "en")) }
+  }
   BIND(COALESCE(STR(?typePicked), STR(?typePlain), STR(?typeEn), "") AS ?typeName)
   BIND(IF(?start != "" && ?start != " ", ?start, ?typeName) AS ?name)
   OPTIONAL { ?phraseAt l10n:of c:BlockHandlePhrase ; l10n:name ?phrasePicked } OPTIONAL { c:BlockHandlePhrase rdfs:label ?phraseEn FILTER(LANGMATCHES(LANG(?phraseEn), "en")) }
@@ -490,18 +493,21 @@ blk:DropZone a sem:Rendering ; sem:targets blk:Container ; sem:modality mod:Scre
     sem:watches rdf:type .
 blk:DropZone-fn a sem:Rule ; sem:implements blk:DropZone ; sem:function "blk:drop-zone" .
 blk:DropZone-sparql a sem:Rule ; sem:implements blk:DropZone ;
-    sem:bulk false ;  # its subquery reads $this
+    sem:bulk false ;  # in bulk, the rows of a newly inserted table lose data-sem-drop-ordered on the SPARQL side
     sem:construct """
 CONSTRUCT { $this dnd:members po:contains ; dnd:orderBy co:nextItem ; dnd:zone ?zone . ?zone dnd:receptacle $this ; c:label ?name . }
 WHERE {
   $this a/rdfs:subClassOf* blk:Container .
   FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:Table }
   # Named by its type, which the drag status says ("Numbered list refuses it").
-  OPTIONAL { { SELECT (MIN(STR(?c)) AS ?typeIri) WHERE { $this a ?c . ?c rdfs:subClassOf* blk:Block } } }
-  BIND(IRI(COALESCE(?typeIri, "urn:semblance:none")) AS ?type)
-  OPTIONAL { ?typeAt l10n:of ?type ; l10n:name ?typePicked }
-  OPTIONAL { ?type rdfs:label ?typePlain FILTER(LANG(?typePlain) = "") }
-  OPTIONAL { ?type rdfs:label ?typeEn FILTER(LANGMATCHES(LANG(?typeEn), "en")) }
+  # (By patterns: a label reaches this zone only through a class of its block.)
+  OPTIONAL {
+    $this a ?type . ?type rdfs:subClassOf* blk:Block .
+    FILTER NOT EXISTS { $this a ?earlier . ?earlier rdfs:subClassOf* blk:Block . FILTER(STR(?earlier) < STR(?type)) }
+    OPTIONAL { ?typeAt l10n:of ?type ; l10n:name ?typePicked }
+    OPTIONAL { ?type rdfs:label ?typePlain FILTER(LANG(?typePlain) = "") }
+    OPTIONAL { ?type rdfs:label ?typeEn FILTER(LANGMATCHES(LANG(?typeEn), "en")) }
+  }
   BIND(COALESCE(STR(?typePicked), STR(?typePlain), STR(?typeEn)) AS ?name)
   # A text block's: its children region, shown once it holds blocks (never its whole root, its text).
   BIND(IRI(CONCAT(STR($this), IF(EXISTS { $this a/rdfs:subClassOf* blk:TextBlock }, "/~children", "/~root"))) AS ?zone)
