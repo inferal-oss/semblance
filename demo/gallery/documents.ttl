@@ -53,7 +53,7 @@ ui:dt-p1-b a blk:Strong ; oa:start 75 ; oa:end 79 .
 ui:dt-p1-i a blk:Emphasis ; oa:start 81 ; oa:end 87 .
 ui:dt-p1-c a blk:InlineCode ; oa:start 89 ; oa:end 93 .
 ui:dt-p1-s a blk:Strike ; oa:start 95 ; oa:end 105 .
-ui:dt-p1-l a blk:Link ; oa:start 109 ; oa:end 113 ; schema:url "https://semblance.dev/docs" .
+ui:dt-p1-l a blk:Link ; oa:start 109 ; oa:end 113 ; schema:url "https://github.com/inferal-oss/semblance/blob/main/docs/BLOCKS.md" .
 ui:dt-p1-m a blk:Mention ; oa:start 131 ; oa:end 140 ; oa:hasBody <https://github.com/inferal-oss/semblance> .
 ui:dt-h2 a blk:Heading2 ; rdf:value "In DoCo" ; co:nextItem ui:dt-p2 .
 ui:dt-p2 a blk:Paragraph ; co:nextItem ui:dt-quote ;
