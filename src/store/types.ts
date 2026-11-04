@@ -75,3 +75,13 @@ export class QueryInterrupted extends Error {
     this.name = 'QueryInterrupted'
   }
 }
+
+/**
+ * What a store's error says, for a message about the rule or reaction that ran the query. A trap
+ * (WebAssembly's "unreachable": the engine itself crashed, its instance is not to be trusted after)
+ * also says which store and query it was: it names neither itself.
+ */
+export function storeFailure(store: GraphStore, e: unknown, query: string): string {
+  const message = (e as Error).message
+  return e instanceof WebAssembly.RuntimeError ? `the ${store.kind} store trapped (${message}) running:\n${query}` : message
+}

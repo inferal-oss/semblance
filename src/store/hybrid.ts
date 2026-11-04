@@ -1,27 +1,18 @@
-import type { Quad, Term } from '@rdfjs/types'
+import type { Quad } from '@rdfjs/types'
 import type * as Ox from 'oxigraph'
 import { n3Store } from './n3.ts'
+import { plainResult } from './oxigraph.ts'
 import type { GraphStore } from './types.ts'
 
 /**
  * Oxigraph for SPARQL, an N3.js mirror for pattern matching. Every write goes
  * to both; `match` (the hot path for function rules) never crosses into WASM.
- * CONSTRUCT results are copied into mirror terms.
+ * Query results are copied into the mirror's terms (plainResult).
  */
 export function hybridStore(ox: typeof Ox): GraphStore {
   let sparql = new ox.Store()
   const mirror = n3Store()
   const m = mirror.factory
-  const copy = (t: Ox.Term) =>
-    t.termType === 'NamedNode'
-      ? m.namedNode(t.value)
-      : t.termType === 'Literal'
-        ? m.literal(t.value, t.language || m.namedNode(t.datatype.value))
-        : t.termType === 'DefaultGraph'
-          ? m.defaultGraph()
-          : (t as never)
-  const mirrorQuad = (q: Ox.Quad) =>
-    m.quad(copy(q.subject as Ox.Term), copy(q.predicate as Ox.Term), copy(q.object as Ox.Term), copy(q.graph as Ox.Term))
 
   // Oxigraph keeps deleted quads as dead versions that later lookups walk (see
   // oxigraph.ts). Here the live quads are known in JS (the mirror), so the
@@ -52,8 +43,8 @@ export function hybridStore(ox: typeof Ox): GraphStore {
     },
     has: (q) => mirror.has(q),
     match: (s, p, o, g) => mirror.match(s, p, o, g),
-    select: (query, graphs) => sparql.query(query, { default_graph: graphs as Ox.NamedNode[] }) as unknown as Map<string, Term>[],
-    construct: (query, graphs) => (sparql.query(query, { default_graph: graphs as Ox.NamedNode[] }) as unknown as Ox.Quad[]).map(mirrorQuad),
+    select: (query, graphs) => plainResult(sparql.query(query, { default_graph: graphs as Ox.NamedNode[] })),
+    construct: (query, graphs) => plainResult(sparql.query(query, { default_graph: graphs as Ox.NamedNode[] })),
     loadTurtle(text) {
       sparql.load(text, { format: 'text/turtle' })
       mirror.loadTurtle(text)

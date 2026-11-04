@@ -1,7 +1,7 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { H, L10N, NS, PROV, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { type Delta, mint, mintedUnder, owningFocus, quadKey, termKey } from '../rdf.ts'
-import { QueryInterrupted, type GraphStore } from '../store/types.ts'
+import { QueryInterrupted, storeFailure, type GraphStore } from '../store/types.ts'
 import { createContext, type FnRule, formatLocale, LANGUAGE, languageChain, type RuleContext } from './context.ts'
 import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
@@ -82,9 +82,9 @@ const warn = (msg: string) => console.warn(`[semblance] ${msg}`)
 const interruption = (e: unknown): boolean => e instanceof QueryInterrupted || (e as { interrupted?: boolean } | undefined)?.interrupted === true
 
 /** A store's error, about a rule; an interruption (the store's deadline) stays one. */
-function ruleError(rule: Rule, e: unknown): Error {
+function ruleError(rule: Rule, e: unknown, store: GraphStore, query: string): Error {
   if (interruption(e)) return e instanceof QueryInterrupted ? e : new QueryInterrupted(`SPARQL rule <${rule.iri}> was interrupted: ${(e as Error).message}`)
-  return new Error(`SPARQL rule <${rule.iri}> failed: ${(e as Error).message}`)
+  return new Error(`SPARQL rule <${rule.iri}> failed: ${storeFailure(store, e, query)}`, { cause: e })
 }
 
 /** Foci of a rule batch a suspended run did not evaluate; `interrupted` when a query was cut off by the store's deadline. */
@@ -1567,7 +1567,7 @@ export class Engine {
     try {
       return this.store.constructFor!(rule.queryParts!.join('?this'), 'this', foci.map((x) => f.namedNode(x)), this.graphs)
     } catch (e) {
-      throw ruleError(rule, e)
+      throw ruleError(rule, e, this.store, rule.queryParts!.join('?this'))
     }
   }
 
@@ -1575,7 +1575,7 @@ export class Engine {
     try {
       return this.store.construct(query, this.graphs)
     } catch (e) {
-      throw ruleError(rule, e)
+      throw ruleError(rule, e, this.store, query)
     }
   }
 

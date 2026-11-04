@@ -5,6 +5,7 @@ import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
 import { comboOf, mirrored, modifiersOf, navigate, normalizeShortcut, rightToLeft, rove, trapTab } from '../layers/keyboard.ts'
+import { storeFailure } from '../store/types.ts'
 import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
@@ -511,7 +512,7 @@ export class EventBus {
       try {
         return this.runtime.store.construct(text, this.graphs)
       } catch (e) {
-        throw new Error(`Reaction <${r.iri}> failed: ${(e as Error).message}`)
+        throw new Error(`Reaction <${r.iri}> failed: ${storeFailure(this.runtime.store, e, text)}`, { cause: e })
       }
     }
     return { remove: run(r.deletes), add: run(r.inserts) }
