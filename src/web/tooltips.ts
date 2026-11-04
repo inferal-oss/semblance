@@ -7,8 +7,9 @@
 // nothing hovers, a long press shows it and so does a tap on what a tap does nothing else to.
 //
 // Which tooltip is showing is the browser's state, as :hover is: nothing here writes the graph.
-// The surface lives in the host, so it copies from its source what the source inherits (the theme's
-// tokens, the colour scheme, the direction, the language), and it follows the source's text.
+// The surface (anchored-surface.ts) follows the source's text.
+
+import { openSurface, type AnchoredSurface } from './anchored-surface.ts'
 
 /** Rendered with data-sem-tooltip; the effect marks its host so the theme's ::after stands down. */
 const SOURCE = '[data-sem-tooltip]'
@@ -21,8 +22,6 @@ const PRESS_SLOP_PX = 8
 /** What the surface's style reads from where its source is (a theme may be set on any subtree). */
 const INHERITED = ['--sem-tooltip-bg', '--sem-tooltip-fg', '--sem-font', '--sem-shadow-raised', 'color-scheme']
 
-let surfaces = 0
-
 /** `lift` puts a panel in the top layer next to an element, until the panel leaves the DOM. */
 export function attachTooltips(host: Element, owns: (element: Element) => boolean, lift: (panel: HTMLElement, anchor: HTMLElement) => void) {
   const document = host.ownerDocument
@@ -31,7 +30,7 @@ export function attachTooltips(host: Element, owns: (element: Element) => boolea
   const asking = { hovered: null as HTMLElement | null, focused: null as HTMLElement | null, touched: null as HTMLElement | null }
   /** Dismissed, and not showing again until nothing asks for it any more. */
   const dismissed = new Set<HTMLElement>()
-  let shown: { source: HTMLElement; surface: HTMLElement; id: string } | null = null
+  let shown: { source: HTMLElement; surface: AnchoredSurface } | null = null
   let press: { source: HTMLElement; x: number; y: number; wasTouched: boolean; timer: ReturnType<typeof setTimeout> } | null = null
   /** A focus that follows a touch is not the keyboard's, even where :focus-visible says so (a text field). */
   let touching = false
@@ -45,32 +44,14 @@ export function attachTooltips(host: Element, owns: (element: Element) => boolea
   const hide = () => {
     if (!shown) return
     observer.disconnect()
-    const tokens = (shown.source.getAttribute('aria-describedby') ?? '').split(/\s+/).filter((t) => t && t !== shown!.id)
-    if (tokens.length) shown.source.setAttribute('aria-describedby', tokens.join(' '))
-    else shown.source.removeAttribute('aria-describedby')
-    shown.surface.remove()
+    shown.surface.close()
     shown = null
   }
   const show = (source: HTMLElement) => {
     hide()
-    const surface = document.createElement('div')
-    const id = `sem-tooltip-${++surfaces}`
-    const style = window.getComputedStyle(source)
-    surface.id = id
-    surface.className = 'sem-tooltip'
-    surface.setAttribute('role', 'tooltip')
-    surface.setAttribute('data-sem-anchor', '')
-    surface.setAttribute('data-sem-anchor-side', 'above')
-    surface.setAttribute('data-sem-anchor-align', 'center')
-    surface.setAttribute('dir', style.direction)
-    const lang = source.closest('[lang]')?.getAttribute('lang')
-    if (lang) surface.setAttribute('lang', lang)
-    for (const property of INHERITED) surface.style.setProperty(property, style.getPropertyValue(property))
-    surface.textContent = source.getAttribute('data-sem-tooltip')
-    host.append(surface)
-    source.setAttribute('aria-describedby', [source.getAttribute('aria-describedby'), id].filter(Boolean).join(' '))
-    shown = { source, surface, id }
-    lift(surface, source)
+    const surface = openSurface(host, source, 'sem-tooltip', INHERITED, source.getAttribute('data-sem-tooltip'))
+    shown = { source, surface }
+    lift(surface.element, source)
     observer.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-sem-tooltip', 'hidden', 'inert'] })
   }
   /** Show what was asked for last; when that stops asking, what still asks. */
@@ -96,11 +77,11 @@ export function attachTooltips(host: Element, owns: (element: Element) => boolea
   const observer = new window.MutationObserver(() => {
     if (!shown) return
     for (const kind of Object.keys(asking) as (keyof typeof asking)[]) if (asking[kind] && !present(asking[kind]!)) asking[kind] = null
-    if (!shown.surface.isConnected || !present(shown.source)) hide()
+    if (!shown.surface.element.isConnected || !present(shown.source)) hide()
     settle()
     if (!shown) return
     const text = shown.source.getAttribute('data-sem-tooltip')
-    if (shown.surface.textContent !== text) shown.surface.textContent = text
+    if (shown.surface.element.textContent !== text) shown.surface.element.textContent = text
   })
 
   const over = (e: Event) => {

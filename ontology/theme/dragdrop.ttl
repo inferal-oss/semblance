@@ -72,16 +72,28 @@
 [] a sty:StyleRule ; sty:part "[data-sem-drop-zone][data-sem-drop=refuses][data-sem-drop-over]" ;
     sty:declares [ sty:property "opacity" ; sty:raw "0.9" ] ,
                  [ sty:property "outline" ; sty:raw "2px solid var(--sem-danger-9)" ] .
-[] a sty:StyleRule ; sty:part "[data-sem-drop-zone][data-sem-drop=refuses][data-sem-drop-over]::after" ;
+# The reason. Inside a browser host the drop reason effect (src/web/drop-reasons.ts, attached with
+# the anchored panels) shows it on a surface of its own, an anchored panel in the top layer, so no
+# scrolling list cuts it off: placed by the effect, fixed already where popovers are missing.
+[] a sty:StyleRule ; sty:part ".sem-drop-reason" ;
+    sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
+                 [ sty:property "z-index" ; sty:raw "1000" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "width" ; sty:raw "max-content" ] ,
+                 [ sty:property "max-width" ; sty:raw "320px" ] .
+# In the flow, for a host without the effect (which marks its host data-sem-drop-reasons).
+[] a sty:StyleRule ; sty:part ":not([data-sem-drop-reasons] *)[data-sem-drop-zone][data-sem-drop=refuses][data-sem-drop-over]::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-drop-reason)" ] ,
                  [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "inset-inline" ; sty:raw "8px" ] ,
                  [ sty:property "top" ; sty:raw "0" ] ,
                  [ sty:property "translate" ; sty:raw "0 -50%" ] ,
-                 [ sty:property "z-index" ; sty:raw "20" ] ,
-                 [ sty:property "padding" ; sty:raw "8px 10px" ] ,
+                 [ sty:property "z-index" ; sty:raw "20" ] .
+# The look, wherever the reason is. Small white text: the danger colour darkened, for its contrast in every theme.
+[] a sty:StyleRule ; sty:part ".sem-drop-reason, :not([data-sem-drop-reasons] *)[data-sem-drop-zone][data-sem-drop=refuses][data-sem-drop-over]::after" ;
+    sty:declares [ sty:property "padding" ; sty:raw "8px 10px" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
-                 [ sty:property "background" ; sty:token tok:danger-9 ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-danger-9) 70%, black)" ] ,
                  [ sty:property "color" ; sty:raw "white" ] ,
                  [ sty:property "font" ; sty:raw "600 var(--sem-text-xs)/1.35 var(--sem-font)" ] ,
                  [ sty:property "text-align" ; sty:raw "center" ] ,
