@@ -828,7 +828,8 @@ export class ViewRuntime {
       merge(applied, d)
     }
     if (!applied.add.length && !applied.remove.length) return applied
-    this.check(now)
+    // What the rules have just derived reaches a view over it in its round (Runtime.rounds), which checks it.
+    this.check(now, (v) => !v.readsDerived)
     this.reschedule()
     this.settled()
     return applied
@@ -1319,10 +1320,10 @@ export class ViewRuntime {
   }
 
   /** Strict mode: every view equals its from-scratch evaluation. */
-  private check(now: number) {
+  private check(now: number, due: (v: MaintainedView) => boolean = () => true) {
     if (!this.strict || !this.store.sparql) return
     for (const v of this.views.values()) {
-      if (v.suspended || v.onRequest) continue
+      if (v.suspended || v.onRequest || !due(v)) continue
       const problem = v.compare(now)
       if (problem) throw new Error(`View <${v.iri}> differs from a from-scratch evaluation: ${problem}`)
     }
