@@ -29,8 +29,6 @@
                  [ sty:property "font" ; sty:raw "600 12px/1 var(--sem-font)" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0.01em" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Badge ; sty:part ".sem-icon" ;
-    sty:declares [ sty:property "font-size" ; sty:raw "11px" ] .
 
 # --- alert ---
 [] a sty:StyleRule ; sty:appliesTo c:Alert ;
@@ -97,8 +95,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Tag ; sty:state "[data-checked=false]:hover" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--tone-soft-hover, var(--sem-gray-4))" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Tag ; sty:part ".sem-icon" ;
-    sty:declares [ sty:property "font-size" ; sty:raw "0.92em" ] ,
-                 [ sty:property "opacity" ; sty:raw "0.85" ] .
+    sty:declares [ sty:property "opacity" ; sty:raw "0.85" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Tag ; sty:part "> .sem-tag-toggle" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
@@ -260,7 +257,6 @@
                  [ sty:property "place-items" ; sty:raw "center" ] ,
                  [ sty:property "width" ; sty:raw "20px" ] ,
                  [ sty:property "height" ; sty:raw "20px" ] ,
-                 [ sty:property "margin-top" ; sty:raw "1px" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
                  [ sty:property "background" ; sty:raw "var(--tone-solid, var(--sem-gray-12))" ] ,
                  [ sty:property "color" ; sty:raw "var(--tone-on-solid, var(--sem-gray-1))" ] ,

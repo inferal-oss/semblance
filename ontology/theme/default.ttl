@@ -520,6 +520,9 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part "> *" ;
     sty:declares [ sty:property "flex" ; sty:raw "none" ] .
+# A symbol and its label are one line of text: both take the option's size and line height, so their
+# equal boxes, centred, share a baseline at any height (a touch screen's taller option, a stretched
+# one), and an option is as tall with a symbol as without. Sizing the symbol on its own parts them.
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part "button" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
@@ -531,6 +534,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "font" ; sty:raw "inherit" ] ,
                  [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "line-height" ; sty:token tok:leading-tight ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] ,
@@ -584,10 +588,6 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part "button[aria-pressed=true]" ;
     sty:declares [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "background" ; sty:token tok:accent-soft ] .
-
-[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part "button > span:first-child" ;
-    sty:declares [ sty:property "font-size" ; sty:raw "14px" ] ,
-                 [ sty:property "line-height" ; sty:raw "1" ] .
 
 # --- flippable: the view on the front, how it is made on the back ---------------------------
 

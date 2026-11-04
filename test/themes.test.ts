@@ -297,6 +297,15 @@ describe('structural themes', () => {
     expect(find('fluent', '[data-sem-c=toggle-switch] > button:not(:disabled):hover .sem-thumb')).toContain('width: 14px')
   })
 
+  it('keep a symbol and its label on one line of text', () => {
+    // Boxes of one size, centred, share a baseline at any height; a symbol sized on its own parts them.
+    const option = css.split('\n').find((line) => line.trim().startsWith('[data-sem-c="segmented"] button, ') && line.includes('font: inherit'))!
+    expect(option).toMatch(/align-items: center/)
+    expect(option).toMatch(/line-height: var\(--sem-leading-tight\)/)
+    expect(css).not.toContain('button > span:first-child')
+    for (const c of ['badge', 'tag']) expect(css, c).not.toMatch(new RegExp(`\\[data-sem-c="${c}"\\] \\.sem-icon \\{[^}]*(font-size|line-height)`))
+  })
+
   it('compose with contrast and motion', () => {
     for (const slug of STRUCTURAL) {
       const same = block(`[data-sem-contrast="high"][data-sem-theme="${slug}"]`)
