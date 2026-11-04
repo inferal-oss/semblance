@@ -393,7 +393,7 @@ CONSTRUCT {
   ?root rdfhtml:attribute ?methodAttr . ?methodAttr a rdfhtml:Attribute ; rdfhtml:attributeName "method" ; rdfhtml:attributeValue "get" .
   ?root rdfhtml:attribute ?roleAttr . ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
   ?root rdfhtml:attribute ?labelAttr . ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
-  ?button a rdfhtml:Button ; rdfhtml:type ?buttonType ; rdfhtml:hasChild ?symbol, ?name ; c:selects ?opt ; lc:role ?item .
+  ?button a rdfhtml:Button ; rdfhtml:type ?buttonType ; rdfhtml:value ?optValue ; rdfhtml:hasChild ?symbol, ?name ; c:selects ?opt ; lc:role ?item .
   ?button rdfhtml:attribute ?pressedAttr . ?pressedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-pressed" ; rdfhtml:attributeValue ?pressed .
   ?symbol a rdfhtml:Span ; rdfhtml:hasChild ?symbolText ; ord:immediatelyPrecedes ?name .
   ?symbolText a rdfhtml:Text ; rdfhtml:data ?symbolData .
@@ -442,6 +442,7 @@ WHERE {
       UNION
       { FILTER NOT EXISTS { $this c:options ?explicit } $this c:property/rdfs:range ?range . ?opt a ?range FILTER(isIRI(?opt)) BIND($this AS ?self) }
       BIND(CONCAT("opt-", ENCODE_FOR_URI(STR(?opt))) AS ?key)
+      BIND(STR(?opt) AS ?optValue)
       BIND(IRI(CONCAT(STR(?self), "/~", ?key)) AS ?button)
       BIND(IRI(CONCAT(STR(?self), "/~", ?key, "-aria-pressed")) AS ?pressedAttr)
       BIND(IRI(CONCAT(STR(?self), "/~", ?key, "-label")) AS ?name)

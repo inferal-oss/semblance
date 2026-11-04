@@ -22,7 +22,7 @@ export function renderToStream(opts: StreamOptions): ReadableStream<Uint8Array> 
       try {
         const ready = await readyToRender(opts)
         opts.onStatus?.(ready.status)
-        const [before, after] = documentParts(opts.template, { lang: ready.lang, dir: ready.dir }, { ...opts, stylesheet: opts.stylesheet ?? 'none' })
+        const [before, after] = documentParts(opts.template, { lang: ready.lang, dir: ready.dir, remembered: ready.remembered }, { ...opts, stylesheet: opts.stylesheet ?? 'none' })
         controller.enqueue(encoder.encode(before))
         // Let the head reach the client before the rules run.
         await new Promise((r) => setTimeout(r, 0))

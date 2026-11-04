@@ -1,6 +1,7 @@
 @prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
@@ -32,13 +33,18 @@ per:scope a owl:ObjectProperty ; rdfs:domain per:Policy ; rdfs:range per:Scope ;
 per:Scope a owl:Class .
 per:Session a per:Scope ; sem:order 1 ; sem:slug "session" ;
     rdfs:label "This tab"@en , "Ця вкладка"@uk , "Dieser Tab"@de , "علامة التبويب هذه"@ar ;
-    rdfs:comment "sessionStorage: kept until the tab is closed. The default."@en .
+    rdfs:comment "sessionStorage: kept until the tab is closed. The default."@en ;
+    per:webStorage "sessionStorage" .
 per:Device a per:Scope ; sem:order 2 ; sem:slug "device" ;
     rdfs:label "This device"@en , "Цей пристрій"@uk , "Dieses Gerät"@de , "هذا الجهاز"@ar ;
-    rdfs:comment "localStorage: kept in this browser profile."@en .
+    rdfs:comment "localStorage: kept in this browser profile."@en ;
+    per:webStorage "localStorage" .
 per:Database a per:Scope ; sem:order 3 ; sem:slug "database" ;
     rdfs:label "Browser database"@en , "База даних браузера"@uk , "Browser-Datenbank"@de , "قاعدة بيانات المتصفح"@ar ;
     rdfs:comment "IndexedDB: for larger state, such as the change log."@en .
+
+per:webStorage a owl:DatatypeProperty ; rdfs:domain per:Scope ;
+    rdfs:comment "The Web Storage object a scope keeps its strings in. Read synchronously, so what a policy in such a scope remembers can be on the page before its first paint; a scope without one (IndexedDB) is read too late for that."@en .
 
 per:enabled a owl:DatatypeProperty ; rdfs:domain per:Policy ; rdfs:range xsd:boolean ;
     rdfs:label "Remember"@en , "Запамʼятовувати"@uk , "Merken"@de , "تذكّر"@ar ;
@@ -75,6 +81,36 @@ per:Restore a owl:Class ; rdfs:comment "A policy's stored triples were put back 
 per:Forget a owl:Class ; rdfs:comment "A policy's stored triples were dropped."@en .
 per:policy a owl:ObjectProperty ; rdfs:range per:Policy .
 per:size a owl:DatatypeProperty ; rdfs:range xsd:integer .
+
+# --- what is remembered, before the first paint -----------------------------------------------------
+
+# A policy over a hooked property (sty:hookAttribute) of the document or of the mounted root in a
+# web-storage scope reaches a server-rendered page before its first paint (src/web/remembered.ts).
+# A control bound to such a property shows it there too: it is marked with what it is bound to, and
+# its options carry their values, so the page's head script can find it among what it does not
+# otherwise know. Above the choosers' renderings, as the style layer's hooks are.
+per:RememberedChooser a sem:Rendering ;
+    sem:targets c:Chooser ;
+    sem:modality mod:Screen ;
+    sem:layer sty:Layer ;
+    sem:stratum 20 ;
+    sem:requires c:controls .
+per:RememberedChooser-fn a sem:Rule ; sem:implements per:RememberedChooser ; sem:function "persistence:remembered-chooser" .
+per:RememberedChooser-sparql a sem:Rule ;
+    sem:implements per:RememberedChooser ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?a .
+  ?a a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-remembered" ; rdfhtml:attributeValue ?value .
+}
+WHERE {
+  $this c:controls ?subject ; c:property ?property .
+  ?property sty:hookAttribute ?hook .
+  FILTER EXISTS { ?policy a per:Policy ; per:subject ?subject ; per:properties/rdf:rest*/rdf:first ?property }
+  BIND(CONCAT(STR(?subject), " ", STR(?property)) AS ?value)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-remembered")) AS ?a)
+}""" .
 
 # --- c:PolicyList: every policy, with its switch, size, last write and a Forget button ------------
 

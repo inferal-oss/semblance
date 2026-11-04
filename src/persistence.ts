@@ -16,7 +16,7 @@ import { Parser, Writer } from 'n3'
 import type { ReactionFn } from './behaviour/events.ts'
 import type { FnRule } from './engine/context.ts'
 import { formatLocale } from './engine/context.ts'
-import { BEH, EVENTS_GRAPH, H, MOD, NS, PERSIST_GRAPH, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
+import { BEH, EVENTS_GRAPH, H, MOD, NS, PERSIST_GRAPH, RDF_TYPE, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
 import { prefixesFor } from './prefixes.ts'
 import { type Delta, mint, parseDuration, quadKey } from './rdf.ts'
 import type { ViewHandle } from './view/runtime.ts'
@@ -33,6 +33,9 @@ const TREE_MEMBER = NS.tree + 'member'
 const XSD_DATETIME = NS.xsd + 'dateTime'
 /** A term's kind and value, so an IRI and a blank node of the same label stay apart. */
 const termKey = (t: Term) => t.termType + ':' + t.value
+
+/** What a stored key starts with, unless Persistence is told otherwise. */
+export const STORAGE_PREFIX = 'semblance:'
 
 /** Where a scope keeps its strings. Asynchronous, so IndexedDB fits too. */
 export interface Backend {
@@ -160,7 +163,7 @@ export class Persistence {
   }
 
   private key(policy: string) {
-    return (this.opts.prefix ?? 'semblance:') + policy
+    return (this.opts.prefix ?? STORAGE_PREFIX) + policy
   }
   private backend(scope: string) {
     return this.backends[scope] ?? this.backends[PER + 'Session']!
@@ -705,5 +708,22 @@ const forgetPolicy: ReactionFn = (ctx) => {
   return { remove: [], add: [f.quad(p as never, f.namedNode(PER + 'request'), f.literal('forget'))] }
 }
 
-export const persistenceFunctions: Record<string, FnRule> = { 'policy-list': policyList }
+/** A chooser bound to a remembered, hooked property says so on its root (per:RememberedChooser). */
+const rememberedChooser: FnRule = (ctx, focus) => {
+  const subject = ctx.object(focus, NS.c + 'controls')
+  const property = ctx.object(focus, NS.c + 'property')
+  if (!subject || !property || !ctx.object(property, STY.hookAttribute)) return []
+  const covers = ctx.match(null, PER + 'subject', subject).some((q) => isPolicy(ctx, q.subject) && inList(ctx, ctx.object(q.subject, PER + 'properties'), property.value))
+  if (!covers) return []
+  const o = ctx.out(focus)
+  o.attr(o.node('root'), 'data-sem-remembered', subject.value + ' ' + property.value, 'root-remembered')
+  return o.quads
+}
+const isPolicy = (ctx: Parameters<FnRule>[0], node: Term) => ctx.match(node, RDF_TYPE, PER + 'Policy').length > 0
+const inList = (ctx: Parameters<FnRule>[0], head: Term | undefined, value: string): boolean => {
+  for (let n = head; n && n.value !== NS.rdf + 'nil'; n = ctx.object(n, NS.rdf + 'rest')) if (ctx.object(n, NS.rdf + 'first')?.value === value) return true
+  return false
+}
+
+export const persistenceFunctions: Record<string, FnRule> = { 'policy-list': policyList, 'persistence:remembered-chooser': rememberedChooser }
 export const persistenceReactions: Record<string, ReactionFn> = { 'persistence:toggle': togglePolicy, 'persistence:forget': forgetPolicy }

@@ -1,12 +1,15 @@
 // A whole HTML document from a template (the client build's index.html) and a rendering
 // (renderToString): the root's HTML in the mount element, marked for the client to take over, the
 // document's language, direction and attributes on <html>, the stylesheet (a file the client does
-// not compile again, or inline), the script that marks the viewer's platform before the first paint
-// (src/web/platform.ts: the key hints' spelling) and the one that keeps what the visitor does until
-// the client is ready (src/web/takeover.ts). Platform-neutral string work: used by the static build, the
-// request handler and anyone's own server.
+// not compile again, or inline), the script that puts back what the visitor chose (src/web/remembered.ts)
+// and the one that marks the viewer's platform (src/web/platform.ts: the key hints' spelling), both
+// before the first paint, and the one that keeps what the visitor does until the client is ready
+// (src/web/takeover.ts). Platform-neutral string work: used by the static build, the request handler
+// and anyone's own server.
 import { CAPTURE_SCRIPT, SSR_ATTRIBUTE, STYLES_ATTRIBUTE } from '../web/takeover.ts'
 import { PLATFORM_SCRIPT } from '../web/platform.ts'
+import { COLOR_SCHEME_META, rememberedScript } from '../web/remembered.ts'
+import { documentScheme, firstPaintPlan } from './remembered.ts'
 import type { Rendered } from './render.ts'
 
 export interface DocumentOptions {
@@ -34,10 +37,28 @@ function htmlAttributes(doc: string, attrs: Record<string, string>): string {
 }
 
 /**
+ * What the visitor chose, put back ahead of the template's first stylesheet (a script waits for those
+ * before it), with the color scheme the browser paints the empty page in meanwhile.
+ */
+function rememberedHead(doc: string, remembered: Rendered['remembered'], mount: string, attributes: Record<string, string>): string {
+  const plan = firstPaintPlan(remembered, mount, attributes)
+  const scheme = documentScheme(remembered, attributes)
+  const meta = scheme && !COLOR_SCHEME_META.test(doc) ? `<meta name="color-scheme" content="${escapeAttr(scheme)}">` : ''
+  const script = plan ? `<script>${rememberedScript(plan)}</script>` : ''
+  if (!meta && !script) return doc
+  const head = /<head\b[^>]*>/i.exec(doc)
+  if (!head) return doc
+  const from = head.index + head[0].length
+  const first = doc.slice(from).search(/<(?:link|style|script)\b|<\/head>/i)
+  const at = first < 0 ? from : from + first
+  return doc.slice(0, at) + meta + script + doc.slice(at)
+}
+
+/**
  * The document around the root's HTML: everything before it (up to the mount element's opening
  * tag) and after it. The head can go out before the projection is done (renderToStream).
  */
-export function documentParts(template: string, rendered: Pick<Rendered, 'css' | 'lang' | 'dir'>, opts: DocumentOptions = {}): [string, string] {
+export function documentParts(template: string, rendered: Pick<Rendered, 'css' | 'lang' | 'dir'> & Partial<Pick<Rendered, 'remembered'>>, opts: DocumentOptions = {}): [string, string] {
   const mount = opts.mount ?? 'app'
   let doc = htmlAttributes(template, { lang: rendered.lang, dir: rendered.dir, ...opts.attributes })
   const sheet = opts.stylesheet ?? 'inline'
@@ -46,6 +67,7 @@ export function documentParts(template: string, rendered: Pick<Rendered, 'css' |
   // Functions, so `$` in what is inserted is not read as a replacement pattern. The platform is
   // marked ahead of the styles that read it, so no key hint is painted in the other spelling first.
   doc = doc.replace(/<\/head>/i, () => `<script>${PLATFORM_SCRIPT}</script>${styles}${opts.head ?? ''}</head>`)
+  doc = rememberedHead(doc, rendered.remembered ?? [], mount, opts.attributes ?? {})
   const open = new RegExp(`<div id="${mount}"([^>]*)>\\s*</div>`, 'i')
   const m = open.exec(doc)
   if (!m) throw new Error(`The template has no empty <div id="${mount}"></div> to render into`)
@@ -55,7 +77,7 @@ export function documentParts(template: string, rendered: Pick<Rendered, 'css' |
 }
 
 /** The document: `template` with `rendered` in its mount element. */
-export function renderDocument(template: string, rendered: Pick<Rendered, 'html' | 'css' | 'lang' | 'dir'>, opts: DocumentOptions = {}): string {
+export function renderDocument(template: string, rendered: Pick<Rendered, 'html' | 'css' | 'lang' | 'dir'> & Partial<Pick<Rendered, 'remembered'>>, opts: DocumentOptions = {}): string {
   const [before, after] = documentParts(template, rendered, opts)
   return before + rendered.html + after
 }
