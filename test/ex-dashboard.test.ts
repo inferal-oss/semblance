@@ -1,7 +1,7 @@
 // The sales dashboard example (demo/gallery/_ex-dashboard.ttl): facets over a stream of orders,
 // counts that apply the other facets, charts and a table over one maintained view (a cube), and
 // work that does not grow with the stream - driven through events on the site.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '../src/behaviour/clock.ts'
 import { mountSite } from './harness.ts'
 import { implementationGaps } from './implementations.ts'
@@ -9,9 +9,9 @@ import { implementationGaps } from './implementations.ts'
 const UI = 'https://semblance.dev/demo#'
 const DX = 'https://semblance.dev/demo/dashboard#'
 
-function dashboard(prefer: 'sparql' | 'function' = 'sparql', strict = false, kind: 'oxigraph' | 'wat' = 'oxigraph') {
+function dashboard(prefer: 'sparql' | 'function' = 'sparql', strict = false, kind: 'oxigraph' | 'wat' = 'oxigraph', mount = mountSite) {
   const clock = new ManualClock()
-  const h = mountSite(kind, prefer, clock)
+  const h = mount(kind, prefer, clock)
   h.runtime.views.clock = clock
   h.runtime.views.strict = strict
   const visible = (el: Element | null | undefined) => !!el && !el.closest('[hidden]')
@@ -33,8 +33,12 @@ function dashboard(prefer: 'sparql' | 'function' = 'sparql', strict = false, kin
   const bars = (chart: number) => Object.fromEntries([...[...root().querySelectorAll('[data-sem-c=bar-chart]')][chart]!.querySelectorAll('.sem-bar')].map((b) => [b.querySelector('.sem-category')!.textContent, b.querySelector('.sem-total')!.textContent]))
   const table = () => [...root().querySelectorAll('[data-sem-c=table] tbody tr')].map((tr) => [...tr.querySelectorAll('td, th')].map((c) => c.textContent!.trim()).join(' | '))
   const advance = (ms: number) => (clock.advance(ms), h.shell.flush())
-  const members = () => h.store.match(h.store.factory.namedNode(DX + 'orders'), h.store.factory.namedNode('https://w3id.org/tree#member'), null).length
-  return { ...h, clock, click, button, root, facet, chips, chip, stat, bars, table, advance, members }
+  const orders = () => h.store.match(h.store.factory.namedNode(DX + 'orders'), h.store.factory.namedNode('https://w3id.org/tree#member'), null).map((q) => q.object.value)
+  const members = () => orders().length
+  /** The cube cell an order counts towards. */
+  const cellOf = (order: string) => ['region', 'product', 'channel'].map((d) => h.store.match(h.store.factory.namedNode(order), h.store.factory.namedNode(DX + d), null)[0]!.object.value).join(' ')
+  const work = () => Number(root().querySelector('[data-sem-c=progress]')!.getAttribute('aria-valuenow'))
+  return { ...h, clock, click, button, root, facet, chips, chip, stat, bars, table, advance, members, orders, cellOf, work }
 }
 
 describe('the sales dashboard example', () => {
@@ -101,7 +105,10 @@ describe('the sales dashboard example', () => {
     const h = dashboard('sparql', true)
     h.click(h.button('Add 100 orders'))
     // Ten batches of ten, 40 ms apart: strict mode compares every view with a re-run after each.
-    h.advance(1000)
+    h.advance(320)
+    const earlier = new Set(h.orders())
+    const filled = new Set([...earlier].map(h.cellOf))
+    h.advance(680)
     expect(h.members()).toBe(124)
     expect(h.stat('Orders in all')).toBe('124')
     expect(h.stat('Orders shown')).toBe('124')
@@ -113,8 +120,36 @@ describe('the sales dashboard example', () => {
     h.shell.flush()
     const work = h.root().querySelector('[data-sem-c=progress]')!
     expect(work.textContent).toMatch(/^The cube's last step: \d+ rows of work; a from-scratch run reads 124\.$/)
-    expect(Number(work.getAttribute('aria-valuenow'))).toBeLessThan(40)
+    // Its rows: one per order, and per cell touched a group, its old row and its new one (a new cell has
+    // no old row). At most four an order, so at most 40 here, whatever the batch.
+    const batch = h.orders().filter((o) => !earlier.has(o))
+    expect(batch).toHaveLength(10)
+    const touched = new Set(batch.map(h.cellOf))
+    const fresh = [...touched].filter((c) => !filled.has(c))
+    expect(h.work()).toBe(batch.length + 3 * touched.size - fresh.length)
   }, 120_000)
+
+  it('draws the same orders in every run, whatever the run puts in its event IRIs', async () => {
+    const run = async (startedAt: number) => {
+      vi.resetModules()
+      const now = vi.spyOn(Date, 'now').mockReturnValue(startedAt)
+      const { mountSite: mount } = await import('./harness.ts')
+      now.mockRestore()
+      const h = dashboard('sparql', false, 'oxigraph', mount)
+      h.click(h.button('Add 100 orders'))
+      h.advance(1000)
+      h.runtime.warm(8)
+      h.shell.flush()
+      const f = h.store.factory
+      const events = h.store.match(null, f.namedNode('https://semblance.dev/ns/behaviour#sequence'), null).map((q) => q.subject.value)
+      return { events, orders: h.orders().sort(), work: h.work() }
+    }
+    // Two stamps whose event IRIs, when they fed the draw, gave 40 and 28 rows of work.
+    const [a, b] = [await run(1780000000685), await run(1780000007535)]
+    expect(a.events).not.toEqual(b.events)
+    expect(a.orders).toEqual(b.orders)
+    expect(a.work).toBe(b.work)
+  }, 300_000)
 
   // On wat the SPARQL rules that write numbers in the viewer's locale (sx:formatNumber) are the ones chosen.
   for (const kind of ['oxigraph', 'wat'] as const) it(`renders the same with SPARQL and with function rules, filtered and not (${kind})`, () => {
@@ -176,7 +211,7 @@ describe('the dashboard costs the same at a thousand orders as at two thousand',
       expect(m.batch.viewRows).toBeGreaterThan(0)
       expect(m.batch.viewRows).toBeLessThan(2500)
     }
-    // (A batch's orders are random: how many cells it touches varies, but never past the 48 there are.)
+    // (Each batch has orders of its own: how many cells it touches varies, but never past the 48 there are.)
     expect(two.batch.ruleRuns).toBe(one.batch.ruleRuns)
   }, 300_000)
 })

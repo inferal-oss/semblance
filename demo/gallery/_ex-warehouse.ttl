@@ -310,10 +310,10 @@ CONSTRUCT {
 }
 WHERE {
   wh:rush wh:left ?n FILTER(?n > 0)
-  $event beh:at ?at .
+  $event beh:at ?at ; beh:sequence ?seq .
   BIND(?n - 1 AS ?next)
   BIND(IF(?next > 0, xsd:dateTime(?at) + xsd:dayTimeDuration("PT0.1S"), ?none) AS ?then)
-  BIND(MD5(STR($event)) AS ?h)
+  BIND(MD5(STR(?seq)) AS ?h)
   ?item wh:rushDigits ?digits FILTER(CONTAINS(?digits, SUBSTR(?h, 1, 1)))
   BIND(SUBSTR(?h, 3, 1) = "f" AS ?returned)
   BIND(IF(?returned, wh:Return, wh:Sale) AS ?kind)
@@ -350,7 +350,7 @@ ui:ex-warehouse-w4 a c:WalkthroughStep ; rdfs:label "The reorder list: the same 
 ui:ex-warehouse-w5 a c:WalkthroughStep ; rdfs:label "Best sellers in the last hour" ;
     c:children ( ui:ex-warehouse-m-best " sums the sales of " ui:ex-warehouse-m-lastHour ", an " ui:ex-warehouse-m-SlidingWindow " of an hour on each movement's time, and keeps the five items with most (ORDER BY with LIMIT: a top five). A sale enters the window once; an hour later it leaves it once, on a timer, with nothing else happening - and " ui:ex-warehouse-m-chart " shrinks." ) .
 ui:ex-warehouse-w6 a c:WalkthroughStep ; rdfs:label "Rush hour, on the scheduler" ;
-    c:children ( ui:ex-warehouse-m-rushButton " runs " ui:ex-warehouse-m-startRush ", which makes " ui:ex-warehouse-m-rush " due now (" ui:ex-warehouse-m-dueAt "). The host turns a due time into a " ui:ex-warehouse-m-Due " event, and " ui:ex-warehouse-m-rushOrder " sells one order - the item picked from a hash of the event, as often as its " ui:ex-warehouse-m-rushDigits " say - and makes the next one due a tenth of a second later. Thirty orders, thirty movements; every figure follows each one." ) .
+    c:children ( ui:ex-warehouse-m-rushButton " runs " ui:ex-warehouse-m-startRush ", which makes " ui:ex-warehouse-m-rush " due now (" ui:ex-warehouse-m-dueAt "). The host turns a due time into a " ui:ex-warehouse-m-Due " event, and " ui:ex-warehouse-m-rushOrder " sells one order - the item picked from a hash of the event's number, as often as its " ui:ex-warehouse-m-rushDigits " say - and makes the next one due a tenth of a second later. Thirty orders, thirty movements; every figure follows each one." ) .
 ui:ex-warehouse-w7 a c:WalkthroughStep ; rdfs:label "What a change costs" ;
     c:children ( "Each view is " ui:ex-warehouse-m-measured ": in idle time the runtime writes the work of its last change and the rows a recount would read, and each tile's quiet line shows them (" ui:ex-warehouse-m-qCost ", " ui:ex-warehouse-m-stockCost " for the stock). A sale is a handful of rows of work whatever the history holds, while a recount reads every movement. Elsewhere on the site these views do nothing at all (" ui:ex-warehouse-m-whileShown ")." ) .
 

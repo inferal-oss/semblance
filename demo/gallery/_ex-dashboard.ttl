@@ -298,7 +298,8 @@ dx:Present a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-dashboard-prod
 
 # A feed of batches: the buttons set how many are left and how big they are, and make the feed due
 # now (beh:dueAt). The host turns a due time into a beh:Due event; dx:Batch adds a batch of orders
-# to the stream - their dimensions and amounts drawn from a hash of the event - and makes the next
+# to the stream - their dimensions and amounts drawn from a hash of the event's number, so the same
+# events give the same orders in every run (the event's IRI has the run in it) - and makes the next
 # batch due 40 ms later.
 dx:feed dx:left 0 ; dx:size 10 .
 
@@ -320,12 +321,12 @@ CONSTRUCT {
 }
 WHERE {
   dx:feed dx:left ?n ; dx:size ?size FILTER(?n > 0)
-  $event beh:at ?at .
+  $event beh:at ?at ; beh:sequence ?seq .
   BIND(?n - 1 AS ?next)
   BIND(IF(?next > 0, xsd:dateTime(?at) + xsd:dayTimeDuration("PT0.04S"), ?none) AS ?then)
   VALUES ?k { 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 }
   FILTER(?k <= ?size)
-  BIND(MD5(CONCAT(STR($event), "/", STR(?k))) AS ?h)
+  BIND(MD5(CONCAT(STR(?seq), "/", STR(?k))) AS ?h)
   BIND(IRI(CONCAT(STR(dx:), "o-", SUBSTR(?h, 1, 16))) AS ?o)
   BIND(SUBSTR(?h, 17, 1) AS ?d1) BIND(SUBSTR(?h, 18, 1) AS ?d2) BIND(SUBSTR(?h, 19, 1) AS ?d3)
   BIND(IF(CONTAINS("01234", ?d1), dx:north, IF(CONTAINS("5678", ?d1), dx:south, IF(CONTAINS("9ab", ?d1), dx:east, dx:west))) AS ?region)
@@ -353,7 +354,7 @@ ui:ex-dashboard-w4 a c:WalkthroughStep ; rdfs:label "Counts that know the other 
 ui:ex-dashboard-w5 a c:WalkthroughStep ; rdfs:label "Charts and the table read the cube" ;
     c:children ( ui:ex-dashboard-m-byRegion " is a " ui:ex-dashboard-m-BarChart " of " ui:ex-dashboard-m-qByRegion ", sales per region stacked by channel; the product chart and " ui:ex-dashboard-m-table " (" ui:ex-dashboard-m-qBreakdown ") are SELECTs over the same cells. Each names its " ui:ex-dashboard-m-dataset ": the totals and the filters, so a new order or a chosen value re-runs it - over the cube, never the orders." ) .
 ui:ex-dashboard-w6 a c:WalkthroughStep ; rdfs:label "More orders, a batch at a time" ;
-    c:children ( ui:ex-dashboard-m-add1000 " runs " ui:ex-dashboard-m-add1000r ", which makes " ui:ex-dashboard-m-feed " due now (" ui:ex-dashboard-m-dueAt "). The host turns that into a " ui:ex-dashboard-m-Due " event, and " ui:ex-dashboard-m-batch " adds fifty orders to the stream - their dimensions and amounts drawn from a hash of the event - and makes the next batch due shortly after. Each batch is one tick of the cube." ) .
+    c:children ( ui:ex-dashboard-m-add1000 " runs " ui:ex-dashboard-m-add1000r ", which makes " ui:ex-dashboard-m-feed " due now (" ui:ex-dashboard-m-dueAt "). The host turns that into a " ui:ex-dashboard-m-Due " event, and " ui:ex-dashboard-m-batch " adds fifty orders to the stream - their dimensions and amounts drawn from a hash of the event's number - and makes the next batch due shortly after. Each batch is one tick of the cube." ) .
 ui:ex-dashboard-w7 a c:WalkthroughStep ; rdfs:label "Work that does not grow" ;
     c:children ( "The cube is " ui:ex-dashboard-m-measured ": in idle time the runtime writes the rows of work its last step took and what a from-scratch run would read. " ui:ex-dashboard-m-work " shows them (" ui:ex-dashboard-m-qWork "): a batch of fifty is a hundred-odd rows of work - each order read once, each cell it touched updated - whether the stream holds a hundred orders or ten thousand, while a re-run reads every one. A filter changes nothing in the cube at all: it costs the few queries over its cells." ) .
 
