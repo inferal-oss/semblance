@@ -1690,6 +1690,8 @@ class PartState {
     return this.post.map(out)
   }
 
+  private rescannedAt = -1
+
   /** A triple's row of a scan (Part.scan): its terms by the part's variables, interned. */
   private scanRow(q: Quad): number[] {
     const { s, p } = this.part.scan!
@@ -1699,6 +1701,8 @@ class PartState {
   /** A scan's step: each triple that came or went counts for its row, which is in while some triple gives it. */
   scanned(changes: Delta, happened: Happened): ZSet<Row> {
     const out = new ZSet<Row>()
+    // Read from the store this tick (a parameter moved the pattern): these triples are counted already.
+    if (this.rescannedAt === this.rt.tickNo) return out
     const dirty = new Set<string>()
     for (const [qs, w] of [[changes.remove, -1], [changes.add, 1]] as const) {
       for (const q of qs) {
@@ -1737,6 +1741,7 @@ class PartState {
       this.counts.get(k)!.n = n
     }
     happened.rowsIn += counted.size
+    this.rescannedAt = this.rt.tickNo
     this.rt.terms.sweep()
     return out
   }

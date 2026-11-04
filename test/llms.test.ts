@@ -13,11 +13,12 @@ const UI = 'https://semblance.dev/demo#'
 let files: Map<string, string>
 let store: GraphStore
 
+// It generates the whole site's text, past the default limit of a hook.
 beforeAll(() => {
   files = generateLlms()
   const gallery = readdirSync(new URL('demo/gallery/', root)).filter((f) => f.endsWith('.ttl')).map((f) => readFileSync(new URL('demo/gallery/' + f, root), 'utf8'))
   store = loadStore('wat', readFileSync(new URL('demo/app.ttl', root), 'utf8'), ...gallery)
-})
+}, 120_000)
 
 /** Markdown links, and the site's own addresses written out (a route, or a generated page). */
 const links = (md: string) =>
