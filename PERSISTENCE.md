@@ -97,6 +97,10 @@ storage). It also has a back side, like every view.
 - **Boot**: load the app graph, then for each enabled policy read its scope,
   check `per:version` (and the shapes), apply the stored triples as one delta,
   then project. No flicker; the first render already has the state.
+- **Before the first paint**: a server-rendered page can't wait for that. A policy
+  over a hooked property of the document or the mounted root, in a scope with a
+  `per:webStorage` (a synchronous store: not `per:Database`), is put back by an
+  inline script in the page's head (`src/web/remembered.ts`, docs/SSR.md).
 - **Write**: a runtime listener on input deltas. A delta that touches a
   policy's subject and properties, or for `per:construct` policies the
   predicates the query mentions, schedules that policy's write in idle time,

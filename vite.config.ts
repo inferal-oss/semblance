@@ -55,6 +55,9 @@ export default defineConfig(({ command, mode }) => ({
     outDir: resolve(here, mode === 'single' ? 'dist-single' : 'dist'),
     emptyOutDir: true,
     target: 'es2023',
+    // Browsers with light-dark(): the color scheme picks the side, as in the compiled theme. Lowered
+    // for older ones, it would read a switch only the minifier's own rules set, not data-sem-color-scheme.
+    cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
     assetsInlineLimit: mode === 'single' ? Number.MAX_SAFE_INTEGER : undefined,
   },
   // Integration tests mount the whole demo; with two runs sharing the machine (scripts/test-queue.sh)

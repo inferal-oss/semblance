@@ -196,6 +196,20 @@ hints show `⌘K` rather than `Ctrl+K` from the start. A page the client renders
 when it mounts (`markPlatform`), alike. Either way a hint's box holds both spellings and is as wide
 as the wider one, so nothing moves when the platform is marked, late or never.
 
+The script `rememberedScript` makes (`src/web/remembered.ts`) sits ahead of the template's first
+stylesheet, and puts back what the visitor chose before the first paint: colours are `light-dark()`
+pairs and themes are attributes over one stylesheet, so nothing needs rendering twice, only the
+switches have to be right. What it reads comes from the graph (`src/server/remembered.ts`): every
+`per:Policy` with a `per:subject`, in a scope with a `per:webStorage`, over a hooked property
+(`sty:hookAttribute`) of the document (`documentAttributes` carries its hook) or of the mounted root.
+It sets the document's switch and the `<meta name="color-scheme">` the empty page is coloured by at
+once, then the root's and those of the controls bound to the properties
+(`data-sem-remembered`, `per:RememberedChooser`) as the parser reaches them, in a mutation observer's
+callback, which runs before the browser can paint what was added. The client's first projection is
+then what is on the page: `adopt` finds no mismatch and nothing is rewritten. A policy in IndexedDB
+(`per:Database`), a `per:construct` policy or one over another node's hook is restored by the client,
+as before.
+
 `CAPTURE_SCRIPT` sits right before the mount element, so it runs before any of the HTML it keeps
 events for has arrived. It keeps clicks (on anything but a link) and submits, holding them back,
 and it keeps `input` and `change` while letting them happen (what was typed stays in the field); no
