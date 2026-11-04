@@ -8,6 +8,11 @@
 // left). It follows scrolling, resizing and the on-screen keyboard, and hides a panel whose anchor
 // is scrolled out of its container. Browsers without popovers get the same fixed placement.
 // It never writes the graph, and it gives every panel back as it was when it hides or detaches.
+// A panel may prefer the side above its anchor (data-sem-anchor-side="above") and centre on it
+// (data-sem-anchor-align="center"). The tooltip layer's surface is such a panel (tooltips.ts): it
+// has no id to name, so it is lifted next to its source directly.
+
+import { attachTooltips } from './tooltips.ts'
 
 const MARGIN = 8
 const GAP = 6
@@ -51,6 +56,8 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
   }
   /** Whether a container the anchor scrolls in has scrolled it out of sight. */
   const clipped = (anchor: HTMLElement, rect: DOMRect) => {
+    // Not laid out at all (display: none on the way up): there is nothing to be next to.
+    if (!rect.width && !rect.height) return true
     for (let parent = anchor.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
       const style = window.getComputedStyle(parent)
       if (style.overflowX === 'visible' && style.overflowY === 'visible') continue
@@ -85,18 +92,19 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
     const height = popup.getBoundingClientRect().height
     const below = Math.max(0, viewportHeight - trigger.bottom - GAP - MARGIN)
     const above = Math.max(0, trigger.top - GAP - MARGIN)
-    const placeAbove = height > below && above > below
+    const placeAbove = popup.getAttribute('data-sem-anchor-side') === 'above' ? height <= above || above > below : height > below && above > below
     const space = placeAbove ? above : below
     const rtl = window.getComputedStyle(anchor).direction === 'rtl'
-    const left = Math.min(Math.max(MARGIN, rtl ? trigger.right - width : trigger.left), Math.max(MARGIN, viewportWidth - width - MARGIN))
+    const start = popup.getAttribute('data-sem-anchor-align') === 'center' ? trigger.left + (trigger.width - width) / 2 : rtl ? trigger.right - width : trigger.left
+    const left = Math.min(Math.max(MARGIN, start), Math.max(MARGIN, viewportWidth - width - MARGIN))
     const top = placeAbove ? Math.max(MARGIN, trigger.top - Math.min(height, space) - GAP) : trigger.bottom + GAP
     Object.assign(popup.style, { left: `${left}px`, top: `${top}px`, maxHeight: `${Number.isFinite(ownMaxHeight) ? Math.min(space, ownMaxHeight) : space}px` })
   }
 
-  const discover = (popup: HTMLElement) => {
+  const discover = (popup: HTMLElement, anchor: HTMLElement | null = null) => {
     if (!ownsNode(popup) || lifted.has(popup) || !shown(popup) || !popup.isConnected) return
     const entry: Popup = {
-      anchor: null, anchoredWidth: popup.getBoundingClientRect().width, style: popup.getAttribute('style'), popover: popup.getAttribute('popover'),
+      anchor, anchoredWidth: popup.getBoundingClientRect().width, style: popup.getAttribute('style'), popover: popup.getAttribute('popover'),
       sizing: { width: popup.style.width, minWidth: popup.style.minWidth, maxWidth: popup.style.maxWidth, maxHeight: popup.style.maxHeight },
     }
     if (!anchorOf(popup, entry)) return
@@ -139,7 +147,13 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
   document.addEventListener('scroll', schedule, true)
   scan(host)
   update()
+  const detachTooltips = attachTooltips(host, ownsNode, (panel, anchor) => {
+    discover(panel, anchor)
+    const entry = lifted.get(panel)
+    if (entry) position(panel, entry, anchor)
+  })
   return () => {
+    detachTooltips()
     observer.disconnect()
     window.removeEventListener('resize', schedule)
     window.visualViewport?.removeEventListener('resize', schedule)

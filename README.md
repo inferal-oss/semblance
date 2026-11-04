@@ -106,7 +106,7 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   `prov:wasInfluencedBy` → activity → `prov:hadPlan` → the rule.
 - **Source**: `c:Flippable` turns any component over to show the rules that
   made it (found through its PROV-O trail, syntax-colored).
-- **Tooltip**: ontological tooltips from `sem:tooltip` annotations.
+- **Tooltip**: ontological tooltips from `sem:tooltip` annotations, shown in the top layer so nothing clips them.
 - **Validation**: fields point at SHACL property shapes (`val:validates`); the
   layer derives `c:error`, which fields already render, and disables buttons
   whose `val:requires` fields are invalid.
