@@ -998,9 +998,11 @@ WHERE {
   # The node it describes: c:of, else what c:bindProperty of c:bindFrom holds; then one c:via hop.
   OPTIONAL { $this c:of ?declared }
   OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bound . FILTER(isIRI(?from) && isIRI(?bound)) ?from ?bound ?held }
-  BIND(COALESCE(?declared, ?held) AS ?subject)
+  # Unbound nodes would match anything below: a missing subject or hop is a node with no triples.
+  BIND(COALESCE(?declared, ?held, sem:Nothing) AS ?subject)
+  BIND(EXISTS { $this c:via ?anyVia FILTER(isIRI(?anyVia)) } AS ?hasVia)
   LATERAL { OPTIONAL { $this c:via ?via . FILTER(isIRI(?via)) ?subject ?via ?hop } }
-  BIND(IF(EXISTS { $this c:via ?anyVia FILTER(isIRI(?anyVia)) }, ?hop, ?subject) AS ?of)
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?of)
   BIND(EXISTS { $this c:items/rdf:rest*/rdf:first ?anyItem FILTER(isIRI(?anyItem)) } AS ?hasItems)
   BIND(EXISTS { $this c:entryProperty ?anyEntryProperty } AS ?hasEntries)
   LATERAL {
@@ -1036,7 +1038,7 @@ WHERE {
     BIND("\\u0001n0" AS ?pieceOrder)
   } UNION {
     # The entries of the node it describes, by sem:order, then by term in the viewer's collation.
-    FILTER(!?hasItems && BOUND(?of) && ?hasEntries)
+    FILTER(!?hasItems && ?hasEntries)
     $this c:entryProperty ?entryP ; c:keyProperty ?keyP ; c:valueProperty ?valueP .
     FILTER(isIRI(?entryP) && isIRI(?keyP) && isIRI(?valueP))
     ?of ?entryP ?entry . FILTER(isIRI(?entry))
@@ -1068,7 +1070,7 @@ WHERE {
     BIND("\\u0001n0" AS ?pieceOrder)
   } UNION {
     # The values of c:fields on it, in the fields' order; a field's values in the viewer's collation, then its unit.
-    FILTER(!?hasItems && BOUND(?of) && !?hasEntries)
+    FILTER(!?hasItems && !?hasEntries)
     $this c:fields/rdf:rest*/rdf:first ?field . FILTER(isIRI(?field))
     ?of ?field ?fieldValue .
     { SELECT ?field (COUNT(DISTINCT ?before) AS ?at) WHERE {

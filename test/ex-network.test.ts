@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { StoreKind } from '../src/node/load.ts'
 import { NETWORK_GRAPH, NS } from '../src/ns.ts'
 import { mountShell } from './harness.ts'
 
@@ -10,8 +11,8 @@ const UI = 'https://semblance.dev/demo#'
 // test/panes.test.ts, test/payload.test.ts, test/toolbar.test.ts.)
 
 /** The site's Examples page, showing the network inspector. */
-function showNetwork(prefer: 'sparql' | 'function') {
-  const h = mountShell(5, 'oxigraph', prefer)
+function showNetwork(prefer: 'sparql' | 'function', kind: StoreKind = 'oxigraph') {
+  const h = mountShell(5, kind, prefer)
   const f = h.store.factory
   const app = f.namedNode(UI + 'app')
   h.runtime.apply({
@@ -109,6 +110,27 @@ describe('the network inspector example', () => {
       expect(h.store.match(f.namedNode(UI + 'net-grid'), f.namedNode(NS.c + 'selectedRow'), null)).toHaveLength(0)
       expect(root('net-summary').textContent).toBe('Select a request, message or event to inspect it.')
       expect(part('net-grid', 'status')!.textContent).toBe('19 matching · showing 1–19')
+    })
+
+    // On the store the site runs (a free pattern matched every entry there, and not on Oxigraph: #322).
+    it(`shows empty details until a row is selected, and again after Deselect (wat, ${prefer})`, () => {
+      const { root, click } = showNetwork(prefer, 'wat')
+      const empty = () => {
+        expect(root('net-summary').textContent).toBe('Select a request, message or event to inspect it.')
+        expect(root('net-response').textContent).toBe('No response.')
+        expect(root('net-req-headers').textContent).toBe('No request headers.')
+        expect(root('net-resp-headers').textContent).toBe('No response headers.')
+        expect(root('net-response-body').textContent).toBe('No response body.')
+      }
+      empty()
+      click(root('net-summary'))
+      empty()
+      const failed = [...root('net-grid').querySelectorAll('tbody > tr')].find((tr) => tr.textContent!.includes('Failed'))!
+      click(failed.querySelector('td')!)
+      expect(root('net-summary').textContent).toContain('https://example.org/api/stats')
+      expect(root('net-response').textContent).toBe('HTTP code503Content typeapplication/json')
+      click(root('net-deselect').querySelector('button') ?? root('net-deselect'))
+      empty()
     })
   }
 })

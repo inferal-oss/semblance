@@ -469,10 +469,13 @@ CONSTRUCT {
 WHERE {
   $this a c:TermOverview .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?t FILTER(isIRI(?t)) }
+  OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?held FILTER(isIRI(?held)) }
+  # An unbound term would match anything below: a missing one is a node with no triples.
+  BIND(BOUND(?held) AS ?hasTerm)
+  BIND(COALESCE(?held, sem:Nothing) AS ?t)
   LATERAL { {
     # Nothing bound: the empty text.
-    FILTER(!BOUND(?t))
+    FILTER(!?hasTerm)
     BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
     BIND(IRI(CONCAT(STR($this), "/~empty-text")) AS ?emptyText)
     OPTIONAL { ?e0At l10n:of $this ; l10n:emptyText ?e0 }
@@ -485,7 +488,7 @@ WHERE {
     BIND(STR(COALESCE(?e0, ?e1, ?e2, ?e3, "Pick a term.")) AS ?emptyWords)
   } UNION {
     # The header: prefixed name, kind, IRI; then the comment.
-    FILTER(BOUND(?t))
+    FILTER(?hasTerm)
     BIND(IRI(CONCAT(STR($this), "/~head")) AS ?head)
     BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
     BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
@@ -517,7 +520,7 @@ WHERE {
     BIND(COALESCE(?comment, ?facts) AS ?afterHead)
   } UNION {
     # The facts, one value per row: what the term says, what points at it, its shape.
-    FILTER(BOUND(?t))
+    FILTER(?hasTerm)
     BIND(IRI(CONCAT(STR($this), "/~facts")) AS ?facts)
     BIND(EXISTS { $this c:controls ?selectTarget ; c:property ?selectProperty FILTER(isIRI(?selectTarget) && isIRI(?selectProperty)) } AS ?selectable)
     LATERAL {
