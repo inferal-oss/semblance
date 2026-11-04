@@ -14,7 +14,7 @@
 // (deps.ts). Anything else compiles to a recompute plan that says why (iv:fallback).
 import type { Term } from '@rdfjs/types'
 import { termKey } from '../rdf.ts'
-import { Dependencies } from './deps.ts'
+import { Dependencies, type Pos } from './deps.ts'
 import type { Aggregate, AggregateFn, MaintainedPlan, Op, Order, Part, Post, RecomputePlan, SparqlRunner, ViewCompiler, ViewPlan, ViewSource, WindowSpec } from './plan.ts'
 import { bucketStart, timeLiteral, timeOf } from './window.ts'
 import { certainVars, type Expr, type Group, groupVars, type Item, parseQuery, projectedVars, type Query, type Select, SparqlSyntaxError } from './sparql.ts'
@@ -289,7 +289,7 @@ function allAggregates(sel: Select): import('./sparql.ts').Aggregate[] {
 
 /** A part's structure, without its body's text. */
 function shape(p: Part): unknown {
-  return [p.keys, p.slots, p.op, p.vars, p.post, p.stream, p.window, p.algebra.op, (p.derived ?? []).map((d) => [d.vars, shape(d.part)])]
+  return [!!p.scan, p.keys, p.slots, p.op, p.vars, p.post, p.stream, p.window, p.algebra.op, (p.derived ?? []).map((d) => [d.vars, shape(d.part)])]
 }
 
 /**
@@ -326,7 +326,7 @@ function windowAt(q: Query): number {
 }
 
 /** A part: the partitions of a SELECT's body and what it does with their rows. */
-function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, prologue: string): Part {
+function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, prologue: string, inner = false): Part {
   checkGroup(sel.where)
   const isRoot = (q: Select) => sel.where.items.some((it) => asSelect(it) === q)
   // Aggregate subqueries (candidates; see below which are maintained as parts of their own).
@@ -361,7 +361,7 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   }
   for (const k of keys) if (!certain.has(k)) throw new Unsupported(`the partition key ?${k} is not bound in every solution`)
   const subs = candidates
-  const derived = subs.map((q) => ({ part: part(q, { ...source, partitionBy: undefined, window: undefined }, run, text, prologue), vars: projectedVars(q) }))
+  const derived = subs.map((q) => ({ part: part(q, { ...source, partitionBy: undefined, window: undefined }, run, text, prologue, true), vars: projectedVars(q) }))
   // Keys a derived subquery projects: VALUES inside the LATERAL cannot bind what its left side
   // binds (SPARQL 1.2), so where the batch binds such a key the subquery's rows have it renamed and
   // joined by a FILTER (in their own group, where the key is the left side's constant); where a
@@ -543,6 +543,8 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   if (bucketVar && groupVars(sel.where).has(bucketVar)) throw new Unsupported(`?${bucketVar} is the window's bucket; the body cannot bind it`)
   const window: WindowSpec | undefined = source.window && timeBy ? { ...source.window, stream: stream!.stream!, timeBy } : undefined
   const keyText = keys.length ? keys.map((k) => '?' + k).join(' ') : '()'
+  const scan = inner ? undefined : scanOf(sel, source, deps, op, vars, slots)
+  if (scan) return { keys: [], slots: [...vars], local, deps, scan, op, vars, patternless: withoutTriples(sel.where, text), head: head.slice(prologue.length), algebra: { local: `{${flat(body)}}`, op: `Distinct(Project(${vars.map((v) => '?' + v).join(' ')}))` } }
   return {
     keys,
     slots: slotNames,
@@ -567,6 +569,21 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
       post: post.binds.length || post.filters.length ? [...post.binds.map((b) => `Extend(?${b.as} := ${flat(b.expr)})`), ...post.filters.map((f) => `Filter(${flat(f)})`)].join(', ') : undefined,
     },
   }
+}
+
+/**
+ * The one triple pattern a body is, when DISTINCT over its variables needs nothing but the triples
+ * that changed: a row is in while some triple gives it, so no partition is evaluated.
+ */
+function scanOf(sel: Select, source: ViewSource, deps: Dependencies, op: Op, vars: string[], slots: Map<string, string | undefined>): Part['scan'] {
+  if (op.k !== 'distinct' || source.partitionBy || source.over || source.window || source.reads) return undefined
+  const [only, ...rest] = sel.where.items
+  if (rest.length || only?.k !== 'triples' || only.triples.length !== 1 || sel.values || deps.patterns.length !== 1) return undefined
+  const pat = deps.patterns[0]!
+  if (pat.g || 'path' in pat.p || [...slots.values()].some((e) => e !== undefined)) return undefined
+  const names = [pat.s, pat.p, pat.o].flatMap((x) => ('v' in x ? [x.v] : []))
+  if (new Set(names).size !== names.length || !vars.every((v) => names.includes(v))) return undefined
+  return { s: pat.s, p: pat.p as Pos, o: pat.o }
 }
 
 /** ORDER BY keys (expressions computed before the top-k), LIMIT and OFFSET. */

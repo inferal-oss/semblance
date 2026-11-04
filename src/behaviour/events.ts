@@ -370,6 +370,8 @@ export class EventBus {
       const remove = this.expired()
       const head = this.runtime.store.match(this.stream, nn(BEH.latest), null, this.graph)
       const change = this.statements(event, applied, undoable, raisedBy)
+      // Written for the reactions to read; written again here, so the tick's change says so (views read it).
+      forget()
       this.runtime.log({
         remove: [...remove, ...head, ...change.remove],
         add: [

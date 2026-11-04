@@ -53,19 +53,19 @@ c:completion a owl:DatatypeProperty ;
 # rdf:Property, owl:ObjectProperty, owl:DatatypeProperty, owl:AnnotationProperty) or uses (as a class,
 # as a predicate), a row each, maintained as the graph changes - a declaration or a use costs what it
 # changes, and a keystroke reads the rows, not the store. Three views, each one pattern: a union of
-# them would be evaluated again for every change, not maintained.
-c:DeclaredTerms a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ;
+# them would be evaluated again for every change, not maintained; and maintained while an editor is
+# shown (iv:whileShown), as nothing else reads them.
+c:DeclaredTerms a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ; iv:whileShown c:CodeEditor ;
     rdfs:label "the classes and properties the graph declares"@en ;
     sem:select """SELECT DISTINCT ?term ?declared WHERE {
   VALUES ?declared { owl:Class rdfs:Class rdf:Property owl:ObjectProperty owl:DatatypeProperty owl:AnnotationProperty }
   ?term a ?declared .
 }""" .
-c:UsedClasses a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ;
+# One pattern, DISTINCT: scans (iv:Scan), whose rows the triples that change give, however many there are.
+c:UsedClasses a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ; iv:whileShown c:CodeEditor ;
     rdfs:label "the classes the graph's nodes have"@en ;
     sem:select """SELECT DISTINCT ?term WHERE { ?anyInstance a ?term }""" .
-# Partitioned by subject and object: a node with many statements (a list's members) is many small
-# partitions, so a statement added to it costs that statement.
-c:UsedProperties a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ; iv:partitionBy "anySubject anyObject" ;
+c:UsedProperties a iv:View ; iv:strategy iv:Incremental ; iv:materialize iv:Graph ; iv:whileShown c:CodeEditor ;
     rdfs:label "the predicates the graph uses"@en ;
     sem:select """SELECT DISTINCT ?term WHERE { ?anySubject ?term ?anyObject }""" .
 

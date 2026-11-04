@@ -47,14 +47,14 @@ ui:doc-text-doc a blk:Document ; schema:name "About blocks" ;
 ui:dt-h a blk:Heading1 ; rdf:value "A document is a graph" ; co:nextItem ui:dt-toc .
 ui:dt-toc a blk:Contents ; co:nextItem ui:dt-p1 .
 ui:dt-p1 a blk:Paragraph ; co:nextItem ui:dt-h2 ;
-    rdf:value "Every block is a resource, its text is a literal and its marks are ranges: bold, italic, code, struck out, a link, or a mention of Ada." ;
+    rdf:value "Every block is a resource, its text is a literal and its marks are ranges: bold, italic, code, struck out, a link, or a mention of Semblance." ;
     blk:mark ui:dt-p1-b , ui:dt-p1-i , ui:dt-p1-c , ui:dt-p1-s , ui:dt-p1-l , ui:dt-p1-m .
 ui:dt-p1-b a blk:Strong ; oa:start 75 ; oa:end 79 .
 ui:dt-p1-i a blk:Emphasis ; oa:start 81 ; oa:end 87 .
 ui:dt-p1-c a blk:InlineCode ; oa:start 89 ; oa:end 93 .
 ui:dt-p1-s a blk:Strike ; oa:start 95 ; oa:end 105 .
-ui:dt-p1-l a blk:Link ; oa:start 109 ; oa:end 113 ; schema:url "https://www.w3.org/TR/annotation-vocab/" .
-ui:dt-p1-m a blk:Mention ; oa:start 131 ; oa:end 134 ; oa:hasBody <https://semblance.dev/demo#ada> .
+ui:dt-p1-l a blk:Link ; oa:start 109 ; oa:end 113 ; schema:url "https://github.com/inferal-oss/semblance/blob/main/docs/BLOCKS.md" .
+ui:dt-p1-m a blk:Mention ; oa:start 131 ; oa:end 140 ; oa:hasBody <https://github.com/inferal-oss/semblance> .
 ui:dt-h2 a blk:Heading2 ; rdf:value "In DoCo" ; co:nextItem ui:dt-p2 .
 ui:dt-p2 a blk:Paragraph ; co:nextItem ui:dt-quote ;
     rdf:value "A paragraph is a doco:Paragraph, a heading a doco:SectionTitle, a quote a doco:BlockQuotation." ;
@@ -124,7 +124,7 @@ ui:dm-code a blk:Code ; schema:programmingLanguage "turtle" ; co:nextItem ui:dm-
 ui:dm-math a blk:Math ; rdf:value "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}" ; co:nextItem ui:dm-image .
 ui:dm-image a blk:Image ; dnd:members blk:file ; file:keepIn blk:Uploads ; file:accept "image/*" ; schema:contentUrl "photos/harbour.jpg" ; schema:description "A harbour at dusk, boats moored along the quay" ; schema:caption "An image block: the picture (schema:contentUrl), its description and its caption." ; co:nextItem ui:dm-file .
 ui:dm-file a blk:File ; dnd:members blk:file ; file:keepIn blk:Uploads ; schema:contentUrl "/llms.txt" ; schema:name "llms.txt" ; schema:contentSize "4 KB" ; co:nextItem ui:dm-bookmark .
-ui:dm-bookmark a blk:Bookmark ; schema:url "http://purl.org/spar/doco" ; schema:name "DoCo, the Document Components Ontology" ;
+ui:dm-bookmark a blk:Bookmark ; schema:url "https://github.com/inferal-oss/semblance/blob/main/ontology/vendor/doco-2026-10-05.ttl" ; schema:name "DoCo, the Document Components Ontology" ;
     schema:description "Structural and rhetorical components of documents: paragraphs, sections, lists, figures, tables." ; co:nextItem ui:dm-link .
 ui:dm-link a blk:DocumentLink ; blk:target ui:doc-text-doc .
 

@@ -65,6 +65,7 @@ function site(opts: SemblancePluginOptions): Plugin {
   let disabled = false
   /** The chunk of each graph a client imports on its own (`ontology/<file>`, `demo/gallery/<file>`: by path from the project). */
   let graphChunks: Record<string, string> = {}
+  let generated = false
   const plugin: Plugin = {
     name: NAME,
     apply: 'build',
@@ -75,6 +76,7 @@ function site(opts: SemblancePluginOptions): Plugin {
       disabled = c.plugins.find((p) => p.name === NAME) !== plugin
     },
     generateBundle(_, bundle) {
+      generated = true
       if (disabled || config.build.ssr) return
       // A Turtle file imported on its own (?raw, lazily) is a chunk a page can preload by its graph's
       // name: the framework's `ontology/<file>`, the app's by its path from the site description's folder.
@@ -109,7 +111,8 @@ function site(opts: SemblancePluginOptions): Plugin {
         assets.map((a) => `<link rel="preload" as="fetch" type="application/wasm" crossorigin href="${base}${a.fileName}">`).join('')
     },
     async closeBundle() {
-      if (disabled || !config || config.build.ssr) return
+      // A build that failed before the bundle was written closes too: no pages to render, and its own error shows.
+      if (!generated || disabled || !config || config.build.ssr) return
       const single = opts.single ?? config.mode === 'single'
       const outDir = resolve(config.root, config.build.outDir)
       const base = config.base.startsWith('/') ? config.base : '/'
