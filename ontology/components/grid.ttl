@@ -147,7 +147,7 @@ c:isSelected a owl:DatatypeProperty ; rdfs:domain c:GridRow ; rdfs:range xsd:boo
 c:tabStop a owl:DatatypeProperty ; rdfs:domain c:GridRow ; rdfs:range xsd:boolean ;
     rdfs:comment "The row Tab enters the grid at: the selected one, else the first."@en .
 c:selectsRow a owl:ObjectProperty ; rdfs:comment "On a rendered row: the member that activating it selects (or deselects)."@en .
-c:resizes a owl:ObjectProperty ; rdfs:comment "On a rendered separator: the column whose c:width it sets."@en .
+c:resizes a owl:ObjectProperty ; rdfs:comment "On a rendered separator: the column, panel or docked frame whose size it sets."@en .
 c:windowTo a owl:DatatypeProperty ; rdfs:comment "On a rendered button: the sequence activating it pins the window at."@en .
 c:followsLatest a owl:DatatypeProperty ; rdfs:comment "On a rendered button: activating it follows the newest members again."@en .
 c:shownEnd a owl:DatatypeProperty ; rdfs:comment "On <grid>/~window: the sequence of the newest row shown (where selecting pins)."@en .

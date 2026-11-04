@@ -24,6 +24,7 @@
 #   c:Minimizable  c:windowState c:Minimized (hidden; its desktop's c:Taskbar restores it)
 #   c:Maximizable  c:windowState c:Maximized (fills the viewport)
 #   c:Dockable     c:attachedTo an edge of the viewport; dropped near an edge, or thrown at one, it snaps there
+#   c:DockResizable  docked, its free edge (data-sem-gesture="size") sizes it: c:width or c:height
 #
 # State is two orthogonal, hookable axes (sty:hookAttribute), so the theme styles each
 # value once for every frame: c:windowState (data-sem-window-state) and c:attachedTo
@@ -95,6 +96,17 @@ dragging it away, or a control marked c:undocks, floats it again where it was. A
 where its momentum would carry it (c:throwTime), so a frame thrown at an edge docks there too."""@en ;
     c:snapDistance 24 ;
     c:throwTime 160 .
+
+c:DockResizable a owl:Class ;
+    rdfs:subClassOf c:Dockable ;
+    rdfs:label "Resizable when docked"@en , "Змінює розмір, коли прикріплене"@uk , "Angedockt größenveränderbar"@de , "قابل لتغيير الحجم عند التثبيت"@ar ;
+    rdfs:comment """Mixin: while attached to an edge, the edge opposite it is a size handle (role=separator):
+dragged, or moved with the arrow keys, Home and End, it commits one beh:Size event, and the frame's
+c:width (at the start or end) or c:height (at the top or bottom) becomes that size, at least c:minSize
+(default 240 px for a frame) and at most c:maxSize and the room there is. Floating or maximized it
+has no handle. A frame opts in by having the class (`a c:Window , c:DockResizable`); without it a
+docked frame keeps the size the graph says. Edges are logical, so where the text runs right to left
+a frame docked at the start has its left edge free. A c:DockPanel always has it."""@en .
 
 c:snapDistance a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:integer ;
     rdfs:comment "How close to an edge (CSS px) the pointer must be released for a c:Dockable frame to snap to it."@en .
@@ -174,6 +186,7 @@ c:RestoreCommand a c:Phrase ; rdfs:label "Restore"@en , "Відновити"@uk 
 c:MoveHandle a c:Phrase ; rdfs:label "Move"@en , "Перемістити"@uk , "Verschieben"@de , "نقل"@ar .
 c:MoveHint a c:Phrase ; rdfs:label "Drag, or use the arrow keys; at an edge it docks"@en , "Перетягніть або скористайтеся стрілками; біля краю прикріплюється"@uk ,
     "Ziehen oder mit den Pfeiltasten bewegen; am Rand dockt es an"@de , "اسحب أو استخدم مفاتيح الأسهم؛ عند الحافة يثبت"@ar .
+c:ResizeCommand a c:Phrase ; rdfs:label "Resize"@en , "Змінити розмір"@uk , "Größe ändern"@de , "تغيير الحجم"@ar .
 c:UndockCommand a c:Phrase ; rdfs:label "Float"@en , "Відкріпити"@uk , "Lösen"@de , "فك التثبيت"@ar .
 c:ReturnToTabCommand a c:Phrase ; rdfs:label "Return to its tab"@en , "Повернути у вкладку"@uk , "Zurück in den Tab"@de , "إرجاع إلى علامة التبويب"@ar .
 c:WindowsRegion a c:Phrase ; rdfs:label "Windows"@en , "Вікна"@uk , "Fenster"@de , "النوافذ"@ar .
@@ -242,11 +255,11 @@ c:WindowRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     # It also reads the other frames on its desktops (one maximized in front covers it).
     sem:follows ( [ sem:inverse c:hosts ] c:hosts ) ;
-    sem:watches rdf:type , c:open , c:windowState , c:attachedTo , c:title , c:label , c:body , c:index , c:width , c:height , c:x , c:y , c:z , prov:wasDerivedFrom , c:hosts , c:tileLayout ;
+    sem:watches rdf:type , c:open , c:windowState , c:attachedTo , c:title , c:label , c:body , c:index , c:width , c:height , c:minSize , c:maxSize , c:x , c:y , c:z , prov:wasDerivedFrom , c:hosts , c:tileLayout ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:style ?style ;
-        rdfhtml:attribute ?roleAttr , ?nameAttr , ?tiledAttr ; rdfhtml:hasChild ?bar , ?body , ?grip .
+        rdfhtml:attribute ?roleAttr , ?nameAttr , ?tiledAttr ; rdfhtml:hasChild ?bar , ?body , ?grip , ?handle .
   ?tiledAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-tiled" ; rdfhtml:attributeValue "true" .
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
   ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?title .
@@ -261,10 +274,24 @@ CONSTRUCT {
   ?controlAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-control" ; rdfhtml:attributeValue ?controlName .
   ?controlLabelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?controlLabel .
   ?controlText a rdfhtml:Text ; rdfhtml:data ?glyph .
-  ?body a rdfhtml:Div ; rdfhtml:class "sem-window-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?grip .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-window-body" ; rdfhtml:id ?bodyId ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?grip , ?handle .
   ?grip a rdfhtml:Div ; rdfhtml:class "sem-window-grip" ; rdfhtml:attribute ?gripGesture , ?gripHidden .
   ?gripGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "resize" .
   ?gripHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?handle a rdfhtml:Div ; rdfhtml:class "sem-dock-handle" ; rdfhtml:tabIndex "0" ; c:resizes $this ;
+          rdfhtml:attribute ?hRole , ?hOrientation , ?hNow , ?hMin , ?hMax , ?hControls , ?hLabel , ?hGesture , ?hAxis , ?hSign , ?hMinPx , ?hMaxPx .
+  ?hRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "separator" .
+  ?hOrientation a rdfhtml:Attribute ; rdfhtml:attributeName "aria-orientation" ; rdfhtml:attributeValue ?orientation .
+  ?hNow a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuenow" ; rdfhtml:attributeValue ?dockNow .
+  ?hMin a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuemin" ; rdfhtml:attributeValue ?minText .
+  ?hMax a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuemax" ; rdfhtml:attributeValue ?maxText .
+  ?hControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?bodyId .
+  ?hLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?resizeLabel .
+  ?hGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "size" .
+  ?hAxis a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-axis" ; rdfhtml:attributeValue ?axis .
+  ?hSign a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-sign" ; rdfhtml:attributeValue ?sign .
+  ?hMinPx a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-min" ; rdfhtml:attributeValue ?minText .
+  ?hMaxPx a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-max" ; rdfhtml:attributeValue ?maxText .
 }
 WHERE {
   $this a c:Window .
@@ -285,6 +312,8 @@ WHERE {
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Minimizable } AS ?minimizable)
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Maximizable } AS ?maximizable)
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Dockable } AS ?dockable)
+  # Attached to an edge and c:DockResizable: its free edge sizes it, within c:minSize and c:maxSize.
+  BIND(BOUND(?edge) && EXISTS { $this a/rdfs:subClassOf* c:DockResizable } AS ?dockSized)
   BIND(EXISTS { $this prov:wasDerivedFrom ?origin . ?origin a c:Tab } AS ?fromTab)
   OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
   OPTIONAL { FILTER(!BOUND(?pickt)) ?l10nAt_anyt l10n:of $this ; l10n:title ?anyt } OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:title ?l10nPick }) }
@@ -369,8 +398,43 @@ WHERE {
   OPTIONAL { $this c:y ?yRaw }
   OPTIONAL { $this c:z ?zRaw }
   BIND(COALESCE(xsd:integer(ROUND(xsd:double(?indexRaw))), 0) AS ?index)
-  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?widthRaw))), IF(?isWindow, 520, 240)) AS ?width)
-  BIND(IF(BOUND(?heightRaw) || ?isWindow, COALESCE(xsd:integer(ROUND(xsd:double(?heightRaw))), 440), ?none) AS ?height)
+  OPTIONAL { $this c:minSize ?minRaw }
+  OPTIONAL { $this c:maxSize ?maxRaw }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?minRaw))), 240) AS ?dockMin)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?maxRaw))), 4096) AS ?dockMax)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?widthRaw))), IF(?isWindow, 520, 240)) AS ?ownWidth)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?heightRaw))), IF(?isWindow, 440, 240)) AS ?ownHeight)
+  BIND(IF(?dockSized, IF(?ownWidth > ?dockMax, ?dockMax, IF(?ownWidth < ?dockMin, ?dockMin, ?ownWidth)), ?ownWidth) AS ?width)
+  BIND(IF(?dockSized, IF(?ownHeight > ?dockMax, ?dockMax, IF(?ownHeight < ?dockMin, ?dockMin, ?ownHeight)), ?ownHeight) AS ?sizedHeight)
+  # A palette is as tall as its content unless it says otherwise, or is sized along the height.
+  BIND(IF(BOUND(?heightRaw) || ?isWindow || (?dockSized && ?edge IN ("top", "bottom")), ?sizedHeight, ?none) AS ?height)
+  # The size handle on the free edge: along x at the start or end, along y at the top or bottom;
+  # dragging away from the edge it is docked to grows it.
+  BIND(?shown && ?dockSized AS ?handled)
+  BIND(?handled && ?edge IN ("start", "end") AS ?across)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle")), ?none) AS ?handle)
+  BIND(IF(?handled, STR(?body), ?none) AS ?bodyId)
+  BIND(IF(?across, "vertical", "horizontal") AS ?orientation)
+  BIND(IF(?across, "x", "y") AS ?axis)
+  BIND(IF(?handled && ?edge IN ("start", "top"), "1", "-1") AS ?sign)
+  BIND(STR(IF(?across, ?width, ?sizedHeight)) AS ?dockNow)
+  BIND(STR(?dockMin) AS ?minText)
+  BIND(STR(?dockMax) AS ?maxText)
+  OPTIONAL { ?resizeAt l10n:of c:ResizeCommand ; l10n:name ?resizePick }
+  OPTIONAL { FILTER(!BOUND(?resizePick)) c:ResizeCommand rdfs:label ?resizeOnly }
+  BIND(CONCAT(STR(COALESCE(?resizePick, ?resizeOnly, "Resize")), ": ", ?title) AS ?resizeLabel)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-role")), ?none) AS ?hRole)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-orientation")), ?none) AS ?hOrientation)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-valuenow")), ?none) AS ?hNow)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-valuemin")), ?none) AS ?hMin)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-valuemax")), ?none) AS ?hMax)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-controls")), ?none) AS ?hControls)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-label")), ?none) AS ?hLabel)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-gesture")), ?none) AS ?hGesture)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-axis")), ?none) AS ?hAxis)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-sign")), ?none) AS ?hSign)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-min")), ?none) AS ?hMinPx)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-max")), ?none) AS ?hMaxPx)
   BIND(COALESCE(xsd:integer(ROUND(xsd:double(?xRaw))), 96 + ?index * 28) AS ?x)
   BIND(COALESCE(xsd:integer(ROUND(xsd:double(?yRaw))), 120 + ?index * 28) AS ?y)
   BIND(CONCAT("width: ", STR(?width), "px;") AS ?widthDecl)
@@ -430,11 +494,11 @@ c:PaletteRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     # It also reads the other frames on its desktops (one maximized in front covers it).
     sem:follows ( [ sem:inverse c:hosts ] c:hosts ) ;
-    sem:watches rdf:type , c:open , c:windowState , c:attachedTo , c:title , c:label , c:body , c:index , c:width , c:height , c:x , c:y , c:z , prov:wasDerivedFrom , c:hosts ;
+    sem:watches rdf:type , c:open , c:windowState , c:attachedTo , c:title , c:label , c:body , c:index , c:width , c:height , c:minSize , c:maxSize , c:x , c:y , c:z , prov:wasDerivedFrom , c:hosts ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:style ?style ;
-        rdfhtml:attribute ?roleAttr , ?nameAttr ; rdfhtml:hasChild ?bar , ?body , ?grip .
+        rdfhtml:attribute ?roleAttr , ?nameAttr ; rdfhtml:hasChild ?bar , ?body , ?grip , ?handle .
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
   ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?title .
   ?bar a rdfhtml:Header ; rdfhtml:class "sem-window-bar" ; rdfhtml:attribute ?moveAttr ; rdfhtml:hasChild ?titleEl ;
@@ -448,10 +512,24 @@ CONSTRUCT {
   ?controlAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-control" ; rdfhtml:attributeValue ?controlName .
   ?controlLabelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?controlLabel .
   ?controlText a rdfhtml:Text ; rdfhtml:data ?glyph .
-  ?body a rdfhtml:Div ; rdfhtml:class "sem-window-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?grip .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-window-body" ; rdfhtml:id ?bodyId ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?grip , ?handle .
   ?grip a rdfhtml:Div ; rdfhtml:class "sem-window-grip" ; rdfhtml:attribute ?gripGesture , ?gripHidden .
   ?gripGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "resize" .
   ?gripHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?handle a rdfhtml:Div ; rdfhtml:class "sem-dock-handle" ; rdfhtml:tabIndex "0" ; c:resizes $this ;
+          rdfhtml:attribute ?hRole , ?hOrientation , ?hNow , ?hMin , ?hMax , ?hControls , ?hLabel , ?hGesture , ?hAxis , ?hSign , ?hMinPx , ?hMaxPx .
+  ?hRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "separator" .
+  ?hOrientation a rdfhtml:Attribute ; rdfhtml:attributeName "aria-orientation" ; rdfhtml:attributeValue ?orientation .
+  ?hNow a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuenow" ; rdfhtml:attributeValue ?dockNow .
+  ?hMin a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuemin" ; rdfhtml:attributeValue ?minText .
+  ?hMax a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuemax" ; rdfhtml:attributeValue ?maxText .
+  ?hControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?bodyId .
+  ?hLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?resizeLabel .
+  ?hGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "size" .
+  ?hAxis a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-axis" ; rdfhtml:attributeValue ?axis .
+  ?hSign a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-sign" ; rdfhtml:attributeValue ?sign .
+  ?hMinPx a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-min" ; rdfhtml:attributeValue ?minText .
+  ?hMaxPx a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-max" ; rdfhtml:attributeValue ?maxText .
 }
 WHERE {
   $this a c:Palette .
@@ -469,6 +547,8 @@ WHERE {
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Minimizable } AS ?minimizable)
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Maximizable } AS ?maximizable)
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Dockable } AS ?dockable)
+  # Attached to an edge and c:DockResizable: its free edge sizes it, within c:minSize and c:maxSize.
+  BIND(BOUND(?edge) && EXISTS { $this a/rdfs:subClassOf* c:DockResizable } AS ?dockSized)
   BIND(EXISTS { $this prov:wasDerivedFrom ?origin . ?origin a c:Tab } AS ?fromTab)
   OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
   OPTIONAL { FILTER(!BOUND(?pickt)) ?l10nAt_anyt l10n:of $this ; l10n:title ?anyt } OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:title ?l10nPick }) }
@@ -552,8 +632,43 @@ WHERE {
   OPTIONAL { $this c:y ?yRaw }
   OPTIONAL { $this c:z ?zRaw }
   BIND(COALESCE(xsd:integer(ROUND(xsd:double(?indexRaw))), 0) AS ?index)
-  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?widthRaw))), IF(?isWindow, 520, 240)) AS ?width)
-  BIND(IF(BOUND(?heightRaw) || ?isWindow, COALESCE(xsd:integer(ROUND(xsd:double(?heightRaw))), 440), ?none) AS ?height)
+  OPTIONAL { $this c:minSize ?minRaw }
+  OPTIONAL { $this c:maxSize ?maxRaw }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?minRaw))), 240) AS ?dockMin)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?maxRaw))), 4096) AS ?dockMax)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?widthRaw))), IF(?isWindow, 520, 240)) AS ?ownWidth)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?heightRaw))), IF(?isWindow, 440, 240)) AS ?ownHeight)
+  BIND(IF(?dockSized, IF(?ownWidth > ?dockMax, ?dockMax, IF(?ownWidth < ?dockMin, ?dockMin, ?ownWidth)), ?ownWidth) AS ?width)
+  BIND(IF(?dockSized, IF(?ownHeight > ?dockMax, ?dockMax, IF(?ownHeight < ?dockMin, ?dockMin, ?ownHeight)), ?ownHeight) AS ?sizedHeight)
+  # A palette is as tall as its content unless it says otherwise, or is sized along the height.
+  BIND(IF(BOUND(?heightRaw) || ?isWindow || (?dockSized && ?edge IN ("top", "bottom")), ?sizedHeight, ?none) AS ?height)
+  # The size handle on the free edge: along x at the start or end, along y at the top or bottom;
+  # dragging away from the edge it is docked to grows it.
+  BIND(?shown && ?dockSized AS ?handled)
+  BIND(?handled && ?edge IN ("start", "end") AS ?across)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle")), ?none) AS ?handle)
+  BIND(IF(?handled, STR(?body), ?none) AS ?bodyId)
+  BIND(IF(?across, "vertical", "horizontal") AS ?orientation)
+  BIND(IF(?across, "x", "y") AS ?axis)
+  BIND(IF(?handled && ?edge IN ("start", "top"), "1", "-1") AS ?sign)
+  BIND(STR(IF(?across, ?width, ?sizedHeight)) AS ?dockNow)
+  BIND(STR(?dockMin) AS ?minText)
+  BIND(STR(?dockMax) AS ?maxText)
+  OPTIONAL { ?resizeAt l10n:of c:ResizeCommand ; l10n:name ?resizePick }
+  OPTIONAL { FILTER(!BOUND(?resizePick)) c:ResizeCommand rdfs:label ?resizeOnly }
+  BIND(CONCAT(STR(COALESCE(?resizePick, ?resizeOnly, "Resize")), ": ", ?title) AS ?resizeLabel)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-role")), ?none) AS ?hRole)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-orientation")), ?none) AS ?hOrientation)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-valuenow")), ?none) AS ?hNow)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-valuemin")), ?none) AS ?hMin)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-valuemax")), ?none) AS ?hMax)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-controls")), ?none) AS ?hControls)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-aria-label")), ?none) AS ?hLabel)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-gesture")), ?none) AS ?hGesture)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-axis")), ?none) AS ?hAxis)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-sign")), ?none) AS ?hSign)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-min")), ?none) AS ?hMinPx)
+  BIND(IF(?handled, IRI(CONCAT(STR($this), "/~handle-data-sem-max")), ?none) AS ?hMaxPx)
   BIND(COALESCE(xsd:integer(ROUND(xsd:double(?xRaw))), 96 + ?index * 28) AS ?x)
   BIND(COALESCE(xsd:integer(ROUND(xsd:double(?yRaw))), 120 + ?index * 28) AS ?y)
   BIND(CONCAT("width: ", STR(?width), "px;") AS ?widthDecl)

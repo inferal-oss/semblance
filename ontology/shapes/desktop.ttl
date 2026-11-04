@@ -11,3 +11,10 @@ c:DesktopShape a sh:NodeShape ; sh:targetClass c:Desktop ;
                   sh:message "A tiling desktop has 1 to 24 columns at most." ] ,
                 [ sh:path c:minWidth ; sh:maxCount 1 ; sh:pattern "^[0-9]+([.][0-9]+)?(px|rem|em|ch|vw|%)$" ;
                   sh:message "A tile's least width is a CSS length (\"320px\", \"20rem\")." ] .
+
+# What a docked frame's free edge may size it to (c:DockResizable).
+c:DockResizableShape a sh:NodeShape ; sh:targetClass c:DockResizable ;
+    sh:property [ sh:path c:minSize ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ; sh:lessThanOrEquals c:maxSize ;
+                  sh:message "A docked size's least (c:minSize) is a whole number of px, no more than its most (c:maxSize)." ] ,
+                [ sh:path c:maxSize ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ;
+                  sh:message "A docked size's most (c:maxSize) is a whole number of px." ] .

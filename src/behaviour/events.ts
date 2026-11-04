@@ -1093,14 +1093,16 @@ export class EventBus {
    * edge). The handle says what it sizes (data-sem-sizes: "previous" or "next" for a sibling,
    * else a selector for its closest ancestor, else the nearest component root), along which
    * axis (data-sem-axis "x" or "y"), in which direction (data-sem-sign -1 when dragging toward
-   * the start grows it) and within which bounds (data-sem-min, data-sem-max, in px). While
+   * the start grows it) and within which bounds (data-sem-min, data-sem-max, in px, and the
+   * sized element's own CSS max-width or max-height). While
    * dragging only the view changes; on release one sem-size DOM event carries the new size
    * and the room there was (the sized element's parent along the axis) into a beh:Size event.
    */
   private sizeGesture(e: PointerEvent, handle: HTMLElement, renderer: DomRenderer) {
     const target = sizedBy(handle, renderer)
     if (!target) return
-    const { axis, sign, min, max } = sizing(handle)
+    const { axis, sign, min, max: said } = sizing(handle)
+    const max = Math.min(said, cssMax(target, axis))
     const start = { at: axis === 'x' ? e.clientX : e.clientY, size: measure(target, axis) }
     const original = target.getAttribute('style')
     e.preventDefault()
@@ -1270,19 +1272,34 @@ function sizing(handle: HTMLElement) {
   }
 }
 
-const rtl = (el: HTMLElement) => {
-  try {
-    return el.ownerDocument.defaultView?.getComputedStyle(el).direction === 'rtl'
-  } catch {
-    return false
-  }
-}
+const rtl = (el: HTMLElement) => computed(el)?.direction === 'rtl'
 
 const measure = (el: HTMLElement, axis: 'x' | 'y') => {
   const r = el.getBoundingClientRect?.()
   return (axis === 'x' ? (r?.width ?? el.offsetWidth) : (r?.height ?? el.offsetHeight)) || 0
 }
-const extentOf = (el: HTMLElement, axis: 'x' | 'y') => (el.parentElement ? measure(el.parentElement, axis) : 0)
+/** The room there is along an axis: the viewport for a fixed box, whose parent does not hold it, else its parent. */
+const extentOf = (el: HTMLElement, axis: 'x' | 'y') => {
+  if (computed(el)?.position === 'fixed') {
+    const view = el.ownerDocument.documentElement
+    return axis === 'x' ? view.clientWidth : view.clientHeight
+  }
+  return el.parentElement ? measure(el.parentElement, axis) : 0
+}
+
+const computed = (el: HTMLElement) => {
+  try {
+    return el.ownerDocument.defaultView?.getComputedStyle(el)
+  } catch {
+    return undefined
+  }
+}
+
+/** The most a theme lets a box be along an axis, where it resolves to px (a percentage does not). */
+const cssMax = (el: HTMLElement, axis: 'x' | 'y') => {
+  const max = computed(el)?.[axis === 'x' ? 'maxWidth' : 'maxHeight']
+  return max?.endsWith('px') ? parseFloat(max) : Infinity
+}
 
 /** The sem-size DOM event, made by the handle's own window (a test DOM refuses foreign events). */
 const sizeEvent = (handle: HTMLElement, size: number, extent: number) =>
@@ -1305,12 +1322,13 @@ function setSize(el: HTMLElement, axis: 'x' | 'y', size: number) {
 export function sizeByKey(k: KeyboardEvent, renderer: DomRenderer): boolean {
   const handle = (k.target as Element | null)?.closest?.('[data-sem-gesture="size"]') as HTMLElement | null
   if (!handle || !renderer.host.contains(handle) || k.altKey || k.ctrlKey || k.metaKey) return false
-  const { axis, sign, min, max, step } = sizing(handle)
+  const { axis, sign, min, max: said, step } = sizing(handle)
   const forward = axis === 'x' ? 'ArrowRight' : 'ArrowDown'
   const back = axis === 'x' ? 'ArrowLeft' : 'ArrowUp'
   if (![forward, back, 'Home', 'End'].includes(k.key)) return false
   const target = sizedBy(handle, renderer)
   if (!target) return false
+  const max = Math.min(said, cssMax(target, axis))
   const current = measure(target, axis)
   const size =
     k.key === 'Home' ? min : k.key === 'End' ? (Number.isFinite(max) ? max : current) : Math.min(max, Math.max(min, current + sign * (k.key === forward ? step : -step)))

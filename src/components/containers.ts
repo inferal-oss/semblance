@@ -5,7 +5,7 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { BEH, C, DND, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { mint, type Delta } from '../rdf.ts'
-import { md5 } from './data.ts'
+import { el, md5 } from './data.ts'
 import { FB, hitMarks, phrase } from './feedback.ts'
 import { gridTracks } from './layout.ts'
 import { encodeForUri, named, RDFS_LABEL, str, text } from './util.ts'
@@ -21,6 +21,10 @@ export const WIN = {
   Minimizable: c + 'Minimizable',
   Maximizable: c + 'Maximizable',
   Dockable: c + 'Dockable',
+  DockResizable: c + 'DockResizable',
+  minSize: c + 'minSize',
+  maxSize: c + 'maxSize',
+  resizes: c + 'resizes',
   windowState: c + 'windowState',
   Normal: c + 'Normal',
   Minimized: c + 'Minimized',
@@ -50,6 +54,7 @@ export const WIN = {
   Maximize: c + 'MaximizeCommand',
   Restore: c + 'RestoreCommand',
   Undock: c + 'UndockCommand',
+  Resize: c + 'ResizeCommand',
   Move: c + 'MoveHandle',
   MoveHint: c + 'MoveHint',
   ReturnToTab: c + 'ReturnToTabCommand',
@@ -94,7 +99,7 @@ export function classesOf(ctx: RuleContext, node: Term): Set<string> {
 }
 
 /** The same for reactions, which read the state before the event. */
-function classesIn(ctx: ReactionContext, node: Term): Set<string> {
+export function classesIn(ctx: ReactionContext, node: Term): Set<string> {
   const f = ctx.runtime.store.factory
   const out = new Set<string>()
   const objects = (s: Term | string, p: string) => ctx.match(typeof s === 'string' ? f.namedNode(s) : s, p, null).map((q) => q.object)
@@ -177,11 +182,18 @@ export const frame: FnRule = (ctx, focus) => {
 
   const bar = o.el('bar', 'Header', { class: 'sem-window-bar' }, [o.el('title', 'Strong', {}, [o.text('title-text', title)]), ...controls])
   if (caps.has(WIN.Draggable) && !maximized && !tiled) o.attr(bar, 'data-sem-gesture', 'move')
-  const parts = [bar, o.el('body', 'Div', { class: 'sem-window-body' }, content)]
+  const dockSized = !!edge && caps.has(WIN.DockResizable)
+  const main = o.el('body', 'Div', { class: 'sem-window-body', id: dockSized ? o.node('body').value : undefined }, content)
+  const parts = [bar, main]
   if (caps.has(WIN.Resizable) && !maximized && !edge && !tiled) {
     const grip = o.el('grip', 'Div', { class: 'sem-window-grip' })
     o.attr(grip, 'data-sem-gesture', 'resize').attr(grip, 'aria-hidden', 'true')
     parts.push(grip)
+  }
+  if (dockSized) {
+    const across = edge.slug === 'start' || edge.slug === 'end'
+    const { width, height, min, max } = dockSizes(ctx, focus, caps)
+    parts.push(dockHandle(ctx, o, focus, edge.slug, across ? width : height, min, max, title, main))
   }
   o.renders(o.el('root', 'Section', { style: tiled ? undefined : geometry(ctx, focus, caps, maximized, edge?.slug), hidden: hidden ? '' : undefined }, parts))
   const root = o.node('root')
@@ -208,6 +220,46 @@ function coveredByMaximized(ctx: RuleContext, focus: NamedNode): boolean {
   return false
 }
 
+/** Unless c:maxSize says less: more than any screen, the room there is decides first. */
+export const DOCK_MAX = 4096
+const DOCK_MIN = 240
+
+/**
+ * A size handle on the free edge of what is docked at `edge` (c:DockResizable), the WAI-ARIA window
+ * splitter: dragging away from the edge grows it, along x at the start or end, y at the top or bottom.
+ */
+export function dockHandle(ctx: RuleContext, o: Out, focus: NamedNode, edge: string, size: number, min: number, max: number, name: string | undefined, controls: NamedNode): NamedNode {
+  const across = edge === 'start' || edge === 'end'
+  const command = phrase(ctx, WIN.Resize, 'Resize')
+  const handle = el(o, 'handle', 'Div', {
+    class: 'sem-dock-handle',
+    tabIndex: '0',
+    role: 'separator',
+    'aria-orientation': across ? 'vertical' : 'horizontal',
+    'aria-valuenow': String(size),
+    'aria-valuemin': String(min),
+    'aria-valuemax': String(max),
+    'aria-controls': controls.value,
+    'aria-label': name ? `${command}: ${name}` : command,
+    'data-sem-gesture': 'size',
+    'data-sem-axis': across ? 'x' : 'y',
+    'data-sem-sign': edge === 'start' || edge === 'top' ? '1' : '-1',
+    'data-sem-min': String(min),
+    'data-sem-max': String(max),
+  })
+  o.t(handle, WIN.resizes, focus)
+  return handle
+}
+
+/** A docked frame's own size within its bounds, when its free edge sizes it. */
+function dockSizes(ctx: RuleContext, focus: NamedNode, caps: Set<string>) {
+  const window = caps.has(WIN.Window)
+  const min = int(ctx, focus, WIN.minSize, DOCK_MIN)
+  const max = int(ctx, focus, WIN.maxSize, DOCK_MAX)
+  const within = (v: number) => (v > max ? max : v < min ? min : v)
+  return { min, max, width: within(int(ctx, focus, C.width, window ? 520 : 240)), height: within(int(ctx, focus, C.height, window ? 440 : 240)) }
+}
+
 /** Default geometry, staggered by the window's position among its siblings. */
 const STAGGER = 28
 
@@ -215,9 +267,11 @@ const STAGGER = 28
 function geometry(ctx: RuleContext, focus: NamedNode, caps: Set<string>, maximized: boolean, edge: string | undefined): string | undefined {
   const window = caps.has(WIN.Window)
   const index = int(ctx, focus, C.index, 0)
-  const width = int(ctx, focus, C.width, window ? 520 : 240)
-  // A palette is as tall as its content unless it says otherwise.
-  const height = (ctx.object(focus, C.height) || window) ? int(ctx, focus, C.height, 440) : undefined
+  const sized = edge && caps.has(WIN.DockResizable) ? dockSizes(ctx, focus, caps) : undefined
+  const width = sized?.width ?? int(ctx, focus, C.width, window ? 520 : 240)
+  // A palette is as tall as its content unless it says otherwise, or is sized along the height.
+  const tall = ctx.object(focus, C.height) || window || (sized && (edge === 'top' || edge === 'bottom'))
+  const height = tall ? (sized?.height ?? int(ctx, focus, C.height, window ? 440 : 240)) : undefined
   const px = (p: string, v: number | undefined) => (v === undefined ? [] : [`${p}: ${v}px;`])
   const decls = maximized
     ? []
