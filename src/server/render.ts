@@ -12,6 +12,7 @@ import { type Projection, Runtime } from '../runtime.ts'
 import { prerenderSandboxes, type SandboxOptions } from '../sandbox.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
+import { rememberedPolicies, type RememberedPolicy } from './remembered.ts'
 
 export interface RenderOptions {
   /** The loaded store: the framework's ontology and the app's graphs (it is projected, and changed). */
@@ -51,6 +52,8 @@ export interface Rendered {
   dir: 'ltr' | 'rtl'
   /** The address as the graph spells it (the canonical URL of what was rendered). */
   address?: string
+  /** What the page can put back before its first paint (src/web/remembered.ts). */
+  remembered: RememberedPolicy[]
   runtime: Runtime
   projection: Projection
 }
@@ -104,12 +107,12 @@ export function graphLanguages(store: GraphStore, root: string): string[] {
 }
 
 /** Read the address and prepare the store: what decides the document's language, before projecting. */
-export async function readyToRender(opts: RenderOptions): Promise<{ status: number; address?: string; languages: string[]; lang: string; dir: 'ltr' | 'rtl' }> {
+export async function readyToRender(opts: RenderOptions): Promise<{ status: number; address?: string; languages: string[]; lang: string; dir: 'ltr' | 'rtl'; remembered: RememberedPolicy[] }> {
   const { store, root } = opts
   const { found, address } = opts.url !== undefined ? await readUrl(store, root, opts.url) : { found: true, address: undefined }
   opts.prepare?.(store)
   const languages = opts.languages ?? graphLanguages(store, root)
-  return { status: found ? 200 : 404, address, languages, ...documentLanguage(store, languages[0] ?? 'en') }
+  return { status: found ? 200 : 404, address, languages, remembered: rememberedPolicies(store, root), ...documentLanguage(store, languages[0] ?? 'en') }
 }
 
 /** Project the prepared store and serialize the root (after readyToRender). */

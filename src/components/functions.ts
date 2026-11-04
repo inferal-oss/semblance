@@ -389,7 +389,7 @@ const segmented: FnRule = (ctx, focus) => {
       ...(symbol ? [o.el('opt-' + key + '-symbol', 'Span', {}, [o.text('opt-' + key + '-symbol-text', symbol)])] : []),
       o.el('opt-' + key + '-label', 'Span', {}, [o.text('opt-' + key + '-label-text', label(ctx, opt))]),
     ]
-    const b = o.el('opt-' + key, 'Button', { type: navigates ? 'submit' : 'button' }, parts)
+    const b = o.el('opt-' + key, 'Button', { type: navigates ? 'submit' : 'button', value: opt.value }, parts)
     o.attr(b, 'aria-pressed', String(opt.value === current))
     o.t(b, C.selects, opt)
     if (item) o.t(b, LC.role, item)
