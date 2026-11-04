@@ -6,7 +6,8 @@
 // solution (its group and the groups around it) until it reaches the partition key: those are
 // the partitions to evaluate again. Probes read the store with this tick's removed triples put
 // back (the union of the old and the new state), so a solution that existed before the change,
-// or exists after it, is found either way. A pattern that cannot reach the key (a setting that
+// or exists after it, is found either way. A required UNION or subquery is walked through, every
+// branch of it: a solution is in one of them. A pattern that cannot reach the key (a setting that
 // gates every row; anything under LIMIT) is global: a change to it re-evaluates the view once.
 // An aggregate subquery maintained as a part of its own (a derived input) contributes no patterns:
 // a change of its rows binds the variables it projects, and probes from there.
@@ -26,6 +27,14 @@ interface Scope {
   global: boolean
   pats: Pat[]
   aliases: Alias[]
+  /** Required UNIONs and subqueries in it: every solution here is in one branch of each. */
+  joins: Scope[][]
+  /** Its OPTIONALs: a variable only they bind, when it has a value, comes from one of them. */
+  optionals: Scope[]
+  /** When it was read, among its siblings and BINDs. */
+  order: number
+  /** VALUES in it, per variable with a value in each row: what the variable can be. */
+  values: { v: string; terms: Term[] }[]
   /**
    * The variables its group certainly binds (OPTIONAL, MINUS, a UNION branch, a subquery): only
    * through these does a walk leave it - one it may leave unbound is compatible with any value
@@ -50,15 +59,29 @@ export interface Pat {
   scope: Scope
 }
 
-/** A step of a walk: through a pattern, or an alias (out: from ?to to its sources; in: the reverse), from a bound variable. */
-type Edge = { pat?: Pat; alias?: Alias; dir?: 'out' | 'in'; from: string }
+/** A required UNION or subquery walked through: from a variable to `to`, by a plan per branch. */
+interface JoinStep {
+  plans: WalkPlan[]
+  to: string[]
+}
+
+/** A BIND walked back: from its value to `to`, by a plan per source it can have come from. */
+interface SourceStep {
+  plans: Map<string, WalkPlan>
+  to: string[]
+}
+
+/** A step of a walk: through a pattern, an alias (out: its value to its sources; in: the reverse) or a join, from a bound variable. */
+type Edge = { pat?: Pat; alias?: Alias; dir?: 'out' | 'in'; sources?: SourceStep; join?: JoinStep; from: string }
 
 /** A walk planned for a pattern (or a derived row's scope) and the variables bound at its start. */
 interface WalkPlan {
   id: string
+  /** The variables it is after: the keys, or inside a join what the walk needs of it. */
+  goal: string[]
   /** The start's variables the walk reads (the rest only ride along). */
   reads: string[]
-  /** Every key bound at the start. */
+  /** Every goal bound at the start. */
   bound: boolean
   /** No key reachable: a change that joins anything around it touches every partition. */
   unreachable: boolean
@@ -66,15 +89,42 @@ interface WalkPlan {
   reached: Set<string>
   /** The patterns that prune rows, and their variables a row's binding of does not constrain them. */
   checks: { x: Pat; blocked: string[] }[]
+  /** What the variables around can be, whatever else holds: VALUES, and a BIND of nothing from the data. */
+  domains: { v: string; admits: (t: Term) => boolean }[]
 }
 
-/** BIND(?from AS ?to), BIND(COALESCE(?a, …) AS ?to), BIND(IF(…, ?a, ?b) AS ?to): ?to is one of ?from. */
-interface Alias {
-  to: string
+/** An IRI a BIND mints: CONCAT(<head>, "sep", …), its head a variable (or a constant string, `head` undefined). */
+interface Mint {
+  head?: string
+  /** The head was read through STR(): a node, whose IRI starts the minted one (else already a string). */
+  str: boolean
+  sep: string
+  /** Nothing follows the separator. */
+  last: boolean
+}
+
+/** What a BIND's expression can evaluate to. */
+interface Value {
+  /** Variables it can be the value of. */
   from: string[]
+  /** Variables it can be the STR() of. */
+  strs: string[]
+  constants: Term[]
+  mints: Mint[]
+  /** Something else: its values are not known. */
+  opaque: boolean
+  /** It cannot fail: ?to is certainly bound to one of the above, not left to match anything. */
+  total: boolean
+}
+
+/** BIND(?from AS ?to), BIND(COALESCE(?a, c:none) AS ?to), BIND(IF(…, ?a, ?b) AS ?to), BIND(IRI(CONCAT(STR(?a), "/~x")) AS ?to). */
+interface Alias extends Value {
+  to: string
   /** Whether the first source, when bound, is the value (COALESCE, a plain alias). */
   first: boolean
   scope: Scope
+  /** When it was read: an OPTIONAL after it is no source of it. */
+  order: number
 }
 
 /**
@@ -102,12 +152,16 @@ export class Dependencies {
     readonly keys: string[],
     private readonly derived: readonly Select[] = [],
     /**
-     * Prune also by patterns only partly bound (some triple must agree with what is bound), and when
-     * the change binds the key itself: fewer partitions for a rule (its focus), at a lookup per check.
+     * A rule's body rather than a view's. Prune also by patterns only partly bound (some triple must
+     * agree with what is bound), and when the change binds the key itself: fewer partitions (foci),
+     * at a lookup per check. And the keys ($this, $member) are substituted into the query's text: a
+     * constant in every group and subquery, whether it projects them or not, and never unbound (a
+     * view's key is an ordinary variable, private to a subquery that does not project it). `prefixes`
+     * read the constants of its expressions.
      */
-    private readonly semiJoin = false,
+    private readonly rule?: { prefixes: Map<string, string> },
   ) {
-    const root: Scope = { global: false, pats: [], aliases: [] }
+    const root: Scope = this.scope()
     try {
       this.group(where, root, (v) => v)
     } catch (e) {
@@ -164,10 +218,11 @@ export class Dependencies {
    * partitions. Probes `lookup` (old and new state together).
    */
   probe(p: Pat, q: Quad, lookup: Lookup): (Term | undefined)[][] | 'global' {
-    if (p.scope.global || this.inGlobal(p.scope)) return 'global'
+    const limited = this.limitedBy(p.scope)
+    if (limited && !this.rule) return 'global'
     const starts = this.bind(p, q, lookup)
     if (starts === 'global') return 'global'
-    return this.keysOf(starts.map((start) => this.walk(p.scope, p, start, lookup)))
+    return this.keysOf(starts.map((start) => this.walk(p.scope, p, start, lookup, limited)))
   }
 
   /**
@@ -198,8 +253,13 @@ export class Dependencies {
   }
 
   private inGlobal(s: Scope | undefined): boolean {
-    for (; s; s = s.parent) if (s.global) return true
-    return false
+    return !!this.limitedBy(s)
+  }
+
+  /** The innermost scope around `s` (or `s`) under LIMIT / OFFSET. */
+  private limitedBy(s: Scope | undefined): Scope | undefined {
+    for (; s; s = s.parent) if (s.global) return s
+    return undefined
   }
 
   /** Initial bindings of a pattern to a changed triple (several for closures). */
@@ -314,8 +374,15 @@ export class Dependencies {
   }
 
   /** From bindings in a scope (a pattern bound to a triple, or a derived row), join through the patterns around them until the keys are bound. */
-  private walk(scope: Scope, p: Pat | undefined, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
-    const plan = this.plan(scope, p, start)
+  private walk(scope: Scope, p: Pat | undefined, start: Map<string, Term>, lookup: Lookup, limited?: Scope): Map<string, Term>[] | 'global' {
+    const plan = this.plan(scope, p, start.keys(), this.keys, limited)
+    // Under LIMIT, a change can move rows it does not join: a focus among the subquery's own patterns has
+    // every row of it to itself, so it is that focus's window that moved. Otherwise any partition's.
+    if (limited && !plan.reached.has(this.keys[0]!)) return 'global'
+    return this.walkOnce(plan, start, lookup)
+  }
+
+  private walkOnce(plan: WalkPlan, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
     // The same walk again (another change binding the same variables the walk reads, as a value's
     // removal and its replacement do) is answered once per lookup (while the store holds still).
     let memo = this.walks.get(lookup)
@@ -335,7 +402,7 @@ export class Dependencies {
 
   private walkPlanned(plan: WalkPlan, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
     // Bound already: the key is the change's own (with semiJoin, if the patterns around it hold).
-    if (plan.bound) return !this.semiJoin || this.holds(plan, start, lookup) ? [start] : []
+    if (plan.bound) return !this.rule || this.holds(plan, start, lookup) ? [start] : []
     if (!this.holds(plan, start, lookup)) return []
     let rows = [start]
     for (const e of plan.needed) {
@@ -343,21 +410,35 @@ export class Dependencies {
       for (const r of rows) {
         if (e.pat) {
           for (const x of this.extend(e.pat, r, lookup)) next.push(x)
+        } else if (e.join) {
+          const t = r.get(e.from)
+          if (!t) continue
+          for (const branch of e.join.plans) {
+            const found = this.walkOnce(branch, new Map([[e.from, t]]), lookup)
+            if (found === 'global') return 'global'
+            for (const x of found) {
+              const row = mergeInto(r, x, e.join.to)
+              if (row) next.push(row)
+            }
+          }
+        } else if (e.sources) {
+          const t = r.get(e.from)
+          if (!t) continue
+          const sources = this.sourcesOf(e.alias!, t, e.sources)
+          if (sources === 'global') return 'global'
+          for (const [w, v] of sources) {
+            const found = this.walkOnce(e.sources.plans.get(w)!, new Map([[w, v]]), lookup)
+            if (found === 'global') return 'global'
+            for (const x of found) {
+              const row = mergeInto(r, x, e.sources.to)
+              if (row) next.push(row)
+            }
+          }
         } else {
           const a = e.alias!
-          if (e.dir === 'out') {
-            const t = r.get(a.to)
-            if (!t) continue
-            for (const w of a.from) {
-              const had = r.get(w)
-              if (had && !had.equals(t)) continue
-              next.push(new Map(r).set(w, t))
-            }
-          } else {
-            const t = r.get(a.from[0]!)
-            if (t && !r.has(a.to)) next.push(new Map(r).set(a.to, t))
-            else next.push(r)
-          }
+          const t = r.get(a.from[0]!)
+          if (t && !r.has(a.to)) next.push(new Map(r).set(a.to, t))
+          else next.push(r)
         }
         if (next.length > 50_000) return 'global'
       }
@@ -366,7 +447,29 @@ export class Dependencies {
       if (!rows.length) return []
     }
     if (plan.unreachable) return rows.length ? 'global' : []
-    return rows.filter((r) => this.keys.every((k) => r.has(k) || !plan.reached.has(k)))
+    return rows.filter((r) => plan.goal.every((k) => r.has(k) || !plan.reached.has(k)))
+  }
+
+  /**
+   * The variables a BIND's value can have come from, and what each is then; 'global' when it is
+   * a constant of the expression (every row without a source reads that node), or comes from
+   * something the walk cannot follow.
+   */
+  private sourcesOf(a: Alias, t: Term, step: SourceStep): [string, Term][] | 'global' {
+    if (a.constants.some((c) => same(c, t))) return 'global'
+    const out: [string, Term][] = a.from.map((w) => [w, t])
+    if (t.termType === 'Literal' && ABSOLUTE_IRI.test(t.value)) for (const w of a.strs) out.push([w, this.nn(t.value)])
+    if (t.termType === 'NamedNode')
+      for (const m of a.mints) {
+        const heads = mintHeads(m, t.value)
+        if (!heads.length) continue
+        if (m.head === undefined) return 'global'
+        for (const h of heads) {
+          if (!m.str) out.push([m.head, this.f.literal(h)])
+          else if (ABSOLUTE_IRI.test(h)) out.push([m.head, this.nn(h)])
+        }
+      }
+    return out.some(([w]) => !step.plans.has(w)) ? 'global' : out
   }
 
   /**
@@ -375,6 +478,10 @@ export class Dependencies {
    * reaches the partitions that hold the change, not every one its first edge leads to.
    */
   private holds(plan: WalkPlan, r: Map<string, Term>, lookup: Lookup): boolean {
+    for (const { v, admits } of plan.domains) {
+      const t = r.get(v)
+      if (t && !admits(t)) return false
+    }
     next: for (const { x, blocked } of plan.checks) {
       // (Only with what may leave its scope for x's: a variable an inner group may leave unbound is no constraint.)
       for (const v of blocked) if (r.has(v)) continue next
@@ -386,7 +493,7 @@ export class Dependencies {
       if (!s || !pp || !o) {
         // With a part unbound, it still needs some triple that agrees with what is bound (a
         // semi-join): unless nothing of it is bound by the row, which would say nothing about the row.
-        if (!this.semiJoin) continue
+        if (!this.rule) continue
         // (Only through an index of a bound node: a predicate alone would read all of it.)
         if ((!s && !o) || !patVars(x).some((v) => r.has(v))) continue
         if (pp && pp.termType !== 'NamedNode') continue
@@ -402,19 +509,24 @@ export class Dependencies {
 
   /**
    * How a walk goes from the variables `start` binds: breadth-first over the variables toward each
-   * key, through the patterns and aliases around (planned once per pattern and bound variables).
+   * goal (the keys), through the patterns, aliases and joins around (planned once per pattern and
+   * bound variables). `within`: no further out than this scope. `valued`: a start that a BIND read
+   * as having a value, which it can only have from a group that binds it before that BIND.
    */
-  private plan(scope: Scope, p: Pat | undefined, start: Map<string, Term>): WalkPlan {
+  private plan(scope: Scope, p: Pat | undefined, start: Iterable<string>, goal: string[], within?: Scope, valued?: Alias): WalkPlan {
     const owner = p ?? scope
     let byBound = this.plans.get(owner)
     if (!byBound) this.plans.set(owner, (byBound = new Map()))
-    const sig = [...start.keys()].sort().join(' ')
+    const bound = new Set(start)
+    const sig = `${[...bound].sort().join(' ')}|${goal.join(' ')}|${within ? this.scopeId(within) : ''}|${valued?.order ?? ''}`
     let plan = byBound.get(sig)
     if (plan) return plan
-    const bound = new Set(start.keys())
     // The patterns (and aliases) that occur with p in a solution: its scope and the scopes around it.
-    const { around, aliases, byVar } = this.neighbours(scope, p)
-    // Breadth-first over variables, from the bound ones to each key.
+    const { around, aliases, joins, optionals, byVar } = this.neighbours(scope, p, within)
+    // (While it is being planned, a walk back to the same place finds nothing new.)
+    const unfinished: WalkPlan = { id: '', goal, reads: [], bound: false, unreachable: true, needed: [], reached: new Set(bound), checks: [], domains: [] }
+    byBound.set(sig, unfinished)
+    // Breadth-first over variables, from the bound ones to each goal.
     const via = new Map<string, Edge>()
     const queue = [...bound]
     const reached = new Set(bound)
@@ -434,26 +546,63 @@ export class Dependencies {
       if (reached.has(w)) return
       reached.add(w), via.set(w, edge), queue.push(w), level.set(w, at)
     }
-    while (queue.length && !this.keys.every((k) => reached.has(k))) {
+    // (A pattern with a variable predicate reads every triple about a node: only when nothing else leads on.)
+    const costly: { x: Pat; from: string }[] = []
+    while ((queue.length || costly.length) && !goal.every((k) => reached.has(k))) {
+      if (!queue.length) {
+        const { x, from } = costly.shift()!
+        for (const w of patVars(x)) reach(w, { pat: x, from }, x.scope)
+        continue
+      }
       const v = queue.shift()!
       for (const x of byVar.get(v) ?? []) {
         if (!leaves(v, x.scope)) continue
+        if (!('path' in x.p) && 'v' in x.p) {
+          costly.push({ x, from: v })
+          continue
+        }
         // Path connectors need a bound end to walk from.
         for (const w of patVars(x)) reach(w, { pat: x, from: v }, x.scope)
       }
       for (const a of aliases) {
         if (!leaves(v, a.scope)) continue
-        if (a.to === v) for (const w of a.from) reach(w, { alias: a, dir: 'out', from: v }, a.scope)
+        if (a.to === v && a.total && !a.opaque) {
+          const left = goal.filter((k) => !reached.has(k))
+          const step = this.sourceStep(a, left, within)
+          if (step) {
+            const edge: Edge = { alias: a, sources: step, from: v }
+            for (const w of step.to) reach(w, edge, a.scope)
+          }
+        }
         if (a.first && a.from[0] === v) reach(a.to, { alias: a, dir: 'in', from: v }, a.scope)
+      }
+      // A value read from an OPTIONAL: that it has one says the OPTIONAL matched.
+      if (valued && bound.has(v)) {
+        const binders = optionals.filter((o) => o.order < valued.order && scopeVars(o).has(v))
+        if (binders.length && binders.every((o) => o.certain?.has(v))) {
+          const step = this.joinStep(binders, v, goal, reached)
+          if (step) {
+            const edge: Edge = { join: step, from: v }
+            for (const w of step.to) reach(w, edge, scope)
+          }
+        }
+      }
+      for (const j of joins) {
+        // A branch that may leave v unbound takes any value outside: it does not lead anywhere from v.
+        if (!leaves(v, j.at) || !j.branches.every((b) => b.certain?.has(v))) continue
+        const step = this.joinStep(j.branches, v, goal, reached)
+        if (!step) continue
+        const edge: Edge = { join: step, from: v }
+        for (const w of step.to) reach(w, edge, j.at)
       }
     }
     // No part of the key reached: any partition - unless the change joins with nothing around it
     // (then it is in no solution). Part of it: the slice it binds.
-    const unreachable = this.keys.length > 0 && !this.keys.some((k) => reached.has(k))
+    const unreachable = goal.length > 0 && !goal.some((k) => reached.has(k))
     // The edges on the way to each key, in the order they were found (unreachable: all of them).
     const needed: Edge[] = unreachable ? [...via.values()] : []
     const seen = new Set<Edge>()
-    for (const k of unreachable ? [] : this.keys) {
+    for (const k of unreachable ? [] : goal) {
       if (!reached.has(k)) continue
       const chain: Edge[] = []
       for (let w = k; via.has(w); w = via.get(w)!.from) chain.push(via.get(w)!)
@@ -462,39 +611,113 @@ export class Dependencies {
     // A pattern joined once (a second edge through it adds nothing).
     const done = new Set<Pat>()
     const steps = needed.filter((e) => !e.pat || (!done.has(e.pat) && (done.add(e.pat), true)))
-    const checks = around.map((x) => ({ x, blocked: patVars(x).filter((v) => !leaves(v, x.scope)) }))
+    // (The checks that read a node's every triple after those that may spare them.)
+    const costlyLast = [...around].sort((a, b) => Number('v' in a.p) - Number('v' in b.p))
+    const checks = costlyLast.map((x) => ({ x, blocked: patVars(x).filter((v) => !leaves(v, x.scope)) }))
     // The variables whose values the walk reads: the keys, and those of its steps and checks.
-    const reads = new Set(this.keys)
+    const reads = new Set(goal)
     for (const e of steps) {
       if (e.pat) for (const v of patVars(e.pat)) reads.add(v)
+      else if (e.join) for (const v of [e.from, ...e.join.to]) reads.add(v)
+      else if (e.sources) for (const v of [e.from, ...e.sources.to]) reads.add(v)
       else for (const v of [e.alias!.to, ...e.alias!.from]) reads.add(v)
     }
     for (const { x } of checks) for (const v of patVars(x)) reads.add(v)
-    plan = { id: String(this.planCount++), bound: this.keys.every((k) => bound.has(k)), unreachable, needed: steps, reached, checks, reads: [...reads].filter((v) => bound.has(v)).sort() }
+    const domains: WalkPlan['domains'] = []
+    for (const a of aliases) if (a.total && !a.opaque && !a.from.length && leaves(a.to, a.scope)) domains.push({ v: a.to, admits: (t) => admits(a, t) })
+    for (let s: Scope | undefined = scope; s; s = s === within ? undefined : s.parent)
+      for (const { v, terms } of s.values) if (leaves(v, s)) domains.push({ v, admits: (t) => terms.some((c) => same(c, t)) })
+    for (const { v } of domains) reads.add(v)
+    plan = { id: String(this.planCount++), goal, bound: goal.every((k) => bound.has(k)), unreachable, needed: steps, reached, checks, domains, reads: [...reads].filter((v) => bound.has(v)).sort() }
     byBound.set(sig, plan)
     return plan
   }
 
-  private neighbourhoods = new Map<Pat | Scope, { around: Pat[]; aliases: Alias[]; byVar: Map<string, Pat[]> }>()
+  /**
+   * From `v` through a join: the variables every branch reaches from it, each branch's plan to them;
+   * none, when no branch has anything new to give. Of what it may give only the goals and what the
+   * walk could go on from outside it (what every branch certainly binds) are wanted.
+   */
+  private joinStep(branches: Scope[], v: string, goal: string[], reached: Set<string>): JoinStep | undefined {
+    const certain = [...branches[0]!.certain!].filter((w) => branches.every((b) => b.certain!.has(w)))
+    const wanted = [...new Set([...goal, ...certain])].filter((w) => w !== v && !reached.has(w))
+    if (!wanted.length) return undefined
+    const to = wanted.filter((w) => branches.every((b) => this.plan(b, undefined, [v], wanted, b).reached.has(w)))
+    return to.length ? { to, plans: branches.map((b) => this.plan(b, undefined, [v], to, b)) } : undefined
+  }
+
+  /**
+   * From a BIND's value back to what it reads: each source it can have come from, and the goals every
+   * one of them reaches (one that does not leads anywhere). A source that may hold a literal, read
+   * through STR(), is no node to walk from.
+   */
+  private sourceStep(a: Alias, goal: string[], within?: Scope): SourceStep | undefined {
+    if (!goal.length) return undefined
+    const sources = new Set(a.from)
+    for (const w of a.strs) if (this.isNode(w, a.scope)) sources.add(w)
+    for (const m of a.mints) if (m.head !== undefined && (!m.str || this.isNode(m.head, a.scope))) sources.add(m.head)
+    if (!sources.size) return undefined
+    const plans = [...sources].map((w) => [w, this.plan(a.scope, undefined, [w], goal, within, a)] as const)
+    const to = goal.filter((k) => plans.every(([, x]) => x.reached.has(k)))
+    return to.length ? { to, plans: new Map(plans.map(([w]) => [w, this.plan(a.scope, undefined, [w], to, within, a)])) } : undefined
+  }
+
+  /** Whether a variable, seen from a scope, can only hold a node: a key, the subject of a triple around, or (in every branch) a BIND of only those. */
+  private isNode(v: string, scope: Scope, seen = new Set<string>()): boolean {
+    if (this.rule && this.keys.includes(v)) return true
+    const here = (s: Scope): boolean => {
+      if (s.pats.some((x) => !('path' in x.p) && 'v' in x.s && x.s.v === v)) return true
+      const nodes = (a: Alias) => a.to === v && a.total && !a.opaque && !a.strs.length && a.constants.every((c) => c.termType === 'NamedNode') && a.from.every((w) => this.isNode(w, a.scope, seen))
+      if (s.aliases.some(nodes)) return true
+      return s.joins.some((branches) => branches.every((b) => b.certain?.has(v) && here(b)))
+    }
+    const at = `${v} ${this.scopeId(scope)}`
+    if (seen.has(at)) return false
+    seen.add(at)
+    for (let s: Scope | undefined = scope; s; s = s.parent) if (here(s)) return true
+    return false
+  }
+
+  private scopeIds = new WeakMap<Scope, number>()
+  private scopeCount = 0
+  private scopeId(s: Scope): number {
+    let id = this.scopeIds.get(s)
+    if (id === undefined) this.scopeIds.set(s, (id = this.scopeCount++))
+    return id
+  }
+
+  private neighbourhoods = new Map<Pat | Scope, Map<Scope | undefined, { around: Pat[]; aliases: Alias[]; joins: { branches: Scope[]; at: Scope }[]; optionals: Scope[]; byVar: Map<string, Pat[]> }>>()
 
   /**
    * What a walk from pattern `p` (or from a derived row in `scope`) may go through: the patterns of
-   * its scope and the scopes around it, which hold in every solution p takes part in (so they also
-   * prune: `around`, without paths). Not the groups beside them: an OPTIONAL or a UNION branch need
-   * not match where a solution does, so a walk through one could miss it. By variable; cached.
+   * its scope and the scopes around it (out to `within`), which hold in every solution p takes part
+   * in (so they also prune: `around`, without paths), and the required UNIONs and subqueries there,
+   * but for the one the walk is in (its other branches are not this solution). Not an OPTIONAL
+   * beside them: it need not match where a solution does, so a walk through one could miss it. By
+   * variable; cached.
    */
-  private neighbours(scope: Scope, p: Pat | undefined) {
+  private neighbours(scope: Scope, p: Pat | undefined, within?: Scope) {
     const key = p ?? scope
-    let n = this.neighbourhoods.get(key)
+    let byWithin = this.neighbourhoods.get(key)
+    if (!byWithin) this.neighbourhoods.set(key, (byWithin = new Map()))
+    let n = byWithin.get(within)
     if (n) return n
     const pats: Pat[] = []
     const aliases: Alias[] = []
-    for (let s: Scope | undefined = scope; s; s = s.parent) pats.push(...s.pats.filter((x) => x !== p)), aliases.push(...s.aliases)
+    const joins: { branches: Scope[]; at: Scope }[] = []
+    const optionals: Scope[] = []
+    let inside: Scope | undefined
+    for (let s: Scope | undefined = scope; s; inside = s, s = s.parent) {
+      pats.push(...s.pats.filter((x) => x !== p)), aliases.push(...s.aliases)
+      for (const branches of s.joins) if (!inside || !branches.includes(inside)) joins.push({ branches, at: s })
+      optionals.push(...s.optionals.filter((o) => o !== inside))
+      if (s === within) break
+    }
     const inner = new Set(pats)
     const byVar = new Map<string, Pat[]>()
     for (const x of pats) for (const v of new Set(patVars(x))) byVar.set(v, [...(byVar.get(v) ?? []), x])
-    n = { around: [...inner].filter((x) => !('path' in x.p)), aliases, byVar }
-    this.neighbourhoods.set(key, n)
+    n = { around: [...inner].filter((x) => !('path' in x.p)), aliases, joins, optionals, byVar }
+    byWithin.set(within, n)
     return n
   }
 
@@ -600,23 +823,37 @@ export class Dependencies {
           this.graph = outer
           break
         }
-        case 'optional':
+        case 'optional': {
+          const o = this.child(scope, false, this.certainIn(it.g, rename, left))
+          scope.optionals.push(o)
+          this.group(it.g, o, rename, left)
+          break
+        }
         case 'minus':
-          this.group(it.g, this.child(scope, false, this.certainIn(it.g, rename)), rename, left)
+          this.group(it.g, this.child(scope, false, this.certainIn(it.g, rename, left)), rename, left)
           break
-        case 'union':
-          for (const b of it.gs) this.group(b, this.child(scope, false, this.certainIn(b, rename)), rename, left)
+        case 'union': {
+          const branches = it.gs.map((b) => this.child(scope, false, this.certainIn(b, rename, left)))
+          it.gs.forEach((b, n) => this.group(b, branches[n]!, rename, left))
+          scope.joins.push(branches)
           break
+        }
         case 'service':
           throw new Error('SERVICE')
         case 'filter':
           this.expr(it.e, scope, rename)
           break
-        case 'bind':
+        case 'bind': {
           this.expr(it.e, scope, rename)
-          this.alias(it.e, rename(it.as), scope, rename)
+          const before = this.certainIn({ items: g.items.slice(0, i), at: g.at, end: g.end }, rename, left)
+          this.alias(it.e, rename(it.as), scope, rename, before)
           break
+        }
         case 'values':
+          it.vars.forEach((v, n) => {
+            const nodes = it.rows.map((r) => r[n])
+            if (nodes.every((x) => x)) scope.values.push({ v: rename(v), terms: nodes.map((x) => (this.pos(x!, rename) as { t: Term }).t) })
+          })
           break
         case 'select':
           this.select(it.q, scope, rename, left)
@@ -624,12 +861,39 @@ export class Dependencies {
     })
   }
 
-  private child(parent: Scope, global = false, certain?: Set<string>): Scope {
-    return { parent, global, pats: [], aliases: [], certain }
+  private scope(parent?: Scope, global = false, certain?: Set<string>): Scope {
+    if (certain && this.rule) for (const k of this.keys) certain.add(k)
+    return { parent, global, pats: [], aliases: [], joins: [], optionals: [], order: this.fresh++, values: [], certain }
   }
 
-  private certainIn(g: Group, rename: (v: string) => string): Set<string> {
-    return new Set([...certainVars(g)].map(rename))
+  private child(parent: Scope, global = false, certain?: Set<string>): Scope {
+    return this.scope(parent, global, certain)
+  }
+
+  /**
+   * What a group certainly binds (with what a LATERAL's left side bound before it is read): its
+   * patterns', and those of BINDs that cannot fail, in its groups and UNIONs too.
+   */
+  private certainIn(g: Group, rename: (v: string) => string, left: ReadonlySet<string>): Set<string> {
+    const out = new Set([...[...certainVars(g)].map(rename), ...left])
+    for (const it of g.items) {
+      if (it.k === 'bind') {
+        if (this.value(it.e.text, rename, out).total) out.add(rename(it.as))
+      } else if (it.k === 'group' || it.k === 'lateral') {
+        for (const v of this.certainIn(it.g, rename, out)) out.add(v)
+      } else if (it.k === 'union') {
+        const sets = it.gs.map((b) => this.certainIn(b, rename, left))
+        for (const v of sets[0] ?? []) if (sets.every((x) => x.has(v))) out.add(v)
+      } else if (it.k === 'select') {
+        // A subquery's own names, for its projected variables: BINDs in it may bind them.
+        const projected = new Set(projectedVars(it.q))
+        const id = this.fresh++
+        const inner = (v: string) => (projected.has(v) ? rename(v) : `${v}#${id}`)
+        const inGroup = it.q.groupBy.length ? new Set(it.q.groupBy.map((e) => /^[?$](\w+)$/.exec(e.text.trim())?.[1]).filter((v) => v)) : projected
+        for (const v of this.certainIn(it.q.where, inner, left)) for (const w of inGroup) if (w && inner(w) === v) out.add(v)
+      }
+    }
+    return out
   }
 
   private expr(e: Expr, scope: Scope, rename: (v: string) => string) {
@@ -637,23 +901,80 @@ export class Dependencies {
     for (const a of e.aggregates) if (a.arg !== '*') this.expr(a.arg, scope, rename)
   }
 
-  private alias(e: Expr, to: string, scope: Scope, rename: (v: string) => string) {
+  /** Record what a BIND can be; whether it certainly binds its variable. */
+  private alias(e: Expr, to: string, scope: Scope, rename: (v: string) => string, known: ReadonlySet<string>): boolean {
     const t = e.text.trim()
+    const value = this.value(t, rename, known)
+    const arg = /^COALESCE\s*\(/i.test(t) ? splitArgs(callOf(t)?.args ?? '')[0]?.trim() : t
+    const first = !!arg && /^[?$]\w+$/.test(arg) && value.from.length > 0
+    if (value.from.length || value.strs.length || value.mints.length || value.constants.length) scope.aliases.push({ ...value, to, first, scope, order: this.fresh++ })
+    return value.total
+  }
+
+  /** What an expression can evaluate to, in the variables' names here. */
+  private value(text: string, rename: (v: string) => string, known: ReadonlySet<string>): Value {
+    const t = text.trim()
+    const none: Value = { from: [], strs: [], constants: [], mints: [], opaque: false, total: true }
     const v = /^[?$](\w+)$/.exec(t)
-    if (v) return void scope.aliases.push({ to, from: [rename(v[1]!)], first: true, scope })
-    const call = /^(COALESCE|IF)\s*\(([\s\S]*)\)$/i.exec(t)
-    if (!call) return
-    const args = splitArgs(call[2]!)
-    const isIf = call[1]!.toUpperCase() === 'IF'
-    const vars = (isIf ? args.slice(1) : args).map((a) => /^[?$](\w+)$/.exec(a.trim())?.[1]).filter((x): x is string => !!x).map(rename)
-    if (vars.length) scope.aliases.push({ to, from: vars, first: !isIf && /^[?$]\w+$/.test(args[0]?.trim() ?? ''), scope })
+    if (v) return { ...none, from: [rename(v[1]!)], total: this.bound(v[1]!, rename, known) }
+    const c = this.constant(t)
+    if (c) return { ...none, constants: [c] }
+    const call = callOf(t)
+    const name = call?.name.toUpperCase()
+    const args = call ? splitArgs(call.args) : []
+    const fails = (x: string) => mayFail(x, (w) => this.bound(w, rename, known))
+    if (name === 'COALESCE' || (name === 'IF' && args.length === 3)) {
+      const parts = (name === 'IF' ? args.slice(1) : args).map((x) => this.value(x, rename, known))
+      return {
+        from: [...new Set(parts.flatMap((x) => x.from))],
+        strs: [...new Set(parts.flatMap((x) => x.strs))],
+        constants: parts.flatMap((x) => x.constants),
+        mints: parts.flatMap((x) => x.mints),
+        opaque: parts.some((x) => x.opaque),
+        total: name === 'IF' ? !fails(args[0]!) && parts.every((x) => x.total) : parts.some((x) => x.total),
+      }
+    }
+    if (name === 'STR' && args.length === 1) {
+      const w = /^[?$](\w+)$/.exec(args[0]!.trim())
+      if (w) return { ...none, strs: [rename(w[1]!)], total: this.bound(w[1]!, rename, known) }
+    }
+    if (name === 'IRI' || name === 'URI') {
+      const inner = args.length === 1 ? callOf(args[0]!.trim()) : undefined
+      const parts = inner?.name.toUpperCase() === 'CONCAT' ? splitArgs(inner.args).map((x) => x.trim()) : []
+      const total = parts.length > 0 && !parts.some(fails)
+      const string = /^"([^"\\]*)"$/.exec(parts[0] ?? '')
+      if (string) return { ...none, mints: [{ str: false, sep: string[1]!, last: false }], total }
+      const sep = /^"([^"\\]+)"$/.exec(parts[1] ?? '')
+      if (sep) {
+        const last = parts.length === 2
+        const plain = /^[?$](\w+)$/.exec(parts[0]!)
+        if (plain) return { ...none, mints: [{ head: rename(plain[1]!), str: false, sep: sep[1]!, last }], total }
+        const of = callOf(parts[0]!)
+        const w = of?.name.toUpperCase() === 'STR' ? /^[?$](\w+)$/.exec(of.args.trim()) : undefined
+        if (w) return { ...none, mints: [{ head: rename(w[1]!), str: true, sep: sep[1]!, last }], total }
+      }
+    }
+    return { ...none, opaque: true, total: !fails(t) }
+  }
+
+  private bound(v: string, rename: (v: string) => string, known: ReadonlySet<string>): boolean {
+    return known.has(rename(v)) || (!!this.rule && this.keys.includes(v))
+  }
+
+  /** An IRI written in an expression. */
+  private constant(t: string): Term | undefined {
+    const iri = /^<([^<>\s]*)>$/.exec(t)
+    if (iri) return this.f.namedNode(iri[1]!)
+    const name = /^([\w-]*):([\w.-]*)$/.exec(t)
+    const ns = name && this.rule?.prefixes.get(name[1]!)
+    return ns ? this.f.namedNode(ns + name[2]!) : undefined
   }
 
   private select(q: Select, scope: Scope, rename: (v: string) => string, left: ReadonlySet<string> = new Set()) {
     // A subquery's own variables are its own: only what it projects joins the outside.
     const projected = new Set(projectedVars(q))
     const id = this.fresh++
-    const inner = (v: string) => (projected.has(v) ? rename(v) : `${v}#${id}`)
+    const inner = (v: string) => (projected.has(v) || (this.rule && this.keys.includes(v)) ? rename(v) : `${v}#${id}`)
     const at = this.derived.indexOf(q)
     if (at >= 0) {
       // A derived input: its own part follows its patterns; here only its rows matter.
@@ -661,16 +982,18 @@ export class Dependencies {
       return
     }
     const correlated = [...projected].some((v) => left.has(rename(v)))
-    const certain = new Set([...certainVars(q.where), ...q.projection.filter((x) => x.e).map((x) => x.v)].filter((v) => projected.has(v)).map(inner))
+    const certain = new Set([...[...certainVars(q.where), ...q.projection.filter((x) => x.e).map((x) => x.v)].filter((v) => projected.has(v)).map(inner), ...left])
     const s = this.child(scope, (q.limit !== undefined || q.offset !== undefined) && !correlated, certain)
+    scope.joins.push([s])
     // Projected expressions alias their variables.
-    for (const p of q.projection) if (p.e) this.alias(p.e, inner(p.v), s, inner)
+    const known = new Set([...[...certainVars(q.where)].map(inner), ...left])
+    for (const p of q.projection) if (p.e) this.alias(p.e, inner(p.v), s, inner, known)
     this.group(q.where, s, inner, left)
     for (const p of q.projection) if (p.e) this.expr(p.e, s, inner)
     for (const h of q.having) this.expr(h, s, inner)
     for (const e of q.groupBy) {
       this.expr(e, s, inner)
-      if (e.as) this.alias(e, inner(e.as), s, inner)
+      if (e.as) this.alias(e, inner(e.as), s, inner, known)
     }
   }
 }
@@ -686,6 +1009,107 @@ function patVars(x: Pat): string[] {
   let vs = varCache.get(x)
   if (!vs) varCache.set(x, (vs = [x.s, 'path' in x.p ? undefined : x.p, x.o, x.g].filter((y): y is { v: string } => !!y && 'v' in y).map((y) => y.v)))
   return vs
+}
+
+/** A row with what a walk found of `to` (undefined: it disagrees). */
+function mergeInto(r: Map<string, Term>, found: Map<string, Term>, to: string[]): Map<string, Term> | undefined {
+  const row = new Map(r)
+  for (const w of to) {
+    const t = found.get(w)
+    if (!t) continue
+    const had = row.get(w)
+    if (had && !had.equals(t)) return undefined
+    row.set(w, t)
+  }
+  return row
+}
+
+/** Every variable a scope's groups mention. */
+function scopeVars(s: Scope): Set<string> {
+  const out = new Set<string>()
+  const visit = (x: Scope) => {
+    for (const p of x.pats) for (const v of patVars(p)) out.add(v)
+    for (const a of x.aliases) out.add(a.to)
+    for (const { v } of x.values) out.add(v)
+    for (const o of x.optionals) visit(o)
+    for (const j of x.joins) for (const b of j) visit(b)
+  }
+  visit(s)
+  return out
+}
+
+/** What can be a node's IRI: other text is not the STR() of one (and a store would refuse to make it a term). */
+const ABSOLUTE_IRI = /^[a-zA-Z][a-zA-Z0-9+.-]*:[^\s<>"{}|\\^`]*$/
+
+/** The heads an IRI minted so can have: what stands before the separator, wherever that is. */
+function mintHeads(m: Mint, iri: string): string[] {
+  if (m.head === undefined) return iri.startsWith(m.sep) ? [''] : []
+  if (m.last) return iri.endsWith(m.sep) && iri.length > m.sep.length ? [iri.slice(0, -m.sep.length)] : []
+  const out: string[] = []
+  for (let i = iri.indexOf(m.sep, 1); i > 0; i = iri.indexOf(m.sep, i + 1)) out.push(iri.slice(0, i))
+  return out
+}
+
+/** Whether a BIND of nothing from the data can have this value. */
+function admits(a: Alias, t: Term): boolean {
+  if (a.constants.some((c) => same(c, t))) return true
+  if (a.strs.length && t.termType === 'Literal') return true
+  return t.termType === 'NamedNode' && a.mints.some((m) => mintHeads(m, t.value).length > 0)
+}
+
+/** `name(args)`, when that is all of the text. */
+function callOf(t: string): { name: string; args: string } | undefined {
+  const m = /^(\w+)\s*\(/.exec(t)
+  if (!m) return undefined
+  let depth = 0
+  let quote = ''
+  for (let i = m[0].length - 1; i < t.length; i++) {
+    const c = t[i]!
+    if (quote) {
+      if (c === '\\') i++
+      else if (c === quote) quote = ''
+    } else if (c === '"' || c === "'") quote = c
+    else if (c === '(') depth++
+    else if (c === ')' && --depth === 0) return i === t.length - 1 ? { name: m[1]!, args: t.slice(m[0].length, i) } : undefined
+  }
+  return undefined
+}
+
+/** Functions that fail only when an argument does. */
+const TOTAL_CALLS = new Set(['IF', 'STR', 'CONCAT', 'IRI', 'URI', 'ENCODE_FOR_URI', 'SAMETERM', 'ISIRI', 'ISURI', 'ISBLANK', 'ISLITERAL', 'ISNUMERIC'])
+
+/**
+ * Whether an expression can fail: for a variable left unbound (BOUND, EXISTS and a COALESCE with a
+ * way out cannot), or by a type (what is not known not to: arithmetic, an ordering, other functions).
+ */
+function mayFail(text: string, known: (v: string) => boolean): boolean {
+  const t = text.trim()
+  const call = callOf(t)
+  if (call) {
+    const name = call.name.toUpperCase()
+    if (name === 'BOUND' || name === 'EXISTS') return false
+    const args = splitArgs(call.args)
+    if (name === 'COALESCE') return args.every((a) => mayFail(a, known))
+    return !TOTAL_CALLS.has(name) || args.some((a) => mayFail(a, known))
+  }
+  // An operator's operands: without strings, groups, and what cannot fail.
+  let rest = t.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""')
+  for (let i = rest.search(/\b(BOUND|EXISTS|COALESCE)\b|\{/i); i >= 0; i = rest.search(/\b(BOUND|EXISTS|COALESCE)\b|\{/i)) {
+    const open = rest.slice(i).search(/[({]/)
+    if (open < 0) break
+    let depth = 0
+    let end = i + open
+    for (; end < rest.length; end++) {
+      if (rest[end] === '(' || rest[end] === '{') depth++
+      else if ((rest[end] === ')' || rest[end] === '}') && --depth === 0) break
+    }
+    const head = rest.slice(i, i + open).trim().toUpperCase()
+    if (head === 'COALESCE' && mayFail(rest.slice(i, end + 1), known)) return true
+    rest = rest.slice(0, i) + ' ' + rest.slice(end + 1)
+  }
+  rest = rest.replace(/<[^<>\s]*>/g, ' ')
+  if (/[<>+*]|\b(?!BOUND\b|EXISTS\b|COALESCE\b)\w+\s*\(/i.test(rest) && !/^\s*[!(]*\s*(ISIRI|ISURI|ISLITERAL|ISBLANK|SAMETERM)\b/i.test(rest)) return true
+  return [...rest.matchAll(/[?$](\w+)/g)].some((m) => !known(m[1]!))
 }
 
 function same(constant: Term, t: Term): boolean {
