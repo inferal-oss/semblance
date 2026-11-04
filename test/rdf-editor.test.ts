@@ -15,6 +15,7 @@ import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
 import { md5 } from '../src/components/data.ts'
 import { implementationGaps } from './implementations.ts'
+import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const LIB = 'https://semblance.dev/demo/library#'
@@ -720,4 +721,25 @@ ui:dt-rdf-editor c:editable true .`
     // Where it fits (another book's pages), it is accepted.
     expect(reception(`${EDITOR}/~t-${k12(LIB + 'dispossessed')}/~p-${k12(LIB + 'pages')}`)).toEqual(['Accepted', undefined])
   })
+})
+
+// Hybrid is what a page falls back to without the wat engine. The editor's rows name the data's own
+// blank nodes, so a query's labels and the mirror's have to be the same ones (#325).
+describe('the example on the hybrid store', () => {
+  const shown = (kind: 'hybrid' | 'oxigraph', prefer: 'sparql' | 'function') => {
+    const h = mountShell(5, kind, prefer)
+    const f = h.store.factory
+    h.runtime.apply({ remove: h.store.match(f.namedNode(UI + 'app'), f.namedNode(UI + 'example'), null), add: [f.quad(f.namedNode(UI + 'app'), f.namedNode(UI + 'example'), f.namedNode(UI + 'ExRdf'))] })
+    h.shell.flush()
+    const html = h.document.querySelector('[data-sem-c=rdf-editor]')!.outerHTML
+    h.store.dispose?.()
+    return html
+  }
+
+  it('renders, as it does on Oxigraph', () => {
+    const reference = shown('oxigraph', 'sparql')
+    expect(reference).toContain('role="treeitem"')
+    expect(shown('hybrid', 'sparql')).toBe(reference)
+    expect(shown('hybrid', 'function')).toBe(reference)
+  }, 180_000)
 })

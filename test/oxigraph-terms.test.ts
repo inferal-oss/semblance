@@ -69,12 +69,40 @@ describe.each(Object.keys(stores))('%s results are plain terms (#317)', (kind) =
     expect(store.match(null, f.namedNode(EX + 'says'), null, g)[0]!.equals(about)).toBe(true)
   })
 
+  it('a blank node of a loaded document is one node to match and to a query (#325)', () => {
+    const store = stores[kind]!()
+    store.loadTurtle(`<${EX}a> <${EX}p> [ <${EX}q> 1 ] , _:n . _:n <${EX}q> 2 .`)
+    const built = store.construct(`CONSTRUCT { <${EX}a> <${EX}r> ?o } WHERE { <${EX}a> <${EX}p> ?o }`, [f.defaultGraph()])
+    const matched = store.match(f.namedNode(EX + 'a'), f.namedNode(EX + 'p'), null)
+    expect(built.map((q) => q.object.value).sort()).toEqual(matched.map((q) => q.object.value).sort())
+    for (const q of built) expect(store.match(q.object as Quad['subject'], f.namedNode(EX + 'q'), null)).toHaveLength(1)
+    // A delete by the term match gave reaches SPARQL too.
+    for (const q of matched) store.delete(q)
+    expect(store.select(`ASK { <${EX}a> <${EX}p> ?o }`, [f.defaultGraph()]) as unknown).toBe(false)
+    store.dispose?.()
+  })
+
   it('a synchronous stretch of queries returning more than the memory can hold does not trap', () => {
     const store = stores[kind]!()
     // 16 MB of terms a query, 4.8 GB in all: past what Oxigraph's memory can hold if they stayed in it.
     const long = EX + 'x'.repeat(8192)
     for (let i = 0; i < 2000; i++) store.add(f.quad(f.namedNode(long + i), f.namedNode(EX + 'p'), f.literal('v')))
     for (let i = 0; i < 300; i++) expect(store.construct('CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }', [f.defaultGraph()])).toHaveLength(2000)
+    store.dispose?.()
+  })
+})
+
+describe('the hybrid store loading during its idle rebuild (#325)', () => {
+  it('keeps what was loaded through the swap', () => {
+    const store = hybridStore(ox)
+    for (let i = 0; i < 6000; i++) store.add(f.quad(f.namedNode(`${EX}s${i}`), f.namedNode(EX + 'p'), f.literal('v')))
+    for (const q of store.match(null, f.namedNode(EX + 'p'), null)) store.delete(q)
+    store.add(f.quad(f.namedNode(EX + 'kept'), f.namedNode(EX + 'p'), f.literal('v')))
+    expect(store.maintain!(0)).toBe(true) // the rebuild has begun, and has not finished
+    store.loadTurtle(`<${EX}loaded> <${EX}p> "v" .`)
+    while (store.maintain!(50));
+    const subjects = store.select(`SELECT ?s WHERE { ?s <${EX}p> ?o }`, [f.defaultGraph()]).map((r) => r.get('s')!.value)
+    expect(subjects.sort()).toEqual([EX + 'kept', EX + 'loaded'])
     store.dispose?.()
   })
 })

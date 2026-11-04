@@ -1,5 +1,6 @@
 import type { Quad } from '@rdfjs/types'
 import type * as Ox from 'oxigraph'
+import { Parser } from 'n3'
 import { n3Store } from './n3.ts'
 import { plainResult } from './oxigraph.ts'
 import type { GraphStore } from './types.ts'
@@ -23,6 +24,12 @@ export function hybridStore(ox: typeof Ox): GraphStore {
   let rebuild: { fresh: Ox.Store; todo: Quad[]; next: number } | undefined
   const due = () => deletes > Math.max(REBUILD_MIN, live / 2)
 
+  const add = (q: Quad) => {
+    sparql.add(q as Ox.Quad)
+    rebuild?.fresh.add(q as Ox.Quad)
+    mirror.add(q)
+  }
+
   let disposed = false
   return {
     kind: 'hybrid',
@@ -30,11 +37,7 @@ export function hybridStore(ox: typeof Ox): GraphStore {
     // so the mirror's factory is the cheaper one to hand out.
     factory: m,
     sparql: true,
-    add(q) {
-      sparql.add(q as Ox.Quad)
-      rebuild?.fresh.add(q as Ox.Quad)
-      mirror.add(q)
-    },
+    add,
     delete(q) {
       sparql.delete(q as Ox.Quad)
       rebuild?.fresh.delete(q as Ox.Quad)
@@ -45,9 +48,10 @@ export function hybridStore(ox: typeof Ox): GraphStore {
     match: (s, p, o, g) => mirror.match(s, p, o, g),
     select: (query, graphs) => plainResult(sparql.query(query, { default_graph: graphs as Ox.NamedNode[] })),
     construct: (query, graphs) => plainResult(sparql.query(query, { default_graph: graphs as Ox.NamedNode[] })),
+    // Parsed once: two parsers would label a blank node two ways, and what a query answers (Oxigraph's
+    // label) would name nothing `match` can find (the mirror's).
     loadTurtle(text) {
-      sparql.load(text, { format: 'text/turtle' })
-      mirror.loadTurtle(text)
+      for (const q of new Parser().parse(text)) add(q as Quad)
     },
     dispose() {
       if (disposed) return
