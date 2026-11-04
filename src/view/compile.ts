@@ -474,7 +474,7 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   // Exact dependencies: the body's patterns, and those of EXISTS in the expressions evaluated with it.
   const evaluated = [...slots.values()].filter((e): e is string => e !== undefined)
   const withSlots: Group = { ...sel.where, items: [...sel.where.items, ...slotExists(sel, evaluated, text).map((e) => ({ k: 'filter' as const, e, at: e.at, end: e.end }))] }
-  const deps = new Dependencies(run.factory, withSlots, keys, subs)
+  const deps = new Dependencies(run.factory, withSlots, keys, subs, undefined, new Map([...prefixMap(source.prefixes), ...prefixMap(prologue)]))
   if (deps.problem) throw new Unsupported(deps.problem)
   const join = substitutionChanges(sel.where, keys)
   if (NONDETERMINISTIC.test(body)) throw new Unsupported('NOW(), RAND() or similar in the body')

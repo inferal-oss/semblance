@@ -1801,6 +1801,10 @@ What exists (`src/engine/exact.ts`, `engine.ts`, `src/view/deps.ts`, `runtime.ts
   so it is walked through. Two things stop a narrower answer, by design: a BIND that can fail leaves its
   variable unbound to match any node (an unbound variable, an ordering, arithmetic), and a variable read
   in a nested group without LATERAL, whose new match can stop outer rows being compatible.
+  A view reads the constants of its expressions the same way, and the same holds of it: a BIND that can
+  leave its variable unbound before an OPTIONAL over it reaches every partition, and in fact joins each
+  such row to every match. So it says what it is otherwise, as the grid's window views do
+  (`COALESCE(IF($sortVia = c:none, ?m, ?hop), c:none)`), and a response costs one partition (#319).
 - **The measure.** `engine.test.ts`: the from-scratch test passes with exact dependencies (every step,
   screen and text, against a fresh projection), and "re-renders only what changed" is tightened in its
   exact twin: a todo's `ex:priority` changing re-runs one rule (the list's member placement), not two.

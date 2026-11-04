@@ -22,7 +22,7 @@ const lookupOf =
 /** The foci a change reaches, sorted; or 'global'. Quads are the state with the change in it. */
 function reach(where: string, change: Quad, state: Quad[] = [], rule = true): string[] | 'global' {
   const q = parseQuery(`PREFIX ex: <${EX}> SELECT * WHERE { ${where} }`, prefixes)
-  const deps = new Dependencies(f as unknown as Factory, q.select.where, ['this'], [], rule ? { prefixes } : undefined)
+  const deps = new Dependencies(f as unknown as Factory, q.select.where, ['this'], [], rule ? { prefixes } : undefined, prefixes)
   expect(deps.problem).toBeUndefined()
   const lookup = lookupOf([...state, change])
   const out = new Set<string>()
@@ -38,6 +38,24 @@ function reach(where: string, change: Quad, state: Quad[] = [], rule = true): st
 }
 
 describe('exact dependencies: from a change to the focus', () => {
+  describe('a BIND in a view', () => {
+    const where = 'OPTIONAL { ?this ex:via ?hop } BIND(COALESCE(IF(ex:v = ex:none, ?this, ?hop), ex:none) AS ?s) OPTIONAL { ?s ex:l ?v }'
+    const state = [t('F', 'via', 'h')]
+
+    // (The changed node itself may be a key too: the runtime's anchors say whether it has rows.)
+    it('reads the constants of its expressions: every value of it is known', () => {
+      expect(reach(where, t('h', 'l', 'x'), state, false)).toEqual(['F', 'h'])
+      expect(reach(where, t('F', 'l', 'x'), state, false)).toEqual(['F'])
+      expect(reach(where, t('zzz', 'l', 'x'), state, false)).toEqual(['zzz'])
+    })
+
+    it('is global for its constant, and when it can be left unbound', () => {
+      expect(reach(where, t('none', 'l', 'x'), state, false)).toEqual('global')
+      const unbound = 'OPTIONAL { ?this ex:via ?hop } BIND(IF(ex:v = ex:none, ?this, ?hop) AS ?s) OPTIONAL { ?s ex:l ?v }'
+      expect(reach(unbound, t('h', 'l', 'x'), state, false)).toEqual('global')
+    })
+  })
+
   describe('a subquery', () => {
     const body = '{ SELECT ?x WHERE { ?this ex:p ?x . ?x ex:q ?y } }'
     const state = [t('F', 'p', 'a'), t('G', 'p', 'b')]

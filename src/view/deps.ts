@@ -156,10 +156,11 @@ export class Dependencies {
      * agree with what is bound), and when the change binds the key itself: fewer partitions (foci),
      * at a lookup per check. And the keys ($this, $member) are substituted into the query's text: a
      * constant in every group and subquery, whether it projects them or not, and never unbound (a
-     * view's key is an ordinary variable, private to a subquery that does not project it). `prefixes`
-     * read the constants of its expressions.
+     * view's key is an ordinary variable, private to a subquery that does not project it).
      */
     private readonly rule?: { prefixes: Map<string, string> },
+    /** They read the constants of its expressions (BIND(COALESCE(?a, c:none) AS ?b)). */
+    private readonly prefixes = rule?.prefixes,
   ) {
     const root: Scope = this.scope()
     try {
@@ -966,7 +967,7 @@ export class Dependencies {
     const iri = /^<([^<>\s]*)>$/.exec(t)
     if (iri) return this.f.namedNode(iri[1]!)
     const name = /^([\w-]*):([\w.-]*)$/.exec(t)
-    const ns = name && this.rule?.prefixes.get(name[1]!)
+    const ns = name && this.prefixes?.get(name[1]!)
     return ns ? this.f.namedNode(ns + name[2]!) : undefined
   }
 

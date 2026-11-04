@@ -377,6 +377,9 @@ WHERE {
 #                       window itself when the pin is before every member
 #   c:GridWindowCounts  how many members match, and how many of them are up to the pin
 #
+# A member without the sort column's hop reads the sort value of c:none, which has none: left unbound,
+# ?ss would match every node, and join that member to every value of the column.
+#
 # Each row carries the member's order key (sem:orderKey of its c:GridRow): whether it has a sort
 # value, the value (descending when the grid is), then capture order - a tuple key, so a row's
 # key changing moves only that row. Settings of the grid are parameters (iv:parameter): changing
@@ -416,7 +419,7 @@ SELECT ?m ?sn ?key ?hv ?isNum ?vn ?vs WHERE {
   FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
   FILTER NOT EXISTS { $this c:filteredBy ?ff . ?ff a c:FlagFilter ; c:filterProperty ?fp ; c:filterValue ?fv ; c:included false . ?m ?fp ?fv }
   OPTIONAL { ?m $sortVia ?hop }
-  BIND(IF($sortVia = c:none, ?m, ?hop) AS ?ss)
+  BIND(COALESCE(IF($sortVia = c:none, ?m, ?hop), c:none) AS ?ss)
   OPTIONAL { ?ss $sortProperty ?sval
     OPTIONAL { ?sval sem:order ?sord FILTER(isNumeric(?sord)) }
     OPTIONAL { ?sval c:label ?svl0 FILTER(lang(?svl0) = "") } OPTIONAL { ?sval c:label ?svl1 FILTER(langMatches(lang(?svl1), "en")) }
@@ -450,7 +453,7 @@ SELECT ?m ?sn ?key ?hv ?isNum ?vn ?vs WHERE {
   FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
   FILTER NOT EXISTS { $this c:filteredBy ?ff . ?ff a c:FlagFilter ; c:filterProperty ?fp ; c:filterValue ?fv ; c:included false . ?m ?fp ?fv }
   OPTIONAL { ?m $sortVia ?hop }
-  BIND(IF($sortVia = c:none, ?m, ?hop) AS ?ss)
+  BIND(COALESCE(IF($sortVia = c:none, ?m, ?hop), c:none) AS ?ss)
   OPTIONAL { ?ss $sortProperty ?sval
     OPTIONAL { ?sval sem:order ?sord FILTER(isNumeric(?sord)) }
     OPTIONAL { ?sval c:label ?svl0 FILTER(lang(?svl0) = "") } OPTIONAL { ?sval c:label ?svl1 FILTER(langMatches(lang(?svl1), "en")) }
