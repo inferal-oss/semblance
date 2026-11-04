@@ -12,7 +12,7 @@
 //          multiset] -> [expressions: a CONSTRUCT's BINDs] -> CONSTRUCT template | SELECT rows
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { RuleContext } from '../engine/context.ts'
-import type { Dependencies } from './deps.ts'
+import type { Dependencies, Pos } from './deps.ts'
 import type { Triple } from './sparql.ts'
 
 export type AggregateFn = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX' | 'SAMPLE' | 'GROUP_CONCAT'
@@ -82,6 +82,11 @@ export interface Part {
   local: LocalEvaluator
   /** Exact dependencies (SPARQL parts); absent: a stream part routed by membership and member closure. */
   deps?: Dependencies
+  /**
+   * No partitions (iv:Scan): the body is this one pattern under DISTINCT, so each changed triple counts
+   * for its row (no keys; slots are the variables).
+   */
+  scan?: { s: Pos; p: Pos; o: Pos }
   /** Partitions are the members of an LDES (keys are [streamVar?, memberVar]). */
   stream?: { stream?: string; streamVar?: string; memberVar: string }
   window?: WindowSpec
@@ -170,6 +175,8 @@ export interface ViewSource {
   form: 'select' | 'construct'
   query: string
   prefixes: string
+  /** iv:reads: it also reads what only the runtime writes (the views graph, what rules derive). */
+  reads?: boolean
   /** iv:over */
   over?: string
   /** iv:partitionBy */

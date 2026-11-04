@@ -7,13 +7,13 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import { md5 } from '../components/data.ts'
 import { createContext, type RuleContext } from '../engine/context.ts'
-import { NS, PROV, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
+import { NS, PROV, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
 import { type Delta, mint, owningFocus, parseDuration, quadKey, termKey } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
 import { accSize, accumulate, compareTerms, type Group, newGroup, result } from './aggregate.ts'
 import { compiler, keyString, prefixMap, sparqlTerm, TREE_MEMBER } from './compile.ts'
-import { Dependencies, type Lookup } from './deps.ts'
+import { Dependencies, type Lookup, type Pos } from './deps.ts'
 import { indexRemoved, probeLookup } from './lookup.ts'
 import { parseQuery } from './sparql.ts'
 import { OrderedMultiset } from './ordered.ts'
@@ -310,8 +310,7 @@ export class ViewRuntime {
     const applied: Delta = { add: [], remove: [] }
     const sinkNow = () => {
       const d = this.sink(out)
-      applied.add.push(...d.add)
-      applied.remove.push(...d.remove)
+      merge(applied, d)
       out.clear()
     }
     sinkNow()
@@ -714,10 +713,8 @@ export class ViewRuntime {
       if (!out.size) return
       const d = this.sink(out)
       out.clear()
-      applied.add.push(...d.add)
-      applied.remove.push(...d.remove)
-      viewDelta.add.push(...d.add)
-      viewDelta.remove.push(...d.remove)
+      merge(applied, d)
+      merge(viewDelta, d)
     }
     flush()
     let withViews: { at: string; delta: Delta } | undefined
@@ -743,9 +740,9 @@ export class ViewRuntime {
         const mine = (q: Quad) => q.subject.value === v.iri
         const build = (skip?: (q: Quad) => boolean): Delta => {
           const d: Delta = { add: [...changes.add], remove: [...changes.remove] }
-          if (v.readsDerived) d.add.push(...derived.add), d.remove.push(...derived.remove)
-          d.add.push(...(skip ? written.add.filter((q) => !skip(q)) : written.add), ...viewDelta.add)
-          d.remove.push(...(skip ? written.remove.filter((q) => !skip(q)) : written.remove), ...viewDelta.remove)
+          if (v.readsDerived) merge(d, derived)
+          merge(d, skip ? { add: written.add.filter((q) => !skip(q)), remove: written.remove.filter((q) => !skip(q)) } : written)
+          merge(d, viewDelta)
           return d
         }
         if (written.add.some(mine) || written.remove.some(mine)) own = build(mine)
@@ -818,8 +815,7 @@ export class ViewRuntime {
       out.plus(v.rebuild(now))
       const d = this.sink(out)
       out.clear()
-      applied.add.push(...d.add)
-      applied.remove.push(...d.remove)
+      merge(applied, d)
     }
     // A result set that changed while a node naming it was hidden: that node shown now, it is written now.
     for (const [v, wasShown] of [...this.pending]) {
@@ -829,8 +825,7 @@ export class ViewRuntime {
       v.writeResultSet(out)
       const d = this.sink(out)
       out.clear()
-      applied.add.push(...d.add)
-      applied.remove.push(...d.remove)
+      merge(applied, d)
     }
     if (!applied.add.length && !applied.remove.length) return applied
     this.check(now)
@@ -843,9 +838,20 @@ export class ViewRuntime {
     // An instance of an iv:perQuery template runs while a node naming its query is shown.
     if (v.def.query && v.def.referrers && this.shown) return v.def.referrers.some((c) => this.shown!(c))
     if (!v.whileShown || !this.shown) return true
-    const f = this.store.factory
-    const instances = this.store.match(null, f.namedNode(RDF_TYPE), f.namedNode(v.whileShown))
+    const instances = this.instancesOf(v.whileShown)
     return (instances.length ? instances.map((q) => q.subject.value) : [v.whileShown]).some((c) => this.shown!(c))
+  }
+
+  /** The nodes of a class, its subclasses' included. */
+  private instancesOf(cls: string): Quad[] {
+    const f = this.store.factory
+    const seen = new Set([cls])
+    const out: Quad[] = []
+    for (const c of seen) {
+      for (const q of this.store.match(null, f.namedNode(RDF_TYPE), f.namedNode(c))) out.push(q)
+      for (const q of this.store.match(null, f.namedNode(RDFS_SUBCLASS), f.namedNode(c))) if (q.subject.termType === 'NamedNode') seen.add(q.subject.value)
+    }
+    return out
   }
 
   private hosted = new Map<string, Definition>()
@@ -947,7 +953,7 @@ export class ViewRuntime {
     const set = (s: NamedNode, p: string, o: Term) => {
       const old = this.store.match(s, nn(p), null, this.graph)
       if (old.length === 1 && old[0]!.object.equals(o)) return
-      remove.push(...old)
+      for (const q of old) remove.push(q)
       add.push(f.quad(s, nn(p), o, this.graph))
     }
     const int = (n: number) => f.literal(String(Math.round(n)), nn(NS.xsd + 'integer'))
@@ -1055,6 +1061,7 @@ export class ViewRuntime {
       query,
       prefixes: this.prefixes(),
       over: this.one(s, IV + 'over')?.value,
+      reads: reads.readsViews || reads.readsDerived,
       partitionBy: def.hosted?.attribute ? [def.hosted.attribute] : partitionBy ? partitionBy.split(/[\s,]+/).map((v) => v.replace(/^[?$]/, '')).filter(Boolean) : undefined,
       window,
       graphs: this.datasetFor(reads).filter((g) => g.termType === 'NamedNode').map((g) => g.value),
@@ -1372,6 +1379,12 @@ interface PartitionState {
 
 type Row = Map<string, Term>
 
+/** Append a change to another; a change can hold more quads than a call can take arguments. */
+function merge(into: Delta, d: Delta) {
+  for (const q of d.add) into.add.push(q)
+  for (const q of d.remove) into.remove.push(q)
+}
+
 const rowKey = (ids: readonly number[]) => ids.join(',')
 
 /** What happened in a tick, for the delta log. */
@@ -1456,6 +1469,7 @@ class PartState {
   retarget(next: Part, now: number, happened: Happened, removed: readonly Quad[]): Map<string, (Term | undefined)[]> | 'all' {
     const old = this.part
     this.part = next
+    if (old.scan) return old.algebra.local === next.algebra.local ? new Map() : 'all'
     let all = false
     this.inner.forEach((ps, i) => {
       if (ps.retarget(next.derived![i]!.part, now, happened, removed) === 'all' || ps.part.algebra.local !== old.derived![i]!.part.algebra.local) {
@@ -1579,6 +1593,7 @@ class PartState {
 
   /** Evaluate partitions (all, or those keyed, or slices of them) and push their change through the operator. */
   update(keys: Map<string, (Term | undefined)[]> | undefined, now: number, happened: Happened): ZSet<Row> {
+    if (this.part.scan) return this.rescan(happened)
     const p = this.part
     const terms = this.rt.terms
     const f = this.rt.store.factory
@@ -1673,6 +1688,57 @@ class PartState {
     terms.sweep()
     if (p.op.k === 'group') this.groupOutput(dirty, out, happened, f)
     return this.post.map(out)
+  }
+
+  /** A triple's row of a scan (Part.scan): its terms by the part's variables, interned. */
+  private scanRow(q: Quad): number[] {
+    const { s, p } = this.part.scan!
+    return this.part.vars.map((v) => this.rt.terms.id('v' in s && s.v === v ? q.subject : 'v' in p && p.v === v ? q.predicate : q.object))
+  }
+
+  /** A scan's step: each triple that came or went counts for its row, which is in while some triple gives it. */
+  scanned(changes: Delta, happened: Happened): ZSet<Row> {
+    const out = new ZSet<Row>()
+    const dirty = new Set<string>()
+    for (const [qs, w] of [[changes.remove, -1], [changes.add, 1]] as const) {
+      for (const q of qs) {
+        if (!this.part.deps!.route(q).length) continue
+        this.enter(this.scanRow(q), w, dirty, out)
+        happened.rowsIn++
+      }
+    }
+    this.rt.terms.sweep()
+    return out
+  }
+
+  /** A scan read from the store (start, rebuild, a parameter changed its pattern): its counts anew, and the rows that differ. */
+  private rescan(happened: Happened): ZSet<Row> {
+    const { s, p, o } = this.part.scan!
+    const constant = (x: Pos) => ('t' in x ? x.t : null)
+    const counted = new Map<string, { ids: number[]; n: number }>()
+    for (const g of this.rt.datasetFor(this.view)) {
+      for (const q of this.rt.store.match(constant(s) as never, constant(p) as never, constant(o) as never, g as never)) {
+        const ids = this.scanRow(q)
+        const k = rowKey(ids)
+        const c = counted.get(k)
+        if (c) c.n++
+        else counted.set(k, { ids, n: 1 })
+      }
+    }
+    const out = new ZSet<Row>()
+    const dirty = new Set<string>()
+    for (const [k, c] of this.counts) {
+      if (counted.has(k)) continue
+      c.n = 1
+      this.enter(c.ids, -1, dirty, out)
+    }
+    for (const [k, { ids, n }] of counted) {
+      if (!this.counts.has(k)) this.enter(ids, 1, dirty, out)
+      this.counts.get(k)!.n = n
+    }
+    happened.rowsIn += counted.size
+    this.rt.terms.sweep()
+    return out
   }
 
   /** A partition row enters (w = 1) or leaves (-1) the operator. */
@@ -2058,7 +2124,7 @@ export class MaintainedView implements ViewHandle {
     const ops: [string, string, string?][] = []
     for (const part of p.parts) {
       if (part.stream?.stream) t(this.activity, PROV.used, nn(part.stream.stream))
-      ops.push(['Partition', part.algebra.local, part.keys.length ? part.keys.map((k) => '?' + k).join(' ') : '()'])
+      ops.push(part.scan ? ['Scan', part.algebra.local] : ['Partition', part.algebra.local, part.keys.length ? part.keys.map((k) => '?' + k).join(' ') : '()'])
       if (part.window) ops.push(['Expire', WindowState.algebra(part.window)])
       ops.push([part.op.k === 'group' ? 'Group' : part.op.k === 'distinct' ? 'Distinct' : 'Project', part.algebra.op])
       if (part.algebra.post) ops.push(['Extend', part.algebra.post])
@@ -2105,6 +2171,11 @@ export class MaintainedView implements ViewHandle {
     const union = new ZSet<Row>()
     let any = false
     for (const ps of this.parts) {
+      if (ps.part.scan) {
+        const rows = ps.scanned(changes, happened)
+        if (rows.size) union.plus(rows), (any = true)
+        continue
+      }
       let touched = changes.add.length || changes.remove.length ? ps.touched(changes) : new Map<string, (Term | undefined)[]>()
       if (ps.inner.length && ps.stepDerived(changes, now, happened, touched === 'all' ? new Map() : touched) === 'all') touched = 'all'
       const win = ps.win
@@ -2507,7 +2578,7 @@ export class MaintainedView implements ViewHandle {
     const out: Quad[] = [...(this.header ?? [])]
     const f = this.rt.store.factory
     for (const w of this.written.values()) {
-      out.push(...w.quads)
+      for (const q of w.quads) out.push(q)
       if (w.index !== undefined) out.push(f.quad(w.node, f.namedNode(RS + 'index'), f.literal(String(w.index), f.namedNode(NS.xsd + 'integer')), this.rt.graph))
     }
     return out

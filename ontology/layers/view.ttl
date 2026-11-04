@@ -89,7 +89,7 @@ iv:lateness a owl:DatatypeProperty ; rdfs:domain iv:Window ; rdfs:range xsd:dayT
     rdfs:comment "How far the watermark of an event-time window stays behind the greatest timestamp (default PT0S)."@en .
 iv:whileShown a owl:ObjectProperty ; rdfs:domain iv:View ;
     rdfs:comment """Maintain the view only while this component - or, given a class, one of its instances - is
-shown; otherwise it is suspended (no work per tick) and rebuilt from its inputs when shown again."""@en .
+shown (a subclass's instances are the class's); otherwise it is suspended (no work per tick) and rebuilt from its inputs when shown again."""@en .
 iv:partitionBy a owl:DatatypeProperty ; rdfs:domain iv:View ;
     rdfs:comment """The variable(s) a view's body is partitioned by (e.g. "m", or "stream m"): each binding is a
 partition, evaluated with the key bound and cached, and evaluated again only when a changed triple
@@ -248,6 +248,9 @@ iv:Partition a owl:NamedIndividual ; rdfs:label "partition"@en ;
     rdfs:comment """Evaluates the body once per partition (an LDES member, a row of a collection...) with its key bound,
 and caches its rows until a changed triple reaches the partition through one of the body's patterns
 (joins outside the member, OPTIONAL, EXISTS, MINUS: a delta query over the store's indexes)."""@en .
+iv:Scan a owl:NamedIndividual ; rdfs:label "scan"@en ;
+    rdfs:comment """A body of one triple pattern, under DISTINCT: each triple that comes or goes counts for its row,
+so nothing is evaluated; the store is read only at start and rebuild."""@en .
 iv:Project a owl:NamedIndividual ; rdfs:label "project"@en ; rdfs:comment "The partitions' rows, as a bag."@en .
 iv:Distinct a owl:NamedIndividual ; rdfs:label "distinct"@en ;
     rdfs:comment "DISTINCT with counts: a row is in while some partition has it, so a retraction is exact."@en .
