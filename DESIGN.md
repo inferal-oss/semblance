@@ -196,6 +196,8 @@ layer's report, a class's ontology (`c:ClassDoc`) and the Reference's term tree 
 Floating frames get their abilities from capability classes an instance opts
 into: `c:Draggable`, `c:Resizable`, `c:Raisable`, `c:Minimizable`,
 `c:Maximizable`, `c:Dockable`. A `c:Window` has them all; a `c:Palette` docks.
+A frame that also opts into `c:DockResizable` has a size handle on the edge
+opposite the one it is docked to (`c:DockPanel` always has it).
 Their state is two hookable axes, `c:windowState` (normal, minimized,
 maximized) and `c:attachedTo` (floating or a viewport edge), plus stacking
 order (`c:z`) as graph state. A move docks to the edge where its release lands,

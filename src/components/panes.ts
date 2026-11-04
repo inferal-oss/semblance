@@ -6,14 +6,16 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
 import { MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, XSD_INTEGER } from '../ns.ts'
 import { mint } from '../rdf.ts'
-import { holdsOther, tabsOf } from './containers.ts'
+import { classesIn, dockHandle, DOCK_MAX, holdsOther, tabsOf } from './containers.ts'
 import { el, md5 } from './data.ts'
+import { hitMarks } from './feedback.ts'
 import { isTrue, named, nodes, str, text } from './util.ts'
 
 const C = NS.c
 const XSD_DECIMAL = NS.xsd + 'decimal'
 const DEFAULT_MIN = 120
 const DEFAULT_DOCK = 280
+const FRAME_MIN = 240
 
 // --- TiledWorkspace -------------------------------------------------------------------------------
 
@@ -217,6 +219,7 @@ const dockPanel: FnRule = (ctx, focus) => {
   const { edge, across } = edgeOf(ctx, focus)
   const size = int(str(ctx.object(focus, C + (across ? 'width' : 'height'))), DEFAULT_DOCK)
   const min = int(str(ctx.object(focus, C + 'minSize')), DEFAULT_MIN)
+  const max = int(str(ctx.object(focus, C + 'maxSize')), DOCK_MAX)
   const badge = text(ctx, focus, C + 'badge')
   const actions = nodes(ctx, ctx.object(focus, C + 'actions'))
   const main = o.node('main')
@@ -237,21 +240,7 @@ const dockPanel: FnRule = (ctx, focus) => {
   ])
   const parts: NamedNode[] = []
   if (open) {
-    parts.push(
-      el(o, 'handle', 'Div', {
-        class: 'sem-dock-handle',
-        tabIndex: '0',
-        role: 'separator',
-        'aria-orientation': across ? 'vertical' : 'horizontal',
-        'aria-valuenow': String(size),
-        'aria-valuemin': String(min),
-        'aria-label': caption ? `Resize ${caption}` : 'Resize panel',
-        'data-sem-gesture': 'size',
-        'data-sem-axis': across ? 'x' : 'y',
-        'data-sem-sign': edge === 'start' || edge === 'top' ? '1' : '-1',
-        'data-sem-min': String(min),
-      }),
-    )
+    parts.push(dockHandle(ctx, o, focus, edge, size, min, max, caption, main))
   }
   parts.push(header, main)
   const root = el(o, 'root', 'Section', { style: `--dock-size: ${size}px`, 'data-expanded': String(open) }, parts)
@@ -261,16 +250,17 @@ const dockPanel: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** The free edge's new size: c:width at the start or end, else c:height; at least c:minSize, at most the room. */
+/** The free edge's new size: c:width at the start or end, else c:height; at least c:minSize, at most c:maxSize and the room. Only its own handle counts. */
 const dockResize: ReactionFn = (ctx) => {
   const raw = Number(str(ctx.object(ctx.event, NS.beh + 'size')))
-  if (!Number.isFinite(raw)) return { add: [], remove: [] }
+  if (!Number.isFinite(raw) || !hitMarks(ctx, C + 'resizes')) return { add: [], remove: [] }
   const extent = Number(str(ctx.object(ctx.event, NS.beh + 'extent')))
   const { across } = edgeOf(ctx, ctx.target)
   const p = C + (across ? 'width' : 'height')
-  const min = int(str(ctx.object(ctx.target, C + 'minSize')), DEFAULT_MIN)
-  const capped = Number.isFinite(extent) && extent > min && raw > extent ? extent : raw
-  const size = Math.trunc(Math.max(min, capped))
+  const min = int(str(ctx.object(ctx.target, C + 'minSize')), classesIn(ctx, ctx.target).has(C + 'Frame') ? FRAME_MIN : DEFAULT_MIN)
+  const max = int(str(ctx.object(ctx.target, C + 'maxSize')), DOCK_MAX)
+  const room = Number.isFinite(extent) && extent > min && raw > extent ? extent : raw
+  const size = Math.trunc(Math.max(min, Math.min(max, room)))
   const f = ctx.runtime.store.factory
   return { remove: ctx.match(ctx.target, p, null), add: [f.quad(ctx.target, f.namedNode(p), f.literal(String(size), f.namedNode(XSD_INTEGER)))] }
 }
