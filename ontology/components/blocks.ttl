@@ -370,7 +370,6 @@ blk:BlockHandleRendering a sem:Rendering ; sem:targets blk:BlockHandle ; sem:mod
     sem:watches rdf:type , dnd:carries , rdf:value , c:handleMenuBlock , c:handleMenuReturn .
 blk:BlockHandleRendering-fn a sem:Rule ; sem:implements blk:BlockHandleRendering ; sem:function "blk:handle" .
 blk:BlockHandleRendering-sparql a sem:Rule ; sem:implements blk:BlockHandleRendering ;
-    sem:bulk false ;
     sem:construct """
 CONSTRUCT {
   $this dnd:name ?name .
@@ -493,7 +492,6 @@ blk:DropZone a sem:Rendering ; sem:targets blk:Container ; sem:modality mod:Scre
     sem:watches rdf:type .
 blk:DropZone-fn a sem:Rule ; sem:implements blk:DropZone ; sem:function "blk:drop-zone" .
 blk:DropZone-sparql a sem:Rule ; sem:implements blk:DropZone ;
-    sem:bulk false ;  # in bulk, the rows of a newly inserted table lose data-sem-drop-ordered on the SPARQL side
     sem:construct """
 CONSTRUCT { $this dnd:members po:contains ; dnd:orderBy co:nextItem ; dnd:zone ?zone . ?zone dnd:receptacle $this ; c:label ?name . }
 WHERE {

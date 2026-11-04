@@ -414,6 +414,48 @@ describe('reconfiguration and layers', () => {
 })
 
 describe('bulk attributability', () => {
+  // Foci that are minted IRIs themselves (a block's handle, <container>/~handle-<block>), with a subject minted
+  // from a minted node, and a focus nested under another in one batch, which also writes about that one (#310).
+  const nested = `
+      @prefix sem: <${NS.sem}> . @prefix x: <urn:n:> .
+      <urn:n:Rule> a sem:Rule ; sem:targets x:Part ; sem:stratum 1 ;
+        sem:construct """CONSTRUCT { $this <urn:n:name> ?name . ?root <urn:n:of> $this . ?deep <urn:n:under> ?root . ?inner <urn:n:from> $this } WHERE {
+          $this <urn:n:label> ?name .
+          OPTIONAL { $this <urn:n:holds> ?held }
+          BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+          BIND(IRI(CONCAT(STR(?root), "/~deep")) AS ?deep)
+          BIND(IF(BOUND(?held), IRI(CONCAT(STR($this), "/~inner")), ?none) AS ?inner)
+        }""" .
+      <urn:n:doc/~a> a x:Part ; x:label "a" . <urn:n:doc/~b> a x:Part ; x:label "b" .
+      <urn:n:t> a x:Part ; x:label "t" ; x:holds true . <urn:n:t/~inner> a x:Part ; x:label "inner" .`
+  it.each(['oxigraph', 'wat'] as const)('gives every focus what it derived, whatever its IRI, in %s', (kind) => {
+    const project = (bulkThreshold: number) => {
+      const store = loadStore(kind, todoApp(1), nested)
+      const runtime = new Runtime(store)
+      const screen = runtime.project({ modality: MOD.Screen, prefer: 'sparql', bulkThreshold })
+      const out = () =>
+        store
+          .match(null, null, null, screen.engine.graph)
+          .filter((q) => q.predicate.value.startsWith('urn:n:'))
+          .map((q) => `${q.subject.value} ${q.predicate.value} ${q.object.value}`)
+          .sort()
+      return { store, runtime, screen, out }
+    }
+    const bulk = project(2)
+    const single = project(Infinity)
+    expect(bulk.screen.engine.stats.bulkQueries).toBeGreaterThan(0)
+    expect(single.out()).toContain('urn:n:doc/~a urn:n:name a')
+    expect(single.out()).toContain('urn:n:doc/~a/~root/~deep urn:n:under urn:n:doc/~a/~root')
+    expect(bulk.out()).toEqual(single.out())
+    // What the outer focus wrote about the inner one goes with the outer focus's own next evaluation.
+    for (const h of [bulk, single]) {
+      const f = h.store.factory
+      h.runtime.apply({ remove: h.store.match(f.namedNode('urn:n:t'), f.namedNode('urn:n:holds'), null), add: [] })
+    }
+    expect(single.out()).not.toContain('urn:n:t/~inner urn:n:from urn:n:t')
+    expect(bulk.out()).toEqual(single.out())
+  })
+
   it('evaluates per focus any SPARQL rule whose template writes about nodes not minted from the focus', async () => {
     const { attributable } = await import('../src/engine/rules.ts')
     expect(attributable('CONSTRUCT { ?root sem:renders $this . ?a ord:immediatelyPrecedes ?b } WHERE { BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }')).toBe(false)

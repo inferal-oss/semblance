@@ -31,13 +31,24 @@ export const emptyDelta = (): Delta => ({ add: [], remove: [] })
 /**
  * Minted IRIs live "under" the focus they were generated for: `<focus>/~<local>`.
  * The local part never contains `/~`, so the owning focus is everything before
- * the last `/~`. Bulk SPARQL evaluation relies on this to group results.
+ * the last `/~`. A focus may be minted itself (a block's handle): see mintedUnder.
  */
 export const MINT_SEPARATOR = '/~'
 export const mint = (focus: string, local: string): string => focus + MINT_SEPARATOR + local
 export function owningFocus(iri: string): string {
   const i = iri.lastIndexOf(MINT_SEPARATOR)
   return i < 0 ? iri : iri.slice(0, i)
+}
+
+/**
+ * Which of `foci` a subject belongs to: itself, or the nearest above it. The shape of an IRI cannot
+ * say that alone: `<a>/~b` is a node `<a>` minted, or the focus `<a>/~b` writing about itself.
+ */
+export function mintedUnder(iri: string, foci: ReadonlySet<string>): string | undefined {
+  for (let at = iri, up = owningFocus(at); ; at = up, up = owningFocus(at)) {
+    if (foci.has(at)) return at
+    if (up === at) return undefined
+  }
 }
 
 /** Milliseconds in an ISO 8601 duration (days, hours, minutes, seconds). */

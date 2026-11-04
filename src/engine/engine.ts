@@ -1,6 +1,6 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { H, L10N, NS, PROV, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
-import { type Delta, mint, owningFocus, quadKey, termKey } from '../rdf.ts'
+import { type Delta, mint, mintedUnder, owningFocus, quadKey, termKey } from '../rdf.ts'
 import { QueryInterrupted, type GraphStore } from '../store/types.ts'
 import { createContext, type FnRule, formatLocale, LANGUAGE, languageChain, type RuleContext } from './context.ts'
 import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
@@ -1478,8 +1478,7 @@ export class Engine {
     const member = memberOf(focus)
     // A member-wise pair: the member is written in place of $member, the focus of $this.
     if (member !== undefined) return this.construct(rule, rule.queryParts!.join('<' + focusOf(focus) + '>').replaceAll('$member', '<' + member + '>'))
-    if (this.store.constructFor) return this.constructFor(rule, [focus])
-    return this.construct(rule, rule.queryParts!.join('<' + focus + '>'))
+    return this.queryOne(rule, focus)
   }
 
   /** Drop a (rule, focus) pair's traced reads. */
@@ -1529,28 +1528,38 @@ export class Engine {
   private bulk(rule: Rule, foci: string[]): Map<string, Quad[]> {
     this.stats.bulkQueries++
     const groups = new Map<string, Quad[]>()
-    if (this.store.constructFor) {
-      for (const q of this.constructFor(rule, foci)) {
-        const focus = owningFocus(q.subject.value)
-        let g = groups.get(focus)
-        if (!g) groups.set(focus, (g = []))
-        g.push(q)
-      }
-      return groups
+    // A focus minted under another of the batch goes alone: a triple about it could be its own or the outer focus's.
+    const batch = new Set(foci)
+    const nested = foci.filter((focus) => owningFocus(focus) !== focus && mintedUnder(owningFocus(focus), batch) !== undefined)
+    for (const focus of nested) {
+      batch.delete(focus)
+      this.stats.queries++
+      groups.set(focus, this.queryOne(rule, focus))
     }
+    for (const q of this.queryMany(rule, [...batch])) {
+      const focus = mintedUnder(q.subject.value, batch)
+      if (focus === undefined) continue
+      let g = groups.get(focus)
+      if (!g) groups.set(focus, (g = []))
+      g.push(q)
+    }
+    return groups
+  }
+
+  private queryOne(rule: Rule, focus: string): Quad[] {
+    if (this.store.constructFor) return this.constructFor(rule, [focus])
+    return this.construct(rule, rule.queryParts!.join('<' + focus + '>'))
+  }
+
+  private queryMany(rule: Rule, foci: string[]): Quad[] {
+    if (this.store.constructFor) return this.constructFor(rule, foci)
     // Restrict ?this to the dirty foci, at the start of the WHERE clause.
     const query = rule.queryParts!.join('?this')
     const template = query.search(/CONSTRUCT\s*\{/i)
     const where = query.slice(template).search(/WHERE\s*\{/i)
     const at = where < 0 ? -1 : template + where + query.slice(template + where).indexOf('{') + 1
     const restricted = at < 0 ? query : `${query.slice(0, at)} VALUES ?this { ${foci.map((x) => `<${x}>`).join(' ')} } ${query.slice(at)}`
-    for (const q of this.construct(rule, restricted)) {
-      const focus = owningFocus(q.subject.value)
-      let g = groups.get(focus)
-      if (!g) groups.set(focus, (g = []))
-      g.push(q)
-    }
-    return groups
+    return this.construct(rule, restricted)
   }
 
   private constructFor(rule: Rule, foci: string[]): Quad[] {
