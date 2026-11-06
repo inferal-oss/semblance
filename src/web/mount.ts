@@ -17,7 +17,7 @@ import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 import { serverRendered, serverStyled, takeOver } from './takeover.ts'
 import { markPlatform } from './platform.ts'
 import { graphLanguages } from '../server/render.ts'
-import { Navigation, type NavigationOptions, rendererReveal } from '../navigation.ts'
+import { Navigation, type NavigationOptions, rendererReveal, windowScroll } from '../navigation.ts'
 
 export { DEFAULT_LAYERS }
 
@@ -218,7 +218,10 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     },
   })
   const detachRendered = rendered.attach()
-  const detachNavigation = navigation?.attach(runtime, { bus, links: element, onNavigate: flush, reveal: rendererReveal(renderer) })
+  // The window's scroll follows the location only where the location is the window's own address.
+  const win = element.ownerDocument.defaultView
+  const scroll = win && !(opts.navigation && opts.navigation.location) ? windowScroll(win) : undefined
+  const detachNavigation = navigation?.attach(runtime, { bus, links: element, onNavigate: flush, reveal: rendererReveal(renderer), scroll })
   // What the visitor did before now (a click, typing) happens now, on the adopted nodes.
   const takeover = adopted && { nodes: adopted.nodes, mismatches: adopted.mismatches, replayed: adopted.replay() }
 

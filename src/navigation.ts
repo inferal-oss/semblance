@@ -46,6 +46,8 @@ export interface Dimension {
   /** Carrier IRIs, best rank first. */
   carriers: string[]
   makesHistory: boolean
+  /** A change of it is another place, which starts at the top (nav:scroll; default: where the path or the fragment spells it). */
+  startsAtTop: boolean
   parent?: string
   when: Term[]
   target: boolean
@@ -92,6 +94,10 @@ export function readLocations(r: Reader): Location[] {
         const property = one(r, d, NAV + 'property')?.value
         if (subject?.termType !== 'NamedNode' || !property) return []
         const types = r.match(d, RDF_TYPE, null).map((q) => q.object.value)
+        const carriers = r
+          .match(d, NAV + 'carriedBy', null)
+          .map((q) => q.object.value)
+          .sort((a, b) => rank(a) - rank(b))
         return [
           {
             iri: d.value,
@@ -100,11 +106,9 @@ export function readLocations(r: Reader): Location[] {
             key: one(r, d, NAV + 'key')?.value ?? localName(property),
             keyProperty: one(r, d, NAV + 'keyProperty')?.value ?? SEM.slug,
             prefixed: one(r, d, NAV + 'spelling')?.value === NAV + 'PrefixedName',
-            carriers: r
-              .match(d, NAV + 'carriedBy', null)
-              .map((q) => q.object.value)
-              .sort((a, b) => rank(a) - rank(b)),
+            carriers,
             makesHistory: one(r, d, NAV + 'history')?.value !== NAV + 'NoHistory',
+            startsAtTop: startsAtTop(one(r, d, NAV + 'scroll')?.value, types, carriers),
             parent: one(r, d, NAV + 'parent')?.value,
             when: r.match(d, NAV + 'when', null).map((q) => q.object),
             target: types.includes(NAV + 'TargetDimension'),
@@ -640,6 +644,12 @@ const ruleReader = (ctx: RuleContext): Reader => ({ f: ctx.f, match: (s, p, o) =
 
 // --- the host effect -----------------------------------------------------------------------------
 
+/** What a change of a dimension does to where the page is scrolled (nav:scroll, else by what spells it). */
+function startsAtTop(scroll: string | undefined, types: string[], carriers: string[]): boolean {
+  if (types.includes(NAV + 'TargetDimension')) return false
+  return scroll ? scroll === NAV + 'StartsAtTop' : carriers.includes(PATH) || carriers.includes(NAV + 'Fragment')
+}
+
 /** The parts of window.location the effect reads. */
 export interface UrlLike {
   readonly pathname: string
@@ -647,6 +657,8 @@ export interface UrlLike {
   readonly hash: string
 }
 export interface HistoryLike {
+  /** The current entry's state (where it was scrolled, see Navigation.remember). */
+  readonly state?: unknown
   pushState(data: unknown, unused: string, url: string): void
   replaceState(data: unknown, unused: string, url: string): void
 }
@@ -664,10 +676,59 @@ export interface NavigationOptions {
   persistence?: { restored(policy: string): boolean }
   /** Bring a target's rendered root into view; false while it is not rendered yet (see rendererReveal). */
   reveal?: (iri: string, opts: { smooth: boolean }) => boolean
-  /** When to retry a reveal (default: the next animation frame). */
+  /** The page's scroll position: a step to another place starts at the top, a step back in history where it was (see windowScroll). */
+  scroll?: ScrollLike
+  /** When to retry a reveal, or going back to where a page was (default: the next animation frame). */
   frame?: (run: () => void) => void
   /** When to write the URL after a change (default: a microtask, so one interaction is one step). */
   schedule?: (run: () => void) => void
+}
+
+/** Where a page is scrolled. */
+export interface ScrollOffset {
+  x: number
+  y: number
+}
+/** The page's scroll position, as the navigation effect moves and remembers it. */
+export interface ScrollLike {
+  offset(): ScrollOffset
+  /** Go there at once; false while the page is too short to get there. */
+  to(at: ScrollOffset): boolean
+  /** Hear that scrolling has settled, or that the page is being left. */
+  settled(run: () => void): () => void
+}
+
+/** The window's scroll position. A settled scroll is heard once it has been still for a moment. */
+export function windowScroll(win: Window, still = 100): ScrollLike {
+  const offset = () => ({ x: win.scrollX, y: win.scrollY })
+  return {
+    offset,
+    to(at) {
+      win.scrollTo?.({ left: at.x, top: at.y, behavior: 'instant' })
+      const now = offset()
+      return Math.abs(now.x - at.x) <= 1 && Math.abs(now.y - at.y) <= 1
+    },
+    settled(run) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const scrolled = () => {
+        clearTimeout(timer)
+        timer = setTimeout(run, still)
+      }
+      win.addEventListener('scroll', scrolled, { passive: true })
+      win.addEventListener('pagehide', run)
+      return () => {
+        clearTimeout(timer)
+        win.removeEventListener('scroll', scrolled)
+        win.removeEventListener('pagehide', run)
+      }
+    },
+  }
+}
+
+/** The offset a history entry's state remembers. */
+function rememberedOffset(state: unknown): ScrollOffset | undefined {
+  const at = (state as { semScroll?: Partial<ScrollOffset> } | null | undefined)?.semScroll
+  return typeof at?.x === 'number' && typeof at.y === 'number' ? { x: at.x, y: at.y } : undefined
 }
 
 /** The navigation effect for one location of one store. */
@@ -679,6 +740,11 @@ export class Navigation {
   private written?: Values
   private revealing?: string
   private revealer?: NavigationOptions['reveal']
+  private scroll?: ScrollLike
+  /** Going back to a remembered offset, on a page still too short for it. */
+  private returning?: ScrollOffset
+  /** Where the page was when the change being written began. */
+  private leaving?: ScrollOffset
   private model?: Location | null
   private readonly r: Reader
 
@@ -743,16 +809,21 @@ export class Navigation {
   }
 
   /** Follow input changes and the URL from now on. With a bus, URL changes are recorded as nav:Navigate events. */
-  attach(runtime: Runtime, opts: { bus?: EventBus; onNavigate?: () => void; reveal?: NavigationOptions['reveal']; links?: EventTarget } = {}): () => void {
+  attach(runtime: Runtime, opts: { bus?: EventBus; onNavigate?: () => void; reveal?: NavigationOptions['reveal']; scroll?: ScrollLike; links?: EventTarget } = {}): () => void {
     this.runtime = runtime
     this.bus = opts.bus
     this.onNavigate = opts.onNavigate
     this.revealer = opts.reveal ?? this.opts.reveal
+    this.scroll = opts.scroll ?? this.opts.scroll
     this.write(false)
-    if (this.revealing) this.reveal(this.revealing)
+    // A reload comes back to where the entry was (the browser tries too, on the page before it is taken over).
+    const remembered = this.remembered()
+    if (remembered) this.returnTo(remembered)
+    else if (this.revealing) this.reveal(this.revealing)
     const stop = runtime.onInput((graph, delta) => this.changed(graph, delta))
+    const stopScroll = this.scroll?.settled(() => this.remember())
     const events = this.opts.events ?? (globalThis as unknown as EventTarget)
-    const follow = () => this.follow()
+    const follow = () => this.follow(undefined, true)
     events.addEventListener?.('popstate', follow)
     events.addEventListener?.('hashchange', follow)
     // A location with paths takes over the links that go to its own paths: a step, not a page load.
@@ -770,6 +841,7 @@ export class Navigation {
     links?.addEventListener?.('submit', submit)
     return () => {
       stop()
+      stopScroll?.()
       links?.removeEventListener?.('click', click)
       links?.removeEventListener?.('submit', submit)
       events.removeEventListener?.('popstate', follow)
@@ -795,6 +867,8 @@ export class Navigation {
     }
     if (!touched || this.pending) return
     this.pending = true
+    // Where the page is now: rendering what changed may cut it short before the step is written.
+    this.leaving = this.scroll?.offset()
     ;(this.opts.schedule ?? queueMicrotask)(() => this.pending && this.flush())
   }
 
@@ -810,7 +884,7 @@ export class Navigation {
     if (path !== loc.base.slice(0, -1) && !path.startsWith(loc.base)) return
     e.preventDefault()
     const next = path + (href.includes('?') ? '?' + href.split('?')[1]!.split('#')[0] : this.url.search) + (href.includes('#') ? href.slice(href.indexOf('#')) : '')
-    if (next !== this.url.pathname + this.url.search + this.url.hash) this.history.pushState(null, '', next)
+    if (next !== this.url.pathname + this.url.search + this.url.hash) this.step(next)
     this.follow()
   }
 
@@ -836,15 +910,70 @@ export class Navigation {
     const hash = address.indexOf('#')
     const path = hash > 0 ? address.slice(0, hash) : address.startsWith('#') ? this.url.pathname : address
     const href = path + this.url.search + (hash >= 0 ? address.slice(hash) : '')
-    if (href === this.url.pathname + this.url.search + this.url.hash) this.history.replaceState(null, '', href)
-    else this.history.pushState(null, '', href)
+    if (href === this.url.pathname + this.url.search + this.url.hash) this.inPlace(href)
+    else this.step(href)
     this.follow()
   }
 
   /** Write the graph's location to the URL now (if it changed). */
   flush(): void {
     this.pending = false
-    this.write(true)
+    if (this.write(true) && !this.target()) this.toTop()
+  }
+
+  /** A new history entry; the one being left remembers where it was. */
+  private step(href: string) {
+    this.remember(this.leaving)
+    this.history.pushState(null, '', href)
+  }
+
+  /** The address changes in place; the entry keeps what it remembers. */
+  private inPlace(href: string) {
+    this.history.replaceState(this.history.state ?? null, '', href)
+  }
+
+  /** The current entry remembers where the page is scrolled, for Back, Forward and a reload. */
+  private remember(at = this.scroll?.offset()) {
+    if (!at || this.returning) return
+    const was = this.remembered()
+    if (was?.x === at.x && was.y === at.y) return
+    const state = this.history.state
+    this.history.replaceState({ ...(typeof state === 'object' ? state : null), semScroll: at }, '', this.url.pathname + this.url.search + this.url.hash)
+  }
+
+  private remembered() {
+    return this.scroll && rememberedOffset(this.history.state)
+  }
+
+  /** Another place: its top. */
+  private toTop() {
+    this.returning = this.revealing = undefined
+    this.scroll?.to({ x: 0, y: 0 })
+  }
+
+  /** Where the entry was, once the page is long enough to get there (it may still be rendering). */
+  private returnTo(at: ScrollOffset, tries = 120) {
+    const scroll = this.scroll
+    if (!scroll) return
+    this.returning = at
+    this.revealing = undefined
+    const attempt = (left: number) => {
+      if (this.returning !== at) return
+      if (scroll.to(at) || left <= 0) return void (this.returning = undefined)
+      this.nextFrame(() => attempt(left - 1))
+    }
+    attempt(tries)
+  }
+
+  /** The target the location has now, if any. */
+  private target(): Term | undefined {
+    const loc = this.location()
+    const target = loc?.dimensions.find((d) => d.target)
+    return target && currentValues(this.r, loc!).get(target.iri)
+  }
+
+  private nextFrame(run: () => void) {
+    ;(this.opts.frame ?? ((next) => (globalThis.requestAnimationFrame ?? ((cb: () => void) => setTimeout(cb, 16)))(next)))(run)
   }
 
   /** The URL as the graph would spell it now. */
@@ -858,10 +987,11 @@ export class Navigation {
     return (loc.paths ? path : this.url.pathname) + (search ? '?' + search : '') + fragment
   }
 
-  private write(asStep: boolean) {
+  /** Spell the graph's location in the URL. Whether it is at another place than it was (nav:scroll). */
+  private write(asStep: boolean): boolean {
     const loc = this.location()
     const runtime = this.runtime
-    if (!loc || !runtime) return
+    if (!loc || !runtime) return false
     const values = currentValues(this.r, loc)
     // A target applies while the location shows it; moving elsewhere leaves it.
     const stale = loc.dimensions.filter((d) => d.target && values.has(d.iri) && !inScope(this.r, loc, d, values))
@@ -875,12 +1005,19 @@ export class Navigation {
     const next = this.href()!
     const previous = this.written
     this.written = values
-    if (next === this.url.pathname + this.url.search + this.url.hash) return this.report(loc)
+    const moved = !!previous && loc.dimensions.some((d) => d.startsAtTop && !same(previous.get(d.iri), values.get(d.iri)) && inScope(this.r, loc, d, values))
+    if (next === this.url.pathname + this.url.search + this.url.hash) {
+      this.leaving = undefined
+      this.report(loc)
+      return moved
+    }
     const urlDims = loc.dimensions.filter((d) => d.carriers.some((c) => URL_CARRIERS.has(c)))
     const step = asStep && !!previous && urlDims.some((d) => d.makesHistory && !same(previous.get(d.iri), values.get(d.iri)))
-    if (step) this.history.pushState(null, '', next)
-    else this.history.replaceState(null, '', next)
+    if (step) this.step(next)
+    else this.inPlace(next)
+    this.leaving = undefined
     this.report(loc)
+    return moved
   }
 
   /**
@@ -917,19 +1054,24 @@ export class Navigation {
   /**
    * The URL changed outside the graph (Back, Forward, a typed or followed link): write what it
    * says into the graph (a nav:Navigate event when there is a bus), then spell it back in place.
+   * The page lands as a browser's would: where the entry was when it remembers that (Back,
+   * Forward: `traversal`, when the entry may remember); else at the target; else, at another
+   * place, at its top.
    */
-  follow(address = this.address()): void {
+  follow(address = this.address(), traversal = false): void {
     const loc = this.location()
     const runtime = this.runtime
     if (!loc || !runtime) return
     if (this.bus) this.bus.emit(NAV + 'Navigate', loc.iri, { value: address })
     else runtime.apply(followDelta(this.r, loc, address))
     this.pending = false
-    this.write(false)
+    const moved = this.write(false)
     this.onNavigate?.()
-    const target = loc.dimensions.find((d) => d.target)
-    const now = target && currentValues(this.r, loc).get(target.iri)
-    if (now) this.reveal(now.value)
+    const remembered = traversal ? this.remembered() : undefined
+    const now = this.target()
+    if (remembered) this.returnTo(remembered)
+    else if (now) this.reveal(now.value)
+    else if (moved) this.toTop()
   }
 
   /** Bring a target into view once it is rendered (it may be parked until its page shows). */
@@ -940,7 +1082,7 @@ export class Navigation {
     const attempt = (left: number) => {
       if (this.revealing !== iri) return
       if (reveal(iri, { smooth: this.smooth() })) return void (this.revealing = undefined)
-      if (left > 0) (this.opts.frame ?? ((run) => (globalThis.requestAnimationFrame ?? ((cb: () => void) => setTimeout(cb, 16)))(run)))(() => attempt(left - 1))
+      if (left > 0) this.nextFrame(() => attempt(left - 1))
     }
     attempt(tries)
   }

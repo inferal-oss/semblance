@@ -136,6 +136,19 @@ nav:NoHistory a nav:History ;
     rdfs:label "No history"@en , "Без історії"@uk , "Kein Verlauf"@de , "بلا سجل"@ar ;
     rdfs:comment "A change updates where we are in place (the URL carriers replace the current entry). Storage carriers never keep history: only the current value."@en .
 
+# --- scrolling: where a step lands --------------------------------------------------------------
+
+nav:Scroll a owl:Class ;
+    rdfs:comment "What a change of a dimension does to where the page is scrolled. Whichever it says, a step with a target brings the target into view, and Back, Forward and a reload return to where the page was on that entry (the effect keeps it in the entry's history state)."@en .
+nav:scroll a owl:ObjectProperty ; rdfs:domain nav:Dimension ; rdfs:range nav:Scroll ;
+    rdfs:comment "Default nav:StartsAtTop for a dimension the path or the fragment spells (a place), nav:KeepsScroll for any other (a query parameter, one only in storage or the graph). A target dimension does not move the page by this."@en .
+nav:StartsAtTop a nav:Scroll ;
+    rdfs:label "Starts at the top"@en , "Починається згори"@uk , "Beginnt oben"@de , "يبدأ من الأعلى"@ar ;
+    rdfs:comment "A change is another place: the page starts at its top."@en .
+nav:KeepsScroll a nav:Scroll ;
+    rdfs:label "Keeps the scroll"@en , "Зберігає прокрутку"@uk , "Behält die Position"@de , "يحافظ على التمرير"@ar ;
+    rdfs:comment "A change shows the same place another way (the language it is in): the page stays where it is."@en .
+
 # --- following the URL: an event like any other -----------------------------------------------
 
 nav:Navigate a owl:Class ; rdfs:subClassOf beh:Event ;

@@ -16,6 +16,7 @@ const PER = NS.per
 /** A browser tab's address and history: entries, an index, popstate on Back and Forward, hashchange on a followed link. */
 function tab(start = '/') {
   const entries = [new URL(start, 'https://semblance.test/')]
+  const states: unknown[] = [null]
   let at = 0
   const events = new EventTarget()
   const location = {
@@ -32,13 +33,18 @@ function tab(start = '/') {
   const history = {
     pushes: 0,
     replaces: 0,
-    pushState(_d: unknown, _u: string, url: string) {
+    get state() {
+      return states[at]
+    },
+    pushState(d: unknown, _u: string, url: string) {
       entries.splice(at + 1, Infinity, new URL(url, entries[at]))
+      states.splice(at + 1, Infinity, d)
       at++
       this.pushes++
     },
-    replaceState(_d: unknown, _u: string, url: string) {
+    replaceState(d: unknown, _u: string, url: string) {
       entries[at] = new URL(url, entries[at])
+      states[at] = d
       this.replaces++
     },
   }
@@ -67,6 +73,7 @@ function tab(start = '/') {
     /** Follow a link or type an address: a new entry, then hashchange (as browsers do for a fragment; the navigation effect takes over links to paths). */
     visit(url: string) {
       entries.splice(at + 1, Infinity, new URL(url, entries[at]))
+      states.splice(at + 1, Infinity, null)
       at++
       events.dispatchEvent(new Event('hashchange'))
     },
@@ -87,6 +94,184 @@ async function site(start = '/', backends?: Record<string, Backend>, extra: Part
   const visible = (el: Element | null | undefined) => !!el && !el.closest('[hidden]')
   return { ...h, tab: t, set, visible }
 }
+
+/** A page's scroll position: a person scrolling, and how long the page is now. */
+function scrolled() {
+  const settled: (() => void)[] = []
+  const page = {
+    y: 0,
+    height: 10_000,
+    moves: [] as number[],
+    offset: () => ({ x: 0, y: page.y }),
+    to(at: { x: number; y: number }) {
+      page.y = Math.min(at.y, page.height)
+      page.moves.push(page.y)
+      return page.y === at.y
+    },
+    settled(run: () => void) {
+      settled.push(run)
+      return () => {}
+    },
+    /** A person scrolls there, and it settles. */
+    scroll(y: number) {
+      page.y = y
+      for (const run of settled) run()
+    },
+  }
+  return page
+}
+
+describe('navigation: where a step lands', () => {
+  it('starts another place at its top, by a change of the graph or the address', async () => {
+    const page = scrolled()
+    const s = await site('/docs/rules/', undefined, { scroll: page })
+    page.scroll(800)
+    s.set(UI + 'page', UI + 'Components') // the app bar
+    await tick()
+    expect(s.tab.url).toBe('/components/foundations/')
+    expect(page.y).toBe(0)
+    page.scroll(800)
+    s.set(UI + 'galleryGroup', UI + 'GroupInputs') // a side list
+    await tick()
+    expect(page.y).toBe(0)
+    page.scroll(800)
+    s.tab.visit('/examples/kanban/') // a followed link
+    expect(s.value(UI + 'example')).toBe(UI + 'ExKanban')
+    expect(page.y).toBe(0)
+  })
+
+  it('stays where it is for what shows the same place another way, or does not move it (nav:scroll)', async () => {
+    const page = scrolled()
+    const s = await site('/docs/rules/', undefined, { scroll: page })
+    page.scroll(800)
+    s.set(NS.l10n + 'language', NS.l10n + 'Ukrainian')
+    await tick()
+    expect(s.tab.url).toBe('/uk/docs/rules/')
+    expect(page.y).toBe(800)
+    // The address not changing, a section out of scope changing: not another place either.
+    s.tab.history.replaceState(s.tab.history.state, '', '/uk/docs/rules/')
+    s.set(UI + 'example', UI + 'ExKanban')
+    await tick()
+    expect(page.y).toBe(800)
+    expect(page.moves).toEqual([])
+  })
+
+  it('brings a target into view instead, and goes to the top once a step leaves it', async () => {
+    const page = scrolled()
+    const revealed: string[] = []
+    const s = await site('/docs/rules/', undefined, { scroll: page, reveal: (iri) => (revealed.push(iri), true) })
+    page.scroll(800)
+    s.tab.visit('/components/inputs/#inp-codes-spec')
+    expect(revealed).toEqual([UI + 'inp-codes-spec'])
+    expect(page.moves).toEqual([])
+    s.set(UI + 'page', UI + 'Docs')
+    await tick()
+    expect(s.tab.url).toBe('/docs/rules/')
+    expect(page.y).toBe(0)
+  })
+
+  it('returns to where the page was on Back and Forward, at the target or not', async () => {
+    const page = scrolled()
+    const revealed: string[] = []
+    const s = await site('/docs/rules/', undefined, { scroll: page, reveal: (iri) => (revealed.push(iri), true) })
+    page.scroll(800)
+    s.set(UI + 'page', UI + 'Components')
+    await tick()
+    expect(page.y).toBe(0)
+    page.scroll(350)
+    s.tab.visit('/components/inputs/#inp-codes-spec')
+    revealed.length = 0
+    page.scroll(1200)
+    s.tab.back()
+    expect(s.tab.url).toBe('/components/foundations/')
+    expect(page.y).toBe(350)
+    s.tab.back()
+    expect(s.tab.url).toBe('/docs/rules/')
+    expect(page.y).toBe(800)
+    s.tab.forward()
+    expect(page.y).toBe(350)
+    s.tab.forward()
+    expect(s.tab.url).toBe('/components/inputs/#inp-codes-spec')
+    expect(page.y).toBe(1200)
+    expect(revealed).toEqual([]) // where it was, not back at the target
+  })
+
+  it('remembers the offset the page had before rendering the step cut it short', async () => {
+    const page = scrolled()
+    const s = await site('/docs/rules/', undefined, { scroll: page })
+    page.scroll(800)
+    page.y = 900 // scrolled on, not settled yet
+    s.set(UI + 'page', UI + 'Components') // rendered at once: the page is shorter before the step is written
+    page.y = 300
+    await tick()
+    page.y = 0
+    s.tab.back()
+    expect(page.y).toBe(900)
+  })
+
+  it('waits for a page too short to get back there, stops when another step comes, and remembers nothing on the way', async () => {
+    const page = scrolled()
+    const frames: (() => void)[] = []
+    const s = await site('/docs/rules/', undefined, { scroll: page, frame: (run) => frames.push(run) })
+    page.scroll(800)
+    s.set(UI + 'page', UI + 'Components')
+    await tick()
+    page.height = 100
+    s.tab.back()
+    expect(page.y).toBe(100)
+    page.scroll(100) // the clamp's own scroll event: not where the entry was
+    page.height = 10_000
+    frames.shift()!()
+    expect(page.y).toBe(800)
+    expect(s.tab.history.state).toMatchObject({ semScroll: { y: 800 } })
+    page.height = 100
+    s.tab.forward()
+    s.tab.back()
+    s.set(UI + 'page', UI + 'Home')
+    await tick()
+    page.height = 10_000
+    for (const run of frames.splice(0)) run()
+    expect(page.y).toBe(0)
+  })
+
+  it('keeps the position over a reload, and over the address being spelled in place', async () => {
+    const t = tab('/docs/rules/')
+    const options = { location: t.location, history: t.history, events: t.events }
+    const page = scrolled()
+    await mountNavigating({ ...options, scroll: page })
+    page.scroll(640)
+    expect(t.history.state).toMatchObject({ semScroll: { y: 640 } })
+    t.history.replaceState(t.history.state, '', '/docs/rules/')
+    const reloaded = scrolled()
+    const revealed: string[] = []
+    await mountNavigating({ ...options, scroll: reloaded, reveal: (iri) => (revealed.push(iri), true) })
+    expect(reloaded.y).toBe(640)
+    expect(revealed).toEqual([])
+    expect(t.history.state).toMatchObject({ semScroll: { y: 640 } })
+  })
+
+  it('does not move on a first load, and a new load with a target brings it into view', async () => {
+    const page = scrolled()
+    await site('/docs/rules/', undefined, { scroll: page })
+    expect(page.moves).toEqual([])
+    const target = scrolled()
+    const revealed: string[] = []
+    await site('/components/inputs/#inp-codes-spec', undefined, { scroll: target, reveal: (iri) => (revealed.push(iri), true) })
+    expect(revealed).toEqual([UI + 'inp-codes-spec'])
+    expect(target.moves).toEqual([])
+  })
+
+  it('a link followed to the address already shown is not a step back: its target is brought into view', async () => {
+    const page = scrolled()
+    const revealed: string[] = []
+    const s = await site('/components/inputs/#inp-codes-spec', undefined, { scroll: page, reveal: (iri) => (revealed.push(iri), true) })
+    page.scroll(1200)
+    revealed.length = 0
+    s.navigation.follow()
+    expect(revealed).toEqual([UI + 'inp-codes-spec'])
+    expect(page.moves).toEqual([])
+  })
+})
 
 describe('navigation: where we are, in the address', () => {
   it('reads the address into the graph before the first projection, and keeps a canonical one (a fragment from before paths too)', async () => {
