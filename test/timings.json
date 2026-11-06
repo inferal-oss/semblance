@@ -75,7 +75,7 @@
   "test/reference-search.test.ts": 9.3,
   "test/reference.test.ts": 110.6,
   "test/schedule.test.ts": 0.7,
-  "test/shapes.test.ts": 10.2,
+  "test/shapes.test.ts": 50,
   "test/shell.test.ts": 160.7,
   "test/site.test.ts": 25.9,
   "test/soak.test.ts": 681.8,

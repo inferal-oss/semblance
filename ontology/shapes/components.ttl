@@ -77,9 +77,24 @@ c:EmblemShape a sh:NodeShape ; sh:targetClass c:Emblem ;
                   sh:message "An emblem's c:viewBox is four numbers: min-x min-y width height." ] ,
                 [ sh:path c:pathData ; sh:minCount 1 ; sh:maxCount 1 ] ,
                 [ sh:path c:fillRule ; sh:maxCount 1 ; sh:in ( "nonzero" "evenodd" ) ] .
+# A link goes to a resource (c:to; the navigation layer derives its address, nav:href, which is not
+# input to check) or to an address (c:href), or both, the address as the fallback.
+c:LinkToShape a sh:PropertyShape ;
+    rdfs:comment "Goes to a resource, at the location that shows it."@en ;
+    sh:path c:to ; sh:minCount 1 .
+c:LinkHrefShape a sh:PropertyShape ;
+    rdfs:comment "Goes to an address."@en ;
+    sh:path c:href ; sh:minCount 1 .
 c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
-    sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
+    sh:or ( c:LinkToShape c:LinkHrefShape ) ;
+    sh:message "A link needs a destination: a resource (c:to) or an address (c:href)."@en ,
+        "Посилання потребує призначення: ресурс (c:to) або адресу (c:href)."@uk ,
+        "Ein Link braucht ein Ziel: eine Ressource (c:to) oder eine Adresse (c:href)."@de ,
+        "يحتاج الرابط إلى وجهة: مورد (c:to) أو عنوان (c:href)."@ar ;
+    sh:property [ sh:path c:href ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
                   sh:message "A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] ,
+                [ sh:path c:to ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
+                  sh:message "A link's c:to is one resource: an IRI." ] ,
                 [ sh:path c:content ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
                   sh:message "A link's body (c:content) is one component." ] ,
                 [ sh:path c:currentPage ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
@@ -134,8 +149,19 @@ c:AppBarShape a sh:NodeShape ; sh:targetClass c:AppBar ;
 c:TabsShape a sh:NodeShape ; sh:targetClass c:Tabs ;
     sh:property [ sh:path c:tabs ; sh:minCount 1 ; sh:maxCount 1 ] ,
                 [ sh:path c:selected ; sh:maxCount 1 ; sh:class c:Tab ] .
+c:TabContentShape a sh:PropertyShape ;
+    rdfs:comment "Shows a component."@en ;
+    sh:path c:content ; sh:minCount 1 .
+c:TabSlotShape a sh:PropertyShape ;
+    rdfs:comment "Shows a slot the host fills."@en ;
+    sh:path c:slot ; sh:minCount 1 .
 c:TabShape a sh:NodeShape ; sh:targetClass c:Tab ;
-    sh:property [ sh:path c:label ; sh:minCount 1 ] , [ sh:path c:content ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
+    sh:or ( c:TabContentShape c:TabSlotShape ) ;
+    sh:message "A tab shows a component (c:content) or a host-owned slot (c:slot)."@en ,
+        "Вкладка показує компонент (c:content) або слот застосунку (c:slot)."@uk ,
+        "Ein Tab zeigt eine Komponente (c:content) oder einen Slot der Anwendung (c:slot)."@de ,
+        "تعرض علامة التبويب مكوّنًا (c:content) أو فتحة يملؤها التطبيق المضيف (c:slot)."@ar ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ] , [ sh:path c:content ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
 c:WindowShape a sh:NodeShape ; sh:targetClass c:Window ;
     sh:property [ sh:path c:width ; sh:maxCount 1 ; sh:minInclusive 160 ] , [ sh:path c:height ; sh:maxCount 1 ; sh:minInclusive 100 ] .
 c:TableShape a sh:NodeShape ; sh:targetClass c:Table ;

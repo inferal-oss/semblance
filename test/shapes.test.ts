@@ -5,7 +5,8 @@ import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { MOD, NS, SEM, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
-import { mountShell } from './harness.ts'
+import { followDelta, readLocations, routesOf } from '../src/navigation.ts'
+import { mountShell, mountSite } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const SH = 'http://www.w3.org/ns/shacl#'
@@ -112,6 +113,83 @@ describe('component shapes: a c:Field labels its content (sh:or with an inverse 
     expect(reference.length).toBeGreaterThan(0)
     for (const [kind, prefer] of runs) expect(validate(kind, prefer).all, `${kind}, ${prefer}`).toEqual(reference)
   })
+})
+
+// A shape asks for what its component accepts: a link's destination is c:to or c:href, a tab's panel
+// c:content or c:slot. A tab is not a component: it is checked as an entry of a validated one.
+const destinations = `
+@prefix c: <${C}> .
+@prefix sem: <${NS.sem}> .
+@prefix ui: <${UI}> .
+ui:root a c:Stack ; c:validated true ; c:entry ui:tab-content , ui:tab-slot , ui:tab-neither , ui:tab-both ;
+    c:children ( ui:to ui:href ui:both ui:card ui:neither ui:script ui:scriptTo ui:toText ) .
+ui:to a c:Link ; c:label "To" ; c:to sem:Component .
+ui:href a c:Link ; c:label "Href" ; c:href "/docs/" .
+ui:both a c:Link ; c:label "Both" ; c:to sem:Component ; c:href "/reference/" .
+ui:card a c:LinkedCard ; c:to sem:Component ; c:content ui:cardBody .
+ui:cardBody a c:Text ; c:label "Card" .
+ui:neither a c:Link ; c:label "Nowhere" .
+ui:script a c:Link ; c:label "Script" ; c:href "javascript:alert(1)" .
+ui:scriptTo a c:Link ; c:label "Script too" ; c:to sem:Component ; c:href "data:text/html,x" .
+ui:toText a c:Link ; c:label "Text" ; c:to "not a resource" .
+ui:tab-content a c:Tab ; c:label "Content" ; c:content ui:cardBody .
+ui:tab-slot a c:Tab ; c:label "Slot" ; c:slot "editor" .
+ui:tab-neither a c:Tab ; c:label "Empty" .
+ui:tab-both a c:Tab ; c:label "Twice" ; c:content ui:cardBody , ui:to ; c:slot "editor" .
+`
+
+describe('a shape asks for what its component accepts', () => {
+  const check = (kind: StoreKind, prefer: 'sparql' | 'function') => {
+    const store = loadStore(kind, destinations)
+    const runtime = new Runtime(store)
+    runtime.project({ modality: MOD.Screen, layers: [VAL.ShapesLayer], prefer, name: 'screen', roots: [UI + 'root'] }, (e) => {
+      throw e
+    })
+    const f = store.factory
+    return (id: string) => store.match(null, f.namedNode(SH + 'focusNode'), f.namedNode(UI + id)).map((q) => store.match(q.subject, f.namedNode(SH + 'resultMessage'), null)[0]!.object.value)
+  }
+  for (const [kind, prefer] of runs) {
+    it(`takes a link's c:to or c:href, a tab's c:content or c:slot (${kind}, ${prefer})`, () => {
+      const messages = check(kind, prefer)
+      for (const id of ['to', 'href', 'both', 'card', 'tab-content', 'tab-slot']) expect(messages(id), id).toEqual([])
+      expect(messages('neither')).toEqual(['A link needs a destination: a resource (c:to) or an address (c:href).'])
+      // Whichever else a link has, an address it has is still checked.
+      for (const id of ['script', 'scriptTo']) expect(messages(id), id).toEqual(["A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)."])
+      expect(messages('toText')).toEqual(["A link's c:to is one resource: an IRI."])
+      expect(messages('tab-neither')).toEqual(['A tab shows a component (c:content) or a host-owned slot (c:slot).'])
+      expect(messages('tab-both')).toEqual(['content: one value only'])
+    })
+  }
+})
+
+// The specimen on the Layers page that shows what a violation looks like.
+const ON_PURPOSE = new Set(['badLink', 'badProgress', 'badBadge'].map((id) => `${UI}${id}/~root`))
+
+describe('the site conforms to the component shapes', () => {
+  it('marks nothing on any page, but for the specimen that shows a violation', () => {
+    const h = mountSite('wat')
+    const f = h.store.factory
+    const r = { f, match: (s: never, p: string | null, o: never) => h.store.match(s, p ? f.namedNode(p) : null, o, f.defaultGraph()) }
+    const location = readLocations(r).find((l) => l.iri === UI + 'location')!
+    // Every page in its first language (the marks do not depend on the language), and a sample of
+    // the Reference's terms: one rendering, thousands of pages.
+    const pages = routesOf(r, location).filter((p) => !/^\/(uk|de|ar)\//.test(p)).filter((p, i) => !p.startsWith('/reference/') || i % 100 === 0)
+    expect(pages.length).toBeGreaterThan(40)
+    const marked: string[] = []
+    const shown = new Set<string>()
+    for (const page of pages) {
+      h.runtime.apply(followDelta(r, location, page))
+      h.shell.flush()
+      for (const el of h.document.querySelectorAll('[data-sem-shape-invalid]')) {
+        const key = h.shell.keyOf(el)!
+        if (ON_PURPOSE.has(key)) shown.add(key)
+        else marked.push(`${page}: ${key}: ${el.getAttribute('data-sem-tooltip')}`)
+      }
+    }
+    expect(marked).toEqual([])
+    // The walk did reach the marked specimen, so a mark would have been seen.
+    expect(shown).toEqual(ON_PURPOSE)
+  }, 300_000)
 })
 
 describe('the Inputs gallery conforms to the component shapes', () => {
