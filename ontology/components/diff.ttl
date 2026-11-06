@@ -1,0 +1,111 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Ordered changes to plain text. A line carries its text without the diff sign;
+# the view supplies signs, color and an accessible description.
+c:DiffView a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "diff-view" ;
+    rdfs:comment "An ordered text diff. c:items is a list of c:DiffLine components; c:label names the view."@en .
+c:DiffLine a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "diff-line" ;
+    rdfs:comment "A text line in a diff. c:value is its text, and c:diffKind says whether it was added, removed or unchanged."@en .
+c:diffKind a owl:ObjectProperty ; rdfs:domain c:DiffLine ; rdfs:range c:DiffKind .
+c:DiffKind a owl:Class .
+c:DiffAdded a c:DiffKind ; rdfs:label "Added"@en , "Додано"@uk , "Hinzugefügt"@de , "مضاف"@ar .
+c:DiffRemoved a c:DiffKind ; rdfs:label "Removed"@en , "Вилучено"@uk , "Entfernt"@de , "محذوف"@ar .
+c:DiffContext a c:DiffKind ; rdfs:label "Unchanged"@en , "Без змін"@uk , "Unverändert"@de , "دون تغيير"@ar .
+
+c:DiffViewRendering a sem:Rendering ; sem:targets c:DiffView ; sem:stratum 0 .
+c:DiffViewRendering-fn-screen a sem:Rule ; sem:implements c:DiffViewRendering ; sem:modality mod:Screen ; sem:function "diff:view-screen" .
+c:DiffViewRendering-fn-text a sem:Rule ; sem:implements c:DiffViewRendering ; sem:modality mod:Text ; sem:function "diff:view-text" .
+c:DiffViewRendering-sparql-screen a sem:Rule ; sem:implements c:DiffViewRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:attribute ?roleAttr, ?labelAttr ; rdfhtml:hasChild ?line .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "list" .
+  ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?a ord:immediatelyPrecedes ?b .
+}
+WHERE {
+  $this a c:DiffView .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~role")) AS ?roleAttr)
+  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelAttr)
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
+  BIND(STR(COALESCE(?localLabel, ?ownLabel, "Text changes")) AS ?label)
+  {} UNION {
+    $this c:items/rdf:rest*/rdf:first ?line .
+  } UNION {
+    $this c:items/rdf:rest* ?cell . ?cell rdf:first ?a ; rdf:rest/rdf:first ?b .
+  }
+}""" .
+c:DiffViewRendering-sparql-text a sem:Rule ; sem:implements c:DiffViewRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?a ord:immediatelyPrecedes ?b .
+}
+WHERE {
+  $this a c:DiffView .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  {} UNION {
+    $this c:items/rdf:rest*/rdf:first ?line .
+  } UNION {
+    $this c:items/rdf:rest* ?cell . ?cell rdf:first ?a ; rdf:rest/rdf:first ?b .
+  }
+}""" .
+
+c:DiffLineRendering a sem:Rendering ; sem:targets c:DiffLine ; sem:stratum 0 .
+c:DiffLineRendering-fn-screen a sem:Rule ; sem:implements c:DiffLineRendering ; sem:modality mod:Screen ; sem:function "diff:line-screen" .
+c:DiffLineRendering-fn-text a sem:Rule ; sem:implements c:DiffLineRendering ; sem:modality mod:Text ; sem:function "diff:line-text" .
+c:DiffLineRendering-sparql-screen a sem:Rule ; sem:implements c:DiffLineRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:attribute ?roleAttr, ?kindAttr, ?labelAttr ; rdfhtml:hasChild ?sign, ?code .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "listitem" .
+  ?kindAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-change" ; rdfhtml:attributeValue ?slug .
+  ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?description .
+  ?sign a rdfhtml:Span ; rdfhtml:class "sem-sign" ; rdfhtml:attribute ?hiddenAttr ; rdfhtml:hasChild ?signText ; ord:immediatelyPrecedes ?code .
+  ?hiddenAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?signText a rdfhtml:Text ; rdfhtml:data ?marker .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?textNode .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?text .
+}
+WHERE {
+  $this a c:DiffLine ; c:value ?value .
+  OPTIONAL { $this c:diffKind ?kind0 }
+  BIND(COALESCE(?kind0, c:DiffContext) AS ?kind)
+  BIND(IF(?kind = c:DiffAdded, "added", IF(?kind = c:DiffRemoved, "removed", "context")) AS ?slug)
+  BIND(IF(?kind = c:DiffAdded, "+", IF(?kind = c:DiffRemoved, "-", " ")) AS ?marker)
+  BIND(STR(?value) AS ?text)
+  OPTIONAL { ?localized l10n:of ?kind ; l10n:name ?localKindLabel }
+  OPTIONAL { ?kind rdfs:label ?enLabel FILTER(lang(?enLabel) = "en") }
+  BIND(CONCAT(STR(COALESCE(?localKindLabel, ?enLabel, "Unchanged")), ": ", ?text) AS ?description)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~role")) AS ?roleAttr)
+  BIND(IRI(CONCAT(STR($this), "/~kind")) AS ?kindAttr)
+  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelAttr)
+  BIND(IRI(CONCAT(STR($this), "/~sign")) AS ?sign)
+  BIND(IRI(CONCAT(STR($this), "/~sign-hidden")) AS ?hiddenAttr)
+  BIND(IRI(CONCAT(STR($this), "/~sign-text")) AS ?signText)
+  BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?textNode)
+}""" .
+c:DiffLineRendering-sparql-text a sem:Rule ; sem:implements c:DiffLineRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?textNode .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a c:DiffLine ; c:value ?value .
+  OPTIONAL { $this c:diffKind ?kind0 }
+  BIND(COALESCE(?kind0, c:DiffContext) AS ?kind)
+  BIND(IF(?kind = c:DiffAdded, "+", IF(?kind = c:DiffRemoved, "-", " ")) AS ?marker)
+  BIND(CONCAT(?marker, STR(?value)) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?textNode)
+}""" .

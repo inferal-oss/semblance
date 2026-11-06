@@ -1,0 +1,44 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+
+[] a sty:StyleRule ; sty:appliesTo c:DiffView ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "overflow-x" ; sty:raw "auto" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
+                 [ sty:property "background" ; sty:token tok:surface-sunken ] .
+[] a sty:StyleRule ; sty:appliesTo c:DiffLine ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "2.5rem max-content" ] ,
+                 [ sty:property "min-width" ; sty:raw "max-content" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "line-height" ; sty:raw "1.6" ] ,
+                 [ sty:property "white-space" ; sty:raw "pre" ] .
+[] a sty:StyleRule ; sty:appliesTo c:DiffLine ; sty:part "> .sem-sign" ;
+    sty:declares [ sty:property "padding-inline" ; sty:token tok:space-2 ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] ,
+                 [ sty:property "user-select" ; sty:raw "none" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:DiffLine ; sty:part "> code" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "padding-inline-end" ; sty:token tok:space-3 ] ,
+                 [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "white-space" ; sty:raw "inherit" ] .
+[] a sty:StyleRule ; sty:appliesTo c:DiffLine ; sty:state "[data-sem-change=added]" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--sem-success) 12%, transparent)" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "3px solid var(--sem-success)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:DiffLine ; sty:state "[data-sem-change=removed]" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--sem-danger) 12%, transparent)" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "3px solid var(--sem-danger)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:DiffLine ; sty:state "[data-sem-change=added]" ; sty:part "> .sem-sign" ;
+    sty:declares [ sty:property "color" ; sty:token tok:success ] .
+[] a sty:StyleRule ; sty:appliesTo c:DiffLine ; sty:state "[data-sem-change=removed]" ; sty:part "> .sem-sign" ;
+    sty:declares [ sty:property "color" ; sty:token tok:danger ] .
