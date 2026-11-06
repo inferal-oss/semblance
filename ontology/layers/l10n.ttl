@@ -25,8 +25,11 @@
 # that localizes a text uses, as util.text does): the value whose language tag
 # is the most preferred l10n:code (an exact tag before a sub-tag: "uk" before
 # "uk-UA"), found as a candidate with no better one (FILTER NOT EXISTS); else
-# the untagged value; else English; else any. A rule that reads l10n:prefers is
-# re-run for every focus when the viewer's languages change.
+# the untagged value; else English; else any. A value stated twice at one of these
+# steps (sh:uniqueLang flags it) gives way to the least (STR(?other) < STR(?pick)), as
+# in util.text: one value, the same one for both kinds of rule, whatever the store's
+# order. A rule that reads l10n:prefers is re-run for every focus when the viewer's
+# languages change.
 
 <https://semblance.dev/ns/l10n> a owl:Ontology ;
     rdfs:label "Semblance localization layer"@en .
@@ -79,13 +82,18 @@ WHERE {
       $this c:label ?other . FILTER(isLiteral(?other))
       BIND(LCASE(LANG(?other)) AS ?tag2)
       FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
-      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
+      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code)
+        || (?rank2 = ?rank && (?tag2 = ?code2 || ?tag != ?code) && STR(?other) < STR(?pick)))
     }
   }
-  OPTIONAL { FILTER(!BOUND(?pick)) $this c:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this c:label ?en FILTER(LCASE(LANG(?en)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this c:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this c:label ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(!BOUND(?pick)) $this c:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "")
+    FILTER NOT EXISTS { $this c:label ?plainLess FILTER(isLiteral(?plainLess) && LANG(?plainLess) = "" && STR(?plainLess) < STR(?plain)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this c:label ?en FILTER(LCASE(LANG(?en)) = "en")
+    FILTER NOT EXISTS { $this c:label ?enLess FILTER(LCASE(LANG(?enLess)) = "en" && STR(?enLess) < STR(?en)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this c:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-"))
+    FILTER NOT EXISTS { $this c:label ?enxLess FILTER(STRSTARTS(LCASE(LANG(?enxLess)), "en-") && STR(?enxLess) < STR(?enx)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this c:label ?any FILTER(isLiteral(?any))
+    FILTER NOT EXISTS { $this c:label ?anyLess FILTER(isLiteral(?anyLess) && STR(?anyLess) < STR(?any)) } }
   BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?label)
 }""" .
 
@@ -345,13 +353,18 @@ WHERE {
       ?n ?p ?other . FILTER(isLiteral(?other))
       BIND(LCASE(LANG(?other)) AS ?tag2)
       FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
-      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
+      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code)
+        || (?rank2 = ?rank && (?tag2 = ?code2 || ?tag != ?code) && STR(?other) < STR(?pick)))
     }
   }
-  OPTIONAL { FILTER(!BOUND(?pick)) ?n ?p ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) ?n ?p ?en FILTER(LCASE(LANG(?en)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) ?n ?p ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) ?n ?p ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(!BOUND(?pick)) ?n ?p ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "")
+    FILTER NOT EXISTS { ?n ?p ?plainLess FILTER(isLiteral(?plainLess) && LANG(?plainLess) = "" && STR(?plainLess) < STR(?plain)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) ?n ?p ?en FILTER(LCASE(LANG(?en)) = "en")
+    FILTER NOT EXISTS { ?n ?p ?enLess FILTER(LCASE(LANG(?enLess)) = "en" && STR(?enLess) < STR(?en)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) ?n ?p ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-"))
+    FILTER NOT EXISTS { ?n ?p ?enxLess FILTER(STRSTARTS(LCASE(LANG(?enxLess)), "en-") && STR(?enxLess) < STR(?enx)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) ?n ?p ?any FILTER(isLiteral(?any))
+    FILTER NOT EXISTS { ?n ?p ?anyLess FILTER(isLiteral(?anyLess) && STR(?anyLess) < STR(?any)) } }
   BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?picked)
   } } }
   BIND(IRI(CONCAT(STR($this), "/~t-", MD5(STR(?n)))) AS ?at)

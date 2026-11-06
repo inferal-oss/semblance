@@ -34,6 +34,8 @@ export const nodes = (ctx: RuleContext, head: Term | undefined): NamedNode[] => 
 /**
  * A text-valued property in the viewer's language: the first of ctx.languages
  * that has a value, then the untagged source text, then English, then anything.
+ * Two values at one of these steps (a text stated twice): the least, as the SPARQL rules take it,
+ * never the store's order.
  */
 export function text(ctx: RuleContext, s: Term, p: string): string | undefined {
   const values = ctx.objects(s, p).filter((t) => t.termType === 'Literal')
@@ -41,12 +43,13 @@ export function text(ctx: RuleContext, s: Term, p: string): string | undefined {
   // Which value wins depends on the viewer's languages: a language change re-runs this.
   ctx.readsLanguage()
   const lang = (t: Term) => (t.termType === 'Literal' ? t.language.toLowerCase() : '')
-  const tagged = (want: string) => values.find((t) => lang(t) === want) ?? values.find((t) => lang(t).startsWith(want + '-'))
+  const least = (ts: Term[]) => ts.reduce<Term | undefined>((a, t) => (a === undefined || t.value < a.value ? t : a), undefined)
+  const tagged = (want: string) => least(values.filter((t) => lang(t) === want)) ?? least(values.filter((t) => lang(t).startsWith(want + '-')))
   for (const want of ctx.languages) {
     const hit = tagged(want)
     if (hit) return hit.value
   }
-  return (values.find((t) => lang(t) === '') ?? tagged('en') ?? values[0])!.value
+  return (least(values.filter((t) => lang(t) === '')) ?? tagged('en') ?? least(values))!.value
 }
 
 /**

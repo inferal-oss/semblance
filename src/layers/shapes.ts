@@ -82,6 +82,10 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
   if (min !== undefined && values.length < min) fail('minCount', min === 1 ? 'required' : `at least ${min} values`)
   const max = n('maxCount')
   if (max !== undefined && values.length > max) fail('maxCount', max === 1 ? 'one value only' : `at most ${max} values`)
+  if (str(ctx.object(ps, SH + 'uniqueLang')) === 'true') {
+    const tags = values.map((v) => (v.termType === 'Literal' ? v.language.toLowerCase() : '')).filter((tag) => tag !== '')
+    for (const tag of new Set(tags.filter((tag, i) => tags.indexOf(tag) !== i))) fail('uniqueLang', `more than one value in "${tag}"`)
+  }
   const datatype = str(ctx.object(ps, SH + 'datatype'))
   const cls = str(ctx.object(ps, SH + 'class'))
   const kind = str(ctx.object(ps, SH + 'nodeKind'))
