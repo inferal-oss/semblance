@@ -5,8 +5,10 @@
 // twin's, byte for byte, on every page that shows one, on screen and as text.
 import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
+import { loadStore } from '../src/node/load.ts'
 import { MOD, NS } from '../src/ns.ts'
 import { toHTML } from '../src/render/serialize.ts'
+import { Runtime } from '../src/runtime.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -101,6 +103,34 @@ describe('walkthroughs in SPARQL (wat)', () => {
       same(`${lang} ${ex}`)
       if (lang === 'Arabic') expect([...hs[0]!.walks().values()].join()).toContain('كيف يعمل')
     }
+  })
+
+  // A step without a title has its number right before it, as it is for a moment while a page's
+  // graphs arrive (the list of steps before the steps): never before the step's own element (#332).
+  it('a step without a title: as its function twin renders it, and nothing is lost', () => {
+    const graph = `
+@prefix ex: <https://example.test/#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+ex:how a c:Walkthrough ; c:label "How" ; c:steps ( ex:s0 ex:s1 ex:s2 ) .
+ex:s0 a c:WalkthroughStep ; rdfs:label "Named" ; c:children ( "first" ) .
+ex:s1 a c:WalkthroughStep ; c:children ( "second" ) .
+ex:s2 a c:WalkthroughStep .`
+    const [sparql, fn] = (['sparql', 'function'] as const).map((prefer) => {
+      const errors: string[] = []
+      const runtime = new Runtime(loadStore('wat', graph))
+      const screen = runtime.project({ modality: MOD.Screen, prefer, name: 'screen', roots: ['https://example.test/#how'] }, (e) => errors.push(e.message))
+      const html = toHTML(screen.index, 'https://example.test/#how')
+      runtime.dispose()
+      return { html, errors }
+    })
+    expect(sparql!.errors).toEqual([])
+    expect(fn!.errors).toEqual([])
+    expect(sparql!.html, diff(sparql!.html, fn!.html)).toBe(fn!.html)
+    const { document } = parseHTML(`<div>${sparql!.html}</div>`)
+    const steps = [...document.querySelectorAll('.sem-walk-step')]
+    expect(steps.map((li) => li.querySelector('.sem-walk-num')?.textContent)).toEqual(['1', '2', '3'])
+    expect(steps[1]!.querySelector('.sem-walk-num + *')?.textContent).toContain('second')
   })
 
   it('reading a walkthrough does not lay its diagram out again', () => {
