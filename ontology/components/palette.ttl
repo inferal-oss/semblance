@@ -169,12 +169,16 @@ WHERE {
         $this c:label ?ownCaptionOther . FILTER(isLiteral(?ownCaptionOther))
         BIND(LCASE(LANG(?ownCaptionOther)) AS ?ownCaptionTag2)
         FILTER(?ownCaptionTag2 = ?ownCaptionCode2 || STRSTARTS(?ownCaptionTag2, CONCAT(?ownCaptionCode2, "-")))
-        FILTER(?ownCaptionRank2 < ?ownCaptionRank || (?ownCaptionRank2 = ?ownCaptionRank && ?ownCaptionTag2 = ?ownCaptionCode2 && ?ownCaptionTag != ?ownCaptionCode))
+        FILTER(?ownCaptionRank2 < ?ownCaptionRank || (?ownCaptionRank2 = ?ownCaptionRank && ?ownCaptionTag2 = ?ownCaptionCode2 && ?ownCaptionTag != ?ownCaptionCode)
+          || (?ownCaptionRank2 = ?ownCaptionRank && (?ownCaptionTag2 = ?ownCaptionCode2 || ?ownCaptionTag != ?ownCaptionCode) && STR(?ownCaptionOther) < STR(?ownCaptionPick)))
       }
     }
-    OPTIONAL { FILTER(!BOUND(?ownCaptionPick)) $this c:label ?ownCaptionPlain FILTER(isLiteral(?ownCaptionPlain) && LANG(?ownCaptionPlain) = "") }
-    OPTIONAL { FILTER(!BOUND(?ownCaptionPick) && !BOUND(?ownCaptionPlain)) $this c:label ?ownCaptionEn FILTER(LCASE(LANG(?ownCaptionEn)) = "en") }
-    OPTIONAL { FILTER(!BOUND(?ownCaptionPick) && !BOUND(?ownCaptionPlain) && !BOUND(?ownCaptionEn)) $this c:label ?ownCaptionEnx FILTER(STRSTARTS(LCASE(LANG(?ownCaptionEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?ownCaptionPick)) $this c:label ?ownCaptionPlain FILTER(isLiteral(?ownCaptionPlain) && LANG(?ownCaptionPlain) = "")
+      FILTER NOT EXISTS { $this c:label ?ownCaptionPlainLess FILTER(isLiteral(?ownCaptionPlainLess) && LANG(?ownCaptionPlainLess) = "" && STR(?ownCaptionPlainLess) < STR(?ownCaptionPlain)) } }
+    OPTIONAL { FILTER(!BOUND(?ownCaptionPick) && !BOUND(?ownCaptionPlain)) $this c:label ?ownCaptionEn FILTER(LCASE(LANG(?ownCaptionEn)) = "en")
+      FILTER NOT EXISTS { $this c:label ?ownCaptionEnLess FILTER(LCASE(LANG(?ownCaptionEnLess)) = "en" && STR(?ownCaptionEnLess) < STR(?ownCaptionEn)) } }
+    OPTIONAL { FILTER(!BOUND(?ownCaptionPick) && !BOUND(?ownCaptionPlain) && !BOUND(?ownCaptionEn)) $this c:label ?ownCaptionEnx FILTER(STRSTARTS(LCASE(LANG(?ownCaptionEnx)), "en-"))
+      FILTER NOT EXISTS { $this c:label ?ownCaptionEnxLess FILTER(STRSTARTS(LCASE(LANG(?ownCaptionEnxLess)), "en-") && STR(?ownCaptionEnxLess) < STR(?ownCaptionEnx)) } }
     OPTIONAL { FILTER(!BOUND(?ownCaptionPick) && !BOUND(?ownCaptionPlain) && !BOUND(?ownCaptionEn) && !BOUND(?ownCaptionEnx)) $this c:label ?ownCaptionAny FILTER(isLiteral(?ownCaptionAny))
       FILTER NOT EXISTS { $this c:label ?ownCaptionLess FILTER(isLiteral(?ownCaptionLess) && STR(?ownCaptionLess) < STR(?ownCaptionAny)) } }
     BIND(STR(COALESCE(?ownCaptionPick, ?ownCaptionPlain, ?ownCaptionEn, ?ownCaptionEnx, ?ownCaptionAny)) AS ?ownCaption)
@@ -247,12 +251,16 @@ WHERE {
         ?named c:label ?labelCOther . FILTER(isLiteral(?labelCOther))
         BIND(LCASE(LANG(?labelCOther)) AS ?labelCTag2)
         FILTER(?labelCTag2 = ?labelCCode2 || STRSTARTS(?labelCTag2, CONCAT(?labelCCode2, "-")))
-        FILTER(?labelCRank2 < ?labelCRank || (?labelCRank2 = ?labelCRank && ?labelCTag2 = ?labelCCode2 && ?labelCTag != ?labelCCode))
+        FILTER(?labelCRank2 < ?labelCRank || (?labelCRank2 = ?labelCRank && ?labelCTag2 = ?labelCCode2 && ?labelCTag != ?labelCCode)
+          || (?labelCRank2 = ?labelCRank && (?labelCTag2 = ?labelCCode2 || ?labelCTag != ?labelCCode) && STR(?labelCOther) < STR(?labelCPick)))
       }
     }
-    OPTIONAL { FILTER(!BOUND(?labelCPick)) ?named c:label ?labelCPlain FILTER(isLiteral(?labelCPlain) && LANG(?labelCPlain) = "") }
-    OPTIONAL { FILTER(!BOUND(?labelCPick) && !BOUND(?labelCPlain)) ?named c:label ?labelCEn FILTER(LCASE(LANG(?labelCEn)) = "en") }
-    OPTIONAL { FILTER(!BOUND(?labelCPick) && !BOUND(?labelCPlain) && !BOUND(?labelCEn)) ?named c:label ?labelCEnx FILTER(STRSTARTS(LCASE(LANG(?labelCEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?labelCPick)) ?named c:label ?labelCPlain FILTER(isLiteral(?labelCPlain) && LANG(?labelCPlain) = "")
+      FILTER NOT EXISTS { ?named c:label ?labelCPlainLess FILTER(isLiteral(?labelCPlainLess) && LANG(?labelCPlainLess) = "" && STR(?labelCPlainLess) < STR(?labelCPlain)) } }
+    OPTIONAL { FILTER(!BOUND(?labelCPick) && !BOUND(?labelCPlain)) ?named c:label ?labelCEn FILTER(LCASE(LANG(?labelCEn)) = "en")
+      FILTER NOT EXISTS { ?named c:label ?labelCEnLess FILTER(LCASE(LANG(?labelCEnLess)) = "en" && STR(?labelCEnLess) < STR(?labelCEn)) } }
+    OPTIONAL { FILTER(!BOUND(?labelCPick) && !BOUND(?labelCPlain) && !BOUND(?labelCEn)) ?named c:label ?labelCEnx FILTER(STRSTARTS(LCASE(LANG(?labelCEnx)), "en-"))
+      FILTER NOT EXISTS { ?named c:label ?labelCEnxLess FILTER(STRSTARTS(LCASE(LANG(?labelCEnxLess)), "en-") && STR(?labelCEnxLess) < STR(?labelCEnx)) } }
     OPTIONAL { FILTER(!BOUND(?labelCPick) && !BOUND(?labelCPlain) && !BOUND(?labelCEn) && !BOUND(?labelCEnx)) ?named c:label ?labelCAny FILTER(isLiteral(?labelCAny))
       FILTER NOT EXISTS { ?named c:label ?labelCLess FILTER(isLiteral(?labelCLess) && STR(?labelCLess) < STR(?labelCAny)) } }
     BIND(STR(COALESCE(?labelCPick, ?labelCPlain, ?labelCEn, ?labelCEnx, ?labelCAny)) AS ?labelC)
@@ -266,12 +274,16 @@ WHERE {
         ?named rdfs:label ?labelROther . FILTER(isLiteral(?labelROther))
         BIND(LCASE(LANG(?labelROther)) AS ?labelRTag2)
         FILTER(?labelRTag2 = ?labelRCode2 || STRSTARTS(?labelRTag2, CONCAT(?labelRCode2, "-")))
-        FILTER(?labelRRank2 < ?labelRRank || (?labelRRank2 = ?labelRRank && ?labelRTag2 = ?labelRCode2 && ?labelRTag != ?labelRCode))
+        FILTER(?labelRRank2 < ?labelRRank || (?labelRRank2 = ?labelRRank && ?labelRTag2 = ?labelRCode2 && ?labelRTag != ?labelRCode)
+          || (?labelRRank2 = ?labelRRank && (?labelRTag2 = ?labelRCode2 || ?labelRTag != ?labelRCode) && STR(?labelROther) < STR(?labelRPick)))
       }
     }
-    OPTIONAL { FILTER(!BOUND(?labelRPick)) ?named rdfs:label ?labelRPlain FILTER(isLiteral(?labelRPlain) && LANG(?labelRPlain) = "") }
-    OPTIONAL { FILTER(!BOUND(?labelRPick) && !BOUND(?labelRPlain)) ?named rdfs:label ?labelREn FILTER(LCASE(LANG(?labelREn)) = "en") }
-    OPTIONAL { FILTER(!BOUND(?labelRPick) && !BOUND(?labelRPlain) && !BOUND(?labelREn)) ?named rdfs:label ?labelREnx FILTER(STRSTARTS(LCASE(LANG(?labelREnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?labelRPick)) ?named rdfs:label ?labelRPlain FILTER(isLiteral(?labelRPlain) && LANG(?labelRPlain) = "")
+      FILTER NOT EXISTS { ?named rdfs:label ?labelRPlainLess FILTER(isLiteral(?labelRPlainLess) && LANG(?labelRPlainLess) = "" && STR(?labelRPlainLess) < STR(?labelRPlain)) } }
+    OPTIONAL { FILTER(!BOUND(?labelRPick) && !BOUND(?labelRPlain)) ?named rdfs:label ?labelREn FILTER(LCASE(LANG(?labelREn)) = "en")
+      FILTER NOT EXISTS { ?named rdfs:label ?labelREnLess FILTER(LCASE(LANG(?labelREnLess)) = "en" && STR(?labelREnLess) < STR(?labelREn)) } }
+    OPTIONAL { FILTER(!BOUND(?labelRPick) && !BOUND(?labelRPlain) && !BOUND(?labelREn)) ?named rdfs:label ?labelREnx FILTER(STRSTARTS(LCASE(LANG(?labelREnx)), "en-"))
+      FILTER NOT EXISTS { ?named rdfs:label ?labelREnxLess FILTER(STRSTARTS(LCASE(LANG(?labelREnxLess)), "en-") && STR(?labelREnxLess) < STR(?labelREnx)) } }
     OPTIONAL { FILTER(!BOUND(?labelRPick) && !BOUND(?labelRPlain) && !BOUND(?labelREn) && !BOUND(?labelREnx)) ?named rdfs:label ?labelRAny FILTER(isLiteral(?labelRAny))
       FILTER NOT EXISTS { ?named rdfs:label ?labelRLess FILTER(isLiteral(?labelRLess) && STR(?labelRLess) < STR(?labelRAny)) } }
     BIND(STR(COALESCE(?labelRPick, ?labelRPlain, ?labelREn, ?labelREnx, ?labelRAny)) AS ?labelR)
@@ -290,12 +302,16 @@ WHERE {
         ?upNode c:label ?upLabelCOther . FILTER(isLiteral(?upLabelCOther))
         BIND(LCASE(LANG(?upLabelCOther)) AS ?upLabelCTag2)
         FILTER(?upLabelCTag2 = ?upLabelCCode2 || STRSTARTS(?upLabelCTag2, CONCAT(?upLabelCCode2, "-")))
-        FILTER(?upLabelCRank2 < ?upLabelCRank || (?upLabelCRank2 = ?upLabelCRank && ?upLabelCTag2 = ?upLabelCCode2 && ?upLabelCTag != ?upLabelCCode))
+        FILTER(?upLabelCRank2 < ?upLabelCRank || (?upLabelCRank2 = ?upLabelCRank && ?upLabelCTag2 = ?upLabelCCode2 && ?upLabelCTag != ?upLabelCCode)
+          || (?upLabelCRank2 = ?upLabelCRank && (?upLabelCTag2 = ?upLabelCCode2 || ?upLabelCTag != ?upLabelCCode) && STR(?upLabelCOther) < STR(?upLabelCPick)))
       }
     }
-    OPTIONAL { FILTER(!BOUND(?upLabelCPick)) ?upNode c:label ?upLabelCPlain FILTER(isLiteral(?upLabelCPlain) && LANG(?upLabelCPlain) = "") }
-    OPTIONAL { FILTER(!BOUND(?upLabelCPick) && !BOUND(?upLabelCPlain)) ?upNode c:label ?upLabelCEn FILTER(LCASE(LANG(?upLabelCEn)) = "en") }
-    OPTIONAL { FILTER(!BOUND(?upLabelCPick) && !BOUND(?upLabelCPlain) && !BOUND(?upLabelCEn)) ?upNode c:label ?upLabelCEnx FILTER(STRSTARTS(LCASE(LANG(?upLabelCEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?upLabelCPick)) ?upNode c:label ?upLabelCPlain FILTER(isLiteral(?upLabelCPlain) && LANG(?upLabelCPlain) = "")
+      FILTER NOT EXISTS { ?upNode c:label ?upLabelCPlainLess FILTER(isLiteral(?upLabelCPlainLess) && LANG(?upLabelCPlainLess) = "" && STR(?upLabelCPlainLess) < STR(?upLabelCPlain)) } }
+    OPTIONAL { FILTER(!BOUND(?upLabelCPick) && !BOUND(?upLabelCPlain)) ?upNode c:label ?upLabelCEn FILTER(LCASE(LANG(?upLabelCEn)) = "en")
+      FILTER NOT EXISTS { ?upNode c:label ?upLabelCEnLess FILTER(LCASE(LANG(?upLabelCEnLess)) = "en" && STR(?upLabelCEnLess) < STR(?upLabelCEn)) } }
+    OPTIONAL { FILTER(!BOUND(?upLabelCPick) && !BOUND(?upLabelCPlain) && !BOUND(?upLabelCEn)) ?upNode c:label ?upLabelCEnx FILTER(STRSTARTS(LCASE(LANG(?upLabelCEnx)), "en-"))
+      FILTER NOT EXISTS { ?upNode c:label ?upLabelCEnxLess FILTER(STRSTARTS(LCASE(LANG(?upLabelCEnxLess)), "en-") && STR(?upLabelCEnxLess) < STR(?upLabelCEnx)) } }
     OPTIONAL { FILTER(!BOUND(?upLabelCPick) && !BOUND(?upLabelCPlain) && !BOUND(?upLabelCEn) && !BOUND(?upLabelCEnx)) ?upNode c:label ?upLabelCAny FILTER(isLiteral(?upLabelCAny))
       FILTER NOT EXISTS { ?upNode c:label ?upLabelCLess FILTER(isLiteral(?upLabelCLess) && STR(?upLabelCLess) < STR(?upLabelCAny)) } }
     BIND(STR(COALESCE(?upLabelCPick, ?upLabelCPlain, ?upLabelCEn, ?upLabelCEnx, ?upLabelCAny)) AS ?upLabelC)
@@ -309,12 +325,16 @@ WHERE {
         ?upNode rdfs:label ?upLabelROther . FILTER(isLiteral(?upLabelROther))
         BIND(LCASE(LANG(?upLabelROther)) AS ?upLabelRTag2)
         FILTER(?upLabelRTag2 = ?upLabelRCode2 || STRSTARTS(?upLabelRTag2, CONCAT(?upLabelRCode2, "-")))
-        FILTER(?upLabelRRank2 < ?upLabelRRank || (?upLabelRRank2 = ?upLabelRRank && ?upLabelRTag2 = ?upLabelRCode2 && ?upLabelRTag != ?upLabelRCode))
+        FILTER(?upLabelRRank2 < ?upLabelRRank || (?upLabelRRank2 = ?upLabelRRank && ?upLabelRTag2 = ?upLabelRCode2 && ?upLabelRTag != ?upLabelRCode)
+          || (?upLabelRRank2 = ?upLabelRRank && (?upLabelRTag2 = ?upLabelRCode2 || ?upLabelRTag != ?upLabelRCode) && STR(?upLabelROther) < STR(?upLabelRPick)))
       }
     }
-    OPTIONAL { FILTER(!BOUND(?upLabelRPick)) ?upNode rdfs:label ?upLabelRPlain FILTER(isLiteral(?upLabelRPlain) && LANG(?upLabelRPlain) = "") }
-    OPTIONAL { FILTER(!BOUND(?upLabelRPick) && !BOUND(?upLabelRPlain)) ?upNode rdfs:label ?upLabelREn FILTER(LCASE(LANG(?upLabelREn)) = "en") }
-    OPTIONAL { FILTER(!BOUND(?upLabelRPick) && !BOUND(?upLabelRPlain) && !BOUND(?upLabelREn)) ?upNode rdfs:label ?upLabelREnx FILTER(STRSTARTS(LCASE(LANG(?upLabelREnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?upLabelRPick)) ?upNode rdfs:label ?upLabelRPlain FILTER(isLiteral(?upLabelRPlain) && LANG(?upLabelRPlain) = "")
+      FILTER NOT EXISTS { ?upNode rdfs:label ?upLabelRPlainLess FILTER(isLiteral(?upLabelRPlainLess) && LANG(?upLabelRPlainLess) = "" && STR(?upLabelRPlainLess) < STR(?upLabelRPlain)) } }
+    OPTIONAL { FILTER(!BOUND(?upLabelRPick) && !BOUND(?upLabelRPlain)) ?upNode rdfs:label ?upLabelREn FILTER(LCASE(LANG(?upLabelREn)) = "en")
+      FILTER NOT EXISTS { ?upNode rdfs:label ?upLabelREnLess FILTER(LCASE(LANG(?upLabelREnLess)) = "en" && STR(?upLabelREnLess) < STR(?upLabelREn)) } }
+    OPTIONAL { FILTER(!BOUND(?upLabelRPick) && !BOUND(?upLabelRPlain) && !BOUND(?upLabelREn)) ?upNode rdfs:label ?upLabelREnx FILTER(STRSTARTS(LCASE(LANG(?upLabelREnx)), "en-"))
+      FILTER NOT EXISTS { ?upNode rdfs:label ?upLabelREnxLess FILTER(STRSTARTS(LCASE(LANG(?upLabelREnxLess)), "en-") && STR(?upLabelREnxLess) < STR(?upLabelREnx)) } }
     OPTIONAL { FILTER(!BOUND(?upLabelRPick) && !BOUND(?upLabelRPlain) && !BOUND(?upLabelREn) && !BOUND(?upLabelREnx)) ?upNode rdfs:label ?upLabelRAny FILTER(isLiteral(?upLabelRAny))
       FILTER NOT EXISTS { ?upNode rdfs:label ?upLabelRLess FILTER(isLiteral(?upLabelRLess) && STR(?upLabelRLess) < STR(?upLabelRAny)) } }
     BIND(STR(COALESCE(?upLabelRPick, ?upLabelRPlain, ?upLabelREn, ?upLabelREnx, ?upLabelRAny)) AS ?upLabelR)
@@ -331,12 +351,16 @@ WHERE {
         ?item rdfs:comment ?commentOther . FILTER(isLiteral(?commentOther))
         BIND(LCASE(LANG(?commentOther)) AS ?commentTag2)
         FILTER(?commentTag2 = ?commentCode2 || STRSTARTS(?commentTag2, CONCAT(?commentCode2, "-")))
-        FILTER(?commentRank2 < ?commentRank || (?commentRank2 = ?commentRank && ?commentTag2 = ?commentCode2 && ?commentTag != ?commentCode))
+        FILTER(?commentRank2 < ?commentRank || (?commentRank2 = ?commentRank && ?commentTag2 = ?commentCode2 && ?commentTag != ?commentCode)
+          || (?commentRank2 = ?commentRank && (?commentTag2 = ?commentCode2 || ?commentTag != ?commentCode) && STR(?commentOther) < STR(?commentPick)))
       }
     }
-    OPTIONAL { FILTER(!BOUND(?commentPick)) ?item rdfs:comment ?commentPlain FILTER(isLiteral(?commentPlain) && LANG(?commentPlain) = "") }
-    OPTIONAL { FILTER(!BOUND(?commentPick) && !BOUND(?commentPlain)) ?item rdfs:comment ?commentEn FILTER(LCASE(LANG(?commentEn)) = "en") }
-    OPTIONAL { FILTER(!BOUND(?commentPick) && !BOUND(?commentPlain) && !BOUND(?commentEn)) ?item rdfs:comment ?commentEnx FILTER(STRSTARTS(LCASE(LANG(?commentEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?commentPick)) ?item rdfs:comment ?commentPlain FILTER(isLiteral(?commentPlain) && LANG(?commentPlain) = "")
+      FILTER NOT EXISTS { ?item rdfs:comment ?commentPlainLess FILTER(isLiteral(?commentPlainLess) && LANG(?commentPlainLess) = "" && STR(?commentPlainLess) < STR(?commentPlain)) } }
+    OPTIONAL { FILTER(!BOUND(?commentPick) && !BOUND(?commentPlain)) ?item rdfs:comment ?commentEn FILTER(LCASE(LANG(?commentEn)) = "en")
+      FILTER NOT EXISTS { ?item rdfs:comment ?commentEnLess FILTER(LCASE(LANG(?commentEnLess)) = "en" && STR(?commentEnLess) < STR(?commentEn)) } }
+    OPTIONAL { FILTER(!BOUND(?commentPick) && !BOUND(?commentPlain) && !BOUND(?commentEn)) ?item rdfs:comment ?commentEnx FILTER(STRSTARTS(LCASE(LANG(?commentEnx)), "en-"))
+      FILTER NOT EXISTS { ?item rdfs:comment ?commentEnxLess FILTER(STRSTARTS(LCASE(LANG(?commentEnxLess)), "en-") && STR(?commentEnxLess) < STR(?commentEnx)) } }
     OPTIONAL { FILTER(!BOUND(?commentPick) && !BOUND(?commentPlain) && !BOUND(?commentEn) && !BOUND(?commentEnx)) ?item rdfs:comment ?commentAny FILTER(isLiteral(?commentAny))
       FILTER NOT EXISTS { ?item rdfs:comment ?commentLess FILTER(isLiteral(?commentLess) && STR(?commentLess) < STR(?commentAny)) } }
     BIND(STR(COALESCE(?commentPick, ?commentPlain, ?commentEn, ?commentEnx, ?commentAny)) AS ?comment)
@@ -368,12 +392,16 @@ WHERE {
         ?shownNode c:label ?shownLabelCOther . FILTER(isLiteral(?shownLabelCOther))
         BIND(LCASE(LANG(?shownLabelCOther)) AS ?shownLabelCTag2)
         FILTER(?shownLabelCTag2 = ?shownLabelCCode2 || STRSTARTS(?shownLabelCTag2, CONCAT(?shownLabelCCode2, "-")))
-        FILTER(?shownLabelCRank2 < ?shownLabelCRank || (?shownLabelCRank2 = ?shownLabelCRank && ?shownLabelCTag2 = ?shownLabelCCode2 && ?shownLabelCTag != ?shownLabelCCode))
+        FILTER(?shownLabelCRank2 < ?shownLabelCRank || (?shownLabelCRank2 = ?shownLabelCRank && ?shownLabelCTag2 = ?shownLabelCCode2 && ?shownLabelCTag != ?shownLabelCCode)
+          || (?shownLabelCRank2 = ?shownLabelCRank && (?shownLabelCTag2 = ?shownLabelCCode2 || ?shownLabelCTag != ?shownLabelCCode) && STR(?shownLabelCOther) < STR(?shownLabelCPick)))
       }
     }
-    OPTIONAL { FILTER(!BOUND(?shownLabelCPick)) ?shownNode c:label ?shownLabelCPlain FILTER(isLiteral(?shownLabelCPlain) && LANG(?shownLabelCPlain) = "") }
-    OPTIONAL { FILTER(!BOUND(?shownLabelCPick) && !BOUND(?shownLabelCPlain)) ?shownNode c:label ?shownLabelCEn FILTER(LCASE(LANG(?shownLabelCEn)) = "en") }
-    OPTIONAL { FILTER(!BOUND(?shownLabelCPick) && !BOUND(?shownLabelCPlain) && !BOUND(?shownLabelCEn)) ?shownNode c:label ?shownLabelCEnx FILTER(STRSTARTS(LCASE(LANG(?shownLabelCEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?shownLabelCPick)) ?shownNode c:label ?shownLabelCPlain FILTER(isLiteral(?shownLabelCPlain) && LANG(?shownLabelCPlain) = "")
+      FILTER NOT EXISTS { ?shownNode c:label ?shownLabelCPlainLess FILTER(isLiteral(?shownLabelCPlainLess) && LANG(?shownLabelCPlainLess) = "" && STR(?shownLabelCPlainLess) < STR(?shownLabelCPlain)) } }
+    OPTIONAL { FILTER(!BOUND(?shownLabelCPick) && !BOUND(?shownLabelCPlain)) ?shownNode c:label ?shownLabelCEn FILTER(LCASE(LANG(?shownLabelCEn)) = "en")
+      FILTER NOT EXISTS { ?shownNode c:label ?shownLabelCEnLess FILTER(LCASE(LANG(?shownLabelCEnLess)) = "en" && STR(?shownLabelCEnLess) < STR(?shownLabelCEn)) } }
+    OPTIONAL { FILTER(!BOUND(?shownLabelCPick) && !BOUND(?shownLabelCPlain) && !BOUND(?shownLabelCEn)) ?shownNode c:label ?shownLabelCEnx FILTER(STRSTARTS(LCASE(LANG(?shownLabelCEnx)), "en-"))
+      FILTER NOT EXISTS { ?shownNode c:label ?shownLabelCEnxLess FILTER(STRSTARTS(LCASE(LANG(?shownLabelCEnxLess)), "en-") && STR(?shownLabelCEnxLess) < STR(?shownLabelCEnx)) } }
     OPTIONAL { FILTER(!BOUND(?shownLabelCPick) && !BOUND(?shownLabelCPlain) && !BOUND(?shownLabelCEn) && !BOUND(?shownLabelCEnx)) ?shownNode c:label ?shownLabelCAny FILTER(isLiteral(?shownLabelCAny))
       FILTER NOT EXISTS { ?shownNode c:label ?shownLabelCLess FILTER(isLiteral(?shownLabelCLess) && STR(?shownLabelCLess) < STR(?shownLabelCAny)) } }
     BIND(STR(COALESCE(?shownLabelCPick, ?shownLabelCPlain, ?shownLabelCEn, ?shownLabelCEnx, ?shownLabelCAny)) AS ?shownLabelC)
@@ -387,12 +415,16 @@ WHERE {
         ?shownNode rdfs:label ?shownLabelROther . FILTER(isLiteral(?shownLabelROther))
         BIND(LCASE(LANG(?shownLabelROther)) AS ?shownLabelRTag2)
         FILTER(?shownLabelRTag2 = ?shownLabelRCode2 || STRSTARTS(?shownLabelRTag2, CONCAT(?shownLabelRCode2, "-")))
-        FILTER(?shownLabelRRank2 < ?shownLabelRRank || (?shownLabelRRank2 = ?shownLabelRRank && ?shownLabelRTag2 = ?shownLabelRCode2 && ?shownLabelRTag != ?shownLabelRCode))
+        FILTER(?shownLabelRRank2 < ?shownLabelRRank || (?shownLabelRRank2 = ?shownLabelRRank && ?shownLabelRTag2 = ?shownLabelRCode2 && ?shownLabelRTag != ?shownLabelRCode)
+          || (?shownLabelRRank2 = ?shownLabelRRank && (?shownLabelRTag2 = ?shownLabelRCode2 || ?shownLabelRTag != ?shownLabelRCode) && STR(?shownLabelROther) < STR(?shownLabelRPick)))
       }
     }
-    OPTIONAL { FILTER(!BOUND(?shownLabelRPick)) ?shownNode rdfs:label ?shownLabelRPlain FILTER(isLiteral(?shownLabelRPlain) && LANG(?shownLabelRPlain) = "") }
-    OPTIONAL { FILTER(!BOUND(?shownLabelRPick) && !BOUND(?shownLabelRPlain)) ?shownNode rdfs:label ?shownLabelREn FILTER(LCASE(LANG(?shownLabelREn)) = "en") }
-    OPTIONAL { FILTER(!BOUND(?shownLabelRPick) && !BOUND(?shownLabelRPlain) && !BOUND(?shownLabelREn)) ?shownNode rdfs:label ?shownLabelREnx FILTER(STRSTARTS(LCASE(LANG(?shownLabelREnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?shownLabelRPick)) ?shownNode rdfs:label ?shownLabelRPlain FILTER(isLiteral(?shownLabelRPlain) && LANG(?shownLabelRPlain) = "")
+      FILTER NOT EXISTS { ?shownNode rdfs:label ?shownLabelRPlainLess FILTER(isLiteral(?shownLabelRPlainLess) && LANG(?shownLabelRPlainLess) = "" && STR(?shownLabelRPlainLess) < STR(?shownLabelRPlain)) } }
+    OPTIONAL { FILTER(!BOUND(?shownLabelRPick) && !BOUND(?shownLabelRPlain)) ?shownNode rdfs:label ?shownLabelREn FILTER(LCASE(LANG(?shownLabelREn)) = "en")
+      FILTER NOT EXISTS { ?shownNode rdfs:label ?shownLabelREnLess FILTER(LCASE(LANG(?shownLabelREnLess)) = "en" && STR(?shownLabelREnLess) < STR(?shownLabelREn)) } }
+    OPTIONAL { FILTER(!BOUND(?shownLabelRPick) && !BOUND(?shownLabelRPlain) && !BOUND(?shownLabelREn)) ?shownNode rdfs:label ?shownLabelREnx FILTER(STRSTARTS(LCASE(LANG(?shownLabelREnx)), "en-"))
+      FILTER NOT EXISTS { ?shownNode rdfs:label ?shownLabelREnxLess FILTER(STRSTARTS(LCASE(LANG(?shownLabelREnxLess)), "en-") && STR(?shownLabelREnxLess) < STR(?shownLabelREnx)) } }
     OPTIONAL { FILTER(!BOUND(?shownLabelRPick) && !BOUND(?shownLabelRPlain) && !BOUND(?shownLabelREn) && !BOUND(?shownLabelREnx)) ?shownNode rdfs:label ?shownLabelRAny FILTER(isLiteral(?shownLabelRAny))
       FILTER NOT EXISTS { ?shownNode rdfs:label ?shownLabelRLess FILTER(isLiteral(?shownLabelRLess) && STR(?shownLabelRLess) < STR(?shownLabelRAny)) } }
     BIND(STR(COALESCE(?shownLabelRPick, ?shownLabelRPlain, ?shownLabelREn, ?shownLabelREnx, ?shownLabelRAny)) AS ?shownLabelR)

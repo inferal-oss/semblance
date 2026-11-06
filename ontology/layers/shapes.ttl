@@ -17,7 +17,7 @@
 #            sh:resultMessage "…" ; sh:sourceShape <shape> ; sh:resultSeverity sh:Violation .
 # A component with violations is outlined, with the messages as its tooltip,
 # and c:ShapeReport lists every result. Supported constraints, in property shapes
-# (sh:property) whose sh:path is a property: sh:minCount, sh:maxCount, sh:datatype,
+# (sh:property) whose sh:path is a property: sh:minCount, sh:maxCount, sh:uniqueLang, sh:datatype,
 # sh:class, sh:nodeKind, sh:in, sh:minInclusive, sh:maxInclusive, sh:minLength,
 # sh:maxLength, sh:pattern, sh:lessThanOrEquals. On the node shape: sh:or, a list of
 # property shapes the focus must conform to one of. Each alternative is read as needing
@@ -61,7 +61,7 @@ WHERE {
   {
     ?shape sh:property ?ps .
     ?ps sh:path ?path ; ?constraint ?param .
-    FILTER(isIRI(?path) && ?constraint IN (sh:minCount, sh:maxCount, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
+    FILTER(isIRI(?path) && ?constraint IN (sh:minCount, sh:maxCount, sh:uniqueLang, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
                                            sh:maxInclusive, sh:minLength, sh:maxLength, sh:pattern, sh:lessThanOrEquals))
   } UNION {
     # The node shape's own constraint: about the focus, with no path.
@@ -86,7 +86,13 @@ WHERE {
       FILTER(IF(?constraint = sh:minCount, COALESCE(?n, 0) < ?bound, COALESCE(?n, 0) > ?bound))
       BIND(IF(?constraint = sh:minCount, CONCAT("at least ", STR(?param), " values"), CONCAT("at most ", STR(?param), " values")) AS ?fallback)
     } UNION {
-      FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:lessThanOrEquals, sh:or))
+      # Two values in one language: one result per language, as SHACL says (untagged values are not in one).
+      FILTER(?constraint = sh:uniqueLang && STR(?param) = "true")
+      ?focus ?path ?inLanguage , ?alsoInLanguage .
+      FILTER(LANG(?inLanguage) != "" && ?inLanguage != ?alsoInLanguage && LCASE(LANG(?inLanguage)) = LCASE(LANG(?alsoInLanguage)))
+      BIND(CONCAT("more than one value in \\"", LCASE(LANG(?inLanguage)), "\\"") AS ?fallback)
+    } UNION {
+      FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:uniqueLang, sh:lessThanOrEquals, sh:or))
       ?focus ?path ?value .
       OPTIONAL { FILTER(?constraint = sh:pattern) ?ps sh:flags ?flags }
       FILTER(IF(?constraint = sh:datatype,

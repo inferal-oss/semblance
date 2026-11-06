@@ -238,13 +238,18 @@ WHERE {
         $this c:label ?other . FILTER(isLiteral(?other))
         BIND(LCASE(LANG(?other)) AS ?tag2)
         FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
-        FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
+        FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code)
+          || (?rank2 = ?rank && (?tag2 = ?code2 || ?tag != ?code) && STR(?other) < STR(?pick)))
       }
     }
-    OPTIONAL { FILTER(!BOUND(?pick)) $this c:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
-    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this c:label ?en FILTER(LCASE(LANG(?en)) = "en") }
-    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this c:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
-    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this c:label ?any FILTER(isLiteral(?any)) }
+    OPTIONAL { FILTER(!BOUND(?pick)) $this c:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "")
+      FILTER NOT EXISTS { $this c:label ?plainLess FILTER(isLiteral(?plainLess) && LANG(?plainLess) = "" && STR(?plainLess) < STR(?plain)) } }
+    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this c:label ?en FILTER(LCASE(LANG(?en)) = "en")
+      FILTER NOT EXISTS { $this c:label ?enLess FILTER(LCASE(LANG(?enLess)) = "en" && STR(?enLess) < STR(?en)) } }
+    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this c:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-"))
+      FILTER NOT EXISTS { $this c:label ?enxLess FILTER(STRSTARTS(LCASE(LANG(?enxLess)), "en-") && STR(?enxLess) < STR(?enx)) } }
+    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this c:label ?any FILTER(isLiteral(?any))
+      FILTER NOT EXISTS { $this c:label ?anyLess FILTER(isLiteral(?anyLess) && STR(?anyLess) < STR(?any)) } }
     OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx) && !BOUND(?any)) $this c:property ?captionProperty .
       OPTIONAL { ?captionProperty l10n:label ?propertyLabelC1 }
       OPTIONAL { FILTER(!BOUND(?propertyLabelC1)) ?propertyLabelC2At l10n:of ?captionProperty ; l10n:label ?propertyLabelC2 }

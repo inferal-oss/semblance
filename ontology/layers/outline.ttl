@@ -71,13 +71,18 @@ WHERE {
       $this ol:label ?other . FILTER(isLiteral(?other))
       BIND(LCASE(LANG(?other)) AS ?tag2)
       FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
-      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
+      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code)
+        || (?rank2 = ?rank && (?tag2 = ?code2 || ?tag != ?code) && STR(?other) < STR(?pick)))
     }
   }
-  OPTIONAL { FILTER(!BOUND(?pick)) $this ol:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this ol:label ?en FILTER(LCASE(LANG(?en)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this ol:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this ol:label ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(!BOUND(?pick)) $this ol:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "")
+    FILTER NOT EXISTS { $this ol:label ?plainLess FILTER(isLiteral(?plainLess) && LANG(?plainLess) = "" && STR(?plainLess) < STR(?plain)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this ol:label ?en FILTER(LCASE(LANG(?en)) = "en")
+    FILTER NOT EXISTS { $this ol:label ?enLess FILTER(LCASE(LANG(?enLess)) = "en" && STR(?enLess) < STR(?en)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this ol:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-"))
+    FILTER NOT EXISTS { $this ol:label ?enxLess FILTER(STRSTARTS(LCASE(LANG(?enxLess)), "en-") && STR(?enxLess) < STR(?enx)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this ol:label ?any FILTER(isLiteral(?any))
+    FILTER NOT EXISTS { $this ol:label ?anyLess FILTER(isLiteral(?anyLess) && STR(?anyLess) < STR(?any)) } }
   OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx) && !BOUND(?any)) $this ol:defaultLabel ?default FILTER(isLiteral(?default)) }
   BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any, ?default)) AS ?name)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)

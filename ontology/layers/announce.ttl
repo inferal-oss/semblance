@@ -112,13 +112,18 @@ WHERE {
       ?m ?saidBy ?othere . FILTER(isLiteral(?othere))
       BIND(LCASE(LANG(?othere)) AS ?tag2e)
       FILTER(?tag2e = ?code2e || STRSTARTS(?tag2e, CONCAT(?code2e, "-")))
-      FILTER(?rank2e < ?ranke || (?rank2e = ?ranke && ?tag2e = ?code2e && ?tage != ?codee))
+      FILTER(?rank2e < ?ranke || (?rank2e = ?ranke && ?tag2e = ?code2e && ?tage != ?codee)
+        || (?rank2e = ?ranke && (?tag2e = ?code2e || ?tage != ?codee) && STR(?othere) < STR(?picke)))
     }
   }
-  OPTIONAL { FILTER(!BOUND(?picke)) ?m ?saidBy ?plaine FILTER(isLiteral(?plaine) && LANG(?plaine) = "") }
-  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine)) ?m ?saidBy ?ene FILTER(LCASE(LANG(?ene)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine) && !BOUND(?ene)) ?m ?saidBy ?enxe FILTER(STRSTARTS(LCASE(LANG(?enxe)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine) && !BOUND(?ene) && !BOUND(?enxe)) ?m ?saidBy ?anye FILTER(isLiteral(?anye)) }
+  OPTIONAL { FILTER(!BOUND(?picke)) ?m ?saidBy ?plaine FILTER(isLiteral(?plaine) && LANG(?plaine) = "")
+    FILTER NOT EXISTS { ?m ?saidBy ?plaineLess FILTER(isLiteral(?plaineLess) && LANG(?plaineLess) = "" && STR(?plaineLess) < STR(?plaine)) } }
+  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine)) ?m ?saidBy ?ene FILTER(LCASE(LANG(?ene)) = "en")
+    FILTER NOT EXISTS { ?m ?saidBy ?eneLess FILTER(LCASE(LANG(?eneLess)) = "en" && STR(?eneLess) < STR(?ene)) } }
+  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine) && !BOUND(?ene)) ?m ?saidBy ?enxe FILTER(STRSTARTS(LCASE(LANG(?enxe)), "en-"))
+    FILTER NOT EXISTS { ?m ?saidBy ?enxeLess FILTER(STRSTARTS(LCASE(LANG(?enxeLess)), "en-") && STR(?enxeLess) < STR(?enxe)) } }
+  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine) && !BOUND(?ene) && !BOUND(?enxe)) ?m ?saidBy ?anye FILTER(isLiteral(?anye))
+    FILTER NOT EXISTS { ?m ?saidBy ?anyeLess FILTER(isLiteral(?anyeLess) && STR(?anyeLess) < STR(?anye)) } }
   BIND(STR(COALESCE(?picke, ?plaine, ?ene, ?enxe, ?anye)) AS ?fromEvent)
   } } }
   LATERAL { OPTIONAL { SELECT ?reaction ?announced WHERE {
