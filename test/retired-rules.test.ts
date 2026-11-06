@@ -77,11 +77,13 @@ ex:page a c:Stack ; c:children ( ${shown} ) .`)
       const p = f.namedNode(EX + 'title')
       runtime.apply({ remove: store.match(source, p, null), add: [f.quad(source, p, f.literal(title))] })
     },
-    /** The page shows `iri` where it showed ex:shown. */
+    /** The page shows only `iri`. */
     show(iri: string) {
-      const first = f.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#first')
-      const cells = store.match(null, first, f.namedNode(EX + 'shown'))
-      runtime.apply({ remove: cells, add: cells.map((q) => f.quad(q.subject, first, f.namedNode(EX + iri))) })
+      const page = f.namedNode(EX + 'page')
+      const children = f.namedNode('https://semblance.dev/ns/component#children')
+      const list = f.namedNode(EX + 'list-' + iri)
+      const rdf = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+      runtime.apply({ remove: store.match(page, children, null), add: [f.quad(page, children, list), f.quad(list, f.namedNode(rdf + 'first'), f.namedNode(EX + iri)), f.quad(list, f.namedNode(rdf + 'rest'), f.namedNode(rdf + 'nil'))] })
     },
   }
 }
@@ -97,10 +99,10 @@ describe('a rule that left the engine', () => {
     expect(s.html()).toContain('twin')
     const calls = s.calls
     s.show('later')
-    const html = s.html()
+    expect(s.screen.index.nodes.has(EX + 'later/~twin-text')).toBe(true)
     expect(s.calls).toBe(calls)
-    expect(html).not.toContain('function')
-    expect(html).toContain('twin')
+    expect(s.screen.index.nodes.has(EX + 'later/~fn-text')).toBe(false)
+    expect(s.html()).not.toContain('function')
     expect(s.errors).toEqual([])
     s.runtime.dispose()
   })
