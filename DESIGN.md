@@ -140,7 +140,7 @@ the locale writes them, and `l10n:locale` ("en-GB") overrides the viewer's langu
 button opens a `c:MonthGrid` in a popup (the WAI-ARIA date picker dialog): a grid of day buttons
 whose active day is graph state (`c:activeDate`, `c:shownMonth`), moved by the arrows (swapped right
 to left), Home and End, Page Up and Down (Shift: a year); Enter picks and closes, Escape closes, and
-the focus goes back to the button (an element marked `data-sem-takes-focus` gets it after an event).
+the focus goes back to the button (an element newly marked `data-sem-takes-focus` gets it after an event).
 A range is picked start first, its span highlighted and previewed under the pointer. Typed text that
 is not a date stays and the validation layer says how to write one; bounds are the `val:validates`
 shapes' `sh:minInclusive` / `sh:maxInclusive` (and `sh:lessThanOrEquals` for a range), which the

@@ -946,7 +946,10 @@ export class EventBus {
     const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
     const around: Element[] = []
     for (let el = active?.parentElement; el && el !== renderer.host; el = el.parentElement) around.push(el)
-    return { active, inside: !!active && active !== doc?.body && !!root?.contains(active), around }
+    const inside = !!active && active !== doc?.body && !!root?.contains(active)
+    // The marks standing before the event: a closed overlay's trigger keeps one, to have the focus back on closing.
+    const marks = new Set(inside ? [...renderer.host.querySelectorAll('[data-sem-takes-focus]')].map((el) => renderer.keyOf(el)) : [])
+    return { active, inside, around, marks }
   }
 
   /**
@@ -954,17 +957,20 @@ export class EventBus {
    * month grid's active day, a date field's button once its popup closed; an element that is not a
    * control stands for its first control: an open menu's popup, its first item) gets the focus, if the
    * focus was in the component when the event came: unless it is in a text field (typing keeps it).
-   * If the focused element went away or was hidden, and nothing else has placed the focus since, the
-   * nearest marked element around where it was wins, without scrolling to it (nobody asked to go
-   * there); a closed modal's focus is settled by ModalFocus alone, even when that is the page (it
-   * was opened from there, and what ran in it may have changed the page). An input whose aria-activedescendant names an option keeps that option in view.
+   * Only a mark this event made asks for it: one that stood before the event (the closed popover in a
+   * panel whose size handle has the focus) says nothing about this event.
+   * If the focused element went away or was hidden, the nearest mark this event made around where it
+   * was wins; and if nothing has placed the focus since, the nearest standing one; either way without
+   * scrolling to it (nobody asked to go there). A closed modal's focus is settled by ModalFocus alone,
+   * even when that is the page (it was opened from there, and what ran in it may have changed the page).
+   * An input whose aria-activedescendant names an option keeps that option in view.
    */
   private placeFocus(renderer: DomRenderer, focus: string, at: ReturnType<EventBus['focusAt']>) {
     const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
     for (const field of root?.querySelectorAll?.<HTMLElement>('[aria-activedescendant]') ?? []) {
       field.ownerDocument.getElementById(field.getAttribute('aria-activedescendant')!)?.scrollIntoView?.({ block: 'nearest' })
     }
-    const { active, inside, around } = at
+    const { active, inside, around, marks } = at
     if (!active || !inside) return
     const shown = (el: Element) => el.isConnected && !el.closest('[hidden], [inert]')
     const lost = !shown(active)
@@ -974,9 +980,15 @@ export class EventBus {
     if (lost && now && now !== now.ownerDocument.body && now !== renderer.refocused && shown(now)) return
     if (lost && around.some((el) => el.getAttribute('aria-modal') === 'true')) return
     if (!lost && active.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]:not([contenteditable=false])')) return
-    const marked = (scope: Element) => [...scope.querySelectorAll<HTMLElement>('[data-sem-takes-focus]')].filter(shown).map((el) => controlIn(el, shown)).find((el) => el)
-    let target = root?.isConnected ? marked(root) : undefined
-    if (!target && lost) for (const scope of around) if (scope.isConnected && (target = marked(scope))) break
+    const marked = (scope: Element, made: boolean) => [...scope.querySelectorAll<HTMLElement>('[data-sem-takes-focus]')].filter((el) => shown(el) && (!made || !marks.has(renderer.keyOf(el)))).map((el) => controlIn(el, shown)).find((el) => el)
+    const scopes = [...(root?.isConnected ? [root] : []), ...(lost ? around.filter((scope) => scope.isConnected) : [])]
+    const nearest = (made: boolean) => {
+      for (const scope of scopes) {
+        const el = marked(scope, made)
+        if (el) return el
+      }
+    }
+    const target = nearest(true) ?? (lost && now !== renderer.refocused ? nearest(false) : undefined)
     if (target && target !== target.ownerDocument.activeElement) target.focus?.(lost ? { preventScroll: true } : undefined)
   }
 
