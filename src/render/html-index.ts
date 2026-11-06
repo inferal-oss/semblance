@@ -2,7 +2,7 @@ import type { Quad, Term } from '@rdfjs/types'
 import { EXT, H, NS, ORD, RDF_TYPE, SEM } from '../ns.ts'
 import type { Delta } from '../rdf.ts'
 import { ATTRIBUTE_NAMES, TAG_NAMES, VOID_ELEMENTS } from '../vocab/rdfhtml.generated.ts'
-import { linearize } from './ordering.ts'
+import { linearize, OrderingError } from './ordering.ts'
 import { compareKeys } from './order-key.ts'
 import { SVG_TAG_NAMES } from '../vocab/svg.ts'
 
@@ -118,7 +118,7 @@ export class HtmlIndex {
    * data ("photos/harbour.jpg") is the same file on every page. Absent: URLs are written as given.
    */
   constructor(
-    private readonly onError: (e: Error) => void = (e) => console.error(e),
+    readonly onError: (e: Error) => void = (e) => console.error(e),
     readonly urlBase?: string,
   ) {}
 
@@ -264,6 +264,11 @@ export class HtmlIndex {
       for (const edges of [this.immediate, this.strict]) {
         for (const b of edges.get(a) ?? []) {
           if (all.has(b)) continue
+          // A child ordered next to the node it is in: the node stays out of its own children.
+          if (b === parent) {
+            this.onError(new OrderingError(parent, `<${a}> is ordered next to its own parent`))
+            continue
+          }
           all.add(b)
           todo.push(b)
           this.chainParent.set(b, parent)

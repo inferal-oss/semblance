@@ -363,7 +363,15 @@ export class DomRenderer {
     let anchor: Node | null = null
     for (let i = desired.length - 1; i >= 0; i--) {
       const n = desired[i]!
-      if (!stay.has(n)) move(parent, n, anchor), this.ops++
+      if (!stay.has(n)) {
+        // A graph that nests a node in itself (a rule's error) cannot be drawn: what it leaves out
+        // is reported, the rest of the patch still happens.
+        if (n === parent || n.contains(parent)) {
+          this.index.onError(new Error(`<${this.keys.get(n)}> cannot be placed inside itself, under <${this.keys.get(parent)}>`))
+          continue
+        }
+        move(parent, n, anchor), this.ops++
+      }
       anchor = n
     }
   }

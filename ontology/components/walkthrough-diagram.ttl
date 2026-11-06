@@ -481,7 +481,7 @@ WHERE {
     BIND(IF(?part = "li", IRI(CONCAT(?me, "/~steps")), IRI(CONCAT(?me, "/~", ?s))) AS ?parent)
     BIND(IF(?part = "li", ?i, ?unset) AS ?key)
     BIND(IF(?part = "li", ?step, ?unset) AS ?showsStep)
-    BIND(IF(?part = "num", IRI(CONCAT(?me, "/~", ?s, IF(?stepName != "", "-title", ""))), IF(?part = "title", ?step, ?unset)) AS ?after)
+    BIND(IF(?part = "num", IF(?stepName != "", IRI(CONCAT(?me, "/~", ?s, "-title")), ?step), IF(?part = "title", ?step, ?unset)) AS ?after)
     BIND(IF(?part IN ("num", "title"), IRI(CONCAT(?me, "/~", ?s, "-", ?part, "-text")), ?unset) AS ?textNode)
     BIND(IF(?part = "num", STR(?i + 1), IF(?part = "title", ?stepName, ?unset)) AS ?data)
     OPTIONAL { FILTER(?part = "li") ?step c:children/rdf:rest*/rdf:first ?mention . ?mention a c:Mention ; c:mentions ?mentions FILTER(isIRI(?mentions)) }

@@ -336,7 +336,8 @@ WHERE {
 # lines; a term the diagram leaves out (c:diagramExcludes) has no node, so no arrow. In stratum 0,
 # placed in the walkthrough's arrow layer (/~arrows).
 c:WalkthroughArrows a sem:Rendering ; sem:targets c:Walkthrough ; sem:modality mod:Screen ; sem:stratum 0 ;
-    sem:watches rdf:type , c:steps , c:current , c:pointedTerm , c:selectedTerm , c:diagramExcludes .
+    sem:follows ( c:steps [ sem:zeroOrMore rdf:rest ] rdf:first c:children [ sem:zeroOrMore rdf:rest ] rdf:first ) ;
+    sem:watches rdf:type , c:steps , c:children , c:mentions , c:current , c:pointedTerm , c:selectedTerm , c:diagramExcludes , rdf:first , rdf:rest .
 c:WalkthroughArrows-fn a sem:Rule ; sem:implements c:WalkthroughArrows ; sem:function "walkthrough:arrows" .
 c:WalkthroughArrows-sparql a sem:Rule ;
     sem:implements c:WalkthroughArrows ;

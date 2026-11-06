@@ -126,4 +126,39 @@ ui:slot a h:Div ; sem:slot "page" .`, true)
       app.dispose()
     }
   })
+  describe('a graph that nests a node in itself', () => {
+    const render = (graph: string) => {
+      const { document } = parseHTML('<!doctype html><html><body><main></main></body></html>')
+      const host = document.querySelector('main')!
+      const errors: string[] = []
+      const index = new HtmlIndex((e) => errors.push(e.message))
+      const renderer = new DomRenderer(index, host, 'https://example.org/ui#workspace')
+      index.apply({ add: parse(graph), remove: [] })
+      renderer.flush()
+      return { host, errors, index, renderer }
+    }
+
+    it('a child ordered next to its own parent: reported, the node stays out of its children, the rest is drawn', () => {
+      const { host, errors } = render(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:item , ui:after .
+ui:item a h:Li ; sem:orderKey 0 ; h:hasChild ui:num .
+ui:after a h:P ; sem:orderKey 1 .
+ui:num a h:Span ; ord:immediatelyPrecedes ui:item .`)
+      expect(errors.join()).toContain('its own parent')
+      expect(host.querySelector('li > span')).toBeTruthy()
+      expect(host.querySelector('section > p')).toBeTruthy()
+    })
+
+    it('two nodes in each other: reported, the patch goes on', () => {
+      const { host, errors, index, renderer } = render(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:a , ui:after .
+ui:a a h:Div ; sem:orderKey 0 ; h:hasChild ui:b .
+ui:b a h:Div ; h:hasChild ui:a .
+ui:after a h:P ; sem:orderKey 1 .`)
+      expect(errors.join()).toContain('inside itself')
+      expect(host.querySelector('section > p')).toBeTruthy()
+      // Later changes still arrive.
+      index.apply({ add: parse('ui:root h:hasChild ui:more . ui:more a h:H2 ; sem:orderKey 2 .'), remove: [] })
+      renderer.flush()
+      expect(host.querySelector('section > h2')).toBeTruthy()
+    })
+  })
 })

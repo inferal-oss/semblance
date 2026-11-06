@@ -610,7 +610,7 @@ export class Engine {
     // A rule on its way out is not probed while its output is withdrawn (nor is one about to run for every focus).
     if (this.exact) for (const r of [...this.rules, ...after]) if (!kept.has(r)) this.pristine.add(r)
     for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
-    for (const r of this.rules) if (!kept.has(r)) this.outputs.delete(r), this.memberKeys.delete(r), this.forgetAllFollowing(r)
+    for (const r of this.rules) if (!kept.has(r)) this.retire(r)
     for (const [member, byRule] of [...this.memberReaders]) {
       for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
       if (!byRule.size) this.memberReaders.delete(member)
@@ -622,6 +622,27 @@ export class Engine {
     for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r)) this.markFocus(r, focus)
     if (this.exact) for (const r of after) if (!kept.has(r)) this.pristine.add(r)
     this.run()
+  }
+
+  /**
+   * A rule leaves the running engine, its output withdrawn: nothing it left may run it again. Work
+   * parked, held or stopped for it and what it read would evaluate it for a focus later, next to the
+   * rule that took its slot (a function rule on a page whose first graphs lacked its SPARQL twin, #332).
+   */
+  private retire(rule: Rule) {
+    this.outputs.delete(rule)
+    this.memberKeys.delete(rule)
+    this.forgetAllFollowing(rule)
+    this.deferred.dropRule(rule)
+    for (const byRule of this.held.values()) {
+      this.heldPairs -= byRule.get(rule)?.size ?? 0
+      byRule.delete(rule)
+    }
+    this.stoppedPairs -= this.stopped.get(rule)?.size ?? 0
+    this.stopped.delete(rule)
+    for (const focus of [...(this.readsOf.get(rule)?.keys() ?? [])]) this.forgetReads(rule, focus)
+    this.readsOf.delete(rule)
+    this.traced.delete(rule)
   }
 
   /**
