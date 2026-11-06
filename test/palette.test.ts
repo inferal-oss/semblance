@@ -328,6 +328,28 @@ describe('the command palette goes to places', () => {
     expect(p.fact('palette', NS.nav + 'goTo')).toEqual([])
     expect(p.log(1)).toEqual([[NS.nav + 'Navigate', UI + 'location']])
   })
+
+  it('leaves the focus with the page on a place: nothing on the new page takes it, or scrolls to itself', async () => {
+    const t = tab()
+    const h = await mountNavigating({ ...t, schedule: (run) => queueMicrotask(run), frame: () => {} })
+    const p = drive(h as unknown as Shell)
+    const pulled: unknown[] = []
+    const focus = h.window.HTMLElement.prototype.focus
+    h.window.HTMLElement.prototype.focus = function (this: HTMLElement, o?: FocusOptions) {
+      if (!o?.preventScroll) pulled.push(this.className)
+      return focus.call(this, o)
+    }
+    p.open()
+    p.type('checkout')
+    pulled.length = 0
+    p.press('Enter')
+    await new Promise((r) => setTimeout(r, 0))
+    h.shell.flush()
+    expect(t.location.pathname).toBe('/examples/checkout/')
+    expect(pulled).toEqual([])
+    expect(h.document.activeElement).toBe(h.document.body)
+    h.window.HTMLElement.prototype.focus = focus
+  })
 })
 
 describe('the gallery palette', () => {

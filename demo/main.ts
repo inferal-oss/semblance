@@ -10,7 +10,7 @@ import { workerThumbnails } from '../src/file-store.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
-import { Navigation, rendererReveal, setBase } from '../src/navigation.ts'
+import { Navigation, rendererReveal, setBase, windowScroll } from '../src/navigation.ts'
 import { attachIntent } from '../src/intent.ts'
 import { NetworkCapture } from '../src/network.ts'
 import { Sandboxes } from '../src/sandbox.ts'
@@ -474,10 +474,12 @@ new Files(bus, {
 }).attach(shell)
 
 // Changes of where we are go to the address; Back, Forward and typed or followed addresses
-// come back as nav:Navigate events, and a followed link's target is brought into view.
+// come back as nav:Navigate events, and a followed link's target is brought into view. A step to
+// another place starts at its top; Back and Forward return to where the page was.
 navigation.attach(runtime, {
   bus,
   reveal: rendererReveal(shell),
+  scroll: windowScroll(window),
   onNavigate: () => {
     syncSettings()
     flush()

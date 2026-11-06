@@ -955,7 +955,9 @@ export class EventBus {
    * control stands for its first control: an open menu's popup, its first item) gets the focus, if the
    * focus was in the component when the event came: unless it is in a text field (typing keeps it).
    * If the focused element went away or was hidden, and nothing else has placed the focus since, the
-   * nearest marked element around where it was wins. An input whose aria-activedescendant names an option keeps that option in view.
+   * nearest marked element around where it was wins, without scrolling to it (nobody asked to go
+   * there); a closed modal's focus is settled by ModalFocus alone, even when that is the page (it
+   * was opened from there, and what ran in it may have changed the page). An input whose aria-activedescendant names an option keeps that option in view.
    */
   private placeFocus(renderer: DomRenderer, focus: string, at: ReturnType<EventBus['focusAt']>) {
     const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
@@ -970,11 +972,12 @@ export class EventBus {
     // opener): not lost. Only the page, or the renderer's guess at a nearby control, is.
     const now = active.ownerDocument.activeElement
     if (lost && now && now !== now.ownerDocument.body && now !== renderer.refocused && shown(now)) return
+    if (lost && around.some((el) => el.getAttribute('aria-modal') === 'true')) return
     if (!lost && active.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]:not([contenteditable=false])')) return
     const marked = (scope: Element) => [...scope.querySelectorAll<HTMLElement>('[data-sem-takes-focus]')].filter(shown).map((el) => controlIn(el, shown)).find((el) => el)
     let target = root?.isConnected ? marked(root) : undefined
     if (!target && lost) for (const scope of around) if (scope.isConnected && (target = marked(scope))) break
-    if (target && target !== target.ownerDocument.activeElement) target.focus?.()
+    if (target && target !== target.ownerDocument.activeElement) target.focus?.(lost ? { preventScroll: true } : undefined)
   }
 
   /**
