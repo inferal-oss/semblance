@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { ManualClock } from '../src/behaviour/clock.ts'
 import { mountSite } from './harness.ts'
 import { implementationGaps } from './implementations.ts'
-import { A11Y, MOD, NS, STY } from '../src/ns.ts'
+import { A11Y, MOD, NS, STY, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toText } from '../src/render/serialize.ts'
 
@@ -168,6 +168,35 @@ describe('the shared agenda example', () => {
     expect(h.value(CO + 'p6', CO + 'text')).toEqual(['Dinner at seven, at Nopi'])
     h.click(h.button('Save'))
     expect(h.line(h.item('Dinner'))).toBe("[Ada Lovelace, Tim Berners-Lee] Dinner at eight (Ada Lovelace, step 11) ⚠ Ada Lovelace wrote over Tim Berners-Lee's “Dinner at seven, at Nopi” (step 10) without having seen it")
+  })
+
+  it('keeps the step slider conforming after every edit, whose maximum a view derives (#334), on both sides', () => {
+    const STEP = UI + 'ex-collab-step'
+    const [a, b] = [agenda('sparql'), agenda('function')]
+    const both = (step: (h: typeof a) => void) => {
+      for (const h of [a, b]) {
+        step(h)
+        const f = h.store.factory
+        const slider = h.root().querySelector('[data-sem-c=slider]')!
+        expect(slider.hasAttribute('data-sem-shape-invalid')).toBe(false)
+        expect(slider.hasAttribute('aria-description')).toBe(false)
+        expect(h.store.match(f.namedNode(STEP), f.namedNode(VAL.violation), null)).toEqual([])
+        expect(h.slider().getAttribute('max')).toBe(h.value(CO + 'doc', CO + 'seq')[0])
+      }
+      expect(a.root().innerHTML).toBe(b.root().innerHTML)
+    }
+    both((h) => h.advance(0))
+    for (let i = 0; i < 12; i++) both((h) => h.advance(1500))
+    expect(a.slider().value).toBe('11')
+    // Back through the history, by the buttons and by dragging, and following live again.
+    both((h) => h.click(h.button('One step back')))
+    both((h) => {
+      h.slider().value = '0'
+      h.fire(h.slider(), 'input')
+      h.shell.flush()
+    })
+    both((h) => h.click(h.root().querySelector('[data-sem-c=toggle-switch] button, [data-sem-c=toggle-switch] [role=switch]')!))
+    expect(a.slider().value).toBe('11')
   })
 
   it('renders the same with SPARQL and with function rules, as the scripts play and you write', () => {

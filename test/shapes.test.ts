@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { MOD, NS, SEM, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
-import { Runtime } from '../src/runtime.ts'
+import { parseTurtle, Runtime } from '../src/runtime.ts'
 import { followDelta, readLocations, routesOf } from '../src/navigation.ts'
+import { sliceAddition } from '../src/slices.ts'
 import { mountShell, mountSite } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -205,6 +206,102 @@ describe('the Inputs gallery conforms to the component shapes', () => {
       expect(h.shell.nodeOf(UI + 'inp-f-level-input/~root')).toBeTruthy()
       expect(h.store.match(null, f.namedNode(SH + 'focusNode'), null).map((q) => q.object.value)).toEqual([])
       expect(h.document.querySelectorAll('[data-sem-shape-invalid]')).toHaveLength(0)
+    })
+  }
+})
+
+// A shape compares what the strata below the components leave: a formula's c:value and c:max (#334).
+describe('component shapes: what a formula derives', () => {
+  const VIEWS = `
+@prefix sem: <${NS.sem}> .
+@prefix iv: <${NS.iv}> .
+@prefix c: <${C}> .
+@prefix ui: <${UI}> .
+ui:doc ui:done 1 ; ui:total 5 .
+ui:Both a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """SELECT ?value ?max WHERE { <${UI}doc> <${UI}done> ?value ; <${UI}total> ?max }""" .
+ui:Total a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """SELECT ?max WHERE { <${UI}doc> <${UI}total> ?max }""" .
+ui:page a c:Stack ; c:children ( ui:progress ui:slider ) .
+ui:progress a c:Progress ; c:valueQuery ui:Both .
+ui:slider a c:Slider ; c:label "Step" ; c:min 0 ; c:value 1 ; c:valueQuery ui:Total .
+`
+  function mount(kind: StoreKind, prefer: 'sparql' | 'function') {
+    const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+    const store = loadStore(kind, VIEWS)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, layers: [VAL.ShapesLayer, SEM.TooltipLayer], prefer, name: 'screen', roots: [UI + 'page'] }, (e) => {
+      throw e
+    })
+    const dom = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'page')
+    dom.flush()
+    const f = store.factory
+    const int = (n: number) => f.literal(String(n), f.namedNode(NS.xsd + 'integer'))
+    const set = (changes: [string, string, number][]) => {
+      runtime.apply({
+        remove: changes.flatMap(([s, p]) => store.match(f.namedNode(UI + s), f.namedNode(p), null, f.defaultGraph())),
+        add: changes.map(([s, p, n]) => f.quad(f.namedNode(UI + s), f.namedNode(p), int(n))),
+      })
+      dom.flush()
+    }
+    const app = document.getElementById('app')!
+    const invalid = (id: string) => ([...document.querySelectorAll('*')].find((e) => dom.keyOf(e) === `${UI}${id}/~root`) as HTMLElement).getAttribute('data-sem-tooltip')
+    return { set, invalid, html: () => app.innerHTML }
+  }
+
+  for (const [kind, prefer] of runs) {
+    it(`compares a value with the maximum of the same change (${kind}, ${prefer})`, () => {
+      const h = mount(kind, prefer)
+      expect([h.invalid('progress'), h.invalid('slider')]).toEqual([null, null])
+      // The value and the maximum go up together, as an edit moves a slider that follows the latest.
+      for (let n = 6; n <= 8; n++) {
+        h.set([['slider', C + 'value', n], ['doc', UI + 'total', n], ['doc', UI + 'done', n]])
+        expect([h.invalid('progress'), h.invalid('slider')]).toEqual([null, null])
+      }
+      // Past the maximum, for what the same change says it is; then fine again.
+      h.set([['slider', C + 'value', 9], ['doc', UI + 'done', 9]])
+      expect(h.invalid('slider')).toBe('Shape violation: value: more than max (8)')
+      expect(h.invalid('progress')).toContain("can't exceed")
+      h.set([['doc', UI + 'total', 9]])
+      expect([h.invalid('progress'), h.invalid('slider')]).toEqual([null, null])
+    })
+  }
+
+  it('renders the same with SPARQL and with function rules at every step', () => {
+    const [a, b] = [mount('wat', 'sparql'), mount('wat', 'function')]
+    expect(a.html()).toBe(b.html())
+    for (const step of [
+      [['slider', C + 'value', 6], ['doc', UI + 'total', 6]],
+      [['slider', C + 'value', 7], ['doc', UI + 'done', 7]],
+      [['doc', UI + 'total', 7]],
+    ] as [string, string, number][][]) {
+      a.set(step)
+      b.set(step)
+      expect(a.html()).toBe(b.html())
+    }
+  })
+})
+
+// A page's later graphs bring shapes after the rule first ran (src/slices.ts): shown components are judged by them at once.
+describe('component shapes: shapes that arrive later', () => {
+  const LATE = `
+@prefix sh: <${SH}> .
+@prefix c: <${C}> .
+@prefix ui: <${UI}> .
+ui:NeedsLevelShape a sh:PropertyShape ; sh:path ui:level ; sh:minCount 1 .
+ui:LateShape a sh:NodeShape ; sh:targetClass c:Slider ; sh:or ( ui:NeedsLevelShape ) ; sh:message "A slider says its level." .
+`
+  for (const [kind, prefer] of runs) {
+    it(`judges what is shown, and what changes after (${kind}, ${prefer})`, () => {
+      const h = validate(kind, prefer)
+      const f = h.store.factory
+      expect(h.root('sl-own').hasAttribute('data-sem-shape-invalid')).toBe(false)
+      const { rules, rest } = sliceAddition(parseTurtle(LATE, f), 1)
+      expect(rest).toEqual([])
+      h.runtime.apply({ add: rules, remove: [] })
+      h.dom.flush()
+      expect(h.root('sl-own').getAttribute('data-sem-tooltip')).toContain('A slider says its level.')
+      h.runtime.apply({ remove: [], add: [f.quad(f.namedNode(UI + 'sl-own'), f.namedNode(UI + 'level'), f.literal('3'))] })
+      h.dom.flush()
+      expect(h.root('sl-own').hasAttribute('data-sem-shape-invalid')).toBe(false)
     })
   }
 })

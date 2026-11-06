@@ -12,7 +12,8 @@
 # (sh:targetClass) saying what a well-formed instance looks like (ontology/
 # shapes/components.ttl). The layer validates each component declared in the
 # graph against the shapes of its classes and their superclasses, before
-# anything renders, and records standard SHACL results in the derived graph:
+# anything renders, as the strata below the components leave it (a c:value against the c:max a
+# formula derives, both from the same change), and records standard SHACL results in the derived graph:
 #   <result> a sh:ValidationResult ; sh:focusNode <component> ; sh:resultPath <p> ;
 #            sh:resultMessage "…" ; sh:sourceShape <shape> ; sh:resultSeverity sh:Violation .
 # A component with violations is outlined, with the messages as its tooltip,
@@ -35,8 +36,9 @@ val:violation a owl:ObjectProperty ; rdfs:range sh:ValidationResult ;
 val:Shapes a sem:Rendering ;
     sem:targets sem:Component ;
     sem:layer val:ShapesLayer ;
-    sem:stratum -9 ;
-    sem:inputOnly true .
+    sem:stratum -1 ;
+    sem:inputOnly true ;
+    sem:watchesAnywhere sh:targetClass .
 val:Shapes-fn a sem:Rule ; sem:implements val:Shapes ; sem:function "shapes:validate" .
 # Each constraint of each property shape of the focus's classes (shapes.ts checkProperty):
 # counts, then one test per value, then pairs with another property; then each sh:or of
@@ -158,8 +160,9 @@ val:EntryShapes a sem:Rendering ;
     sem:targets sem:Component ;
     sem:forEach c:entry ;
     sem:requires c:validated ;
-    sem:stratum -9 ;
-    sem:inputOnly true .
+    sem:stratum -1 ;
+    sem:inputOnly true ;
+    sem:watchesAnywhere sh:targetClass .
 val:EntryShapes-fn a sem:Rule ; sem:implements val:EntryShapes ; sem:function "shapes:validate" .
 val:EntryShapes-sparql a sem:Rule ; sem:implements val:EntryShapes ; sem:constructFrom val:Shapes-sparql .
 c:validated a owl:DatatypeProperty ; rdfs:range xsd:boolean ;

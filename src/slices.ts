@@ -4,14 +4,15 @@
 // no change leaves a node half described. What defines rules (a sem:Rule, the slot it implements,
 // whatever it is - a sem:Rendering, a sem:BuildingBlock -, the rule it takes its query from, a
 // subclass link, a prefix declaration) comes first, in one change: the engine reads its rules again
-// once (Engine.process), and the slices after it are data its rules take in incrementally.
+// once (Engine.process), and the slices after it are data its rules take in incrementally. SHACL
+// shapes come with them: a shape names others (sh:or), so the shapes layer judges by all or none.
 import type { Quad } from '@rdfjs/types'
 import { NS, RDF_TYPE, RDFS_SUBCLASS, SEM } from './ns.ts'
 
-const RULE_CLASSES = new Set([SEM.Rule, NS.sem + 'Rendering', NS.sem + 'BuildingBlock'])
+const RULE_CLASSES = new Set([SEM.Rule, NS.sem + 'Rendering', NS.sem + 'BuildingBlock', NS.sh + 'NodeShape', NS.sh + 'PropertyShape'])
 // A rule reads its properties from the node these name too (loadRules): that node defines it as well.
 const RULE_LINKS = new Set([SEM.implements, SEM.constructFrom])
-const RULE_PREDICATES = new Set([RDFS_SUBCLASS, NS.sem + 'readsLocation', NS.sem + 'readsProvenance', NS.sh + 'prefix', NS.sh + 'namespace', NS.sh + 'declare'])
+const RULE_PREDICATES = new Set([RDFS_SUBCLASS, NS.sem + 'readsLocation', NS.sem + 'readsProvenance', NS.sh + 'prefix', NS.sh + 'namespace', NS.sh + 'declare', NS.sh + 'targetClass'])
 
 export interface Slices {
   /** The descriptions that define rules (or what rules read about themselves), as one change. */

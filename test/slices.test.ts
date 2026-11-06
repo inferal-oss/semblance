@@ -50,6 +50,16 @@ ex:data ex:p 1 .`
     expect(rest.flat().map((q) => q.subject.value)).toEqual(['https://example.org/data'])
   })
 
+  it('puts shapes with the rules, whole: a shape names the others it needs', () => {
+    const { rules, rest } = sliceAddition(parseTurtle(`@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ex: <https://example.org/> .
+ex:own a sh:PropertyShape ; sh:path ex:p ; sh:minCount 1 .
+ex:node a sh:NodeShape ; sh:targetClass ex:C ; sh:or ( ex:own ) ; sh:property [ sh:path ex:q ; sh:maxCount 1 ] .
+ex:data ex:p 1 .`, store.factory), 1)
+    expect(subjects(rules)).toEqual(new Set(['https://example.org/own', 'https://example.org/node']))
+    expect(rest.flat().map((q) => q.subject.value)).toEqual(['https://example.org/data'])
+  })
+
   it('slices the rest without splitting a description', () => {
     const { rest } = sliceAddition(quads, 2)
     expect(rest.length).toBeGreaterThan(1)
