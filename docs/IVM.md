@@ -1519,7 +1519,9 @@ What uses it:
   (no retention: it is a ledger), all incremental - `wh:Stock` (SUM per item, joined outside the member to
   the item's name, minimum and supplier), `wh:Reorder` (the same with HAVING and `?minimum - SUM(…)`),
   `wh:BestSellers` (a one-hour sliding window, GROUP BY, top five), and three figures. Its tables, chart,
-  stats and alert read their rows; each tile's cost line reads `iv:lastRows` and `iv:inputRows`.
+  stats and alert read their rows; each tile's cost line reads `iv:lastRows` and `iv:inputRows`. A sale
+  asks the stock view's row first (`wh:Enough`, which reactions read in the derived graph), so what is
+  not on the shelf is not sold; `wh:Stock` alone is not `iv:whileShown`, as a rush goes on from any page.
   `test/ex-warehouse.test.ts` drives it on WAT, strict, and measures a sale over 200 and 2,000 earlier
   movements: 22 view rows, 6 partitions, 31 rule runs, 16 SPARQL rows, 52 DOM operations, no rebuild,
   identical at both sizes (the stock tile: "4 rows of work; a recount would read 217" / "… 2017"). The

@@ -65,7 +65,21 @@ function warehouse(opts: { kind?: StoreKind; prefer?: 'sparql' | 'function'; str
   const stock = () => Object.fromEntries(rows(0).map((r) => r.split(' | ')).map(([item, , onHand]) => [item, Number(onHand!.replace(/\D/g, '')) * (onHand!.startsWith('-') || onHand!.startsWith('−') ? -1 : 1)]))
   const reorder = () => rows(1)
   const bars = () => [...root().querySelectorAll('[data-sem-c=bar-chart] .sem-bar')].map((b) => `${b.querySelector('.sem-category')!.textContent} ${b.querySelector('.sem-total')!.textContent}`)
-  const alert = () => root().querySelector('[data-sem-c=alert]')!
+  const alert = () => h.shell.nodeOf(UI + 'ex-warehouse-reorder-alert/~root') as Element
+  // The line saying why nothing is sold, or that a rush turned orders away: its text while shown.
+  const reason = (line: 'not-enough' | 'turned-away') => {
+    const el = h.shell.nodeOf(UI + `ex-warehouse-${line}/~root`) as Element | null
+    return el && !el.hasAttribute('hidden') ? el.textContent!.trim() : null
+  }
+  // What the movements themselves say is on the shelf, per item: the graph, not the view.
+  const ledger = () => {
+    const onHand: Record<string, number> = {}
+    for (const { object: m } of h.store.match(nn(WH + 'movements'), nn(TREE + 'member'), null)) {
+      const item = h.store.match(m as never, nn(WH + 'item'), null)[0]!.object.value
+      onHand[item] = (onHand[item] ?? 0) + Number(h.store.match(m as never, nn(WH + 'change'), null)[0]!.object.value)
+    }
+    return onHand
+  }
   const costs = () => [...root().querySelectorAll('[data-sem-c=text]')].map((t) => t.textContent!.trim()).filter((t) => t.startsWith('Last change') || t.startsWith('No change') || t.startsWith('Measuring'))
   const choose = (item: string) => {
     const select = root().querySelector('[data-sem-c=choice] select')!
@@ -78,7 +92,7 @@ function warehouse(opts: { kind?: StoreKind; prefer?: 'sparql' | 'function'; str
   const advance = (ms: number) => (clock.advance(ms), sync())
   const idle = () => (h.runtime.warm(8), h.shell.flush())
   const members = () => h.store.match(nn(WH + 'movements'), nn(TREE + 'member'), null).length
-  return { ...h, clock, click, button, root, card, stat, rows, stock, reorder, bars, alert, costs, choose, amount, advance, idle, members, open, sync }
+  return { ...h, clock, click, button, root, card, stat, rows, stock, reorder, bars, alert, costs, choose, amount, advance, idle, members, open, sync, reason, ledger }
 }
 
 const VIEWS = ['Stock', 'Reorder', 'BestSellers', 'OnHand', 'SoldLastHour', 'Recorded']
@@ -181,6 +195,94 @@ describe('the warehouse example', () => {
     expect(h.stock()).toEqual(opening)
     expect(h.members()).toBe(14)
   }, 120_000)
+
+  it('does not sell what is not on the shelf: Sell is disabled, says why, and a click changes nothing', () => {
+    const h = warehouse()
+    const sell = () => h.button('Sell')
+    expect(sell().hasAttribute('disabled')).toBe(false)
+    expect(h.reason('not-enough')).toBeNull()
+    h.choose('Helmet')
+    h.amount('5')
+    h.click(sell())
+    expect(h.stock().Helmet).toBe(2)
+    expect(h.ledger()[WH + 'helmet']).toBe(2)
+    // Five are chosen, two are left.
+    expect(sell().hasAttribute('disabled')).toBe(true)
+    expect(h.reason('not-enough')).toContain('Not enough on the shelf')
+    expect(h.store.match(h.store.factory.namedNode(WH + 'desk'), h.store.factory.namedNode(WH + 'enough'), null)[0]!.object.value).toBe('false')
+    // The reaction refuses whatever sends the click: no movement, no figure, no "Sold".
+    const before = { members: h.members(), stock: h.stock(), sold: h.stat('Sold in the last hour'), toasts: h.document.querySelectorAll('[data-sem-c=toast]').length }
+    h.click(sell())
+    expect(h.members()).toBe(before.members)
+    expect(h.stock()).toEqual(before.stock)
+    expect(h.stat('Sold in the last hour')).toBe(before.sold)
+    expect(h.document.querySelectorAll('[data-sem-c=toast]').length).toBe(before.toasts)
+    // Fewer can be sold, and exactly what is left: down to none, never past it.
+    h.amount('2')
+    expect(sell().hasAttribute('disabled')).toBe(false)
+    expect(h.reason('not-enough')).toBeNull()
+    h.click(sell())
+    expect(h.stock().Helmet).toBe(0)
+    expect(sell().hasAttribute('disabled')).toBe(true)
+    h.amount('1')
+    expect(sell().hasAttribute('disabled')).toBe(true)
+    expect(h.reason('not-enough')).toContain('Not enough on the shelf')
+    // Another item is another shelf.
+    h.choose('Chain lube')
+    expect(sell().hasAttribute('disabled')).toBe(false)
+    expect(h.reason('not-enough')).toBeNull()
+    // A delivery lifts it again.
+    h.choose('Helmet')
+    h.click(h.button('Restock'))
+    expect(h.stock().Helmet).toBe(4)
+    expect(sell().hasAttribute('disabled')).toBe(false)
+    h.click(sell())
+    expect(h.stock().Helmet).toBe(3)
+    // And Reset brings it back.
+    h.click(h.button('Reset'))
+    expect(h.stock()).toEqual(opening)
+  }, 120_000)
+
+  it.each([['uk', 'Ukrainian', 'На полиці'], ['de', 'German', 'nicht genug im Regal'], ['ar', 'Arabic', 'على الرف']])('says why in the viewer\'s language (%s)', (_code, language, text) => {
+    const h = warehouse({ strict: false })
+    h.choose('Helmet')
+    h.amount('5')
+    h.click(h.button('Sell'))
+    const f = h.store.factory
+    h.runtime.apply({ remove: h.store.match(f.namedNode(UI + 'app'), f.namedNode(L10N.language), null), add: [f.quad(f.namedNode(UI + 'app'), f.namedNode(L10N.language), f.namedNode(NS.l10n + language))] })
+    h.sync()
+    expect(h.reason('not-enough')).toContain(text)
+  }, 120_000)
+
+  it.each([['on the page', true], ['with another page open', false]])('turns away the rush orders the shelf cannot fill, %s', (_where, stay) => {
+    const h = warehouse()
+    // Most of the rush's items nearly gone first, so that orders come for what is not there.
+    h.amount('5')
+    for (const [item, sales] of [['Helmet', 1], ['Light set', 1], ['Brake pads', 2], ['Chain lube', 3], ['Tyre levers', 4], ['Water bottle', 5], ['Puncture kit', 7], ['Inner tube 700c', 11]] as const) {
+      h.choose(item)
+      for (let i = 0; i < sales; i++) h.click(h.button('Sell'))
+    }
+    if (!stay) h.click(h.button('Home'))
+    const orders = 3
+    for (let i = 0; i < orders; i++) {
+      const rush = h.shell.nodeOf(UI + 'ex-warehouse-rush/~root') as Element
+      h.fire(rush, 'click')
+      h.sync()
+      h.advance(3100)
+      for (const [item, onHand] of Object.entries(h.ledger())) expect(onHand, item).toBeGreaterThanOrEqual(0)
+    }
+    if (!stay) h.open()
+    for (const onHand of Object.values(h.stock())) expect(onHand).toBeGreaterThanOrEqual(0)
+    expect(Object.values(h.stock()).reduce((a, b) => a + b, 0)).toBe(Object.values(h.ledger()).reduce((a, b) => a + b, 0))
+    // Fewer movements than orders, and the page says why.
+    expect(h.members()).toBeLessThan(14 + 26 + 30 * orders)
+    expect(h.reason('turned-away')).toContain('turned orders away')
+    // The rush still ended (no order stalled it), and a reset clears what it said.
+    expect(h.store.match(h.store.factory.namedNode(WH + 'rush'), h.store.factory.namedNode(WH + 'left'), null)[0]!.object.value).toBe('0')
+    h.click(h.button('Reset'))
+    expect(h.reason('turned-away')).toBeNull()
+    expect(h.stock()).toEqual(opening)
+  }, 300_000)
 
   it('says on each tile what the last change cost, against what a recount would read', () => {
     const h = warehouse()

@@ -4,12 +4,14 @@
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix dep: <https://semblance.dev/ns/dependency#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix iv: <https://semblance.dev/ns/view#> .
 @prefix ldes: <https://w3id.org/ldes#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix wh: <https://semblance.dev/demo/warehouse#> .
@@ -28,7 +30,8 @@
 # They are maintained views (iv:View, docs/IVM.md): plain SPARQL, kept up to date from each
 # movement as it arrives instead of being counted again over the whole history, so a sale costs
 # the same with fifteen movements behind it or fifteen thousand. Each tile says, in one line,
-# what the last change took and what counting again would read.
+# what the last change took and what counting again would read. What is not on the shelf cannot
+# be sold: the stock view is also what the counter and the rush hour ask before they sell.
 # =================================================================================================
 
 ui:ex-warehouse-prefixes sh:declare [ sh:prefix "wh" ; sh:namespace "https://semblance.dev/demo/warehouse#"^^xsd:anyURI ] .
@@ -100,18 +103,21 @@ wh:h14 a wh:Sale ; wh:item wh:lube ; wh:change -5 ; wh:at "2025-12-04T17:45:00Z"
 # adding to its item's group once, when it arrives (and the window taking a sale away once, when
 # it is an hour old). Their rows live in the views graph (iv:materialize iv:Graph), where the
 # tables, the chart and the figures read them. iv:measured writes each one's work in idle time,
-# for the cost lines; iv:whileShown keeps them only while the warehouse is on screen.
+# for the cost lines; iv:whileShown keeps them only while the warehouse is on screen - all but
+# wh:Stock, which the rush hour's orders read wherever on the site you have gone meanwhile (it does
+# work only when a movement comes).
 
 # Stock per item: the sum of its movements, with its name, supplier and minimum (joins outside
 # the movement: a supplier's new name would re-evaluate just that supplier's items' movements).
+# ?i is the item itself, for the reactions; the table shows its name.
 wh:Stock a sem:View , iv:View ; rdfs:label "stock per item" ;
-    iv:materialize iv:Graph ; iv:measured true ; iv:whileShown ui:ex-warehouse ;
+    iv:materialize iv:Graph ; iv:measured true ;
     sem:select """
-SELECT ?item ?supplier (SUM(?change) AS ?onHand) ?minimum WHERE {
+SELECT ?i ?item ?supplier (SUM(?change) AS ?onHand) ?minimum WHERE {
   wh:movements tree:member ?m . ?m wh:item ?i ; wh:change ?change .
   ?i rdfs:label ?item ; wh:minimum ?minimum ; wh:supplier ?s . ?s rdfs:label ?supplier .
 }
-GROUP BY ?item ?supplier ?minimum
+GROUP BY ?i ?item ?supplier ?minimum
 ORDER BY ?item""" .
 
 # The reorder list: the same groups, kept only while they are below their minimum (HAVING), and
@@ -192,21 +198,73 @@ wh:units a owl:DatatypeProperty ; rdfs:domain wh:Amount ; rdfs:range xsd:integer
 wh:one a wh:Amount ; rdfs:label "1" ; sem:order 1 ; wh:units 1 .
 wh:two a wh:Amount ; rdfs:label "2" ; sem:order 2 ; wh:units 2 .
 wh:five a wh:Amount ; rdfs:label "5" ; sem:order 3 ; wh:units 5 .
-wh:desk wh:item wh:tube ; wh:amount wh:one .
+wh:Counter a owl:Class ; rdfs:comment "Where an item and an amount are chosen, to sell."@en .
+wh:desk a wh:Counter ; wh:item wh:tube ; wh:amount wh:one ; wh:shelf wh:Stock .
+wh:shelf a owl:ObjectProperty ; rdfs:domain wh:Counter ; rdfs:comment "The view that says what is on the shelf."@en .
+wh:enough a owl:DatatypeProperty ; rdfs:domain wh:Counter ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether the shelf holds the amount chosen of the item chosen (derived: wh:Enough)."@en .
+wh:onHand a owl:DatatypeProperty ; rdfs:domain wh:Item ; rdfs:range xsd:integer ;
+    rdfs:comment "How many of the item are on the shelf (derived from the stock view's row: wh:Enough)."@en .
+
+# What the reactions ask before they sell, from the stock view's rows (one per item, whatever the
+# history holds) into the derived graph, where reactions read: each item's figure, and whether what
+# is chosen can be sold. Sell follows wh:enough through the dependency layer, and so does the line
+# that says why. The counter is one node no projection shows, and a rush goes on from any page: it
+# is evaluated regardless (sem:always).
+wh:Enough a sem:Rendering ;
+    rdfs:comment "How many of each item the shelf holds, and whether it holds the amount chosen at the counter."@en ;
+    sem:targets wh:Counter ;
+    sem:stratum -15 ;
+    sem:inputOnly true ;
+    sem:always true ;
+    sem:follows wh:amount , wh:shelf ;
+    sem:watches wh:item , wh:amount , wh:shelf , wh:units , rs:solution .
+wh:Enough-sparql a sem:Rule ;
+    sem:implements wh:Enough ;
+    sem:construct """
+CONSTRUCT { ?item wh:onHand ?onHand . $this wh:enough ?enough }
+WHERE {
+  $this wh:shelf ?stock . ?stock rs:solution ?row . ?row rs:binding ?i , ?h .
+  ?i rs:variable "i" ; rs:value ?item . ?h rs:variable "onHand" ; rs:value ?onHand .
+  OPTIONAL { $this wh:item ?item ; wh:amount ?amount . ?amount wh:units ?n }
+  BIND(?onHand >= ?n AS ?enough)
+}""" .
 
 ui:ex-warehouse-counter a c:Card ; c:label "At the counter" ;
     c:note "Choose an item and how many. Sell takes them off the shelf; Restock receives one case from the item's supplier." ;
-    c:content ui:ex-warehouse-controls .
+    c:content ui:ex-warehouse-counter-body .
+ui:ex-warehouse-counter-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-warehouse-controls ui:ex-warehouse-not-enough ui:ex-warehouse-turned-away ) .
 ui:ex-warehouse-controls a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-4 ;
     c:children ( ui:ex-warehouse-item ui:ex-warehouse-amount ui:ex-warehouse-actions ) .
 ui:ex-warehouse-item a c:Choice ; c:label "Item" ; c:controls wh:desk ; c:property wh:item .
 ui:ex-warehouse-amount a c:Segmented ; c:label "How many" ; c:controls wh:desk ; c:property wh:amount .
 ui:ex-warehouse-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
     c:children ( ui:ex-warehouse-sell ui:ex-warehouse-restock ui:ex-warehouse-rush ui:ex-warehouse-reset ) .
-ui:ex-warehouse-sell a c:Button ; c:label "Sell" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:ex-warehouse-sell a c:Button ; c:label "Sell" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ;
+    dep:follows wh:desk ; dep:property wh:enough ;
+    dep:case [ dep:when false ; dep:gives [ c:disabled true ] ] .
 ui:ex-warehouse-restock a c:Button ; c:label "Restock" .
 ui:ex-warehouse-rush a c:Button ; c:label "Rush hour" ; sty:emphasis sty:Outline ; c:help "Thirty orders in three seconds." .
 ui:ex-warehouse-reset a c:Button ; c:label "Reset" ; sty:emphasis sty:Ghost ; c:help "Take away every movement added here." .
+
+# Why nothing is sold: shown only while it holds.
+ui:ex-warehouse-not-enough a c:Alert ; sty:tone sty:Warning ;
+    c:label "Not enough on the shelf for this sale. Sell fewer, or restock." ,
+            "На полиці недостатньо для цього продажу. Продайте менше або поповніть запас."@uk ,
+            "Für diesen Verkauf ist nicht genug im Regal. Verkaufen Sie weniger oder füllen Sie den Bestand auf."@de ,
+            "لا يكفي ما على الرف لهذا البيع. بِع كمية أقل أو أعد التخزين."@ar ;
+    dep:follows wh:desk ; dep:property wh:enough ;
+    dep:case [ dep:when false ; dep:gives [ c:hidden false ] ] ;
+    dep:otherwise [ c:hidden true ] .
+ui:ex-warehouse-turned-away a c:Alert ; sty:tone sty:Warning ;
+    c:label "The rush hour turned orders away: the shelf did not hold enough to fill them." ,
+            "Під час години пік частину замовлень відхилено: на полиці бракувало товару."@uk ,
+            "In der Stoßzeit wurden Bestellungen abgewiesen: Es war nicht genug im Regal."@de ,
+            "رُفضت بعض الطلبات في ساعة الذروة: لم يكن على الرف ما يكفي لتلبيتها."@ar ;
+    dep:follows wh:rush ; dep:property wh:turnedAway ;
+    dep:case [ dep:when true ; dep:gives [ c:hidden false ] ] ;
+    dep:otherwise [ c:hidden true ] .
 
 # At a glance: three figures, and what they cost.
 ui:ex-warehouse-glance a c:Card ; c:label "At a glance" ; c:content ui:ex-warehouse-glance-body .
@@ -263,13 +321,14 @@ ui:ex-warehouse-best-cost a c:Text ; sty:textStyle sty:Caption ; c:of wh:BestSel
 
 # --- what the buttons do -------------------------------------------------------------------------------
 # Each adds one movement to the stream, named from the event that made it. Nothing else changes:
-# the views see the new member and update the groups it falls in.
+# the views see the new member and update the groups it falls in. A sale asks wh:Enough first: what
+# is not on the shelf is not sold (Sell is disabled then, and this holds whatever sends the click).
 
 wh:Sell a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-warehouse-sell ;
     beh:inserts """
 CONSTRUCT { wh:movements tree:member ?m . ?m a wh:Sale ; wh:item ?item ; wh:change ?change ; wh:at ?at }
 WHERE {
-  wh:desk wh:item ?item ; wh:amount ?amount . ?amount wh:units ?n .
+  wh:desk wh:enough true ; wh:item ?item ; wh:amount ?amount . ?amount wh:units ?n .
   $event beh:at ?at .
   BIND(-?n AS ?change)
   BIND(IRI(CONCAT(STR(wh:), "m-", SUBSTR(MD5(STR($event)), 1, 16))) AS ?m)
@@ -290,12 +349,14 @@ WHERE {
 # and makes wh:rush due now (beh:dueAt); the host turns a due time into a beh:Due event, and
 # wh:RushOrder sells one order - its item picked by a hex digit of the event's hash, as often as
 # the item's wh:rushDigits say; 1 to 3 of it; now and then a return of one instead - and makes the
-# next one due.
+# next one due. An order the shelf cannot fill is turned away: no movement, and the rush says so
+# (wh:turnedAway) until the next one or a reset; the orders after it go on.
 wh:rush wh:left 0 .
 wh:left a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Orders left in the rush."@en .
+wh:turnedAway a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "The rush has turned an order away."@en .
 
 wh:StartRush a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-warehouse-rush ;
-    beh:deletes """CONSTRUCT { wh:rush wh:left ?n ; beh:dueAt ?due } WHERE { { wh:rush wh:left ?n } UNION { wh:rush beh:dueAt ?due } }""" ;
+    beh:deletes """CONSTRUCT { wh:rush wh:left ?n ; beh:dueAt ?due ; wh:turnedAway ?away } WHERE { { wh:rush wh:left ?n } UNION { wh:rush beh:dueAt ?due } UNION { wh:rush wh:turnedAway ?away } }""" ;
     beh:inserts """CONSTRUCT { wh:rush wh:left 30 ; beh:dueAt ?at } WHERE { $event beh:at ?at }""" ;
     ann:announces "Rush hour" .
 
@@ -305,7 +366,7 @@ CONSTRUCT { wh:rush wh:left ?n ; beh:dueAt ?due }
 WHERE { wh:rush wh:left ?n FILTER(?n > 0) OPTIONAL { wh:rush beh:dueAt ?due } }""" ;
     beh:inserts """
 CONSTRUCT {
-  wh:rush wh:left ?next ; beh:dueAt ?then .
+  wh:rush wh:left ?next ; beh:dueAt ?then ; wh:turnedAway ?away .
   wh:movements tree:member ?m . ?m a ?kind ; wh:item ?item ; wh:change ?change ; wh:at ?at .
 }
 WHERE {
@@ -318,17 +379,21 @@ WHERE {
   BIND(SUBSTR(?h, 3, 1) = "f" AS ?returned)
   BIND(IF(?returned, wh:Return, wh:Sale) AS ?kind)
   BIND(IF(?returned, 1, -1 - xsd:integer(FLOOR(STRLEN(STRBEFORE("0123456789abcdef", SUBSTR(?h, 2, 1))) / 6))) AS ?change)
-  BIND(IRI(CONCAT(STR(wh:), "m-", SUBSTR(?h, 1, 16))) AS ?m)
+  ?item wh:onHand ?onHand .
+  BIND(?returned || ?onHand + ?change >= 0 AS ?filled)
+  BIND(IF(?filled, IRI(CONCAT(STR(wh:), "m-", SUBSTR(?h, 1, 16))), ?none) AS ?m)
+  BIND(IF(?filled, ?none, true) AS ?away)
 }""" .
 
 # Reset: the movements added here go (the history stays), and a rush stops.
 wh:Reset a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-warehouse-reset ;
     beh:deletes """
-CONSTRUCT { wh:movements tree:member ?m . ?m ?p ?o . wh:rush wh:left ?n ; beh:dueAt ?due }
+CONSTRUCT { wh:movements tree:member ?m . ?m ?p ?o . wh:rush wh:left ?n ; beh:dueAt ?due ; wh:turnedAway ?away }
 WHERE {
   { wh:movements tree:member ?m FILTER(STRSTARTS(STR(?m), CONCAT(STR(wh:), "m-"))) ?m ?p ?o }
   UNION { wh:rush wh:left ?n FILTER(?n > 0) }
   UNION { wh:rush beh:dueAt ?due }
+  UNION { wh:rush wh:turnedAway ?away }
 }""" ;
     beh:inserts """CONSTRUCT { wh:rush wh:left 0 } WHERE { wh:rush wh:left ?n FILTER(?n > 0) }""" ;
     ann:announces "Back to the opening stock" .
@@ -342,7 +407,7 @@ ui:ex-warehouse-how a c:Walkthrough ; c:label "How it works" ;
 ui:ex-warehouse-w1 a c:WalkthroughStep ; rdfs:label "Items, and what happens to them" ;
     c:children ( "The shop keeps eight items. Each, like " ui:ex-warehouse-m-tube ", has a " ui:ex-warehouse-m-supplier ", a " ui:ex-warehouse-m-minimum " to keep on the shelf, and a case size. Everything that happens to them is a movement in " ui:ex-warehouse-m-movements ", an " ui:ex-warehouse-m-EventStream ": " ui:ex-warehouse-m-h1 " delivered sixty inner tubes, " ui:ex-warehouse-m-h9 " sold three. A movement says only how the stock changed (" ui:ex-warehouse-m-change "); no stock figure is stored anywhere." ) .
 ui:ex-warehouse-w2 a c:WalkthroughStep ; rdfs:label "Selling is one more movement" ;
-    c:children ( ui:ex-warehouse-m-sellButton " runs " ui:ex-warehouse-m-sell ": it adds one member to the stream - a sale of the item and the amount chosen on " ui:ex-warehouse-m-desk ", named from the click's own event - and does nothing else. " ui:ex-warehouse-m-receive " does the same for a delivery of one case. There is no stock to update: the rest of the page follows from the movements." ) .
+    c:children ( ui:ex-warehouse-m-sellButton " runs " ui:ex-warehouse-m-sell ": it adds one member to the stream - a sale of the item and the amount chosen on " ui:ex-warehouse-m-desk ", named from the click's own event - and does nothing else. " ui:ex-warehouse-m-receive " does the same for a delivery of one case. There is no stock to update: the rest of the page follows from the movements. A sale asks " ui:ex-warehouse-m-enough " first, which reads " ui:ex-warehouse-m-stock2 ", so what is not on the shelf is not sold; the button is disabled then, and a line says why." ) .
 ui:ex-warehouse-w3 a c:WalkthroughStep ; rdfs:label "Stock is a sum that is kept, not recounted" ;
     c:children ( ui:ex-warehouse-m-stock " asks how many of each item there are: the SUM of its movements, joined to its name and its supplier's. It is an " ui:ex-warehouse-m-View ", so the runtime keeps the answer and adds each new movement to its item's row as it arrives: one group changes, by the movement's amount. " ui:ex-warehouse-m-stockTable " reads the rows from the views graph." ) .
 ui:ex-warehouse-w4 a c:WalkthroughStep ; rdfs:label "The reorder list: the same sum, filtered" ;
@@ -350,9 +415,9 @@ ui:ex-warehouse-w4 a c:WalkthroughStep ; rdfs:label "The reorder list: the same 
 ui:ex-warehouse-w5 a c:WalkthroughStep ; rdfs:label "Best sellers in the last hour" ;
     c:children ( ui:ex-warehouse-m-best " sums the sales of " ui:ex-warehouse-m-lastHour ", an " ui:ex-warehouse-m-SlidingWindow " of an hour on each movement's time, and keeps the five items with most (ORDER BY with LIMIT: a top five). A sale enters the window once; an hour later it leaves it once, on a timer, with nothing else happening - and " ui:ex-warehouse-m-chart " shrinks." ) .
 ui:ex-warehouse-w6 a c:WalkthroughStep ; rdfs:label "Rush hour, on the scheduler" ;
-    c:children ( ui:ex-warehouse-m-rushButton " runs " ui:ex-warehouse-m-startRush ", which makes " ui:ex-warehouse-m-rush " due now (" ui:ex-warehouse-m-dueAt "). The host turns a due time into a " ui:ex-warehouse-m-Due " event, and " ui:ex-warehouse-m-rushOrder " sells one order - the item picked from a hash of the event's number, as often as its " ui:ex-warehouse-m-rushDigits " say - and makes the next one due a tenth of a second later. Thirty orders, thirty movements; every figure follows each one." ) .
+    c:children ( ui:ex-warehouse-m-rushButton " runs " ui:ex-warehouse-m-startRush ", which makes " ui:ex-warehouse-m-rush " due now (" ui:ex-warehouse-m-dueAt "). The host turns a due time into a " ui:ex-warehouse-m-Due " event, and " ui:ex-warehouse-m-rushOrder " sells one order - the item picked from a hash of the event's number, as often as its " ui:ex-warehouse-m-rushDigits " say - and makes the next one due a tenth of a second later. Thirty orders, a movement for each the shelf can fill; every figure follows each one. An order it cannot fill is turned away, and " ui:ex-warehouse-m-turnedAway " says so." ) .
 ui:ex-warehouse-w7 a c:WalkthroughStep ; rdfs:label "What a change costs" ;
-    c:children ( "Each view is " ui:ex-warehouse-m-measured ": in idle time the runtime writes the work of its last change and the rows a recount would read, and each tile's quiet line shows them (" ui:ex-warehouse-m-qCost ", " ui:ex-warehouse-m-stockCost " for the stock). A sale is a handful of rows of work whatever the history holds, while a recount reads every movement. Elsewhere on the site these views do nothing at all (" ui:ex-warehouse-m-whileShown ")." ) .
+    c:children ( "Each view is " ui:ex-warehouse-m-measured ": in idle time the runtime writes the work of its last change and the rows a recount would read, and each tile's quiet line shows them (" ui:ex-warehouse-m-qCost ", " ui:ex-warehouse-m-stockCost " for the stock). A sale is a handful of rows of work whatever the history holds, while a recount reads every movement. Elsewhere on the site these views do nothing at all (" ui:ex-warehouse-m-whileShown "), but for the stock, which works only when a movement comes." ) .
 
 ui:ex-warehouse-m-tube a c:Mention ; c:label "the inner tube" ; c:mentions wh:tube .
 ui:ex-warehouse-m-supplier a c:Mention ; c:label "supplier" ; c:mentions wh:supplier .
@@ -366,6 +431,9 @@ ui:ex-warehouse-m-sellButton a c:Mention ; c:label "Sell" ; c:mentions ui:ex-war
 ui:ex-warehouse-m-sell a c:Mention ; c:label "wh:Sell" ; c:mentions wh:Sell .
 ui:ex-warehouse-m-desk a c:Mention ; c:label "the counter" ; c:mentions wh:desk .
 ui:ex-warehouse-m-receive a c:Mention ; c:label "Restock" ; c:mentions wh:Receive .
+ui:ex-warehouse-m-stock2 a c:Mention ; c:label "the stock view" ; c:mentions wh:Stock .
+ui:ex-warehouse-m-enough a c:Mention ; c:label "wh:Enough" ; c:mentions wh:Enough .
+ui:ex-warehouse-m-turnedAway a c:Mention ; c:label "wh:turnedAway" ; c:mentions wh:turnedAway .
 ui:ex-warehouse-m-stock a c:Mention ; c:label "wh:Stock" ; c:mentions wh:Stock .
 ui:ex-warehouse-m-View a c:Mention ; c:label "iv:View" ; c:mentions iv:View ; c:to iv:View .
 ui:ex-warehouse-m-stockTable a c:Mention ; c:label "The stock table" ; c:mentions ui:ex-warehouse-stock .
