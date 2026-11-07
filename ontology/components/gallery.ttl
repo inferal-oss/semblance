@@ -474,7 +474,8 @@ WHERE {
 # layer mirrors horizontal arrows in a right-to-left page. Zoomed, only the current frame is drawn.
 # Each image names the element it is in the gallery (data-sem-origin): the lightbox effect
 # (src/web/lightbox.ts) grows the viewer from it, returns it there when it closes, slides between
-# images and zooms where it was double-clicked, all timed by the motion tokens.
+# images and zooms where it was double-clicked, all timed by the motion tokens. The bus's modal focus
+# reads it too: opened from the gallery, closing gives the focus to the item of the image it shows.
 
 c:LightboxRendering a sem:Rendering ; sem:targets c:Lightbox ; sem:stratum 1 ;
     sem:follows c:of ;
