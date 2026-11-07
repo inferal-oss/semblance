@@ -23,19 +23,19 @@ sty:textStyle a owl:ObjectProperty ;
     rdfs:comment "Where a run of text sits in the type scale: display, title, subtitle, body, caption, overline or mono."@en ;
     sty:hookAttribute "data-sem-text-style" .
 sty:TextStyle a owl:Class ; rdfs:comment "A step of the type scale: font size, weight, line height and letter spacing from the type tokens."@en .
-sty:Display a sty:TextStyle ; rdfs:label "Display"@en ; sem:slug "display" ; sem:order 1 ;
+sty:Display a sty:TextStyle ; rdfs:label "Display"@en , "Дисплейний"@uk , "Display"@de , "عرضي"@ar ; sem:slug "display" ; sem:order 1 ;
     rdfs:comment "The largest step: a page's one big statement."@en .
-sty:Title a sty:TextStyle ; rdfs:label "Title"@en ; sem:slug "title" ; sem:order 2 ;
+sty:Title a sty:TextStyle ; rdfs:label "Title"@en , "Заголовок"@uk , "Titel"@de , "عنوان"@ar ; sem:slug "title" ; sem:order 2 ;
     rdfs:comment "Titles of pages and sections."@en .
-sty:Subtitle a sty:TextStyle ; rdfs:label "Subtitle"@en ; sem:slug "subtitle" ; sem:order 3 ;
+sty:Subtitle a sty:TextStyle ; rdfs:label "Subtitle"@en , "Підзаголовок"@uk , "Untertitel"@de , "عنوان فرعي"@ar ; sem:slug "subtitle" ; sem:order 3 ;
     rdfs:comment "A quieter line under a title."@en .
-sty:Body a sty:TextStyle ; rdfs:label "Body"@en ; sem:slug "body" ; sem:order 4 ;
+sty:Body a sty:TextStyle ; rdfs:label "Body"@en , "Основний"@uk , "Fließtext"@de , "متن"@ar ; sem:slug "body" ; sem:order 4 ;
     rdfs:comment "Running text (the default)."@en .
-sty:Caption a sty:TextStyle ; rdfs:label "Caption"@en ; sem:slug "caption" ; sem:order 5 ;
+sty:Caption a sty:TextStyle ; rdfs:label "Caption"@en , "Підпис"@uk , "Bildunterschrift"@de , "تسمية توضيحية"@ar ; sem:slug "caption" ; sem:order 5 ;
     rdfs:comment "Small supporting text: hints, footnotes, metadata."@en .
-sty:Overline a sty:TextStyle ; rdfs:label "Overline"@en ; sem:slug "overline" ; sem:order 6 ;
+sty:Overline a sty:TextStyle ; rdfs:label "Overline"@en , "Надзаголовок"@uk , "Dachzeile"@de , "عنوان علوي"@ar ; sem:slug "overline" ; sem:order 6 ;
     rdfs:comment "A small upper-case label above a title."@en .
-sty:Mono a sty:TextStyle ; rdfs:label "Mono"@en ; sem:slug "mono" ; sem:order 7 ;
+sty:Mono a sty:TextStyle ; rdfs:label "Mono"@en , "Моноширинний"@uk , "Monospace"@de , "أحادي العرض"@ar ; sem:slug "mono" ; sem:order 7 ;
     rdfs:comment "Monospaced text: identifiers, IRIs, numbers that line up."@en .
 
 # --- Text --------------------------------------------------------------------------------------

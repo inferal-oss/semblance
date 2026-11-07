@@ -16,7 +16,7 @@
 
 ui:gallery-themes a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-themes-intro ui:th-switch ui:th-side ui:th-structure ui:th-frames ui:th-how ui:th-schemes ui:th-contrast ui:th-ramps ) .
-ui:gallery-themes-intro a c:Heading ; c:label "Themes" .
+ui:gallery-themes-intro a c:Heading ; c:label "Themes" , "Теми"@uk , "Designs"@de , "السمات"@ar .
 
 # --- switching the whole interface ---------------------------------------------------------
 

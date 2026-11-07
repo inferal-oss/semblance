@@ -14,20 +14,20 @@
 # text and code built from the same components as everything else; the Performance
 # section is live (the benchmark matrix runs here and its charts are SPARQL views).
 
-ui:docSection rdfs:label "Docs" ; rdfs:range ui:DocSection .
-ui:DocOverview a ui:DocSection ; rdfs:label "Overview" ; sem:order 1 ; ui:key "overview" .
-ui:DocStart a ui:DocSection ; rdfs:label "Getting started" ; sem:order 2 ; ui:key "start" .
-ui:DocRecipes a ui:DocSection ; rdfs:label "Recipes" ; sem:order 3 ; ui:key "recipes" .
-ui:DocComponents a ui:DocSection ; rdfs:label "Building components" ; sem:order 4 ; ui:key "components" .
-ui:DocIntegrate a ui:DocSection ; rdfs:label "Integrating" ; sem:order 5 ; ui:key "integrate" .
-ui:DocRules a ui:DocSection ; rdfs:label "Rules and the engine" ; sem:order 6 ; ui:key "rules" .
-ui:DocLayers a ui:DocSection ; rdfs:label "Layers" ; sem:order 7 ; ui:key "layers" .
-ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" ; sem:order 8 ; ui:key "behaviour" .
-ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" ; sem:order 9 ; ui:key "styling" .
-ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" ; sem:order 10 ; ui:key "persistence" .
-ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" ; sem:order 11 ; ui:key "navigation" .
-ui:DocViews a ui:DocSection ; rdfs:label "Maintained views" ; sem:order 12 ; ui:key "views" .
-ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 13 ; ui:key "tools" .
+ui:docSection rdfs:label "Docs" , "Документація"@uk , "Doku"@de , "التوثيق"@ar ; rdfs:range ui:DocSection .
+ui:DocOverview a ui:DocSection ; rdfs:label "Overview" , "Огляд"@uk , "Überblick"@de , "نظرة عامة"@ar ; sem:order 1 ; ui:key "overview" .
+ui:DocStart a ui:DocSection ; rdfs:label "Getting started" , "Початок роботи"@uk , "Erste Schritte"@de , "البدء"@ar ; sem:order 2 ; ui:key "start" .
+ui:DocRecipes a ui:DocSection ; rdfs:label "Recipes" , "Рецепти"@uk , "Rezepte"@de , "وصفات"@ar ; sem:order 3 ; ui:key "recipes" .
+ui:DocComponents a ui:DocSection ; rdfs:label "Building components" , "Створення компонентів"@uk , "Komponenten bauen"@de , "بناء المكونات"@ar ; sem:order 4 ; ui:key "components" .
+ui:DocIntegrate a ui:DocSection ; rdfs:label "Integrating" , "Інтеграція"@uk , "Einbinden"@de , "الدمج"@ar ; sem:order 5 ; ui:key "integrate" .
+ui:DocRules a ui:DocSection ; rdfs:label "Rules and the engine" , "Правила і рушій"@uk , "Regeln und Engine"@de , "القواعد والمحرك"@ar ; sem:order 6 ; ui:key "rules" .
+ui:DocLayers a ui:DocSection ; rdfs:label "Layers" , "Шари"@uk , "Schichten"@de , "الطبقات"@ar ; sem:order 7 ; ui:key "layers" .
+ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" , "Поведінка і події"@uk , "Verhalten und Ereignisse"@de , "السلوك والأحداث"@ar ; sem:order 8 ; ui:key "behaviour" .
+ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" , "Стилі й теми"@uk , "Stile und Designs"@de , "الأنماط والسمات"@ar ; sem:order 9 ; ui:key "styling" .
+ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" , "Збереження"@uk , "Persistenz"@de , "الحفظ"@ar ; sem:order 10 ; ui:key "persistence" .
+ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقل"@ar ; sem:order 11 ; ui:key "navigation" .
+ui:DocViews a ui:DocSection ; rdfs:label "Maintained views" , "Підтримувані подання"@uk , "Gepflegte Ansichten"@de , "العروض المُصانة"@ar ; sem:order 12 ; ui:key "views" .
+ui:DocTools a ui:DocSection ; rdfs:label "Tools" , "Інструменти"@uk , "Werkzeuge"@de , "الأدوات"@ar ; sem:order 13 ; ui:key "tools" .
 ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 14 ; ui:key "performance" .
 
 ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;

@@ -275,7 +275,7 @@ ui:ex-sheet-card a c:Card ; c:label "Café sales" ; c:badge "81 formulas" ; c:co
 
 # --- how it works -----------------------------------------------------------------------------------
 
-ui:ex-sheet-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-sheet-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-sheet-w1 ui:ex-sheet-w2 ui:ex-sheet-w3 ui:ex-sheet-w4 ui:ex-sheet-w5 ui:ex-sheet-w6 ui:ex-sheet-w8 ui:ex-sheet-w7 ) .
 

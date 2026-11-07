@@ -153,7 +153,7 @@ ui:ex-activity-recent a c:Timeline ; c:label "Newest events" ; c:of beh:ChangeLo
 
 # --- how it works ---------------------------------------------------------------------------------
 
-ui:ex-activity-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-activity-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-activity-w1 ui:ex-activity-w2 ui:ex-activity-w3 ui:ex-activity-w4 ui:ex-activity-w5 ) .
 

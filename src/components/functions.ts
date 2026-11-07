@@ -517,9 +517,9 @@ const flippableSource: FnRule = (ctx, focus) => {
   const revealed = flipped || isTrue(ctx.object(focus, C.revealed))
   const source = revealed ? [o.node('source')] : []
   // Both faces float their flip control in the same corner.
-  const backBar = o.el('back-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-back', '↺ View', 'Show the view')])
+  const backBar = o.el('back-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-back', `↺ ${phrase(ctx, C.FlipViewPhrase, 'View')}`, phrase(ctx, C.FlipToViewHint, 'Show the view'))])
   const back = o.el('back', 'Div', { class: 'sem-face sem-back', inert: flipped ? undefined : '' }, [backBar, ...source])
-  const bar = o.el('front-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-front', '</> Source', 'Show how this view is made')])
+  const bar = o.el('front-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-front', `</> ${phrase(ctx, C.FlipSourcePhrase, 'Source')}`, phrase(ctx, C.FlipToSourceHint, 'Show how this view is made'))])
   o.t(frontFace, H.hasChild, bar).t(bar, ORD.precedes, front)
   o.t(faces, H.hasChild, back).t(frontFace, ORD.precedes, back)
   if (flipped) o.t(frontFace, H.ns + 'inert', '')

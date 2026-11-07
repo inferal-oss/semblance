@@ -43,7 +43,7 @@ ui:net-page a c:Text ; sty:textStyle sty:Caption ;
 
 # --- how it works (shown under the example) ---------------------------------------------------------
 
-ui:networkExample-how a c:Walkthrough ; c:label "How it works" ;
+ui:networkExample-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:nh-w1 ui:nh-w2 ui:nh-w3 ui:nh-w4 ui:nh-w5 ui:nh-w6 ui:nh-w7 ) .
 
@@ -91,14 +91,14 @@ ui:nh-m-Policy a c:Mention ; c:label "per:Policy" ; c:mentions per:Policy ; c:to
 
 # --- the panel ---------------------------------------------------------------------------------------
 
-ui:net-inspector a c:DockPanel ; c:label "Network activity" ; c:height 560 ; c:minSize 220 ;
+ui:net-inspector a c:DockPanel ; c:label "Network activity" , "Мережева активність"@uk , "Netzwerkaktivität"@de , "نشاط الشبكة"@ar ; c:height 560 ; c:minSize 220 ;
     c:actions ( ui:net-count ui:net-preferences ) ;
     c:toolbar ui:net-filters ; c:content ui:net-split ; c:footer ui:net-footer .
 
-ui:net-count a c:CountBadge ; c:label "entries" ; c:collection net:Capture ; sty:tone sty:Accent .
-ui:net-preferences a c:Popover ; c:label "Display preferences" ;
-    c:help "Which columns the list shows." ; c:content ui:net-columns .
-ui:net-columns a c:Chips ; c:label "Columns" ; c:controls ui:net-grid ; c:property c:shows ;
+ui:net-count a c:CountBadge ; c:label "entries" , "записи"@uk , "Einträge"@de , "إدخالات"@ar ; c:collection net:Capture ; sty:tone sty:Accent .
+ui:net-preferences a c:Popover ; c:label "Display preferences" , "Параметри показу"@uk , "Anzeigeoptionen"@de , "تفضيلات العرض"@ar ;
+    c:help "Which columns the list shows." , "Які стовпці показує список."@uk , "Welche Spalten die Liste zeigt."@de , "الأعمدة التي تعرضها القائمة."@ar ; c:content ui:net-columns .
+ui:net-columns a c:Chips ; c:label "Columns" , "Стовпці"@uk , "Spalten"@de , "الأعمدة"@ar ; c:controls ui:net-grid ; c:property c:shows ;
     c:options ( ui:net-col-entry ui:net-col-kind ui:net-col-status ui:net-col-code ui:net-col-size ui:net-col-took ui:net-col-bars ) .
 
 ui:net-footer a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:Center ;
@@ -109,18 +109,19 @@ ui:net-footer a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:alig
 # a second for spans reported after they end - and moves only when an entry arrives.
 ui:net-last5s a iv:SlidingWindow ; iv:range "PT5S"^^xsd:dayTimeDuration ;
     iv:clock iv:EventTime ; iv:lateness "PT1S"^^xsd:dayTimeDuration .
-ui:net-recentView a sem:View , iv:View ; rdfs:label "entries in the last 5 s of the capture" ;
+ui:net-recentView a sem:View , iv:View ; rdfs:label "entries in the last 5 s of the capture" , "записи за останні 5 с запису"@uk , "Einträge in den letzten 5 s der Aufzeichnung"@de , "إدخالات آخر 5 ثوانٍ من الالتقاط"@ar ;
     iv:window ui:net-last5s ; iv:materialize iv:Graph ; iv:whileShown ui:net-inspector ;
     sem:select """SELECT (COUNT(?e) AS ?value) WHERE { net:Capture tree:member ?e }""" .
-ui:net-qRecent a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ui:net-recentView ; iv:whileShown ui:net-recent ; sem:select """
+ui:net-qRecent a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ui:net-recentView ; iv:whileShown ui:net-recentCount ; sem:select """
 SELECT ?label WHERE {
   OPTIONAL { ui:net-recentView <http://www.w3.org/2001/sw/DataAccess/tests/result-set#solution>/<http://www.w3.org/2001/sw/DataAccess/tests/result-set#binding> [ <http://www.w3.org/2001/sw/DataAccess/tests/result-set#variable> "value" ; <http://www.w3.org/2001/sw/DataAccess/tests/result-set#value> ?n ] }
-  BIND(COALESCE(?n, 0) AS ?count)
-  BIND(IF(?count = 1, "1 entry in the last 5 s of the capture", CONCAT(STR(?count), " entries in the last 5 s of the capture")) AS ?label)
+  BIND(STR(COALESCE(?n, 0)) AS ?label)
 }""" .
-ui:net-recent a c:Text ; sty:textStyle sty:Caption ; c:valueQuery ui:net-qRecent ; c:dataset ui:net-recentView .
+ui:net-recent a c:Text ; sty:textStyle sty:Caption ; c:children ( ui:net-recentWhat ui:net-recentCount ) .
+ui:net-recentWhat a c:Text ; c:inline true ; c:label "In the last 5 s of the capture: " , "За останні 5 с запису: "@uk , "In den letzten 5 s der Aufzeichnung: "@de , "في آخر 5 ثوانٍ من الالتقاط: "@ar .
+ui:net-recentCount a c:Text ; c:inline true ; c:valueQuery ui:net-qRecent ; c:dataset ui:net-recentView .
 ui:net-live a c:LiveIndicator ; c:controls net:Capture ; c:property net:recording .
-ui:net-kinds a c:Legend ; c:label "Kinds" ; c:of net:Kind .
+ui:net-kinds a c:Legend ; c:label "Kinds" , "Види"@uk , "Arten"@de , "الأنواع"@ar ; c:of net:Kind .
 
 # --- filters: nodes the grid honours, edited by ordinary controls -------------------------------------
 
@@ -129,68 +130,68 @@ ui:net-kind a c:ValueFilter ; c:filterProperty net:kind ; c:filterValue c:AnyVal
 ui:net-status a c:ValueFilter ; c:filterProperty net:status ; c:filterValue c:AnyValue .
 ui:net-samples a c:FlagFilter ; c:filterProperty ui:sample ; c:filterValue true ; c:included true .
 
-ui:net-filters a c:Toolbar ; c:label "Filters" ;
+ui:net-filters a c:Toolbar ; c:label "Filters" , "Фільтри"@uk , "Filter"@de , "عوامل التصفية"@ar ;
     c:children ( ui:net-filter-text ui:net-filter-kind ui:net-filter-status ui:net-filter-samples ) .
-ui:net-filter-text a c:SearchField ; c:label "Filter entries" ; c:placeholder "Filter URL, event or correlation…" ;
+ui:net-filter-text a c:SearchField ; c:label "Filter entries" , "Фільтрувати записи"@uk , "Einträge filtern"@de , "تصفية الإدخالات"@ar ; c:placeholder "Filter URL, event or correlation…" , "Фільтр за URL, подією чи кореляцією…"@uk , "URL, Ereignis oder Korrelation filtern…"@de , "تصفية حسب URL أو الحدث أو الارتباط…"@ar ;
     c:controls ui:net-search ; c:property c:filterText .
-ui:net-filter-kind a c:Choice ; c:label "Activity" ; c:controls ui:net-kind ; c:property c:filterValue ;
+ui:net-filter-kind a c:Choice ; c:label "Activity" , "Активність"@uk , "Aktivität"@de , "النشاط"@ar ; c:controls ui:net-kind ; c:property c:filterValue ;
     c:options ( c:AnyValue net:HttpKind net:SocketKind net:FrameKind net:EventKind ) .
-ui:net-filter-status a c:Choice ; c:label "Status" ; c:controls ui:net-status ; c:property c:filterValue ;
+ui:net-filter-status a c:Choice ; c:label "Status" , "Статус"@uk , "Status"@de , "الحالة"@ar ; c:controls ui:net-status ; c:property c:filterValue ;
     c:options ( c:AnyValue net:Pending net:Complete net:Failed net:Open net:Closed net:Sent net:Received net:Recorded ) .
-ui:net-filter-samples a c:ToggleSwitch ; c:label "Earlier visit" ; sty:size sty:Small ;
+ui:net-filter-samples a c:ToggleSwitch ; c:label "Earlier visit" , "Попередній візит"@uk , "Früherer Besuch"@de , "زيارة سابقة"@ar ; sty:size sty:Small ;
     c:controls ui:net-samples ; c:property c:included .
 
 # --- the list and the details, side by side -------------------------------------------------------------
 
-ui:net-split a c:SplitView ; c:label "the list and the details" ; c:ratio 0.64 ; c:minSize 240 ;
+ui:net-split a c:SplitView ; c:label "the list and the details" , "список і подробиці"@uk , "die Liste und die Details"@de , "القائمة والتفاصيل"@ar ; c:ratio 0.64 ; c:minSize 240 ;
     c:primary ui:net-grid ; c:secondary ui:net-details .
 
-ui:net-col-entry a c:GridColumn ; c:label "Request / event" ; c:cellProperty net:label ; c:detailProperty net:correlation ; c:width 220 .
-ui:net-col-kind a c:GridColumn ; c:label "Kind" ; c:cellProperty net:kind ; c:width 110 .
-ui:net-col-status a c:GridColumn ; c:label "Status" ; c:cellProperty net:status ; c:cellAs c:BadgeCell ; c:width 100 .
-ui:net-col-code a c:GridColumn ; c:label "HTTP code" ; c:via http:resp ; c:cellProperty http:statusCodeValue ; c:cellAs c:CodeCell ; c:width 92 .
-ui:net-col-size a c:GridColumn ; c:label "Size" ; c:cellProperty net:size ; c:cellAs c:BytesCell ; c:align "end" ; c:width 76 .
-ui:net-col-took a c:GridColumn ; c:label "Took" ; c:cellAs c:DurationCell ; c:startProperty net:startedAt ; c:endProperty net:endedAt ; c:align "end" ; c:width 80 .
-ui:net-col-bars a c:GridColumn ; c:label "Waterfall" ; c:cellAs c:TimeBarCell ; c:width 220 ;
+ui:net-col-entry a c:GridColumn ; c:label "Request / event" , "Запит / подія"@uk , "Anfrage / Ereignis"@de , "طلب / حدث"@ar ; c:cellProperty net:label ; c:detailProperty net:correlation ; c:width 220 .
+ui:net-col-kind a c:GridColumn ; c:label "Kind" , "Вид"@uk , "Art"@de , "النوع"@ar ; c:cellProperty net:kind ; c:width 110 .
+ui:net-col-status a c:GridColumn ; c:label "Status" , "Статус"@uk , "Status"@de , "الحالة"@ar ; c:cellProperty net:status ; c:cellAs c:BadgeCell ; c:width 100 .
+ui:net-col-code a c:GridColumn ; c:label "HTTP code" , "Код HTTP"@uk , "HTTP-Code"@de , "رمز HTTP"@ar ; c:via http:resp ; c:cellProperty http:statusCodeValue ; c:cellAs c:CodeCell ; c:width 92 .
+ui:net-col-size a c:GridColumn ; c:label "Size" , "Розмір"@uk , "Größe"@de , "الحجم"@ar ; c:cellProperty net:size ; c:cellAs c:BytesCell ; c:align "end" ; c:width 76 .
+ui:net-col-took a c:GridColumn ; c:label "Took" , "Тривало"@uk , "Dauer"@de , "استغرق"@ar ; c:cellAs c:DurationCell ; c:startProperty net:startedAt ; c:endProperty net:endedAt ; c:align "end" ; c:width 80 .
+ui:net-col-bars a c:GridColumn ; c:label "Waterfall" , "Водоспад"@uk , "Wasserfall"@de , "الشلال"@ar ; c:cellAs c:TimeBarCell ; c:width 220 ;
     c:startProperty net:startedAt ; c:endProperty net:endedAt ; c:colorProperty net:kind .
 
-ui:net-grid a c:DataGrid ; c:label "Network activity" ; c:collection net:Capture ; c:pageSize 50 ;
+ui:net-grid a c:DataGrid ; c:label "Network activity" , "Мережева активність"@uk , "Netzwerkaktivität"@de , "نشاط الشبكة"@ar ; c:collection net:Capture ; c:pageSize 50 ;
     c:gridColumns ( ui:net-col-entry ui:net-col-kind ui:net-col-status ui:net-col-code ui:net-col-size ui:net-col-took ui:net-col-bars ) ;
     c:shows ui:net-col-entry , ui:net-col-status , ui:net-col-size , ui:net-col-bars ;
     c:filteredBy ui:net-search , ui:net-kind , ui:net-status , ui:net-samples ;
-    c:emptyText "Nothing matches. Clear the filters, or use the page: its fetches, sockets and events appear here." .
+    c:emptyText "Nothing matches. Clear the filters, or use the page: its fetches, sockets and events appear here." , "Нічого не знайдено. Очистьте фільтри або скористайтеся сторінкою: її запити, сокети й події зʼявляться тут."@uk , "Nichts passt. Leeren Sie die Filter oder benutzen Sie die Seite: Ihre Abrufe, Sockets und Ereignisse erscheinen hier."@de , "لا نتائج. امسح عوامل التصفية أو استخدم الصفحة: ستظهر هنا طلباتها ومقابسها وأحداثها."@ar .
 
 # The details follow the selection: each part describes what c:selectedRow of the grid holds.
 ui:net-details a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:net-detail-bar ui:net-summary ui:net-sections ) .
 ui:net-detail-bar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; pos:align pos:Center ;
     c:children ( ui:net-detail-title ui:net-detail-space ui:net-deselect ) .
-ui:net-detail-title a c:Text ; sty:textStyle sty:Overline ; c:label "Details" .
+ui:net-detail-title a c:Text ; sty:textStyle sty:Overline ; c:label "Details" , "Подробиці"@uk , "Details"@de , "التفاصيل"@ar .
 ui:net-detail-space a c:Spacer .
-ui:net-deselect a c:Button , c:Unsetter ; c:label "Deselect" ; sty:size sty:Small ; sty:emphasis sty:Ghost ;
+ui:net-deselect a c:Button , c:Unsetter ; c:label "Deselect" , "Зняти вибір"@uk , "Auswahl aufheben"@de , "إلغاء التحديد"@ar ; sty:size sty:Small ; sty:emphasis sty:Ghost ;
     c:controls ui:net-grid ; c:property c:selectedRow .
 ui:net-summary a c:DescriptionList ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ;
     c:fields ( net:label net:kind net:status http:methodName http:absoluteURI net:url net:level net:size net:startedAt net:endedAt net:correlation net:initiator ) ;
-    c:emptyText "Select a request, message or event to inspect it." .
+    c:emptyText "Select a request, message or event to inspect it." , "Виберіть запит, повідомлення чи подію, щоб їх переглянути."@uk , "Wählen Sie eine Anfrage, Nachricht oder ein Ereignis zum Prüfen aus."@de , "حدّد طلبًا أو رسالة أو حدثًا لفحصه."@ar .
 ui:net-sections a c:Accordion ; c:items ( ui:net-sec-response ui:net-sec-headers ui:net-sec-request-body ui:net-sec-response-body ui:net-sec-payload ) .
-ui:net-sec-response a c:AccordionItem ; c:label "Response" ; c:content ui:net-response ; c:expanded true .
+ui:net-sec-response a c:AccordionItem ; c:label "Response" , "Відповідь"@uk , "Antwort"@de , "الاستجابة"@ar ; c:content ui:net-response ; c:expanded true .
 ui:net-response a c:DescriptionList ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ; c:via http:resp ;
-    c:fields ( http:statusCodeValue net:contentType ) ; c:emptyText "No response." .
-ui:net-sec-headers a c:AccordionItem ; c:label "Headers" ; c:content ui:net-headers .
+    c:fields ( http:statusCodeValue net:contentType ) ; c:emptyText "No response." , "Відповіді немає."@uk , "Keine Antwort."@de , "لا استجابة."@ar .
+ui:net-sec-headers a c:AccordionItem ; c:label "Headers" , "Заголовки"@uk , "Header"@de , "الترويسات"@ar ; c:content ui:net-headers .
 ui:net-headers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:net-req-headers ui:net-resp-headers ) .
 ui:net-req-headers a c:DescriptionList ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ;
-    c:entryProperty http:headers ; c:keyProperty http:fieldName ; c:valueProperty http:fieldValue ; c:emptyText "No request headers." .
+    c:entryProperty http:headers ; c:keyProperty http:fieldName ; c:valueProperty http:fieldValue ; c:emptyText "No request headers." , "Заголовків запиту немає."@uk , "Keine Anfrage-Header."@de , "لا ترويسات طلب."@ar .
 ui:net-resp-headers a c:DescriptionList ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ; c:via http:resp ;
-    c:entryProperty http:headers ; c:keyProperty http:fieldName ; c:valueProperty http:fieldValue ; c:emptyText "No response headers." .
-ui:net-sec-request-body a c:AccordionItem ; c:label "Request body" ; c:content ui:net-request-body .
+    c:entryProperty http:headers ; c:keyProperty http:fieldName ; c:valueProperty http:fieldValue ; c:emptyText "No response headers." , "Заголовків відповіді немає."@uk , "Keine Antwort-Header."@de , "لا ترويسات استجابة."@ar .
+ui:net-sec-request-body a c:AccordionItem ; c:label "Request body" , "Тіло запиту"@uk , "Anfrage-Inhalt"@de , "محتوى الطلب"@ar ; c:content ui:net-request-body .
 ui:net-request-body a c:BodyViewer ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ;
-    c:payloadProperty net:body ; c:emptyText "No request body." .
-ui:net-sec-response-body a c:AccordionItem ; c:label "Response body" ; c:content ui:net-response-body ; c:expanded true .
+    c:payloadProperty net:body ; c:emptyText "No request body." , "Тіла запиту немає."@uk , "Kein Anfrage-Inhalt."@de , "لا محتوى للطلب."@ar .
+ui:net-sec-response-body a c:AccordionItem ; c:label "Response body" , "Тіло відповіді"@uk , "Antwort-Inhalt"@de , "محتوى الاستجابة"@ar ; c:content ui:net-response-body ; c:expanded true .
 ui:net-response-body a c:BodyViewer ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ; c:via http:resp ;
-    c:payloadProperty net:body ; c:typeProperty net:contentType ; c:emptyText "No response body." .
-ui:net-sec-payload a c:AccordionItem ; c:label "Message or event data" ; c:content ui:net-payload ; c:expanded true .
+    c:payloadProperty net:body ; c:typeProperty net:contentType ; c:emptyText "No response body." , "Тіла відповіді немає."@uk , "Kein Antwort-Inhalt."@de , "لا محتوى للاستجابة."@ar .
+ui:net-sec-payload a c:AccordionItem ; c:label "Message or event data" , "Дані повідомлення чи події"@uk , "Nachrichten- oder Ereignisdaten"@de , "بيانات الرسالة أو الحدث"@ar ; c:content ui:net-payload ; c:expanded true .
 ui:net-payload a c:BodyViewer ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ;
-    c:payloadProperty net:data ; c:emptyText "No message or event data." .
+    c:payloadProperty net:data ; c:emptyText "No message or event data." , "Даних повідомлення чи події немає."@uk , "Keine Nachrichten- oder Ereignisdaten."@de , "لا بيانات رسالة أو حدث."@ar .
 
 # --- what it remembers (for this tab): see PERSISTENCE.md -------------------------------------------
 # The selection and the window are not remembered: they point at entries of this visit.
@@ -211,7 +212,7 @@ WHERE {
 # Members of the same stream as the captured ones, before them in capture order (negative
 # sequences) and flagged ui:sample, so the "Earlier visit" switch can hide them.
 
-ui:sample a owl:DatatypeProperty ; rdfs:label "Earlier visit"@en .
+ui:sample a owl:DatatypeProperty ; rdfs:label "Earlier visit"@en , "Попередній візит"@uk , "Früherer Besuch"@de , "زيارة سابقة"@ar .
 
 net:Capture tree:member ui:s1 , ui:s2 , ui:s3 , ui:s4 , ui:s5 , ui:s6 , ui:s7 , ui:s8 , ui:s9 , ui:s10 , ui:s11 , ui:s12 ,
     ui:s13 , ui:s14 , ui:s15 , ui:s16 , ui:s17 , ui:s18 .

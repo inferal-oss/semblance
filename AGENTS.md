@@ -39,7 +39,13 @@ performs the effects of graph state (the address, storage, timers, network captu
    structural ones: Classic, Tracker, Doodle, Cupertino, Fluent), light and dark, at phone width,
    and in an RTL language. Theme rules sit in a later cascade layer than component rules: a
    theme that redeclares a component's general property (a window's inset) overrides it everywhere.
-   Labels come in English, Ukrainian, German and Arabic (`@en`, `@uk`, `@de`, `@ar`).
+   Labels come in English, Ukrainian, German and Arabic (`@en`, `@uk`, `@de`, `@ar`). The rule covers
+   the chrome: the framework's `c:Phrase`s and the options it shows, and the site's pages, groups,
+   example names, specimen titles, shell and inspector (`test/translations.test.ts` lists what is
+   missing). A framework string goes in a `c:Phrase` used by both the SPARQL rule and its twin,
+   never a literal in the rule. Prose stays in English: specimen help, example intros, walkthroughs,
+   the docs and the home page, and the sample content of specimens and examples, since it is written
+   around terms of the ontology and changes with them.
 8. **Accessible by construction.** Use the WAI-ARIA pattern for the widget; ARIA relationships by
    minted IRI; keyboard patterns via `key:navigation`; announcements via `ann:announces`.
 9. **Slugs are global.** `sem:slug` becomes `data-sem-c`; two classes with one slug share styles.

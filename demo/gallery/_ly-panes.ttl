@@ -35,7 +35,7 @@ ui:ly-tiled-notes a c:Tabs , dnd:Sortable ; c:tabs ( ui:ly-tiled-tab-notes ) ; c
 ui:ly-tiled-tab-notes a c:Tab ; c:label "Notes" ; c:content ui:ly-tiled-note-content .
 ui:ly-tiled-note-content a c:Text ; c:label "Keep notes beside the editor." .
 ui:ly-tiled a c:Flippable ; c:front ui:ly-tiled-spec .
-ui:ly-tiled-spec a c:Specimen ; c:demonstrates c:TiledWorkspace ; c:label "Tiled workspace" ;
+ui:ly-tiled-spec a c:Specimen ; c:demonstrates c:TiledWorkspace ; c:label "Tiled workspace" , "Плитковий робочий простір"@uk , "Gekachelter Arbeitsbereich"@de , "مساحة عمل مقسّمة"@ar ;
     c:help "A tree of split views whose panes are sortable tabs. Drag a tab onto other tabs to move it there, or onto an edge of a pane to split that pane; tabs left with none close. With the keyboard: Space picks a tab up, the arrow keys go between the panes and their edges, Space puts it down. Each tab keeps its IRI and content, and the arrangement is graph state, kept for this tab of the browser." ;
     c:children ( ui:ly-tiled-workspace ) .
 
@@ -75,7 +75,7 @@ ui:ly-split-collapse a c:ToggleSwitch ; sty:size sty:Small ; c:label "Hide the d
 ui:ly-split-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:ly-split-collapse ui:ly-split-view ) .
 ui:ly-split a c:Flippable ; c:front ui:ly-split-spec .
-ui:ly-split-spec a c:Specimen ; c:demonstrates c:SplitView ; c:label "Split view" ;
+ui:ly-split-spec a c:Specimen ; c:demonstrates c:SplitView ; c:label "Split view" , "Розділений вигляд"@uk , "Geteilte Ansicht"@de , "عرض مقسّم"@ar ;
     c:help "Two panes and a divider (role=separator). Drag the divider, or focus it and use the arrow keys, Home and End: one beh:Size event sets the first pane's share, c:ratio, as graph state (within c:minSize of either end). c:collapsed hides the second pane; here a switch sets it." ;
     c:children ( ui:ly-split-col ) .
 
@@ -86,7 +86,7 @@ ui:ly-split-stacked-view a c:SplitView ; pos:direction pos:Column ; c:label "the
 ui:ly-split-request a c:Text ; sty:textStyle sty:Mono ; c:label "POST /api/todos  {\"title\": \"Write the report\"}" .
 ui:ly-split-response a c:Text ; sty:textStyle sty:Mono ; c:label "201 Created  {\"id\": 42, \"title\": \"Write the report\", \"done\": false}" .
 ui:ly-split-stacked a c:Flippable ; c:front ui:ly-split-stacked-spec .
-ui:ly-split-stacked-spec a c:Specimen ; c:demonstrates c:SplitView ; c:label "Split view, stacked" ;
+ui:ly-split-stacked-spec a c:Specimen ; c:demonstrates c:SplitView ; c:label "Split view, stacked" , "Розділений вигляд, стосом"@uk , "Geteilte Ansicht, gestapelt"@de , "عرض مقسّم، مكدّس"@ar ;
     c:help "pos:direction pos:Column stacks the panes; the divider then sizes the first pane's height (the up and down arrow keys move it)." ;
     c:children ( ui:ly-split-stacked-view ) .
 
@@ -110,7 +110,7 @@ ui:ly-dock-foot a c:Text ; sty:textStyle sty:Caption ; c:label "3 entries · new
 ui:ly-dock-page a c:Text ; c:label "The panel is docked to the bottom of this surface: it stays at that edge while the page scrolls past it. Its title folds it to its header; its top edge resizes it." .
 ui:ly-dock-stage a c:Surface ; sty:elevation sty:Flat ; c:children ( ui:ly-dock-page ui:ly-dock-panel ) .
 ui:ly-dock a c:Flippable ; c:front ui:ly-dock-spec .
-ui:ly-dock-spec a c:Specimen ; c:demonstrates c:DockPanel ; c:label "Dock panel" ;
+ui:ly-dock-spec a c:Specimen ; c:demonstrates c:DockPanel ; c:label "Dock panel" , "Прикріплена панель"@uk , "Dock-Leiste"@de , "لوحة مثبتة"@ar ;
     c:help "A c:Dockable panel: c:attachedTo an edge of its container (the bottom by default), with a header (title, badge, actions), a toolbar, a body and a footer. Its free edge is a size handle (drag it, or focus it and use the arrow keys) that sets c:height; its title folds it (c:expanded). Both are graph state." ;
     c:children ( ui:ly-dock-stage ) .
 
@@ -126,6 +126,6 @@ ui:ly-dock-end-page a c:Text ; c:label "Attached to the end edge, the panel's si
 ui:ly-dock-end-stage a c:Surface ; sty:elevation sty:Flat ; pos:direction pos:Row ;
     c:children ( ui:ly-dock-end-page ui:ly-dock-end-panel ) .
 ui:ly-dock-end a c:Flippable ; c:front ui:ly-dock-end-spec .
-ui:ly-dock-end-spec a c:Specimen ; c:demonstrates c:DockPanel ; c:label "Dock panel, at the end" ;
+ui:ly-dock-end-spec a c:Specimen ; c:demonstrates c:DockPanel ; c:label "Dock panel, at the end" , "Прикріплена панель, у кінці"@uk , "Dock-Leiste, am Ende"@de , "لوحة مثبتة، في النهاية"@ar ;
     c:help "c:attachedTo c:EndEdge: the same panel, sized by c:width." ;
     c:children ( ui:ly-dock-end-stage ) .

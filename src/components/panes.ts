@@ -6,9 +6,9 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
 import { MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, XSD_INTEGER } from '../ns.ts'
 import { mint } from '../rdf.ts'
-import { classesIn, dockHandle, DOCK_MAX, holdsOther, tabsOf } from './containers.ts'
+import { classesIn, dockHandle, DOCK_MAX, holdsOther, tabsOf, WIN } from './containers.ts'
 import { el, md5 } from './data.ts'
-import { hitMarks } from './feedback.ts'
+import { hitMarks, phrase } from './feedback.ts'
 import { isTrue, named, nodes, str, text } from './util.ts'
 
 const C = NS.c
@@ -160,7 +160,7 @@ const splitView: FnRule = (ctx, focus) => {
         'aria-valuemin': '0',
         'aria-valuemax': '100',
         'aria-controls': first.value,
-        'aria-label': caption ? `Resize ${caption}` : 'Resize panes',
+        'aria-label': caption ? `${phrase(ctx, WIN.Resize, 'Resize')}: ${caption}` : phrase(ctx, WIN.Resize, 'Resize'),
         'data-sem-gesture': 'size',
         'data-sem-axis': stacked ? 'y' : 'x',
         'data-sem-sizes': 'previous',

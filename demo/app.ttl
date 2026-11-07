@@ -134,7 +134,8 @@ ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:perfPanel ui:desktop ) ;
 
 # Who sponsors the project, in the app bar beside the name, with their chevron (a c:Emblem, drawn from data).
 ui:sponsorLine a c:Text ; c:inline true ;
-    c:children ( "Sponsored by " ui:inferalLink ) .
+    c:children ( ui:sponsoredBy ui:inferalLink ) .
+ui:sponsoredBy a c:Text ; c:inline true ; c:label "Sponsored by " .
 ui:inferalLink a c:Link ; c:href "https://inferal.com/" ; c:external false ; c:label "Inferal" ; c:logo ui:inferalChevron ; sty:tone sty:Neutral .
 ui:inferalChevron a c:Emblem ; rdfs:label "Inferal" ; c:decorative true ;
     c:viewBox "0 0 348.45 415.12" ; c:fillRule "evenodd" ; c:color "#0070f3" ;

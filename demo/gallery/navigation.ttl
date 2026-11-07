@@ -15,7 +15,7 @@
 
 ui:gallery-navigation a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-navigation-intro ui:nv-links ui:nv-breadcrumbs ui:nv-pagination ui:nv-stepper ui:nv-navlist ) .
-ui:gallery-navigation-intro a c:Heading ; c:label "Navigation" .
+ui:gallery-navigation-intro a c:Heading ; c:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقل"@ar .
 
 # --- NavLink --------------------------------------------------------------------------------------
 
@@ -32,7 +32,7 @@ ui:nv-link-components a c:NavLink ; c:href "/components/" ; c:count 3 ;
 ui:nv-links-list a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ;
     c:children ( ui:nv-link-home ui:nv-link-navigation ui:nv-link-components ) .
 ui:nv-links a c:Flippable ; c:front ui:nv-links-spec .
-ui:nv-links-spec a c:Specimen ; c:demonstrates c:NavLink ; c:label "Navigation links" ;
+ui:nv-links-spec a c:Specimen ; c:demonstrates c:NavLink ; c:label "Navigation links" , "Навігаційні посилання"@uk , "Navigationslinks"@de , "روابط التنقل"@ar ;
     c:help "A c:Link drawn as a nav list's row: c:href or c:to, an optional c:logo, and c:count, spelled out with c:countLabel for screen readers. The link to the address being shown is aria-current=page by itself (nav:current); c:currentPage says so outright, or false says it is not. Any c:Link does all of this." ;
     c:children ( ui:nv-links-list ) .
 
@@ -51,7 +51,7 @@ ui:nv-crumbs-derived a c:Breadcrumbs ; c:label "Class path" ; c:of c:ThemeSwitch
 ui:nv-crumbs-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:nv-crumbs-explicit ui:nv-crumbs-derived ) .
 ui:nv-breadcrumbs a c:Flippable ; c:front ui:nv-breadcrumbs-spec .
-ui:nv-breadcrumbs-spec a c:Specimen ; c:demonstrates c:Breadcrumbs ; c:label "Breadcrumbs" ;
+ui:nv-breadcrumbs-spec a c:Specimen ; c:demonstrates c:Breadcrumbs ; c:label "Breadcrumbs" , "Хлібні крихти"@uk , "Brotkrumen"@de , "مسار التنقل"@ar ;
     c:help "A trail in a <nav>, the last crumb aria-current=page: explicit c:items, or derived by walking c:parentProperty up from a node (here rdfs:subClassOf from c:ThemeSwitcher). With c:controls and c:property, crumbs navigate (see the Tree on the Data page)." ;
     c:children ( ui:nv-crumbs-col ) .
 
@@ -62,7 +62,7 @@ ui:nv-pages-short a c:Pagination ; c:label "Short pagination" ; c:page 2 ; c:pag
 ui:nv-pages-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:nv-pages-long ui:nv-pages-short ) .
 ui:nv-pagination a c:Flippable ; c:front ui:nv-pagination-spec .
-ui:nv-pagination-spec a c:Specimen ; c:demonstrates c:Pagination ; c:label "Pagination" ;
+ui:nv-pagination-spec a c:Specimen ; c:demonstrates c:Pagination ; c:label "Pagination" , "Пагінація"@uk , "Seitennummerierung"@de , "ترقيم الصفحات"@ar ;
     c:help "Previous, next and numbered pages; long runs fold into an ellipsis around the current page. Clicking writes c:page on the component. Sized by sty:size." ;
     c:children ( ui:nv-pages-col ) .
 
@@ -77,7 +77,7 @@ ui:nv-stepper-make a c:Stepper ; c:label "Making a component" ;
     c:steps ( ui:nv-step-describe ui:nv-step-render ui:nv-step-style ui:nv-step-react ui:nv-step-ship ) ;
     c:current ui:nv-step-style ; c:navigable true .
 ui:nv-stepper a c:Flippable ; c:front ui:nv-stepper-spec .
-ui:nv-stepper-spec a c:Specimen ; c:demonstrates c:Stepper ; c:label "Stepper" ;
+ui:nv-stepper-spec a c:Specimen ; c:demonstrates c:Stepper ; c:label "Stepper" , "Кроки"@uk , "Schrittanzeige"@de , "مؤشر الخطوات"@ar ;
     c:help "Ordered steps: those before c:current are complete, c:current is aria-current=step, the rest are upcoming. With c:navigable, clicking a step makes it current." ;
     c:children ( ui:nv-stepper-make ) .
 
@@ -96,6 +96,6 @@ ui:nvOpen a owl:DatatypeProperty ; rdfs:label "Open questions"@en ; rdfs:range x
 ui:NvTheme ui:nvOpen 2 .
 ui:NvBehaviour ui:nvOpen 12 .
 ui:nv-navlist a c:Flippable ; c:front ui:nv-navlist-spec .
-ui:nv-navlist-spec a c:Specimen ; c:demonstrates c:NavList ; c:label "Nav list" ;
+ui:nv-navlist-spec a c:Specimen ; c:demonstrates c:NavList ; c:label "Nav list" , "Навігаційний список"@uk , "Navigationsliste"@de , "قائمة التنقل"@ar ;
     c:help "Vertical navigation over one property's values: the options are the individuals in its rdfs:range, ordered by sem:order. The same contract and reaction as c:Segmented. c:countProperty shows a number of each option beside it (here open questions; in the Chat example, unread messages), spelled out for screen readers by c:countLabel." ;
     c:children ( ui:nv-navlist-sections ) .

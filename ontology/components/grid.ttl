@@ -167,6 +167,17 @@ c:end a owl:DatatypeProperty ; rdfs:range xsd:double .
 # Arrow keys move among the rows; focusing one selects it (through the row's click reaction).
 key:GridNavigation a key:Navigation ; key:items "tbody > tr[role=row]" ; key:orientation key:Vertical ; key:activatesOnFocus true .
 
+# --- what a grid says of its own ----------------------------------------------------------------------
+c:GridShowingPhrase a c:Phrase ; rdfs:label "{total} matching · showing {first}–{end}"@en , "Збігів: {total} · показано {first}–{end}"@uk , "{total} Treffer · {first}–{end} angezeigt"@de , "المطابقة: {total} · المعروض {first}–{end}"@ar .
+c:GridNoneShownPhrase a c:Phrase ; rdfs:label "{total} matching · none shown"@en , "Збігів: {total} · нічого не показано"@uk , "{total} Treffer · keine angezeigt"@de , "المطابقة: {total} · لا شيء معروض"@ar .
+c:GridNewPhrase a c:Phrase ; rdfs:label "{n} new"@en , "Нових: {n}"@uk , "{n} neu"@de , "الجديدة: {n}"@ar .
+c:GridJumpPhrase a c:Phrase ; rdfs:label "{n} new · Jump to latest"@en , "Нових: {n} · До найновіших"@uk , "{n} neu · Zu den neuesten"@de , "الجديدة: {n} · الانتقال إلى الأحدث"@ar .
+c:GridFollowPhrase a c:Phrase ; rdfs:label "Follow latest"@en , "Стежити за новими"@uk , "Neuesten folgen"@de , "متابعة الأحدث"@ar .
+c:GridOlderPhrase a c:Phrase ; rdfs:label "Older"@en , "Старіші"@uk , "Älter"@de , "الأقدم"@ar .
+c:GridNewerPhrase a c:Phrase ; rdfs:label "Newer"@en , "Новіші"@uk , "Neuer"@de , "الأحدث"@ar .
+c:GridBarPhrase a c:Phrase ; rdfs:label "from {start} for {span}"@en , "від {start}, тривалість {span}"@uk , "ab {start} für {span}"@de , "من {start} لمدة {span}"@ar .
+c:GridBarRunningPhrase a c:Phrase ; rdfs:label "from {start}, still running"@en , "від {start}, ще триває"@uk , "ab {start}, läuft noch"@de , "من {start}، ما زال جاريًا"@ar .
+
 # --- the frame ----------------------------------------------------------------------------------------
 # Header cells are placed by sem:orderKey (their column's position in c:gridColumns), so hiding a
 # column removes its cell without re-chaining the others. The SPARQL rule follows the shown
@@ -225,6 +236,9 @@ WHERE {
       OPTIONAL { ?colLabel1At l10n:of ?col ; l10n:name ?colLabel1 }
   OPTIONAL { ?col rdfs:label ?colLabel1 FILTER(lang(?colLabel1) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?col ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?colLabel0, ?colLabel1, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?label)
+      OPTIONAL { ?resizeAt l10n:of c:ResizeCommand ; l10n:name ?resizePick }
+      OPTIONAL { FILTER(!BOUND(?resizePick)) c:ResizeCommand rdfs:label ?resizeOnly }
+      BIND(STR(COALESCE(?resizePick, ?resizeOnly, "Resize")) AS ?resizeCommand)
       BIND(SUBSTR(MD5(STR(?col)), 1, 8) AS ?key)
       BIND(CONCAT(?g, "/~h-", ?key) AS ?id)
       OPTIONAL { ?col c:cellAs ?kind }
@@ -289,7 +303,7 @@ WHERE {
           FILTER(?part = "a-handle")
           VALUES (?name ?fixed) { ("role" "separator") ("aria-orientation" "vertical") ("aria-label" UNDEF) ("aria-valuenow" UNDEF)
                                   ("aria-valuemin" "48") ("data-sem-gesture" "size") ("data-sem-axis" "x") ("data-sem-sizes" "th") ("data-sem-min" "48") }
-          BIND(COALESCE(?fixed, IF(?name = "aria-label", CONCAT("Resize ", ?label), ?width)) AS ?value)
+          BIND(COALESCE(?fixed, IF(?name = "aria-label", CONCAT(?resizeCommand, ": ", ?label), ?width)) AS ?value)
           BIND(IRI(CONCAT(?id, "-resize")) AS ?owner)
           BIND(IF(BOUND(?value), IRI(CONCAT(?id, "-resize-", ?name)), ?none) AS ?attr)
         }
@@ -641,9 +655,23 @@ WHERE {
            IF(?local = "newer" && ?hasNewer && ?E + ?P < ?total, ?newerEnd, ?unset))) AS ?windowTo)
       BIND(?el AS ?txtParent)
       BIND(IRI(CONCAT(?g, "/~", ?local, "-text")) AS ?txt)
-      BIND(IF(?local = "status", CONCAT(STR(?total), " matching · ", IF(?any, CONCAT("showing ", STR(?first), "–", STR(?E)), "none shown")),
-           IF(?local = "follow", "Follow latest", IF(?local = "jump", CONCAT(STR(?total - ?E), " new · Jump to latest"),
-           IF(?local = "older", "Older", "Newer")))) AS ?data)
+      OPTIONAL { ?showingAt l10n:of c:GridShowingPhrase ; l10n:name ?showing0 }
+      OPTIONAL { FILTER(!BOUND(?showing0)) c:GridShowingPhrase rdfs:label ?showing1 }
+      OPTIONAL { ?noneShownAt l10n:of c:GridNoneShownPhrase ; l10n:name ?noneShown0 }
+      OPTIONAL { FILTER(!BOUND(?noneShown0)) c:GridNoneShownPhrase rdfs:label ?noneShown1 }
+      OPTIONAL { ?followAt l10n:of c:GridFollowPhrase ; l10n:name ?follow0 }
+      OPTIONAL { FILTER(!BOUND(?follow0)) c:GridFollowPhrase rdfs:label ?follow1 }
+      OPTIONAL { ?jumpToAt l10n:of c:GridJumpPhrase ; l10n:name ?jumpTo0 }
+      OPTIONAL { FILTER(!BOUND(?jumpTo0)) c:GridJumpPhrase rdfs:label ?jumpTo1 }
+      OPTIONAL { ?olderWordAt l10n:of c:GridOlderPhrase ; l10n:name ?olderWord0 }
+      OPTIONAL { FILTER(!BOUND(?olderWord0)) c:GridOlderPhrase rdfs:label ?olderWord1 }
+      OPTIONAL { ?newerWordAt l10n:of c:GridNewerPhrase ; l10n:name ?newerWord0 }
+      OPTIONAL { FILTER(!BOUND(?newerWord0)) c:GridNewerPhrase rdfs:label ?newerWord1 }
+      BIND(STR(COALESCE(?showing0, ?showing1, "{total} matching · showing {first}–{end}")) AS ?showingPattern)
+      BIND(STR(COALESCE(?noneShown0, ?noneShown1, "{total} matching · none shown")) AS ?nonePattern)
+      BIND(IF(?local = "status", IF(?any, REPLACE(REPLACE(REPLACE(?showingPattern, "[{]total[}]", STR(?total)), "[{]first[}]", STR(?first)), "[{]end[}]", STR(?E)), REPLACE(?nonePattern, "[{]total[}]", STR(?total))),
+           IF(?local = "follow", STR(COALESCE(?follow0, ?follow1, "Follow latest")), IF(?local = "jump", REPLACE(STR(COALESCE(?jumpTo0, ?jumpTo1, "{n} new · Jump to latest")), "[{]n[}]", STR(?total - ?E)),
+           IF(?local = "older", STR(COALESCE(?olderWord0, ?olderWord1, "Older")), STR(COALESCE(?newerWord0, ?newerWord1, "Newer")))))) AS ?data)
     } UNION {
       BIND(IRI(CONCAT(?g, "/~follow")) AS ?owner)
       BIND(IRI(CONCAT(?g, "/~follow-aria-pressed")) AS ?attr)
@@ -885,8 +913,16 @@ WHERE {
       # The footer: what matches and what is shown, and (pinned) how many are new.
       BIND(IRI(CONCAT(?g, "/~footer")) AS ?txtParent)
       BIND(IRI(CONCAT(?g, "/~footer-text")) AS ?txt)
-      BIND(CONCAT(STR(?total), " matching · ", IF(?any, CONCAT("showing ", STR(?first), "–", STR(?E)), "none shown"),
-           IF(?pinned, CONCAT(" · ", STR(?total - ?E), " new"), "")) AS ?data)
+      OPTIONAL { ?showingAt l10n:of c:GridShowingPhrase ; l10n:name ?showing0 }
+      OPTIONAL { FILTER(!BOUND(?showing0)) c:GridShowingPhrase rdfs:label ?showing1 }
+      OPTIONAL { ?noneShownAt l10n:of c:GridNoneShownPhrase ; l10n:name ?noneShown0 }
+      OPTIONAL { FILTER(!BOUND(?noneShown0)) c:GridNoneShownPhrase rdfs:label ?noneShown1 }
+      OPTIONAL { ?newCountAt l10n:of c:GridNewPhrase ; l10n:name ?newCount0 }
+      OPTIONAL { FILTER(!BOUND(?newCount0)) c:GridNewPhrase rdfs:label ?newCount1 }
+      BIND(STR(COALESCE(?showing0, ?showing1, "{total} matching · showing {first}–{end}")) AS ?showingPattern)
+      BIND(STR(COALESCE(?noneShown0, ?noneShown1, "{total} matching · none shown")) AS ?nonePattern)
+      BIND(CONCAT(IF(?any, REPLACE(REPLACE(REPLACE(?showingPattern, "[{]total[}]", STR(?total)), "[{]first[}]", STR(?first)), "[{]end[}]", STR(?E)), REPLACE(?nonePattern, "[{]total[}]", STR(?total))),
+           IF(?pinned, CONCAT(" · ", REPLACE(STR(COALESCE(?newCount0, ?newCount1, "{n} new")), "[{]n[}]", STR(?total - ?E))), "")) AS ?data)
     }
   }
 }""" .
@@ -985,8 +1021,13 @@ WHERE {
           FILTER(?part = "a-bar" && ?kind = c:TimeBarCell && BOUND(?a))
           VALUES ?name { "data-sem-tone" "role" "aria-label" }
           FILTER(?name != "data-sem-tone" || (!BOUND(?swatch) && BOUND(?barTone)))
+          OPTIONAL { ?spanAt l10n:of c:GridBarPhrase ; l10n:name ?span0 }
+          OPTIONAL { FILTER(!BOUND(?span0)) c:GridBarPhrase rdfs:label ?span1 }
+          OPTIONAL { ?runningAt l10n:of c:GridBarRunningPhrase ; l10n:name ?running0 }
+          OPTIONAL { FILTER(!BOUND(?running0)) c:GridBarRunningPhrase rdfs:label ?running1 }
+          BIND(REPLACE(STR(COALESCE(?span0, ?span1, "from {start} for {span}")), "[{]start[}]", ?aText) AS ?spanPattern)
           BIND(IF(?name = "role", "img", IF(?name = "data-sem-tone", ?barTone,
-               IF(BOUND(?b), CONCAT("from ", ?aText, " for ", ?spanText), CONCAT("from ", ?aText, ", still running")))) AS ?value)
+               IF(BOUND(?b), REPLACE(?spanPattern, "[{]span[}]", ?spanText), REPLACE(STR(COALESCE(?running0, ?running1, "from {start}, still running")), "[{]start[}]", ?aText)))) AS ?value)
           BIND(IRI(CONCAT(?id, "-bar")) AS ?owner) BIND(IRI(CONCAT(?id, "-bar-", ?name)) AS ?attr)
         } UNION {
           FILTER(?part = "text" && ((?kind = c:DurationCell && BOUND(?a)) || (?kind = c:BytesCell && isNumeric(?v)) || (?kind = c:DateCell && ?hasValue)))

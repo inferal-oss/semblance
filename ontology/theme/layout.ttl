@@ -92,10 +92,10 @@
                  [ sty:property "color" ; sty:token tok:muted ] .
 
 # --- elevations (sty:Flat and sty:Raised are in theme/default.ttl) ---
-sty:Overlay a sty:Elevation ; rdfs:label "Overlay"@en ; sem:slug "overlay" ; sem:order 3 ;
+sty:Overlay a sty:Elevation ; rdfs:label "Overlay"@en , "Накладка"@uk , "Overlay"@de , "طبقة عائمة"@ar ; sem:slug "overlay" ; sem:order 3 ;
     rdfs:comment "Floats above the page: menus, popovers, dialogs."@en .
-sty:Flat rdfs:label "Flat"@en ; sem:order 1 .
-sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
+sty:Flat rdfs:label "Flat"@en , "Плоска"@uk , "Flach"@de , "مسطحة"@ar ; sem:order 1 .
+sty:Raised rdfs:label "Raised"@en , "Піднята"@uk , "Erhöht"@de , "مرتفعة"@ar ; sem:order 2 .
 
 # --- surface ---
 # Direction, gap and inset are the position layer's; the surface only fills them in

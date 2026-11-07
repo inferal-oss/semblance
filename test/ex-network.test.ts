@@ -57,18 +57,18 @@ describe('the network inspector example', () => {
       h.shell.flush()
     }
     const recent = () => root('net-recent').textContent
-    expect(recent()).toMatch(/entr(y|ies) in the last 5 s of the capture/)
+    expect(recent()).toMatch(/^In the last 5 s of the capture: \d+$/)
     // Long after the samples (page milliseconds): the watermark is a second behind it, the samples are out.
     entry(1, 100_000)
-    expect(recent()).toBe('1 entry in the last 5 s of the capture')
+    expect(recent()).toBe('In the last 5 s of the capture: 1')
     entry(2, 103_000)
-    expect(recent()).toBe('2 entries in the last 5 s of the capture')
+    expect(recent()).toBe('In the last 5 s of the capture: 2')
     // A span reported late, started before the others: still inside, so it counts.
     entry(3, 99_000)
-    expect(recent()).toBe('3 entries in the last 5 s of the capture')
+    expect(recent()).toBe('In the last 5 s of the capture: 3')
     // Six seconds on in the capture: the first two have left the window (watermark 108,000, back to 103,000).
     entry(4, 109_000)
-    expect(recent()).toBe('2 entries in the last 5 s of the capture')
+    expect(recent()).toBe('In the last 5 s of the capture: 2')
   })
 
   for (const prefer of ['sparql', 'function'] as const) {

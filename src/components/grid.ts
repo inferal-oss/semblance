@@ -10,7 +10,9 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
+import { WIN } from './containers.ts'
 import { el, marked, md5Key } from './data.ts'
+import { phrase } from './feedback.ts'
 import { compareKeys } from '../render/order-key.ts'
 import { isTrue, labelOf, named, nodes, RDFS_LABEL, str, text, isA } from './util.ts'
 
@@ -230,7 +232,7 @@ const frame: FnRule = (ctx, focus) => {
       role: 'separator',
       tabIndex: '0',
       'aria-orientation': 'vertical',
-      'aria-label': `Resize ${c.label}`,
+      'aria-label': `${phrase(ctx, WIN.Resize, 'Resize')}: ${c.label}`,
       'aria-valuenow': c.width === undefined ? undefined : String(c.width),
       'aria-valuemin': '48',
       'data-sem-gesture': 'size',
@@ -460,24 +462,26 @@ const window: FnRule = (ctx, focus) => {
   // The footer: how many match and which are shown; following or pinned; older and newer.
   const shownEnd = w.shownEnd
   if (shownEnd) o.t(o.node('window'), GRID.shownEnd, shownEnd)
-  const status = `${total} matching · ${total ? `showing ${first}–${end}` : 'none shown'}`
+  const status = total
+    ? phrase(ctx, C + 'GridShowingPhrase', '{total} matching · showing {first}–{end}').replace('{total}', String(total)).replace('{first}', String(first)).replace('{end}', String(end))
+    : phrase(ctx, C + 'GridNoneShownPhrase', '{total} matching · none shown').replace('{total}', String(total))
   if (ctx.modality === MOD.Text) {
-    o.t(footer, H.hasChild, o.text('footer-text', `${status}${pinned ? ` · ${total - end} new` : ''}`))
+    o.t(footer, H.hasChild, o.text('footer-text', `${status}${pinned ? ` · ${phrase(ctx, C + 'GridNewPhrase', '{n} new').replace('{n}', String(total - end))}` : ''}`))
     return o.quads
   }
   const parts: NamedNode[] = [el(o, 'status', 'Span', { class: 'sem-status' }, [o.text('status-text', status)])]
-  const follow = el(o, 'follow', 'Button', { type: 'button', class: 'sem-follow', 'aria-pressed': String(!pinned) }, [o.text('follow-text', 'Follow latest')])
+  const follow = el(o, 'follow', 'Button', { type: 'button', class: 'sem-follow', 'aria-pressed': String(!pinned) }, [o.text('follow-text', phrase(ctx, C + 'GridFollowPhrase', 'Follow latest'))])
   if (pinned) o.t(follow, GRID.followsLatest, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
   else if (shownEnd) o.t(follow, GRID.windowTo, shownEnd)
   parts.push(follow)
   if (pinned) {
-    const jump = el(o, 'jump', 'Button', { type: 'button', class: 'sem-jump' }, [o.text('jump-text', `${total - end} new · Jump to latest`)])
+    const jump = el(o, 'jump', 'Button', { type: 'button', class: 'sem-jump' }, [o.text('jump-text', phrase(ctx, C + 'GridJumpPhrase', '{n} new · Jump to latest').replace('{n}', String(total - end)))])
     o.t(jump, GRID.followsLatest, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     parts.push(jump)
   }
-  const older = el(o, 'older', 'Button', { type: 'button', class: 'sem-page', disabled: first > 1 && total ? undefined : '' }, [o.text('older-text', 'Older')])
+  const older = el(o, 'older', 'Button', { type: 'button', class: 'sem-page', disabled: first > 1 && total ? undefined : '' }, [o.text('older-text', phrase(ctx, C + 'GridOlderPhrase', 'Older'))])
   if (first > 1 && total && w.olderEnd) o.t(older, GRID.windowTo, w.olderEnd)
-  const newer = el(o, 'newer', 'Button', { type: 'button', class: 'sem-page', disabled: end < total ? undefined : '' }, [o.text('newer-text', 'Newer')])
+  const newer = el(o, 'newer', 'Button', { type: 'button', class: 'sem-page', disabled: end < total ? undefined : '' }, [o.text('newer-text', phrase(ctx, C + 'GridNewerPhrase', 'Newer'))])
   if (end < total) {
     if (end + size >= total) o.t(newer, GRID.followsLatest, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     else if (w.newerEnd) o.t(newer, GRID.windowTo, w.newerEnd)
@@ -509,7 +513,9 @@ function cell(ctx: RuleContext, o: Out, id: string, row: NamedNode, c: Column): 
         style,
         'data-sem-tone': named(tone) ? str(ctx.object(tone, SEM.slug)) : undefined,
         role: 'img',
-        'aria-label': b === undefined ? `from ${formatDuration(a)}, still running` : `from ${formatDuration(a)} for ${formatDuration(b - a)}`,
+        'aria-label': b === undefined
+          ? phrase(ctx, C + 'GridBarRunningPhrase', 'from {start}, still running').replace('{start}', formatDuration(a))
+          : phrase(ctx, C + 'GridBarPhrase', 'from {start} for {span}').replace('{start}', formatDuration(a)).replace('{span}', formatDuration(b - a)),
       })]
     }
     case GRID.DurationCell: {

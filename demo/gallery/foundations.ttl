@@ -11,10 +11,10 @@
 
 ui:gallery-foundations a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-foundations-intro ui:f-colors ui:f-tones ui:f-sizes ) .
-ui:gallery-foundations-intro a c:Heading ; c:label "Foundations" .
+ui:gallery-foundations-intro a c:Heading ; c:label "Foundations" , "Основи"@uk , "Grundlagen"@de , "الأسس"@ar .
 
 ui:f-colors a c:Flippable ; c:front ui:f-colors-spec .
-ui:f-colors-spec a c:Specimen ; c:label "Color ramps" ;
+ui:f-colors-spec a c:Specimen ; c:label "Color ramps" , "Колірні шкали"@uk , "Farbverläufe"@de , "تدرجات الألوان"@ar ;
     c:help "Twelve steps per hue, each a light-dark() pair: 1-2 backgrounds, 3-5 fills, 6-8 borders, 9-10 solids, 11-12 text. Status hues define the steps components use. Switch Day / Night to see both sides." ;
     c:children ( ui:sw-gray ui:sw-accent ui:sw-info ui:sw-success ui:sw-warning ui:sw-danger ) .
 ui:sw-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
@@ -53,7 +53,7 @@ ui:b-danger-ghost a c:Badge ; c:label "Danger" ; sty:tone sty:Danger ; sty:empha
 ui:f-tones-ghost a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:b-neutral-ghost ui:b-accent-ghost ui:b-info-ghost ui:b-success-ghost ui:b-warning-ghost ui:b-danger-ghost ) .
 
 ui:f-tones a c:Flippable ; c:front ui:f-tones-spec .
-ui:f-tones-spec a c:Specimen ; c:label "Tone × emphasis" ;
+ui:f-tones-spec a c:Specimen ; c:label "Tone × emphasis" , "Тон × акцент"@uk , "Ton × Betonung"@de , "النبرة × التأكيد"@ar ;
     c:help "sty:tone says what a component means, sty:emphasis how loudly. Six tones and four emphases are 24 looks from ten style rules, shared by every toned component (badges here; buttons, alerts and tags elsewhere)." ;
     c:children ( ui:f-tones-col ) .
 ui:f-tones-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:f-tones-solid ui:f-tones-soft ui:f-tones-outline ui:f-tones-ghost ) .
@@ -65,6 +65,6 @@ ui:btn-size-medium-o a c:Button ; c:label "Medium" ; sty:size sty:Medium ; sty:e
 ui:btn-size-large-o a c:Button ; c:label "Large" ; sty:size sty:Large ; sty:emphasis sty:Outline .
 
 ui:f-sizes a c:Flippable ; c:front ui:f-sizes-spec .
-ui:f-sizes-spec a c:Specimen ; c:label "Sizes" ;
+ui:f-sizes-spec a c:Specimen ; c:label "Sizes" , "Розміри"@uk , "Größen"@de , "الأحجام"@ar ;
     c:help "sty:size sets the control height, padding, font size and radius (tokens control-sm, control-md, control-lg) for every control alike." ;
     c:children ( ui:btn-size-small ui:btn-size-medium ui:btn-size-large ui:btn-size-small-o ui:btn-size-medium-o ui:btn-size-large-o ) .
