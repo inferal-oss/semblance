@@ -1321,7 +1321,7 @@ export function moveByKey(k: KeyboardEvent, renderer: DomRenderer): boolean {
 // --- one-axis sizing (separators) ------------------------------------------------------------------
 
 /** The element a size handle sizes (see EventBus.sizeGesture). */
-function sizedBy(handle: HTMLElement, renderer: DomRenderer): HTMLElement | null {
+export function sizedBy(handle: HTMLElement, renderer: DomRenderer): HTMLElement | null {
   const sizes = handle.dataset.semSizes
   if (sizes === 'previous') return handle.previousElementSibling as HTMLElement | null
   if (sizes === 'next') return handle.nextElementSibling as HTMLElement | null
@@ -1350,9 +1350,12 @@ function sizing(handle: HTMLElement) {
 
 const rtl = (el: HTMLElement) => computed(el)?.direction === 'rtl'
 
-const measure = (el: HTMLElement, axis: 'x' | 'y') => {
+/** A box's size as laid out: a transform (a frame scaling in) does not change what it is. */
+export const measure = (el: HTMLElement, axis: 'x' | 'y') => {
+  const laidOut = axis === 'x' ? el.offsetWidth : el.offsetHeight
+  if (laidOut) return laidOut
   const r = el.getBoundingClientRect?.()
-  return (axis === 'x' ? (r?.width ?? el.offsetWidth) : (r?.height ?? el.offsetHeight)) || 0
+  return (axis === 'x' ? r?.width : r?.height) || 0
 }
 /** The room there is along an axis: the viewport for a fixed box, whose parent does not hold it, else its parent. */
 const extentOf = (el: HTMLElement, axis: 'x' | 'y') => {
@@ -1372,7 +1375,7 @@ const computed = (el: HTMLElement) => {
 }
 
 /** The most a theme lets a box be along an axis, where it resolves to px (a percentage does not). */
-const cssMax = (el: HTMLElement, axis: 'x' | 'y') => {
+export const cssMax = (el: HTMLElement, axis: 'x' | 'y') => {
   const max = computed(el)?.[axis === 'x' ? 'maxWidth' : 'maxHeight']
   return max?.endsWith('px') ? parseFloat(max) : Infinity
 }
