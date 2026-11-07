@@ -351,6 +351,44 @@ describe('typing in one breath is one undo step (c:BlockEditor)', () => {
   })
 })
 
+describe('a long editing session (c:BlockEditor)', () => {
+  it('keeps the graph, the engine and the HTML index bounded once the change log is at its bound', () => {
+    const h = mount('sparql')
+    // One turn returns the document to where it was: a run of typing and its Backspaces, a copy across
+    // blocks, the / menu opened, closed and its "/" taken back, an @ that opens nothing.
+    const turn = () => {
+      h.select('p2', 11)
+      h.type(' abc')
+      for (let i = 15; i > 11; i--) {
+        h.select('p2', i - 1, 'p2', i)
+        h.input('deleteContentBackward')
+      }
+      h.select('p1', 6, 'p3', 5)
+      const target = h.selection.anchorNode!.parentElement!
+      target.dispatchEvent(Object.assign(new (target.ownerDocument.defaultView!.Event)('copy', { bubbles: true, cancelable: true }), { clipboardData: { setData() {} } }))
+      h.select('p3', 0)
+      h.type('/')
+      h.press('Escape')
+      h.select('p3', 0, 'p3', 1)
+      h.input('deleteContentBackward')
+    }
+    const footprint = () => ({
+      triples: h.store.match(null, null, null).length,
+      ...Object.fromEntries(Object.entries(h.screen.engine.footprint()).map(([k, v]) => ['engine.' + k, v])),
+      ...Object.fromEntries(Object.entries(h.screen.index.footprint()).map(([k, v]) => ['index.' + k, v])),
+      log: h.bus.recent(10_000).length,
+    })
+    for (let i = 0; i < 30; i++) turn() // past the change log's bound (200 events)
+    const warm = footprint()
+    for (let i = 0; i < 40; i++) turn()
+    const after = footprint()
+    expect(h.value('p2')).toBe('Second line')
+    expect(h.value('p3')).toBe('After the rule')
+    const grew = Object.entries(after).filter(([k, v]) => v > warm[k as keyof typeof warm]! * 1.02 + 4).map(([k, v]) => `${k}: ${warm[k as keyof typeof warm]} -> ${v}`)
+    expect(grew).toEqual([])
+  }, 300_000)
+})
+
 describe('the cost of typing in a block (c:BlockEditor)', () => {
   /** A document of `n` more paragraphs after the editor's own, in its chain. */
   const longer = (n: number) => {

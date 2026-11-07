@@ -293,7 +293,9 @@ the caret in a column; removing one of the last two leaves the other's blocks in
 `data-sem-folded`, but stays where the caret can go: a typeset island is not editable, and a caret put
 on it goes into the TeX); a code block's language typed or picked from its class's `blk:languageOption`.
 
+Checked: every structural theme (Classic, Tracker, Doodle, Cupertino, Fluent), light and dark, with the `/`
+menu open; touch on a handle (a still, long press lifts it and a drop moves the block; a touch that moves
+first scrolls); a long editing session stays bounded (`test/block-editor.test.ts`, "a long editing session").
+
 To come:
-- dragging a block by a handle: the drag-and-drop layer makes a draggable's whole root its handle, which
-  in an editable region would turn every text selection into a drag; it needs a handle part of its own;
 - HTML or Markdown pasted as blocks (the event's HTML in RDF/HTML, mapped by reactions), as designed above;
