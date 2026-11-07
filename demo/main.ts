@@ -33,6 +33,7 @@ import { attachConnectors } from '../src/web/connectors.ts'
 import { attachSnaps } from '../src/web/snap.ts'
 import { attachLightboxes } from '../src/web/lightbox.ts'
 import { attachAnchoredPopups } from '../src/web/anchored-popups.ts'
+import { attachSizeHandles } from '../src/web/size-handles.ts'
 import { RenderedState } from '../src/rendered.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
@@ -336,6 +337,7 @@ attachSnaps(document.getElementById('app')!)
 // Lightboxes: grown from their image and given back to it, sliding, zooming and panning.
 attachLightboxes(document.getElementById('app')!)
 attachAnchoredPopups(document.getElementById('app')!, node => !shell.inSlot(node))
+attachSizeHandles(shell)
 persistence.attach(runtime)
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })

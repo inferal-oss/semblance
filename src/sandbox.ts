@@ -26,6 +26,7 @@ import { type Projection, Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
 import { compileStyles } from './style/compile.ts'
 import { attachAnchoredPopups } from './web/anchored-popups.ts'
+import { attachSizeHandles } from './web/size-handles.ts'
 import { replayKept, SSR_ATTRIBUTE } from './web/takeover.ts'
 
 const c = NS.c
@@ -830,6 +831,7 @@ export class Sandboxes {
     if (!taken.includes(host)) m.slot.replaceChildren(host)
     else for (const style of [...m.slot.children]) if (style.hasAttribute(SANDBOX_STYLES_ATTRIBUTE)) style.remove()
     const detachPopups = attachAnchoredPopups(host, node => !renderer.inSlot(node))
+    const detachSizeHandles = attachSizeHandles(renderer)
     if (textSlot && textHost && !taken.includes(textHost)) textSlot.replaceChildren(textHost)
     if (dataSlot && dataHost && !taken.includes(dataHost)) dataSlot.replaceChildren(dataHost)
     m.sandbox = sandbox
@@ -844,6 +846,7 @@ export class Sandboxes {
       detachBus()
       detachFullscreen()
       detachPopups()
+      detachSizeHandles()
       detachRefresh()
       detachTimer()
     }
