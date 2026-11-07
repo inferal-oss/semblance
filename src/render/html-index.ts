@@ -19,6 +19,9 @@ export interface HNode {
   slot?: string
   /** sem:orderKey: position among siblings that have no ord: precedence. */
   orderKey?: string
+  /** Further values of data and orderKey, while it has several (single). */
+  otherData?: string[]
+  otherKeys?: string[]
   /** ext:island: the foreign component mounted in this (slot) element. */
   island?: string
   /** ext:tag: the custom element's tag, for the HTML serializer. */
@@ -90,6 +93,26 @@ const inc = <K, V>(m: Map<K, Set<V>>, k: K, v: V, sign: number) => {
  * It normalizes ordering (hasChild, childOf, the ord: precedence family and the
  * hasChild∘precedes chain) and records what changed, for renderers to patch.
  */
+/**
+ * A property a node shows one value of, the last stated of those it has. A rule can state several for
+ * a moment (a text in every language, before the graph that picks one arrived, #350): taking the
+ * shown one away shows the one left.
+ */
+function single(n: HNode, field: 'data' | 'orderKey', o: string, sign: 1 | -1) {
+  const others = field === 'data' ? 'otherData' : 'otherKeys'
+  if (sign > 0) {
+    const had = n[field]
+    if (had === o) return
+    if (had !== undefined) (n[others] ??= []).push(had)
+    n[field] = o
+  } else if (n[field] === o) {
+    n[field] = n[others]?.pop()
+  } else {
+    const i = n[others]?.indexOf(o) ?? -1
+    if (i >= 0) n[others]!.splice(i, 1)
+  }
+}
+
 export class HtmlIndex {
   readonly nodes = new Map<string, HNode>()
   private attrs = new Map<string, AttrNode>()
@@ -369,11 +392,11 @@ export class HtmlIndex {
         return
       }
       case SEM.orderKey:
-        this.node(s).orderKey = sign > 0 ? o : undefined
+        single(this.node(s), 'orderKey', o, sign)
         this.structureChanged(s)
         return
       case H.data:
-        this.node(s).data = sign > 0 ? o : undefined
+        single(this.node(s), 'data', o, sign)
         this.mark('data', s)
         return
       case H.hasChild:

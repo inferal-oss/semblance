@@ -47,10 +47,11 @@ prv:Mask a sem:Rendering ;
     sem:layer prv:Layer ;
     sem:stratum -8 ;
     sem:inputOnly true ;
-    # Not c:inputType: the rule writes it, and must not re-run on its own output.
+    # Not c:inputType: the rule writes it, and must not re-run on its own output. Nor does its query
+    # go by its own output: only another type stated gives way.
     sem:watches prv:concealed .
 prv:Mask-sparql a sem:Rule ; sem:implements prv:Mask ;
-    sem:construct """CONSTRUCT { $this c:inputType "password" } WHERE { $this prv:concealed true FILTER NOT EXISTS { $this c:inputType ?t } }""" .
+    sem:construct """CONSTRUCT { $this c:inputType "password" } WHERE { $this prv:concealed true FILTER NOT EXISTS { $this c:inputType ?t FILTER(?t != "password") } }""" .
 prv:Mask-fn a sem:Rule ; sem:implements prv:Mask ; sem:function "privacy:mask" .
 
 # After the components: mark the root, for the theme.

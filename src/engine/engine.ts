@@ -98,6 +98,8 @@ interface Leftover {
  * as "focus member" (a space never occurs in an IRI).
  */
 const SEP = ' '
+/** How many foci of a rule one step of a re-read evaluates (Engine.reread). */
+const REREAD_SLICE = 64
 const focusOf = (key: string) => {
   const i = key.indexOf(SEP)
   return i < 0 ? key : key.slice(0, i)
@@ -435,6 +437,7 @@ export class Engine {
    */
   private reloadRules(): void {
     const before = new Map(this.allRules.map((r) => [r.iri, r]))
+    const supersBefore = this.supers
     const read = this.readRules(this.provenanceReaders !== undefined)
     // The same rule (by IRI and definition) stays the same object: its outputs and bookkeeping are keyed by it.
     this.allRules = read.map((r) => {
@@ -449,7 +452,7 @@ export class Engine {
     // What function rules memoize about the ontology (ctx.memo: the declared prefixes, a class's
     // properties) is read afresh, as an engine started with these rules would.
     this.ctx = createContext(this.store, this.graphs, this.selection.modality, this.selection.languages)
-    this.reconfigure({})
+    this.reconfigure({}, supersBefore)
   }
 
   /** The renderings that read where we are (sem:readsLocation), by slot: every dimension, or the top-level ones. */
@@ -507,6 +510,16 @@ export class Engine {
    */
   warm(budgetMs: number, slice = 4, only?: (focus: string) => boolean): boolean {
     if (!this.demand) return false
+    const until = performance.now() + budgetMs
+    while (this.next < this.due.length && performance.now() < until) {
+      const [rule, foci] = this.due[this.next++]!
+      // (Hidden since: it is parked as it is evaluated.)
+      for (const focus of foci) this.markDirty(rule, focus)
+      this.run()
+    }
+    if (this.next < this.due.length) return true
+    this.due = []
+    this.next = 0
     const test = only ?? this.warmable
     // Asked once per focus (many parked pairs share one), afresh after each run, which may move it.
     const known = new Map<string, boolean>()
@@ -517,7 +530,6 @@ export class Engine {
         if (v === undefined) known.set(focus, (v = test(focus)))
         return v
       })
-    const until = performance.now() + budgetMs
     this.warming = true
     try {
       // Mostly nothing parked may be warmed (lazy parts): that costs a look per focus, not per pair.
@@ -541,6 +553,38 @@ export class Engine {
     }
     return this.hasWarmable(allowed)
   }
+
+  /**
+   * The graphs that arrive after start have all arrived (the rest of a page's graphs, #209): what
+   * was evaluated before them read a store that has grown since, and not all it read is what it
+   * declares (a class's slug, a phrase's name in a query). Every pair is due
+   * again, as if started now: what is hidden parked until it is shown, what is shown or always
+   * evaluated in warm(), a few foci of a rule at a time and in stratum order, so no long task. What
+   * did not change costs its evaluation and no patch. It happens once per arrival, not per change.
+   */
+  reread(): void {
+    // (What declares all it reads over the graph, sem:watchesManyValued, has heard it all.)
+    for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!r.manyValued.length) this.markFocus(r, focus)
+    if (!this.demand) return this.run()
+    const due: [Rule, string[]][] = []
+    for (const stratum of [...this.dirty.keys()].sort((a, b) => a - b)) {
+      for (const [rule, foci] of this.dirty.get(stratum)!) {
+        const shown: string[] = []
+        for (const focus of foci) {
+          if (rule.always || this.demand(focusOf(focus))) shown.push(focus)
+          else this.deferred.add(rule, focus)
+        }
+        for (let i = 0; i < shown.length; i += REREAD_SLICE) due.push([rule, shown.slice(i, i + REREAD_SLICE)])
+      }
+    }
+    this.dirty.clear()
+    this.due = due
+    this.next = 0
+  }
+
+  /** What reread() found due and warm() has not evaluated yet (from `next` on). */
+  private due: [Rule, string[]][] = []
+  private next = 0
 
   /** Whether parked work remains that idle time may evaluate. */
   private hasWarmable(allowed = this.warmable): boolean {
@@ -593,9 +637,11 @@ export class Engine {
    * Switch modality, layers or implementation preference. Rules that are no
    * longer selected retract their output; every selected rule is re-evaluated
    * (kept rules may read what the retracted ones produced) and diffing keeps
-   * the resulting delta minimal.
+   * the resulting delta minimal. `supersBefore` is the class hierarchy before the rules were read
+   * again: a kept rule also runs for what a new subclass link made its instance (or unmade), which
+   * no triple about the focus says (a graph that defines a class arriving after its instances, #350).
    */
-  reconfigure(sel: Partial<Selection>): void {
+  reconfigure(sel: Partial<Selection>, supersBefore?: (cls: string) => Set<string>): void {
     // A language change alone re-runs only what picked a text by language (util.text
     // records it as a read of LANGUAGE); everything else stays as it is.
     if (sel.languages && sel.modality === undefined && sel.prefer === undefined && sel.layers === undefined) {
@@ -629,7 +675,8 @@ export class Engine {
     for (const byRule of this.dirty.values()) for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
     this.activate(after)
     this.reindex()
-    for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r)) this.markFocus(r, focus)
+    for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r) || (supersBefore && !supersBefore(c).has(r.target))) this.markFocus(r, focus)
+    if (supersBefore) for (const r of kept) for (const key of this.outputs.get(r)?.keys() ?? []) if (!this.isInstance(key, r)) this.markDirty(r, key)
     if (this.exact) for (const r of after) if (!kept.has(r)) this.pristine.add(r)
     this.run()
   }
@@ -644,6 +691,7 @@ export class Engine {
     this.memberKeys.delete(rule)
     this.forgetAllFollowing(rule)
     this.deferred.dropRule(rule)
+    this.due = this.due.filter(([r], i) => r !== rule || i < this.next)
     for (const byRule of this.held.values()) {
       this.heldPairs -= byRule.get(rule)?.size ?? 0
       byRule.delete(rule)

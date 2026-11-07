@@ -17,7 +17,9 @@ import { prepareSite, ROOT, siteLayers, siteSources, UI } from '../demo/site.ts'
 // A page rendered beforehand names the graphs its client needs first, and those can hold a
 // rendering's function rule without its SPARQL twin (ontology/components/walkthrough.ttl and
 // walkthrough-diagram.ttl). When the rest arrive the twin takes over, also for what is not shown
-// yet: a page reached by a click afterwards is the page loaded directly (#332).
+// yet: a page reached by a click afterwards is the page loaded directly (#332). And what was
+// evaluated before they arrived is evaluated again (Runtime.reread), whatever it read: every page
+// reached by a click, before or after they arrive, is the page loaded directly (#350).
 
 const TEMPLATE = '<!doctype html><html lang="en"><head><title>t</title></head><body><div id="app"></div></body></html>'
 const config = new URL('../semblance.config.ts', import.meta.url).pathname
@@ -75,6 +77,15 @@ async function loadRest(site: Site, c: Awaited<ReturnType<typeof takenOver>>) {
   for (const slice of rest) c.runtime.apply({ add: slice, remove: [] })
   c.runtime.arriving(false)
   c.renderer.flush()
+  idle(c)
+}
+
+/** Idle time, and the frames in it: everything idle time may evaluate is evaluated. */
+function idle(c: Client & { renderer: DomRenderer }) {
+  while (c.runtime.warm(20));
+  c.runtime.refresh()
+  while (c.runtime.warm(20));
+  c.renderer.flush()
 }
 
 /** What the app states about where we are, as a click into the page `to` has it state. */
@@ -90,7 +101,7 @@ function follow(c: Client & { renderer: DomRenderer }, to: Client) {
   c.renderer.flush()
 }
 
-const walkthroughs = (root: ParentNode) => [...root.querySelectorAll('[data-sem-c=walkthrough]')].filter((w) => !w.closest('[hidden]')).map((w) => w.outerHTML)
+const walkthroughs = (root: ParentNode) => [...root.querySelectorAll('[data-sem-c=walkthrough]')].filter((w) => !w.closest('[hidden]')).map((w) => shown(w).join('\n'))
 
 describe('a page reached by a click after the deferred graphs', () => {
   let site: Site
@@ -147,6 +158,8 @@ describe('a page reached by a click after the deferred graphs', () => {
       c.runtime.arriving(false)
       c.renderer.flush()
       expect(c.errors, `click at ${at}, when all had arrived`).toEqual([])
+      idle(c)
+      expect(c.errors, `click at ${at}, reading again`).toEqual([])
       const [got, want] = [walkthroughs(c.host).join(), to.walks.join()]
       let i = 0
       while (i < got.length && got[i] === want[i]) i++
@@ -177,4 +190,109 @@ describe('a page reached by a click after the deferred graphs', () => {
     }
     c.runtime.dispose()
   }, 300_000)
+})
+
+/** One line per element and text shown: its place and its attributes (the status bar counts interactions). */
+function shown(host: Element): string[] {
+  const out: string[] = []
+  const walk = (n: Element, path: string) => {
+    for (const c of n.childNodes) {
+      if (c.nodeType === 3) {
+        if (c.textContent!.trim()) out.push(`${path} ${JSON.stringify(c.textContent)}`)
+        continue
+      }
+      const el = c as Element
+      if (el.nodeType !== 1 || el.hasAttribute('hidden') || el.getAttribute('data-sem-c') === 'status-bar') continue
+      const attrs = [...el.attributes].map((a) => `${a.name}=${a.value}`).sort().join(' ')
+      // (linkedom keeps an SVG element's case only when it creates it.)
+      const name = el.localName.toLowerCase()
+      out.push(`${path}>${name} ${attrs}`)
+      walk(el, `${path}>${name}`)
+    }
+  }
+  walk(host, '')
+  return out
+}
+
+/** What differs between two pages, briefly ('' when they are the same). */
+function difference(got: string[], want: string[]): string {
+  const [g, w] = [new Set(got), new Set(want)]
+  const brief = (l: string) => l.split('>').slice(-2).join('>').slice(0, 200)
+  const missing = want.filter((l) => !g.has(l))
+  const extra = got.filter((l) => !w.has(l))
+  return missing.length || extra.length ? `${missing.length} missing, ${extra.length} extra\n${missing.slice(0, 5).map((l) => '  - ' + brief(l)).join('\n')}\n${extra.slice(0, 5).map((l) => '  + ' + brief(l)).join('\n')}` : ''
+}
+
+describe('every page reached by a click is the page loaded directly', () => {
+  const FROM = '/components/themes/'
+  let site: Site
+  let routes: string[]
+
+  beforeAll(async () => {
+    site = await loadSite(config)
+    routes = (await siteRoutes(site)).filter((r) => /^\/(docs|examples|components)\//.test(r) && r !== FROM)
+    expect(routes.length).toBeGreaterThan(40)
+  }, 60_000)
+
+  /** The page `url` as a client that loaded it directly has it, with `use` to compare it to. */
+  async function direct(url: string, use: (c: Client, page: string[]) => void | Promise<void>) {
+    const c = await client(site, url)
+    const { document } = parseHTML(TEMPLATE)
+    const host = document.getElementById('app')!
+    const renderer = new DomRenderer(c.screen.index, host, ROOT)
+    renderer.flush()
+    idle({ ...c, renderer })
+    await use(c, shown(host))
+    c.runtime.dispose()
+  }
+
+  it('a click after the rest arrived', async () => {
+    const wrong: string[] = []
+    for (const url of routes) {
+      const c = await takenOver(site, FROM)
+      await loadRest(site, c)
+      await direct(url, (to, want) => {
+        follow(c, to)
+        idle(c)
+        const diff = difference(shown(c.host), want)
+        if (diff || c.errors.length) wrong.push(`${url}: ${diff} ${c.errors[0] ?? ''}`)
+      })
+      c.runtime.dispose()
+    }
+    expect(wrong).toEqual([])
+  }, 900_000)
+
+  it('a click before the rest arrive', async () => {
+    const wrong: string[] = []
+    for (const url of routes) {
+      const c = await takenOver(site, FROM)
+      await direct(url, async (to, want) => {
+        follow(c, to)
+        await loadRest(site, c)
+        const diff = difference(shown(c.host), want)
+        if (diff || c.errors.length) wrong.push(`${url}: ${diff} ${c.errors[0] ?? ''}`)
+      })
+      c.runtime.dispose()
+    }
+    expect(wrong).toEqual([])
+  }, 900_000)
+
+  it('reading again changes nothing on a page that had everything', async () => {
+    const wrong: string[] = []
+    for (const url of routes) {
+      await direct(url, (c, want) => {
+        const { document } = parseHTML(TEMPLATE)
+        const host = document.getElementById('app')!
+        const renderer = new DomRenderer(c.screen.index, host, ROOT)
+        renderer.flush()
+        const changes: string[] = []
+        c.screen.engine.onChange((d) => changes.push(...[...d.add, ...d.remove].map((q) => `${q.subject.value} ${q.predicate.value} ${q.object.value}`)))
+        c.runtime.reread()
+        idle({ ...c, renderer })
+        const diff = difference(shown(host), want)
+        if (diff || changes.length) wrong.push(`${url}: ${diff} ${changes.slice(0, 5).join('; ')}`)
+      })
+    }
+    expect(wrong).toEqual([])
+  }, 600_000)
 })
