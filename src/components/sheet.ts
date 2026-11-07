@@ -15,6 +15,7 @@ const S = {
   selectedCell: NS.c + 'selectedCell',
   selectionEnd: NS.c + 'selectionEnd',
   selects: NS.c + 'selects',
+  valueOnEntry: NS.c + 'valueOnEntry',
   recalculated: NS.c + 'recalculated',
   tick: NS.c + 'recalculationTick',
   valueQuery: NS.c + 'valueQuery',
@@ -91,6 +92,7 @@ const cell: FnRule = (ctx, focus) => {
     ? o.el('content', 'Output', {}, v === undefined ? [] : [o.text('content-text', v)])
     : o.el('content', 'Input', { type: 'text', value: v })
   o.attr(content, 'aria-label', nameOf(r, c))
+  if (!formula) o.attr(content, 'data-sem-select-on-focus', '')
   const root = o.el('root', 'Div', { class: 'sem-cell', style: `grid-row: ${r + 1}; grid-column: ${c + 1}`, 'data-sem-kind': formula ? 'formula' : 'value' }, [content])
   if (v !== undefined && NUMBER.test(v)) o.attr(root, 'data-sem-numeric', 'true')
   o.renders(root)
@@ -290,6 +292,20 @@ const edit: ReactionFn = (ctx) => {
   return { remove: own(ctx, ctx.target, C.value), add }
 }
 
+/** What a value cell holds now is what Escape puts back. */
+const remember: ReactionFn = (ctx) => {
+  const f = ctx.runtime.store.factory
+  const add = ctx.object(ctx.target, S.valueQuery) ? [] : own(ctx, ctx.target, C.value).map((q) => f.quad(ctx.target, f.namedNode(S.valueOnEntry), q.object))
+  return { remove: own(ctx, ctx.target, S.valueOnEntry), add }
+}
+
+/** Escape: a value cell holds what it kept (nothing, when it kept nothing). */
+const restore: ReactionFn = (ctx) => {
+  if (ctx.object(ctx.target, S.valueQuery)) return { add: [], remove: [] }
+  const f = ctx.runtime.store.factory
+  return { remove: own(ctx, ctx.target, C.value), add: own(ctx, ctx.target, S.valueOnEntry).map((q) => f.quad(ctx.target, f.namedNode(C.value), q.object)) }
+}
+
 /** Whether Shift was held (beh:modifiers). */
 const shifted = (ctx: RCtx) => ctx.match(ctx.event, NS.beh + 'modifiers', null).some((q) => `+${q.object.value}+`.includes('+shift+'))
 /** The sheets the cell is in, with the cells each places. */
@@ -414,4 +430,4 @@ const addColumn: ReactionFn = (ctx) => {
   return { add, remove: had }
 }
 
-export const reactions: Record<string, ReactionFn> = { 'sheet:edit': edit, 'sheet:select': select, 'sheet:extend': extend, 'sheet:extend-by-key': extendByKey, 'sheet:enter-formula': enterFormula, 'sheet:add-row': addRow, 'sheet:add-column': addColumn }
+export const reactions: Record<string, ReactionFn> = { 'sheet:edit': edit, 'sheet:remember': remember, 'sheet:restore': restore, 'sheet:select': select, 'sheet:extend': extend, 'sheet:extend-by-key': extendByKey, 'sheet:enter-formula': enterFormula, 'sheet:add-row': addRow, 'sheet:add-column': addColumn }

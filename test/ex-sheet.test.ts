@@ -223,6 +223,38 @@ describe('a spreadsheet of resources and queries', () => {
     expect(Object.keys(s.ranged()).sort()).toEqual(['B3', 'C3'])
   })
 
+  it.each(['sparql', 'function'] as const)('puts back what a cell held on Escape, with %s rules', (prefer) => {
+    const s = open(prefer)
+    const escape = (name: string) => s.send(s.cell(name).querySelector('input')!, 'keydown', { key: 'Escape' })
+    const year = s.value('F3')
+    expect(s.cell('C3').querySelector('input')!.hasAttribute('data-sem-select-on-focus')).toBe(true)
+    expect(s.cell('F3').querySelector('[data-sem-select-on-focus]')).toBeNull()
+    s.click('C3')
+    s.type('C3', '1')
+    expect(s.value('F3')).not.toBe(year)
+    escape('C3')
+    expect(s.value('C3')).toBe('5480')
+    expect(s.cell('C3').querySelector('input')!.value).toBe('5480')
+    expect(s.value('F3')).toBe(year)
+    expect(s.cell('C3').getAttribute('data-sem-numeric')).toBe('true')
+    // The very term it held, a number for the formulas.
+    expect(s.store.match(s.store.factory.namedNode(SS + 'C3'), s.store.factory.namedNode(C + 'value'), null).map((q) => (q.object as { datatype?: { value: string } }).datatype?.value)).toEqual(['http://www.w3.org/2001/XMLSchema#integer'])
+    // Committed (Enter, or leaving the cell), it stays.
+    s.type('C3', '42')
+    s.fire(s.cell('C3').querySelector('input')!, 'change')
+    escape('C3')
+    expect(s.value('C3')).toBe('42')
+    // A cell entered empty is empty again.
+    s.button('Add a row')
+    const added = [...s.sheet().querySelectorAll('input')].find((i) => !i.getAttribute('value') && i.getAttribute('aria-label') === 'B20') ?? [...s.sheet().querySelectorAll('input')].filter((i) => !i.getAttribute('value')).at(-1)!
+    s.send(added, 'focusin')
+    added.value = 'x'
+    s.fire(added, 'input')
+    expect(added.getAttribute('value')).toBe('x')
+    s.send(added, 'keydown', { key: 'Escape' })
+    expect(added.getAttribute('value') ?? '').toBe('')
+  })
+
   it('renders the same with SPARQL rules and reactions as with functions', () => {
     expect(implementationGaps(['components/sheet.ttl'])).toEqual({ noSparql: [], noFunction: [] })
     const [a, b] = (['sparql', 'function'] as const).map((prefer) => {
@@ -238,6 +270,10 @@ describe('a spreadsheet of resources and queries', () => {
       s.type('C3', '2500')
       html.push(s.sheet().outerHTML)
       s.type('A2', 'Ristretto')
+      html.push(s.sheet().outerHTML)
+      s.click('C4')
+      s.type('C4', '1')
+      s.send(s.cell('C4').querySelector('input')!, 'keydown', { key: 'Escape' })
       html.push(s.sheet().outerHTML)
       s.button('Add a column')
       s.write('-K2', '=MAX(B2:E2)', true)
