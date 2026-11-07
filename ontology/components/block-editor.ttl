@@ -64,11 +64,13 @@ c:redoer a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; rdfs:range beh:Redoe
 c:TextEdit a owl:Class ; rdfs:subClassOf beh:Event ;
     rdfs:comment "An edit the browser would make in a rich text region (a beforeinput), which it does not: the reactions make it."@en .
 c:InsertText a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ; beh:inputType "insertText" , "insertReplacementText" , "insertLineBreak" , "insertFromPaste" , "insertFromDrop" , "insertFromYank" ;
+    beh:joinWithin "PT1S"^^xsd:dayTimeDuration ;
     rdfs:comment "Text typed over a range (a line break, for insertLineBreak), or pasted or dropped there as plain text."@en .
 c:DeleteText a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ;
     beh:inputType "deleteContentBackward" , "deleteContentForward" , "deleteWordBackward" , "deleteWordForward" ,
         "deleteSoftLineBackward" , "deleteSoftLineForward" , "deleteHardLineBackward" , "deleteHardLineForward" ,
         "deleteEntireSoftLine" , "deleteByCut" , "deleteByDrag" , "deleteContent" ;
+    beh:joinWithin "PT1S"^^xsd:dayTimeDuration ;
     rdfs:comment "A range deleted: what the key deletes (a character, a word, a line, a boundary between blocks) is the browser's target range."@en .
 c:SplitBlock a owl:Class ; rdfs:subClassOf c:TextEdit ; beh:domEvent "beforeinput" ; beh:inputType "insertParagraph" ;
     rdfs:comment "Enter."@en .
@@ -183,6 +185,37 @@ WHERE {
   BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?m)
   BIND(IF(BOUND(?m), ?ms0, ?none) AS ?ms) BIND(IF(BOUND(?m), ?me0, ?none) AS ?me)
   OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+}""" .
+
+# Typing in one breath is one step to undo: a character typed in a block right where the one before it was
+# typed (or a Backspace or Delete right where the one before it deleted), within the event class's
+# beh:joinWithin of it, continues that step (beh:continues: its change is recorded on the step's member).
+# A pause, a caret moved elsewhere, another kind of edit or an undo starts a new step.
+c:ContinueTyping a beh:Reaction ;
+    rdfs:label "Continue the typing step"@en ;
+    rdfs:comment """A character typed where the last one went, or a deletion where the last one was, soon after it: the same
+undo step as that one (beh:continues the member it is recorded on). Not text that completes a Markdown shortcut."""@en ;
+    beh:when c:InsertText , c:DeleteText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:inserts """CONSTRUCT { $event beh:continues ?owner . }
+WHERE {
+  $event beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?e ; beh:at ?t .
+  $event a ?class . ?class beh:joinWithin ?within .
+  ?log beh:latest ?prev .
+  ?prev beh:target $this ; beh:handledBy c:EditText ; beh:inputType ?it ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?ps ; beh:at ?pt .
+  OPTIONAL { ?prev beh:text ?ptext0 } BIND(STRLEN(COALESCE(STR(?ptext0), "")) AS ?pL)
+  FILTER(?t - ?pt <= ?within)
+  # Typed after the last character typed; deleted before (Backspace) or at (Delete) what was deleted last.
+  FILTER((?it = "insertText" && ?s = ?e && ?s = ?ps + ?pL)
+    || (?it = "deleteContentBackward" && ?e = ?ps && ?s < ?e)
+    || (?it = "deleteContentForward" && ?s = ?ps && ?s < ?e))
+  OPTIONAL { $event beh:text ?t0 } BIND(COALESCE(STR(?t0), "") AS ?typed)
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(SUBSTR(?old, 1, ?s) AS ?before)
+  FILTER NOT EXISTS { ?bsc a blk:BlockShortcut ; blk:trigger ?typed ; blk:pattern ?bp . ?a a/rdfs:subClassOf* blk:Paragraph
+    FILTER(?it = "insertText" && REGEX(?before, ?bp) && (NOT EXISTS { ?bsc blk:whole true } || ?s = STRLEN(?old))) }
+  FILTER NOT EXISTS { ?isc a blk:InlineShortcut ; blk:trigger ?typed ; blk:pattern ?ip FILTER(?it = "insertText" && REGEX(?before, ?ip)) FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock } }
+  OPTIONAL { ?prev beh:continued ?first } BIND(COALESCE(?first, ?prev) AS ?owner)
 }""" .
 
 c:EditAcross a beh:Reaction ;

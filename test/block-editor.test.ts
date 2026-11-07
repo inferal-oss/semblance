@@ -1,5 +1,6 @@
 import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
+import { type Clock, ManualClock } from '../src/behaviour/clock.ts'
 import { EventBus } from '../src/behaviour/events.ts'
 import { domPoint } from '../src/behaviour/text.ts'
 import { memoryFileStore } from '../src/file-store.ts'
@@ -57,7 +58,7 @@ class FakeSelection {
   }
 }
 
-export function mount(prefer: 'sparql' | 'function', kind: 'wat' | 'oxigraph' = 'wat', extra = '') {
+export function mount(prefer: 'sparql' | 'function', kind: 'wat' | 'oxigraph' = 'wat', extra = '', clock?: Clock) {
   const store = loadStore(kind, DOC + extra)
   const runtime = new Runtime(store)
   const fail = (e: Error) => {
@@ -71,7 +72,7 @@ export function mount(prefer: 'sparql' | 'function', kind: 'wat' | 'oxigraph' = 
   const app = document.getElementById('app')!
   const renderer = new DomRenderer(screen.index, app, EX + 'page')
   renderer.flush()
-  const bus = new EventBus(runtime, screen, { prefer })
+  const bus = new EventBus(runtime, screen, { prefer, clock })
   bus.attach(renderer, () => renderer.flush())
   const region = () => app.querySelector('[data-sem-text-root]')!
   Object.defineProperty(document, 'activeElement', { get: () => region(), configurable: true })
@@ -286,6 +287,66 @@ describe('editing block documents (c:BlockEditor)', () => {
     target.dispatchEvent(new win.Event('compositionend', { bubbles: true }))
     expect(h.value('p2')).toBe('Second ありがとう line')
     expect(h.app.querySelector(`[id="${EX}p2/~text"]`)!.textContent).toBe('Second ありがとう line')
+  })
+})
+
+describe('typing in one breath is one undo step (c:BlockEditor)', () => {
+  for (const prefer of ['sparql', 'function'] as const)
+  it(`undoes a run of typing or of Backspace as one step, and a pause, a caret moved or another edit starts a new one (${prefer})`, () => {
+    const clock = new ManualClock()
+    const h = mount(prefer, 'wat', '', clock)
+    const key = (s: string) => {
+      for (const ch of s) {
+        clock.advance(120)
+        h.input('insertText', ch)
+      }
+    }
+    h.select('p2', 11)
+    key(' one')
+    clock.advance(2000)
+    key(' two')
+    expect(h.value('p2')).toBe('Second line one two')
+    h.click('Undo')
+    expect(h.value('p2')).toBe('Second line one')
+    h.click('Undo')
+    expect(h.value('p2')).toBe('Second line')
+    h.click('Redo')
+    expect(h.value('p2')).toBe('Second line one')
+    // A run of Backspace is one step too.
+    h.select('p2', 15)
+    for (let i = 0; i < 4; i++) {
+      clock.advance(100)
+      h.select('p2', 15 - i, 'p2', 15 - i)
+      const end = 15 - i
+      h.select('p2', end - 1, 'p2', end)
+      h.input('deleteContentBackward')
+    }
+    expect(h.value('p2')).toBe('Second line')
+    h.click('Undo')
+    expect(h.value('p2')).toBe('Second line one')
+    // The caret moved elsewhere: a new step.
+    h.select('p1', 0)
+    key('A')
+    h.select('p1', 6)
+    key('B')
+    expect(h.value('p1')).toBe('AHelloB world')
+    h.click('Undo')
+    expect(h.value('p1')).toBe('AHello world')
+    // A Markdown shortcut is a step of its own: undo leaves what was typed before it.
+    h.select('p3', 0)
+    key('#')
+    key(' ')
+    expect(h.objects('p3', NS.rdf + 'type')).toContain(NS.blk + 'Heading1')
+    h.click('Undo')
+    expect(h.objects('p3', NS.rdf + 'type')).toContain(NS.blk + 'Paragraph')
+    expect(h.value('p3')).toBe('#After the rule')
+    // Typed at the end of a bold word, which grows with it: one step back to where it was.
+    h.select('p1', 12)
+    key('ly')
+    expect(h.value('p1')).toBe('AHello worldly')
+    h.click('Undo')
+    expect(h.value('p1')).toBe('AHello world')
+    expect(h.objects('p1-b', NS.oa + 'end')).toEqual(['12'])
   })
 })
 

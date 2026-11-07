@@ -116,7 +116,7 @@ with a SPARQL pair and a function twin:
 | Tab / Shift+Tab | into the previous sibling's children (when its class `blk:nests`; a list item into a nested list of its kind) / out to follow its parent |
 | Alt+Up / Alt+Down, a drop | move the block in its chain (the `dnd:` layer for the pointer and its keyboard drag) |
 | Mod+B, I, E, Shift+S, K | toggle a mark over the selection (or the pending marks at a caret); K asks for a link's address |
-| undo / redo | Mod+Z, Mod+Shift+Z (or the browser's own history) activate the editor's `c:undoer` (a `beh:Undoer`) and `c:redoer` (a `beh:Redoer`, beside `beh:UndoLatest`: `beh:RedoLatest` applies again the change undone last). Each event is one step for now; typing in one breath as one step is to come |
+| undo / redo | Mod+Z, Mod+Shift+Z (or the browser's own history) activate the editor's `c:undoer` (a `beh:Undoer`) and `c:redoer` (a `beh:Redoer`, beside `beh:UndoLatest`: `beh:RedoLatest` applies again the change undone last). Typing in one breath is one step: a character typed where the last one went (or a Backspace or Delete where the last one deleted), within its event class's `beh:joinWithin` (a second), continues that step (`c:ContinueTyping` says `$event beh:continues ?member`, and the bus records the change on that member); a pause, a moved caret, another kind of edit or a Markdown shortcut starts a new one |
 
 Composition (IME, many phone keyboards) cannot be cancelled. Then the browser edits the block, and on
 `compositionend` (or an `input` whose `beforeinput` was not cancellable) the host reads that block's
@@ -269,5 +269,4 @@ To come:
 - copying out as Markdown and Turtle, and HTML or Markdown pasted as blocks (the event's HTML in RDF/HTML,
   mapped by reactions), as designed above;
 - mentions of the graph's resources by a menu of their own;
-- typing in one breath as one undo step;
 - the Examples page's walkthrough of a site block type.

@@ -220,6 +220,22 @@ beh:undone a owl:ObjectProperty ; rdfs:domain ldes:EventStream ; rdfs:range beh:
     rdfs:comment "A member of the log whose recorded change was undone (state, in the input graph)."@en .
 beh:viewState a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "On a property: true when it is view state (which field is open, where the focus goes next), not data: an undoable reaction's change of it is not recorded, so undoing the change does not bring it back."@en .
+# Steps that continue one another: a reaction may say that its event continues an earlier member (typing in
+# one breath, a run of Backspace) by inserting `$event beh:continues ?member`. Like beh:raise it is a
+# request, taken out of the change: the event's undoable change is recorded on that member instead of its
+# own (a triple it takes back cancels that member's statement), so the run is one step to undo. The event
+# says which member it continued (beh:continued), so the next one in the run finds it. Only a member with
+# a recorded change that is not undone is continued.
+beh:continues a owl:ObjectProperty ; rdfs:range beh:Event ;
+    rdfs:label "Continues"@en , "Продовжує"@uk , "Setzt fort"@de , "يُكمل"@ar ;
+    rdfs:comment "In a reaction's inserts, on $event: record this event's undoable change on that member, as one step with it (a request, not a statement)."@en .
+beh:continued a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:range beh:Event ;
+    rdfs:label "Continued"@en , "Продовжила"@uk , "Fortgesetzt"@de , "أكملت"@ar ;
+    rdfs:comment "On a member: the earlier member its undoable change was recorded on (beh:continues)."@en .
+beh:joinWithin a owl:DatatypeProperty ; rdfs:range xsd:dayTimeDuration ;
+    rdfs:label "Joins within"@en , "Об’єднує протягом"@uk , "Verbindet innerhalb"@de , "يدمج خلال"@ar ;
+    rdfs:comment "On an event class: how soon after the step before it an event of it continues that step (beh:continues), when its reactions say it may."@en .
+
 beh:Undoer a owl:Class ;
     rdfs:label "undo"@en , "скасувати"@uk , "rückgängig"@de , "تراجع"@ar ;
     rdfs:comment "A component (e.g. a c:Button that is also a beh:Undoer, with key:shortcut \"mod+z\") that undoes, when clicked, the latest undoable change of its beh:log (default beh:ChangeLog)."@en .
