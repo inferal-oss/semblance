@@ -536,6 +536,7 @@ async function loadRest() {
   // Taken in as several changes, none a long task: what defines rules first (the rules are read
   // again once), then the rest a slice per idle period, whole descriptions at a time.
   const { rules, rest } = sliceAddition(add, 150)
+  runtime.arriving(true)
   runtime.apply({ add: rules, remove: [] })
   flush()
   for (let i = 0; i < rest.length; ) {
@@ -544,6 +545,8 @@ async function loadRest() {
     while (i < rest.length && deadline.timeRemaining() > 8)
     flush()
   }
+  runtime.arriving(false)
+  flush()
   await persistence.restoreAdded().catch((e) => console.warn('[semblance] could not restore remembered state', e))
   flush()
   scheduleWarmup()

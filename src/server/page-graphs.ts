@@ -41,8 +41,10 @@ export function graphIndex(graphs: Record<string, string>): GraphIndex {
 /**
  * The graphs a page rendered with function rules needs (by name, in the index's order), with
  * `always` (the graphs every page loads first). Reads made for the projection's own agent (the
- * viewer: every term's label in its languages, kept whether or not a page shows it) are not counted:
- * the check against the full render says whether the page needs them.
+ * viewer: every term's label in its languages, kept whether or not a page shows it) are not counted,
+ * nor is what states a node that has output only from a rule evaluated whether or not it is shown
+ * (sem:always: a translated label on any page of the site): the check against the full render says
+ * whether the page needs them.
  */
 export function neededGraphs(index: GraphIndex, engine: Engine, store: GraphStore, always: Iterable<string> = []): string[] {
   const need = new Set(always)
@@ -56,7 +58,7 @@ export function neededGraphs(index: GraphIndex, engine: Engine, store: GraphStor
   const supers = superclasses(store)
   for (const { rule, focus } of engine.produced()) {
     subjects.add(rule.iri).add(rule.slot)
-    subjects.add(focus)
+    if (!rule.always) subjects.add(focus)
     for (const q of store.match(f.namedNode(focus), f.namedNode(RDF_TYPE), null)) for (const c of supers(q.object.value)) subjects.add(c)
   }
   for (const s of subjects) for (const n of index.bySubject.get(s) ?? []) need.add(n)

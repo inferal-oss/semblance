@@ -182,6 +182,15 @@ export class Engine {
   private anywhereFoci = new Map<Rule, Set<string>>()
   /** sem:watchesStatements: the rules whose focus is a property whose statements they read anywhere. */
   private statementWatchers: Rule[] = []
+  /** sem:watchesManyValued: the rules, the predicates each reads (read from the graphs when asked), and those due. */
+  private manyValuedRules: Rule[] = []
+  private manyValuedPredicates?: Map<string, Rule[]>
+  private manyValuedDue = new Set<Rule>()
+  /**
+   * An addition is arriving in slices (Runtime.arriving): what is due over the whole graph
+   * (sem:watchesManyValued) waits for the last, or each slice would evaluate it again.
+   */
+  arriving = false
   private pristine = new Set<Rule>()
   /** Every predicate whose links are indexed: followed alone or on a path. */
   private linkedPredicates = new Set<string>()
@@ -382,6 +391,7 @@ export class Engine {
     this.typedIn.clear()
     for (const q of delta.remove) this.propagate(q, -1)
     for (const q of delta.add) this.propagate(q, 1)
+    this.noteManyValued(delta)
     // A graph loaded (or unloaded) after start that defines rules: they join (or leave) the running engine.
     if (this.definesRules(delta)) return this.reloadRules()
     this.locationChanged(delta)
@@ -775,6 +785,8 @@ export class Engine {
     const fed = rules.filter((r) => !this.maintained.has(r))
     this.anywhere.clear()
     this.statementWatchers = rules.filter((r) => r.watchesStatements)
+    this.manyValuedRules = rules.filter((r) => r.manyValued.length)
+    this.manyValuedPredicates = undefined
     for (const r of rules) for (const p of r.anywhere) this.anywhere.set(p, [...(this.anywhere.get(p) ?? []), r])
     this.exact = this.exactOn ? new ExactIndex(this.store.factory, fed) : undefined
     // What a rule with exact dependencies declares is not used: its patterns say what it reads.
@@ -942,7 +954,7 @@ export class Engine {
       }
       this.targets.delete(s)
       for (const r of this.rulesFor(cls)) {
-        if (!r.anywhere.length) continue
+        if (!r.anywhere.length && !r.manyValued.length) continue
         let foci = this.anywhereFoci.get(r)
         if (!foci) this.anywhereFoci.set(r, (foci = new Set()))
         if (sign > 0) foci.add(s)
@@ -1083,6 +1095,53 @@ export class Engine {
     for (const r of this.statementWatchers) if (r.stratum >= this.current && this.isInstance(p, r)) this.markFocus(r, p)
     if (this.exact) this.propagateExact(q)
     if (sign > 0) this.index(q, sign)
+  }
+
+  /**
+   * sem:watchesManyValued: the rules a change in the input makes due, each evaluated once it may
+   * be. A node's values count before and after the change, so a text replaced by another (one
+   * value, then one value) makes nothing due, and neither does what a rule derives.
+   */
+  private noteManyValued(delta: Delta) {
+    if (this.manyValuedRules.length) {
+      const f = this.store.factory
+      const input = this.graphs.filter((g) => this.inputGraphKeys.has(g.value))
+      // A predicate marked, or no longer marked: what the rules read has changed.
+      for (const r of this.manyValuedRules) {
+        if (!delta.add.some((q) => r.manyValued.includes(q.predicate.value)) && !delta.remove.some((q) => r.manyValued.includes(q.predicate.value))) continue
+        this.manyValuedPredicates = undefined
+        this.manyValuedDue.add(r)
+      }
+      if (!this.manyValuedPredicates) {
+        this.manyValuedPredicates = new Map()
+        for (const r of this.manyValuedRules) {
+          for (const m of r.manyValued) {
+            for (const g of input) for (const q of this.store.match(null, f.namedNode(m), null, g)) this.manyValuedPredicates.set(q.subject.value, [...(this.manyValuedPredicates.get(q.subject.value) ?? []), r])
+          }
+        }
+      }
+      // Per node and predicate: how many values the change added, less those it removed.
+      const net = new Map<string, { q: Quad; rules: Rule[]; n: number }>()
+      for (const [qs, w] of [[delta.add, 1], [delta.remove, -1]] as const) {
+        for (const q of qs) {
+          if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'Literal' || !this.inputGraphKeys.has(q.graph.value)) continue
+          const rules = this.manyValuedPredicates.get(q.predicate.value)
+          if (!rules) continue
+          const k = q.subject.value + ' ' + q.predicate.value
+          const e = net.get(k)
+          if (e) e.n += w
+          else net.set(k, { q, rules, n: w })
+        }
+      }
+      for (const { q, rules, n } of net.values()) {
+        if (rules.every((r) => this.manyValuedDue.has(r))) continue
+        const values = new Set(input.flatMap((g) => this.store.match(q.subject, q.predicate, null, g)).filter((v) => v.object.termType === 'Literal').map((v) => v.object.value + '@' + (v.object as { language?: string }).language)).size
+        if (values >= 2 || values - n >= 2) for (const r of rules) this.manyValuedDue.add(r)
+      }
+    }
+    if (this.arriving || !this.manyValuedDue.size) return
+    for (const r of this.manyValuedDue) if (this.manyValuedRules.includes(r)) for (const focus of this.anywhereFoci.get(r) ?? []) this.markFocus(r, focus)
+    this.manyValuedDue.clear()
   }
 
   /** Rules with exact dependencies: the foci a changed triple reaches through their patterns. */

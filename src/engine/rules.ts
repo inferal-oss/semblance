@@ -50,6 +50,12 @@ export interface Rule {
    * on any node (`?s $this ?o`): a change to one makes that focus dirty.
    */
   watchesStatements: boolean
+  /**
+   * sem:watchesManyValued: the rule reads, on any node, the statements made with each predicate that
+   * has one of these properties, and says something only about a node with two values or more of
+   * one: a change in the input to such a node's values makes each of its foci due.
+   */
+  manyValued: string[]
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
   /**
@@ -207,6 +213,7 @@ export function loadRules(store: GraphStore): Rule[] {
       forEach,
       anywhere: getAll(SEM.watchesAnywhere),
       watchesStatements: get(SEM.watchesStatements)?.value === 'true',
+      manyValued: getAll(SEM.watchesManyValued),
       memberWatches:
         getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
           ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }
