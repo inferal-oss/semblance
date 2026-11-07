@@ -238,8 +238,20 @@ selection is written only after an event, so the server's HTML and the client's 
 
 ## Copy and paste
 
-Copy writes three formats of the selected blocks: HTML (the Screen rendering), Markdown (the Text
-modality) and Turtle (the blocks' triples). Paste is a `c:InsertFromPaste` event. The host does only the
+Copy (and cut) writes three formats of the selected blocks: HTML (the Screen rendering), Markdown (the
+Text modality) and Turtle (the blocks' triples). A `copy` or `cut` is an event (`c:BlockCopy`, unrecorded;
+`c:BlockCut`, which also deletes the range as a deletion does, one undoable step) carrying the range and
+every block wholly inside it (`beh:within`: the components whose rendered root lies between the range's
+first and last text). `c:CopyBlocks` replaces the editor's clipboard document (`c:clipboard`,
+`<editor>/~clip`) with a copy of the blocks the selection takes, clipped to it, and of the blocks holding
+them, each minted from its original (`<block>/~clip`, `<mark>/~clip`), in their order; what renderings state
+about a block (`ord:`, `dnd:`, …) is not copied. The editor renders that document out of sight
+(`c:BlockEditorClipboard`, before its body; no handles, no drop zones) with a `c:TriplesView` of its nodes,
+and the host writes the clipboard from those renderings: `text/html` (the document as the screen renders
+it), `text/plain` and `text/markdown` (its Text modality, from a projection of its own) and `text/turtle`.
+A collapsed selection copies nothing, and the browser's own copy goes ahead.
+
+Paste is a `c:InsertFromPaste` event. The host does only the
 mechanical part: the clipboard's HTML, parsed by the browser, is attached to the event in the RDF/HTML
 vocabulary (elements, attributes, text, as nodes minted from the event); plain text is its `beh:text`.
 Reactions map that to blocks in SPARQL (`p`, `h1`–`h3`, `ul`/`ol`/`li`, `blockquote`, `pre`, `hr`,
@@ -266,7 +278,6 @@ on it goes into the TeX); a code block's language typed or picked from its class
 To come:
 - dragging a block by a handle: the drag-and-drop layer makes a draggable's whole root its handle, which
   in an editable region would turn every text selection into a drag; it needs a handle part of its own;
-- copying out as Markdown and Turtle, and HTML or Markdown pasted as blocks (the event's HTML in RDF/HTML,
-  mapped by reactions), as designed above;
+- HTML or Markdown pasted as blocks (the event's HTML in RDF/HTML, mapped by reactions), as designed above;
 - mentions of the graph's resources by a menu of their own;
 - the Examples page's walkthrough of a site block type.

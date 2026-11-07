@@ -524,6 +524,60 @@ describe('nesting and moving blocks (c:BlockEditor)', () => {
   })
 })
 
+describe('copying and cutting blocks (c:BlockEditor)', () => {
+  /** A copy or cut of the selection, as the browser sends one; what it wrote to the clipboard. */
+  const clip = (h: ReturnType<typeof mount>, type: 'copy' | 'cut') => {
+    const written: Record<string, string> = {}
+    const target = h.selection.anchorNode!.parentElement!
+    const e = Object.assign(new (target.ownerDocument.defaultView!.Event)(type, { bubbles: true, cancelable: true }), {
+      clipboardData: { setData: (t: string, v: string) => void (written[t] = v), getData: (t: string) => written[t] ?? '' },
+    })
+    target.dispatchEvent(e)
+    return { written, prevented: e.defaultPrevented }
+  }
+
+  it('copies the selection as HTML, Markdown and Turtle, the same with SPARQL and function rules', () => {
+    const both = [mount('sparql'), mount('function')] as const
+    const out = both.map((h) => {
+      h.select('p1', 6, 'p3', 5)
+      return clip(h, 'copy')
+    })
+    sameHtml(both[1].html(), both[0].html(), 'copied')
+    for (const k of ['text/html', 'text/plain', 'text/turtle']) expect(out[1]!.written[k], k).toBe(out[0]!.written[k])
+    const { written, prevented } = out[0]!
+    expect(prevented).toBe(true)
+    // Markdown (the Text modality): the bold word, the whole block between, the divider, the start of the last.
+    expect(written['text/plain']).toBe('**world**\nSecond line\n---\nAfter')
+    expect(written['text/markdown']).toBe(written['text/plain'])
+    // HTML: the document as the screen renders it, with no handles.
+    const html = written['text/html']!
+    expect(html).toContain('<strong>world</strong>')
+    expect(html).toContain('<hr')
+    expect(html).not.toContain('Hello')
+    expect(html).not.toContain('blk-handle')
+    // Turtle: the copies' triples.
+    expect(written['text/turtle']).toContain('"Second line"')
+    expect(written['text/turtle']).toContain('"world"')
+    expect(written['text/turtle']).toContain('blk:Strong')
+    // Nothing in the document changed, and nothing to undo.
+    expect(both[0].value('p1')).toBe('Hello world')
+    // A collapsed selection copies nothing of its own: the browser's copy goes ahead.
+    both[0].select('p2', 3)
+    expect(clip(both[0], 'copy').prevented).toBe(false)
+  })
+
+  it('cuts the selection: copied, then deleted in one undoable step', () => {
+    const h = mount('sparql')
+    h.select('p2', 0, 'p2', 7)
+    const { written, prevented } = clip(h, 'cut')
+    expect(prevented).toBe(true)
+    expect(written['text/plain']).toBe('Second ')
+    expect(h.value('p2')).toBe('line')
+    h.click('Undo')
+    expect(h.value('p2')).toBe('Second line')
+  })
+})
+
 describe('pasting into a block (c:BlockEditor)', () => {
   it('inserts pasted plain text where the selection is, as typing does', () => {
     const h = mount('sparql')

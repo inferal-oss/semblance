@@ -1281,11 +1281,11 @@ WHERE {
 
 c:TriplesView a owl:Class ;
     rdfs:subClassOf sem:Component , c:TurtleView ;
-    rdfs:comment "The triples about one node (c:of) as syntax-colored Turtle."@en ;
+    rdfs:comment "The triples about a node (c:of), or about each of several, as syntax-colored Turtle."@en ;
     sem:slug "triples-view" ;
     c:turtleInto "root" .
-# What it prints (the Turtle printer, turtle.ttl): the node at the top of its one section (nothing,
-# when it has no triples); its blank nodes inline.
+# What it prints (the Turtle printer, turtle.ttl): each node it is of at the top of its one section
+# (nothing, when it has no triples); its blank nodes inline.
 c:TriplesViewTurtle a sem:BuildingBlock ; sem:targets c:TriplesView ; sem:stratum 97 ; sem:watches rdf:type , c:of .
 c:TriplesViewTurtle-fn a sem:Rule ; sem:implements c:TriplesViewTurtle ; sem:function "triplesview:turtle" .
 c:TriplesViewTurtle-sparql a sem:Rule ;

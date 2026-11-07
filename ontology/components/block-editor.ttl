@@ -83,6 +83,12 @@ c:BlockEditorKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown
     rdfs:comment "A key press in a block editor that marks text or steps through history."@en .
 c:BlockSelect a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "selectionchange" ; beh:recorded false ;
     rdfs:comment "The selection moved in a rich text region (beh:anchorBlock … beh:focusOffset)."@en .
+c:BlockCopy a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "copy" ; beh:recorded false ;
+    rdfs:comment "The selection copied: what it holds is written to the clipboard (as HTML, Markdown and Turtle) from the editor's c:clipboard document."@en .
+c:BlockCut a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "cut" ;
+    rdfs:comment "The selection cut: copied as c:BlockCopy is, and deleted as a c:DeleteText is."@en .
+beh:within a owl:ObjectProperty ;
+    rdfs:comment "On a copy or a cut in a rich text region: a component rendered wholly inside the range (its root after the range's start and before its end): a block between the first and the last."@en .
 
 # --- Markdown shortcuts: data, so a site adds its own ---------------------------------------------
 
@@ -129,7 +135,7 @@ c:EditText a beh:Reaction ;
     rdfs:comment """Text typed over, or deleted from, a range of one block: its rdf:value spliced, its marks moved (a mark
 grows when text is typed at its end, not at its start; a link at neither), a mark left empty removed, the
 pending marks put on what was typed, the caret after it. Not text that completes a Markdown shortcut."""@en ;
-    beh:when c:InsertText , c:DeleteText , c:SplitBlock ;
+    beh:when c:InsertText , c:DeleteText , c:SplitBlock , c:BlockCut ;
     beh:sourceClass c:BlockEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?a rdf:value ?raw . ?m oa:start ?ms ; oa:end ?me . ?a blk:mark ?gone . ?gone ?gp ?go . $this c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
@@ -224,7 +230,7 @@ c:EditAcross a beh:Reaction ;
 the range, then what was typed, then the last's text after it, with the marks of both; the last block, the
 blocks wholly inside the range (beh:covers) and the containers left empty by that go, and every chain they
 were in closes over the gap. A range ending in a block that holds blocks is left alone."""@en ;
-    beh:when c:InsertText , c:DeleteText , c:SplitBlock ;
+    beh:when c:InsertText , c:DeleteText , c:SplitBlock , c:BlockCut ;
     beh:sourceClass c:BlockEditor ;
     beh:undoable true ;
     ann:announces "Blocks joined"@en , "Блоки об’єднано"@uk , "Blöcke verbunden"@de , "تم دمج الكتل"@ar ;
@@ -915,6 +921,86 @@ c:BlockRedo a beh:Reaction ;
 WHERE {
   { $event beh:inputType "historyRedo" } UNION { $event beh:key "mod+shift+z" } UNION { $event beh:key "mod+y" }
   $this c:redoer ?step .
+}""" .
+
+# --- copying out ---------------------------------------------------------------------------------------
+# Copying (or cutting) a selection writes what it holds to the editor's clipboard document (c:clipboard,
+# <editor>/~clip): a copy of each block the selection takes (where it starts and ends, clipped to it, and
+# every block wholly inside it: beh:covers, beh:within) and of the blocks holding them, each minted from its
+# original (<block>/~clip, <mark>/~clip), in the same order. The editor
+# renders it out of sight (c:BlockEditorClipboard), with its Turtle (a c:TriplesView), and the host writes
+# the clipboard from those renderings: the document's HTML (text/html), its Text modality (Markdown:
+# text/plain, text/markdown) and its triples (text/turtle). A copy replaces the one before it.
+
+c:clipboard a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; rdfs:range blk:Document ; beh:viewState true ;
+    rdfs:comment "The document holding a copy of what was copied (or cut) last in the editor (<editor>/~clip)."@en .
+c:copiedAt a owl:DatatypeProperty ; rdfs:domain c:BlockEditor ; rdfs:range xsd:integer ; beh:viewState true ;
+    rdfs:comment "When the editor's clipboard was written last (the copy's beh:sequence), so its rendering follows each copy."@en .
+
+c:CopyBlocks a beh:Reaction ;
+    rdfs:label "Copy the selection"@en ;
+    rdfs:comment """A copy or a cut: the editor's clipboard document is replaced by a copy of the selection's blocks (clipped
+to it) and the blocks holding them, in their order, with their marks."""@en ;
+    beh:when c:BlockCopy , c:BlockCut ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { ?x ?p ?o . $this c:clipboard ?old ; c:copiedAt ?was . }
+WHERE {
+  { $this c:clipboard ?c . ?c po:contains* ?x . ?x ?p ?o }
+  UNION { $this c:clipboard ?c . ?c po:contains* ?y . ?y blk:mark ?x . ?x ?p ?o }
+  UNION { $this c:clipboard ?old } UNION { $this c:copiedAt ?was }
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?clip a blk:Document . $this c:clipboard ?clip ; c:copiedAt ?at .
+  ?nc ?p ?o . ?parentCopy po:contains ?nc . ?nc co:nextItem ?nextCopy . ?nc rdf:value ?part .
+  ?nc blk:mark ?mc . ?mc ?mp ?mo ; oa:start ?mStart ; oa:end ?mEnd .
+}
+WHERE {
+  {
+    # The clipboard's document, for a selection that is not collapsed.
+    $event beh:startBlock ?sa ; beh:endBlock ?sb ; beh:startOffset ?ss ; beh:endOffset ?se FILTER(?sa != ?sb || ?ss < ?se)
+    $event beh:sequence ?at .
+    BIND(IRI(CONCAT(STR($this), "/~clip")) AS ?clip)
+  } UNION {
+    # Each block copied, with what it says (not its place, text or marks),
+    { SELECT DISTINCT ?n WHERE { $this c:of ?d_a . $event beh:startBlock ?s_a_a ; beh:endBlock ?s_a_b ; beh:startOffset ?s_a_s ; beh:endOffset ?s_a_e FILTER(?s_a_a != ?s_a_b || ?s_a_s < ?s_a_e) { { $event beh:startBlock ?n } UNION { $event beh:endBlock ?n } UNION { $event beh:covers ?n } UNION { $event beh:within ?n } } UNION { { $event beh:startBlock ?r_a } UNION { $event beh:endBlock ?r_a } UNION { $event beh:covers ?r_a } UNION { $event beh:within ?r_a } ?n po:contains+ ?r_a } ?d_a po:contains+ ?n . ?n a/rdfs:subClassOf* blk:Block } }
+    BIND(IRI(CONCAT(STR(?n), "/~clip")) AS ?nc)
+    ?n ?p ?o FILTER(?p NOT IN (po:contains, co:nextItem, blk:mark, rdf:value, blk:linePrefix)) FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)))
+  } UNION {
+    # in the document,
+    { SELECT DISTINCT ?n WHERE { $this c:of ?d_f . $event beh:startBlock ?s_f_a ; beh:endBlock ?s_f_b ; beh:startOffset ?s_f_s ; beh:endOffset ?s_f_e FILTER(?s_f_a != ?s_f_b || ?s_f_s < ?s_f_e) { { $event beh:startBlock ?n } UNION { $event beh:endBlock ?n } UNION { $event beh:covers ?n } UNION { $event beh:within ?n } } UNION { { $event beh:startBlock ?r_f } UNION { $event beh:endBlock ?r_f } UNION { $event beh:covers ?r_f } UNION { $event beh:within ?r_f } ?n po:contains+ ?r_f } ?d_f po:contains+ ?n . ?n a/rdfs:subClassOf* blk:Block } }
+    BIND(IRI(CONCAT(STR(?n), "/~clip")) AS ?nc)
+    $this c:of ?doc . ?doc po:contains ?n . BIND(IRI(CONCAT(STR($this), "/~clip")) AS ?parentCopy)
+  } UNION {
+    # or in the copy of the block holding it,
+    { SELECT DISTINCT ?n WHERE { $this c:of ?d_g . $event beh:startBlock ?s_g_a ; beh:endBlock ?s_g_b ; beh:startOffset ?s_g_s ; beh:endOffset ?s_g_e FILTER(?s_g_a != ?s_g_b || ?s_g_s < ?s_g_e) { { $event beh:startBlock ?n } UNION { $event beh:endBlock ?n } UNION { $event beh:covers ?n } UNION { $event beh:within ?n } } UNION { { $event beh:startBlock ?r_g } UNION { $event beh:endBlock ?r_g } UNION { $event beh:covers ?r_g } UNION { $event beh:within ?r_g } ?n po:contains+ ?r_g } ?d_g po:contains+ ?n . ?n a/rdfs:subClassOf* blk:Block } }
+    BIND(IRI(CONCAT(STR(?n), "/~clip")) AS ?nc)
+    ?parent po:contains ?n . { SELECT DISTINCT ?parent WHERE { $this c:of ?d_b . $event beh:startBlock ?s_b_a ; beh:endBlock ?s_b_b ; beh:startOffset ?s_b_s ; beh:endOffset ?s_b_e FILTER(?s_b_a != ?s_b_b || ?s_b_s < ?s_b_e) { { $event beh:startBlock ?parent } UNION { $event beh:endBlock ?parent } UNION { $event beh:covers ?parent } UNION { $event beh:within ?parent } } UNION { { $event beh:startBlock ?r_b } UNION { $event beh:endBlock ?r_b } UNION { $event beh:covers ?r_b } UNION { $event beh:within ?r_b } ?parent po:contains+ ?r_b } ?d_b po:contains+ ?parent . ?parent a/rdfs:subClassOf* blk:Block } } BIND(IRI(CONCAT(STR(?parent), "/~clip")) AS ?parentCopy)
+  } UNION {
+    # before the copy of the block after it.
+    { SELECT DISTINCT ?n WHERE { $this c:of ?d_h . $event beh:startBlock ?s_h_a ; beh:endBlock ?s_h_b ; beh:startOffset ?s_h_s ; beh:endOffset ?s_h_e FILTER(?s_h_a != ?s_h_b || ?s_h_s < ?s_h_e) { { $event beh:startBlock ?n } UNION { $event beh:endBlock ?n } UNION { $event beh:covers ?n } UNION { $event beh:within ?n } } UNION { { $event beh:startBlock ?r_h } UNION { $event beh:endBlock ?r_h } UNION { $event beh:covers ?r_h } UNION { $event beh:within ?r_h } ?n po:contains+ ?r_h } ?d_h po:contains+ ?n . ?n a/rdfs:subClassOf* blk:Block } }
+    BIND(IRI(CONCAT(STR(?n), "/~clip")) AS ?nc)
+    ?n co:nextItem ?next . { SELECT DISTINCT ?next WHERE { $this c:of ?d_c . $event beh:startBlock ?s_c_a ; beh:endBlock ?s_c_b ; beh:startOffset ?s_c_s ; beh:endOffset ?s_c_e FILTER(?s_c_a != ?s_c_b || ?s_c_s < ?s_c_e) { { $event beh:startBlock ?next } UNION { $event beh:endBlock ?next } UNION { $event beh:covers ?next } UNION { $event beh:within ?next } } UNION { { $event beh:startBlock ?r_c } UNION { $event beh:endBlock ?r_c } UNION { $event beh:covers ?r_c } UNION { $event beh:within ?r_c } ?next po:contains+ ?r_c } ?d_c po:contains+ ?next . ?next a/rdfs:subClassOf* blk:Block } } BIND(IRI(CONCAT(STR(?next), "/~clip")) AS ?nextCopy)
+  } UNION {
+    # The text of a block the selection takes: where it starts, from there; where it ends, up to there.
+    { SELECT DISTINCT ?n WHERE { $this c:of ?d_d . $event beh:startBlock ?s_d_a ; beh:endBlock ?s_d_b ; beh:startOffset ?s_d_s ; beh:endOffset ?s_d_e FILTER(?s_d_a != ?s_d_b || ?s_d_s < ?s_d_e) { $event beh:startBlock ?n } UNION { $event beh:endBlock ?n } UNION { $event beh:covers ?n } UNION { $event beh:within ?n } ?d_d po:contains+ ?n . ?n a/rdfs:subClassOf* blk:Block } }
+    BIND(IRI(CONCAT(STR(?n), "/~clip")) AS ?nc)
+    ?n rdf:value ?raw BIND(STR(?raw) AS ?v)
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e .
+    BIND(IF(?n = ?a, ?s, 0) AS ?lo) BIND(IF(?n = ?b, ?e, STRLEN(?v)) AS ?hi)
+    BIND(SUBSTR(?v, ?lo + 1, ?hi - ?lo) AS ?part)
+  } UNION {
+    # Its marks, clipped to what was taken of its text; a mark left empty is not copied.
+    { SELECT DISTINCT ?n WHERE { $this c:of ?d_e . $event beh:startBlock ?s_e_a ; beh:endBlock ?s_e_b ; beh:startOffset ?s_e_s ; beh:endOffset ?s_e_e FILTER(?s_e_a != ?s_e_b || ?s_e_s < ?s_e_e) { $event beh:startBlock ?n } UNION { $event beh:endBlock ?n } UNION { $event beh:covers ?n } UNION { $event beh:within ?n } ?d_e po:contains+ ?n . ?n a/rdfs:subClassOf* blk:Block } }
+    BIND(IRI(CONCAT(STR(?n), "/~clip")) AS ?nc)
+    ?n rdf:value ?raw BIND(STR(?raw) AS ?v)
+    $event beh:startBlock ?a ; beh:endBlock ?b ; beh:startOffset ?s ; beh:endOffset ?e .
+    BIND(IF(?n = ?a, ?s, 0) AS ?lo) BIND(IF(?n = ?b, ?e, STRLEN(?v)) AS ?hi)
+    ?n blk:mark ?m . ?m oa:start ?ms ; oa:end ?me .
+    BIND(IF(?ms > ?lo, ?ms, ?lo) - ?lo AS ?mStart) BIND(IF(?me < ?hi, ?me, ?hi) - ?lo AS ?mEnd)
+    FILTER(?mStart < ?mEnd)
+    BIND(IRI(CONCAT(STR(?m), "/~clip")) AS ?mc)
+    ?m ?mp ?mo FILTER(?mp NOT IN (oa:start, oa:end)) FILTER(!STRSTARTS(STR(?mp), STR(dnd:)) && !STRSTARTS(STR(?mp), STR(ord:)) && !STRSTARTS(STR(?mp), STR(rdfhtml:)) && !STRSTARTS(STR(?mp), STR(sem:)))
+  }
 }""" .
 
 # --- the / menu ---------------------------------------------------------------------------------------

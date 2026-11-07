@@ -348,7 +348,9 @@ CONSTRUCT {
 WHERE {
   $this po:contains $member .
   BIND(IRI(CONCAT(STR($this), IF(EXISTS { $this a/rdfs:subClassOf* blk:TextBlock } || EXISTS { $this a/rdfs:subClassOf* blk:Table }, "/~children", "/~root"))) AS ?region)
-  BIND(EXISTS { $member a/rdfs:subClassOf* blk:Row } || EXISTS { $member a/rdfs:subClassOf* blk:Cell } || EXISTS { $member a/rdfs:subClassOf* blk:Column } AS ?fixed)
+  # None in a copy on an editor's clipboard (block-editor.ttl), which is never edited.
+  BIND(EXISTS { $member a/rdfs:subClassOf* blk:Row } || EXISTS { $member a/rdfs:subClassOf* blk:Cell } || EXISTS { $member a/rdfs:subClassOf* blk:Column }
+    || EXISTS { ?clipEditor c:clipboard ?clipDoc . ?clipDoc po:contains* $this } AS ?fixed)
   BIND(EXISTS { $member a/rdfs:subClassOf* blk:Item } AS ?item)
   BIND(IF(?fixed, ?none, IRI(CONCAT(STR($this), "/~handle-", ENCODE_FOR_URI(STR($member))))) AS ?handle)
   BIND(IF(?item, IRI(CONCAT(STR($member), "/~root")), ?region) AS ?handleRegion)
@@ -497,6 +499,8 @@ CONSTRUCT { $this dnd:members po:contains ; dnd:orderBy co:nextItem ; dnd:zone ?
 WHERE {
   $this a/rdfs:subClassOf* blk:Container .
   FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:Table }
+  # None in a copy on an editor's clipboard (block-editor.ttl), which nothing is dropped on.
+  FILTER NOT EXISTS { ?clipEditor c:clipboard ?clipDoc . ?clipDoc po:contains* $this }
   # Named by its type, which the drag status says ("Numbered list refuses it").
   # (By patterns: a label reaches this zone only through a class of its block.)
   OPTIONAL {
@@ -1496,6 +1500,31 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
   BIND(IRI(CONCAT(STR($this), "/~body-role")) AS ?role)
   BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~body-aria-label")), ?none) AS ?name)
+}""" .
+# What was copied last (the editor's c:clipboard, block-editor.ttl), out of sight before its body: the host
+# writes the clipboard from it - the document's HTML, its Text modality, and its Turtle (a c:TriplesView of
+# its nodes, <editor>/~clipboard-turtle). A copy states c:copiedAt, so it is rendered again.
+c:BlockEditorClipboard a sem:Rendering ; sem:targets c:BlockEditor ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , c:clipboard , c:copiedAt .
+c:BlockEditorClipboard-fn a sem:Rule ; sem:implements c:BlockEditorClipboard ; sem:function "blk:clipboard" .
+c:BlockEditorClipboard-sparql a sem:Rule ; sem:implements c:BlockEditorClipboard ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?box . ?box ord:precedes ?body .
+  ?box a rdfhtml:Div ; rdfhtml:class "sem-clipboard" ; rdfhtml:attribute ?hiddenAttr ; rdfhtml:hasChild ?clip , ?turtle .
+  ?hiddenAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?clip ord:immediatelyPrecedes ?turtle .
+  ?turtle a c:TriplesView ; c:of ?n .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:BlockEditor ; c:clipboard ?clip .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~clipboard")) AS ?box)
+  BIND(IRI(CONCAT(STR($this), "/~clipboard-aria-hidden")) AS ?hiddenAttr)
+  BIND(IRI(CONCAT(STR($this), "/~clipboard-turtle")) AS ?turtle)
+  { $this c:clipboard ?c1 . ?c1 po:contains* ?n } UNION { $this c:clipboard ?c2 . ?c2 po:contains* ?y . ?y blk:mark ?n }
 }""" .
 c:BlockEditorRendering-sparql-text a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:modality mod:Text ;
     sem:construct """

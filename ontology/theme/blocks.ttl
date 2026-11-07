@@ -324,6 +324,9 @@
     sty:declares [ sty:property "padding-inline-start" ; sty:token tok:space-6 ] .
 
 # --- the editor's region and its / menu ---
+# What was copied last (the clipboard's document and its Turtle) is never shown.
+[] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-clipboard" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BlockEditor ; sty:part "> .sem-body[contenteditable=true]" ;
     sty:declares [ sty:property "caret-color" ; sty:token tok:accent-9 ] ,
                  [ sty:property "min-block-size" ; sty:raw "4em" ] ,

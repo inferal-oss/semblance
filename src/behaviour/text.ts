@@ -138,6 +138,21 @@ export function rangeOf(region: Element, r: DomRange): TextRange | undefined {
   return { start, end, covers }
 }
 
+/**
+ * The components rendered wholly inside a text range of a region: those whose root (`<focus>/~root`)
+ * comes after the holder the range starts in and before the one it ends in (a block between them,
+ * text or not).
+ */
+export function componentsWithin(region: Element, r: TextRange): string[] {
+  if (r.start.node === r.end.node) return []
+  const first = holderFor(region, r.start.node)
+  const last = holderFor(region, r.end.node)
+  if (!first || !last) return []
+  const out: string[] = []
+  for (const el of region.querySelectorAll('[id$="/~root"]')) if (before(first, el) && before(el, last)) out.push(el.id.slice(0, -'/~root'.length))
+  return out
+}
+
 /** The holder of a node's text in a region. */
 const holderFor = (region: Element, node: string) => region.querySelector(`[data-sem-text="${CSS_ESCAPE(node)}"]`)
 
