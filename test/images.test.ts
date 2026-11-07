@@ -210,6 +210,88 @@ describe('gallery and lightbox', () => {
     expect(s.document.activeElement).toBe(last)
   })
 
+  describe.each(['sparql', 'function'] as const)('closing on another image (%s)', (prefer) => {
+    /** Each focus's options, in order, on top of a tracked focus. */
+    const scrolls = (s: ReturnType<typeof photos>) => {
+      trackFocus(s.window, s.document)
+      const focus = s.window.HTMLElement.prototype.focus
+      const moved: [Element, boolean][] = []
+      s.window.HTMLElement.prototype.focus = function (this: HTMLElement, o?: FocusOptions) {
+        moved.push([this, !o?.preventScroll])
+        return focus.call(this, o)
+      }
+      return moved
+    }
+
+    it.each([
+      ['carousel', 'slide-2-item', 'slide-4-item'],
+      ['grid', 'cell-2', 'cell-4'],
+      ['pile', 'photo-2', 'photo-4'],
+    ] as const)('in a %s, gives the focus to the image it shows, brought into view, and Enter opens that one', (layout, from, shown) => {
+      const s = photos('GroupData', prefer)
+      s.layout(layout)
+      const moved = scrolls(s)
+      const opener = s.part('dt-photos', from)
+      opener.focus()
+      s.click(opener)
+      expect(s.part('dt-lightbox', 'counter').textContent).toBe('2 / 6')
+      s.key('ArrowRight', s.document.activeElement!)
+      s.key('ArrowRight', s.document.activeElement!)
+      expect(s.fact('dt-photos', 'current')).toEqual(['photo-dunes'])
+      moved.length = 0
+      s.key('Escape', s.document.activeElement!)
+      expect(s.fact('dt-lightbox', 'open')).toEqual(['false'])
+      const item = s.part('dt-photos', shown)
+      expect(s.document.activeElement).toBe(item)
+      expect(moved.at(-1)).toEqual([item, true])
+      // What Enter does there: open what is shown.
+      s.click(s.document.activeElement!)
+      expect(s.fact('dt-lightbox', 'open')).toEqual(['true'])
+      expect(s.part('dt-lightbox', 'counter').textContent).toBe('4 / 6')
+    })
+
+    it('right to left, and by a thumbnail, the ✕ or the scrim too', () => {
+      const s = photos('GroupOverlays', prefer)
+      trackFocus(s.window, s.document)
+      s.document.documentElement.setAttribute('dir', 'rtl')
+      const cells = [...s.root('ov-photos').querySelectorAll<HTMLElement>('.sem-cell')]
+      const open = (cell: HTMLElement) => (cell.focus(), s.click(cell))
+      open(cells[0]!)
+      // Right to left, the left arrow goes on.
+      s.key('ArrowLeft', s.document.activeElement!)
+      s.click(s.part('ov-lightbox', 'close'))
+      expect(s.document.activeElement).toBe(cells[1])
+      open(cells[0]!)
+      s.click(s.part('ov-lightbox', 'thumb-3'))
+      s.click(s.part('ov-lightbox', 'scrim'))
+      expect(s.fact('ov-lightbox', 'open')).toEqual(['false'])
+      expect(s.document.activeElement).toBe(cells[2])
+      s.document.documentElement.removeAttribute('dir')
+    })
+
+    it('opened from elsewhere, it gives the focus back to what opened it, wherever the images went', () => {
+      const s = photos('GroupData', prefer)
+      s.layout('grid')
+      const moved = scrolls(s)
+      const f = s.store.factory
+      const lightbox = f.namedNode(UI + 'dt-lightbox')
+      const open = f.namedNode(C + 'open')
+      const set = (v: boolean) => {
+        s.runtime.apply({ remove: s.store.match(lightbox, open, null), add: [f.quad(lightbox, open, f.literal(String(v), f.namedNode(NS.xsd + 'boolean')))] })
+        s.shell.flush()
+      }
+      const before = s.root('dt-layout').querySelector('button') as HTMLElement
+      before.focus()
+      set(true)
+      s.key('ArrowRight', s.document.activeElement!)
+      moved.length = 0
+      set(false)
+      expect(s.document.activeElement).toBe(before)
+      // It was never seen on this page (linkedom has no screen): nothing scrolls to it.
+      expect(moved.at(-1)).toEqual([before, false])
+    })
+  })
+
   it('moves through the images by arrow keys, mirrored in a right-to-left page, and closes with Escape', () => {
     const s = photos()
     s.click(s.part('dt-photos', 'photo-2'))

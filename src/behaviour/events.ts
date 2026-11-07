@@ -2,7 +2,7 @@ import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { BEH, EVENTS_GRAPH, KEY, LDES, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration, quadKey } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
-import type { DomRenderer } from '../render/dom.ts'
+import type { DomRenderer, ElementPlace } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
 import { comboOf, mirrored, modifiersOf, navigate, normalizeShortcut, rightToLeft, rove, trapTab } from '../layers/keyboard.ts'
 import { storeFailure } from '../store/types.ts'
@@ -1159,13 +1159,43 @@ function controlIn(el: HTMLElement, shown: (el: Element) => boolean): HTMLElemen
  * Where it lands is the overlay rendering's choice: the first element it marks [autofocus] that is,
  * or holds, a shown control (a dialog marks its body, then its actions: the content's first field,
  * else the first action), else the panel itself.
+ *
+ * A panel that moves through a collection says where what it shows lives (data-sem-origin on its
+ * data-sem-current part: a lightbox's image, in its gallery). Opened from that collection, it gives
+ * the focus back to the item it shows when it closes, not the one it opened from; that item may be
+ * out of view by then (a grid scrolled past it), so it is brought there. Opened from elsewhere (a
+ * button that c:opens it), it gives the focus back to what opened it, as any modal does.
+ *
+ * The page is not locked under a modal. What opened it may have scrolled away meanwhile: if it was in
+ * view on opening it comes back into view, for a focus nobody can see is no use; unless the modal
+ * changed the address, when the page is where it was asked to be. If it has gone altogether, a control
+ * near where it was takes the focus (unless the address changed: that is another page).
  */
 class ModalFocus {
-  private readonly open: { panel: HTMLElement; back: Element | null }[] = []
+  private readonly open: { panel: HTMLElement; back: Element | null; place: ElementPlace; seen: boolean; address?: string; shows: string | null | undefined }[] = []
 
   constructor(private readonly renderer: DomRenderer) {}
 
   private shown = (el: Element) => el.isConnected && !el.closest('[hidden], [inert]') && !this.renderer.inSlot(el)
+
+  private address = () => this.renderer.host.ownerDocument.defaultView?.location?.href
+
+  /** Whether an element is on the screen (a linkedom page has none). */
+  private inView(el: Element) {
+    const win = el.ownerDocument.defaultView
+    const r = el.getBoundingClientRect?.()
+    return !!win && !!r && r.bottom > 0 && r.right > 0 && r.top < win.innerHeight && r.left < win.innerWidth
+  }
+
+  private showing = (panel: Element) => panel.querySelector('[data-sem-current] [data-sem-origin]')?.getAttribute('data-sem-origin')
+
+  /** The item a closed panel last showed, if it was opened from the collection that item is in (or from nothing). */
+  private itemShown(back: Element | null, shows: string | null | undefined): HTMLElement | undefined {
+    const doc = this.renderer.host.ownerDocument
+    const item = (shows && doc.getElementById(shows)?.closest<HTMLElement>(FOCUSABLE)) || undefined
+    if (!item || !this.shown(item)) return undefined
+    return back?.isConnected && back !== doc.body && back.closest('[data-sem-c]') !== item.closest('[data-sem-c]') ? undefined : item
+  }
 
   /** Follow what the last flush opened and closed. */
   settle(): void {
@@ -1173,17 +1203,27 @@ class ModalFocus {
     const doc = host.ownerDocument
     const now = [...host.querySelectorAll<HTMLElement>('[aria-modal="true"]')].filter(this.shown)
     for (let i = this.open.length - 1; i >= 0; i--) {
-      const { panel, back } = this.open[i]!
-      if (now.includes(panel)) continue
+      const modal = this.open[i]!
+      const { panel, back, place, seen, address, shows } = modal
+      if (now.includes(panel)) {
+        modal.shows = this.showing(panel)
+        continue
+      }
       this.open.splice(i, 1)
       const active = doc.activeElement
       // The renderer's guess at a nearby control, when the panel went with the focus in it, is not a choice.
       const lost = !active || active === doc.body || !active.isConnected || panel.contains(active) || active === this.renderer.refocused
-      if (lost && back?.isConnected && this.shown(back)) (back as HTMLElement).focus?.({ preventScroll: true })
+      if (!lost) continue
+      const item = this.itemShown(back, shows)
+      const stayed = address === this.address()
+      if (item) item.focus?.()
+      else if (back?.isConnected && this.shown(back)) (back as HTMLElement).focus?.({ preventScroll: !seen || !stayed })
+      else if (back && !back.isConnected && stayed) this.renderer.focusNear(place)
     }
     for (const panel of now) {
       if (this.open.some((m) => m.panel === panel)) continue
-      this.open.push({ panel, back: doc.activeElement })
+      const back = doc.activeElement
+      this.open.push({ panel, back, place: back ? this.renderer.placeOf(back) : [], seen: !!back && back !== doc.body && this.inView(back), address: this.address(), shows: this.showing(panel) })
       const first = [...panel.querySelectorAll<HTMLElement>('[autofocus]')].filter(this.shown).map((el) => controlIn(el, this.shown)).find((el) => el) ?? panel
       if (!panel.contains(doc.activeElement)) first.focus?.({ preventScroll: true })
     }
