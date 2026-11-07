@@ -153,6 +153,7 @@
 (@define S_FILT 5)    ;; a: a filter holder: the group's filters not tested yet
 (@define S_PF 14)
 (@define S_KEEP 15)   ;; a solution of a compiled subquery's WHERE: cq_keep
+(@define S_GUARD 18)  ;; a: this group's leading required triple/path run
 (@define S_EXIT 16)
 (@define S_UNMASK 17) ;; a: a masked group's record (see $masked)   ;; a: a global set to 1, then return (EXISTS found a solution)     ;; a: a filter holder, b: the slots later elements of its group mention
 (@define S_BIND 6)    ;; a expression, b slot: bound to it when unbound
@@ -553,6 +554,10 @@
   (local.set $k (i32.load (local.get $s)))
   (local.set $a (i32.load offset=4 (local.get $s)))
   (local.set $rest (i32.load offset=12 (local.get $s)))
+  (if (i32.eq (local.get $k) (i32.const S_GUARD)) (then
+    (local.set $n (call $group_guard (local.get $f) (local.get $a)))
+    (call $cx_emit (local.get $f) (local.get $rest) (local.get $st))
+    (return (call $close (local.get $f) (local.get $n)))))
   (if (i32.eq (local.get $k) (i32.const S_LIST)) (then
     (if (i32.eqz (local.get $a)) (then (return (call $cx_emit (local.get $f) (local.get $rest) (local.get $st)))))
     ;; the group's filters that the elements from a on cannot change: tested now
@@ -657,8 +662,9 @@
   (loop $fill (if (local.get $l) (then
     (i32.store (i32.add (local.get $h) (i32.shl (local.tee $n (i32.add (local.get $n) (i32.const 1))) (i32.const 2))) (local.get $l))
     (local.set $l (i32.load offset=28 (local.get $l))) (br $fill))))
-  (call $cstep (i32.const S_LIST) (local.get $els) (select (local.get $h) (i32.const 0) (local.get $n))
-    (call $cstep (i32.const S_FILT) (local.get $h) (i32.const 0) (local.get $rest))))
+  (call $cstep (i32.const S_GUARD) (local.get $els) (i32.const 0)
+    (call $cstep (i32.const S_LIST) (local.get $els) (select (local.get $h) (i32.const 0) (local.get $n))
+      (call $cstep (i32.const S_FILT) (local.get $h) (i32.const 0) (local.get $rest)))))
 
 ;; Test the holder's filters that are ready (later: the slots later elements
 ;; mention; 0: all of them), each opening a block the row leaves when it fails:
@@ -1354,14 +1360,15 @@
 
 ;; The module's bytes: header (types, imports: cx-header.ts writes it), functions,
 ;; globals, exports, code.
-(@define CX_HEADER 640)
-(@define CX_IMPORTS 31)
+(@define CX_HEADER 662)
+(@define CX_IMPORTS 32)
 (@define CX_BU_EVENT 30)
+(@define CX_MAY_MATCH 31)
 (func $module (result i32)
   (local $out i32) (local $t i32) (local $i i32) (local $f i32) (local $body i32) (local $n i32)
   (local.set $out (call $bb_new))
   (call $bputs (local.get $out)
-    (@words32 0x6d736100 0x00000001 0x60093501 0x60007f01 0x7f017f01 0x7f7f0360 0x607f017f 0x7f7f7f04 0x607f017f 0x607f0100 0x03600000 0x007f7f7f 0x7f7f0260 0x05607f01 0x7f7f7f7f 0x027f017f 0x062004be 0x69676e65 0x6d06656e 0x726f6d65 0x00000279 0x676e6506 0x08656e69 0x625f7163 0x6e696765 0x65060200 0x6e69676e 0x71630865 0x6d6f635f 0x00006f62 0x676e6506 0x07656e69 0x735f7163 0x006e6163 0x6e650603 0x656e6967 0x5f716307 0x68746170 0x65060300 0x6e69676e 0x71630765 0x6176655f 0x0607006c 0x69676e65 0x6308656e 0x74735f71 0x006b6361 0x6e650604 0x656e6967 0x5f716307 0x74736574 0x65060100 0x6e69676e 0x71630865 0x6c61765f 0x01006575 0x676e6506 0x0b656e69 0x735f7163 0x74756c6f 0x006e6f69 0x6e650605 0x656e6967 0x5f716309 0x70697274 0x0600656c 0x676e6506 0x06656e69 0x655f7163 0x0400646e 0x676e6506 0x0b656e69 0x73657266 0x6e625f68 0x0065646f 0x6e650604 0x656e6967 0x72657409 0x696b5f6d 0x0100646e 0x676e6506 0x0d656e69 0x6d726574 0x7461645f 0x70797461 0x06010065 0x69676e65 0x740d656e 0x5f6d7265 0x676e616c 0x6e656c5f 0x65060100 0x6e69676e 0x61680365 0x06030073 0x69676e65 0x6306656e 0x75735f71 0x06050062 0x69676e65 0x6307656e 0x656b5f71 0x05007065 0x676e6506 0x08656e69 0x675f7163 0x70756f72 0x65060700 0x6e69676e 0x71630665 0x7274735f 0x65060700 0x6e69676e 0x71630665 0x6972695f 0x65060700 0x6e69676e 0x71630665 0x6d756e5f 0x65060100 0x6e69676e 0x71630865 0x6e6f745f 0x03006d75 0x676e6506 0x07656e69 0x745f7163 0x006d7265 0x6e650601 0x656e6967 0x5f716308 0x656c7063 0x0607006e 0x69676e65 0x6308656e 0x70635f71 0x0066666f 0x6e650602 0x656e6967 0x5f716308 0x66727473 0x0608006e 0x69676e65 0x6306656e 0x62655f71 0x06010076 0x69676e65 0x6307656e 0x6f725f71 0x01006d6f 0x676e6506 0x09656e69 0x635f7163 0x65686361 0x06010064 0x69676e65 0x630b656e 0x75625f71 0x6576655f 0x0400746e)
+    (@words32 0x6d736100 0x00000001 0x60093501 0x60007f01 0x7f017f01 0x7f7f0360 0x607f017f 0x7f7f7f04 0x607f017f 0x607f0100 0x03600000 0x007f7f7f 0x7f7f0260 0x05607f01 0x7f7f7f7f 0x027f017f 0x062104d4 0x69676e65 0x6d06656e 0x726f6d65 0x00000279 0x676e6506 0x08656e69 0x625f7163 0x6e696765 0x65060200 0x6e69676e 0x71630865 0x6d6f635f 0x00006f62 0x676e6506 0x07656e69 0x735f7163 0x006e6163 0x6e650603 0x656e6967 0x5f716307 0x68746170 0x65060300 0x6e69676e 0x71630765 0x6176655f 0x0607006c 0x69676e65 0x6308656e 0x74735f71 0x006b6361 0x6e650604 0x656e6967 0x5f716307 0x74736574 0x65060100 0x6e69676e 0x71630865 0x6c61765f 0x01006575 0x676e6506 0x0b656e69 0x735f7163 0x74756c6f 0x006e6f69 0x6e650605 0x656e6967 0x5f716309 0x70697274 0x0600656c 0x676e6506 0x06656e69 0x655f7163 0x0400646e 0x676e6506 0x0b656e69 0x73657266 0x6e625f68 0x0065646f 0x6e650604 0x656e6967 0x72657409 0x696b5f6d 0x0100646e 0x676e6506 0x0d656e69 0x6d726574 0x7461645f 0x70797461 0x06010065 0x69676e65 0x740d656e 0x5f6d7265 0x676e616c 0x6e656c5f 0x65060100 0x6e69676e 0x61680365 0x06030073 0x69676e65 0x6306656e 0x75735f71 0x06050062 0x69676e65 0x6307656e 0x656b5f71 0x05007065 0x676e6506 0x08656e69 0x675f7163 0x70756f72 0x65060700 0x6e69676e 0x71630665 0x7274735f 0x65060700 0x6e69676e 0x71630665 0x6972695f 0x65060700 0x6e69676e 0x71630665 0x6d756e5f 0x65060100 0x6e69676e 0x71630865 0x6e6f745f 0x03006d75 0x676e6506 0x07656e69 0x745f7163 0x006d7265 0x6e650601 0x656e6967 0x5f716308 0x656c7063 0x0607006e 0x69676e65 0x6308656e 0x70635f71 0x0066666f 0x6e650602 0x656e6967 0x5f716308 0x66727473 0x0608006e 0x69676e65 0x6306656e 0x62655f71 0x06010076 0x69676e65 0x6307656e 0x6f725f71 0x01006d6f 0x676e6506 0x09656e69 0x635f7163 0x65686361 0x06010064 0x69676e65 0x630b656e 0x75625f71 0x6576655f 0x0400746e 0x676e6506 0x0c656e69 0x6d5f7163 0x6d5f7961 0x68637461 0x00000200)
     (i32.const CX_HEADER))
   (local.set $n (i32.load offset=4 (global.get $cx_funcs)))
   ;; functions: run (i32) -> i32, the rest (i32) -> ()
@@ -1566,6 +1573,7 @@
   (if (i32.eqz (local.get $ok)) (then (return (call $fail (@str "bound variables changed since compile")))))
   ;; the run's budget (budget.wat): the module steps in line, cq_end says -2 once it is spent
   (call $bu_start)
+  (call $gp_reset)
   (call $run_begin (local.get $q) (local.get $graphs))
   (call $cx_sbuf)
   (i32.store offset=8 (global.get $bases) (global.get $dg))

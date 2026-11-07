@@ -158,6 +158,33 @@ impl Store {
         self.graphs.clone()
     }
 
+    /// A bounded, allocation-free existence proof. None means the candidate
+    /// limit prevented a complete search; only Some(false) proves absence.
+    /// Even fully bound quads use the bounded index walk, not an unbounded
+    /// hash-table probe. Return the actual number of candidates inspected.
+    pub fn any_bounded(&self, pat: Quad, limit: u32) -> (Option<bool>, u32) {
+        let mut best: Option<&[u32]> = None;
+        for k in 0..4 {
+            if pat[k] != 0 {
+                let list = self.list(pat[k], k);
+                if best.is_none_or(|b| list.len() < b.len()) {
+                    best = Some(list);
+                }
+            }
+        }
+        let len = best.map_or(self.quads.len(), |list| list.len());
+        let mut tested = 0;
+        for at in 0..len {
+            if tested == limit { return (None, tested); }
+            let q = &self.quads[best.map_or(at, |list| list[at] as usize)];
+            tested += 1;
+            if pat.iter().zip(q).all(|(&x, &y)| x == 0 || x == y) {
+                return (Some(true), tested);
+            }
+        }
+        (Some(false), tested)
+    }
+
     /// Append every quad matching the pattern (0 = any) to `out`, 4 ids each.
     pub fn scan(&self, pat: Quad, out: &mut Vec<u32>) {
         if pat.iter().all(|&x| x != 0) {

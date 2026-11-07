@@ -30,6 +30,7 @@ const IMPORTS: [string, number][] = [
   ['cq_cached', 1],
   // the query budget: a step's countdown reached 0 (compile.wat, $cx_step)
   ['cq_bu_event', 4],
+  ['cq_may_match', 2],
 ]
 const uleb = (out: number[], v: number) => {
   do {

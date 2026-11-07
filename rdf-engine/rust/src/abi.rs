@@ -582,8 +582,10 @@ struct Run {
     distinct: crate::idmap::IdMap,
     stack: Vec<u32>,
     scan: Vec<u32>,
-    /// Solutions of compiled subqueries' WHEREs being collected (nested).
+    /// Ordinary pattern or subquery WHERE solutions being collected (nested).
     keep: Vec<Vec<sparql::eval::Row>>,
+    /// Row count of the immediately preceding private cq_pack call.
+    pack_count: u32,
 }
 
 struct RunCell(UnsafeCell<Option<Run>>);
@@ -627,8 +629,9 @@ pub extern "C" fn cq_begin(h: u32, shape_id: u32, graphs: u32) -> i32 {
     s.result.clear();
     // The run's budget: the module steps in line (budget::cd_addr), cq_end says -2 once it is spent.
     crate::budget::start();
+    crate::guard::reset();
     unsafe {
-        *RUN.0.get() = Some(Run { ctx, p, combos, count: 0, seen: crate::idmap::IdMap::new(), distinct: crate::idmap::IdMap::new(), stack: Vec::new(), scan: Vec::new(), keep: Vec::new() });
+        *RUN.0.get() = Some(Run { ctx, p, combos, count: 0, seen: crate::idmap::IdMap::new(), distinct: crate::idmap::IdMap::new(), stack: Vec::new(), scan: Vec::new(), keep: Vec::new(), pack_count: 0 });
     }
     n
 }
@@ -637,6 +640,18 @@ pub extern "C" fn cq_begin(h: u32, shape_id: u32, graphs: u32) -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn cq_bu_event() -> i32 {
     crate::budget::event() as i32
+}
+
+/// Conservative required-triple proof in this run's selected default graphs.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_may_match(s: u32, p: u32, o: u32) -> u32 {
+    let r = run_state();
+    crate::guard::may_match(r.ctx.store, &r.ctx.default, s, p, o)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_guard_count(index: u32) -> u32 {
+    crate::guard::count(index)
 }
 
 #[unsafe(no_mangle)]
@@ -751,6 +766,82 @@ pub extern "C" fn cq_group(k: u32, at: u32) -> u32 {
         core::arch::wasm32::unreachable()
     }
     rows.len() as u32
+}
+
+/// Finish an ordinary (not Select) collection without changing its row order
+/// or evaluating either side again. Return (stack end << 1) | sparse; row count
+/// is read immediately through cq_pack_count. Sparse rows store a pair count
+/// followed by (variable slot, original term id) pairs. Zero remains unbound.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_pack(at: u32) -> u32 {
+    let r = run_state();
+    let rows = r.keep.pop().unwrap_or_default();
+    let width = r.p.query.vars.len();
+    let add = |a: u64, b: u64| a.checked_add(b).unwrap_or_else(|| core::arch::wasm32::unreachable());
+    let (dense, sparse) = rows.iter().fold((0, 0), |(dense, sparse), row| {
+        let bound = row.iter().filter(|&&id| id != 0).count() as u64;
+        (add(dense, row.len() as u64), add(sparse, 1 + 2 * bound))
+    });
+    // Include the one reusable expansion row. Dense tables never pay for a
+    // header or scratch row, so this cannot increase their old word footprint.
+    let sparse_room = add(sparse, width as u64);
+    let packed = sparse_room <= dense;
+    let words = if packed { sparse_room } else { dense };
+    if at as usize > r.stack.len() || add(at as u64, words) > (16 << 20) {
+        core::arch::wasm32::unreachable()
+    }
+    r.stack.truncate(at as usize);
+    r.pack_count = rows.len() as u32;
+    for row in rows {
+        if packed {
+            r.stack.push(row.iter().filter(|&&id| id != 0).count() as u32);
+            for (slot, id) in row.into_iter().enumerate() {
+                if id != 0 {
+                    r.stack.push(slot as u32);
+                    r.stack.push(id);
+                }
+            }
+        } else {
+            r.stack.extend_from_slice(&row);
+        }
+    }
+    // The existing 16M-word limit makes this tagged end fit in an i32.
+    (r.stack.len() as u32) * 2 | packed as u32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_pack_count() -> u32 {
+    run_state().pack_count
+}
+
+/// Expand one sparse row into scratch space above all live tables. The
+/// generated consumer has already reserved this frame in its next stack top.
+/// Return the next sparse cursor; no budget state or query frame is changed.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_unpack(at: u32, scratch: u32) -> u32 {
+    let r = run_state();
+    let width = r.p.query.vars.len();
+    let at = at as usize;
+    let scratch = scratch as usize;
+    let Some(&pairs) = r.stack.get(at) else { core::arch::wasm32::unreachable() };
+    // Validate in u64 before converting back to wasm32 indices: even an
+    // invalid cursor/count must not wrap around a checked stack boundary.
+    let next = at as u64 + 1 + 2 * pairs as u64;
+    let end = scratch as u64 + width as u64;
+    if pairs as usize > width || next > r.stack.len() as u64 || next > scratch as u64 || end > (16 << 20) {
+        core::arch::wasm32::unreachable()
+    }
+    r.stack.resize(end as usize, 0);
+    r.stack[scratch..end as usize].fill(0);
+    for pair in 0..pairs as usize {
+        let slot = r.stack[at + 1 + 2 * pair] as usize;
+        let id = r.stack[at + 2 + 2 * pair];
+        if slot >= width {
+            core::arch::wasm32::unreachable()
+        }
+        r.stack[scratch + slot] = id;
+    }
+    next as u32
 }
 
 /// Expression k of a compiled module: with bit 31 (a SELECT expression after

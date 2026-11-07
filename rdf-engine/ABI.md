@@ -196,6 +196,50 @@ The Rust engine's: helpers for typed expressions (`cq_lex`, `cq_num`,
 `cq_numterm`, `cq_strterm`, `cq_iri`, `cq_strfn`, `cq_cplen`, `cq_substr`,
 `cq_tonum`, `cq_ebv`); `rust/src/sparql/compile.rs` lists them.
 
+Both engines' generated modules additionally import
+`cq_may_match(s,p,o) -> 0 | 1`, a private conservative required-triple guard
+in the current run's active/default graph union. Zero proves no matching triple;
+one means present or unknown. Graph visits and indexed candidates share a
+128-work-unit cap per call; exhaustion is unknown, never absence. Each affected
+Rust join checks at most four plain triples in its first mandatory BGP. WAT
+checks at most four plain triples in a compiled group's leading BGP, after its
+masking/substitution setup. Paths and unproved scope boundaries are not plain
+triple proofs. The guard allocates no rows, leaves frame/stack and fuel countdown
+unchanged, and polls the existing deadline without restarting the run. Unproved
+empty sides can still incur eager work; this is not a general lazy join.
+
+`cq_guard_count(i)` reports saturating u32 counters for the last compiled run:
+calls, graph visits, candidates, absent, unknown, present (i=0..5, otherwise zero).
+A successful cq_begin resets them. They retain no query rows. These are private
+optional compiled exports, not new common host ABI version-2 requirements.
+Generated modules must be linked to the same live engine instance/image that
+emitted them: handles, frames, table indices and private imports are image-specific.
+Older images cannot substitute for newly emitting images. The host forwards
+exports unchanged; no host fallback or persisted portable module format is added.
+The guard retains the existing non-reentrant caller assumption for clock
+callbacks. Returned nonfinite clock values interrupt a budgeted proof; callback
+exceptions and same-instance callback reentry gain no new protection here.
+
+Rust ordinary compiled collections additionally use private `cq_pack(at)`,
+`cq_pack_count()` and `cq_unpack(cursor,scratch)` imports. These change storage,
+not evaluation: the RHS is collected once in its original order. `cq_pack`
+returns `(endWords << 1) | sparse` and exposes its row count to the immediately
+following `cq_pack_count`. Sparse records contain a pair count followed by
+(variable slot, original term ID) pairs; zero/unbound slots are reconstructed in
+one reusable dense row above all live tables. Dense storage is retained unless
+the sparse table plus that scratch row is no larger. The existing 16M-word
+stack limit and row fuel are unchanged. Grouped Select finishing and native
+fallback tables retain their dense format; consumers reserve scratch before
+continuations so nested helpers cannot overwrite it. These imports are specific
+to the emitting Rust image and add no common host ABI version-2 requirement.
+The existing `cq_group(k,at)` export is unchanged: it returns a row count and
+writes dense full-width rows, including when `k = -1`. Previously emitted
+modules therefore keep that contract; no old count is reinterpreted as a
+descriptor and no old dense row becomes sparse implicitly. The new helpers are
+additive and used only by newly emitted modules.
+WAT's `cq_group` finishes subqueries, not ordinary `cq_group(-1)` collections;
+its existing streamed/grouped paths are unchanged by this Rust storage format.
+
 A compiled run is budgeted as an interpreted one is (`set_deadline`,
 `set_fuel`): `cq_begin` starts the budget, and `cq_end` returns -2 with the
 error `interrupted` once it is spent (the host then throws rather than

@@ -79,7 +79,7 @@ function transfer(from: Engine, to: Engine, id: number, memo: Map<number, number
 }
 
 /** A run's results as sorted text rows; 'error: …' when it fails, undefined when it ran out of steps. */
-function results(e: Engine, q: Query, graphs: number[], compiled: boolean): string | undefined {
+function results(e: Engine, q: Query, graphs: number[], compiled: boolean, throwOnError = false): string | undefined {
   try {
     if (compiled && q.compile() !== null) return 'declined'
     const r = q.run(graphs)
@@ -92,6 +92,7 @@ function results(e: Engine, q: Query, graphs: number[], compiled: boolean): stri
     // CONSTRUCT results are a set; SELECT keeps duplicates (and their count).
     return r.form === Form.Select ? `${r.vars.join(',')}: ${rows.join('\n')}` : [...new Set(rows)].join('\n')
   } catch (err) {
+    if (throwOnError) throw err
     if (err instanceof EngineError && err.interrupted) return undefined
     return 'error'
   }
@@ -169,6 +170,36 @@ describe.skipIf(!built)('Semblance queries on both builds', () => {
     }
     expect(mismatches).toEqual([])
     expect(compared).toBeGreaterThan(500)
+  }, 300_000)
+
+  it('renders a populated Calendar through both genuine compiled paths', () => {
+    const raw = semblanceQueries().find(q => q.includes('rdfhtml:class "sem-cal-grid"'))
+    expect(raw).toBeDefined()
+    const text = SPARQL_PREFIXES + '\n' + raw!
+    const outputs: string[] = []
+    for (const compiled of [false, true]) for (const kind of KINDS) {
+      const { e } = engines[kind]
+      const q = e.prepare(text)
+      try {
+        q.bind('this', e.iri('https://semblance.dev/demo#ex-calendar-week'))
+        e.setFuel(FUEL)
+        const before = { ...e.stats }
+        let output: string | undefined
+        try { output = results(e, q, [], compiled, true) }
+        catch (cause) { throw new Error(`${kind} ${compiled ? 'compiled' : 'interpreted'} populated Calendar failed`, { cause }) }
+        expect(output).toBeDefined()
+        expect(output).not.toBe('')
+        expect(output).not.toBe('error')
+        expect(output).not.toBe('declined')
+        if (compiled) {
+          expect(q.isCompiled).toBe(true)
+          expect(e.stats.compiledRuns - before.compiledRuns).toBe(1)
+          expect(e.stats.fallbacks - before.fallbacks).toBe(0)
+        }
+        outputs.push(output!)
+      } finally { q.release(); e.setFuel() }
+    }
+    for (const output of outputs) expect(output).toBe(outputs[0])
   }, 300_000)
 
   it('prepare the same corpus queries, and give the same results for them run on their own', () => {
