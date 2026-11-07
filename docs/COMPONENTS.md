@@ -237,6 +237,11 @@ A pair is dirty when the focus's own triples change, and also:
 - `sem:watchesStatements true` — the focus is a property and the rule reads the statements made
   with it on any node (`?s $this ?o`: `nav:Containment`, whose foci are the containment
   properties): adding or removing one makes that focus dirty;
+- `sem:watchesManyValued l10n:pickedAs` — the rule reads, on any node, the statements made with
+  each predicate that has that property, and says something only about a node with two values or
+  more of one (`l10n:Terms`, on texts with translations): a change in the input to such a node's
+  values makes each focus dirty, and a text with one value replaced by another does not. A host
+  that takes an addition in slices brackets them with `Runtime.arriving`, so the rule runs once;
 - `sem:follows ( c:of [ sem:inverseVia ( c:inTree c:parentProperty ) ] )` — a path whose last
   step goes against a predicate named in the data: a triple `?child ?p ?node` makes dirty the
   foci that reach `?node` along the path's other steps and name `?p` along the given one (a tree's
