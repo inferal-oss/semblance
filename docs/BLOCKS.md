@@ -148,6 +148,17 @@ offered like a built-in one. Picking replaces the `/query` text and turns the bl
 empty block, by the conversion to it), or inserts a block of the type after it, with its `blk:template`.
 In a block with text the menu also offers what the block can turn into ("Turn into Heading 1"), first.
 
+## Mentions
+
+An editor that names classes it mentions (`blk:mentionable`, e.g. `ex:notes blk:mentionable schema:Person`)
+opens the same menu at an `@` typed at the start of a text block or after a space (`c:OpenMentionMenu`;
+the menu's `c:menuTrigger` is then `"@"`, else `"/"`). Its options are the instances of those classes, by
+name (their least label, then their IRI), labelled in the viewer's language and filtered as one types; the
+menu is named "Mentions" and says "No one by that name" when nothing matches. Picking one (Enter, Tab, a
+click; `c:PickMention`) replaces the `@` and the query with its name, marked as a `blk:Mention` of it
+(`oa:hasBody`, minted from the event), and a space: one undoable change. A mention renders as a link and
+reads as `[name](iri)` in Markdown.
+
 ## Handles: moving, turning into, duplicating, deleting
 
 Each block but a table's rows and cells and a layout's columns has a handle at its leading edge (`blk:BlockHandle`,
@@ -279,5 +290,4 @@ To come:
 - dragging a block by a handle: the drag-and-drop layer makes a draggable's whole root its handle, which
   in an editable region would turn every text selection into a drag; it needs a handle part of its own;
 - HTML or Markdown pasted as blocks (the event's HTML in RDF/HTML, mapped by reactions), as designed above;
-- mentions of the graph's resources by a menu of their own;
 - the Examples page's walkthrough of a site block type.

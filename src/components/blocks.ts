@@ -680,7 +680,7 @@ const menuState: FnRule = (ctx, focus) => {
   const at = Number(str(ctx.object(focus, NS.c + 'focusOffset')))
   if (!b || !fb || fb.value !== b.value || !(at > from)) return []
   const v = ctx.object(b, RDF_VALUE)
-  if (!v || substr(v.value, from, 1) !== '/') return []
+  if (!v || substr(v.value, from, 1) !== (str(ctx.object(focus, NS.c + 'menuTrigger')) ?? '/')) return []
   const q = substr(v.value, from + 1, at - from - 1).toLowerCase()
   if (q.startsWith(' ')) return []
   const chars = [...v.value]
@@ -701,6 +701,28 @@ const menuOptions: FnRule = (ctx, focus) => {
   if (!ctx.object(focus, NS.c + 'menuBlock')) return []
   const o = ctx.out(focus)
   const list = o.node('menu-list')
+  // After an "@": the resources the editor mentions, by name (their least label, else their IRI; then their IRI).
+  if (str(ctx.object(focus, NS.c + 'menuTrigger')) === '@') {
+    const found = new Map<string, Term>()
+    for (const cls of ctx.objects(focus, NS.blk + 'mentionable')) for (const q of ctx.match(null, RDF_TYPE, cls)) found.set(q.subject.value, q.subject)
+    const keyOf = (r: Term) => ctx.objects(r, NS.rdfs + 'label').map((l) => l.value).reduce<string | undefined>((a, b) => (a === undefined || b < a ? b : a), undefined) ?? r.value
+    const ranked = [...found.values()].map((r) => ({ r, k: keyOf(r) })).sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : a.r.value < b.r.value ? -1 : a.r.value > b.r.value ? 1 : 0))
+    ranked.forEach(({ r }, i) => {
+      const label = picked(ctx, r, NS.rdfs + 'label')
+      if (label === undefined) return
+      const key = label.toLowerCase()
+      const item = o.node('opt-' + encodeForUri(r.value))
+      o.t(list, H.hasChild, item)
+      o.t(item, RDF_TYPE, ctx.nn(NS.c + 'TypeaheadOption')).t(item, NS.c + 'of', focus).t(item, NS.c + 'option', r)
+      o.t(item, C.label, label).t(item, NS.c + 'searchKey', key).t(item, NS.c + 'matchKey', key + ' ')
+      const help = picked(ctx, r, C.help)
+      if (help !== undefined) o.t(item, C.help, help)
+      const icon = ctx.object(r, C.icon)
+      if (icon) o.t(item, C.icon, icon)
+      o.t(item, NS.c + 'rank', ctx.f.literal(String(i), ctx.nn(NS.xsd + 'integer'))).t(item, SEM.orderKey, String(i))
+    })
+    return o.quads
+  }
   for (const q of ctx.match(null, NS.blk + 'menuOrder', null)) {
     const cls = q.subject as NamedNode
     const label = picked(ctx, cls, NS.rdfs + 'label')
@@ -957,9 +979,12 @@ const editor: FnRule = (ctx, focus) => {
   const parts = [body]
   if (open) {
     const { shown, active } = menuRows(ctx, focus)
-    const list = o.el('menu-list', 'Ul', { id: o.node('menu-list').value, role: 'listbox', 'aria-label': text(ctx, ctx.nn(NS.c + 'BlockMenuPhrase'), NS.rdfs + 'label') })
+    // Its name and what it says when nothing matches: of block types, or of mentions (opened by an "@").
+    const mentioning = str(ctx.object(focus, NS.c + 'menuTrigger')) === '@'
+    const phrase = (blocks: string, mentions: string) => text(ctx, ctx.nn(NS.c + (mentioning ? mentions : blocks)), NS.rdfs + 'label')
+    const list = o.el('menu-list', 'Ul', { id: o.node('menu-list').value, role: 'listbox', 'aria-label': phrase('BlockMenuPhrase', 'MentionMenuPhrase') })
     const menuParts = [list]
-    if (!shown.length) menuParts.push(o.el('menu-empty', 'Div', { class: 'sem-empty' }, [o.text('menu-empty-text', text(ctx, ctx.nn(NS.c + 'NoBlocksPhrase'), NS.rdfs + 'label') ?? '')]))
+    if (!shown.length) menuParts.push(o.el('menu-empty', 'Div', { class: 'sem-empty' }, [o.text('menu-empty-text', phrase('NoBlocksPhrase', 'NoMentionsPhrase') ?? '')]))
     const block = ctx.object(focus, NS.c + 'menuBlock')!
     parts.push(o.el('menu', 'Div', { class: 'sem-block-menu', 'data-sem-anchor': block.value + '/~root', 'data-sem-keep-focus': '' }, menuParts))
     o.attr(body, 'aria-controls', list.value)
