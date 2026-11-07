@@ -1,4 +1,5 @@
 import { SVG_NS } from '../ns.ts'
+import { sameDecimal } from '../rdf.ts'
 import type { HtmlIndex } from './html-index.ts'
 
 /**
@@ -356,7 +357,15 @@ export class DomRenderer {
     if (el.localName !== 'input' && el.localName !== 'textarea') return
     const input = el as HTMLInputElement
     if (name === 'checked') input.checked = value !== undefined
-    else if (name === 'value' && input.value !== (value ?? '')) input.value = value ?? ''
+    else if (name === 'value' && input.value !== (value ?? '')) {
+      // The field being typed in keeps "1.0" while the graph's text is "1" (the next key makes it 1.05);
+      // it shows the graph's text when it is left.
+      if (value !== undefined && input.ownerDocument.activeElement === input && sameDecimal(input.value, value)) {
+        input.addEventListener('blur', () => { input.value = input.getAttribute('value') ?? '' }, { once: true })
+        return
+      }
+      input.value = value ?? ''
+    }
   }
 
   private syncChildren(k: string) {

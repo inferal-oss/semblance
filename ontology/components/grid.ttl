@@ -1000,8 +1000,8 @@ WHERE {
       }
       BIND(?v != c:none AS ?hasValue)
       BIND(?d != c:none AS ?hasDetail)
-      BIND(IF(isIRI(?v), STR(COALESCE(?vl0, ?vl1, ?vl2, ?vl3, REPLACE(STR(?v), "^.*[#/]", ""))), STR(?v)) AS ?shown)
-      BIND(IF(isIRI(?d), STR(COALESCE(?dl0, ?dl1, ?dl2, ?dl3, REPLACE(STR(?d), "^.*[#/]", ""))), STR(?d)) AS ?detail)
+      BIND(IF(isIRI(?v), STR(COALESCE(?vl0, ?vl1, ?vl2, ?vl3, REPLACE(STR(?v), "^.*[#/]", ""))), IF(isNumeric(?v), xsd:string(?v), STR(?v))) AS ?shown)
+      BIND(IF(isIRI(?d), STR(COALESCE(?dl0, ?dl1, ?dl2, ?dl3, REPLACE(STR(?d), "^.*[#/]", ""))), IF(isNumeric(?d), xsd:string(?d), STR(?d))) AS ?detail)
       # Durations as grid.ts formatDuration writes them: ms under a second, else s to two places.
       BIND(IF(?a < 1000, CONCAT(STR(ROUND(?a)), " ms"), CONCAT(STR(ROUND(?a / 10) / 100), " s")) AS ?aText)
       BIND(?b - ?a AS ?span)
@@ -1034,7 +1034,7 @@ WHERE {
           BIND(IRI(?id) AS ?txtParent) BIND(IRI(CONCAT(?id, "-text")) AS ?txt)
           BIND(xsd:double(?v) AS ?n)
           BIND(IF(?kind = c:DateCell, SUBSTR(STR(?v), 1, 10), IF(?kind = c:DurationCell, IF(BOUND(?b), ?spanText, "…"),
-               IF(?n < 1024, CONCAT(STR(?v), " B"),
+               IF(?n < 1024, CONCAT(xsd:string(?v), " B"),
                IF(?n < 1048576, CONCAT(STR(ROUND(?v * 10 / 1024) / 10), " KiB"), CONCAT(STR(ROUND(?v * 10 / 1048576) / 10), " MiB"))))) AS ?data)
         } UNION {
           FILTER(?part = "badge" && ?kind = c:BadgeCell && ?hasValue)
@@ -1112,11 +1112,11 @@ WHERE {
   BIND(STR(COALESCE(?picklrv, ?anylrv)) AS ?lrv)
   } } }
   BIND(COALESCE(?lcv, ?lrv, REPLACE(STR(?v), "^.*[#/]", "")) AS ?valueLabel)
-        BIND(IF(?v = c:none, "", IF(isIRI(?v), ?valueLabel, STR(?v))) AS ?shown)
+        BIND(IF(?v = c:none, "", IF(isIRI(?v), ?valueLabel, IF(isNumeric(?v), xsd:string(?v), STR(?v)))) AS ?shown)
         BIND(?b - ?a AS ?span)
         BIND(IF(?span < 1000, CONCAT(STR(ROUND(?span)), " ms"), CONCAT(STR(ROUND(?span / 10) / 100), " s")) AS ?spanText)
         BIND(IF(isNumeric(?v), xsd:double(?v), 0) AS ?n)
-        BIND(IF(isNumeric(?v), STR(?v), "0") AS ?nText)
+        BIND(IF(isNumeric(?v), xsd:string(?v), "0") AS ?nText)
         BIND(IF(?s = c:none, "",
              IF(?kind = c:BytesCell, IF(?n < 1024, CONCAT(?nText, " B"), IF(?n < 1048576, CONCAT(STR(ROUND(?n * 10 / 1024) / 10), " KiB"), CONCAT(STR(ROUND(?n * 10 / 1048576) / 10), " MiB"))),
              IF(?kind = c:DurationCell, IF(!BOUND(?a), "", IF(!BOUND(?b), "\u2026", ?spanText)),

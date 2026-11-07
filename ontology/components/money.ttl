@@ -17,6 +17,9 @@
 # with sx:Locale, else its function twin), on a node minted under the instance
 # (<money>/~l10n-amount l10n:label "…"); both renderings show that. Without it (an
 # instance another rule minted) they fall back to the currency code and the plain amount.
+#
+# The machine-readable amount is the value's canonical text ("1249.00" -> "1249"), by casting it to
+# xsd:string: STR gives the store's own text, and a store may keep the value and not the lexical form.
 
 c:Money a owl:Class ;
     rdfs:subClassOf sem:Component ;
@@ -69,7 +72,7 @@ WHERE {
   OPTIONAL { $this c:currency ?code }
   BIND(IRI(CONCAT(STR($this), "/~l10n-amount")) AS ?local)
   LATERAL { OPTIONAL { ?local l10n:label ?formatted } }
-  BIND(STR(?value) AS ?amount)
+  BIND(IF(isNumeric(?value), xsd:string(?value), STR(?value)) AS ?amount)
   BIND(COALESCE(STR(?formatted), CONCAT(IF(BOUND(?code), CONCAT(STR(?code), " "), ""), ?amount)) AS ?shown)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
@@ -87,7 +90,7 @@ WHERE {
   OPTIONAL { $this c:currency ?code }
   BIND(IRI(CONCAT(STR($this), "/~l10n-amount")) AS ?local)
   LATERAL { OPTIONAL { ?local l10n:label ?formatted } }
-  BIND(COALESCE(STR(?formatted), CONCAT(IF(BOUND(?code), CONCAT(STR(?code), " "), ""), STR(?value))) AS ?shown)
+  BIND(COALESCE(STR(?formatted), CONCAT(IF(BOUND(?code), CONCAT(STR(?code), " "), ""), IF(isNumeric(?value), xsd:string(?value), STR(?value)))) AS ?shown)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
 }""" .

@@ -225,7 +225,7 @@ WHERE {
   BIND(EXISTS { $this c:valueQuery ?q } AS ?formula)
   BIND(IF(?formula, "formula", "value") AS ?kind)
   OPTIONAL { $this c:value ?v0 }
-  BIND(STR(?v0) AS ?v)
+  BIND(IF(isNumeric(?v0), xsd:string(?v0), STR(?v0)) AS ?v)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~content")) AS ?content)
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-kind")) AS ?kindAttr)
@@ -399,9 +399,10 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~bar-text")) AS ?barText)
     OPTIONAL { ?sel c:row ?sr ; c:column ?sc }
     OPTIONAL { ?sel c:formulaText ?ft }
-    OPTIONAL { ?sel c:value ?sv }
+    OPTIONAL { ?sel c:value ?sv0 }
+    BIND(IF(isNumeric(?sv0), xsd:string(?sv0), STR(?sv0)) AS ?sv)
     BIND(IF(?selected, CONCAT(SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?sc, 1), STR(?sr), "  ",
-         IF(BOUND(?ft), CONCAT(STR(?ft), "  →  ", COALESCE(STR(?sv), "…")), COALESCE(STR(?sv), ""))),
+         IF(BOUND(?ft), CONCAT(STR(?ft), "  →  ", COALESCE(?sv, "…")), COALESCE(?sv, ""))),
          "Select a cell to see its formula, what it reads and what reads it.") AS ?barData)
   } UNION {
     # The range selected, summed up; else how much the last change re-ran.
@@ -412,7 +413,7 @@ WHERE {
     OPTIONAL { SELECT (COUNT(?x) AS ?span) (MIN(?xr) AS ?r0) (MAX(?xr) AS ?r1) (MIN(?xc) AS ?c0) (MAX(?xc) AS ?c1) WHERE { $this c:selects ?x . ?x c:row ?xr ; c:column ?xc } }
     OPTIONAL { SELECT (COUNT(?fv) AS ?filled) WHERE { $this c:selects ?fx . ?fx c:value ?fv } }
     OPTIONAL { SELECT (COUNT(?d) AS ?numbers) (SUM(?d) AS ?sum) ((ROUND(AVG(?d) * 100) / 100) AS ?mean) WHERE {
-      $this c:selects ?dx . ?dx c:value ?dv FILTER(REGEX(STR(?dv), "^-?[0-9]+([.][0-9]+)?$")) BIND(xsd:decimal(STR(?dv)) AS ?d)
+      $this c:selects ?dx . ?dx c:value ?dv0 BIND(IF(isNumeric(?dv0), xsd:string(?dv0), STR(?dv0)) AS ?dv) FILTER(REGEX(?dv, "^-?[0-9]+([.][0-9]+)?$")) BIND(xsd:decimal(?dv) AS ?d)
     } }
     BIND(CONCAT(SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?c0, 1), STR(?r0), ":", SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?c1, 1), STR(?r1)) AS ?rangeName)
     BIND(IF(COALESCE(?span, 0) > 1,

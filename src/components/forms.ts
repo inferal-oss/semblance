@@ -4,7 +4,7 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, LC, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
-import { mint } from '../rdf.ts'
+import { mint, numberText } from '../rdf.ts'
 import { RDFS_LABEL, isBlank, named, rdfList, str, encodeForUri, picked } from './util.ts'
 
 const SH = NS.sh
@@ -82,7 +82,7 @@ function shapeOf(ctx: RuleContext, ps: Term) {
 /** The first constraint `lex` violates (as the SPARQL rule checks them), or undefined. */
 export function shapeViolation(ctx: RuleContext, ps: Term, lex: string): string | undefined {
   const { datatype, allowed, numeric, kind, maxLength } = shapeOf(ctx, ps)
-  const lit = (p: string) => str(ctx.object(ps, SH + p))
+  const lit = (p: string) => { const t = ctx.object(ps, SH + p); return t && numberText(t) }
   const plainProblem = ((): string | undefined => {
     const required = (num(ctx.object(ps, SH + 'minCount')) ?? 0) > 0
     if (lex === '' || (required && isBlank(lex))) return required ? 'Required.' : undefined
@@ -105,7 +105,7 @@ export function shapeViolation(ctx: RuleContext, ps: Term, lex: string): string 
     if (numeric && min !== undefined && Number(lex) < Number(min)) return `At least ${min}.`
     const max = lit('maxInclusive')
     if (numeric && max !== undefined && Number(lex) > Number(max)) return `At most ${max}.`
-    if (allowed && !rdfList(ctx, allowed).some((t) => t.value === lex)) return 'Not one of the allowed values.'
+    if (allowed && !rdfList(ctx, allowed).some((t) => numberText(t) === lex)) return 'Not one of the allowed values.'
     return undefined
   })()
   return plainProblem === undefined ? undefined : (plain(ctx, ps, SH + 'message') ?? plainProblem)
@@ -113,7 +113,7 @@ export function shapeViolation(ctx: RuleContext, ps: Term, lex: string): string 
 
 /** The resource's value of the property, as text (the least, as the SPARQL rule's MIN), "" when none. */
 function lexOf(ctx: RuleContext, resource: Term, path: Term): string {
-  const values = ctx.objects(resource, path).map((t) => t.value)
+  const values = ctx.objects(resource, path).map(numberText)
   return values.length ? values.sort()[0]! : ''
 }
 
@@ -135,15 +135,16 @@ const field: FnRule = (ctx, focus) => {
   const controlId = mint(focus.value, 'control')
   const helpId = help !== undefined ? mint(focus.value, 'help') : undefined
   const errorId = problem !== undefined ? mint(focus.value, 'error') : undefined
-  const minInclusive = str(ctx.object(ps, SH + 'minInclusive'))
-  const maxInclusive = str(ctx.object(ps, SH + 'maxInclusive'))
+  const bound = (p: string) => { const t = ctx.object(ps, SH + p); return t && numberText(t) }
+  const minInclusive = bound('minInclusive')
+  const maxInclusive = bound('maxInclusive')
   const textual = kind === 'text' || kind === 'number' || kind === 'date'
   const options =
     kind === 'choice'
       ? rdfList(ctx, allowed).map((choice) => {
-          const value = choice.value
+          const value = numberText(choice)
           const key = 'opt-' + encodeForUri(value)
-          const name = plain(ctx, choice, RDFS_LABEL) ?? (choice.termType === 'NamedNode' ? localName(value) : value)
+          const name = (choice.termType === 'Literal' ? undefined : plain(ctx, choice, RDFS_LABEL)) ?? (choice.termType === 'NamedNode' ? localName(value) : value)
           return o.el(key, 'Option', { value, selected: value === lex ? '' : undefined }, [o.text(key + '-text', name)])
         })
       : []
@@ -227,7 +228,7 @@ const choose: ReactionFn = (ctx) => {
   const checked = ctx.object(ctx.event, NS.beh + 'checked')
   if (t.boolean && checked) add.push(f.quad(t.resource as NamedNode, t.path as NamedNode, f.literal(checked.value, f.namedNode(XSD + 'boolean'))))
   const v = ctx.object(ctx.event, NS.beh + 'value')?.value
-  if (t.allowed && v !== undefined) for (const choice of rdfList(ctx, t.allowed)) if (choice.value === v) add.push(f.quad(t.resource as NamedNode, t.path as NamedNode, choice as NamedNode))
+  if (t.allowed && v !== undefined) for (const choice of rdfList(ctx, t.allowed)) if (numberText(choice) === v) add.push(f.quad(t.resource as NamedNode, t.path as NamedNode, choice as NamedNode))
   return { remove: own(ctx, t.resource, t.path), add }
 }
 

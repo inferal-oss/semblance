@@ -399,6 +399,11 @@ on the rule; its function twin calls `formatLocale(ctx.languages)` for the same 
 BIND(sx:formatNumber(xsd:double(STR(?value)), ?locale, "maximumFractionDigits=2") AS ?shown)
 ```
 
+A number shown or written to an attribute as it is takes its canonical text, not the store's:
+`STR` of `"1.50"^^xsd:decimal` is `1.50` on a store that keeps the lexical form and `1.5` on one that
+keeps the value (Oxigraph). Cast it, `IF(isNumeric(?v), xsd:string(?v), STR(?v))`, and call
+`numberText` (`src/rdf.ts`) in the function twin; `test/number-text.test.ts` renders them on every store.
+
 Lists in the viewer's collation are placed by order keys: `sx:sortKey(?label, ?locale)` (case
 folded, accents stripped) as a `sem:orderKey`, since a CONSTRUCT cannot rank rows by
 `localeCompare`; the function twin computes the same key (`sortKey` from
