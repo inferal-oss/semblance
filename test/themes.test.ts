@@ -14,27 +14,29 @@ const themes = store
   .map((q) => ({ iri: q.subject.value, slug: store.match(q.subject, f.namedNode(SEM.slug), null)[0]!.object.value }))
   .sort((a, b) => (a.slug < b.slug ? -1 : 1))
 
-/** The declarations of the first rule whose selector is exactly `selector`, as a map. */
-function block(selector: string): Map<string, string> {
-  const at = css.indexOf(`  ${selector} { `)
-  if (at < 0) throw new Error(`no rule for ${selector}`)
-  const body = css.slice(at + selector.length + 5, css.indexOf(' }\n', at))
+/** A rule's declarations as a map; split on ';' outside parentheses (values contain url("...;...") and nested functions). */
+function declarations(body: string): Map<string, string> {
   const out = new Map<string, string>()
-  // split on ';' outside parentheses (values contain url("...;...") and nested functions)
   let depth = 0
   let start = 0
-  for (let i = 0; i < body.length; i++) {
+  for (let i = 0; i <= body.length; i++) {
     const ch = body[i]
     if (ch === '(') depth++
     else if (ch === ')') depth--
-    else if (ch === ';' && depth === 0) {
+    else if ((ch === ';' || ch === undefined) && depth === 0) {
       const decl = body.slice(start, i).trim()
       const colon = decl.indexOf(':')
-      out.set(decl.slice(0, colon).trim(), decl.slice(colon + 1).trim())
+      if (colon > 0) out.set(decl.slice(0, colon).trim(), decl.slice(colon + 1).trim())
       start = i + 1
     }
   }
   return out
+}
+/** The declarations of the first rule whose selector is exactly `selector`, as a map. */
+function block(selector: string): Map<string, string> {
+  const at = css.indexOf(`  ${selector} { `)
+  if (at < 0) throw new Error(`no rule for ${selector}`)
+  return declarations(css.slice(at + selector.length + 5, css.indexOf(' }\n', at)))
 }
 const rootTokens = block(':root')
 const layerOf = (selector: string) => {
@@ -66,17 +68,23 @@ const ratio = (a: string, b: string) => {
   return (hi! + 0.05) / (lo! + 0.05)
 }
 
-// Text roles every theme must keep readable, in both schemes: [foreground, background, minimum].
-const textRoles: [string, string, number][] = [
-  ['text', 'surface', 7], ['text', 'canvas', 7], ['text', 'surface-sunken', 7], ['text', 'surface-overlay', 7],
-  ['muted', 'surface', 4.5], ['muted', 'canvas', 4.5], ['muted', 'surface-sunken', 4.5], ['muted', 'surface-hover', 4.5],
+// Every theme keeps these readable, in both schemes: [foreground, background, minimum].
+const surfaces = ['surface', 'canvas', 'surface-sunken', 'surface-hover', 'surface-overlay']
+const contrastRoles: [string, string, number][] = [
+  ...surfaces.flatMap((s): [string, string, number][] => [
+    ['text', s, 7],
+    ['muted', s, 4.5],
+    // tok:faint is for what nobody has to read (DESIGN.md §1): still 3:1, like any part of a control.
+    ['faint', s, 3],
+  ]),
+  ['muted', 'code-bg', 4.5],
+  ...['keyword', 'var', 'string', 'name', 'iri', 'comment'].map((c): [string, string, number] => [`code-${c}`, 'code-bg', 4.5]),
   ['accent', 'surface', 4.5], ['accent', 'canvas', 4.5], ['accent-11', 'surface', 4.5], ['accent-11', 'accent-3', 4.5],
-  ['on-accent', 'accent', 4.5], ['gray-1', 'gray-12', 7], ['tooltip-fg', 'tooltip-bg', 7],
-]
-// ...and what the new themes guarantee beyond the default (solids, status text).
-const solidRoles: [string, string, number][] = [
-  ['accent-contrast', 'accent-9', 4.5],
-  ['on-status', 'info-9', 4.5], ['on-status', 'success-9', 4.5], ['on-status', 'danger-9', 4.5],
+  ['gray-1', 'gray-12', 7], ['tooltip-fg', 'tooltip-bg', 7],
+  // A solid and what is on it, at rest; under the pointer it only has to stay legible.
+  ['on-accent', 'accent', 4.5], ['accent-contrast', 'accent-9', 4.5], ['accent-contrast', 'accent-10', 3],
+  ['on-status', 'info-9', 4.5], ['on-status', 'success-9', 4.5], ['on-status', 'danger-9', 4.5], ['on-warning', 'warning-9', 4.5],
+  ['on-status', 'info-10', 3], ['on-status', 'success-10', 3], ['on-status', 'danger-10', 3], ['on-warning', 'warning-10', 3],
   ['danger', 'surface', 4.5], ['success', 'surface', 4.5],
   ...['info', 'success', 'warning', 'danger'].flatMap((s): [string, string, number][] => [[`${s}-11`, `${s}-3`, 4.5], [`${s}-11`, 'surface', 4.5]]),
 ]
@@ -144,8 +152,7 @@ describe('themes are values of a hookable axis', () => {
     const failures: string[] = []
     for (const t of themes) {
       const decls = block(`[data-sem-theme="${t.slug}"]`)
-      const pairs = t.slug === 'semblance' ? textRoles : [...textRoles, ...solidRoles]
-      for (const [fg, bg, min] of pairs) {
+      for (const [fg, bg, min] of contrastRoles) {
         for (const side of [0, 1] as const) {
           const r = ratio(resolve(decls, fg, side), resolve(decls, bg, side))
           if (r < min) failures.push(`${t.slug} ${side ? 'night' : 'day'} ${fg} on ${bg}: ${r.toFixed(2)} < ${min}`)
@@ -155,11 +162,31 @@ describe('themes are values of a hookable axis', () => {
     expect(failures).toEqual([])
   })
 
+  it('puts on each solid fill the token that is held against it, never a colour of its own', () => {
+    // tok:accent is a text colour, so light at night; tok:accent-9 is a fill. Each has its own partner.
+    const partner: Record<string, string> = {
+      accent: 'on-accent', 'accent-9': 'accent-contrast', 'accent-10': 'accent-contrast',
+      'info-9': 'on-status', 'success-9': 'on-status', 'danger-9': 'on-status', 'warning-9': 'on-warning',
+    }
+    const failures: string[] = []
+    for (const m of css.matchAll(/^ *([^@\n{][^{\n]*) \{ ([^\n]*) \}$/gm)) {
+      const decls = declarations(m[2]!)
+      const fill = /^var\(--sem-([\w-]+)\)$/.exec(decls.get('background') ?? decls.get('background-color') ?? '')?.[1]
+      const color = decls.get('color')
+      if (!fill || !color || !(fill in partner) || color === 'inherit') continue
+      if (color !== `var(--sem-${partner[fill]})`) failures.push(`${m[1]!.slice(0, 120)}: ${color} on ${fill}`)
+    }
+    expect(failures).toEqual([])
+  })
+
   it('reads theme-level tokens in generic rules, so the nearest theme wins', () => {
-    for (const sel of ['[data-sem-theme] [data-sem-c="heading"]::after', '[data-sem-theme] [data-sem-c="progress"] .sem-fill', '[data-sem-theme] [data-sem-tone="accent"]']) {
+    for (const sel of ['[data-sem-theme] [data-sem-c="heading"]::after', '[data-sem-theme] [data-sem-c="progress"] .sem-fill', '[data-sem-theme] [data-sem-intent="danger"]']) {
       expect(layerOf(sel), sel).toBe('sem.components')
       for (const v of block(sel).values()) expect(v, sel).toMatch(/var\(--sem-/)
     }
+    // A tone's text on its solid is the nearest theme's token too.
+    expect(block('[data-sem-tone="accent"]').get('--tone-on-solid')).toBe('var(--sem-accent-contrast)')
+    expect(block('[data-sem-tone="warning"]').get('--tone-on-solid')).toBe('var(--sem-on-warning)')
     // per-theme descendant rules exist only for the structural themes, and each is guarded
     // against leaking into a differently themed subtree below it (see the next block)
     const descendant = [...css.matchAll(/^ {2}\[data-sem-theme="([a-z]+)"\] [^{\s][^{\n]*\{/gm)].map((m) => m[1])

@@ -56,7 +56,7 @@
                  [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
 [] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-time" ;
     sty:declares [ sty:property "font" ; sty:raw "11px/1 var(--sem-font-mono)" ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "padding-inline-end" ; sty:raw "6px" ] ,
                  # Room for "1234 ms" in every language, kept before the time is known.
                  [ sty:property "min-inline-size" ; sty:raw "8ch" ] ,

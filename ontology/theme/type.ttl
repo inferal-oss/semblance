@@ -239,7 +239,7 @@ sty:Mono sty:declares
                  [ sty:property "font" ; sty:raw "650 10px/1 var(--sem-font)" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0.08em" ] ,
                  [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] .
 # Code tokens, wherever code is coloured (c:Code, c:CodeEditor, c:Flippable's rules, a live example's
 # data): one set of colours, from the code tokens of the theme.

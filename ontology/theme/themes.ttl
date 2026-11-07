@@ -55,11 +55,14 @@ tok:display-case a sty:Token ; sty:scale sty:Font ; sem:slug "display-case" ;
     rdfs:comment "text-transform of headings (none, uppercase)."@en ;
     sty:value "none" .
 tok:accent-contrast a sty:Token ; sty:scale sty:Color ; sem:slug "accent-contrast" ;
-    rdfs:comment "Text and marks on accent-9 solids."@en ;
+    rdfs:comment "Text and marks on accent-9 solids; on a tok:accent fill it is tok:on-accent."@en ;
     sty:value "#ffffff" .
 tok:on-status a sty:Token ; sty:scale sty:Color ; sem:slug "on-status" ;
     rdfs:comment "Text on info, success and danger solids (step 9)."@en ;
     sty:value "#ffffff" .
+tok:on-warning a sty:Token ; sty:scale sty:Color ; sem:slug "on-warning" ;
+    rdfs:comment "Text on warning solids (step 9)."@en ;
+    sty:value "#2b1a00" .
 tok:mark a sty:Token ; sem:slug "mark" ;
     rdfs:comment "Background of the mark under a c:Heading."@en ;
     sty:value "linear-gradient(90deg, var(--sem-accent), color-mix(in oklab, var(--sem-accent) 30%, #ff7ac6))" .
@@ -90,7 +93,8 @@ tok:backdrop a sty:Token ; sem:slug "backdrop" ;
 
 # --- the themes ------------------------------------------------------------------------
 # Generated from OKLCH ramps (12 steps per hue, light and dark lightness curves) and checked
-# for contrast: text and muted >= 4.5:1 on every surface, text on solids >= 4.5:1.
+# for contrast (test/themes.test.ts): text and muted >= 4.5:1 on every surface, faint >= 3:1, text on
+# solids >= 4.5:1 and on their hover >= 3:1.
 
 sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇" ;
     rdfs:label "Semblance"@en ;
@@ -118,22 +122,22 @@ sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇
         [ sty:property "--sem-accent-6" ; sty:raw "light-dark(#c9bfff, #3e3379)" ] ,
         [ sty:property "--sem-accent-7" ; sty:raw "light-dark(#b3a6fb, #4b3f92)" ] ,
         [ sty:property "--sem-accent-8" ; sty:raw "light-dark(#9787f5, #5d4fb5)" ] ,
-        [ sty:property "--sem-accent-9" ; sty:raw "light-dark(#5b4cf0, #7c6cf6)" ] ,
-        [ sty:property "--sem-accent-10" ; sty:raw "light-dark(#4f40e0, #8b7dff)" ] ,
+        [ sty:property "--sem-accent-9" ; sty:raw "light-dark(#5b4cf0, #6f5ef2)" ] ,
+        [ sty:property "--sem-accent-10" ; sty:raw "light-dark(#4f40e0, #7c6cf6)" ] ,
         [ sty:property "--sem-accent-11" ; sty:raw "light-dark(#4b3cc9, #b2a8ff)" ] ,
         [ sty:property "--sem-accent-12" ; sty:raw "light-dark(#231a63, #e2ddff)" ] ,
         # status
         [ sty:property "--sem-info-3" ; sty:raw "light-dark(#e6f1ff, #10233d)" ] ,
         [ sty:property "--sem-info-4" ; sty:raw "light-dark(#d6e8ff, #142c4d)" ] ,
         [ sty:property "--sem-info-6" ; sty:raw "light-dark(#a9cdfb, #1d4a7a)" ] ,
-        [ sty:property "--sem-info-9" ; sty:raw "light-dark(#0b74de, #3b8ef0)" ] ,
-        [ sty:property "--sem-info-10" ; sty:raw "light-dark(#0a66c4, #5aa0f5)" ] ,
+        [ sty:property "--sem-info-9" ; sty:raw "light-dark(#0b74de, #2572d4)" ] ,
+        [ sty:property "--sem-info-10" ; sty:raw "light-dark(#0a66c4, #3b8ef0)" ] ,
         [ sty:property "--sem-info-11" ; sty:raw "light-dark(#0b5cad, #8ec2ff)" ] ,
         [ sty:property "--sem-success-3" ; sty:raw "light-dark(#e3f7ee, #0f2a20)" ] ,
         [ sty:property "--sem-success-4" ; sty:raw "light-dark(#d0f0e2, #123427)" ] ,
         [ sty:property "--sem-success-6" ; sty:raw "light-dark(#9edfc2, #1d5a43)" ] ,
-        [ sty:property "--sem-success-9" ; sty:raw "light-dark(#12a37a, #2bbf8f)" ] ,
-        [ sty:property "--sem-success-10" ; sty:raw "light-dark(#0f916c, #4fd8a8)" ] ,
+        [ sty:property "--sem-success-9" ; sty:raw "light-dark(#0b8763, #17855f)" ] ,
+        [ sty:property "--sem-success-10" ; sty:raw "light-dark(#097a5a, #1f9a72)" ] ,
         [ sty:property "--sem-success-11" ; sty:raw "light-dark(#0a7a59, #7fe8c1)" ] ,
         [ sty:property "--sem-warning-3" ; sty:raw "light-dark(#fff4d6, #2e2310)" ] ,
         [ sty:property "--sem-warning-4" ; sty:raw "light-dark(#ffecbd, #3a2c12)" ] ,
@@ -144,8 +148,8 @@ sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇
         [ sty:property "--sem-danger-3" ; sty:raw "light-dark(#ffe8eb, #3a1419)" ] ,
         [ sty:property "--sem-danger-4" ; sty:raw "light-dark(#ffd9de, #47181f)" ] ,
         [ sty:property "--sem-danger-6" ; sty:raw "light-dark(#f5b0b9, #7a2a36)" ] ,
-        [ sty:property "--sem-danger-9" ; sty:raw "light-dark(#e0344a, #ec4f63)" ] ,
-        [ sty:property "--sem-danger-10" ; sty:raw "light-dark(#c92a3f, #ff7a8a)" ] ,
+        [ sty:property "--sem-danger-9" ; sty:raw "light-dark(#d9304a, #d9304a)" ] ,
+        [ sty:property "--sem-danger-10" ; sty:raw "light-dark(#c92a3f, #ec4f63)" ] ,
         [ sty:property "--sem-danger-11" ; sty:raw "light-dark(#c0263a, #ffa3ae)" ] ,
         # roles
         [ sty:property "--sem-canvas" ; sty:raw "var(--sem-gray-2)" ] ,
@@ -154,8 +158,8 @@ sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇
         [ sty:property "--sem-surface-hover" ; sty:raw "light-dark(#f4f4fb, #1f1f27)" ] ,
         [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#ffffff, #1c1c23)" ] ,
         [ sty:property "--sem-text" ; sty:raw "light-dark(#16161d, #f2f2f7)" ] ,
-        [ sty:property "--sem-muted" ; sty:raw "light-dark(#6b6b7b, #9898a8)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#a3a3b2, #5d5d6c)" ] ,
+        [ sty:property "--sem-muted" ; sty:raw "light-dark(#646475, #9898a8)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#8b8b98, #6a6a78)" ] ,
         [ sty:property "--sem-border" ; sty:raw "light-dark(#e8e8f0, #26262f)" ] ,
         [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#d4d4e0, #3a3a46)" ] ,
         [ sty:property "--sem-accent" ; sty:raw "light-dark(#5b4cf0, #8f86ff)" ] ,
@@ -164,8 +168,9 @@ sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #0e0b26)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "#ffffff" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "#ffffff" ] ,
-        [ sty:property "--sem-danger" ; sty:raw "light-dark(#e0344a, #ff7a8a)" ] ,
-        [ sty:property "--sem-success" ; sty:raw "light-dark(#12a37a, #4fd8a8)" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
+        [ sty:property "--sem-danger" ; sty:raw "light-dark(#d9304a, #ff7a8a)" ] ,
+        [ sty:property "--sem-success" ; sty:raw "light-dark(#0b8763, #4fd8a8)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 0 4px color-mix(in oklab, var(--sem-accent) 22%, transparent)" ] ,
         [ sty:property "--sem-scrim" ; sty:raw "light-dark(rgb(20 18 40 / 0.32), rgb(0 0 0 / 0.6))" ] ,
         [ sty:property "--sem-tooltip-bg" ; sty:raw "light-dark(#1c1b2e, #f2f2f7)" ] ,
@@ -280,7 +285,7 @@ sty:Paper a sty:Theme ; sem:slug "paper" ; sem:order 2 ; sem:symbol "¶" ;
         [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#fffdf6, #211d1a)" ] ,
         [ sty:property "--sem-text" ; sty:raw "light-dark(#211f19, #f5ede5)" ] ,
         [ sty:property "--sem-muted" ; sty:raw "light-dark(#66635c, #c4bcb4)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#8f8c83, #605b57)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#8d8a81, #6e6965)" ] ,
         [ sty:property "--sem-border" ; sty:raw "light-dark(#dcd9d0, #302c28)" ] ,
         [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#bdbab1, #4a4641)" ] ,
         [ sty:property "--sem-accent" ; sty:raw "light-dark(#ad2f22, #cc624a)" ] ,
@@ -289,6 +294,7 @@ sty:Paper a sty:Theme ; sem:slug "paper" ; sem:order 2 ; sem:symbol "¶" ;
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #110e0a)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "light-dark(#ffffff, #ffffff)" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "light-dark(#ffffff, #ffffff)" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
         [ sty:property "--sem-danger" ; sty:raw "light-dark(#aa3332, #ffb4b1)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#1a754b, #9cdcb6)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 0 2px var(--sem-surface), 0 0 0 3.5px var(--sem-accent)" ] ,
@@ -405,7 +411,7 @@ sty:Terminal a sty:Theme ; sem:slug "terminal" ; sem:order 3 ; sem:symbol "▮" 
         [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#f8fff9, #09160b)" ] ,
         [ sty:property "--sem-text" ; sty:raw "light-dark(#063215, #a7fdb3)" ] ,
         [ sty:property "--sem-muted" ; sty:raw "light-dark(#3d6646, #80d58d)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#839085, #445345)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#818e83, #596659)" ] ,
         [ sty:property "--sem-border" ; sty:raw "light-dark(#d0ded2, #162418)" ] ,
         [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#b1bfb3, #2f3e30)" ] ,
         [ sty:property "--sem-accent" ; sty:raw "light-dark(#006e29, #40f864)" ] ,
@@ -414,6 +420,7 @@ sty:Terminal a sty:Theme ; sem:slug "terminal" ; sem:order 3 ; sem:symbol "▮" 
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #03140a)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "light-dark(#ffffff, #03140a)" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "light-dark(#ffffff, #03140a)" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
         [ sty:property "--sem-danger" ; sty:raw "light-dark(#aa332e, #fea199)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#26753e, #89eb9f)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 0 2px var(--sem-accent)" ] ,
@@ -530,7 +537,7 @@ sty:Blueprint a sty:Theme ; sem:slug "blueprint" ; sem:order 4 ; sem:symbol "⌗
         [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#fcfdfe, #152946)" ] ,
         [ sty:property "--sem-text" ; sty:raw "light-dark(#0b2540, #e6effe)" ] ,
         [ sty:property "--sem-muted" ; sty:raw "light-dark(#4a6685, #b8c5d8)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#848d98, #536a8c)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#828b96, #5e7493)" ] ,
         [ sty:property "--sem-border" ; sty:raw "light-dark(#d0dbe7, #2e4362)" ] ,
         [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#b2bcc7, #536a8c)" ] ,
         [ sty:property "--sem-accent" ; sty:raw "light-dark(#0161bd, #15b6df)" ] ,
@@ -539,6 +546,7 @@ sty:Blueprint a sty:Theme ; sem:slug "blueprint" ; sem:order 4 ; sem:symbol "⌗
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #031329)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "light-dark(#ffffff, #031329)" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "light-dark(#ffffff, #ffffff)" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
         [ sty:property "--sem-danger" ; sty:raw "light-dark(#aa3332, #ffb4b1)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#1a754b, #9cdcb6)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 0 1px var(--sem-surface), 0 0 0 3px var(--sem-accent)" ] ,
@@ -655,7 +663,7 @@ sty:Sunset a sty:Theme ; sem:slug "sunset" ; sem:order 5 ; sem:symbol "◓" ;
         [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#fefcfc, #261925)" ] ,
         [ sty:property "--sem-text" ; sty:raw "light-dark(#351c1c, #f7eaf5)" ] ,
         [ sty:property "--sem-muted" ; sty:raw "light-dark(#795a5a, #c6b9c4)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#958989, #665664)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#938787, #746572)" ] ,
         [ sty:property "--sem-border" ; sty:raw "light-dark(#ecdfde, #2e202c)" ] ,
         [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#d7caca, #40313e)" ] ,
         [ sty:property "--sem-accent" ; sty:raw "light-dark(#cb1863, #ea5489)" ] ,
@@ -664,6 +672,7 @@ sty:Sunset a sty:Theme ; sem:slug "sunset" ; sem:order 5 ; sem:symbol "◓" ;
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #2a0716)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "light-dark(#ffffff, #ffffff)" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "light-dark(#ffffff, #ffffff)" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
         [ sty:property "--sem-danger" ; sty:raw "light-dark(#aa3332, #ffb4b1)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#1a754b, #9cdcb6)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 0 4px color-mix(in oklab, var(--sem-accent) 30%, transparent)" ] ,
@@ -750,16 +759,10 @@ sty:Sunset a sty:Theme ; sem:slug "sunset" ; sem:order 5 ; sem:symbol "◓" ;
 [] a sty:StyleRule ; sty:part "[data-sem-theme] [data-sem-c=\"graph-mark\"] .sem-stop-b" ;
     sty:declares [ sty:property "stop-color" ; sty:token tok:gradient-to ] .
 
-# Text on solids: an accent-9 fill may be light (Terminal's phosphor), so what sits on it
-# is the theme's accent-contrast, not white; likewise on the status solids.
-[] a sty:StyleRule ; sty:part "[data-sem-theme] [data-sem-tone=\"accent\"]" ;
-    sty:declares [ sty:property "--tone-on-solid" ; sty:token tok:accent-contrast ] .
-[] a sty:StyleRule ;
-    sty:part "[data-sem-theme] :is([data-sem-tone=\"info\"], [data-sem-tone=\"success\"], [data-sem-tone=\"danger\"], [data-sem-intent=\"danger\"])" ;
+# Text on solids: an accent-9 fill may be light (Terminal's phosphor), so the tones (variants.ttl)
+# read the theme's accent-contrast, on-status and on-warning, not white.
+[] a sty:StyleRule ; sty:part "[data-sem-theme] [data-sem-intent=\"danger\"]" ;
     sty:declares [ sty:property "--tone-on-solid" ; sty:token tok:on-status ] .
-[] a sty:StyleRule ;
-    sty:part "[data-sem-theme] :is([data-sem-c=\"pagination\"] button[aria-current=page], [data-sem-c=\"stepper\"] [data-state=complete] .sem-marker)" ;
-    sty:declares [ sty:property "color" ; sty:token tok:accent-contrast ] .
 [] a sty:StyleRule ; sty:part "[data-sem-theme] [data-sem-c=\"checkbox\"] > .sem-row > input:checked" ;
     sty:declares [ sty:property "background-image" ; sty:token tok:check ] .
 

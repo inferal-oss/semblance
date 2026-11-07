@@ -259,7 +259,7 @@
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part ":is([data-sem-c=combobox], [data-sem-c=tag-input]) > .sem-ta-field > .sem-ta-popup > .sem-ta-list > li[aria-selected=true]:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part ":is([data-sem-c=combobox], [data-sem-c=tag-input]) > .sem-ta-field > .sem-ta-popup > .sem-ta-list > li[aria-selected=true] mark:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;

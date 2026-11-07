@@ -116,8 +116,8 @@ sty:Cupertino a sty:Theme ; sem:slug "cupertino" ; sem:order 6 ; sem:symbol "⌘
         [ sty:property "--sem-surface-hover" ; sty:raw "light-dark(#f0f0f0, #2f2f31)" ] ,
         [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#fbfbfb, #2a2a2c)" ] ,
         [ sty:property "--sem-text" ; sty:raw "light-dark(#1d1d1f, #f5f5f7)" ] ,
-        [ sty:property "--sem-muted" ; sty:raw "light-dark(#636366, #a1a1a6)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#a1a1a6, #6e6e73)" ] ,
+        [ sty:property "--sem-muted" ; sty:raw "light-dark(#5f5f63, #a1a1a6)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#86868b, #79797e)" ] ,
         [ sty:property "--sem-border" ; sty:raw "light-dark(#e3e3e3, #38383a)" ] ,
         [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#c8c8c8, #4a4a4c)" ] ,
         [ sty:property "--sem-accent" ; sty:raw "light-dark(#0058b8, #4ea4ff)" ] ,
@@ -126,6 +126,7 @@ sty:Cupertino a sty:Theme ; sem:slug "cupertino" ; sem:order 6 ; sem:symbol "⌘
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #0b0b0d)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "#ffffff" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "#ffffff" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
         [ sty:property "--sem-danger" ; sty:raw "light-dark(#c0000f, #ff8a85)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#156b2e, #5fd57a)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 0 3.5px color-mix(in srgb, var(--sem-accent-9) 45%, transparent)" ] ,
@@ -242,7 +243,7 @@ sty:Tracker a sty:Theme ; sem:slug "tracker" ; sem:order 7 ; sem:symbol "▀" ;
         [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#e4e4e4, #404045)" ] ,
         [ sty:property "--sem-text" ; sty:raw "light-dark(#000000, #f2f2f2)" ] ,
         [ sty:property "--sem-muted" ; sty:raw "light-dark(#4a4a4a, #c4c4c8)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#7a7a7a, #8a8a90)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#6e6e6e, #939398)" ] ,
         [ sty:property "--sem-border" ; sty:raw "light-dark(#a8a8a8, #56565c)" ] ,
         [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#6c6c6c, #8a8a90)" ] ,
         [ sty:property "--sem-accent" ; sty:raw "light-dark(#0f3fbf, #9db6ff)" ] ,
@@ -251,6 +252,7 @@ sty:Tracker a sty:Theme ; sem:slug "tracker" ; sem:order 7 ; sem:symbol "▀" ;
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #101014)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "#ffffff" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "#ffffff" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
         [ sty:property "--sem-danger" ; sty:raw "light-dark(#a01010, #ff9d99)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#1d5e20, #8fd897)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 0 2px var(--sem-accent-9)" ] ,
@@ -367,7 +369,7 @@ sty:Classic a sty:Theme ; sem:slug "classic" ; sem:order 8 ; sem:symbol "⊞" ;
         [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#c0c0c0, #3c3c44)" ] ,
         [ sty:property "--sem-text" ; sty:raw "light-dark(#000000, #f2f2f2)" ] ,
         [ sty:property "--sem-muted" ; sty:raw "light-dark(#3c3c3c, #c2c2ca)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#707070, #8a8a94)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#686868, #95959e)" ] ,
         [ sty:property "--sem-border" ; sty:raw "light-dark(#808080, #5a5a64)" ] ,
         [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#404040, #9a9aa4)" ] ,
         [ sty:property "--sem-accent" ; sty:raw "light-dark(#000080, #9fb4ff)" ] ,
@@ -376,6 +378,7 @@ sty:Classic a sty:Theme ; sem:slug "classic" ; sem:order 8 ; sem:symbol "⊞" ;
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #000000)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "#ffffff" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "#ffffff" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
         [ sty:property "--sem-danger" ; sty:raw "light-dark(#8b0000, #ff9a9a)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#005000, #8fdc8f)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 0 1px light-dark(#000000, #ffffff)" ] ,
@@ -501,6 +504,7 @@ sty:Fluent a sty:Theme ; sem:slug "fluent" ; sem:order 10 ; sem:symbol "◫" ;
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #000000)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "light-dark(#ffffff, #000000)" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "light-dark(#ffffff, #000000)" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
         [ sty:property "--sem-danger" ; sty:raw "light-dark(#c42b1c, #ff99a4)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#0f7b0f, #6ccb5f)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 #0000" ] ,
@@ -617,7 +621,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
         [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#fffdf5, #2a3a32)" ] ,
         [ sty:property "--sem-text" ; sty:raw "light-dark(#1b2340, #f1f0e8)" ] ,
         [ sty:property "--sem-muted" ; sty:raw "light-dark(#5b5446, #c0c8bf)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#9a907a, #74897e)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#8e8571, #74897e)" ] ,
         [ sty:property "--sem-border" ; sty:raw "light-dark(#cfc6ae, #4a6055)" ] ,
         [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#1b2340, #e6e4d8)" ] ,
         [ sty:property "--sem-accent" ; sty:raw "light-dark(#1d4ed8, #ffd866)" ] ,
@@ -626,6 +630,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
         [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #1d2924)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "light-dark(#ffffff, #1b1f12)" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "light-dark(#ffffff, #141a16)" ] ,
+        [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
         [ sty:property "--sem-danger" ; sty:raw "light-dark(#a31f1f, #ffb3a9)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#24652a, #a8e2ac)" ] ,
         [ sty:property "--sem-ring" ; sty:raw "0 0 0 2px var(--sem-surface), 0 0 0 4px var(--sem-accent)" ] ,
@@ -715,7 +720,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 [] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Primary ;
     sty:state ":where([data-sem-theme=cupertino] *):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "linear-gradient(180deg, color-mix(in srgb, var(--sem-accent-9) 82%, white), var(--sem-accent-9))" ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] ,
                  [ sty:property "border-color" ; sty:raw "transparent" ] ,
                  [ sty:property "box-shadow" ; sty:raw "0 0 0 0.5px color-mix(in srgb, var(--sem-accent-9) 70%, black), 0 1px 1.5px light-dark(rgb(0 0 0 / 0.15), rgb(0 0 0 / 0.5))" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Primary ;
@@ -806,7 +811,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part ":is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part ":is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page]):focus-visible:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
@@ -831,7 +836,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part "[data-sem-c=menu-item]:not(:disabled):is(:hover, :focus-visible):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part "[data-sem-c=menu-item]:not(:disabled):is(:hover, :focus-visible) .sem-icon:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
@@ -1109,7 +1114,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part "[data-sem-c=table] tbody tr:hover:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] .
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part "[data-sem-c=table] tbody tr:hover :is(td, th, code):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "inherit" ] .
@@ -1121,8 +1126,8 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
                  [ sty:property "border-radius" ; sty:raw "5px" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row :is(.sem-label, .sem-count, .sem-twisty):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
-    sty:declares [ sty:property "color" ; sty:raw "#ffffff" ] .
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row :is(.sem-label, .sem-count, .sem-twisty, .sem-detail):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part "[data-sem-c=metrics] .sem-metric:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "border" ; sty:raw "0" ] ,
@@ -2406,8 +2411,8 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 # --- Doodle ----------------------------------------------------------------------------------
 [] a sty:StyleRule ; sty:when sty:Doodle ;
     sty:declares [ sty:property "--ink" ; sty:raw "var(--sem-border-strong)" ] ,
-                 [ sty:property "--hl" ; sty:raw "light-dark(rgb(255 214 0 / 0.55), rgb(255 216 102 / 0.3))" ] ,
-                 [ sty:property "--hl-strong" ; sty:raw "light-dark(rgb(255 214 0 / 0.85), rgb(255 216 102 / 0.5))" ] ,
+                 [ sty:property "--hl" ; sty:raw "light-dark(rgb(255 214 0 / 0.55), rgb(255 216 102 / 0.2))" ] ,
+                 [ sty:property "--hl-strong" ; sty:raw "light-dark(rgb(255 214 0 / 0.85), rgb(255 216 102 / 0.35))" ] ,
                  [ sty:property "--wob-a" ; sty:raw "255px 15px 225px 15px / 15px 225px 15px 255px" ] ,
                  [ sty:property "--wob-b" ; sty:raw "15px 255px 15px 225px / 225px 15px 255px 15px" ] ,
                  [ sty:property "--wob-c" ; sty:raw "125px 10px 20px 185px / 25px 205px 205px 25px" ] ,

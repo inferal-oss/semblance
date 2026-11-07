@@ -205,7 +205,7 @@
                  [ sty:property "white-space" ; sty:raw "pre-wrap" ] ,
                  [ sty:property "animation" ; sty:raw "sem-rise-in var(--sem-duration) var(--sem-ease)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ClassDoc ; sty:part ".ttl-comment" ;
-    sty:declares [ sty:property "color" ; sty:token tok:faint ] , [ sty:property "font-style" ; sty:raw "italic" ] .
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] , [ sty:property "font-style" ; sty:raw "italic" ] .
 
 # --- remembered state: the policy list ---
 [] a sty:StyleRule ; sty:appliesTo c:PolicyList ;
@@ -252,7 +252,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part "[role=switch][aria-checked=true]" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent ] , [ sty:property "border-color" ; sty:token tok:accent ] .
 [] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part "[role=switch][aria-checked=true] > span" ;
-    sty:declares [ sty:property "transform" ; sty:raw "translateX(14px)" ] , [ sty:property "background" ; sty:raw "#ffffff" ] .
+    sty:declares [ sty:property "transform" ; sty:raw "translateX(14px)" ] , [ sty:property "background" ; sty:token tok:on-accent ] .
 [] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part ":is([role=switch], .sem-forget):focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] , [ sty:property "box-shadow" ; sty:token tok:ring ] .
 [] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part ".sem-forget" ;

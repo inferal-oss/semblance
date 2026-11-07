@@ -50,8 +50,8 @@ tok:surface a sty:Token ; sty:scale sty:Color ; sem:slug "surface" ; sty:value "
 tok:surface-sunken a sty:Token ; sty:scale sty:Color ; sem:slug "surface-sunken" ; sty:value "light-dark(#f6f6fa, #111116)" .
 tok:surface-hover a sty:Token ; sty:scale sty:Color ; sem:slug "surface-hover" ; sty:value "light-dark(#f4f4fb, #1f1f27)" .
 tok:text a sty:Token ; sty:scale sty:Color ; sem:slug "text" ; sty:value "light-dark(#16161d, #f2f2f7)" .
-tok:muted a sty:Token ; sty:scale sty:Color ; sem:slug "muted" ; sty:value "light-dark(#6b6b7b, #9898a8)" .
-tok:faint a sty:Token ; sty:scale sty:Color ; sem:slug "faint" ; sty:value "light-dark(#a3a3b2, #5d5d6c)" .
+tok:muted a sty:Token ; sty:scale sty:Color ; sem:slug "muted" ; sty:value "light-dark(#646475, #9898a8)" .
+tok:faint a sty:Token ; sty:scale sty:Color ; sem:slug "faint" ; sty:value "light-dark(#8b8b98, #6a6a78)" .
 tok:border a sty:Token ; sty:scale sty:Color ; sem:slug "border" ; sty:value "light-dark(#e8e8f0, #26262f)" .
 tok:border-strong a sty:Token ; sty:scale sty:Color ; sem:slug "border-strong" ; sty:value "light-dark(#d4d4e0, #3a3a46)" .
 tok:accent a sty:Token ; sty:scale sty:Color ; sem:slug "accent" ; sty:value "light-dark(#5b4cf0, #8f86ff)" .
@@ -59,8 +59,8 @@ tok:accent-strong a sty:Token ; sty:scale sty:Color ; sem:slug "accent-strong" ;
 tok:accent-soft a sty:Token ; sty:scale sty:Color ; sem:slug "accent-soft" ;
     sty:value "color-mix(in oklab, var(--sem-accent) 13%, transparent)" .
 tok:on-accent a sty:Token ; sty:scale sty:Color ; sem:slug "on-accent" ; sty:value "light-dark(#ffffff, #0e0b26)" .
-tok:danger a sty:Token ; sty:scale sty:Color ; sem:slug "danger" ; sty:value "light-dark(#e0344a, #ff7a8a)" .
-tok:success a sty:Token ; sty:scale sty:Color ; sem:slug "success" ; sty:value "light-dark(#12a37a, #4fd8a8)" .
+tok:danger a sty:Token ; sty:scale sty:Color ; sem:slug "danger" ; sty:value "light-dark(#d9304a, #ff7a8a)" .
+tok:success a sty:Token ; sty:scale sty:Color ; sem:slug "success" ; sty:value "light-dark(#0b8763, #4fd8a8)" .
 
 # --- densities and elevations -------------------------------------------------------
 
@@ -362,7 +362,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "transition" ; sty:raw "color var(--sem-motion)" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:ListItem ; sty:part "input:checked + label" ;
-    sty:declares [ sty:property "color" ; sty:token tok:faint ] ,
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "text-decoration" ; sty:raw "line-through" ] ,
                  [ sty:property "text-decoration-color" ; sty:token tok:faint ] .
 
@@ -592,12 +592,12 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 # --- flippable: the view on the front, how it is made on the back ---------------------------
 
 tok:code-bg a sty:Token ; sty:scale sty:Color ; sem:slug "code-bg" ; sty:value "light-dark(#f7f7fb, #0f0f15)" .
-tok:code-keyword a sty:Token ; sty:scale sty:Color ; sem:slug "code-keyword" ; sty:value "light-dark(#7c3aed, #c4b5fd)" .
+tok:code-keyword a sty:Token ; sty:scale sty:Color ; sem:slug "code-keyword" ; sty:value "light-dark(#7434e0, #c4b5fd)" .
 tok:code-var a sty:Token ; sty:scale sty:Color ; sem:slug "code-var" ; sty:value "light-dark(#be185d, #f9a8d4)" .
-tok:code-string a sty:Token ; sty:scale sty:Color ; sem:slug "code-string" ; sty:value "light-dark(#b45309, #fdba74)" .
+tok:code-string a sty:Token ; sty:scale sty:Color ; sem:slug "code-string" ; sty:value "light-dark(#a34b08, #fdba74)" .
 tok:code-name a sty:Token ; sty:scale sty:Color ; sem:slug "code-name" ; sty:value "light-dark(#4338ca, #a5b4fc)" .
 tok:code-iri a sty:Token ; sty:scale sty:Color ; sem:slug "code-iri" ; sty:value "light-dark(#0e7490, #67e8f9)" .
-tok:code-comment a sty:Token ; sty:scale sty:Color ; sem:slug "code-comment" ; sty:value "light-dark(#8a8a9a, #6b6b7b)" .
+tok:code-comment a sty:Token ; sty:scale sty:Color ; sem:slug "code-comment" ; sty:value "light-dark(#6a6a7a, #8f8f9f)" .
 tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" .
 
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ;
@@ -941,7 +941,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "font-size" ; sty:raw "11px" ] ,
                  [ sty:property "line-height" ; sty:raw "1" ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] .
+                 [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > .sem-byline [data-sem-c=link]" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > .sem-byline [data-sem-c=text]" ;
@@ -1180,7 +1180,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] .
+                 [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part "> .sem-source" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:tokens ( tok:space-4 tok:space-4 ) ] ,
@@ -1602,17 +1602,16 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "width" ; sty:raw "16px" ] ,
                  [ sty:property "height" ; sty:raw "16px" ] ,
                  [ sty:property "border-radius" ; sty:raw "50%" ] ,
-                 [ sty:property "color" ; sty:raw "white" ] ,
                  [ sty:property "font-size" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-good" ;
-    sty:declares [ sty:property "color" ; sty:token tok:good ] , [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-good) 12%, transparent)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-good b" ; sty:declares [ sty:property "background" ; sty:token tok:good ] .
+    sty:declares [ sty:property "color" ; sty:token tok:success-11 ] , [ sty:property "background" ; sty:token tok:success-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-good b" ; sty:declares [ sty:property "background" ; sty:token tok:success-9 ] , [ sty:property "color" ; sty:token tok:on-status ] .
 [] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-concern" ;
-    sty:declares [ sty:property "color" ; sty:token tok:flag ] , [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-flag) 12%, transparent)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-concern b" ; sty:declares [ sty:property "background" ; sty:token tok:flag ] .
+    sty:declares [ sty:property "color" ; sty:token tok:warning-11 ] , [ sty:property "background" ; sty:token tok:warning-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-concern b" ; sty:declares [ sty:property "background" ; sty:token tok:warning-9 ] , [ sty:property "color" ; sty:token tok:on-warning ] .
 [] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-insight" ;
     sty:declares [ sty:property "color" ; sty:token tok:accent-strong ] , [ sty:property "background" ; sty:token tok:accent-soft ] .
-[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-insight b" ; sty:declares [ sty:property "background" ; sty:token tok:accent ] .
+[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-insight b" ; sty:declares [ sty:property "background" ; sty:token tok:accent ] , [ sty:property "color" ; sty:token tok:on-accent ] .
 
 # --- toggle as a switch; detach as a quiet affordance -----------------------------------------------
 
