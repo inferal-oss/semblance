@@ -2411,8 +2411,8 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 # --- Doodle ----------------------------------------------------------------------------------
 [] a sty:StyleRule ; sty:when sty:Doodle ;
     sty:declares [ sty:property "--ink" ; sty:raw "var(--sem-border-strong)" ] ,
-                 [ sty:property "--hl" ; sty:raw "light-dark(rgb(255 214 0 / 0.55), rgb(255 216 102 / 0.2))" ] ,
-                 [ sty:property "--hl-strong" ; sty:raw "light-dark(rgb(255 214 0 / 0.85), rgb(255 216 102 / 0.35))" ] ,
+                 [ sty:property "--hl" ; sty:raw "light-dark(rgb(255 214 0 / 0.55), rgb(255 216 102 / 0.18))" ] ,
+                 [ sty:property "--hl-strong" ; sty:raw "light-dark(rgb(255 214 0 / 0.85), rgb(255 216 102 / 0.26))" ] ,
                  [ sty:property "--wob-a" ; sty:raw "255px 15px 225px 15px / 15px 225px 15px 255px" ] ,
                  [ sty:property "--wob-b" ; sty:raw "15px 255px 15px 225px / 225px 15px 255px 15px" ] ,
                  [ sty:property "--wob-c" ; sty:raw "125px 10px 20px 185px / 25px 205px 205px 25px" ] ,
