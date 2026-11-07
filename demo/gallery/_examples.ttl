@@ -35,6 +35,7 @@ ui:ExPhotos a ui:Example ; rdfs:label "Photo post" , "Допис із фото"@
 ui:ExForeign a ui:Example ; rdfs:label "Coffee tasting" , "Дегустація кави"@uk , "Kaffeeverkostung"@de , "تذوق القهوة"@ar ; sem:order 19 ; ui:key "foreign" .
 ui:ExRdf a ui:Example ; rdfs:label "Editing a dataset" , "Редагування набору даних"@uk , "Datensatz bearbeiten"@de , "تحرير مجموعة بيانات"@ar ; sem:order 20 ; ui:key "rdf-editor" .
 ui:ExReader a ui:Example ; rdfs:label "Reader" , "Читанка"@uk , "Reader"@de , "القارئ"@ar ; sem:order 21 ; ui:key "reader" .
+ui:ExBlocks a ui:Example ; rdfs:label "A block type of your own" , "Власний тип блока"@uk , "Ein eigener Blocktyp"@de , "نوع كتلة خاص بك"@ar ; sem:order 22 ; ui:key "block-types" .
 
 ui:examples a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:examplesSide ui:examplePages ) .
@@ -42,7 +43,7 @@ ui:examples a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset t
 ui:examplesSide a c:Stack ; pos:direction pos:Column ; pos:sticky pos:StickToTop ; c:children ( ui:examplesNav ) .
 ui:examplesNav a c:NavList ; c:controls ui:app ; c:property ui:example ; c:label "Examples" , "Приклади"@uk , "Beispiele"@de , "أمثلة"@ar ; c:compactAs c:Picker .
 ui:examplePages a c:Switch ; c:controls ui:app ; c:property ui:example ;
-    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-warehouse ui:exc-shapes ui:exc-sheet ui:exc-calendar ui:exc-dashboard ui:exc-collab ui:exc-files ui:exc-photos ui:exc-foreign ui:exc-rdf ui:exc-reader ) .
+    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-warehouse ui:exc-shapes ui:exc-sheet ui:exc-calendar ui:exc-dashboard ui:exc-collab ui:exc-files ui:exc-photos ui:exc-foreign ui:exc-rdf ui:exc-reader ui:exc-blocks ) .
 ui:exc-todo c:when ui:ExTodo ; c:content ui:exp-todo .
 ui:exc-signin c:when ui:ExSignin ; c:content ui:exp-signin .
 ui:exc-network c:when ui:ExNetwork ; c:content ui:exp-network .
@@ -64,6 +65,7 @@ ui:exc-files c:when ui:ExFiles ; c:content ui:exp-files .
 ui:exc-photos c:when ui:ExPhotos ; c:content ui:exp-photos .
 ui:exc-foreign c:when ui:ExForeign ; c:content ui:exp-foreign .
 ui:exc-reader c:when ui:ExReader ; c:content ui:exp-reader .
+ui:exc-blocks c:when ui:ExBlocks ; c:content ui:exp-blocks .
 
 # --- Each example: the app, how it works, and its source ---------------------------------------------
 # An example is its own graph, in its own file (demo/gallery/_ex-<key>.ttl; the network inspector in
@@ -134,3 +136,6 @@ ui:exs-rdf a c:SourceView ; c:label "Source" , "Код"@uk , "Quelle"@de , "ال
 ui:exp-reader a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-reader ui:ex-reader-how ) .
 ui:ex-reader-how c:sourceView ui:exs-reader .
 ui:exs-reader a c:SourceView ; c:label "Source" , "Код"@uk , "Quelle"@de , "المصدر"@ar ; c:of <urn:semblance:source:demo/gallery/_ex-reader.ttl> .
+ui:exp-blocks a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-blocks ui:ex-blocks-how ) .
+ui:ex-blocks-how c:sourceView ui:exs-blocks .
+ui:exs-blocks a c:SourceView ; c:label "Source" , "Код"@uk , "Quelle"@de , "المصدر"@ar ; c:of <urn:semblance:source:demo/gallery/_ex-blocks.ttl> .

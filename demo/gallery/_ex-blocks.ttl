@@ -1,0 +1,203 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix blk: <https://semblance.dev/ns/block#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix file: <https://semblance.dev/ns/file#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix po: <http://www.essepuntato.it/2008/12/pattern#> .
+@prefix co: <http://purl.org/co/> .
+@prefix doco: <http://purl.org/spar/doco/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rn: <https://semblance.dev/demo/changes#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# --- A block type of your own: release notes ---------------------------------------------------------
+# A changelog edited in a block editor, whose entries are a block type the site declares in Turtle
+# (docs/BLOCKS.md, "Custom block types: the contract"): rn:Change, a line of text with its kind (added,
+# changed, fixed, removed). Its class, its rendering on the screen and its line in Markdown, its shape, its
+# / entry, a Markdown shortcut, its conversions and a reaction - and no host code.
+
+ui:ex-blocks-prefixes sh:declare [ sh:prefix "rn" ; sh:namespace "https://semblance.dev/demo/changes#"^^xsd:anyURI ] .
+
+ui:ex-blocks a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:ex-blocks-intro ui:ex-blocks-body ) .
+ui:ex-blocks-intro a c:Text ; c:label "Release notes as a block document. Each entry is a block type of the site's own, rn:Change, declared in Turtle: type / and pick \"Change\", start a line with \"+ \", or turn a paragraph into one from its handle's menu. Click an entry's kind to cycle it. On the right, the same document as the RDF it is; copying a selection gives it as HTML, Markdown and Turtle." .
+ui:ex-blocks-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:ex-blocks-card ui:ex-blocks-text-card ) .
+ui:ex-blocks-card a c:Card ; c:label "Release notes" ; c:badge "c:BlockEditor" ;
+    c:note "A blk:Document of headings, paragraphs and rn:Change blocks." ;
+    c:content ui:ex-blocks-stack .
+ui:ex-blocks-stack a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:ex-blocks-actions ui:ex-blocks-editor ) .
+ui:ex-blocks-actions a c:Toolbar ; c:label "History"@en , "Історія"@uk , "Verlauf"@de , "السجل"@ar ; c:children ( ui:ex-blocks-undo ui:ex-blocks-redo ) .
+ui:ex-blocks-undo a c:Button , beh:Undoer ; c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar ; sty:size sty:Small .
+ui:ex-blocks-redo a c:Button , beh:Redoer ; c:label "Redo"@en , "Повторити"@uk , "Wiederholen"@de , "إعادة"@ar ; sty:size sty:Small .
+ui:ex-blocks-editor a c:BlockEditor ; c:label "Release notes"@en , "Примітки до випуску"@uk , "Versionshinweise"@de , "ملاحظات الإصدار"@ar ;
+    c:of rn:notes ; c:editable true ; c:undoer ui:ex-blocks-undo ; c:redoer ui:ex-blocks-redo ; file:keepIn blk:Uploads .
+ui:ex-blocks-text-card a c:Card ; c:label "As RDF" ; c:badge "c:RdfEditor" ;
+    c:note "The same graph: change a kind or a text here, and the block shows it." ;
+    c:content ui:ex-blocks-rdf .
+ui:ex-blocks-rdf a c:RdfEditor ; c:label "Release notes as RDF"@en , "Примітки до випуску як RDF"@uk , "Versionshinweise als RDF"@de , "ملاحظات الإصدار بصيغة RDF"@ar ;
+    c:entry rn:notes , rn:c1 , rn:c2 , rn:c3 , rn:c4 ; c:editable true .
+
+rn:notes a blk:Document ; po:contains rn:title , rn:intro , rn:c1 , rn:c2 , rn:c3 , rn:c4 .
+rn:title a blk:Heading2 ; rdf:value "Release 1.2" ; co:nextItem rn:intro .
+rn:intro a blk:Paragraph ; rdf:value "What changed since 1.1:" ; co:nextItem rn:c1 .
+rn:c1 a rn:Change ; rn:kind rn:Added ; rdf:value "Copy a selection as Markdown or Turtle." ; co:nextItem rn:c2 .
+rn:c2 a rn:Change ; rn:kind rn:Changed ; rdf:value "Typing in one breath is one undo step." ; co:nextItem rn:c3 ; blk:mark rn:c2-em .
+rn:c2-em a blk:Emphasis ; oa:start 10 ; oa:end 20 .
+rn:c3 a rn:Change ; rn:kind rn:Fixed ; rdf:value "Undo after typing at the end of a bold word." ; co:nextItem rn:c4 .
+rn:c4 a rn:Change ; rn:kind rn:Removed ; rdf:value "The old plain-text paste." .
+
+# --- the block type -----------------------------------------------------------------------------------
+# 1. The class: a text block (it has text, edited like a paragraph) and the DoCo class it is.
+rn:Change a owl:Class ; rdfs:subClassOf blk:TextBlock , doco:Paragraph ; sem:slug "rn-change" ;
+    # 4. Its / entry: label, description, icon, keywords, place in the menu, and what a new one starts with.
+    rdfs:label "Change"@en , "Зміна"@uk , "Änderung"@de , "تغيير"@ar ;
+    c:help "An entry of release notes: what was added, changed, fixed or removed."@en ,
+        "Запис приміток до випуску: що додано, змінено, виправлено чи вилучено."@uk ,
+        "Ein Eintrag der Versionshinweise: was hinzugefügt, geändert, behoben oder entfernt wurde."@de ,
+        "إدخال في ملاحظات الإصدار: ما أُضيف أو غُيّر أو أُصلح أو أُزيل."@ar ;
+    c:icon "±" ; blk:keyword "changelog release note entry" ; blk:menuOrder 40 ; blk:template rn:ChangeTemplate .
+rn:ChangeTemplate rn:kind rn:Added .
+rn:kind a owl:ObjectProperty ; rdfs:domain rn:Change ; rdfs:range rn:Kind ; rdfs:label "kind" .
+rn:next a owl:ObjectProperty ; rdfs:domain rn:Kind ; rdfs:range rn:Kind .
+rn:Kind a owl:Class ; rdfs:label "Kind of change" .
+rn:Added a rn:Kind ; rn:next rn:Changed ; rdfs:label "Added"@en , "Додано"@uk , "Hinzugefügt"@de , "أُضيف"@ar .
+rn:Changed a rn:Kind ; rn:next rn:Fixed ; rdfs:label "Changed"@en , "Змінено"@uk , "Geändert"@de , "تغيّر"@ar .
+rn:Fixed a rn:Kind ; rn:next rn:Removed ; rdfs:label "Fixed"@en , "Виправлено"@uk , "Behoben"@de , "أُصلح"@ar .
+rn:Removed a rn:Kind ; rn:next rn:Added ; rdfs:label "Removed"@en , "Вилучено"@uk , "Entfernt"@de , "أُزيل"@ar .
+
+# 2. Its rendering: one root that renders the block; its kind, a button, then <block>/~text, where the shared
+#    text rule puts the runs of its text and marks.
+rn:ChangeRendering a sem:Rendering ; sem:targets rn:Change ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , rn:kind .
+rn:ChangeRendering-sparql a sem:Rule ; sem:implements rn:ChangeRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hasChild ?kind , ?text ; rdfhtml:attribute ?kindAttr .
+  ?kindAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-rn-kind" ; rdfhtml:attributeValue ?kindKey .
+  ?kind a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "rn-kind" ; rdfhtml:contenteditable "false" ; rdfhtml:hasChild ?kindText ;
+        ord:immediatelyPrecedes ?text .
+  ?kindText a rdfhtml:Text ; rdfhtml:data ?kindName .
+}
+WHERE {
+  $this a/rdfs:subClassOf* rn:Change .
+  OPTIONAL { $this rn:kind ?k }
+  BIND(COALESCE(LCASE(REPLACE(STR(?k), "^.*[#/]", "")), "none") AS ?kindKey)
+  OPTIONAL { ?nameAt l10n:of ?k ; l10n:name ?namePicked }
+  OPTIONAL { ?k rdfs:label ?nameEn FILTER(LANGMATCHES(LANG(?nameEn), "en")) }
+  BIND(COALESCE(STR(?namePicked), STR(?nameEn), "?") AS ?kindName)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(STR(?root) AS ?rootId)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-rn-kind")) AS ?kindAttr)
+  BIND(IRI(CONCAT(STR($this), "/~kind")) AS ?kind)
+  BIND(IRI(CONCAT(STR($this), "/~kind-text")) AS ?kindText)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+}""" .
+#    In the Text modality the shared rendering writes a text block's line; this says what it starts with:
+#    a list item led by its kind, in bold.
+rn:ChangeLinePrefix a sem:Rendering ; sem:targets rn:Change ; sem:modality mod:Text ; sem:stratum -5 ; sem:inputOnly true ;
+    sem:watches rdf:type , rn:kind .
+rn:ChangeLinePrefix-sparql a sem:Rule ; sem:implements rn:ChangeLinePrefix ;
+    sem:construct """
+CONSTRUCT { $this blk:linePrefix ?prefix . }
+WHERE {
+  $this a/rdfs:subClassOf* rn:Change ; rn:kind ?k .
+  OPTIONAL { ?nameAt l10n:of ?k ; l10n:name ?namePicked }
+  OPTIONAL { ?k rdfs:label ?nameEn FILTER(LANGMATCHES(LANG(?nameEn), "en")) }
+  BIND(CONCAT("- **", COALESCE(STR(?namePicked), STR(?nameEn)), "** ") AS ?prefix)
+}""" .
+[] a sty:StyleRule ; sty:appliesTo rn:Change ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "baseline" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "margin-block" ; sty:token tok:space-1 ] .
+[] a sty:StyleRule ; sty:appliesTo rn:Change ; sty:part "> .rn-kind" ;
+    sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "min-inline-size" ; sty:raw "6.5em" ] ,
+                 [ sty:property "padding" ; sty:raw "0.1em 0.6em" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid currentColor" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] ,
+                 [ sty:property "color" ; sty:token tok:accent-11 ] .
+[] a sty:StyleRule ; sty:appliesTo rn:Change ; sty:state "[data-rn-kind=added]" ; sty:part "> .rn-kind" ;
+    sty:declares [ sty:property "color" ; sty:token tok:success-11 ] .
+[] a sty:StyleRule ; sty:appliesTo rn:Change ; sty:state "[data-rn-kind=fixed]" ; sty:part "> .rn-kind" ;
+    sty:declares [ sty:property "color" ; sty:token tok:warning-11 ] .
+[] a sty:StyleRule ; sty:appliesTo rn:Change ; sty:state "[data-rn-kind=removed]" ; sty:part "> .rn-kind" ;
+    sty:declares [ sty:property "color" ; sty:token tok:danger-11 ] .
+
+# 3. Its shape: what a change must say. The shapes layer shows a violation beside the block.
+rn:ChangeShape a sh:NodeShape ; sh:targetClass rn:Change ;
+    sh:property [ sh:path rn:kind ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( rn:Added rn:Changed rn:Fixed rn:Removed ) ;
+                  sh:message "A change is added, changed, fixed or removed (one rn:kind)." ] .
+
+# A Markdown shortcut of its own: "+ " at the start of a paragraph makes it a change.
+rn:ChangeShortcut a blk:BlockShortcut ; blk:trigger " " ; blk:pattern "^\\+$" ; blk:makes rn:Change .
+
+# Its conversions, one term per direction. To a change: the built-in kind (blk:Retype) keeps the text and marks
+# and applies the template. Back to a paragraph: queries of its own, which also drop the kind.
+rn:ParagraphToChange a blk:Conversion ; beh:sourceClass blk:Paragraph ; blk:to rn:Change ; beh:like blk:Retype ;
+    ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar .
+rn:ChangeToParagraph a blk:Conversion ; beh:sourceClass rn:Change ; blk:to blk:Paragraph ; beh:undoable true ;
+    rdfs:comment "A change becomes a paragraph: its text and marks kept, its kind dropped."@en ;
+    ann:announces "Block type changed"@en , "Тип блоку змінено"@uk , "Blocktyp geändert"@de , "تم تغيير نوع الكتلة"@ar ;
+    beh:deletes """CONSTRUCT { $this a ?old . $this rn:kind ?k . }
+WHERE { { $this a ?old . ?old rdfs:subClassOf* blk:Block } UNION { $this rn:kind ?k } }""" ;
+    beh:inserts """CONSTRUCT { $this a ?to . } WHERE { $event a ?conversion . ?conversion blk:to ?to }""" .
+
+# Behaviour: a click on its kind moves it to the next kind, one undoable change.
+rn:NextKind a beh:Reaction ;
+    rdfs:label "Next kind"@en ;
+    beh:when beh:Click ; beh:sourceClass rn:Change ; beh:undoable true ;
+    beh:deletes """CONSTRUCT { $this rn:kind ?was } WHERE { $event beh:node ?hit FILTER(?hit = IRI(CONCAT(STR($this), "/~kind"))) $this rn:kind ?was }""" ;
+    beh:inserts """CONSTRUCT { $this rn:kind ?now } WHERE { $event beh:node ?hit FILTER(?hit = IRI(CONCAT(STR($this), "/~kind"))) $this rn:kind ?was . ?was rn:next ?now }""" .
+
+# --- How it works: a walkthrough ------------------------------------------------------------------------
+
+ui:ex-blocks-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-blocks-w1 ui:ex-blocks-w2 ui:ex-blocks-w3 ui:ex-blocks-w4 ui:ex-blocks-w5 ui:ex-blocks-w6 ) .
+
+ui:ex-blocks-w1 a c:WalkthroughStep ; rdfs:label "A block type is a class" ;
+    c:children ( "The notes, " ui:ex-blocks-m-notes ", are a " ui:ex-blocks-m-Document " holding blocks in a chain. An entry such as " ui:ex-blocks-m-c1 " is an instance of " ui:ex-blocks-m-Change ", a subclass of " ui:ex-blocks-m-TextBlock " (it has text, edited as a paragraph's is) and of DoCo's paragraph. Its kind, " ui:ex-blocks-m-Added ", is an ordinary resource with its labels in four languages." ) .
+ui:ex-blocks-w2 a c:WalkthroughStep ; rdfs:label "Its rendering" ;
+    c:children ( "A block is a component, so its type has a rendering: " ui:ex-blocks-m-rendering " mints one root that renders the block, the kind as a button, and places <block>/~text, where the shared text rule puts the runs of its text and marks. In the Text modality the shared rule writes its line; " ui:ex-blocks-m-prefix " says what the line starts with, which is how the notes read as Markdown and copy as Markdown." ) .
+ui:ex-blocks-w3 a c:WalkthroughStep ; rdfs:label "Its shape" ;
+    c:children ( ui:ex-blocks-m-shape " says what a change must say: exactly one kind, one of four. The shapes layer checks every change and shows its message beside a block that breaks it." ) .
+ui:ex-blocks-w4 a c:WalkthroughStep ; rdfs:label "Its place in the / menu" ;
+    c:children ( "Every class with a blk:menuOrder is offered by the / menu, with its label, description (c:help), icon and keywords in the viewer's language; picking " ui:ex-blocks-m-Change2 " starts the block with what " ui:ex-blocks-m-template " says. " ui:ex-blocks-m-shortcut " makes a paragraph that starts with \"+ \" a change." ) .
+ui:ex-blocks-w5 a c:WalkthroughStep ; rdfs:label "Turning into and back" ;
+    c:children ( "A conversion is a term per direction. " ui:ex-blocks-m-to " takes its queries from the built-in kind blk:Retype: the text and marks stay, the template comes. " ui:ex-blocks-m-from " has its own pair, which also drops the kind. Both are offered in the handle's menu and the / menu, and each is one undoable change." ) .
+ui:ex-blocks-w6 a c:WalkthroughStep ; rdfs:label "Behaviour, and no host code" ;
+    c:children ( ui:ex-blocks-m-next " is a reaction: a click on a change's kind moves it to the next one, one undoable change. Typing, Enter, the menus, moving and nesting, copying and undo come from the superclass. Everything here is Turtle." ) .
+
+ui:ex-blocks-m-notes a c:Mention ; c:label "rn:notes" ; c:mentions rn:notes .
+ui:ex-blocks-m-Document a c:Mention ; c:label "blk:Document" ; c:mentions blk:Document ; c:to blk:Document .
+ui:ex-blocks-m-c1 a c:Mention ; c:label "rn:c1" ; c:mentions rn:c1 .
+ui:ex-blocks-m-Change a c:Mention ; c:label "rn:Change" ; c:mentions rn:Change .
+ui:ex-blocks-m-Change2 a c:Mention ; c:label "Change" ; c:mentions rn:Change .
+ui:ex-blocks-m-TextBlock a c:Mention ; c:label "blk:TextBlock" ; c:mentions blk:TextBlock ; c:to blk:TextBlock .
+ui:ex-blocks-m-Added a c:Mention ; c:label "rn:Added" ; c:mentions rn:Added .
+ui:ex-blocks-m-rendering a c:Mention ; c:label "rn:ChangeRendering" ; c:mentions rn:ChangeRendering .
+ui:ex-blocks-m-prefix a c:Mention ; c:label "rn:ChangeLinePrefix" ; c:mentions rn:ChangeLinePrefix .
+ui:ex-blocks-m-shape a c:Mention ; c:label "rn:ChangeShape" ; c:mentions rn:ChangeShape .
+ui:ex-blocks-m-template a c:Mention ; c:label "its template" ; c:mentions rn:ChangeTemplate .
+ui:ex-blocks-m-shortcut a c:Mention ; c:label "rn:ChangeShortcut" ; c:mentions rn:ChangeShortcut .
+ui:ex-blocks-m-to a c:Mention ; c:label "rn:ParagraphToChange" ; c:mentions rn:ParagraphToChange .
+ui:ex-blocks-m-from a c:Mention ; c:label "rn:ChangeToParagraph" ; c:mentions rn:ChangeToParagraph .
+ui:ex-blocks-m-next a c:Mention ; c:label "rn:NextKind" ; c:mentions rn:NextKind .
