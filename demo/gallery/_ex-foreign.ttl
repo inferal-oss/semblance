@@ -11,6 +11,7 @@
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix dep: <https://semblance.dev/ns/dependency#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -276,15 +277,19 @@ ui:ex-foreign-add-row a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 
     c:children ( ui:ex-foreign-new ui:ex-foreign-add ) .
 ui:ex-foreign-new a c:TextField ;
     c:label "Another coffee" , "Ще одна кава"@uk , "Ein weiterer Kaffee"@de , "قهوة أخرى"@ar ;
-    c:placeholder "Guji, Antigua, …" .
+    c:placeholder "Guji, Antigua, …" ; val:validates cf:NewCoffeeShape .
+cf:NewCoffeeShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:maxLength 40 ;
+    sh:message "Name the coffee, up to 40 characters." , "Назвіть каву, до 40 символів."@uk ,
+               "Nennen Sie den Kaffee, bis zu 40 Zeichen."@de , "سمِّ القهوة، بما لا يتجاوز 40 حرفًا."@ar .
 ui:ex-foreign-add a c:Button ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; key:shortcut "mod+enter" ;
+    val:requires ( ui:ex-foreign-new ) ;
     c:label "Add to the tasting" , "Додати до дегустації"@uk , "Zur Verkostung hinzufügen"@de , "أضف إلى التذوق"@ar .
 ui:FxAdd a beh:Reaction ;
     rdfs:label "Add a coffee"@en ;
     beh:when beh:Click ; beh:source ui:ex-foreign-add ;
     beh:deletes """
 CONSTRUCT { ui:ex-foreign-new c:value ?v . cf:tasting cf:chosen ?old }
-WHERE { ui:ex-foreign-new c:value ?v FILTER(STRLEN(STR(?v)) > 0 && STRLEN(STR(?v)) <= 40) OPTIONAL { cf:tasting cf:chosen ?old } }""" ;
+WHERE { ui:ex-foreign-new c:value ?v FILTER NOT EXISTS { ui:ex-foreign-new val:invalid true } OPTIONAL { cf:tasting cf:chosen ?old } }""" ;
     beh:inserts """
 CONSTRUCT {
   ?coffee a cf:Coffee ; rdfs:label ?name ; sem:order ?next ; cf:rating 0 ; cf:notes "Added during the tasting." .
@@ -292,7 +297,7 @@ CONSTRUCT {
   cf:tasting cf:chosen ?coffee .
 }
 WHERE {
-  ui:ex-foreign-new c:value ?v FILTER(STRLEN(STR(?v)) > 0 && STRLEN(STR(?v)) <= 40)
+  ui:ex-foreign-new c:value ?v FILTER NOT EXISTS { ui:ex-foreign-new val:invalid true }
   BIND(STR(?v) AS ?name)
   BIND(IRI(CONCAT(STR(cf:), "coffee-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?coffee)
   { SELECT (COALESCE(MAX(?o) + 1, 1) AS ?next) WHERE { ?any a cf:Coffee ; sem:order ?o } }

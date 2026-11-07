@@ -4,7 +4,7 @@
 import type { Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, VAL, XSD_BOOLEAN } from '../ns.ts'
-import { isTrue, nodes, rdfList, str, text } from '../components/util.ts'
+import { isBlank, isTrue, nodes, rdfList, str, text } from '../components/util.ts'
 import { LATIN, parseDate, parseTime } from '../components/dates.ts'
 
 const SH = NS.sh
@@ -17,7 +17,7 @@ function violation(ctx: RuleContext, shape: Term, value: string | undefined): st
   }
   const message = (fallback: string) => text(ctx, shape, SH + 'message') ?? fallback
   const required = (n('minCount') ?? 0) > 0
-  if (value === undefined || value === '') return required ? message('Required.') : undefined
+  if (value === undefined || value === '' || (required && isBlank(value))) return required ? message('Required.') : undefined
   const minLength = n('minLength')
   if (minLength !== undefined && value.length < minLength) return message(`At least ${minLength} characters.`)
   const maxLength = n('maxLength')

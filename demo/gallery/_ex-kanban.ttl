@@ -86,7 +86,8 @@ ui:ex-kanban-board a c:Board , dnd:Sortable ; c:label "Sprint 14" ;
 
 # Adding a card: a field whose shape says what a title is, and a button gated on it (val:requires).
 kb:TitleShape a sh:PropertyShape ; sh:path kb:title ; sh:minCount 1 ; sh:maxLength 80 ;
-    sh:message "A title of up to 80 characters." .
+    sh:message "A title of up to 80 characters." , "Назва до 80 символів."@uk ,
+               "Ein Titel mit bis zu 80 Zeichen."@de , "عنوان لا يتجاوز 80 حرفًا."@ar .
 ui:ex-kanban-add-row a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
     c:children ( ui:ex-kanban-new ui:ex-kanban-who ui:ex-kanban-tag ui:ex-kanban-add ui:ex-kanban-undo ) .
 ui:ex-kanban-new a c:TextField ; c:label "New card" ; c:placeholder "What needs doing?" ; val:validates kb:TitleShape .
@@ -124,18 +125,19 @@ ui:ex-kanban-key-space a c:Kbd ; c:label "Space" .
 # A new card, minted from the event's IRI, goes to the end of To do: its rank is one more than
 # the highest; it is for the draft's assignee and has its tag. The field is cleared. (Moving, refusing a full column and removing are the
 # board's own reactions, c:BoardMove, c:BoardRefuse and c:BoardRemove in ontology/components/board.ttl.)
+# What a title is, the field's shape says: only a valid one adds a card, whichever way Add is pressed.
 
 kb:AddCard a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-kanban-add ;
     beh:deletes """
 CONSTRUCT { ui:ex-kanban-new c:value ?v }
-WHERE { ui:ex-kanban-new c:value ?v FILTER(STRLEN(STR(?v)) > 0 && STRLEN(STR(?v)) <= 80) }""" ;
+WHERE { ui:ex-kanban-new c:value ?v FILTER NOT EXISTS { ui:ex-kanban-new val:invalid true } }""" ;
     beh:inserts """
 CONSTRUCT {
   ?card a kb:Card ; kb:title ?title ; kb:column kb:todo ; kb:rank ?rank ; kb:assignee ?who ; kb:tag ?tag .
   ui:ex-kanban-board c:card ?card .
 }
 WHERE {
-  ui:ex-kanban-new c:value ?v FILTER(STRLEN(STR(?v)) > 0 && STRLEN(STR(?v)) <= 80)
+  ui:ex-kanban-new c:value ?v FILTER NOT EXISTS { ui:ex-kanban-new val:invalid true }
   BIND(STR(?v) AS ?title)
   BIND(IRI(CONCAT(STR(kb:), "card-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?card)
   { SELECT (COALESCE(MAX(?r) + 1, 1) AS ?rank) WHERE { ?any kb:rank ?r } }

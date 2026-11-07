@@ -5,7 +5,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, LC, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { mint } from '../rdf.ts'
-import { RDFS_LABEL, named, rdfList, str, encodeForUri, picked } from './util.ts'
+import { RDFS_LABEL, isBlank, named, rdfList, str, encodeForUri, picked } from './util.ts'
 
 const SH = NS.sh
 const XSD = NS.xsd
@@ -84,7 +84,8 @@ export function shapeViolation(ctx: RuleContext, ps: Term, lex: string): string 
   const { datatype, allowed, numeric, kind, maxLength } = shapeOf(ctx, ps)
   const lit = (p: string) => str(ctx.object(ps, SH + p))
   const plainProblem = ((): string | undefined => {
-    if (lex === '') return (num(ctx.object(ps, SH + 'minCount')) ?? 0) > 0 ? 'Required.' : undefined
+    const required = (num(ctx.object(ps, SH + 'minCount')) ?? 0) > 0
+    if (lex === '' || (required && isBlank(lex))) return required ? 'Required.' : undefined
     const length = [...lex].length
     const minLength = lit('minLength')
     if (kind !== 'boolean' && minLength !== undefined && length < Number(minLength)) return `At least ${minLength} characters.`

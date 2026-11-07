@@ -11,6 +11,8 @@ const SH = 'http://www.w3.org/ns/shacl#'
 export const str = (t: Term | undefined) => t?.value
 export const isTrue = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'true'
 export const named = (t: Term | undefined): t is NamedNode => t?.termType === 'NamedNode'
+/** Text of only white space, by the same list as the SPARQL rules (an engine's own \\s may be ASCII or Unicode). */
+export const isBlank = (text: string) => /^[\t\n\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]*$/.test(text)
 
 /** A number-valued property, or `fallback`. */
 export function num(ctx: RuleContext, s: Term, p: string, fallback: number): number {

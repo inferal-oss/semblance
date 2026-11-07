@@ -61,18 +61,18 @@ ex:RequireText a beh:Reaction ;
     beh:when beh:Click ; beh:source ex:add ;
     beh:inserts """PREFIX ex: <${EX}>
 CONSTRUCT { ex:newTodo c:error "Please describe the todo first." }
-WHERE { FILTER NOT EXISTS { ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0) } }""" ;
+WHERE { FILTER NOT EXISTS { ex:newTodo c:value ?v FILTER(REGEX(STR(?v), "[^ ]")) } }""" ;
     sem:function "todo:require" .
 
 ex:AddTodo a beh:Reaction ;
     beh:when beh:Click ; beh:source ex:add ;
     beh:deletes """PREFIX ex: <${EX}>
 CONSTRUCT { ex:newTodo c:value ?v ; c:error ?e }
-WHERE { ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0) OPTIONAL { ex:newTodo c:error ?e } }""" ;
+WHERE { ex:newTodo c:value ?v FILTER(REGEX(STR(?v), "[^ ]")) OPTIONAL { ex:newTodo c:error ?e } }""" ;
     beh:inserts """PREFIX ex: <${EX}>
 CONSTRUCT { ?item rdfs:label ?v ; ex:priority ?next ; ex:done false . ex:todos c:item ?item . }
 WHERE {
-  ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0)
+  ex:newTodo c:value ?v FILTER(REGEX(STR(?v), "[^ ]"))
   BIND(IRI(CONCAT(STR(ex:), "todo-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?item)
   { SELECT (COALESCE(MAX(?p) + 1, 0) AS ?next) WHERE { ?any ex:priority ?p } }
 }""" ;
@@ -94,14 +94,14 @@ export const todoReactions: Record<string, ReactionFn> = {
   'todo:require': ({ runtime, match }) => {
     const f = runtime.store.factory
     const field = f.namedNode(EX + 'newTodo')
-    const filled = match(field, C.value, null).some((q) => q.object.value.length > 0)
+    const filled = match(field, C.value, null).some((q) => /[^ ]/.test(q.object.value))
     return { remove: [], add: filled ? [] : [f.quad(field, f.namedNode(C.error), f.literal('Please describe the todo first.'))] }
   },
   'todo:add': ({ runtime, event, match }) => {
     const f = runtime.store.factory
     const nn = (iri: string) => f.namedNode(iri)
     const field = nn(EX + 'newTodo')
-    const values = match(field, C.value, null).filter((q) => q.object.value.length > 0)
+    const values = match(field, C.value, null).filter((q) => /[^ ]/.test(q.object.value))
     if (!values.length) return { remove: [], add: [] }
     const item = nn(EX + 'todo-' + event.value.slice('urn:semblance:event:'.length))
     const priorities = match(null, EX + 'priority', null).map((q) => Number(q.object.value))

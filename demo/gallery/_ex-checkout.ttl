@@ -382,11 +382,13 @@ ui:co-ships-from a c:Text ; sty:textStyle sty:Caption ;
     dep:otherwise [ c:label "Ships from San Francisco: import duties may be due on delivery." ] .
 
 ck:NameShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 2 ;
-    sh:message "Enter the name of the person receiving the parcel." .
+    sh:message "Enter the name of the person receiving the parcel." , "Введіть ім'я отримувача посилки."@uk ,
+               "Geben Sie den Namen der Person ein, die das Paket erhält."@de , "أدخل اسم مستلم الطرد."@ar .
 ck:StreetShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 5 ;
-    sh:message "Enter a street and number, like 12 Harbour Road." .
+    sh:message "Enter a street and number, like 12 Harbour Road." , "Введіть вулицю й номер, як-от 12 Harbour Road."@uk ,
+               "Geben Sie Straße und Hausnummer ein, etwa 12 Harbour Road."@de , "أدخل الشارع والرقم، مثل 12 Harbour Road."@ar .
 ck:CityShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 2 ;
-    sh:message "Enter a city." .
+    sh:message "Enter a city." , "Введіть місто."@uk , "Geben Sie einen Ort ein."@de , "أدخل المدينة."@ar .
 ck:PhoneShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:pattern "^[0-9][0-9 ()-]{5,17}$" ;
     sh:message "Enter a phone number: digits and spaces, without the dialling code." .
 # The postal code's shape is the country's (ck:postalField); this one is for a country without.
