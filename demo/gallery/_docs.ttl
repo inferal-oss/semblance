@@ -325,7 +325,7 @@ ex:Add a beh:Reaction ;
     beh:deletes """CONSTRUCT { ex:new c:value ?v } WHERE { ex:new c:value ?v }""" ;
     beh:inserts """CONSTRUCT { ex:list c:item ?item . ?item rdfs:label ?v ; ex:added ?next ; ex:got false }
 WHERE {
-  ex:new c:value ?v FILTER(STRLEN(?v) > 0)
+  ex:new c:value ?v FILTER(REGEX(?v, "[^ ]"))
   BIND(IRI(CONCAT(STR(ex:), "item-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?item)
   { SELECT (COALESCE(MAX(?n), 0) + 1 AS ?next) WHERE { ?any ex:added ?n } }
 }""" .

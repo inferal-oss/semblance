@@ -102,7 +102,8 @@ ui:set-bio a c:TextArea, set:SettingField ; set:edits set:bio ;
 # The validation layer checks each field against its shape and derives c:error; Save requires
 # all three (val:requires above), so it is disabled while one is wrong.
 set:NameShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:maxLength 60 ;
-    sh:message "Enter a name, up to 60 characters." .
+    sh:message "Enter a name, up to 60 characters." , "Введіть ім'я, до 60 символів."@uk ,
+               "Geben Sie einen Namen ein, bis zu 60 Zeichen."@de , "أدخل اسمًا لا يتجاوز 60 حرفًا."@ar .
 set:EmailShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ;
     sh:pattern "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" ;
     sh:message "Enter an email address like ada@example.org." .

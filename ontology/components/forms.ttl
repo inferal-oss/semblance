@@ -147,7 +147,7 @@ WHERE {
   BIND(IF(BOUND(?allowed), "choice", IF(COALESCE(?datatype = xsd:boolean, false), "boolean", IF(?numeric, "number",
        IF(COALESCE(?datatype = xsd:date, false), "date", IF(COALESCE(?maxLength >= 160, false), "textarea", "text"))))) AS ?kind)
   # The first constraint the value violates, in the order the validation layer checks them.
-  BIND(IF(?lex = "", IF(COALESCE(?minCount > 0, false), "Required.", ?none),
+  BIND(IF(?lex = "" || (COALESCE(?minCount > 0, false) && REGEX(?lex, "^[\\\\t\\\\n\\\\r    -     　]*$")), IF(COALESCE(?minCount > 0, false), "Required.", ?none),
        IF(?kind != "boolean" && BOUND(?minLength) && STRLEN(?lex) < ?minLength, CONCAT("At least ", STR(?minLength), " characters."),
        IF(?kind != "boolean" && BOUND(?maxLength) && STRLEN(?lex) > ?maxLength, CONCAT("At most ", STR(?maxLength), " characters."),
        IF(BOUND(?pattern) && !REGEX(?lex, STR(?pattern), COALESCE(STR(?flags), "")), "Does not match the expected format.",

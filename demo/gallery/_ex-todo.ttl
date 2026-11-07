@@ -103,15 +103,15 @@ ex:t3 rdfs:label "Wire up behaviour" ; ex:priority 3 ; ex:done false .
 ex:RequireText a beh:Reaction ; beh:when beh:Click ; beh:source ex:add ;
     beh:inserts """PREFIX ex: <https://example.org/todo#>
 CONSTRUCT { ex:newTodo c:error "Please describe the todo first." }
-WHERE { FILTER NOT EXISTS { ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0) } }""" .
+WHERE { FILTER NOT EXISTS { ex:newTodo c:value ?v FILTER(REGEX(STR(?v), "[^ ]")) } }""" .
 ex:AddTodo a beh:Reaction ; beh:when beh:Click ; beh:source ex:add ; beh:undoable true ;
     beh:deletes """PREFIX ex: <https://example.org/todo#>
 CONSTRUCT { ex:newTodo c:value ?v ; c:error ?e }
-WHERE { ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0) OPTIONAL { ex:newTodo c:error ?e } }""" ;
+WHERE { ex:newTodo c:value ?v FILTER(REGEX(STR(?v), "[^ ]")) OPTIONAL { ex:newTodo c:error ?e } }""" ;
     beh:inserts """PREFIX ex: <https://example.org/todo#>
 CONSTRUCT { ?item rdfs:label ?v ; ex:priority ?next ; ex:done false . ex:todos c:item ?item . }
 WHERE {
-  ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0)
+  ex:newTodo c:value ?v FILTER(REGEX(STR(?v), "[^ ]"))
   { SELECT (COALESCE(MAX(?p) + 1, 1) AS ?next) WHERE { ?any ex:priority ?p } }
   BIND(IRI(CONCAT(STR(ex:), "t", STR(?next))) AS ?item)
 }""" .''' .

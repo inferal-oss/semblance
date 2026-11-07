@@ -13,6 +13,8 @@
 # shape's sh:message, which every field already renders (and the a11y layer
 # turns into aria-invalid + an announced message). Errors appear once the
 # field has a value; a required field without one is invalid but quiet.
+# Text of only white space is no value for a required field (sh:minCount): it
+# speaks as a value does, and no shape has to say so itself.
 #
 # A button with val:requires (fields) is disabled while any of them is
 # invalid. The layer runs before the components (stratum -10), so they render
@@ -98,7 +100,7 @@ WHERE {
   } } }
     BIND(xsd:double(REPLACE(?value, "^\\\\s+|\\\\s+$", "")) AS ?xp)
     BIND(?datatypep = xsd:integer || ?datatypep = xsd:decimal AS ?numericp)
-    BIND(IF(!BOUND(?value) || ?value = "",
+    BIND(IF(!BOUND(?value) || ?value = "" || (COALESCE(xsd:double(?minCountp), 0) > 0 && REGEX(?value, "^[\\\\t\\\\n\\\\r    -     　]*$")),
            IF(COALESCE(xsd:double(?minCountp), 0) > 0, COALESCE(?messagep, "Required."), ?none),
          IF(BOUND(?minLengthp) && STRLEN(?value) < xsd:double(?minLengthp), COALESCE(?messagep, CONCAT("At least ", STR(?minLengthp), " characters.")),
          IF(BOUND(?maxLengthp) && STRLEN(?value) > xsd:double(?maxLengthp), COALESCE(?messagep, CONCAT("At most ", STR(?maxLengthp), " characters.")),
