@@ -6,6 +6,7 @@ import { formatLocale } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { isTrue, labelOf, named, nodes, num, rdfList, str, text } from './util.ts'
 import { dateOf, formatDateTime, formatNumber as intlNumber, numberOf, sortKey } from '../../rdf-engine/host/intl.ts'
+import { numberText } from '../rdf.ts'
 import { compareKeys, TUPLE } from '../render/order-key.ts'
 import { viewRows } from '../view/rows.ts'
 
@@ -118,7 +119,7 @@ function display(ctx: RuleContext, t: Term | undefined, format?: string): string
       return !d || Number.isNaN(d.getTime()) ? t.value : formatDateTime(d, locale(ctx), 'hour=2-digit;minute=2-digit;second=2-digit;hour12=false', ctx.timeZone)
     }
     case 'code':
-      return t.value
+      return numberText(t)
   }
   return isNumeric(t) ? formatNumber(ctx, n) : t.value
 }

@@ -4,6 +4,7 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, MOD, NS, SEM, STY, XSD_BOOLEAN } from '../ns.ts'
+import { numberText } from '../rdf.ts'
 import { RDFS_LABEL, named, str, picked } from './util.ts'
 
 const S = {
@@ -87,7 +88,8 @@ const cell: FnRule = (ctx, focus) => {
   if (!Number.isFinite(r) || !Number.isFinite(c)) return []
   const o = ctx.out(focus)
   const formula = !!ctx.object(focus, S.valueQuery)
-  const v = str(ctx.object(focus, C.value))
+  const held = ctx.object(focus, C.value)
+  const v = held && numberText(held)
   const content = formula
     ? o.el('content', 'Output', {}, v === undefined ? [] : [o.text('content-text', v)])
     : o.el('content', 'Input', { type: 'text', value: v })
@@ -151,7 +153,8 @@ const focusRule: FnRule = (ctx, focus) => {
   // The formula bar.
   let bar = 'Select a cell to see its formula, what it reads and what reads it.'
   if (sel) {
-    const value = str(ctx.object(sel, C.value))
+    const held = ctx.object(sel, C.value)
+    const value = held && numberText(held)
     const text = str(ctx.object(sel, S.formulaText))
     bar = `${nameOf(int(ctx, sel, S.row), int(ctx, sel, S.column))}  ${text !== undefined ? `${text}  →  ${value ?? '…'}` : (value ?? '')}`
   }
@@ -167,7 +170,7 @@ const focusRule: FnRule = (ctx, focus) => {
     const rs = range.map((p) => p.r)
     const cs = range.map((p) => p.c)
     const [r0, r1, c0, c1] = [Math.min(...rs), Math.max(...rs), Math.min(...cs), Math.max(...cs)]
-    const values = range.flatMap(({ x }) => ctx.objects(x, C.value).map((v) => v.value))
+    const values = range.flatMap(({ x }) => ctx.objects(x, C.value).map(numberText))
     const numbers = values.filter((v) => NUMBER.test(v)).map(decimal)
     const sum = numbers.reduce((a, b) => a + b, 0n)
     const stats = numbers.length ? `  ·  Sum ${printed(sum)}  ·  Average ${printed(hundredths(sum, BigInt(numbers.length)))}` : ''

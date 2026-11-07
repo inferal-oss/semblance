@@ -308,7 +308,7 @@ WHERE {
     BIND(isLiteral(?cellValue) && REGEX(STR(?cellValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?cellValueNumeric)
     BIND(xsd:double(STR(?cellValue)) AS ?cellValueNumber)
     BIND(IF(!BOUND(?cellValue), "", IF(isIRI(?cellValue), ?cellValueLabel,
-      IF(?format = "code", STR(?cellValue),
+      IF(?format = "code", IF(isNumeric(?cellValue), xsd:string(?cellValue), STR(?cellValue)),
       IF(?format = "time", COALESCE(sx:formatDateTime(?cellValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?cellValue)),
       IF(!?cellValueNumeric, STR(?cellValue),
       IF(?format = "number", sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=0"),
@@ -572,7 +572,7 @@ WHERE {
             BIND(isLiteral(?cellValue) && REGEX(STR(?cellValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?cellValueNumeric)
             BIND(xsd:double(STR(?cellValue)) AS ?cellValueNumber)
             BIND(IF(!BOUND(?cellValue), "", IF(isIRI(?cellValue), ?cellValueLabel,
-              IF(?format = "code", STR(?cellValue),
+              IF(?format = "code", IF(isNumeric(?cellValue), xsd:string(?cellValue), STR(?cellValue)),
               IF(?format = "time", COALESCE(sx:formatDateTime(?cellValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?cellValue)),
               IF(!?cellValueNumeric, STR(?cellValue),
               IF(?format = "number", sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=0"),
@@ -728,7 +728,7 @@ WHERE {
             BIND(isLiteral(?cellValue) && REGEX(STR(?cellValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?cellValueNumeric)
             BIND(xsd:double(STR(?cellValue)) AS ?cellValueNumber)
             BIND(IF(!BOUND(?cellValue), "", IF(isIRI(?cellValue), ?cellValueLabel,
-              IF(?format = "code", STR(?cellValue),
+              IF(?format = "code", IF(isNumeric(?cellValue), xsd:string(?cellValue), STR(?cellValue)),
               IF(?format = "time", COALESCE(sx:formatDateTime(?cellValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?cellValue)),
               IF(!?cellValueNumeric, STR(?cellValue),
               IF(?format = "number", sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=0"),
@@ -854,7 +854,7 @@ WHERE {
             BIND(isLiteral(?cellValue) && REGEX(STR(?cellValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?cellValueNumeric)
             BIND(xsd:double(STR(?cellValue)) AS ?cellValueNumber)
             BIND(IF(!BOUND(?cellValue), "", IF(isIRI(?cellValue), ?cellValueLabel,
-              IF(?format = "code", STR(?cellValue),
+              IF(?format = "code", IF(isNumeric(?cellValue), xsd:string(?cellValue), STR(?cellValue)),
               IF(?format = "time", COALESCE(sx:formatDateTime(?cellValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?cellValue)),
               IF(!?cellValueNumeric, STR(?cellValue),
               IF(?format = "number", sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=0"),

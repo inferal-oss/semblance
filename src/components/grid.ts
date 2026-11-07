@@ -10,6 +10,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
+import { numberText } from '../rdf.ts'
 import { WIN } from './containers.ts'
 import { el, marked, md5Key } from './data.ts'
 import { phrase } from './feedback.ts'
@@ -105,8 +106,8 @@ export function formatDuration(ms: number): string {
   return ms < 1000 ? `${num(Math.round(ms))} ms` : `${num(Math.round(ms / 10) / 100)} s`
 }
 
-/** The label of a value: IRIs by their c:label / rdfs:label (else local name), literals as they are. */
-const shown = (ctx: RuleContext, t: Term | undefined) => (!t ? '' : t.termType === 'NamedNode' ? labelOf(ctx, t) : t.value)
+/** The label of a value: IRIs by their c:label / rdfs:label (else local name), literals as they are, numbers in their canonical text. */
+const shown = (ctx: RuleContext, t: Term | undefined) => (!t ? '' : t.termType === 'NamedNode' ? labelOf(ctx, t) : numberText(t))
 
 // --- columns ---------------------------------------------------------------------------------------
 
