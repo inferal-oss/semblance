@@ -210,7 +210,7 @@ fx:Delete a beh:Reaction ; beh:when beh:Click ; beh:source ui:fx-delete ;
 
 # --- how it works -----------------------------------------------------------------------------------
 
-ui:ex-files-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-files-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-files-w1 ui:ex-files-w2 ui:ex-files-w3 ui:ex-files-w4 ui:ex-files-w5 ui:ex-files-w7 ui:ex-files-w8 ui:ex-files-w9 ui:ex-files-w10 ui:ex-files-w6 ) .
 

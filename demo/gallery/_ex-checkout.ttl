@@ -593,7 +593,7 @@ WHERE { ui:co-steps c:current ui:co-step-done . OPTIONAL { ui:ex-checkout ck:lin
 
 # --- how it works -----------------------------------------------------------------------------------
 
-ui:ex-checkout-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-checkout-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:co-w1 ui:co-w2 ui:co-w3 ui:co-w4 ui:co-w5 ui:co-w5b ui:co-w6 ui:co-w7 ) .
 

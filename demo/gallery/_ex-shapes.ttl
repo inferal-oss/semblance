@@ -108,7 +108,7 @@ pf:ToggleBioRequired a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-shap
 
 # --- how it works -----------------------------------------------------------------------------------
 
-ui:ex-shapes-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-shapes-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-shapes-w1 ui:ex-shapes-w2 ui:ex-shapes-w3 ui:ex-shapes-w4 ui:ex-shapes-w5 ui:ex-shapes-w6 ) .
 

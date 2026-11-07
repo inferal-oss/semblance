@@ -12,7 +12,7 @@
 # values being the fallbacks in each emphasis rule).
 
 # --- tones ---
-sty:Neutral a sty:Tone ; rdfs:label "Neutral"@en ; sem:slug "neutral" ; sem:order 1 ;
+sty:Neutral a sty:Tone ; rdfs:label "Neutral"@en , "Нейтральний"@uk , "Neutral"@de , "محايد"@ar ; sem:slug "neutral" ; sem:order 1 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-gray-12)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "light-dark(#2c2c3a, #ffffff)" ] ,
                  [ sty:property "--tone-soft" ; sty:raw "var(--sem-gray-3)" ] ,
@@ -20,7 +20,7 @@ sty:Neutral a sty:Tone ; rdfs:label "Neutral"@en ; sem:slug "neutral" ; sem:orde
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-gray-7)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-gray-12)" ] ,
                  [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-gray-1)" ] .
-sty:Accent a sty:Tone ; rdfs:label "Accent"@en ; sem:slug "accent" ; sem:order 2 ;
+sty:Accent a sty:Tone ; rdfs:label "Accent"@en , "Акцент"@uk , "Akzent"@de , "مميّز"@ar ; sem:slug "accent" ; sem:order 2 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-accent-9)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "var(--sem-accent-10)" ] ,
                  [ sty:property "--tone-soft" ; sty:raw "var(--sem-accent-3)" ] ,
@@ -28,7 +28,7 @@ sty:Accent a sty:Tone ; rdfs:label "Accent"@en ; sem:slug "accent" ; sem:order 2
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-accent-7)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-accent-11)" ] ,
                  [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-accent-contrast)" ] .
-sty:Info a sty:Tone ; rdfs:label "Info"@en ; sem:slug "info" ; sem:order 3 ;
+sty:Info a sty:Tone ; rdfs:label "Info"@en , "Інформація"@uk , "Info"@de , "معلومات"@ar ; sem:slug "info" ; sem:order 3 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-info-9)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "var(--sem-info-10)" ] ,
                  [ sty:property "--tone-soft" ; sty:raw "var(--sem-info-3)" ] ,
@@ -36,7 +36,7 @@ sty:Info a sty:Tone ; rdfs:label "Info"@en ; sem:slug "info" ; sem:order 3 ;
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-info-6)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-info-11)" ] ,
                  [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-on-status)" ] .
-sty:Success a sty:Tone ; rdfs:label "Success"@en ; sem:slug "success" ; sem:order 4 ;
+sty:Success a sty:Tone ; rdfs:label "Success"@en , "Успіх"@uk , "Erfolg"@de , "نجاح"@ar ; sem:slug "success" ; sem:order 4 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-success-9)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "var(--sem-success-10)" ] ,
                  [ sty:property "--tone-soft" ; sty:raw "var(--sem-success-3)" ] ,
@@ -44,7 +44,7 @@ sty:Success a sty:Tone ; rdfs:label "Success"@en ; sem:slug "success" ; sem:orde
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-success-6)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-success-11)" ] ,
                  [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-on-status)" ] .
-sty:Warning a sty:Tone ; rdfs:label "Warning"@en ; sem:slug "warning" ; sem:order 5 ;
+sty:Warning a sty:Tone ; rdfs:label "Warning"@en , "Попередження"@uk , "Warnung"@de , "تحذير"@ar ; sem:slug "warning" ; sem:order 5 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-warning-9)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "var(--sem-warning-10)" ] ,
                  [ sty:property "--tone-soft" ; sty:raw "var(--sem-warning-3)" ] ,
@@ -52,7 +52,7 @@ sty:Warning a sty:Tone ; rdfs:label "Warning"@en ; sem:slug "warning" ; sem:orde
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-warning-6)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-warning-11)" ] ,
                  [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-on-warning)" ] .
-sty:Danger a sty:Tone ; rdfs:label "Danger"@en ; sem:slug "danger" ; sem:order 6 ;
+sty:Danger a sty:Tone ; rdfs:label "Danger"@en , "Небезпека"@uk , "Gefahr"@de , "خطر"@ar ; sem:slug "danger" ; sem:order 6 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-danger-9)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "var(--sem-danger-10)" ] ,
                  [ sty:property "--tone-soft" ; sty:raw "var(--sem-danger-3)" ] ,
@@ -62,10 +62,10 @@ sty:Danger a sty:Tone ; rdfs:label "Danger"@en ; sem:slug "danger" ; sem:order 6
                  [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-on-status)" ] .
 
 # --- emphases ---
-sty:Solid a sty:Emphasis ; rdfs:label "Solid"@en ; sem:slug "solid" ; sem:order 1 .
-sty:Soft a sty:Emphasis ; rdfs:label "Soft"@en ; sem:slug "soft" ; sem:order 2 .
-sty:Outline a sty:Emphasis ; rdfs:label "Outline"@en ; sem:slug "outline" ; sem:order 3 .
-sty:Ghost a sty:Emphasis ; rdfs:label "Ghost"@en ; sem:slug "ghost" ; sem:order 4 .
+sty:Solid a sty:Emphasis ; rdfs:label "Solid"@en , "Суцільний"@uk , "Vollfarbe"@de , "مصمت"@ar ; sem:slug "solid" ; sem:order 1 .
+sty:Soft a sty:Emphasis ; rdfs:label "Soft"@en , "Мʼякий"@uk , "Weich"@de , "ناعم"@ar ; sem:slug "soft" ; sem:order 2 .
+sty:Outline a sty:Emphasis ; rdfs:label "Outline"@en , "Контур"@uk , "Kontur"@de , "محدد"@ar ; sem:slug "outline" ; sem:order 3 .
+sty:Ghost a sty:Emphasis ; rdfs:label "Ghost"@en , "Прозорий"@uk , "Transparent"@de , "شفاف"@ar ; sem:slug "ghost" ; sem:order 4 .
 
 [] a sty:StyleRule ; sty:when sty:Solid ;
     sty:declares [ sty:property "background" ; sty:raw "var(--tone-solid, var(--sem-gray-12))" ] ,
@@ -104,17 +104,17 @@ sty:Ghost a sty:Emphasis ; rdfs:label "Ghost"@en ; sem:slug "ghost" ; sem:order 
     sty:declares [ sty:property "background" ; sty:raw "var(--tone-soft, var(--sem-gray-3))" ] .
 
 # --- sizes ---
-sty:Small a sty:ControlSize ; rdfs:label "Small"@en ; sem:slug "sm" ; sem:order 1 ;
+sty:Small a sty:ControlSize ; rdfs:label "Small"@en , "Малий"@uk , "Klein"@de , "صغير"@ar ; sem:slug "sm" ; sem:order 1 ;
     sty:declares [ sty:property "--control-h" ; sty:token tok:control-sm ] ,
                  [ sty:property "--control-px" ; sty:token tok:space-2 ] ,
                  [ sty:property "--control-font" ; sty:token tok:text-sm ] ,
                  [ sty:property "--control-radius" ; sty:token tok:radius-sm ] .
-sty:Medium a sty:ControlSize ; rdfs:label "Medium"@en ; sem:slug "md" ; sem:order 2 ;
+sty:Medium a sty:ControlSize ; rdfs:label "Medium"@en , "Середній"@uk , "Mittel"@de , "متوسط"@ar ; sem:slug "md" ; sem:order 2 ;
     sty:declares [ sty:property "--control-h" ; sty:token tok:control-md ] ,
                  [ sty:property "--control-px" ; sty:token tok:space-3 ] ,
                  [ sty:property "--control-font" ; sty:token tok:text-md ] ,
                  [ sty:property "--control-radius" ; sty:token tok:radius-md ] .
-sty:Large a sty:ControlSize ; rdfs:label "Large"@en ; sem:slug "lg" ; sem:order 3 ;
+sty:Large a sty:ControlSize ; rdfs:label "Large"@en , "Великий"@uk , "Groß"@de , "كبير"@ar ; sem:slug "lg" ; sem:order 3 ;
     sty:declares [ sty:property "--control-h" ; sty:token tok:control-lg ] ,
                  [ sty:property "--control-px" ; sty:token tok:space-4 ] ,
                  [ sty:property "--control-font" ; sty:token tok:text-lg ] ,

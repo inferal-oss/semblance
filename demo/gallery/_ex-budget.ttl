@@ -230,7 +230,7 @@ ui:ex-budget-chart a c:BarChart ; rdfs:label "Spending by category" ;
 
 # --- how it works ---------------------------------------------------------------------------------
 
-ui:ex-budget-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-budget-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-budget-w1 ui:ex-budget-w2 ui:ex-budget-w3 ui:ex-budget-w4 ui:ex-budget-w5 ui:ex-budget-w6 ) .
 

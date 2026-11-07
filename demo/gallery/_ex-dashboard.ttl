@@ -339,7 +339,7 @@ WHERE {
 
 # --- how it works -----------------------------------------------------------------------------------
 
-ui:ex-dashboard-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-dashboard-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-dashboard-w1 ui:ex-dashboard-w2 ui:ex-dashboard-w3 ui:ex-dashboard-w4 ui:ex-dashboard-w5 ui:ex-dashboard-w6 ui:ex-dashboard-w7 ui:ex-dashboard-w8 ) .
 

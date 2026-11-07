@@ -165,7 +165,7 @@ c:SplitView a owl:Class ;
     rdfs:comment """Two panes, c:primary and c:secondary, side by side (pos:direction pos:Column stacks them)
 with a divider between them (role=separator) that drags or moves with the arrow keys. The primary's
 share is c:ratio (0-1, default 0.5), bounded by c:minSize for each pane; c:collapsed true hides the
-secondary pane. c:label names the divider ("Resize ...")."""@en ;
+secondary pane. c:label names the divider ("Resize: ...")."""@en ;
     sem:slug "split-view" .
 c:primary a owl:ObjectProperty ; rdfs:domain c:SplitView ; rdfs:range sem:Component ; rdfs:comment "The first pane: the one the divider sizes."@en .
 c:secondary a owl:ObjectProperty ; rdfs:domain c:SplitView ; rdfs:range sem:Component ; rdfs:comment "The second pane: it takes the rest, and c:collapsed hides it."@en .
@@ -214,7 +214,10 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
-  BIND(IF(BOUND(?caption) && ?caption != "", CONCAT("Resize ", ?caption), "Resize panes") AS ?resizeLabel)
+  OPTIONAL { ?resizeAt l10n:of c:ResizeCommand ; l10n:name ?resizePick }
+  OPTIONAL { FILTER(!BOUND(?resizePick)) c:ResizeCommand rdfs:label ?resizeOnly }
+  BIND(STR(COALESCE(?resizePick, ?resizeOnly, "Resize")) AS ?resizeCommand)
+  BIND(IF(BOUND(?caption) && ?caption != "", CONCAT(?resizeCommand, ": ", ?caption), ?resizeCommand) AS ?resizeLabel)
   BIND(COALESCE(xsd:decimal(STR(?ratioRaw)), 0.5) AS ?ratio0)
   BIND(IF(?ratio0 < 0, 0, IF(?ratio0 > 1, 1, ?ratio0)) AS ?ratio)
   BIND(STR(?ratio) AS ?ratioText)

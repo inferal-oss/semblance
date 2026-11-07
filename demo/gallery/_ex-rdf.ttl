@@ -124,7 +124,7 @@ ui:ex-rdf-keys a c:Text ; sty:textStyle sty:Caption ;
 
 # --- how it works --------------------------------------------------------------------------------------
 
-ui:ex-rdf-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-rdf-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-rdf-w1 ui:ex-rdf-w2 ui:ex-rdf-w3 ui:ex-rdf-w4 ui:ex-rdf-w5 ) .
 

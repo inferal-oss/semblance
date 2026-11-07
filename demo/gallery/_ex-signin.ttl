@@ -65,7 +65,7 @@ ui:SigninAgain a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-signin-aga
 
 # --- How it works: a walkthrough beside a diagram of what it mentions (ontology/components/walkthrough.ttl)
 
-ui:ex-signin-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-signin-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-signin-w1 ui:ex-signin-w2 ui:ex-signin-w3 ui:ex-signin-w4 ui:ex-signin-w5 ui:ex-signin-w6 ) .
 

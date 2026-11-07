@@ -46,22 +46,22 @@ net:correlation a owl:DatatypeProperty ; rdfs:domain net:Entry ;
 net:data a owl:DatatypeProperty ; rdfs:domain net:Entry ; rdfs:comment "A payload as text (often JSON)."@en .
 
 net:Status a owl:Class .
-net:Pending a net:Status ; rdfs:label "Pending"@en ; sem:order 1 ; sem:slug "pending" .
-net:Complete a net:Status ; rdfs:label "Complete"@en ; sem:order 2 ; sem:slug "complete" .
-net:Failed a net:Status ; rdfs:label "Failed"@en ; sem:order 3 ; sem:slug "failed" .
-net:Open a net:Status ; rdfs:label "Open"@en ; sem:order 4 ; sem:slug "open" .
-net:Closed a net:Status ; rdfs:label "Closed"@en ; sem:order 5 ; sem:slug "closed" .
-net:Sent a net:Status ; rdfs:label "Sent"@en ; sem:order 6 ; sem:slug "sent" .
-net:Received a net:Status ; rdfs:label "Received"@en ; sem:order 7 ; sem:slug "received" .
-net:Recorded a net:Status ; rdfs:label "Recorded"@en ; sem:order 8 ; sem:slug "recorded" .
+net:Pending a net:Status ; rdfs:label "Pending"@en , "Очікує"@uk , "Ausstehend"@de , "قيد الانتظار"@ar ; sem:order 1 ; sem:slug "pending" .
+net:Complete a net:Status ; rdfs:label "Complete"@en , "Завершено"@uk , "Abgeschlossen"@de , "مكتمل"@ar ; sem:order 2 ; sem:slug "complete" .
+net:Failed a net:Status ; rdfs:label "Failed"@en , "Помилка"@uk , "Fehlgeschlagen"@de , "فشل"@ar ; sem:order 3 ; sem:slug "failed" .
+net:Open a net:Status ; rdfs:label "Open"@en , "Відкрито"@uk , "Offen"@de , "مفتوح"@ar ; sem:order 4 ; sem:slug "open" .
+net:Closed a net:Status ; rdfs:label "Closed"@en , "Закрито"@uk , "Geschlossen"@de , "مغلق"@ar ; sem:order 5 ; sem:slug "closed" .
+net:Sent a net:Status ; rdfs:label "Sent"@en , "Надіслано"@uk , "Gesendet"@de , "مُرسَل"@ar ; sem:order 6 ; sem:slug "sent" .
+net:Received a net:Status ; rdfs:label "Received"@en , "Отримано"@uk , "Empfangen"@de , "مُستلَم"@ar ; sem:order 7 ; sem:slug "received" .
+net:Recorded a net:Status ; rdfs:label "Recorded"@en , "Записано"@uk , "Aufgezeichnet"@de , "مسجَّل"@ar ; sem:order 8 ; sem:slug "recorded" .
 
 # What kind of activity an entry is, for filtering and the legend.
 net:kind a owl:ObjectProperty ; rdfs:domain net:Entry ; rdfs:range net:Kind .
 net:Kind a owl:Class .
 net:HttpKind a net:Kind ; rdfs:label "HTTP"@en ; sem:order 1 ; sem:slug "http" .
-net:SocketKind a net:Kind ; rdfs:label "Socket lifetime"@en ; sem:order 2 ; sem:slug "socket" .
-net:FrameKind a net:Kind ; rdfs:label "Sent / received"@en ; sem:order 3 ; sem:slug "frame" .
-net:EventKind a net:Kind ; rdfs:label "Event"@en ; sem:order 4 ; sem:slug "event" .
+net:SocketKind a net:Kind ; rdfs:label "Socket lifetime"@en , "Час життя сокета"@uk , "Socket-Lebensdauer"@de , "عمر المقبس"@ar ; sem:order 2 ; sem:slug "socket" .
+net:FrameKind a net:Kind ; rdfs:label "Sent / received"@en , "Надіслано / отримано"@uk , "Gesendet / empfangen"@de , "مُرسَل / مُستلَم"@ar ; sem:order 3 ; sem:slug "frame" .
+net:EventKind a net:Kind ; rdfs:label "Event"@en , "Подія"@uk , "Ereignis"@de , "حدث"@ar ; sem:order 4 ; sem:slug "event" .
 
 # How entries look, for legends, badges and time bars: a kind is a category, drawn in a series
 # color (c:swatch); a status or a level is state, shown in a tone (sty:tone).
@@ -124,9 +124,9 @@ net:Event a owl:Class ; rdfs:subClassOf net:Entry , as:Activity ;
     rdfs:comment "Something the application records about itself (a saved draft, a changed filter)."@en .
 net:level a owl:ObjectProperty ; rdfs:domain net:Event ; rdfs:range net:Level .
 net:Level a owl:Class .
-net:Info a net:Level ; rdfs:label "Info"@en ; sem:order 1 ; sem:slug "info" .
-net:Success a net:Level ; rdfs:label "Success"@en ; sem:order 2 ; sem:slug "success" .
-net:Warning a net:Level ; rdfs:label "Warning"@en ; sem:order 3 ; sem:slug "warning" .
+net:Info a net:Level ; rdfs:label "Info"@en , "Інформація"@uk , "Info"@de , "معلومات"@ar ; sem:order 1 ; sem:slug "info" .
+net:Success a net:Level ; rdfs:label "Success"@en , "Успіх"@uk , "Erfolg"@de , "نجاح"@ar ; sem:order 2 ; sem:slug "success" .
+net:Warning a net:Level ; rdfs:label "Warning"@en , "Попередження"@uk , "Warnung"@de , "تحذير"@ar ; sem:order 3 ; sem:slug "warning" .
 net:Info sty:tone sty:Info .
 net:Success sty:tone sty:Success .
 net:Warning sty:tone sty:Warning .
@@ -139,7 +139,7 @@ beh:Event rdfs:subClassOf net:Event .
 # --- the capture: a bounded stream -------------------------------------------------------------------
 
 net:Capture a ldes:EventStream ;
-    rdfs:label "Network activity"@en ;
+    rdfs:label "Network activity"@en , "Мережева активність"@uk , "Netzwerkaktivität"@de , "نشاط الشبكة"@ar ;
     ldes:timestampPath net:startedAt ;
     ldes:sequencePath net:sequence ;
     tree:view net:CaptureView .

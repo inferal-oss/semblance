@@ -624,7 +624,7 @@ c:compactAs a owl:ObjectProperty ;
     sty:hookAttribute "data-sem-compact-as" .
 c:CompactPresentation a owl:Class ;
     rdfs:comment "A way for a component to present itself on a compact screen."@en .
-c:Picker a c:CompactPresentation ; sem:slug "picker" ; rdfs:label "Picker"@en ;
+c:Picker a c:CompactPresentation ; sem:slug "picker" ; rdfs:label "Picker"@en , "Вибір"@uk , "Auswahl"@de , "منتقي"@ar ;
     rdfs:comment "A native select of the options in place of the list: one line, the current option shown."@en .
 
 c:SegmentedPicker a sem:Rendering ;
@@ -951,6 +951,11 @@ WHERE {
   BIND(IF(EXISTS { $this c:revealed|c:flipped ?shown FILTER(STR(?shown) = "true") }, IRI(CONCAT(STR($this), "/~source")), ?none) AS ?source)
 }""" .
 
+c:FlipSourcePhrase a c:Phrase ; rdfs:label "Source"@en , "Код"@uk , "Quelle"@de , "المصدر"@ar .
+c:FlipViewPhrase a c:Phrase ; rdfs:label "View"@en , "Вигляд"@uk , "Ansicht"@de , "العرض"@ar .
+c:FlipToSourceHint a c:Phrase ; rdfs:label "Show how this view is made"@en , "Показати, як зроблено цей вигляд"@uk , "Zeigen, wie diese Ansicht gemacht ist"@de , "إظهار كيفية بناء هذا العرض"@ar .
+c:FlipToViewHint a c:Phrase ; rdfs:label "Show the view"@en , "Показати вигляд"@uk , "Ansicht zeigen"@de , "إظهار العرض"@ar .
+
 # Stratum 95: after every other layer, so the back lists the layers that decorated the front.
 c:FlippableSource a sem:Rendering ;
     sem:targets c:Flippable ;
@@ -969,20 +974,32 @@ CONSTRUCT {
   ?frontFace rdfhtml:hasChild ?bar ; ord:precedes ?back ; rdfhtml:inert ?frontInert .
   ?bar a rdfhtml:Div ; rdfhtml:class "sem-face-bar" ; rdfhtml:hasChild ?flipFront ; ord:precedes ?front .
   ?flipFront a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-flip" ; rdfhtml:hasChild ?flipFrontText ; c:flips $this .
-  ?flipFront rdfhtml:attribute ?flipFrontLabel . ?flipFrontLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue "Show how this view is made" .
-  ?flipFrontText a rdfhtml:Text ; rdfhtml:data "</> Source" .
+  ?flipFront rdfhtml:attribute ?flipFrontLabel . ?flipFrontLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?toSourceHint .
+  ?flipFrontText a rdfhtml:Text ; rdfhtml:data ?flipFrontData .
   ?faces rdfhtml:hasChild ?back .
   ?back a rdfhtml:Div ; rdfhtml:class "sem-face sem-back" ; rdfhtml:inert ?backInert ; rdfhtml:hasChild ?backBar, ?source .
   ?backBar a rdfhtml:Div ; rdfhtml:class "sem-face-bar" ; rdfhtml:hasChild ?flipBack ; ord:immediatelyPrecedes ?source .
   ?flipBack a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-flip" ; rdfhtml:hasChild ?flipBackText ; c:flips $this .
-  ?flipBack rdfhtml:attribute ?flipBackLabel . ?flipBackLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue "Show the view" .
-  ?flipBackText a rdfhtml:Text ; rdfhtml:data "↺ View" .
+  ?flipBack rdfhtml:attribute ?flipBackLabel . ?flipBackLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?toViewHint .
+  ?flipBackText a rdfhtml:Text ; rdfhtml:data ?flipBackData .
   ?root rdfhtml:attribute ?flippedAttr . ?flippedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-flipped" ; rdfhtml:attributeValue ?flippedValue .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Flippable ; c:front ?front FILTER(isIRI(?front))
   BIND(EXISTS { $this c:flipped ?f FILTER(STR(?f) = "true") } AS ?flipped)
   BIND(?flipped || EXISTS { $this c:revealed ?r FILTER(STR(?r) = "true") } AS ?revealed)
+  OPTIONAL { ?sourceAt l10n:of c:FlipSourcePhrase ; l10n:name ?sourcePick }
+  OPTIONAL { FILTER(!BOUND(?sourcePick)) c:FlipSourcePhrase rdfs:label ?sourceOnly }
+  BIND(CONCAT("</> ", STR(COALESCE(?sourcePick, ?sourceOnly, "Source"))) AS ?flipFrontData)
+  OPTIONAL { ?viewAt l10n:of c:FlipViewPhrase ; l10n:name ?viewPick }
+  OPTIONAL { FILTER(!BOUND(?viewPick)) c:FlipViewPhrase rdfs:label ?viewOnly }
+  BIND(CONCAT("↺ ", STR(COALESCE(?viewPick, ?viewOnly, "View"))) AS ?flipBackData)
+  OPTIONAL { ?toSourceAt l10n:of c:FlipToSourceHint ; l10n:name ?toSourcePick }
+  OPTIONAL { FILTER(!BOUND(?toSourcePick)) c:FlipToSourceHint rdfs:label ?toSourceOnly }
+  BIND(STR(COALESCE(?toSourcePick, ?toSourceOnly, "Show how this view is made")) AS ?toSourceHint)
+  OPTIONAL { ?toViewAt l10n:of c:FlipToViewHint ; l10n:name ?toViewPick }
+  OPTIONAL { FILTER(!BOUND(?toViewPick)) c:FlipToViewHint rdfs:label ?toViewOnly }
+  BIND(STR(COALESCE(?toViewPick, ?toViewOnly, "Show the view")) AS ?toViewHint)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~faces")) AS ?faces)
   BIND(IRI(CONCAT(STR($this), "/~front")) AS ?frontFace)

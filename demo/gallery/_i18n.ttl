@@ -73,3 +73,79 @@ st:Layer rdfs:label "статус"@uk , "Status"@de , "الحالة"@ar .
 ann:Layer rdfs:label "оголошення"@uk , "Ankündigungen"@de , "الإعلانات"@ar .
 ui:GroupWindows rdfs:label "Вікна"@uk , "Fenster"@de , "النوافذ"@ar .
 ui:GroupThemes rdfs:label "Теми"@uk , "Designs"@de , "السمات"@ar .
+ui:Hybrid rdfs:label "Гібрид · Oxigraph + дзеркало N3"@uk , "Hybrid · Oxigraph + N3-Spiegel"@de , "هجين · Oxigraph + مرآة N3"@ar .
+ui:N3 rdfs:label "N3.js · лише функції"@uk , "N3.js · nur Funktionen"@de , "N3.js · الدوال فقط"@ar .
+ui:PreferSparql rdfs:label "Спершу SPARQL"@uk , "SPARQL bevorzugen"@de , "تفضيل SPARQL"@ar .
+ui:PreferFunction rdfs:label "Спершу функції"@uk , "Funktionen bevorzugen"@de , "تفضيل الدوال"@ar .
+ui:page rdfs:label "Сторінка"@uk , "Seite"@de , "الصفحة"@ar .
+ui:inspectorMode rdfs:label "Інспектор"@uk , "Inspektor"@de , "المفتش"@ar .
+ui:inspecting rdfs:label "перегляд"@uk , "Inspektion"@de , "فحص"@ar .
+ui:action rdfs:label "дія"@uk , "Aktion"@de , "إجراء"@ar .
+ui:ms rdfs:label "оновлення + DOM"@uk , "Update + DOM"@de , "تحديث + DOM"@ar .
+ui:ruleRuns rdfs:label "запуски правил"@uk , "Regelläufe"@de , "مرات تشغيل القواعد"@ar .
+ui:domOps rdfs:label "операції DOM"@uk , "DOM-Operationen"@de , "عمليات DOM"@ar .
+ui:viewRows rdfs:label "рядки подань"@uk , "Ansichtszeilen"@de , "صفوف العروض"@ar .
+ui:heap rdfs:label "купа JS"@uk , "JS-Heap"@de , "كومة JS"@ar .
+ui:storage rdfs:label "сховище (із сеансом)"@uk , "Speicher (inkl. Sitzung)"@de , "التخزين (مع الجلسة)"@ar .
+ui:triples rdfs:label "трійки"@uk , "Tripel"@de , "ثلاثيات"@ar .
+ui:domNodes rdfs:label "вузли DOM"@uk , "DOM-Knoten"@de , "عُقد DOM"@ar .
+ui:tools c:title "Інструменти"@uk , "Werkzeuge"@de , "الأدوات"@ar .
+ui:locationTable c:label "Де ми зараз"@uk , "Wo wir sind"@de , "أين نحن"@ar .
+ui:locationTable c:emptyText "Розташування не оголошено."@uk , "Kein Ort ist angegeben."@de , "لم يُعلَن عن أي موقع."@ar .
+ui:loc-col-dimension c:label "Вимір"@uk , "Dimension"@de , "البُعد"@ar .
+ui:loc-col-value c:label "Значення"@uk , "Wert"@de , "القيمة"@ar .
+ui:loc-col-spelled c:label "В адресі"@uk , "In der Adresse"@de , "في العنوان"@ar .
+ui:loc-col-carriers c:label "Хто несе"@uk , "Getragen von"@de , "يحمله"@ar .
+ui:loc-col-history c:label "Історія"@uk , "Verlauf"@de , "السجل"@ar .
+ui:locationRows rdfs:label "де ми зараз"@uk , "wo wir sind"@de , "أين نحن"@ar .
+ui:inspectorMarkup c:emptyText "Наведіть на будь-який елемент сторінки, щоб побачити, яким HTML він стає."@uk , "Fahren Sie über ein Element der Seite, um das HTML zu sehen, zu dem es wird."@de , "مرّر المؤشر فوق أي عنصر في الصفحة لترى HTML الذي يصير إليه."@ar .
+ui:inspector c:emptyText "Коли інспектор наживо, наведіть на будь-який елемент сторінки, щоб побачити його RDF/HTML, дію PROV-O і правило, що його створили, шари, що його оздобили, і вхідні дані, з яких він походить."@uk , "Steht der Inspektor auf Live, fahren Sie über ein Element der Seite, um sein RDF/HTML zu sehen, die PROV-O-Aktivität und Regel, die es erzeugt haben, die Schichten, die es ergänzt haben, und die Eingabe, aus der es abgeleitet ist."@de , "عندما يكون المفتش في وضع مباشر، مرّر المؤشر فوق أي عنصر في الصفحة لترى RDF/HTML الخاص به، ونشاط PROV-O والقاعدة اللذين أنتجاه، والطبقات التي زيّنته، والمدخل الذي اشتُق منه."@ar .
+ui:qElement rdfs:label "відтворений елемент (RDF/HTML)"@uk , "gerendertes Element (RDF/HTML)"@de , "العنصر المعروض (RDF/HTML)"@ar .
+ui:qProvenance rdfs:label "походження"@uk , "Herkunft"@de , "المصدر"@ar .
+ui:qGeneratedBy rdfs:label "створено: дія, її план і правило"@uk , "erzeugt von: die Aktivität, ihr Plan und die Regel"@de , "أنتجه: النشاط وخطته والقاعدة"@ar .
+ui:qInfluencedBy rdfs:label "зазнало впливу: шари, що його оздобили"@uk , "beeinflusst von: die Schichten, die es ergänzt haben"@de , "تأثر بـ: الطبقات التي زيّنته"@ar .
+ui:qDerivedFrom rdfs:label "походить від: вхідні дані, які використала дія"@uk , "abgeleitet von: die Eingabe, die die Aktivität nutzte"@de , "مشتق من: المدخل الذي استخدمه النشاط"@ar .
+ui:textProjection rdfs:label "Текстова проєкція"@uk , "Textprojektion"@de , "الإسقاط النصي"@ar .
+ui:changeLogMembers c:emptyText "Клацніть, введіть щось або поставте позначку. Кожна важлива взаємодія стає незмінним елементом LDES beh:ChangeLog із розміром зміни, яку вона спричинила."@uk , "Klicken, tippen oder haken Sie etwas an. Jede relevante Interaktion wird zu einem unveränderlichen Mitglied des LDES beh:ChangeLog, mit der Größe der Änderung, die sie bewirkt hat."@de , "انقر أو اكتب أو حدّد شيئًا. يصير كل تفاعل ذي صلة عضوًا ثابتًا في beh:ChangeLog LDES، مع حجم التغيير الذي أحدثه."@ar .
+ui:qStream rdfs:label "потік подій"@uk , "der Ereignisstrom"@de , "تدفق الأحداث"@ar .
+ui:qStreamView rdfs:label "його подання і політика зберігання"@uk , "seine Ansicht und Aufbewahrungsregel"@de , "عرضه وسياسة الاحتفاظ به"@ar .
+ui:sizes c:label "Розміри"@uk , "Größen"@de , "الأحجام"@ar .
+ui:runButton c:label "Запустити матрицю"@uk , "Matrix ausführen"@de , "تشغيل المصفوفة"@ar .
+ui:clearButton c:label "Очистити"@uk , "Leeren"@de , "مسح"@ar .
+ui:initialPanel c:label "Перше відтворення"@uk , "Erstes Rendern"@de , "العرض الأولي"@ar .
+ui:initialPanel c:badge "стосом"@uk , "gestapelt"@de , "مكدّس"@ar .
+ui:initialPanel c:note "Побудова всього інтерфейсу з графа, поділена на час графового рушія і DOM. Одна панель на розмір."@uk , "Die ganze Oberfläche aus dem Graphen aufbauen, aufgeteilt in die Zeit der Graph-Engine und des DOM. Ein Feld je Größe."@de , "بناء الواجهة كلها من الرسم البياني، مقسّمًا بين وقت محرك الرسم البياني ووقت DOM. لوحة لكل حجم."@ar .
+ui:initialChart rdfs:label "Перше відтворення"@uk , "Erstes Rendern"@de , "العرض الأولي"@ar .
+ui:engineSeries rdfs:label "графовий рушій (запис у сховище, правила, індекс)"@uk , "Graph-Engine (Speicher-Schreibvorgänge, Regeln, Index)"@de , "محرك الرسم البياني (كتابات المخزن، القواعد، الفهرس)"@ar .
+ui:domSeries rdfs:label "оновлення DOM"@uk , "DOM-Patching"@de , "ترقيع DOM"@ar .
+ui:mixPanel c:label "Куди йде час оновлення"@uk , "Wohin die Update-Zeit geht"@de , "أين يذهب وقت التحديث"@ar .
+ui:mixPanel c:badge "стосом"@uk , "gestapelt"@de , "مكدّس"@ar .
+ui:mixPanel c:note "Одна операція кожного виду на конфігурацію, кожен сегмент — один сценарій (мс на операцію)."@uk , "Eine Operation jeder Art je Konfiguration, jedes Segment ein Szenario (ms pro Operation)."@de , "عملية واحدة من كل نوع لكل تكوين، وكل مقطع سيناريو واحد (ميلي ثانية لكل عملية)."@ar .
+ui:mixChart rdfs:label "Склад оновлень"@uk , "Update-Mix"@de , "مزيج التحديثات"@ar .
+ui:matrixPanel c:label "Затримка оновлення"@uk , "Update-Latenz"@de , "زمن التحديث"@ar .
+ui:matrixPanel c:badge "таблиця"@uk , "Tabelle"@de , "جدول"@ar .
+ui:matrixPanel c:note "Від зміни графа до оновленого DOM, середнє з 15 операцій. Запит подання позначає клітинки понад бюджет кадру 16,7 мс."@uk , "Von der Graphänderung bis zum gepatchten DOM, Mittel aus 15 Operationen. Die Abfrage der Ansicht markiert Zellen über dem Frame-Budget von 16,7 ms."@de , "من تغيير الرسم البياني إلى DOM المحدَّث، متوسط 15 عملية. يعلّم استعلام العرض الخلايا التي تتجاوز ميزانية الإطار البالغة 16.7 ميلي ثانية."@ar .
+ui:matrixChart rdfs:label "Затримка оновлення"@uk , "Update-Latenz"@de , "زمن التحديث"@ar .
+ui:scalingPanel c:label "Масштабування"@uk , "Skalierung"@de , "التوسّع"@ar .
+ui:scalingPanel c:note "Перше відтворення, коли список зростає. Крутіше за пунктирну лінію означає гірше за лінійне."@uk , "Erstes Rendern bei wachsender Liste. Steiler als die gepunktete Referenz heißt schlechter als linear."@de , "العرض الأولي مع نمو القائمة. الأشد انحدارًا من الخط المنقط يعني أسوأ من الخطي."@ar .
+ui:scalingChart rdfs:label "Масштабування"@uk , "Skalierung"@de , "التوسّع"@ar .
+ui:scalingChart c:emptyText "Запустіть щонайменше два розміри, щоб побачити масштабування."@uk , "Führen Sie mindestens zwei Größen aus, um die Skalierung zu sehen."@de , "شغّل حجمين على الأقل لترى التوسّع."@ar .
+ui:insightsPanel c:label "Висновки"@uk , "Erkenntnisse"@de , "الاستنتاجات"@ar .
+ui:insightsPanel c:badge "Судження SPARQL"@uk , "SPARQL-Urteile"@de , "أحكام SPARQL"@ar .
+ui:insightsPanel c:note "Результати — це sosa:Observations у графі; кожне судження — CONSTRUCT, що записує висновки."@uk , "Ergebnisse sind sosa:Observations im Graphen; jedes Urteil ist ein CONSTRUCT, das Befunde schreibt."@de , "النتائج هي sosa:Observations في الرسم البياني؛ وكل حكم CONSTRUCT يكتب الاستنتاجات."@ar .
+ui:findings c:emptyText "Висновки зʼявляться, щойно будуть спостереження."@uk , "Befunde erscheinen, sobald es Beobachtungen gibt."@de , "تظهر الاستنتاجات بعد وجود ملاحظات."@ar .
+ui:observations c:emptyText "Спостережень ще немає. Результати запуску зберігаються для цієї вкладки."@uk , "Noch keine Beobachtungen. Die Ergebnisse eines Laufs bleiben für diesen Tab erhalten."@de , "لا ملاحظات بعد. تُحفظ نتائج التشغيل لهذه العلامة."@ar .
+ui:GroupInspection rdfs:label "Перегляд"@uk , "Inspektion"@de , "الفحص"@ar .
+ui:GroupDocuments rdfs:label "Документи"@uk , "Dokumente"@de , "المستندات"@ar .
+ui:stallDialog c:help "Щось триває довше, ніж слід. «Продовжити» дає завершити, поки сторінка відповідає; «Зупинити» лишає неоновлене як було, із позначкою, що воно застаріло."@uk , "Etwas dauert länger als nötig. „Fortsetzen“ lässt es zu Ende laufen, während die Seite weiter reagiert; „Stoppen“ lässt das noch nicht Aktualisierte, wie es war, als veraltet markiert."@de , "هناك ما يستغرق وقتًا أطول مما ينبغي. «متابعة» تتركه يكتمل بينما تواصل الصفحة الاستجابة؛ و«إيقاف» تُبقي ما لم يُحدَّث بعد على حاله، موسومًا بأنه قديم."@ar .
+ui:stallReport c:emptyText "Зараз нічого не зависло. Хід понад 1,5 с призупиняється і питає; зависання, які нічого не могло перервати, записано нижче."@uk , "Gerade hängt nichts. Ein Durchlauf über 1,5 s wird angehalten und fragt nach; Hänger, die nichts unterbrechen konnte, stehen unten im Protokoll."@de , "لا شيء متوقف الآن. أي دورة تتجاوز 1.5 ثانية تُعلَّق وتسأل؛ وما لم يمكن مقاطعته يُسجَّل أدناه."@ar .
+ui:stallTable c:label "Журнал зависань"@uk , "Hänger-Protokoll"@de , "سجل التوقفات"@ar .
+ui:stall-col-at c:label "Коли"@uk , "Wann"@de , "متى"@ar .
+ui:stall-col-state c:label "Стан"@uk , "Zustand"@de , "الحالة"@ar .
+ui:stall-col-detector c:label "Хто помітив"@uk , "Bemerkt von"@de , "لاحظه"@ar .
+ui:stall-col-ms c:label "Зайнято"@uk , "Belegt"@de , "مشغول"@ar .
+ui:stall-col-culprit c:label "Найповільніша робота"@uk , "Langsamste Arbeit"@de , "أبطأ عمل"@ar .
+ui:stall-col-event c:label "Чим розпочато"@uk , "Gestartet von"@de , "بدأه"@ar .
+ui:stall-col-script c:label "Скрипт"@uk , "Skript"@de , "البرنامج النصي"@ar .
+ui:stallRows rdfs:label "журнал зависань"@uk , "das Hänger-Protokoll"@de , "سجل التوقفات"@ar .
+ui:sponsoredBy c:label "Спонсор: "@uk , "Gesponsert von "@de , "برعاية "@ar .

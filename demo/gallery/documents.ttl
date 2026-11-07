@@ -26,14 +26,14 @@
 
 ui:gallery-documents a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-documents-intro ui:gallery-documents-lede ui:doc-rdf ui:doc-text ui:doc-structure ui:doc-media ui:doc-custom ) .
-ui:gallery-documents-intro a c:Heading ; c:label "Documents" .
+ui:gallery-documents-intro a c:Heading ; c:label "Documents" , "Документи"@uk , "Dokumente"@de , "المستندات"@ar .
 ui:gallery-documents-lede a c:Text ;
     c:label "Documents of blocks: every block a DoCo or Pattern Ontology class that is also a component, its text and marks graph state, rendered as plain semantic HTML and, in the Text modality, as Markdown." .
 
 # --- text and marks ---------------------------------------------------------------------------------
 
 ui:doc-text a c:Flippable ; c:front ui:doc-text-spec .
-ui:doc-text-spec a c:Specimen ; c:label "Text, headings and marks" ;
+ui:doc-text-spec a c:Specimen ; c:label "Text, headings and marks" , "Текст, заголовки й позначки"@uk , "Text, Überschriften und Auszeichnungen"@de , "النص والعناوين والعلامات"@ar ;
     c:demonstrates c:BlockEditor , blk:Document , blk:Paragraph , blk:Heading1 , blk:Heading2 , blk:Quote , blk:Callout , blk:Strong , blk:Emphasis , blk:InlineCode , blk:Strike , blk:Link , blk:Mention , blk:Contents ;
     c:help "A block editor (c:of a blk:Document). Marks are ranges of a block's text (oa:start, oa:end) that may overlap: the text is split into runs at their boundaries." ;
     c:children ( ui:doc-text-actions ui:doc-text-sides ) .
@@ -68,7 +68,7 @@ ui:dt-callout a blk:Callout ; c:icon "💡" ; sty:tone sty:Info ; rdf:value "Tur
 # --- lists, toggles, tables, columns ---------------------------------------------------------------
 
 ui:doc-structure a c:Flippable ; c:front ui:doc-structure-spec .
-ui:doc-structure-spec a c:Specimen ; c:label "Lists, toggles, tables and columns" ;
+ui:doc-structure-spec a c:Specimen ; c:label "Lists, toggles, tables and columns" , "Списки, перемикачі, таблиці й стовпці"@uk , "Listen, Aufklapper, Tabellen und Spalten"@de , "القوائم والمفاتيح والجداول والأعمدة"@ar ;
     c:demonstrates blk:BulletedList , blk:NumberedList , blk:TodoList , blk:ListItem , blk:TodoItem , blk:Toggle , blk:Table , blk:Row , blk:Cell , blk:Columns , blk:Column , blk:Divider ;
     c:help "Containers hold blocks (po:contains) in a chain (co:nextItem): a list its items, an item its nested list, a toggle what it hides, a table its rows, columns their blocks." ;
     c:children ( ui:doc-structure-sides ) .
@@ -110,7 +110,7 @@ ui:ds-right-p a blk:Paragraph ; rdf:value "Each column is a container of blocks 
 # --- code, math, media and links ---------------------------------------------------------------------
 
 ui:doc-media a c:Flippable ; c:front ui:doc-media-spec .
-ui:doc-media-spec a c:Specimen ; c:label "Code, math, media and links" ;
+ui:doc-media-spec a c:Specimen ; c:label "Code, math, media and links" , "Код, формули, медіа й посилання"@uk , "Code, Formeln, Medien und Links"@de , "الشيفرة والرياضيات والوسائط والروابط"@ar ;
     c:demonstrates blk:Code , blk:Math , blk:Image , blk:File , blk:Bookmark , blk:Embed , blk:DocumentLink ;
     c:help "Atoms of a document: code as written, a formula in TeX, an image with its caption, a file, a bookmark of a page, an embedded page in a sandboxed frame, and a link to another document. Their details are schema.org." ;
     c:children ( ui:doc-media-sides ) .
@@ -171,7 +171,7 @@ ui:KeyPointShape a sh:NodeShape ; sh:targetClass ui:KeyPoint ;
                  [ sty:property "font-weight" ; sty:raw "550" ] .
 
 ui:doc-custom a c:Flippable ; c:front ui:doc-custom-spec .
-ui:doc-custom-spec a c:Specimen ; c:label "A block type of your own" ;
+ui:doc-custom-spec a c:Specimen ; c:label "A block type of your own" , "Власний тип блока"@uk , "Ein eigener Blocktyp"@de , "نوع كتلة خاص بك"@ar ;
     c:demonstrates blk:Block , blk:BlockShortcut , blk:Conversion ;
     c:help "A site adds a block type in Turtle: a class (here a paragraph that is an aside: it names its element, so the shared rendering draws it), its style, its shape, its / entry, a Markdown shortcut (\"! \") and its conversions to and from a paragraph and a quote. Type / and find it, start a line with \"! \", or turn a block into one from its handle's menu." ;
     c:children ( ui:doc-custom-sides ) .
@@ -186,7 +186,7 @@ ui:dc-empty a blk:Paragraph ; rdf:value "" .
 # so an edit in either shows in the other at once, and one Undo takes back either's.
 
 ui:doc-rdf a c:Flippable ; c:front ui:doc-rdf-spec .
-ui:doc-rdf-spec a c:Specimen ; c:label "The document as RDF" ;
+ui:doc-rdf-spec a c:Specimen ; c:label "The document as RDF" , "Документ як RDF"@uk , "Das Dokument als RDF"@de , "المستند بصيغة RDF"@ar ;
     c:demonstrates c:BlockEditor , blk:Document , blk:Mark ;
     c:help "The same document as blocks and as the RDF it is. Type in the blocks and the triples change; change a triple (Enter on a value in the RDF editor) and the block shows it. One Undo takes back either." ;
     c:children ( ui:doc-rdf-actions ui:doc-rdf-sides ) .

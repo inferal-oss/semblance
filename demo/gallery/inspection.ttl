@@ -17,7 +17,7 @@
 
 ui:gallery-inspection a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-inspection-intro ui:gallery-inspection-lede ui:in-results ui:in-queries ui:in-triples ui:in-log ui:in-markup ui:in-class ) .
-ui:gallery-inspection-intro a c:Heading ; c:label "Inspection" .
+ui:gallery-inspection-intro a c:Heading ; c:label "Inspection" , "Перегляд"@uk , "Inspektion"@de , "الفحص"@ar .
 ui:gallery-inspection-lede a c:Text ;
     c:children ( "The graph looking at itself: a query's results as a table, a graph or Turtle; named queries bound to a selection; the triples about a node; the change log; the HTML a rendered element becomes; a class's ontology. "
                  ui:in-to-workbench " and " ui:in-to-reference " are made of them. An inspector of an app's own data is made of general components - a data grid, panes, payload views, a toolbar - as "
@@ -40,7 +40,7 @@ ui:in-results-turtle-tab a c:Tab ; c:label "Turtle" ; c:content ui:in-results-tu
 ui:in-results-tabs a c:Tabs ; c:label "Results" ;
     c:tabs ( ui:in-results-table-tab ui:in-results-graph-tab ui:in-results-turtle-tab ) ; c:selected ui:in-results-table-tab .
 ui:in-results a c:Flippable ; c:front ui:in-results-spec .
-ui:in-results-spec a c:Specimen ; c:demonstrates c:ResultTable , c:ResultGraph , c:ResultTurtle ; c:label "Query results" ;
+ui:in-results-spec a c:Specimen ; c:demonstrates c:ResultTable , c:ResultGraph , c:ResultTurtle ; c:label "Query results" , "Результати запиту"@uk , "Abfrageergebnisse"@de , "نتائج الاستعلام"@ar ;
     c:help "The results of a query (c:of a sem:Query, here a CONSTRUCT of this group's classes and what they specialize) as a table, a node-link graph or Turtle. A view runs its query when shown and when its text or c:runCount changes; with c:followUpdates, also when a triple the query reads changes. Select a node of the graph (a click, or Enter) to light up its neighbourhood." ;
     c:children ( ui:in-results-tabs ) .
 
@@ -56,7 +56,7 @@ ui:in-qv-q-members a sem:Query ; rdfs:label "its components" ;
 ui:in-qv-view a c:QueryView ; c:queries ( ui:in-qv-q-group ui:in-qv-q-members ) ;
     c:bindVariable "group" ; c:bindFrom ui:in-qv-pick ; c:bindProperty ui:in-qv-group ; c:emptyText "Pick a group." .
 ui:in-queries a c:Flippable ; c:front ui:in-queries-spec .
-ui:in-queries-spec a c:Specimen ; c:demonstrates c:QueryView ; c:label "Query view" ;
+ui:in-queries-spec a c:Specimen ; c:demonstrates c:QueryView ; c:label "Query view" , "Вигляд запиту"@uk , "Abfrageansicht"@de , "عرض الاستعلام"@ar ;
     c:help "Named CONSTRUCTs (c:queries), one section of Turtle each, with a variable ($group, c:bindVariable) bound to what a property of a node holds (c:bindFrom / c:bindProperty): here the choice above. Choosing another group runs them again. The inspector in the tools is one, bound to the element under the pointer." ;
     c:children ( ui:in-qv-choice ui:in-qv-view ) .
 
@@ -64,7 +64,7 @@ ui:in-queries-spec a c:Specimen ; c:demonstrates c:QueryView ; c:label "Query vi
 
 ui:in-tv-view a c:TriplesView ; c:of c:InspectionGroup .
 ui:in-triples a c:Flippable ; c:front ui:in-triples-spec .
-ui:in-triples-spec a c:Specimen ; c:demonstrates c:TriplesView ; c:label "Triples view" ;
+ui:in-triples-spec a c:Specimen ; c:demonstrates c:TriplesView ; c:label "Triples view" , "Вигляд трійок"@uk , "Tripel-Ansicht"@de , "عرض الثلاثيات"@ar ;
     c:help "The triples about one node (c:of) as Turtle: here, this page's component group as ontology/components/groups.ttl declares it. Every specimen on the page names the classes it demonstrates (c:demonstrates), and those classes are in this group (sem:group)." ;
     c:children ( ui:in-tv-view ) .
 
@@ -74,7 +74,7 @@ ui:in-log-members a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 3 ;
     c:emptyText "Click, type or tick something anywhere on the page: each interaction becomes a member of the change log." .
 ui:in-log-stats a c:StreamStats ; c:label "This session" ; c:of beh:ChangeLog .
 ui:in-log a c:Flippable ; c:front ui:in-log-spec .
-ui:in-log-spec a c:Specimen ; c:demonstrates c:StreamMembers , c:StreamStats ; c:label "Change log" ;
+ui:in-log-spec a c:Specimen ; c:demonstrates c:StreamMembers , c:StreamStats ; c:label "Change log" , "Журнал змін"@uk , "Änderungsprotokoll"@de , "سجل التغييرات"@ar ;
     c:help "Every interaction is an immutable member of the beh:ChangeLog event stream, with the size of the change it caused. c:StreamMembers shows the newest (c:limit), read from the stream's head; c:StreamStats what they add up to, kept by maintained views. Click anything on this page to add one." ;
     c:children ( ui:in-log-stats ui:in-log-members ) .
 
@@ -86,7 +86,7 @@ ui:in-em-pick ui:in-em-element <https://semblance.dev/demo#in-em-badge/~root> .
 ui:in-em-markup a c:ElementMarkup ; c:active true ; c:bindFrom ui:in-em-pick ; c:bindProperty ui:in-em-element .
 ui:in-em-highlight a c:Highlight ; c:bindFrom ui:in-em-pick ; c:bindProperty ui:in-em-element .
 ui:in-markup a c:Flippable ; c:front ui:in-markup-spec .
-ui:in-markup-spec a c:Specimen ; c:demonstrates c:ElementMarkup , c:Highlight ; c:label "Element markup" ;
+ui:in-markup-spec a c:Specimen ; c:demonstrates c:ElementMarkup , c:Highlight ; c:label "Element markup" , "Розмітка елемента"@uk , "Element-Markup"@de , "ترميز العنصر"@ar ;
     c:help "A rendered element (the RDF/HTML node a property holds: here the badge's root) without its RDF/HTML encoding: the component that rendered it, as Turtle, and the HTML it becomes. A c:Highlight bound to the same node marks it. The inspector in the tools shows the element under the pointer this way." ;
     c:children ( ui:in-em-badge ui:in-em-markup ui:in-em-highlight ) .
 
@@ -94,6 +94,6 @@ ui:in-markup-spec a c:Specimen ; c:demonstrates c:ElementMarkup , c:Highlight ; 
 
 ui:in-class-doc a c:ClassDoc ; c:of c:CountBadge .
 ui:in-class a c:Flippable ; c:front ui:in-class-spec .
-ui:in-class-spec a c:Specimen ; c:demonstrates c:ClassDoc ; c:label "Class ontology" ;
+ui:in-class-spec a c:Specimen ; c:demonstrates c:ClassDoc ; c:label "Class ontology" , "Онтологія класу"@uk , "Klassen-Ontologie"@de , "أنطولوجيا الصنف"@ar ;
     c:help "What a class is, read from the graph that renders it: the class, the properties whose domain it is, its renderings and their rules, its reactions and its shape, as Turtle (c:of a class; here c:CountBadge). The ontology section under every specimen, and the Reference's Turtle tab, are made of these." ;
     c:children ( ui:in-class-doc ) .

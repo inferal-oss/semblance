@@ -395,7 +395,7 @@ ui:ex-foreign-log a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 3 .
 
 # --- How it works: a walkthrough beside a diagram of what it mentions (ontology/components/walkthrough.ttl)
 
-ui:ex-foreign-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-foreign-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-foreign-w1 ui:ex-foreign-w2 ui:ex-foreign-w3 ui:ex-foreign-w4 ui:ex-foreign-w5 ui:ex-foreign-w6 ui:ex-foreign-w7 ) .
 

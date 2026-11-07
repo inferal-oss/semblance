@@ -66,7 +66,7 @@ describe('panes', () => {
         expect(divider!.getAttribute('aria-orientation')).toBe('vertical')
         expect(divider!.getAttribute('aria-valuenow')).toBe('40')
         expect(divider!.getAttribute('aria-controls')).toBe(first!.id)
-        expect(divider!.getAttribute('aria-label')).toBe('Resize the request list')
+        expect(divider!.getAttribute('aria-label')).toBe('Resize: the request list')
         expect(divider!.getAttribute('tabindex')).toBe('0')
         expect(divider!.getAttribute('data-sem-gesture')).toBe('size')
         expect(divider!.getAttribute('data-sem-sizes')).toBe('previous')

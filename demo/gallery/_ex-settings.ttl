@@ -273,7 +273,7 @@ WHERE {
 
 # --- how it works -------------------------------------------------------------------------------------
 
-ui:ex-settings-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-settings-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-settings-w1 ui:ex-settings-w2 ui:ex-settings-w3 ui:ex-settings-w4 ui:ex-settings-w5 ui:ex-settings-w5b ui:ex-settings-w6 ) .
 

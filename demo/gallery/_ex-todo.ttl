@@ -33,7 +33,7 @@ ui:textProjectionCard a c:Card ;
 # a diagram of the mentioned resources and their links; activating a mention shows its statement in
 # the source (here the todo app's graph). Mentions of framework terms link to the Reference (c:to).
 
-ui:ex-todo-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-todo-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-todo-w1 ui:ex-todo-w2 ui:ex-todo-w3 ui:ex-todo-w4 ui:ex-todo-w5 ) .
 

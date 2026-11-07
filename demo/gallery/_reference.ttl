@@ -34,7 +34,7 @@ ui:referenceSearch a c:Combobox ; c:controls ui:app ; c:property ui:referenceSub
     c:optionsFrom ui:referenceTree ; c:optionNames c:PrefixedNames ; c:optionLimit 20 ; c:picksFirstMatch true ;
     key:shortcut "/" ;
     c:label "Find a term"@en , "Знайти термін"@uk , "Begriff suchen"@de , "ابحث عن مصطلح"@ar ;
-    c:placeholder "c:List, keyboard…" .
+    c:placeholder "c:List, keyboard…" , "c:List, клавіатура…"@uk , "c:List, Tastatur…"@de , "c:List، لوحة المفاتيح…"@ar .
 
 ui:referenceTree a c:TermTree ; c:controls ui:app ; c:property ui:referenceSubject ; pos:fill pos:FillLine ;
     c:label "Vocabulary"@en , "Словник"@uk , "Vokabular"@de , "المفردات"@ar ;
@@ -77,7 +77,7 @@ ui:referenceTurtle a c:ClassDoc ; c:bindFrom ui:app ; c:bindProperty ui:referenc
 # the ranges of its properties and the rules of its renderings. $term is the selection.
 ui:referenceGraph a c:ResultGraph ; c:of ui:qReferenceNeighbourhood ; c:limit 40 ;
     c:bindVariable "term" ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject .
-ui:qReferenceNeighbourhood a sem:Query ; rdfs:label "The term's neighbourhood" ;
+ui:qReferenceNeighbourhood a sem:Query ; rdfs:label "The term's neighbourhood" , "Оточення терміна"@uk , "Die Umgebung des Begriffs"@de , "جوار المصطلح"@ar ;
     sem:construct """
 CONSTRUCT { $term ?p ?o . ?s ?q $term . ?property rdfs:range ?range . ?rule sem:implements ?rendering . ?instance a $term }
 WHERE {
