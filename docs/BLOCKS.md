@@ -235,7 +235,14 @@ Editing, the menu, moving, nesting, undo, copy and paste come from the superclas
 A type can bring its own Markdown shortcut too (a `blk:BlockShortcut`), and its own conversions (above): those
 of its superclass apply to it already, and one from it is preferred to its superclass's. The Documents page of
 the site has one: `ui:KeyPoint` (`demo/gallery/documents.ttl`), a paragraph that is an aside, with its style,
-its shape, its `/` entry, the shortcut `! ` and conversions to and from a quote.
+its shape, its `/` entry, the shortcut `! ` and conversions to and from a quote. The Examples page's "A block
+type of your own" (`demo/gallery/_ex-blocks.ttl`) walks through a type with a rendering of its own:
+`rn:Change`, an entry of release notes with its kind (added, changed, fixed, removed) as a button before its
+text, its line in the Text modality (`rn:ChangeLinePrefix` states the `blk:linePrefix` the shared rule writes,
+`- **Added** `), a shape (one kind of four), a `/` entry with a template (`rn:kind rn:Added`), the shortcut
+`+ `, conversions to it (`beh:like blk:Retype`) and back (queries of its own, which drop the kind), and a
+reaction (a click on the kind moves it to the next one). A type with a rendering of its own names no
+`blk:element` (that is how the shared text block rendering knows to leave it alone) and places `<block>/~text`.
 
 ## Server rendering and the Text modality
 
@@ -290,4 +297,3 @@ To come:
 - dragging a block by a handle: the drag-and-drop layer makes a draggable's whole root its handle, which
   in an editable region would turn every text selection into a drag; it needs a handle part of its own;
 - HTML or Markdown pasted as blocks (the event's HTML in RDF/HTML, mapped by reactions), as designed above;
-- the Examples page's walkthrough of a site block type.

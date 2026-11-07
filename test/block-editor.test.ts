@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
 import { type Clock, ManualClock } from '../src/behaviour/clock.ts'
@@ -693,6 +694,44 @@ describe('the selection toolbar and links (c:BlockEditor)', () => {
     h.input('insertParagraph')
     h.type('b')
     expect(h.value('code')).toBe('a = 1\nb')
+  })
+})
+
+describe('a block type of the site\'s own, with a rendering of its own (demo/gallery/_ex-blocks.ttl)', () => {
+  const RN = 'https://semblance.dev/demo/changes#'
+  // The example's Turtle as it is, and one of its changes after the notes' last paragraph.
+  const SITE =
+    readFileSync(new URL('../demo/gallery/_ex-blocks.ttl', import.meta.url), 'utf8') +
+    `
+<${EX}doc> <${NS.po}contains> <${EX}ch> .
+<${EX}p3> <${NS.co}nextItem> <${EX}ch> .
+<${EX}ch> a <${RN}Change> ; <${RN}kind> <${RN}Added> ; <${NS.rdf}value> "A walkthrough" .
+`
+  it('renders, reads as Markdown, cycles its kind, comes from its shortcut and keeps its shape, the same with SPARQL and function rules', () => {
+    const both = [mount('sparql', 'wat', SITE), mount('function', 'wat', SITE)] as const
+    const [m] = both
+    const step = (what: string, act: (h: ReturnType<typeof mount>) => void) => {
+      for (const h of both) act(h)
+      sameHtml(both[1].html(), both[0].html(), what)
+      expect(both[1].text(), what).toBe(both[0].text())
+    }
+    step('rendered', () => {})
+    const kind = () => m.app.querySelector(`[id="${EX}ch/~root"] > .rn-kind`)!
+    expect(kind().textContent).toBe('Added')
+    expect(m.app.querySelector(`[id="${EX}ch/~root"]`)!.getAttribute('data-rn-kind')).toBe('added')
+    expect(m.text()).toContain('- **Added** A walkthrough')
+    step('a click on its kind moves it on', (h) => h.app.querySelector(`[id="${EX}ch/~root"] > .rn-kind`)!.dispatchEvent(new (h.app.ownerDocument.defaultView!.Event)('click', { bubbles: true })))
+    expect(m.objects('ch', RN + 'kind')).toEqual([RN + 'Changed'])
+    expect(kind().textContent).toBe('Changed')
+    step('undo puts it back', (h) => h.click('Undo'))
+    expect(m.objects('ch', RN + 'kind')).toEqual([RN + 'Added'])
+    step('"+ " at the start of a paragraph makes one, of its template\'s kind', (h) => {
+      h.select('p2', 0)
+      h.type('+ ')
+    })
+    expect(m.objects('p2', NS.rdf + 'type')).toContain(RN + 'Change')
+    expect(m.objects('p2', RN + 'kind')).toEqual([RN + 'Added'])
+    expect(m.value('p2')).toBe('Second line')
   })
 })
 
