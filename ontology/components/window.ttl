@@ -106,7 +106,9 @@ c:width (at the start or end) or c:height (at the top or bottom) becomes that si
 (default 240 px for a frame) and at most c:maxSize and the room there is. Floating or maximized it
 has no handle. A frame opts in by having the class (`a c:Window , c:DockResizable`); without it a
 docked frame keeps the size the graph says. Edges are logical, so where the text runs right to left
-a frame docked at the start has its left edge free. A c:DockPanel always has it."""@en .
+a frame docked at the start has its left edge free. A c:DockPanel always has it. The handle's
+aria-valuenow and aria-valuemax say what the box comes to and may come to where the theme or the room
+holds it under c:width or c:maxSize (src/web/size-handles.ts); the graph keeps what it asked for."""@en .
 
 c:snapDistance a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:integer ;
     rdfs:comment "How close to an edge (CSS px) the pointer must be released for a c:Dockable frame to snap to it."@en .

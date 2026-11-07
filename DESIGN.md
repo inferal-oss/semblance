@@ -186,7 +186,9 @@ controls edit, in a `c:Toolbar` (Actions) with a `c:SearchField` (Inputs). A wat
 draws spans on the window's time scale, which a `c:TimeAxis` ticks. Detail views follow a selection
 through `c:bindFrom` / `c:bindProperty`. Separators (a `c:SplitView`'s divider, a column's edge, a
 `c:DockPanel`'s free edge; Layout) are one-axis size handles: dragged, or moved with the arrow
-keys, they commit one `beh:Size` event. The Examples page's network inspector
+keys, they commit one `beh:Size` event. What a handle reports (`aria-valuenow`, `aria-valuemax`)
+is the box as drawn, under a theme's cap or in the room there is; the graph keeps the size it asked
+for. The Examples page's network inspector
 (`demo/gallery/_network.ttl`) is composed only of these parts.
 
 The **Inspection** group is the graph looking at itself: the SPARQL workbench and its result
