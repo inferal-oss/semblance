@@ -273,7 +273,7 @@
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part "[data-sem-c=command-palette] .sem-cp-group > [role=option][aria-selected=true]:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] ,
                  [ sty:property "border-radius" ; sty:raw "6px" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;

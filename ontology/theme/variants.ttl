@@ -27,7 +27,7 @@ sty:Accent a sty:Tone ; rdfs:label "Accent"@en ; sem:slug "accent" ; sem:order 2
                  [ sty:property "--tone-soft-hover" ; sty:raw "var(--sem-accent-4)" ] ,
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-accent-7)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-accent-11)" ] ,
-                 [ sty:property "--tone-on-solid" ; sty:raw "#ffffff" ] .
+                 [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-accent-contrast)" ] .
 sty:Info a sty:Tone ; rdfs:label "Info"@en ; sem:slug "info" ; sem:order 3 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-info-9)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "var(--sem-info-10)" ] ,
@@ -35,7 +35,7 @@ sty:Info a sty:Tone ; rdfs:label "Info"@en ; sem:slug "info" ; sem:order 3 ;
                  [ sty:property "--tone-soft-hover" ; sty:raw "var(--sem-info-4)" ] ,
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-info-6)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-info-11)" ] ,
-                 [ sty:property "--tone-on-solid" ; sty:raw "#ffffff" ] .
+                 [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-on-status)" ] .
 sty:Success a sty:Tone ; rdfs:label "Success"@en ; sem:slug "success" ; sem:order 4 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-success-9)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "var(--sem-success-10)" ] ,
@@ -43,7 +43,7 @@ sty:Success a sty:Tone ; rdfs:label "Success"@en ; sem:slug "success" ; sem:orde
                  [ sty:property "--tone-soft-hover" ; sty:raw "var(--sem-success-4)" ] ,
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-success-6)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-success-11)" ] ,
-                 [ sty:property "--tone-on-solid" ; sty:raw "#ffffff" ] .
+                 [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-on-status)" ] .
 sty:Warning a sty:Tone ; rdfs:label "Warning"@en ; sem:slug "warning" ; sem:order 5 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-warning-9)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "var(--sem-warning-10)" ] ,
@@ -51,7 +51,7 @@ sty:Warning a sty:Tone ; rdfs:label "Warning"@en ; sem:slug "warning" ; sem:orde
                  [ sty:property "--tone-soft-hover" ; sty:raw "var(--sem-warning-4)" ] ,
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-warning-6)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-warning-11)" ] ,
-                 [ sty:property "--tone-on-solid" ; sty:raw "#2b1a00" ] .
+                 [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-on-warning)" ] .
 sty:Danger a sty:Tone ; rdfs:label "Danger"@en ; sem:slug "danger" ; sem:order 6 ;
     sty:declares [ sty:property "--tone-solid" ; sty:raw "var(--sem-danger-9)" ] ,
                  [ sty:property "--tone-solid-hover" ; sty:raw "var(--sem-danger-10)" ] ,
@@ -59,7 +59,7 @@ sty:Danger a sty:Tone ; rdfs:label "Danger"@en ; sem:slug "danger" ; sem:order 6
                  [ sty:property "--tone-soft-hover" ; sty:raw "var(--sem-danger-4)" ] ,
                  [ sty:property "--tone-border" ; sty:raw "var(--sem-danger-6)" ] ,
                  [ sty:property "--tone-text" ; sty:raw "var(--sem-danger-11)" ] ,
-                 [ sty:property "--tone-on-solid" ; sty:raw "#ffffff" ] .
+                 [ sty:property "--tone-on-solid" ; sty:raw "var(--sem-on-status)" ] .
 
 # --- emphases ---
 sty:Solid a sty:Emphasis ; rdfs:label "Solid"@en ; sem:slug "solid" ; sem:order 1 .

@@ -196,7 +196,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Pagination ; sty:part "button[aria-current=page]" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-9 ] ,
                  [ sty:property "border-color" ; sty:token tok:accent-9 ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] ,
+                 [ sty:property "color" ; sty:token tok:accent-contrast ] ,
                  [ sty:property "cursor" ; sty:raw "default" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Pagination ; sty:part "button:disabled" ;
     sty:declares [ sty:property "opacity" ; sty:raw "0.4" ] ,
@@ -204,7 +204,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Pagination ; sty:part ".sem-gap" ;
     sty:declares [ sty:property "min-width" ; sty:raw "20px" ] ,
                  [ sty:property "text-align" ; sty:raw "center" ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] .
 
 # --- stepper ---
@@ -271,7 +271,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Stepper ; sty:part "[data-state=complete] .sem-marker" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-9 ] ,
                  [ sty:property "border-color" ; sty:token tok:accent-9 ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] .
+                 [ sty:property "color" ; sty:token tok:accent-contrast ] .
 [] a sty:StyleRule ; sty:appliesTo c:Stepper ; sty:part "[data-state=current] .sem-marker" ;
     sty:declares [ sty:property "border-color" ; sty:token tok:accent ] ,
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,

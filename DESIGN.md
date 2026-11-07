@@ -13,7 +13,8 @@ Every value is a `sty:Token` on a named scale, emitted as `--sem-<slug>`.
 | **Neutral** | `gray-1` … `gray-12` | 12-step ramp (Radix-style roles): 1–2 backgrounds, 3–5 component fills, 6–8 borders, 9–10 solid, 11–12 text. `light-dark()` pairs. |
 | **Accent** | `accent-1` … `accent-12` | Same roles as neutral, in the brand hue (violet). |
 | **Status** | `info-*`, `success-*`, `warning-*`, `danger-*` | Steps 3 (soft fill), 6 (border), 9 (solid), 11 (text). Reserved for state; never series colors. |
-| **Roles** | `canvas`, `surface`, `surface-sunken`, `surface-overlay`, `text`, `muted`, `faint`, `border`, `border-strong`, `ring` | What components use. Defined from the ramps, so a theme swaps ramps and roles follow. |
+| **Roles** | `canvas`, `surface`, `surface-sunken`, `surface-overlay`, `text`, `muted`, `faint`, `border`, `border-strong`, `ring` | What components use. Defined from the ramps, so a theme swaps ramps and roles follow. `text` and `muted` are what people read. `faint` (3:1) is for what nobody has to read: a placeholder, a separator, a line number, a disabled control, a part of a control. |
+| **On a fill** | `on-accent`, `accent-contrast`, `on-status`, `on-warning` | Text and marks on a solid; never `white`, which a theme's fill may be too light for. `on-accent` goes on `accent`, `accent-contrast` on `accent-9`, `on-status` on `info-9`, `success-9`, `danger-9`, `on-warning` on `warning-9`. `test/themes.test.ts` holds these pairs and the roles above at their contrast, in every theme, in both schemes. |
 | **Type** | `text-xs` 11 · `text-sm` 13 · `text-md` 15 · `text-lg` 17 · `text-xl` 20 · `text-2xl` 24 · `text-3xl` 30 | Plus `font`, `font-mono`, `leading-tight/normal`. |
 | **Space** | `space-1` … `space-8` (4 → 48px) | Densities re-value these per subtree. |
 | **Radius** | `radius-sm` 6 · `radius-md` 10 · `radius-lg` 14 · `radius-xl` 20 · `radius-full` | |

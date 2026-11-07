@@ -395,7 +395,7 @@
     sty:declares [ sty:property "opacity" ; sty:raw "0.5" ] ,
                  [ sty:property "outline-color" ; sty:raw "var(--sem-border-strong)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state "[data-sem-ghost][data-sem-tear=back]" ; sty:part ".sem-tear-cue" ;
-    sty:declares [ sty:property "color" ; sty:token tok:faint ] .
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[role=tablist][data-sem-gathering]" ;
     sty:declares [ sty:property "outline" ; sty:raw "2px dashed var(--sem-accent-9)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "-3px" ] ,
@@ -415,7 +415,7 @@
                  [ sty:property "padding" ; sty:raw "8px 12px" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
                  [ sty:property "background" ; sty:token tok:accent-9 ] ,
-                 [ sty:property "color" ; sty:raw "white" ] ,
+                 [ sty:property "color" ; sty:token tok:accent-contrast ] ,
                  [ sty:property "font" ; sty:raw "600 var(--sem-text-xs)/1.35 var(--sem-font)" ] ,
                  [ sty:property "text-align" ; sty:raw "center" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,

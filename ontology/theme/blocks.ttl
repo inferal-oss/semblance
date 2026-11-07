@@ -304,7 +304,7 @@
     sty:declares [ sty:property "font-size" ; sty:token tok:text-sm ] , [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo blk:Bookmark ; sty:part ".sem-address" ;
     sty:declares [ sty:property "font-size" ; sty:token tok:text-xs ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
 
 # --- table of contents ---

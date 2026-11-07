@@ -2016,4 +2016,3 @@ tok:ramp-12 a sty:Token ; sem:slug "ramp-12" ; sty:value "#0d366b" .
 tok:ramp-ink-light a sty:Token ; sem:slug "ramp-ink-light" ; sty:value "#0d366b" .
 tok:ramp-ink-dark a sty:Token ; sem:slug "ramp-ink-dark" ; sty:value "#ffffff" .
 tok:flag a sty:Token ; sty:scale sty:Color ; sem:slug "flag" ; sty:value "light-dark(#c2410c, #fb923c)" .
-tok:good a sty:Token ; sty:scale sty:Color ; sem:slug "good" ; sty:value "light-dark(#0f8a5f, #4fd8a8)" .

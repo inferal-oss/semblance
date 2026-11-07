@@ -40,8 +40,8 @@ tok:accent-5 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-5" ; sty:value 
 tok:accent-6 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-6" ; sty:value "light-dark(#c9bfff, #3e3379)" .
 tok:accent-7 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-7" ; sty:value "light-dark(#b3a6fb, #4b3f92)" .
 tok:accent-8 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-8" ; sty:value "light-dark(#9787f5, #5d4fb5)" .
-tok:accent-9 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-9" ; sty:value "light-dark(#5b4cf0, #7c6cf6)" .
-tok:accent-10 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-10" ; sty:value "light-dark(#4f40e0, #8b7dff)" .
+tok:accent-9 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-9" ; sty:value "light-dark(#5b4cf0, #6f5ef2)" .
+tok:accent-10 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-10" ; sty:value "light-dark(#4f40e0, #7c6cf6)" .
 tok:accent-11 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-11" ; sty:value "light-dark(#4b3cc9, #b2a8ff)" .
 tok:accent-12 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-12" ; sty:value "light-dark(#231a63, #e2ddff)" .
 
@@ -49,15 +49,15 @@ tok:accent-12 a sty:Token ; sty:scale sty:Ramp ; sem:slug "accent-12" ; sty:valu
 tok:info-3 a sty:Token ; sty:scale sty:Ramp ; sem:slug "info-3" ; sty:value "light-dark(#e6f1ff, #10233d)" .
 tok:info-4 a sty:Token ; sty:scale sty:Ramp ; sem:slug "info-4" ; sty:value "light-dark(#d6e8ff, #142c4d)" .
 tok:info-6 a sty:Token ; sty:scale sty:Ramp ; sem:slug "info-6" ; sty:value "light-dark(#a9cdfb, #1d4a7a)" .
-tok:info-9 a sty:Token ; sty:scale sty:Ramp ; sem:slug "info-9" ; sty:value "light-dark(#0b74de, #3b8ef0)" .
-tok:info-10 a sty:Token ; sty:scale sty:Ramp ; sem:slug "info-10" ; sty:value "light-dark(#0a66c4, #5aa0f5)" .
+tok:info-9 a sty:Token ; sty:scale sty:Ramp ; sem:slug "info-9" ; sty:value "light-dark(#0b74de, #2572d4)" .
+tok:info-10 a sty:Token ; sty:scale sty:Ramp ; sem:slug "info-10" ; sty:value "light-dark(#0a66c4, #3b8ef0)" .
 tok:info-11 a sty:Token ; sty:scale sty:Ramp ; sem:slug "info-11" ; sty:value "light-dark(#0b5cad, #8ec2ff)" .
 
 tok:success-3 a sty:Token ; sty:scale sty:Ramp ; sem:slug "success-3" ; sty:value "light-dark(#e3f7ee, #0f2a20)" .
 tok:success-4 a sty:Token ; sty:scale sty:Ramp ; sem:slug "success-4" ; sty:value "light-dark(#d0f0e2, #123427)" .
 tok:success-6 a sty:Token ; sty:scale sty:Ramp ; sem:slug "success-6" ; sty:value "light-dark(#9edfc2, #1d5a43)" .
-tok:success-9 a sty:Token ; sty:scale sty:Ramp ; sem:slug "success-9" ; sty:value "light-dark(#12a37a, #2bbf8f)" .
-tok:success-10 a sty:Token ; sty:scale sty:Ramp ; sem:slug "success-10" ; sty:value "light-dark(#0f916c, #4fd8a8)" .
+tok:success-9 a sty:Token ; sty:scale sty:Ramp ; sem:slug "success-9" ; sty:value "light-dark(#0b8763, #17855f)" .
+tok:success-10 a sty:Token ; sty:scale sty:Ramp ; sem:slug "success-10" ; sty:value "light-dark(#097a5a, #1f9a72)" .
 tok:success-11 a sty:Token ; sty:scale sty:Ramp ; sem:slug "success-11" ; sty:value "light-dark(#0a7a59, #7fe8c1)" .
 
 tok:warning-3 a sty:Token ; sty:scale sty:Ramp ; sem:slug "warning-3" ; sty:value "light-dark(#fff4d6, #2e2310)" .
@@ -70,8 +70,8 @@ tok:warning-11 a sty:Token ; sty:scale sty:Ramp ; sem:slug "warning-11" ; sty:va
 tok:danger-3 a sty:Token ; sty:scale sty:Ramp ; sem:slug "danger-3" ; sty:value "light-dark(#ffe8eb, #3a1419)" .
 tok:danger-4 a sty:Token ; sty:scale sty:Ramp ; sem:slug "danger-4" ; sty:value "light-dark(#ffd9de, #47181f)" .
 tok:danger-6 a sty:Token ; sty:scale sty:Ramp ; sem:slug "danger-6" ; sty:value "light-dark(#f5b0b9, #7a2a36)" .
-tok:danger-9 a sty:Token ; sty:scale sty:Ramp ; sem:slug "danger-9" ; sty:value "light-dark(#e0344a, #ec4f63)" .
-tok:danger-10 a sty:Token ; sty:scale sty:Ramp ; sem:slug "danger-10" ; sty:value "light-dark(#c92a3f, #ff7a8a)" .
+tok:danger-9 a sty:Token ; sty:scale sty:Ramp ; sem:slug "danger-9" ; sty:value "light-dark(#d9304a, #d9304a)" .
+tok:danger-10 a sty:Token ; sty:scale sty:Ramp ; sem:slug "danger-10" ; sty:value "light-dark(#c92a3f, #ec4f63)" .
 tok:danger-11 a sty:Token ; sty:scale sty:Ramp ; sem:slug "danger-11" ; sty:value "light-dark(#c0263a, #ffa3ae)" .
 
 # --- type ---

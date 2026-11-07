@@ -132,7 +132,7 @@
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
                  [ sty:property "border-bottom" ; sty:raw "1px solid var(--sem-border)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:HexView ; sty:part ".sem-offset" ;
-    sty:declares [ sty:property "color" ; sty:token tok:faint ] .
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:HexView ; sty:part ".sem-ascii" ;
     sty:declares [ sty:property "color" ; sty:token tok:code-string ] .
 [] a sty:StyleRule ; sty:appliesTo c:HexView ; sty:part ".sem-more" ;
