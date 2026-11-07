@@ -93,6 +93,11 @@
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
                  [ sty:property "line-height" ; sty:token tok:leading-tight ] ,
                  [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoardCard ; sty:part ".sem-title[href]" ;
+    sty:declares [ sty:property "color" ; sty:raw "inherit" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoardCard ; sty:part ".sem-title[href]:hover" ;
+    sty:declares [ sty:property "text-decoration" ; sty:raw "underline" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BoardCard ; sty:part "> .sem-card-foot" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
