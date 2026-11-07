@@ -49,6 +49,9 @@ per:webStorage a owl:DatatypeProperty ; rdfs:domain per:Scope ;
 per:enabled a owl:DatatypeProperty ; rdfs:domain per:Policy ; rdfs:range xsd:boolean ;
     rdfs:label "Remember"@en , "Запамʼятовувати"@uk , "Merken"@de , "تذكّر"@ar ;
     rdfs:comment "Whether the policy is on (default true). Graph state, so a switch can control it; turning it off forgets what was stored."@en .
+per:acrossTabs a owl:DatatypeProperty ; rdfs:domain per:Policy ; rdfs:range xsd:boolean ;
+    rdfs:label "Across tabs"@en , "Між вкладками"@uk , "Über Tabs hinweg"@de , "عبر علامات التبويب"@ar ;
+    rdfs:comment "In a scope other tabs share (per:Device): a tab already open takes what another tab stores under the policy, as a change, when it is stored (default false: it keeps its own until it is reloaded)."@en .
 per:subject a owl:ObjectProperty ; rdfs:domain per:Policy ; rdfs:comment "Simple form: the node whose per:properties are remembered."@en .
 per:properties a owl:ObjectProperty ; rdfs:domain per:Policy ; rdfs:range rdf:List .
 per:construct a owl:DatatypeProperty ; rdfs:domain per:Policy ;

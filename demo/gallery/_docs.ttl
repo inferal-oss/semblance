@@ -694,10 +694,10 @@ ui:doc-persistence a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:doc-pe-h ui:doc-pe-1 ui:doc-pe-code ui:doc-pe-2 ) .
 ui:doc-pe-h a c:Heading ; c:level 1 ; c:label "Persistence" .
 ui:doc-pe-1 a c:Text ; c:label "What to remember is graph data too: a per:Policy names a subject and properties, or a CONSTRUCT, and a scope - this tab, this device, the browser database. A host effect restores policies before the first render and writes them back in idle time." .
-ui:doc-pe-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ui:rememberDisplay a per:Policy ; per:scope per:Session ;
+ui:doc-pe-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ui:rememberDisplay a per:Policy ; per:scope per:Device ; per:acrossTabs true ;
     per:subject ui:shell ;
     per:properties ( mot:preference sty:contrast sty:density sty:theme ) .""" .
-ui:doc-pe-2 a c:Text ; c:label "That policy is this site\u2019s own, running now: change the theme and reload the tab. The edits of the live examples in these docs are remembered the same way (ui:rememberLiveExamples, a CONSTRUCT over every example\u2019s sources). Every write, restore and forget is a member of per:StateLog. On this site the tools, the display settings and the page you were on are remembered for the tab; the change log only if you switch it on." .
+ui:doc-pe-2 a c:Text ; c:label "That policy is this site\u2019s own, running now: change the theme and open the page in another tab: it opens in that theme, and a tab already open follows. The edits of the live examples in these docs are remembered the same way (ui:rememberLiveExamples, a CONSTRUCT over every example\u2019s sources). Every write, restore and forget is a member of per:StateLog. On this site the display settings and the colour scheme are remembered on this device (per:acrossTabs: every open tab follows them); the tools, the language, private mode and the page you were on, for the tab; the change log only if you switch it on." .
 
 # --- Navigation ---
 ui:doc-navigation a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;

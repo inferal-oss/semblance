@@ -147,7 +147,7 @@ that belongs to the engine (#9).
 - **Colour scheme and reduced motion** follow the system in CSS (`light-dark()`,
   `sty:underMedia "(prefers-reduced-motion: reduce)"`), so the HTML is right without a script.
 - **The language** is part of the path, so each language's page is rendered as it is.
-- **Remembered choices** (a theme picked this session, the inspector open) are restored by the
+- **Remembered choices** (a theme picked on this device, the inspector open in this tab) are restored by the
   client. What differs from the page as rendered is patched at takeover, like any change.
 
 ## Taking over
@@ -205,7 +205,9 @@ switches have to be right. What it reads comes from the graph (`src/server/remem
 It sets the document's switch and the `<meta name="color-scheme">` the empty page is coloured by at
 once, then the root's and those of the controls bound to the properties
 (`data-sem-remembered`, `per:RememberedChooser`) as the parser reaches them, in a mutation observer's
-callback, which runs before the browser can paint what was added. The client's first projection is
+callback, which runs before the browser can paint what was added. It reads the store the policy's scope names
+(`per:webStorage`), the same one the client restores from: the site keeps how it looks in
+`localStorage` (`per:Device`), so a new tab, a reload and a deep link are painted in it as well. The client's first projection is
 then what is on the page: `adopt` finds no mismatch and nothing is rewritten. A policy in IndexedDB
 (`per:Database`), a `per:construct` policy or one over another node's hook is restored by the client,
 as before.

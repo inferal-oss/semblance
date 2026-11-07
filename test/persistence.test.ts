@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
-import { type Backend, memoryBackend, Persistence } from '../src/persistence.ts'
+import { type Backend, memoryBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { mountRemembering } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -105,6 +105,70 @@ describe('persistence (per:Policy)', () => {
     a.store.dispose?.()
     await new Promise((r) => setTimeout(r, 60))
     expect(await storage[PER + 'Session']!.get('semblance:' + UI + 'rememberInspector')).toBeUndefined()
+  })
+})
+
+/**
+ * One device's localStorage, seen from several tabs: a write in one fires a `storage` event in each
+ * of the others (not in itself), with that tab's own storage as its area, as a browser does.
+ */
+function device() {
+  const m = new Map<string, string>()
+  const tabs: { storage: Storage; events: EventTarget }[] = []
+  return () => {
+    const events = new EventTarget()
+    const changed = (key: string) => {
+      for (const t of tabs) if (t.events !== events) t.events.dispatchEvent(Object.assign(new Event('storage'), { key, storageArea: t.storage }))
+    }
+    const storage = {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => (m.set(k, v), changed(k)),
+      removeItem: (k: string) => (m.delete(k), changed(k)),
+    } as unknown as Storage
+    tabs.push({ storage, events })
+    return { [PER + 'Session']: memoryBackend(), [PER + 'Device']: webStorageBackend(storage, events), [PER + 'Database']: memoryBackend() }
+  }
+}
+
+describe('across tabs (per:acrossTabs, #361)', () => {
+  it('an open tab follows how another one looks, without writing it back; private mode stays with its tab', async () => {
+    const tab = device()
+    const a = await mountRemembering(tab())
+    const b = await mountRemembering(tab())
+    await b.persistence.flush() // what a tab writes once, at the start
+    type Tab = typeof a
+    const at = (h: Tab, s: string, p: string) => h.store.match(h.store.factory.namedNode(s), h.store.factory.namedNode(p), null, h.store.factory.defaultGraph())[0]?.object.value
+    const put = (h: Tab, s: string, p: string, o: string) => {
+      const f = h.store.factory
+      h.runtime.apply({ remove: h.store.match(f.namedNode(s), f.namedNode(p), null, f.defaultGraph()), add: [f.quad(f.namedNode(s), f.namedNode(p), f.namedNode(o))] })
+    }
+    put(a, UI + 'shell', NS.sty + 'theme', NS.sty + 'Classic')
+    put(a, UI + 'app', NS.sty + 'colorScheme', NS.sty + 'Dark')
+    put(a, UI + 'shell', NS.prv + 'privacy', NS.prv + 'Private')
+    await a.persistence.flush()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(at(b, UI + 'shell', NS.sty + 'theme')).toBe(NS.sty + 'Classic')
+    expect(at(b, UI + 'app', NS.sty + 'colorScheme')).toBe(NS.sty + 'Dark')
+    b.shell.flush()
+    expect(b.document.querySelector('[data-sem-theme]')!.getAttribute('data-sem-theme')).toBe('classic')
+    expect(at(b, UI + 'shell', NS.prv + 'privacy')).toBe(NS.prv + 'Conceal')
+    // Followed, not written again (no echo back to the first tab).
+    const writes = b.persistence.writes.entries
+    await b.persistence.flush()
+    expect(b.store.match(null, b.store.factory.namedNode(NS.rdf + 'type'), b.store.factory.namedNode(PER + 'Restore')).length).toBeGreaterThan(0)
+    expect(b.persistence.writes.entries).toBe(writes)
+    // A tab opened afterwards opens in it.
+    const c = await mountRemembering(tab())
+    expect(at(c, UI + 'shell', NS.sty + 'theme')).toBe(NS.sty + 'Classic')
+    expect(at(c, UI + 'shell', NS.prv + 'privacy')).toBe(NS.prv + 'Conceal')
+    // A policy not across tabs is not followed: the open tab keeps its own until it is reloaded.
+    const f = b.store.factory
+    b.runtime.apply({ remove: b.store.match(f.namedNode(UI + 'rememberColorScheme'), f.namedNode(PER + 'acrossTabs'), null), add: [] })
+    put(a, UI + 'app', NS.sty + 'colorScheme', NS.sty + 'Light')
+    await a.persistence.flush()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(at(b, UI + 'app', NS.sty + 'colorScheme')).toBe(NS.sty + 'Dark')
+    expect(at(c, UI + 'app', NS.sty + 'colorScheme')).toBe(NS.sty + 'Light')
   })
 })
 

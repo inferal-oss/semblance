@@ -21,6 +21,7 @@ change log records what was remembered and why.
 |---|---|
 | `per:Policy` | Something to remember. |
 | `per:scope` | `per:Session` (sessionStorage: this tab, until closed), `per:Device` (localStorage: this browser profile), `per:Database` (IndexedDB: larger, structured), `per:Pod` (later: a Solid pod / server, shared across devices). |
+| `per:acrossTabs` | `xsd:boolean`, default false. In a scope other tabs share (`per:Device`): a tab already open takes what another tab stores under the policy, as one change, when it is stored. Without it an open tab keeps its own until it is reloaded. |
 | `per:enabled` | `xsd:boolean`. Default true. Graph state, so a switch can control it. |
 | `per:subject` + `per:properties` | The simple form: these properties of this node. |
 | `per:construct` | The general form: a SPARQL CONSTRUCT over the input and derived graphs whose result is remembered. Restoring writes it back to the input graph, the same contract as a reaction's `beh:inserts`. |
@@ -57,13 +58,22 @@ ui:rememberInspectorWindowSwitch a c:ToggleSwitch ;
 Windows minted from tabs have deterministic IRIs. A restored `c:x` lands on
 the same window the next time it is detached.
 
-**Settings for this tab only.**
+**How the site looks, per device; what belongs to the tab, per tab** (the site's
+own, `demo/app.ttl`). The theme, contrast, density, motion and colour scheme are
+the visitor's on this device: a new tab or a later visit opens in them, and a tab
+already open follows a choice made in another. Private mode is for sharing one
+tab's screen, and the language is the address's (a link opens in it), so both
+stay with their tab.
 
 ```turtle
-ui:rememberDisplay a per:Policy ; per:scope per:Session ;
+ui:rememberDisplay a per:Policy ; per:scope per:Device ; per:acrossTabs true ;
     per:subject ui:shell ; per:properties ( mot:preference sty:contrast sty:density sty:theme ) .
-ui:rememberLanguage a per:Policy ; per:scope per:Device ;
-    per:subject ui:app ; per:properties ( l10n:language sty:colorScheme ) .
+ui:rememberColorScheme a per:Policy ; per:scope per:Device ; per:acrossTabs true ;
+    per:subject ui:app ; per:properties ( sty:colorScheme ) .
+ui:rememberPrivacy a per:Policy ; per:scope per:Session ;
+    per:subject ui:shell ; per:properties ( prv:privacy ) .
+ui:rememberLanguage a per:Policy ; per:scope per:Session ;
+    per:subject ui:app ; per:properties ( l10n:language ) .
 ```
 
 **Whole classes**, e.g. every window's geometry:
@@ -100,7 +110,13 @@ storage). It also has a back side, like every view.
 - **Before the first paint**: a server-rendered page can't wait for that. A policy
   over a hooked property of the document or the mounted root, in a scope with a
   `per:webStorage` (a synchronous store: not `per:Database`), is put back by an
-  inline script in the page's head (`src/web/remembered.ts`, docs/SSR.md).
+  inline script in the page's head (`src/web/remembered.ts`, docs/SSR.md). It
+  reads the store the policy's scope names, so a policy moved to `per:Device`
+  is painted in a new tab as the client will restore it.
+- **Across tabs**: a backend that hears other tabs' writes (`Backend.watch`;
+  Web Storage's `storage` event) lets a `per:acrossTabs` policy restore what
+  another tab stored, as one change through the runtime, recorded as a
+  `per:Restore` and not written back.
 - **Write**: a runtime listener on input deltas. A delta that touches a
   policy's subject and properties, or for `per:construct` policies the
   predicates the query mentions, schedules that policy's write in idle time,
