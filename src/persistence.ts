@@ -42,6 +42,8 @@ export interface Backend {
   get(key: string): Promise<string | undefined>
   set(key: string, value: string): Promise<void>
   remove(key: string): Promise<void>
+  /** Hear about keys another tab changed (a scope other tabs share); returns a function that stops it. */
+  watch?(listener: (key: string) => void): () => void
 }
 
 export function memoryBackend(): Backend {
@@ -49,11 +51,22 @@ export function memoryBackend(): Backend {
   return { get: async (k) => m.get(k), set: async (k, v) => void m.set(k, v), remove: async (k) => void m.delete(k) }
 }
 
-export function webStorageBackend(storage: Storage): Backend {
+/** `events` hears the `storage` events other tabs' writes to it fire (the window, in a browser). */
+export function webStorageBackend(storage: Storage, events: EventTarget | undefined = 'addEventListener' in globalThis ? globalThis : undefined): Backend {
   return {
     get: async (k) => storage.getItem(k) ?? undefined,
     set: async (k, v) => storage.setItem(k, v),
     remove: async (k) => storage.removeItem(k),
+    ...(events && {
+      watch: (listener: (key: string) => void) => {
+        const heard = (e: Event) => {
+          const { key, storageArea } = e as StorageEvent
+          if (storageArea === storage && key !== null) listener(key)
+        }
+        events.addEventListener('storage', heard)
+        return () => events.removeEventListener('storage', heard)
+      },
+    }),
   }
 }
 
@@ -95,6 +108,8 @@ interface Policy {
   watches: Set<string>
   /** A storage-carried nav:Dimension rather than a declared policy (no switch of its own). */
   dimension?: true
+  /** per:acrossTabs: an open tab takes what another tab stores. */
+  acrossTabs?: true
 }
 
 interface Blob {
@@ -149,7 +164,8 @@ export class Persistence {
   constructor(
     readonly store: GraphStore,
     readonly backends: Record<string, Backend>,
-    readonly opts: { prefix?: string; delayMs?: number } = {},
+    /** onFollowed: another tab's write was taken (per:acrossTabs), so the host shows the change, as after an event. */
+    readonly opts: { prefix?: string; delayMs?: number; onFollowed?: () => void } = {},
   ) {
     created?.(this)
   }
@@ -202,6 +218,7 @@ export class Persistence {
         construct,
         incremental: one(p, NS.iv + 'strategy')?.value === NS.iv + 'Incremental',
         watches: new Set([...properties, ...(construct ? this.mentioned(construct) : [])]),
+        ...(one(p, PER + 'acrossTabs')?.value === 'true' && { acrossTabs: true as const }),
       }
     })
     // A dimension of a location (nav:Dimension) carried by a storage scope is remembered like a
@@ -345,15 +362,39 @@ export class Persistence {
     if (this.dirty.size) this.schedule()
     this.keep()
     const stop = runtime.onInput((graph, delta) => this.changed(graph, delta))
+    const unwatch = Object.entries(this.backends).flatMap(([scope, b]) => (b.watch ? [b.watch((key) => void this.follow(scope, key))] : []))
     // The runtime ending (a web mount's unmount) releases the store: a waiting write must not run.
     const unend = runtime.onEnd(() => this.stop())
     this.detachInput = () => {
       stop()
       unend()
+      for (const u of unwatch) u()
       for (const [iri, k] of this.kept) k.stop(), runtime.views.unhost(mint(iri, 'view'))
       this.kept.clear()
     }
     return () => this.stop()
+  }
+
+  /**
+   * Another tab stored `key` in `scope`: a policy across tabs (per:acrossTabs) takes it, as one change
+   * through the runtime, so what shows it updates. Not written back: it is what is stored already.
+   */
+  private async follow(scope: string, key: string) {
+    const policy = this.policies().find((p) => p.acrossTabs && p.enabled && p.scope === scope && this.key(p.iri) === key)
+    const runtime = this.runtime
+    if (!policy || !runtime || this.stopped) return
+    const change = await this.storedChange(policy)
+    if (!change || this.stopped) return
+    const add = change.add.filter((q) => !this.store.has(q))
+    if (!add.length && !change.remove.length) return
+    const dirty = this.dirty.has(policy.iri)
+    const d = { add, remove: change.remove }
+    if (policy.graph) runtime.write(policy.graph, d)
+    else runtime.apply(d)
+    if (!dirty) this.dirty.delete(policy.iri)
+    this.restoredCounts.set(policy.iri, change.add.length)
+    this.record(PER + 'Restore', policy, change.add.length)
+    this.opts.onFollowed?.()
   }
 
   /**

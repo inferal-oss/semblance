@@ -144,25 +144,29 @@ describe('the head script', () => {
     const byIri = Object.fromEntries(policies.map((p) => [p.iri, p]))
     // The taskbar's is of a node the page cannot name yet: it lands nowhere.
     const plan = firstPaintPlan(policies, 'app', { 'data-sem-color-scheme': 'system' })!
-    expect(plan.policies.map((p) => p.iri).sort()).toEqual([UI + 'rememberDisplay', UI + 'rememberSettings'])
-    expect(byIri[UI + 'rememberDisplay']!.storage).toBe('sessionStorage')
-    expect(byIri[UI + 'rememberDisplay']!.hooks.map((h) => h.attribute).sort()).toEqual(['data-sem-contrast', 'data-sem-density', 'data-sem-motion', 'data-sem-privacy', 'data-sem-theme'])
+    expect(plan.policies.map((p) => p.iri).sort()).toEqual([UI + 'rememberColorScheme', UI + 'rememberDisplay', UI + 'rememberPrivacy'])
+    // How it looks is kept on the device (#361); private mode, for this tab.
+    expect(byIri[UI + 'rememberDisplay']!.storage).toBe('localStorage')
+    expect(byIri[UI + 'rememberColorScheme']!.storage).toBe('localStorage')
+    expect(byIri[UI + 'rememberPrivacy']!.storage).toBe('sessionStorage')
+    expect(byIri[UI + 'rememberDisplay']!.hooks.map((h) => h.attribute).sort()).toEqual(['data-sem-contrast', 'data-sem-density', 'data-sem-motion', 'data-sem-theme'])
     expect(byIri[UI + 'rememberDisplay']!.hooks.every((h) => h.root)).toBe(true)
     // A language is not a hook; a scheme is, of the document.
-    expect(byIri[UI + 'rememberSettings']!.hooks.map((h) => [h.attribute, h.root])).toEqual([['data-sem-color-scheme', false]])
+    expect(byIri[UI + 'rememberLanguage']).toBeUndefined()
+    expect(byIri[UI + 'rememberColorScheme']!.hooks.map((h) => [h.attribute, h.root])).toEqual([['data-sem-color-scheme', false]])
     // A policy in another scope or under another key follows the graph.
     const f = store.factory
     const display = f.namedNode(UI + 'rememberDisplay')
     const scope = f.namedNode(NS.per + 'scope')
     for (const q of store.match(display, scope, null)) store.delete(q)
-    store.add(f.quad(display, scope, f.namedNode(NS.per + 'Device')))
-    expect(rememberedPolicies(store, ROOT).find((p) => p.iri === display.value)!.storage).toBe('localStorage')
+    store.add(f.quad(display, scope, f.namedNode(NS.per + 'Session')))
+    expect(rememberedPolicies(store, ROOT).find((p) => p.iri === display.value)!.storage).toBe('sessionStorage')
     // IndexedDB cannot be read before the first paint.
     for (const q of store.match(display, scope, null)) store.delete(q)
     store.add(f.quad(display, scope, f.namedNode(NS.per + 'Database')))
     expect(rememberedPolicies(store, ROOT).map((p) => p.iri)).not.toContain(display.value)
     // Neither is the document's hook put anywhere unless the document carries it.
-    expect(firstPaintPlan(rememberedPolicies(store, ROOT), 'app', {})).toBeUndefined()
+    expect(firstPaintPlan(rememberedPolicies(store, ROOT), 'app', {})!.policies.map((p) => p.iri)).toEqual([UI + 'rememberPrivacy'])
   })
 
   it('leaves a page with nothing stored alone, and does not watch it', async () => {
@@ -178,7 +182,8 @@ describe('the head script', () => {
     const page = await pageOf('/docs/overview/')
     const { session, device } = await storedBy([theme('Classic')])
     const key = 'semblance:' + UI + 'rememberDisplay'
-    const blob = JSON.parse(session.getItem(key)!)
+    expect(session.getItem(key)).toBeNull()
+    const blob = JSON.parse(device.getItem(key)!)
     const themeOf = (s: FakeStorage, d: FakeStorage) => {
       const { document } = parseHTML(page)
       run(page, document, s, d)
@@ -190,10 +195,10 @@ describe('the head script', () => {
       s.setItem(key, typeof v === 'string' ? v : JSON.stringify(v))
       return s
     }
-    expect(themeOf(stored({ ...blob, version: 'other' }), device)).toBe('semblance')
-    expect(themeOf(stored('{not json'), device)).toBe('semblance')
-    expect(themeOf(stored({ ...blob, nt: blob.nt.replaceAll(STY + 'Classic', STY + 'NoSuchTheme') }), device)).toBe('semblance')
-    const off = new FakeStorage()
+    expect(themeOf(session, stored({ ...blob, version: 'other' }))).toBe('semblance')
+    expect(themeOf(session, stored('{not json'))).toBe('semblance')
+    expect(themeOf(session, stored({ ...blob, nt: blob.nt.replaceAll(STY + 'Classic', STY + 'NoSuchTheme') }))).toBe('semblance')
+    const off = stored(blob)
     off.setItem('semblance:enabled', JSON.stringify({ [UI + 'rememberDisplay']: false }))
     expect(themeOf(session, off)).toBe('semblance')
     // A storage that throws (blocked site data).
@@ -205,11 +210,27 @@ describe('the head script', () => {
     // Retention, as the policy says.
     const store = await siteStore()
     const plan = firstPaintPlan(rememberedPolicies(store, ROOT), 'app', { 'data-sem-color-scheme': 'system' })!
-    plan.policies[0]!.retentionMs = DAY
+    plan.policies.find((p) => p.iri === UI + 'rememberDisplay')!.retentionMs = DAY
     const held = parseHTML(page).document
     const script = rememberedScript(plan)
-    new Function('document', 'localStorage', 'MutationObserver', 'globalThis', script)(held, device, observerStub().MutationObserver, { sessionStorage: stored({ ...blob, savedAt: Date.now() - 2 * DAY }), localStorage: device })
+    const expired = stored({ ...blob, savedAt: Date.now() - 2 * DAY })
+    new Function('document', 'localStorage', 'MutationObserver', 'globalThis', script)(held, expired, observerStub().MutationObserver, { sessionStorage: session, localStorage: expired })
     expect(held.getElementById('app')!.firstElementChild!.getAttribute('data-sem-theme')).toBe('semblance')
+  })
+
+  it('paints how it looks in a new tab, but not private mode, which stays with its tab (#361)', async () => {
+    const page = await pageOf('/docs/overview/')
+    const { session, device } = await storedBy([theme('Classic'), scheme('Dark'), [ROOT, NS.prv + 'privacy', NS.prv + 'Private']])
+    expect(session.getItem('semblance:' + UI + 'rememberPrivacy')).toContain('Private')
+    expect(device.getItem('semblance:' + UI + 'rememberPrivacy')).toBeNull()
+    const painted = (s: FakeStorage) => {
+      const { document } = parseHTML(page)
+      run(page, document, s, device)
+      const root = document.getElementById('app')!.firstElementChild!
+      return [document.documentElement.getAttribute('data-sem-color-scheme'), root.getAttribute('data-sem-theme'), root.getAttribute('data-sem-privacy')]
+    }
+    expect(painted(session)).toEqual(['dark', 'classic', 'private'])
+    expect(painted(new FakeStorage())).toEqual(['dark', 'classic', 'conceal'])
   })
 
   it('reaches what the parser has not got to yet, as it arrives', async () => {
@@ -248,7 +269,9 @@ describe('taking over a page with a remembered choice', () => {
 
   it.each(CASES)('changes nothing: %s', async (_name, url, choices) => {
     const page = await pageOf(url)
-    const { session, device } = await storedBy(choices)
+    // Chosen in one tab, the page opened in a new one: its session has nothing (#361).
+    const { device } = await storedBy(choices)
+    const session = new FakeStorage()
     const { document } = parseHTML(page)
     run(page, document, session, device)
     const c = await client(url, session, device)

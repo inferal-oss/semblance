@@ -80,11 +80,21 @@ if (import.meta.env.MODE === 'single') carryInFragment(store)
 // Its paths start at where it is served (SEMBLANCE_BASE, else "/"), and relative URLs in its data resolve there.
 else setBase(store, import.meta.env.BASE_URL.startsWith('/') ? import.meta.env.BASE_URL : '/')
 // Remembered state (per:Policy nodes in the graph) is restored before the first projection.
-const persistence = new Persistence(store, {
-  [NS.per + 'Session']: webStorageBackend(sessionStorage),
-  [NS.per + 'Device']: webStorageBackend(localStorage),
-  [NS.per + 'Database']: indexedDbBackend(),
-})
+// A choice another tab stores under a policy across tabs (per:acrossTabs) is shown here too.
+const persistence = new Persistence(
+  store,
+  {
+    [NS.per + 'Session']: webStorageBackend(sessionStorage),
+    [NS.per + 'Device']: webStorageBackend(localStorage),
+    [NS.per + 'Database']: indexedDbBackend(),
+  },
+  {
+    onFollowed: () => {
+      syncSettings()
+      flush()
+    },
+  },
+)
 await persistence.restore().catch((e) => console.warn('[semblance] could not restore remembered state', e))
 // Where we are (ui:location in app.ttl): the address over what storage kept, before the first projection too.
 const navigation = new Navigation(store, { root: UI + 'shell', persistence })

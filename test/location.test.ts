@@ -410,7 +410,7 @@ describe('navigation: where we are, in the address', () => {
     await a.persistence!.flush()
     expect(await backends[PER + 'Session']!.get('semblance:' + UI + 'atDocSection')).toContain('DocRules')
     // Remembered once, by the location: the settings policy no longer covers it.
-    expect(await backends[PER + 'Session']!.get('semblance:' + UI + 'rememberSettings')).toBeUndefined()
+    expect(await backends[PER + 'Session']!.get('semblance:' + UI + 'rememberLanguage')).toBeUndefined()
 
     expect((await site('/docs/layers/', backends)).value(UI + 'docSection')).toBe(UI + 'DocLayers') // the address
     expect((await site('/docs/', backends)).value(UI + 'docSection')).toBe(UI + 'DocRules') // storage

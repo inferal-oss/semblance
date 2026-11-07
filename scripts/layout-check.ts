@@ -4,7 +4,7 @@
 //   npx tsx scripts/layout-check.ts [--root <checkout>] --pages 'examples/checkout@Continue to shipping,examples/shapes' \
 //     [--widths 320,1280] [--height 900] [--scroll 0] [--themes semblance,doodle] [--langs en,uk,de,ar] [--dir rtl] [--out <dir>] [--check]
 //
-// A language is chosen the way the site remembers it: its policy (ui:rememberSettings) in the tab's
+// A language is chosen the way the site remembers it: its policy (ui:rememberLanguage) in the tab's
 // sessionStorage before the page loads.
 //
 // It starts the checkout's Vite dev server in-process, drives a headless Chromium over the DevTools
@@ -144,7 +144,7 @@ export async function measure(base: string, pages: string[], widths: number[], t
     if (lang) {
       await cdp.send('Page.navigate', { url: base + 'favicon.ico' })
       const nt = `<https://semblance.dev/demo#app> <https://semblance.dev/ns/l10n#language> <https://semblance.dev/ns/l10n#${LANGUAGES[lang]}> .\n`
-      await cdp.evaluate(`sessionStorage.setItem('semblance:https://semblance.dev/demo#rememberSettings', ${JSON.stringify(JSON.stringify({ version: '1', savedAt: Date.now(), nt }))})`)
+      await cdp.evaluate(`sessionStorage.setItem('semblance:https://semblance.dev/demo#rememberLanguage', ${JSON.stringify(JSON.stringify({ version: '1', savedAt: Date.now(), nt }))})`)
     }
     for (const width of widths) {
       await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
