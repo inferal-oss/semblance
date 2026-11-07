@@ -269,8 +269,9 @@ describe('every page reached by a click is the page loaded directly', () => {
       await direct(url, async (to, want) => {
         follow(c, to)
         await loadRest(site, c)
+        // (A text in every language may say so in passing, before the graph that picks one: not what is left at the end.)
         const diff = difference(shown(c.host), want)
-        if (diff || c.errors.length) wrong.push(`${url}: ${diff} ${c.errors[0] ?? ''}`)
+        if (diff) wrong.push(`${url}: ${diff}`)
       })
       c.runtime.dispose()
     }

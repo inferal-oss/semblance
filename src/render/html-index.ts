@@ -20,8 +20,7 @@ export interface HNode {
   /** sem:orderKey: position among siblings that have no ord: precedence. */
   orderKey?: string
   /** Further values of data and orderKey, while it has several (single). */
-  otherData?: string[]
-  otherKeys?: string[]
+  others?: Record<string, string[]>
   /** ext:island: the foreign component mounted in this (slot) element. */
   island?: string
   /** ext:tag: the custom element's tag, for the HTML serializer. */
@@ -48,6 +47,8 @@ interface InputNode {
 interface AttrNode {
   name?: string
   value?: string
+  /** Further values of name and value, while it has several (single). */
+  others?: Record<string, string[]>
   owners: Set<string>
 }
 
@@ -98,18 +99,19 @@ const inc = <K, V>(m: Map<K, Set<V>>, k: K, v: V, sign: number) => {
  * a moment (a text in every language, before the graph that picks one arrived, #350): taking the
  * shown one away shows the one left.
  */
-function single(n: HNode, field: 'data' | 'orderKey', o: string, sign: 1 | -1) {
-  const others = field === 'data' ? 'otherData' : 'otherKeys'
+function single<F extends string>(n: { [K in F]?: string } & { others?: Record<string, string[]> }, field: F, o: string, sign: 1 | -1) {
+  const holder = n as { [K in F]?: string }
+  const had = holder[field] as string | undefined
+  const others = n.others?.[field]
   if (sign > 0) {
-    const had = n[field]
     if (had === o) return
-    if (had !== undefined) (n[others] ??= []).push(had)
-    n[field] = o
-  } else if (n[field] === o) {
-    n[field] = n[others]?.pop()
+    if (had !== undefined) ((n.others ??= {})[field] ??= []).push(had)
+    ;(holder as Record<F, string | undefined>)[field] = o
+  } else if (had === o) {
+    ;(holder as Record<F, string | undefined>)[field] = others?.pop()
   } else {
-    const i = n[others]?.indexOf(o) ?? -1
-    if (i >= 0) n[others]!.splice(i, 1)
+    const i = others?.indexOf(o) ?? -1
+    if (i >= 0) others!.splice(i, 1)
   }
 }
 
@@ -430,8 +432,7 @@ export class HtmlIndex {
       case H.attributeName:
       case H.attributeValue: {
         const a = this.attr(s)
-        const field = p === H.attributeName ? 'name' : 'value'
-        a[field] = sign > 0 ? o : undefined
+        single(a, p === H.attributeName ? 'name' : 'value', o, sign)
         for (const owner of a.owners) this.mark('attrs', owner)
         return
       }

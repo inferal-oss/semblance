@@ -165,7 +165,7 @@ ex:page a c:Stack ; c:children ( ex:b ) .`
   })
 })
 
-describe('a node shows one text and one order key', () => {
+describe('a node shows one text, one attribute value and one order key', () => {
   const prefix = '@prefix h: <https://ia2.dev/spec/rdf-html#> . @prefix sem: <https://semblance.dev/ns/core#> . @prefix ui: <https://example.org/ui#> . '
   const parse = (text: string) => new Parser().parse(prefix + text)
   const node = (index: HtmlIndex, key: string) => (index as unknown as { nodes: Map<string, { data?: string; orderKey?: string }> }).nodes.get('https://example.org/ui#' + key)!
@@ -184,6 +184,14 @@ describe('a node shows one text and one order key', () => {
     expect(node(index, 't').data).toBeUndefined()
   })
 
+  it('so does an attribute', () => {
+    const index = new HtmlIndex()
+    index.apply({ add: parse('ui:d a h:Div ; h:attribute ui:a . ui:a a h:Attribute ; h:attributeName "aria-label" ; h:attributeValue "Forget" .'), remove: [] })
+    index.apply({ add: parse('ui:a h:attributeValue "Забути" .'), remove: [] })
+    index.apply({ add: [], remove: parse('ui:a h:attributeValue "Забути" .') })
+    expect(index.attributes('https://example.org/ui#d')).toEqual([['aria-label', 'Forget']])
+  })
+
   it('so does an order key, and a new one replaces the old in one change', () => {
     const index = new HtmlIndex()
     index.apply({ add: parse('ui:t sem:orderKey "a" .'), remove: [] })
@@ -192,5 +200,22 @@ describe('a node shows one text and one order key', () => {
     expect(node(index, 't').orderKey).toBe('a')
     index.apply({ add: parse('ui:t sem:orderKey "c" .'), remove: parse('ui:t sem:orderKey "a" .') })
     expect(node(index, 't').orderKey).toBe('c')
+  })
+})
+
+describe('a query that is a view of its own, named by a node that comes later', () => {
+  it('runs for that node too (iv:run), whichever arrives first', () => {
+    const store = loadStore('wat', `${prefixes}
+@prefix iv: <https://semblance.dev/ns/view#> .
+ex:q a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select "SELECT ?s WHERE { ?s a <${EX}Row> }" .
+ex:r a ex:Row .
+ex:page a c:Stack .`)
+    const runtime = new Runtime(store)
+    runtime.project({ modality: MOD.Screen, prefer: 'sparql', name: 'screen', roots: [EX + 'page'] })
+    const f = store.factory
+    const run = () => store.match(f.namedNode(EX + 't'), f.namedNode(NS.iv + 'run'), null).map((q) => q.object.value)
+    runtime.apply({ add: parseTurtle(`${prefixes}ex:t a c:Table ; c:query ex:q . ex:page c:children ( ex:t ) .`, f), remove: [] })
+    expect(run()).toEqual([EX + 'q'])
+    runtime.dispose()
   })
 })

@@ -578,20 +578,26 @@ export class ViewRuntime {
 
   /** The nodes that name a query by an iv:perQuery template's property (of its referrer class). */
   private queryReferrers(query: string): string[] {
+    return this.allQueryReferrers().get(query) ?? []
+  }
+
+  /** Each query's nodes that name it (queryReferrers), sorted. */
+  private allQueryReferrers(): Map<string, string[]> {
     const f = this.store.factory
-    const out = new Set<string>()
+    const out = new Map<string, Set<string>>()
     for (const t of this.templates.values()) {
       const pq = t.perQuery
       if (!pq) continue
       for (const q of this.namedQueries(pq)) {
-        if (q.object.value !== query || q.object.termType !== 'NamedNode') continue
-        if (q.subject.termType !== 'NamedNode') continue
+        if (q.object.termType !== 'NamedNode' || q.subject.termType !== 'NamedNode') continue
         if (pq.classes && !this.store.match(q.subject as NamedNode, f.namedNode(RDF_TYPE), null).some((t) => pq.classes!.has(t.object.value))) continue
         if (pq.bind && this.one(q.subject, pq.bind.variable)) continue
-        out.add(q.subject.value)
+        let names = out.get(q.object.value)
+        if (!names) out.set(q.object.value, (names = new Set()))
+        names.add(q.subject.value)
       }
     }
-    return [...out].sort()
+    return new Map([...out].map(([query, names]) => [query, [...names].sort()]))
   }
 
   /** Whether a changed triple can change which views an iv:perQuery template defines. */
@@ -675,6 +681,15 @@ export class ViewRuntime {
     for (const node of nodes) {
       for (const v of this.views.values()) if (v.def.node === node) redefine.add(v.iri)
       if (this.store.match(this.store.factory.namedNode(node), this.store.factory.namedNode(RDF_TYPE), this.store.factory.namedNode(IV + 'View')).length) for (const d of this.definitions(node)) redefine.add(d.iri)
+    }
+    // A query that is a view of its own says which nodes it runs for (iv:run): one that came later
+    // than the view (a graph loaded later, in slices) is one more, whichever came first.
+    if ([...members, ...nodes].some((tpl) => this.templates.get(tpl)?.perQuery)) {
+      const referrers = this.allQueryReferrers()
+      for (const v of this.views.values()) {
+        if (v.def.node !== v.iri || v.def.query) continue
+        if ((referrers.get(v.iri) ?? []).join() !== (v.def.referrers ?? []).join()) redefine.add(v.iri)
+      }
     }
     // A parameter changed: retune in place (LIMIT / OFFSET), else compile again.
     const retuned = new Set<string>()
