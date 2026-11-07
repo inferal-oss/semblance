@@ -272,7 +272,11 @@ loads those, takes the page over, and loads the rest in idle time (`Site.pageGra
   rules again once), then the rest a slice per idle period, each slice whole descriptions (a subject
   with every blank node it reaches). Their rules join the running engine and are evaluated for what
   is shown, their reactions the bus, their remembered state is restored
-  (`Persistence.restoreAdded`). The live examples build once the ontology's text is fetched (they
+  (`Persistence.restoreAdded`). Once the last has arrived (`runtime.arriving(false)`), what was
+  evaluated before may have read what they add without declaring it (a class's slug), so it is
+  evaluated again (`runtime.reread()`), a few foci of a rule at a time in idle time (`warm`), what is
+  hidden when it is shown; a run on request and a window are defined again. A page reached by a click, before or after
+  they arrive, is the page loaded directly (`test/deferred-graphs.test.ts`). The live examples build once the ontology's text is fetched (they
   need the whole ontology, in stores of their own). A test takes pages over with only their graphs
   and loads the rest, sliced, without a change (`test/ssr.test.ts`). Every engine reads each rule's
   query once (what it watches, whether its output is attributable), so a sandbox or a reload of the

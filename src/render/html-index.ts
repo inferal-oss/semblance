@@ -19,6 +19,8 @@ export interface HNode {
   slot?: string
   /** sem:orderKey: position among siblings that have no ord: precedence. */
   orderKey?: string
+  /** Further values of data and orderKey, while it has several (single). */
+  others?: Record<string, string[]>
   /** ext:island: the foreign component mounted in this (slot) element. */
   island?: string
   /** ext:tag: the custom element's tag, for the HTML serializer. */
@@ -45,6 +47,8 @@ interface InputNode {
 interface AttrNode {
   name?: string
   value?: string
+  /** Further values of name and value, while it has several (single). */
+  others?: Record<string, string[]>
   owners: Set<string>
 }
 
@@ -90,6 +94,27 @@ const inc = <K, V>(m: Map<K, Set<V>>, k: K, v: V, sign: number) => {
  * It normalizes ordering (hasChild, childOf, the ord: precedence family and the
  * hasChild∘precedes chain) and records what changed, for renderers to patch.
  */
+/**
+ * A property a node shows one value of, the last stated of those it has. A rule can state several for
+ * a moment (a text in every language, before the graph that picks one arrived, #350): taking the
+ * shown one away shows the one left.
+ */
+function single<F extends string>(n: { [K in F]?: string } & { others?: Record<string, string[]> }, field: F, o: string, sign: 1 | -1) {
+  const holder = n as { [K in F]?: string }
+  const had = holder[field] as string | undefined
+  const others = n.others?.[field]
+  if (sign > 0) {
+    if (had === o) return
+    if (had !== undefined) ((n.others ??= {})[field] ??= []).push(had)
+    ;(holder as Record<F, string | undefined>)[field] = o
+  } else if (had === o) {
+    ;(holder as Record<F, string | undefined>)[field] = others?.pop()
+  } else {
+    const i = others?.indexOf(o) ?? -1
+    if (i >= 0) others!.splice(i, 1)
+  }
+}
+
 export class HtmlIndex {
   readonly nodes = new Map<string, HNode>()
   private attrs = new Map<string, AttrNode>()
@@ -369,11 +394,11 @@ export class HtmlIndex {
         return
       }
       case SEM.orderKey:
-        this.node(s).orderKey = sign > 0 ? o : undefined
+        single(this.node(s), 'orderKey', o, sign)
         this.structureChanged(s)
         return
       case H.data:
-        this.node(s).data = sign > 0 ? o : undefined
+        single(this.node(s), 'data', o, sign)
         this.mark('data', s)
         return
       case H.hasChild:
@@ -407,8 +432,7 @@ export class HtmlIndex {
       case H.attributeName:
       case H.attributeValue: {
         const a = this.attr(s)
-        const field = p === H.attributeName ? 'name' : 'value'
-        a[field] = sign > 0 ? o : undefined
+        single(a, p === H.attributeName ? 'name' : 'value', o, sign)
         for (const owner of a.owners) this.mark('attrs', owner)
         return
       }

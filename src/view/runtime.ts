@@ -578,20 +578,26 @@ export class ViewRuntime {
 
   /** The nodes that name a query by an iv:perQuery template's property (of its referrer class). */
   private queryReferrers(query: string): string[] {
+    return this.allQueryReferrers().get(query) ?? []
+  }
+
+  /** Each query's nodes that name it (queryReferrers), sorted. */
+  private allQueryReferrers(): Map<string, string[]> {
     const f = this.store.factory
-    const out = new Set<string>()
+    const out = new Map<string, Set<string>>()
     for (const t of this.templates.values()) {
       const pq = t.perQuery
       if (!pq) continue
       for (const q of this.namedQueries(pq)) {
-        if (q.object.value !== query || q.object.termType !== 'NamedNode') continue
-        if (q.subject.termType !== 'NamedNode') continue
+        if (q.object.termType !== 'NamedNode' || q.subject.termType !== 'NamedNode') continue
         if (pq.classes && !this.store.match(q.subject as NamedNode, f.namedNode(RDF_TYPE), null).some((t) => pq.classes!.has(t.object.value))) continue
         if (pq.bind && this.one(q.subject, pq.bind.variable)) continue
-        out.add(q.subject.value)
+        let names = out.get(q.object.value)
+        if (!names) out.set(q.object.value, (names = new Set()))
+        names.add(q.subject.value)
       }
     }
-    return [...out].sort()
+    return new Map([...out].map(([query, names]) => [query, [...names].sort()]))
   }
 
   /** Whether a changed triple can change which views an iv:perQuery template defines. */
@@ -621,7 +627,8 @@ export class ViewRuntime {
     if ([...changes.add, ...changes.remove].some((q) => q.predicate.value === NS.sh + 'prefix' || q.predicate.value === NS.sh + 'namespace')) this.prefixText = undefined
     const out = new ZSet<Quad>()
     // A view's own triples (its query, its window, its parameters) changed: compile it again.
-    const redefine = new Set<string>()
+    const redefine = this.redefined
+    this.redefined = new Set()
     const nodes = new Set<string>()
     const members = new Set<string>()
     const refreshed = this.refreshNodes()
@@ -674,6 +681,15 @@ export class ViewRuntime {
     for (const node of nodes) {
       for (const v of this.views.values()) if (v.def.node === node) redefine.add(v.iri)
       if (this.store.match(this.store.factory.namedNode(node), this.store.factory.namedNode(RDF_TYPE), this.store.factory.namedNode(IV + 'View')).length) for (const d of this.definitions(node)) redefine.add(d.iri)
+    }
+    // A query that is a view of its own says which nodes it runs for (iv:run): one that came later
+    // than the view (a graph loaded later, in slices) is one more, whichever came first.
+    if ([...members, ...nodes].some((tpl) => this.templates.get(tpl)?.perQuery)) {
+      const referrers = this.allQueryReferrers()
+      for (const v of this.views.values()) {
+        if (v.def.node !== v.iri || v.def.query) continue
+        if ((referrers.get(v.iri) ?? []).join() !== (v.def.referrers ?? []).join()) redefine.add(v.iri)
+      }
     }
     // A parameter changed: retune in place (LIMIT / OFFSET), else compile again.
     const retuned = new Set<string>()
@@ -835,6 +851,19 @@ export class ViewRuntime {
     return applied
   }
 
+  /**
+   * The graphs that arrive after start have arrived (Runtime.reread). A view maintained incrementally
+   * has followed them, but a run on request is stepped by no change, and a window was compiled from
+   * what was known of its stream and has passed over what came out of order: those are defined again,
+   * in the next tick.
+   */
+  reread(): void {
+    for (const v of this.views.values()) if (v.onRequest || v.window) this.redefined.add(v.iri)
+  }
+
+  /** The views the next tick defines again. */
+  private redefined = new Set<string>()
+
   private demanded(v: MaintainedView): boolean {
     // An instance of an iv:perQuery template runs while a node naming its query is shown.
     if (v.def.query && v.def.referrers && this.shown) return v.def.referrers.some((c) => this.shown!(c))
@@ -961,7 +990,8 @@ export class ViewRuntime {
     const dec = (n: number) => f.literal(n.toFixed(3), nn(NS.xsd + 'decimal'))
     for (const v of this.views.values()) {
       const s = nn(v.iri)
-      if (this.store.match(nn(v.def.node), nn(IV + 'measured'), null).every((q) => q.object.value !== 'true')) continue
+      // Suspended, it holds no rows to count: its figures wait until it is shown.
+      if (v.suspended || this.store.match(nn(v.def.node), nn(IV + 'measured'), null).every((q) => q.object.value !== 'true')) continue
       set(s, IV + 'stateRows', int(v.stateRows()))
       set(s, IV + 'ticks', int(v.figures.ticks))
       set(s, IV + 'lastRows', int(v.figures.lastRows))

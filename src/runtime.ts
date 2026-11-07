@@ -193,6 +193,7 @@ export class Runtime {
 
   private tickWatched(byGraph: Map<string | undefined, Delta>, input: Delta) {
     if (this.disposed) return
+    if (this.isArriving) this.arrived = true
     const views = this.views.tick(input)
     const all = views.add.length || views.remove.length ? { add: [...input.add, ...views.add], remove: [...input.remove, ...views.remove] } : input
     if (!all.add.length && !all.remove.length) return
@@ -414,6 +415,18 @@ export class Runtime {
     this.write(EVENTS_GRAPH, delta)
   }
 
+  /**
+   * The graphs that arrive after start have arrived (arriving does this): what was evaluated before
+   * them is due again, in warm() (see Engine.reread), and the views that followed none of it.
+   */
+  reread(): void {
+    if (this.disposed) return
+    this.views.reread()
+    this.advance()
+    for (const p of this.projections) p.engine.reread(), settle(p)
+    this.resumeViews()
+  }
+
   /** Spend up to `budgetMs` evaluating hidden work (see Engine.warm). Returns whether work remains. */
   warm(budgetMs: number): boolean {
     const until = performance.now() + budgetMs
@@ -542,7 +555,8 @@ export class Runtime {
   /**
    * An addition is arriving in slices (sliceAddition), from before its first to after its last: what
    * is due over the whole graph (sem:watchesManyValued) is evaluated once, when it has all arrived,
-   * not again at each slice. A change applied meanwhile is taken in as usual.
+   * not again at each slice. A change applied meanwhile is taken in as usual. What was evaluated
+   * before it arrived is evaluated again, in idle time (reread).
    */
   arriving(on: boolean): void {
     this.isArriving = on
@@ -552,8 +566,11 @@ export class Runtime {
       for (const p of this.projections) p.engine.process({ add: [], remove: [] }), settle(p)
       this.resumeViews()
     })
+    if (this.arrived) this.reread()
+    this.arrived = false
   }
   private isArriving = false
+  private arrived = false
 
   /** Apply a change to the input graph (default graph) and update every projection. */
   apply(delta: Delta): Delta {
