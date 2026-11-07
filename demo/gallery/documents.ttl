@@ -35,10 +35,15 @@ ui:gallery-documents-lede a c:Text ;
 ui:doc-text a c:Flippable ; c:front ui:doc-text-spec .
 ui:doc-text-spec a c:Specimen ; c:label "Text, headings and marks" , "Текст, заголовки й позначки"@uk , "Text, Überschriften und Auszeichnungen"@de , "النص والعناوين والعلامات"@ar ;
     c:demonstrates c:BlockEditor , blk:Document , blk:Paragraph , blk:Heading1 , blk:Heading2 , blk:Quote , blk:Callout , blk:Strong , blk:Emphasis , blk:InlineCode , blk:Strike , blk:Link , blk:Mention , blk:Contents ;
-    c:help "A block editor (c:of a blk:Document). Marks are ranges of a block's text (oa:start, oa:end) that may overlap: the text is split into runs at their boundaries." ;
+    c:help "A block editor (c:of a blk:Document). Marks are ranges of a block's text (oa:start, oa:end) that may overlap: the text is split into runs at their boundaries. Type @ to mention one of DoCo's authors (blk:mentionable)." ;
     c:children ( ui:doc-text-actions ui:doc-text-sides ) .
 ui:doc-text-editor a c:BlockEditor ; c:label "About blocks"@en , "Про блоки"@uk , "Über Blöcke"@de , "عن الكتل"@ar ; c:of ui:doc-text-doc ; file:keepIn blk:Uploads ;
-    c:editable true ; c:undoer ui:doc-text-undo ; c:redoer ui:doc-text-redo .
+    c:editable true ; c:undoer ui:doc-text-undo ; c:redoer ui:doc-text-redo ; blk:mentionable ui:Author .
+# Typing "@" offers the authors (blk:mentionable): picking one marks its name as a blk:Mention of it.
+ui:Author a owl:Class ; rdfs:label "Author"@en , "Автор"@uk , "Autor"@de , "مؤلف"@ar .
+ui:author-peroni a ui:Author ; rdfs:label "Silvio Peroni"@en , "Сільвіо Пероні"@uk , "Silvio Peroni"@de , "سيلفيو بيروني"@ar .
+ui:author-shotton a ui:Author ; rdfs:label "David Shotton"@en , "Девід Шоттон"@uk , "David Shotton"@de , "ديفيد شوتون"@ar .
+ui:author-vitali a ui:Author ; rdfs:label "Fabio Vitali"@en , "Фабіо Віталі"@uk , "Fabio Vitali"@de , "فابيو فيتالي"@ar .
 ui:doc-text-actions a c:Toolbar ; c:label "History"@en , "Історія"@uk , "Verlauf"@de , "السجل"@ar ; c:children ( ui:doc-text-undo ui:doc-text-redo ) .
 ui:doc-text-undo a c:Button , beh:Undoer ; c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar ; sty:size sty:Small .
 ui:doc-text-redo a c:Button , beh:Redoer ; c:label "Redo"@en , "Повторити"@uk , "Wiederholen"@de , "إعادة"@ar ; sty:size sty:Small .

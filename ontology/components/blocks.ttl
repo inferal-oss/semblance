@@ -1412,7 +1412,7 @@ into it or dropped on it becomes an image or file block, shown once it is kept (
 
 c:BlockEditorRendering a sem:Rendering ; sem:targets c:BlockEditor ; sem:stratum 0 ;
     sem:watches rdf:type , c:of , c:label , l10n:label , c:editable , c:anchorBlock , c:anchorOffset , c:focusBlock , c:focusOffset ,
-        c:menuBlock , c:menuFrom , c:activeOption , c:menuOpen , c:foldedQuery .
+        c:menuBlock , c:menuFrom , c:menuTrigger , c:activeOption , c:menuOpen , c:foldedQuery .
 c:BlockEditorRendering-fn a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:function "blk:editor" .
 c:BlockEditorRendering-sparql-screen a sem:Rule ; sem:implements c:BlockEditorRendering ; sem:modality mod:Screen ;
     sem:bulk false ;  # its subquery reads $this
@@ -1478,12 +1478,18 @@ WHERE {
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~menu-data-sem-keep-focus")), ?none) AS ?keepAttr)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~menu-list-role")), ?none) AS ?listRole)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~menu-list-aria-label")), ?none) AS ?listName)
+  # Its name and what it says when nothing matches: of block types, or of mentions (opened by an "@").
+  BIND(EXISTS { $this c:menuTrigger "@" } AS ?mentioning)
   OPTIONAL { ?menuNameAt l10n:of c:BlockMenuPhrase ; l10n:name ?menuNamePicked }
   OPTIONAL { c:BlockMenuPhrase rdfs:label ?menuNameEn FILTER(LANGMATCHES(LANG(?menuNameEn), "en")) }
-  BIND(STR(COALESCE(?menuNamePicked, ?menuNameEn)) AS ?menuName)
+  OPTIONAL { ?mentionNameAt l10n:of c:MentionMenuPhrase ; l10n:name ?mentionNamePicked }
+  OPTIONAL { c:MentionMenuPhrase rdfs:label ?mentionNameEn FILTER(LANGMATCHES(LANG(?mentionNameEn), "en")) }
+  BIND(STR(IF(?mentioning, COALESCE(?mentionNamePicked, ?mentionNameEn), COALESCE(?menuNamePicked, ?menuNameEn))) AS ?menuName)
   OPTIONAL { ?nothingAt l10n:of c:NoBlocksPhrase ; l10n:name ?nothingPicked }
   OPTIONAL { c:NoBlocksPhrase rdfs:label ?nothingEn FILTER(LANGMATCHES(LANG(?nothingEn), "en")) }
-  BIND(IF(?open && !BOUND(?firstRank), STR(COALESCE(?nothingPicked, ?nothingEn)), ?none) AS ?nothing)
+  OPTIONAL { ?noneAt l10n:of c:NoMentionsPhrase ; l10n:name ?noonePicked }
+  OPTIONAL { c:NoMentionsPhrase rdfs:label ?noneEn FILTER(LANGMATCHES(LANG(?noneEn), "en")) }
+  BIND(IF(?open && !BOUND(?firstRank), STR(IF(?mentioning, COALESCE(?noonePicked, ?noneEn), COALESCE(?nothingPicked, ?nothingEn))), ?none) AS ?nothing)
   # Where the caret is, collapsed: its text says what typing / does (shown while the block is empty).
   BIND(IF(?editable && BOUND(?ab) && ?ab = ?fb && ?ao = ?fo, IRI(CONCAT(STR(?ab), "/~text")), ?none) AS ?caretText)
   OPTIONAL { ?placeholderAt l10n:of c:TypeSlashPhrase ; l10n:name ?placeholderPicked }

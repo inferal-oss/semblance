@@ -1034,17 +1034,56 @@ c:BlockMenuPhrase a c:Phrase ; rdfs:label "Blocks"@en , "Блоки"@uk , "Blöc
 c:NoBlocksPhrase a c:Phrase ; rdfs:label "No matching blocks"@en , "Немає таких блоків"@uk , "Keine passenden Blöcke"@de , "لا توجد كتل مطابقة"@ar .
 c:TypeSlashPhrase a c:Phrase ; rdfs:label "Type / for blocks"@en , "Введіть / для блоків"@uk , "„/“ tippen für Blöcke"@de , "اكتب / لإدراج كتلة"@ar .
 
+# --- mentions ------------------------------------------------------------------------------------------
+# An editor that names classes it mentions (blk:mentionable) opens the same menu at an "@" typed at the start
+# of a text block or after a space (c:menuTrigger "@"): its options are the instances of those classes, by
+# name, filtered as one types; picking one replaces the "@" and the query with its name, marked as a
+# blk:Mention of it (oa:hasBody), and a space - one undoable change.
+
+c:menuTrigger a owl:DatatypeProperty ; rdfs:domain c:BlockEditor ; beh:viewState true ;
+    rdfs:comment "The character the open menu was opened by: \"/\" (block types, the default) or \"@\" (mentions)."@en .
+blk:mentionable a owl:ObjectProperty ; rdfs:domain c:BlockEditor ; rdfs:range owl:Class ;
+    rdfs:label "Mentions"@en , "Згадує"@uk , "Erwähnt"@de , "يشير إلى"@ar ;
+    rdfs:comment "A class whose instances the editor's @ menu offers to mention."@en .
+c:MentionMenuPhrase a c:Phrase ; rdfs:label "Mentions"@en , "Згадки"@uk , "Erwähnungen"@de , "الإشارات"@ar .
+c:NoMentionsPhrase a c:Phrase ; rdfs:label "No one by that name"@en , "Нікого з таким ім’ям"@uk , "Niemand mit diesem Namen"@de , "لا أحد بهذا الاسم"@ar .
+
+c:OpenMentionMenu a beh:Reaction ;
+    rdfs:label "Open the @ menu"@en ;
+    rdfs:comment """"@" typed at the start of a text block or after a space, in an editor that mentions something (blk:mentionable):
+the menu opens there, for mentions (the "@" itself is typed, by c:EditText)."""@en ;
+    beh:when c:InsertText ;
+    beh:sourceClass c:BlockEditor ;
+    beh:deletes """CONSTRUCT { $this c:menuBlock ?ob ; c:menuFrom ?of ; c:activeOption ?oa ; c:menuTrigger ?ot . }
+WHERE {
+  $event a c:InsertText ; beh:text "@" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s .
+  $this blk:mentionable ?anyClass .
+  ?a a/rdfs:subClassOf* blk:TextBlock . FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock }
+  OPTIONAL { ?a rdf:value ?raw } BIND(SUBSTR(COALESCE(STR(?raw), ""), 1, ?s) AS ?before)
+  FILTER(?before = "" || REGEX(?before, "\\\\s$"))
+  OPTIONAL { $this c:menuBlock ?ob } OPTIONAL { $this c:menuFrom ?of } OPTIONAL { $this c:activeOption ?oa } OPTIONAL { $this c:menuTrigger ?ot }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:menuBlock ?a ; c:menuFrom ?s ; c:menuTrigger "@" . }
+WHERE {
+  $event a c:InsertText ; beh:text "@" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s .
+  $this blk:mentionable ?anyClass .
+  ?a a/rdfs:subClassOf* blk:TextBlock . FILTER NOT EXISTS { ?a a/rdfs:subClassOf* blk:PlainTextBlock }
+  OPTIONAL { ?a rdf:value ?raw } BIND(SUBSTR(COALESCE(STR(?raw), ""), 1, ?s) AS ?before)
+  FILTER(?before = "" || REGEX(?before, "\\\\s$"))
+}""" .
+
 c:BlockMenuState a sem:Rendering ; sem:targets c:BlockEditor ; sem:modality mod:Screen ; sem:stratum -6 ; sem:inputOnly true ;
     sem:requires c:menuBlock ;
     sem:follows c:menuBlock ;
-    sem:watches c:menuBlock , c:menuFrom , c:focusBlock , c:focusOffset , rdf:value .
+    sem:watches c:menuBlock , c:menuFrom , c:menuTrigger , c:focusBlock , c:focusOffset , rdf:value .
 c:BlockMenuState-fn a sem:Rule ; sem:implements c:BlockMenuState ; sem:function "blk:menu-state" .
 c:BlockMenuState-sparql a sem:Rule ; sem:implements c:BlockMenuState ;
     sem:construct """
 CONSTRUCT { $this c:menuOpen true ; c:foldedQuery ?q ; c:menuBlank ?blank . }
 WHERE {
   $this c:menuBlock ?b ; c:menuFrom ?from ; c:focusBlock ?b ; c:focusOffset ?at FILTER(?at > ?from)
-  ?b rdf:value ?v FILTER(SUBSTR(STR(?v), ?from + 1, 1) = "/")
+  OPTIONAL { $this c:menuTrigger ?trigger0 } BIND(COALESCE(STR(?trigger0), "/") AS ?trigger)
+  ?b rdf:value ?v FILTER(SUBSTR(STR(?v), ?from + 1, 1) = ?trigger)
   BIND(LCASE(SUBSTR(STR(?v), ?from + 2, ?at - ?from - 1)) AS ?q)
   FILTER(!STRSTARTS(?q, " "))
   BIND(CONCAT(SUBSTR(STR(?v), 1, ?from), SUBSTR(STR(?v), ?at + 1)) = "" AS ?blank)
@@ -1053,7 +1092,7 @@ WHERE {
 c:BlockMenuOptions a sem:Rendering ; sem:targets c:BlockEditor ; sem:modality mod:Screen ; sem:stratum -5 ;
     sem:requires c:menuBlock ;
     sem:follows c:menuBlock ;
-    sem:watches rdf:type , c:menuBlock , c:menuBlank .
+    sem:watches rdf:type , c:menuBlock , c:menuBlank , c:menuTrigger , blk:mentionable .
 c:BlockMenuOptions-fn a sem:Rule ; sem:implements c:BlockMenuOptions ; sem:function "blk:menu-options" .
 c:BlockMenuOptions-sparql a sem:Rule ; sem:implements c:BlockMenuOptions ;
     sem:bulk false ;  # its subqueries read no $this, but each editor mints its own
@@ -1065,8 +1104,10 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* c:BlockEditor ; c:menuBlock ?anyBlock .
+  OPTIONAL { $this c:menuTrigger ?trigger0 } BIND(COALESCE(STR(?trigger0), "/") AS ?trigger)
   {
     ?cls blk:menuOrder ?order .
+    BIND("/" AS ?for)
     BIND(?cls AS ?type)
     { SELECT ?cls (GROUP_CONCAT(LCASE(STR(?word)); separator=" ") AS ?words) WHERE { ?cls blk:menuOrder ?o . OPTIONAL { ?cls blk:keyword ?word } } GROUP BY ?cls }
     BIND("" AS ?lead)
@@ -1077,11 +1118,28 @@ WHERE {
     FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?type ; beh:sourceClass ?of . ?mblock a/rdfs:subClassOf* ?of . ?of rdfs:subClassOf+ ?from }
     ?type blk:menuOrder ?typeOrder .
     BIND(?typeOrder - 100 AS ?order)
+    BIND("/" AS ?for)
     { SELECT ?type (GROUP_CONCAT(LCASE(STR(?tword)); separator=" ") AS ?words) WHERE { ?type blk:menuOrder ?to2 . OPTIONAL { ?type blk:keyword ?tword } } GROUP BY ?type }
     OPTIONAL { ?leadAt l10n:of c:TurnIntoPhrase ; l10n:name ?leadPicked }
     OPTIONAL { c:TurnIntoPhrase rdfs:label ?leadEn FILTER(LANGMATCHES(LANG(?leadEn), "en")) }
     BIND(CONCAT(STR(COALESCE(?leadPicked, ?leadEn)), " ") AS ?lead)
+  } UNION {
+    # After an "@": the resources the editor mentions (instances of its blk:mentionable classes), by name.
+    $this blk:mentionable ?mentionClass . ?cls a ?mentionClass .
+    BIND(?cls AS ?type)
+    # Ranked by name: its least label (else its IRI), then its IRI.
+    { SELECT ?cls (COUNT(DISTINCT ?before) AS ?order) WHERE {
+        { SELECT ?cls (MIN(COALESCE(STR(?l1), STR(?cls))) AS ?k1) WHERE { $this blk:mentionable ?mc1 . ?cls a ?mc1 . OPTIONAL { ?cls rdfs:label ?l1 } } GROUP BY ?cls }
+        OPTIONAL {
+          { SELECT ?before (MIN(COALESCE(STR(?l2), STR(?before))) AS ?k2) WHERE { $this blk:mentionable ?mc2 . ?before a ?mc2 . OPTIONAL { ?before rdfs:label ?l2 } } GROUP BY ?before }
+          FILTER(?k2 < ?k1 || (?k2 = ?k1 && STR(?before) < STR(?cls)))
+        }
+      } GROUP BY ?cls }
+    BIND("" AS ?words)
+    BIND("" AS ?lead)
+    BIND("@" AS ?for)
   }
+  FILTER(?for = ?trigger)
   OPTIONAL { ?labelAt l10n:of ?type ; l10n:name ?labelPicked }
   OPTIONAL { ?type rdfs:label ?labelPlain FILTER(LANG(?labelPlain) = "") }
   OPTIONAL { ?type rdfs:label ?labelEn FILTER(LANGMATCHES(LANG(?labelEn), "en")) }
@@ -1103,16 +1161,16 @@ c:OpenBlockMenu a beh:Reaction ;
     rdfs:comment """"/" typed at the start of a text block or after a space: the / menu opens there (the "/" itself is typed, by c:EditText)."""@en ;
     beh:when c:InsertText ;
     beh:sourceClass c:BlockEditor ;
-    beh:deletes """CONSTRUCT { $this c:menuBlock ?ob ; c:menuFrom ?of ; c:activeOption ?oa ; c:handleMenuBlock ?hm ; c:handleMenuReturn ?hr . }
+    beh:deletes """CONSTRUCT { $this c:menuBlock ?ob ; c:menuFrom ?of ; c:activeOption ?oa ; c:handleMenuBlock ?hm ; c:handleMenuReturn ?hr ; c:menuTrigger ?ot . }
 WHERE {
   $event a c:InsertText ; beh:text "/" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s .
   ?a a/rdfs:subClassOf* blk:TextBlock .
   OPTIONAL { ?a rdf:value ?raw } BIND(SUBSTR(COALESCE(STR(?raw), ""), 1, ?s) AS ?before)
   FILTER(?before = "" || REGEX(?before, "\\\\s$"))
   OPTIONAL { $this c:menuBlock ?ob } OPTIONAL { $this c:menuFrom ?of } OPTIONAL { $this c:activeOption ?oa }
-  OPTIONAL { $this c:handleMenuBlock ?hm } OPTIONAL { $this c:handleMenuReturn ?hr }
+  OPTIONAL { $this c:handleMenuBlock ?hm } OPTIONAL { $this c:handleMenuReturn ?hr } OPTIONAL { $this c:menuTrigger ?ot }
 }""" ;
-    beh:inserts """CONSTRUCT { $this c:menuBlock ?a ; c:menuFrom ?s . }
+    beh:inserts """CONSTRUCT { $this c:menuBlock ?a ; c:menuFrom ?s ; c:menuTrigger "/" . }
 WHERE {
   $event a c:InsertText ; beh:text "/" ; beh:startBlock ?a ; beh:endBlock ?a ; beh:startOffset ?s ; beh:endOffset ?s .
   ?a a/rdfs:subClassOf* blk:TextBlock .
@@ -1211,6 +1269,7 @@ WHERE {
   } UNION {
     $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?cls .
   }
+  FILTER(EXISTS { ?cls blk:menuOrder ?typeOrder } || EXISTS { ?cls a blk:Conversion })
   OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
   BIND(CONCAT(SUBSTR(?old, 1, ?from), SUBSTR(?old, ?at + 1)) AS ?rest)
   BIND(?rest = "" AS ?empty)
@@ -1246,6 +1305,7 @@ WHERE {
   } UNION {
     $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?cls .
   }
+  FILTER(EXISTS { ?cls blk:menuOrder ?typeOrder } || EXISTS { ?cls a blk:Conversion })
   OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
   BIND(CONCAT(SUBSTR(?old, 1, ?from), SUBSTR(?old, ?at + 1)) AS ?rest)
   BIND(?rest = "" AS ?empty)
@@ -1287,6 +1347,7 @@ WHERE {
   } UNION {
     $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?cls .
   }
+  FILTER(EXISTS { ?cls blk:menuOrder ?typeOrder } || EXISTS { ?cls a blk:Conversion })
   OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
   BIND(CONCAT(SUBSTR(?old, 1, ?from), SUBSTR(?old, ?at + 1)) AS ?rest)
   BIND(?rest = "" AS ?empty)
@@ -1330,6 +1391,7 @@ WHERE {
   } UNION {
     $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?cls .
   }
+  FILTER(EXISTS { ?cls blk:menuOrder ?typeOrder } || EXISTS { ?cls a blk:Conversion })
   OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
   BIND(CONCAT(SUBSTR(?old, 1, ?from), SUBSTR(?old, ?at + 1)) AS ?rest)
   BIND(?rest = "" AS ?empty)
@@ -1367,6 +1429,75 @@ WHERE {
   BIND(IF(?isList, ?item, IF(?isText, ?n, ?a)) AS ?caretBlock)
   BIND(IF(?isList || ?isText, 0, ?from) AS ?caretAt)
   BIND($this AS ?xab0)
+}""" .
+
+c:PickMention a beh:Reaction ;
+    rdfs:label "Mention"@en ;
+    rdfs:comment """Picking a resource in the @ menu (Enter, Tab or a click): the "@" and what follows it become its name, marked as
+a blk:Mention of it (minted from the event), and a space; the caret after them; the menu closes."""@en ;
+    beh:when c:BlockMenuKey , beh:Click ;
+    beh:sourceClass c:BlockEditor ;
+    beh:undoable true ;
+    ann:announces "Mention inserted"@en , "Згадку вставлено"@uk , "Erwähnung eingefügt"@de , "تم إدراج الإشارة"@ar ;
+    beh:deletes """CONSTRUCT { ?a rdf:value ?raw . ?moved oa:start ?ms0 ; oa:end ?me0 . ?a blk:mark ?gone . ?gone ?gp ?go .
+  $this c:menuBlock ?a ; c:menuFrom ?from ; c:menuTrigger "@" ; c:activeOption ?ma ; c:anchorBlock ?xab ; c:anchorOffset ?xao ; c:focusBlock ?xfb ; c:focusOffset ?xfo ; c:pendingMark ?xpm . }
+WHERE {
+  $this c:menuOpen true ; c:menuTrigger "@" ; c:menuBlock ?a ; c:menuFrom ?from ; c:focusOffset ?at .
+  {
+    { $event beh:key ?key FILTER(?key IN ("enter", "tab")) }
+    { SELECT (MIN(xsd:decimal(?fr)) AS ?firstRank) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq0 } BIND(COALESCE(STR(?fq0), "") AS ?fq)
+        ?fo c:of $this ; c:matchKey ?fmk ; c:rank ?fr . FILTER(?fq = "" || CONTAINS(STR(?fmk), ?fq)) } }
+    OPTIONAL { $this c:activeOption ?chosen . OPTIONAL { $this c:foldedQuery ?q1 } BIND(COALESCE(STR(?q1), "") AS ?qa) ?co c:of $this ; c:option ?chosen ; c:matchKey ?cmk ; c:rank ?cr FILTER(?qa = "" || CONTAINS(STR(?cmk), ?qa)) }
+    BIND(COALESCE(xsd:decimal(?cr), ?firstRank) AS ?activeRank)
+    ?picked c:of $this ; c:option ?res ; c:rank ?pr . FILTER(xsd:decimal(?pr) = ?activeRank)
+  } UNION {
+    $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?res .
+  }
+  ?option c:of $this ; c:option ?res ; c:label ?name0 . BIND(STR(?name0) AS ?name)
+  FILTER NOT EXISTS { ?res blk:menuOrder ?typeOrder } FILTER NOT EXISTS { ?res a blk:Conversion }
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(STRLEN(?name) + 1 AS ?L)
+  BIND(CONCAT(SUBSTR(?old, 1, ?from), ?name, " ", SUBSTR(?old, ?at + 1)) AS ?new)
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(IF(?ms0 < ?from, ?ms0, IF(?ms0 >= ?at, ?ms0 - (?at - ?from) + ?L, ?from)) AS ?ns)
+  BIND(IF(?me0 <= ?from, ?me0, IF(?me0 >= ?at, ?me0 - (?at - ?from) + ?L, ?from)) AS ?ne)
+  BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
+  BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
+  OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+  OPTIONAL { $this c:activeOption ?ma }
+  OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
+  OPTIONAL { $this c:pendingMark ?xpm }
+}""" ;
+    beh:inserts """CONSTRUCT { ?a rdf:value ?new . ?moved oa:start ?ns ; oa:end ?ne .
+  ?a blk:mark ?mention . ?mention a blk:Mention ; oa:start ?from ; oa:end ?mentionEnd ; oa:hasBody ?res .
+  $this c:anchorBlock ?a ; c:anchorOffset ?caret ; c:focusBlock ?a ; c:focusOffset ?caret . }
+WHERE {
+  $this c:menuOpen true ; c:menuTrigger "@" ; c:menuBlock ?a ; c:menuFrom ?from ; c:focusOffset ?at .
+  {
+    { $event beh:key ?key FILTER(?key IN ("enter", "tab")) }
+    { SELECT (MIN(xsd:decimal(?fr)) AS ?firstRank) WHERE { $this c:menuOpen true . OPTIONAL { $this c:foldedQuery ?fq0 } BIND(COALESCE(STR(?fq0), "") AS ?fq)
+        ?fo c:of $this ; c:matchKey ?fmk ; c:rank ?fr . FILTER(?fq = "" || CONTAINS(STR(?fmk), ?fq)) } }
+    OPTIONAL { $this c:activeOption ?chosen . OPTIONAL { $this c:foldedQuery ?q1 } BIND(COALESCE(STR(?q1), "") AS ?qa) ?co c:of $this ; c:option ?chosen ; c:matchKey ?cmk ; c:rank ?cr FILTER(?qa = "" || CONTAINS(STR(?cmk), ?qa)) }
+    BIND(COALESCE(xsd:decimal(?cr), ?firstRank) AS ?activeRank)
+    ?picked c:of $this ; c:option ?res ; c:rank ?pr . FILTER(xsd:decimal(?pr) = ?activeRank)
+  } UNION {
+    $event a beh:Click ; beh:node ?hit . ?row rdfhtml:hasChild* ?hit . ?row c:optionRow $this ; c:pick ?res .
+  }
+  ?option c:of $this ; c:option ?res ; c:label ?name0 . BIND(STR(?name0) AS ?name)
+  FILTER NOT EXISTS { ?res blk:menuOrder ?typeOrder } FILTER NOT EXISTS { ?res a blk:Conversion }
+  OPTIONAL { ?a rdf:value ?raw } BIND(COALESCE(STR(?raw), "") AS ?old)
+  BIND(STRLEN(?name) + 1 AS ?L)
+  BIND(CONCAT(SUBSTR(?old, 1, ?from), ?name, " ", SUBSTR(?old, ?at + 1)) AS ?new)
+  OPTIONAL { ?a blk:mark ?mk . ?mk oa:start ?ms0 ; oa:end ?me0 }
+  BIND(IF(?ms0 < ?from, ?ms0, IF(?ms0 >= ?at, ?ms0 - (?at - ?from) + ?L, ?from)) AS ?ns)
+  BIND(IF(?me0 <= ?from, ?me0, IF(?me0 >= ?at, ?me0 - (?at - ?from) + ?L, ?from)) AS ?ne)
+  BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
+  BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
+  OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
+  BIND(STRAFTER(STR($event), "event:") AS ?ev)
+  BIND(IRI(CONCAT(STR(?a), "/~mark-", ?ev, "-mention")) AS ?mention)
+  BIND(?from + ?L - 1 AS ?mentionEnd)
+  BIND(?from + ?L AS ?caret)
 }""" .
 
 c:BlockMenuLeave a beh:Reaction ;

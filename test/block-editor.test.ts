@@ -455,6 +455,57 @@ describe('the / menu (c:BlockEditor)', () => {
   })
 })
 
+describe('mentions (c:BlockEditor)', () => {
+  const PEOPLE = `
+<${EX}editor> <${NS.blk}mentionable> <${EX}Person> .
+<${EX}grace> a <${EX}Person> ; <${NS.rdfs}label> "Grace Hopper" .
+<${EX}ada> a <${EX}Person> ; <${NS.rdfs}label> "Ada Lovelace" .
+<${EX}alan> a <${EX}Person> ; <${NS.rdfs}label> "Alan Turing" .
+`
+  it('opens at an "@", offers the resources by name, filters as one types and marks the one picked, the same with SPARQL and function rules', () => {
+    const both = [mount('sparql', 'wat', PEOPLE), mount('function', 'wat', PEOPLE)] as const
+    const [m] = both
+    const step = (what: string, act: (h: ReturnType<typeof mount>) => void) => {
+      for (const h of both) act(h)
+      sameHtml(both[1].html(), both[0].html(), what)
+      expect(both[1].text(), what).toBe(both[0].text())
+    }
+    const options = () => [...m.app.querySelectorAll('.sem-block-menu [role=option]:not([hidden])')].map((o) => o.querySelector('.sem-ta-label')!.textContent)
+    step('"@" opens the menu', (h) => {
+      h.select('p2', 11)
+      h.type(' @')
+    })
+    expect(m.app.querySelector('.sem-block-menu [role=listbox]')!.getAttribute('aria-label')).toBe('Mentions')
+    expect(options()).toEqual(['Ada Lovelace', 'Alan Turing', 'Grace Hopper'])
+    step('typing filters it', (h) => h.type('al'))
+    expect(options()).toEqual(['Alan Turing'])
+    step('Enter picks', (h) => h.press('Enter'))
+    expect(m.value('p2')).toBe('Second line Alan Turing ')
+    const mention = m.objects('p2', NS.blk + 'mark').find((k) => m.objects(k, NS.rdf + 'type').includes(NS.blk + 'Mention'))!
+    expect(m.objects(mention, NS.oa + 'hasBody')).toEqual([EX + 'alan'])
+    expect([m.objects(mention, NS.oa + 'start')[0], m.objects(mention, NS.oa + 'end')[0]]).toEqual(['12', '23'])
+    expect(m.caret()).toBe(`${EX}p2 24 ${EX}p2 24`)
+    expect(m.app.querySelector('.sem-block-menu')).toBeNull()
+    expect(m.text()).toContain('Second line [Alan Turing](')
+    step('nobody by a name says so', (h) => h.type('@zz'))
+    expect(m.app.querySelector('.sem-block-menu .sem-empty')!.textContent).toBe('No one by that name')
+    step('Escape closes it', (h) => h.press('Escape'))
+    step('undo takes back the "@zz" typed, then the mention in one step', (h) => {
+      h.click('Undo')
+      h.click('Undo')
+    })
+    expect(m.value('p2')).toBe('Second line @al')
+    expect(m.objects('p2', NS.blk + 'mark')).toEqual([])
+  })
+
+  it('does not open where the editor mentions nothing', () => {
+    const h = mount('sparql')
+    h.select('p2', 11)
+    h.type(' @')
+    expect(h.app.querySelector('.sem-block-menu')).toBeNull()
+  })
+})
+
 describe('nesting and moving blocks (c:BlockEditor)', () => {
   const extra = `
 <${EX}p3> <${NS.co}nextItem> <${EX}list> .
