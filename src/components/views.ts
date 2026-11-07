@@ -484,18 +484,19 @@ const streammembers: FnRule = (ctx, focus) => {
 
 /** The element the Turtle printer puts the node's tokens in (turtle.ttl). */
 const triplesview: FnRule = (ctx, focus) => {
-  if (!named(ctx.object(focus, C.of))) return []
+  if (!ctx.objects(focus, C.of).some(named)) return []
   const o = ctx.out(focus)
   o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }))
   return o.quads
 }
 
-/** What a triples view prints: the node at the top of its one section. */
+/** What a triples view prints: each node it is of at the top of its one section. */
 const triplesviewTurtle: FnRule = (ctx, focus) => {
-  const subject = ctx.object(focus, C.of)
-  if (!named(subject)) return []
+  // Every node it is of (an editor's clipboard prints several), each at the top of its one section.
+  const subjects = ctx.objects(focus, C.of).filter(named)
+  if (!subjects.length) return []
   const o = ctx.out(focus)
-  topNode(ctx, o, 0, subject)
+  for (const subject of subjects) topNode(ctx, o, 0, subject)
   section(ctx, o, 0)
   return o.quads
 }

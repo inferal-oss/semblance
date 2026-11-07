@@ -117,7 +117,8 @@ const members: FnRule = (ctx, focus, member) => {
   }
   // On the screen, a handle before it (inside it, ahead of its first part, for a list's item; none
   // for a table's rows and cells or a layout's columns), carrying it.
-  const fixed = [BLK.Row, BLK.Cell, NS.blk + 'Column'].some((c) => isA(ctx, member, c))
+  // None in a copy on an editor's clipboard (block-editor.ttl), which is never edited.
+  const fixed = [BLK.Row, BLK.Cell, NS.blk + 'Column'].some((c) => isA(ctx, member, c)) || onClipboard(ctx, focus)
   const item = isA(ctx, member, BLK.Item)
   const handleOf = (b: Term) => o.node('handle-' + encodeForUri(b.value))
   if (!fixed) {
@@ -128,6 +129,27 @@ const members: FnRule = (ctx, focus, member) => {
   }
   if (sibling) o.t(member, ORD.immediatelyPrecedes, fixed || item ? sibling : handleOf(sibling))
   return o.quads
+}
+
+/** Whether a block is in an editor's clipboard document, or is it (`?e c:clipboard ?d . ?d po:contains* $this`). */
+function onClipboard(ctx: RuleContext, block: Term): boolean {
+  for (let b: Term | undefined = block, hops = 0; b && hops < 256; b = parentOf(ctx, b), hops++) if (ctx.match(null, NS.c + 'clipboard', b).length) return true
+  return false
+}
+
+/** The nodes of an editor's clipboard document: the document, its blocks and their marks. */
+function clipboardNodes(ctx: RuleContext, doc: Term): Term[] {
+  const out: Term[] = []
+  const todo = [doc]
+  const seen = new Set<string>()
+  while (todo.length) {
+    const n = todo.pop()!
+    if (seen.has(n.value)) continue
+    seen.add(n.value)
+    out.push(n, ...ctx.objects(n, NS.blk + 'mark'))
+    todo.push(...ctx.objects(n, PO.contains))
+  }
+  return out
 }
 
 /** What to call a block's type: the label of its first class (by IRI) that is a block's. */
@@ -189,7 +211,8 @@ const handleMenu: FnRule = (ctx, focus) => {
 
 /** A container takes blocks dragged by their handles, into the region its blocks are in, ordered by the chain. */
 const dropZone: FnRule = (ctx, focus) => {
-  if (isA(ctx, focus, BLK.Table)) return []
+  // None in a copy on an editor's clipboard (block-editor.ttl), which nothing is dropped on.
+  if (isA(ctx, focus, BLK.Table) || onClipboard(ctx, focus)) return []
   const o = ctx.out(focus)
   o.t(focus, DND.members, ctx.nn(PO.contains)).t(focus, DND.orderBy, ctx.nn(CO.nextItem))
   // A text block's: its children region, shown once it holds blocks (never its whole root, its text).
@@ -807,6 +830,19 @@ const toolbar: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** What was copied last, out of sight before the editor's body, with its Turtle. */
+const clipboard: FnRule = (ctx, focus) => {
+  const doc = ctx.object(focus, NS.c + 'clipboard')
+  if (!named(doc)) return []
+  const o = ctx.out(focus)
+  const turtle = o.node('clipboard-turtle')
+  o.t(turtle, RDF_TYPE, ctx.nn(NS.c + 'TriplesView'))
+  for (const n of clipboardNodes(ctx, doc)) o.t(turtle, C.of, n)
+  const box = o.el('clipboard', 'Div', { class: 'sem-clipboard', 'aria-hidden': 'true' }, [doc as NamedNode, turtle])
+  o.t(o.node('root'), H.hasChild, box).t(box, ORD.precedes, o.node('body'))
+  return o.quads
+}
+
 /** A block with an address: a field for it, after what the block shows. */
 const addressField: FnRule = (ctx, focus) => {
   const property = nearest(ctx, focus, NS.blk + 'address')
@@ -969,6 +1005,7 @@ export const functions: Record<string, FnRule> = {
   'blk:editor': editor,
   'blk:atom': atom,
   'blk:toolbar': toolbar,
+  'blk:clipboard': clipboard,
   'blk:address-field': addressField,
   'blk:entered': entered,
   'blk:handle': handle,

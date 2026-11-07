@@ -1,8 +1,9 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
-import { BEH, EVENTS_GRAPH, KEY, LDES, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { BEH, EVENTS_GRAPH, KEY, LDES, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration, quadKey } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
 import { type DomRenderer, type ElementPlace, takeFocus } from '../render/dom.ts'
+import { toHTML, toText } from '../render/serialize.ts'
 import type { Projection, Runtime } from '../runtime.ts'
 import { comboOf, mirrored, modifiersOf, navigate, normalizeShortcut, rightToLeft, rove, trapTab } from '../layers/keyboard.ts'
 import { storeFailure } from '../store/types.ts'
@@ -10,7 +11,7 @@ import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
 import { type Clock, systemClock } from './clock.ts'
-import { before, holderOf, holderText, placeSelection, rangeOf, regionOf, selectionIn, type TextPoint } from './text.ts'
+import { before, componentsWithin, holderOf, holderText, placeSelection, rangeOf, regionOf, selectionIn, type TextPoint } from './text.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 /** Distinguishes event IRIs across page loads sharing a store snapshot. */
@@ -625,6 +626,7 @@ export class EventBus {
           // A key or a right click a reaction used is not also the browser's (its shortcut, its context menu).
           if (combo !== undefined || e.type === 'contextmenu') e.preventDefault(), consumed.add(e)
           onHandled(handled)
+          if (region && (e.type === 'copy' || e.type === 'cut')) this.writeClipboard(e as ClipboardEvent, renderer, focus)
           this.placeCaret(renderer, focus)
           this.placeText(renderer, focus)
           this.placeFocus(renderer, focus, before)
@@ -907,6 +909,8 @@ export class EventBus {
       point('start', range.start)
       point('end', range.end)
       for (const c of range.covers) about.push([NS.beh + 'covers', f.namedNode(c)])
+      // A copy or a cut also names every block wholly inside the range, text or not (what it takes).
+      if (e.type === 'copy' || e.type === 'cut') for (const c of componentsWithin(region, range)) about.push([NS.beh + 'within', f.namedNode(c)])
     }
     if (sel) {
       point('anchor', sel.anchor)
@@ -914,6 +918,32 @@ export class EventBus {
     }
     return { about, numbers, text }
   }
+
+  /**
+   * A copy or a cut a component with a rich text region handled: the clipboard is written from what it
+   * copied (its c:clipboard document, docs/BLOCKS.md) - the document's HTML as the screen renders it,
+   * its Text modality (Markdown) and its Turtle (<component>/~clipboard-turtle).
+   */
+  private writeClipboard(e: ClipboardEvent, renderer: DomRenderer, focus: string) {
+    const data = e.clipboardData
+    const doc = this.runtime.store.match(this.f.namedNode(focus), this.f.namedNode(NS.c + 'clipboard'), null, this.f.defaultGraph())[0]?.object
+    if (!data || !doc) return
+    const markdown = toText(this.textOf(doc.value).index, doc.value)
+    data.setData('text/html', toHTML(renderer.index, doc.value))
+    data.setData('text/plain', markdown)
+    data.setData('text/markdown', markdown)
+    data.setData('text/turtle', toText(renderer.index, focus + MINT_SEPARATOR + 'clipboard-turtle'))
+    e.preventDefault()
+  }
+
+  /** A Text-modality projection of a clipboard document (one per document, kept). */
+  private textOf(root: string): Projection {
+    let p = this.clipboardTexts.get(root)
+    if (!p) this.clipboardTexts.set(root, (p = this.runtime.project({ modality: MOD.Text, layers: [], prefer: this.opts.prefer, name: `clipboard-${this.clipboardTexts.size}`, roots: [root] })))
+    return p
+  }
+
+  private readonly clipboardTexts = new Map<string, Projection>()
 
   /** Whether one text holder of a region comes before another in document order. */
   private precedes(region: Element, a: string, b: string): boolean {
