@@ -318,13 +318,16 @@ export class EventBus {
     // the change and raised once this event is applied and recorded.
     const raised = delta.add.filter((q) => q.predicate.value === BEH.raise && q.subject.termType === 'NamedNode' && q.object.termType === 'NamedNode')
     if (raised.length) delta.add = delta.add.filter((q) => q.predicate.value !== BEH.raise)
+    // So is saying the event continues an earlier step (`$event beh:continues ?member`): its change is recorded there.
+    const continues = delta.add.find((q) => q.predicate.value === BEH.continues && q.subject.equals(event) && q.object.termType === 'NamedNode')?.object as NamedNode | undefined
+    if (delta.add.some((q) => q.predicate.value === BEH.continues)) delta.add = delta.add.filter((q) => q.predicate.value !== BEH.continues)
     if (!delta.add.length && !delta.remove.length && !raised.length) {
       forget()
       return { recorded: false, event, type, target: nn(target), reactions: [], delta }
     }
     // A raised event's change is part of the change that raised it: one step to undo.
     const raisedBy = detail.about?.find(([p]) => p === BEH.raisedBy)?.[1] as NamedNode | undefined
-    const handled = this.record(type, target, event, quads, delta, reactions, forget, undoable, raisedBy)
+    const handled = this.record(type, target, event, quads, delta, reactions, forget, undoable, raisedBy, continues)
     this.raise(raised, event)
     return handled
   }
@@ -352,7 +355,7 @@ export class EventBus {
   }
 
   /** Apply an event's change and append it to the change log, as one tick. */
-  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode): Handled {
+  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode, continues?: NamedNode): Handled {
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
     // The state change and the member that records it are one tick: views over the log and
@@ -370,7 +373,7 @@ export class EventBus {
       const int = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
       const remove = this.expired()
       const head = this.runtime.store.match(this.stream, nn(BEH.latest), null, this.graph)
-      const change = this.statements(event, applied, undoable, raisedBy)
+      const change = this.statements(event, applied, undoable, raisedBy, continues)
       // Written for the reactions to read; written again here, so the tick's change says so (views read it).
       forget()
       this.runtime.log({
@@ -393,17 +396,22 @@ export class EventBus {
   /**
    * The effective change of an event's undoable reactions, as rdf:Statement nodes minted under its
    * member - or, for a raised event, under the member that raised it -: beh:asserted (added),
-   * beh:retracted (removed). Only what actually changed is recorded.
+   * beh:retracted (removed). Only what actually changed is recorded. An event that continues an earlier
+   * member (beh:continues) records its change on that member, and says so (beh:continued).
    */
-  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode): Delta {
+  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode, continues?: NamedNode): Delta {
     if (!undoable.add.size && !undoable.remove.size) return { add: [], remove: [] }
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
     const store = this.runtime.store
-    // A raised event's change goes on the member that raised it (when it recorded one), as its own
-    // statements; one that takes back what that member changed cancels its statement instead.
-    const owner = raisedBy && store.match(raisedBy, nn(BEH.asserted), null, this.graph).length + store.match(raisedBy, nn(BEH.retracted), null, this.graph).length ? raisedBy : event
-    const out: Quad[] = []
+    const changed = (m: NamedNode) => store.match(m, nn(BEH.asserted), null, this.graph).length + store.match(m, nn(BEH.retracted), null, this.graph).length > 0
+    const undone = (m: NamedNode) => store.match(this.stream, nn(BEH.undone), m, this.graph).length > 0
+    // A raised event's change goes on the member that raised it (when it recorded one) - or on the one
+    // that member continued -, as its own statements; one that takes back what that member changed
+    // cancels its statement instead. So does a continuing event's, on the member it continues.
+    const raiser = raisedBy && ((store.match(raisedBy, nn(BEH.continued), null, this.graph)[0]?.object as NamedNode | undefined) ?? raisedBy)
+    const owner = raiser && changed(raiser) ? raiser : continues && changed(continues) && !undone(continues) ? continues : event
+    const out: Quad[] = owner === continues ? [f.quad(event, nn(BEH.continued), owner)] : []
     const cancelled: Quad[] = []
     const recorded = (p: string, q: Quad) =>
       store
@@ -412,9 +420,12 @@ export class EventBus {
         .find((st) => [['subject', q.subject], ['predicate', q.predicate], ['object', q.object]].every(([k, t]) => store.match(st as NamedNode, nn(NS.rdf + k), t as Term, this.graph).length))
     let i = 0
     const tag = owner === event ? '' : `${event.value.replace(/^.*[:/]/, '')}-`
+    // A triple removed and stated again (a mark's start that stayed where it was) is no change.
+    const added = new Set(applied.add.map(quadKey))
+    const kept = new Set(applied.remove.map(quadKey).filter((k) => added.has(k)))
     for (const [p, qs, keep, opposite] of [[BEH.asserted, applied.add, undoable.add, BEH.retracted], [BEH.retracted, applied.remove, undoable.remove, BEH.asserted]] as const) {
       for (const q of qs) {
-        if (!keep.has(quadKey(q))) continue
+        if (!keep.has(quadKey(q)) || kept.has(quadKey(q))) continue
         const back = owner === event ? undefined : recorded(opposite, q)
         if (back) {
           cancelled.push(...store.match(owner, nn(opposite), back, this.graph), ...store.match(back as NamedNode, null, null, this.graph))

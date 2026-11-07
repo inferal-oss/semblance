@@ -398,6 +398,8 @@ export const BEH = {
   Click: beh + 'Click',
   raise: beh + 'raise',
   raisedBy: beh + 'raisedBy',
+  continues: beh + 'continues',
+  continued: beh + 'continued',
 } as const
 
 export const A11Y = { Layer: NS.a11y + 'Layer' } as const
