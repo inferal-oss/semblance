@@ -113,6 +113,13 @@ the replacement as one backslash; Oxigraph keeps both), `PT1H < P1M` is an
 error (XPath orders only durations of one kind; Oxigraph says true), and a
 duration times a number, a date plus a dayTimeDuration and a time plus a
 duration have values (Oxigraph gives none).
+`isNumeric` is true for an integer past 64 bits (`"99999999999999999999"`) and a
+decimal with more than 18 fractional digits (`"0.1234567890123456789"`): XSD
+sets no limit, and Oxigraph, which keeps them in an `i64` and a decimal of 18
+fractional digits, says false (and casts the lexical form as it is). Cast to
+`xsd:string`, such a number keeps every digit of its whole part, and a
+decimal's fraction is cut at 18 digits (`"0.123456789012345678"`). Rust's decimal has room for
+about 20 whole digits, so a longer one cannot be cast there (`wat` writes it).
 
 ## Rules for a fair comparison
 

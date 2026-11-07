@@ -773,6 +773,42 @@
 
 ;; --- casts -----------------------------------------------------------------------
 
+;; The canonical text of a valid integer or decimal lexical form [p, p+n),
+;; written from its digits, since $parse_num keeps only 18 of them: no "+", no
+;; leading zeros, the fraction cut at 18 digits (a decimal's precision, as on
+;; Oxigraph) without trailing zeros or a bare point, "-0" as "0".
+(func $num_text (param $p i32) (param $n i32) (result i32)
+  (local $e i32) (local $neg i32) (local $dot i32) (local $fe i32) (local $len i32) (local $buf i32) (local $w i32) (local $r i32) (local $c i32)
+  (local.set $e (i32.add (local.get $p) (local.get $n)))
+  (if (i32.lt_u (local.get $p) (local.get $e)) (then
+    (local.set $c (i32.load8_u (local.get $p)))
+    (if (i32.or (i32.eq (local.get $c) (i32.const '+')) (i32.eq (local.get $c) (i32.const '-'))) (then
+      (local.set $neg (i32.eq (local.get $c) (i32.const '-')))
+      (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
+  (loop $zeros (if (i32.and (i32.lt_u (local.get $p) (local.get $e)) (i32.eq (i32.load8_u (local.get $p)) (i32.const '0'))) (then
+    (local.set $p (i32.add (local.get $p) (i32.const 1))) (br $zeros))))
+  (local.set $dot (local.get $p))
+  (loop $whole (if (i32.and (i32.lt_u (local.get $dot) (local.get $e)) (i32.ne (i32.load8_u (local.get $dot)) (i32.const '.'))) (then
+    (local.set $dot (i32.add (local.get $dot) (i32.const 1))) (br $whole))))
+  ;; the fraction: at most 18 digits, then without trailing zeros (and its point when none is left)
+  (local.set $fe (select (local.get $e) (i32.add (local.get $dot) (i32.const 19)) (i32.lt_u (i32.sub (local.get $e) (local.get $dot)) (i32.const 19))))
+  (if (i32.lt_u (local.get $dot) (local.get $e)) (then
+    (loop $trail (if (i32.and (i32.gt_u (local.get $fe) (i32.add (local.get $dot) (i32.const 1))) (i32.eq (i32.load8_u (i32.sub (local.get $fe) (i32.const 1))) (i32.const '0'))) (then
+      (local.set $fe (i32.sub (local.get $fe) (i32.const 1))) (br $trail))))
+    (if (i32.eq (local.get $fe) (i32.add (local.get $dot) (i32.const 1))) (then (local.set $fe (local.get $dot))))))
+  (if (i32.eq (local.get $p) (local.get $fe)) (then (return (call $simple (@str "0")))))
+  ;; "-", a "0" before a point, the digits
+  (local.set $len (i32.add (i32.sub (local.get $fe) (local.get $p)) (i32.const 2)))
+  (local.set $buf (select (global.get $nbuf) (call $alloc (local.get $len)) (i32.le_u (local.get $len) (i32.const 400))))
+  (local.set $w (local.get $buf))
+  (if (local.get $neg) (then (i32.store8 (local.get $w) (i32.const '-')) (local.set $w (i32.add (local.get $w) (i32.const 1)))))
+  (if (i32.eq (local.get $p) (local.get $dot)) (then (i32.store8 (local.get $w) (i32.const '0')) (local.set $w (i32.add (local.get $w) (i32.const 1)))))
+  (memory.copy (local.get $w) (local.get $p) (i32.sub (local.get $fe) (local.get $p)))
+  (local.set $w (i32.add (local.get $w) (i32.sub (local.get $fe) (local.get $p))))
+  (local.set $r (call $simple (local.get $buf) (i32.sub (local.get $w) (local.get $buf))))
+  (if (i32.ne (local.get $buf) (global.get $nbuf)) (then (call $free (local.get $buf) (local.get $len))))
+  (local.get $r))
+
 (func $cast (param $v i32) (param $dt i32) (result i32)
   (local $tc i32) (local $k i32) (local $t i32) (local $p i32) (local $n i32) (local $b i32) (local $sc i32) (local $m i64)
   (local.set $tc (call $dtc (local.get $dt)))
@@ -789,6 +825,9 @@
       ;; an ill-formed number ("abc"^^xsd:integer) cannot be cast
       (if (i32.and (i32.le_u (i32.sub (call $dtc (local.get $t)) (i32.const C_INTEGER)) (i32.const 3)) (i32.eqz (call $num (local.get $v))))
         (then (return (i32.const 0))))
+      ;; an integer or decimal from its lexical form, every digit of it kept
+      (if (i32.le_u (i32.sub (call $dtc (local.get $t)) (i32.const C_INTEGER)) (i32.const 1))
+        (then (return (call $num_text (call $tval (local.get $v)) (call $tlen (local.get $v))))))
       (if (i32.or (i32.or (call $tkind (local.get $t)) (i32.eq (call $dtc (local.get $t)) (i32.const C_BOOLEAN))) (call $num (local.get $v))) (then
         ;; an ill-formed one ("maybe"^^xsd:boolean) cannot be cast
         (if (i32.eqz (local.tee $v (call $cast (local.get $v) (local.get $t)))) (then (return (i32.const 0))))))))

@@ -18,6 +18,19 @@ const CASES: [string, string | undefined][] = [
   ['xsd:string("+1.50"^^xsd:decimal)', '1.5^^string'],
   ['xsd:string("01"^^xsd:integer)', '1^^string'],
   ['xsd:string("+5"^^xsd:int)', '5^^string'],
+  // past the 18 digits a number is computed with, every digit of the whole part is kept,
+  // and a decimal's fraction is cut at 18 (#357)
+  ['xsd:string("123456789012345678.50"^^xsd:decimal)', '123456789012345678.5^^string'],
+  ['xsd:string("1234567890123456789.50"^^xsd:decimal)', '1234567890123456789.5^^string'],
+  ['xsd:string("-000100000000000000000000.000"^^xsd:decimal)', '-100000000000000000000^^string'],
+  ['xsd:string("99999999999999999999"^^xsd:integer)', '99999999999999999999^^string'],
+  ['xsd:string("+00012345678901234567890"^^xsd:long)', '12345678901234567890^^string'],
+  ['xsd:string("0.1234567890123456789"^^xsd:decimal)', '0.123456789012345678^^string'],
+  ['xsd:string("-0.00000000000000000010"^^xsd:decimal)', '0^^string'],
+  ['xsd:string("-0.0"^^xsd:decimal)', '0^^string'],
+  ['xsd:string(".5"^^xsd:decimal)', '0.5^^string'],
+  ['xsd:string("1."^^xsd:decimal)', '1^^string'],
+  ['xsd:string("-0"^^xsd:integer)', '0^^string'],
   ['xsd:string("1.0E0"^^xsd:double)', '1^^string'],
   ['xsd:string("1e7"^^xsd:double)', '10000000^^string'],
   ['xsd:string("-0"^^xsd:double)', '-0^^string'],
@@ -53,6 +66,16 @@ describe.skipIf(!built.length).each(built)('%s engine: numbers and casts to stri
     if (r.kind !== 'bindings') throw new Error('expected bindings')
     const v = r.rows[0]?.get('x') as { v: string; dt?: string } | undefined
     expect(v ? `${v.v}^^${(v.dt ?? '').replace(/.*#/, '')}` : undefined).toBe(want)
+  })
+
+  // Rust's integers and decimals have fixed widths; wat writes any length from the lexical form
+  it.skipIf(kind !== 'wat')('casts a 500-digit integer and a 30-digit decimal to string whole', () => {
+    for (const [lit, want] of [[`-000${'9'.repeat(500)}`, `-${'9'.repeat(500)}`], ['123456789012345678901234567890.50', '123456789012345678901234567890.5']]) {
+      const q = `SELECT ?x { BIND(STR(<http://www.w3.org/2001/XMLSchema#string>("${lit}"^^<http://www.w3.org/2001/XMLSchema#${lit.includes('.') ? 'decimal' : 'integer'}>)) AS ?x) }`
+      const r = target.query({ default: [], named: [] }, q, 'http://example/')
+      if (r.kind !== 'bindings') throw new Error('expected bindings')
+      expect((r.rows[0]?.get('x') as { v: string } | undefined)?.v).toBe(want)
+    }
   })
 
   // Reading a double rounds once, to the nearest (ties to even), as Number() does (#159): the
