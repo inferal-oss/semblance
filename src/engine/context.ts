@@ -56,8 +56,12 @@ export interface RuleContext {
   untraced<T>(read: () => T): T
   /** Record that what is being computed depends on the viewer's languages (see util.text). */
   readsLanguage(): void
-  /** The viewer's languages, most preferred first (the localization layer sets them). */
-  languages: string[]
+  /**
+   * The viewer's languages, most preferred first (the localization layer sets them). Reading
+   * them is a read of the language (readsLanguage): a rule that returns early because there are
+   * none is re-run when the viewer gets one (#259).
+   */
+  readonly languages: string[]
   /** Per-engine memo, e.g. for ontology lookups that never change during a run. */
   memo<T>(key: string, compute: () => T): T
   out(focus: NamedNode): Out
@@ -172,10 +176,14 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     else if (ctx.trace) ctx.opaque = true
     return text
   }
+  const chain = languageChain(languages)
   const ctx: RuleContext = {
     f,
     modality,
-    languages: languageChain(languages),
+    get languages() {
+      ctx.readsLanguage()
+      return chain
+    },
     nn,
     match,
     object: (s, p) => match(s, p, null)[0]?.object,
