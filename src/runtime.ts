@@ -334,6 +334,7 @@ export class Runtime {
     })
     const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase())
     engine.watchdog = this.watchdog
+    engine.arriving = this.isArriving
     engine.onChange((d) => index.apply(d))
     // A view that reads what rules derive (iv:reads <rendering>) reads the first projection's.
     if (!this.projections.length) {
@@ -537,6 +538,22 @@ export class Runtime {
   load(turtle: string): Delta {
     return this.apply({ add: parseTurtle(turtle, this.store.factory), remove: [] })
   }
+
+  /**
+   * An addition is arriving in slices (sliceAddition), from before its first to after its last: what
+   * is due over the whole graph (sem:watchesManyValued) is evaluated once, when it has all arrived,
+   * not again at each slice. A change applied meanwhile is taken in as usual.
+   */
+  arriving(on: boolean): void {
+    this.isArriving = on
+    for (const p of this.projections) p.engine.arriving = on
+    if (on) return
+    this.watchdog.turn(() => {
+      for (const p of this.projections) p.engine.process({ add: [], remove: [] }), settle(p)
+      this.resumeViews()
+    })
+  }
+  private isArriving = false
 
   /** Apply a change to the input graph (default graph) and update every projection. */
   apply(delta: Delta): Delta {

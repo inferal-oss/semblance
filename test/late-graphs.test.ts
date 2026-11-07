@@ -6,6 +6,7 @@ import { mountSite, mountSiteWithout } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const SET = 'https://semblance.dev/demo/settings#'
+const L10N = 'https://semblance.dev/ns/l10n#'
 
 type Site = ReturnType<typeof mountSite>
 
@@ -65,6 +66,54 @@ describe('a graph loaded after start', () => {
       expect(draft(late)).toEqual(draft(all))
       expect(html(late)).toBe(html(all))
       expect(derived(late)).toEqual(derived(all))
+    })
+  }
+
+  // l10n:Terms reads every translated text in the graph: it hears a text with two values or more,
+  // a graph that brings one included, and nothing else; slices evaluate it once (#355).
+  for (const prefer of ['sparql', 'function'] as const) {
+    it(`a text with translations reaches the viewer's language however it arrives (WAT, ${prefer} preferred)`, () => {
+      const h = mountSite('wat', prefer)
+      const f = h.store.factory
+      const shape = f.namedNode(UI + 'lateShape')
+      const message = f.namedNode('http://www.w3.org/ns/shacl#message')
+      const say = (text: string, language?: string, node = shape) => f.quad(node, message, language ? f.literal(text, language) : f.literal(text))
+      const twin = (node = shape) => {
+        const at = h.store.match(null, f.namedNode(L10N + 'of'), node, h.screen.engine.graph)
+        return at.flatMap((q) => h.store.match(q.subject, f.namedNode(L10N + 'message'), null, h.screen.engine.graph)).map((q) => q.object.value)
+      }
+      const runs = () => h.screen.engine.stats.byRule.get(`${L10N}Terms-${prefer === 'sparql' ? 'sparql' : 'fn'}`)!.runs
+      const start = runs()
+      // One value, replaced: nothing to pick, and no evaluation over the whole graph.
+      h.runtime.apply({ add: [say('Once')], remove: [] })
+      h.runtime.apply({ add: [say('Replaced')], remove: [say('Once')] })
+      expect(runs()).toBe(start)
+      expect(twin()).toEqual([])
+      // A second value: it is picked; the viewer's value wins over another's.
+      h.runtime.apply({ add: [say('Einmal', 'de')], remove: [] })
+      expect(twin()).toEqual(['Replaced'])
+      // Replaced, with two values before and after.
+      h.runtime.apply({ add: [say('Again')], remove: [say('Replaced')] })
+      expect(twin()).toEqual(['Again'])
+      // Back to one value: the twin goes.
+      h.runtime.apply({ add: [], remove: [say('Einmal', 'de')] })
+      expect(twin()).toEqual([])
+      // Slices: nothing until the last, then once for them all.
+      const [first, second] = [f.namedNode(UI + 'lateShape1'), f.namedNode(UI + 'lateShape2')]
+      const before = runs()
+      h.runtime.arriving(true)
+      h.runtime.apply({ add: [say('First', undefined, first), say('Erste', 'de', first)], remove: [] })
+      h.runtime.apply({ add: [say('Second', undefined, second), say('Друге', 'uk', second)], remove: [] })
+      expect(runs()).toBe(before)
+      expect(twin(first)).toEqual([])
+      h.runtime.arriving(false)
+      expect(runs()).toBe(before + 1)
+      expect(twin(first)).toEqual(['First'])
+      expect(twin(second)).toEqual(['Second'])
+      // Nothing arrived: nothing to do.
+      h.runtime.arriving(true)
+      h.runtime.arriving(false)
+      expect(runs()).toBe(before + 1)
     })
   }
 

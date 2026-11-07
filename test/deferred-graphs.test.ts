@@ -69,9 +69,11 @@ async function restOf(site: Site, c: Awaited<ReturnType<typeof takenOver>>) {
 /** All of the rest: what defines rules, then slices. */
 async function loadRest(site: Site, c: Awaited<ReturnType<typeof takenOver>>) {
   const { rules, rest } = await restOf(site, c)
+  c.runtime.arriving(true)
   c.runtime.apply({ add: rules, remove: [] })
   c.renderer.flush()
   for (const slice of rest) c.runtime.apply({ add: slice, remove: [] })
+  c.runtime.arriving(false)
   c.renderer.flush()
 }
 
@@ -133,6 +135,7 @@ describe('a page reached by a click after the deferred graphs', () => {
       const c = await takenOver(site, '/components/themes/')
       const { rules, rest } = await restOf(site, c)
       if (at === -1) follow(c, to.client)
+      c.runtime.arriving(true)
       c.runtime.apply({ add: rules, remove: [] })
       c.renderer.flush()
       rest.forEach((slice, i) => {
@@ -141,6 +144,9 @@ describe('a page reached by a click after the deferred graphs', () => {
         c.renderer.flush()
         expect(c.errors, `click at ${at}, slice ${i}`).toEqual([])
       })
+      c.runtime.arriving(false)
+      c.renderer.flush()
+      expect(c.errors, `click at ${at}, when all had arrived`).toEqual([])
       const [got, want] = [walkthroughs(c.host).join(), to.walks.join()]
       let i = 0
       while (i < got.length && got[i] === want[i]) i++
@@ -148,6 +154,18 @@ describe('a page reached by a click after the deferred graphs', () => {
       c.runtime.dispose()
     }
   }, 300_000)
+
+  // l10n:Labels is evaluated for every component, shown or not: a translated label on another page
+  // is no reason to load that page's graph first (#355).
+  it('a page does not need the graph of a page it does not show, for a label in its languages', async () => {
+    const url = '/components/themes/'
+    const server = await renderSite(site, url)
+    const only = await pageGraphs(site, url, server.html, { base: '/' })
+    server.runtime.dispose()
+    expect(only).toBeDefined()
+    expect(only).not.toContain('demo/gallery/_ex-checkout.ttl')
+    expect(only).not.toContain('demo/gallery/_ex-budget.ttl')
+  }, 60_000)
 
   it('from /: every page with a walkthrough', async () => {
     const c = await takenOver(site, '/')
