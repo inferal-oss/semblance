@@ -20,7 +20,9 @@
 # invalid. The layer runs before the components (stratum -10), so they render
 # its conclusions like any other input. Supported: sh:minCount (required),
 # sh:minLength, sh:maxLength, sh:pattern (+ sh:flags), sh:minInclusive,
-# sh:maxInclusive, sh:datatype (xsd:integer / xsd:decimal), sh:in.
+# sh:maxInclusive, sh:datatype (xsd:integer / xsd:decimal: the text must be in that datatype's
+# lexical form, so 1e3, which a browser's number input allows, is not one; .5 and 5. are decimals),
+# sh:in.
 #
 # A field that edits a property of another node (c:controls, c:property: a
 # combobox, a tag input) is checked by the values that node has: sh:minCount
@@ -105,7 +107,7 @@ WHERE {
          IF(BOUND(?minLengthp) && STRLEN(?value) < xsd:double(?minLengthp), COALESCE(?messagep, CONCAT("At least ", STR(?minLengthp), " characters.")),
          IF(BOUND(?maxLengthp) && STRLEN(?value) > xsd:double(?maxLengthp), COALESCE(?messagep, CONCAT("At most ", STR(?maxLengthp), " characters.")),
          IF(BOUND(?patternp) && !REGEX(?value, STR(?patternp), COALESCE(STR(?flagsp), "")), COALESCE(?messagep, "Does not match the expected format."),
-         IF(COALESCE(?numericp, false) && (REPLACE(?value, "^\\\\s+|\\\\s+$", "") = "" || !BOUND(?xp) || (?datatypep = xsd:integer && ?xp != FLOOR(?xp))),
+         IF(COALESCE(?numericp, false) && (!BOUND(?xp) || !REGEX(?value, IF(?datatypep = xsd:integer, "^\\\\s*[-+]?[0-9]+\\\\s*$", "^\\\\s*[-+]?([0-9]+([.][0-9]*)?|[.][0-9]+)\\\\s*$"))),
             COALESCE(?messagep, IF(?datatypep = xsd:integer, "A whole number.", "A number.")),
          IF(BOUND(?minp) && !COALESCE(?xp >= xsd:double(?minp), false), COALESCE(?messagep, CONCAT("At least ", STR(?minp), ".")),
          IF(BOUND(?maxp) && !COALESCE(?xp <= xsd:double(?maxp), false), COALESCE(?messagep, CONCAT("At most ", STR(?maxp), ".")),
@@ -167,7 +169,7 @@ WHERE {
          IF(BOUND(?minLengthe) && STRLEN(?typed) < xsd:double(?minLengthe), COALESCE(?messagee, CONCAT("At least ", STR(?minLengthe), " characters.")),
          IF(BOUND(?maxLengthe) && STRLEN(?typed) > xsd:double(?maxLengthe), COALESCE(?messagee, CONCAT("At most ", STR(?maxLengthe), " characters.")),
          IF(BOUND(?patterne) && !REGEX(?typed, STR(?patterne), COALESCE(STR(?flagse), "")), COALESCE(?messagee, "Does not match the expected format."),
-         IF(COALESCE(?numerice, false) && (REPLACE(?typed, "^\\\\s+|\\\\s+$", "") = "" || !BOUND(?xe) || (?datatypee = xsd:integer && ?xe != FLOOR(?xe))),
+         IF(COALESCE(?numerice, false) && (!BOUND(?xe) || !REGEX(?typed, IF(?datatypee = xsd:integer, "^\\\\s*[-+]?[0-9]+\\\\s*$", "^\\\\s*[-+]?([0-9]+([.][0-9]*)?|[.][0-9]+)\\\\s*$"))),
             COALESCE(?messagee, IF(?datatypee = xsd:integer, "A whole number.", "A number.")),
          IF(BOUND(?mine) && !COALESCE(?xe >= xsd:double(?mine), false), COALESCE(?messagee, CONCAT("At least ", STR(?mine), ".")),
          IF(BOUND(?maxe) && !COALESCE(?xe <= xsd:double(?maxe), false), COALESCE(?messagee, CONCAT("At most ", STR(?maxe), ".")),

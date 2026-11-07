@@ -4,8 +4,8 @@ import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 
-function showLayers() {
-  const h = mountShell()
+function showLayers(prefer: 'sparql' | 'function' = 'sparql') {
+  const h = mountShell(5, 'oxigraph', prefer)
   const f = h.store.factory
   const app = f.namedNode(UI + 'app')
   h.showPage('Components')
@@ -18,8 +18,8 @@ function showLayers() {
 }
 
 describe('validation layer', () => {
-  it('derives errors from SHACL shapes and gates the submit button', () => {
-    const h = showLayers()
+  it.each(['sparql', 'function'] as const)('derives errors from SHACL shapes and gates the submit button (%s)', (prefer) => {
+    const h = showLayers(prefer)
     const input = (field: string) => h.byId(`${UI}${field}/~input`) as HTMLInputElement
     const submit = h.byId(`${UI}signupSubmit/~root`) as HTMLButtonElement
     const type = (field: string, value: string) => {
@@ -40,6 +40,14 @@ describe('validation layer', () => {
     type('signupAge', '12')
     expect(h.byId(`${UI}signupAge/~root`).textContent).toContain('13 to 120')
     expect(submit.hasAttribute('disabled')).toBe(true)
+    // In bounds, but not the lexical form of an xsd:integer, though a browser's number input allows them.
+    for (const text of ['1e2', '36.0', '0x24']) {
+      type('signupAge', text)
+      expect(input('signupAge').getAttribute('aria-invalid'), text).toBe('true')
+      expect(submit.hasAttribute('disabled'), text).toBe(true)
+    }
+    type('signupAge', ' +36 ')
+    expect(submit.hasAttribute('disabled')).toBe(false)
     type('signupAge', '36')
     expect(submit.hasAttribute('disabled')).toBe(false)
   })

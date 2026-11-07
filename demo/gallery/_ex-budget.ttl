@@ -54,9 +54,13 @@ bud:power a bud:Entry ; bud:category bud:Utilities ; dcterms:description "Power 
 bud:books a bud:Entry ; bud:category bud:Leisure ; dcterms:description "Books and concerts" ; bud:amount 120.00 .
 
 # What an amount must be: the validation layer checks each field against this shape and shows
-# its message (and aria-invalid) while the text is not a non-negative number.
-bud:AmountShape a sh:PropertyShape ; sh:path bud:amount ; sh:datatype xsd:decimal ; sh:minInclusive 0 ;
-    sh:message "An amount of zero or more, like 86 or 120.50." .
+# its message (and aria-invalid) while the text is not a non-negative number. An emptied field is
+# not an amount either (sh:minCount). bud:EditAmount reads the pattern, so what the field accepts
+# and what reaches the figures cannot differ.
+bud:AmountShape a sh:PropertyShape ; sh:path bud:amount ; sh:minCount 1 ; sh:datatype xsd:decimal ; sh:minInclusive 0 ;
+    sh:pattern "^ *([0-9]+([.][0-9]*)?|[.][0-9]+) *$" ;
+    sh:message "An amount of zero or more, like 86 or 120.50." , "Сума, нуль або більше, як-от 86 чи 120.50."@uk ,
+               "Ein Betrag von null oder mehr, etwa 86 oder 120.50."@de , "مبلغ يساوي صفرًا أو أكثر، مثل 86 أو 120.50."@ar .
 
 # --- the formulas: SPARQL SELECTs -----------------------------------------------------------------
 # Each is a sem:View. A Stat takes its figure from one (c:valueQuery: the first row's ?value,
@@ -108,21 +112,22 @@ ORDER BY ?order""" .
 
 # --- the reaction: an edited amount becomes data -------------------------------------------------
 # Each amount field says which entry it edits (bud:edits). Typing in it is a beh:Input event;
-# the field's own reaction keeps the text (c:value), and this one, when the text is a number,
-# writes it to the entry and stamps the sheet. Every view following bud:sheet then re-runs - only
-# while it is shown.
+# the field's own reaction keeps the text (c:value), and this one, when the text is what the
+# field's shape says an amount is, writes it to the entry and stamps the sheet. Every view following
+# bud:sheet then re-runs - only while it is shown. Any other text leaves the last good amount, and
+# the validation layer has the field say so.
 
 bud:EditAmount a beh:Reaction ; beh:when beh:Input ; beh:sourceClass c:TextField ;
     beh:deletes """
 CONSTRUCT { ?entry bud:amount ?old . bud:sheet dcterms:modified ?stamp }
 WHERE {
-  $this bud:edits ?entry . $event beh:value ?text FILTER(REGEX(?text, "^ *[0-9]+([.][0-9]+)? *$"))
+  $this bud:edits ?entry ; val:validates/sh:pattern ?amountForm . $event beh:value ?text FILTER(REGEX(?text, ?amountForm))
   { ?entry bud:amount ?old } UNION { bud:sheet dcterms:modified ?stamp }
 }""" ;
     beh:inserts """
 CONSTRUCT { ?entry bud:amount ?amount . bud:sheet dcterms:modified ?at }
 WHERE {
-  $this bud:edits ?entry . $event beh:value ?text ; beh:at ?at FILTER(REGEX(?text, "^ *[0-9]+([.][0-9]+)? *$"))
+  $this bud:edits ?entry ; val:validates/sh:pattern ?amountForm . $event beh:value ?text ; beh:at ?at FILTER(REGEX(?text, ?amountForm))
   BIND(xsd:decimal(REPLACE(?text, " ", "")) AS ?amount)
 }""" .
 
@@ -234,13 +239,13 @@ ui:ex-budget-w1 a c:WalkthroughStep ; rdfs:label "The month is data" ;
 ui:ex-budget-w2 a c:WalkthroughStep ; rdfs:label "One ordinary field per amount" ;
     c:children ( "Each amount is a " ui:ex-budget-m-TextField ", like " ui:ex-budget-m-field ", that names the entry it edits and validates its text against " ui:ex-budget-m-shape ", a SHACL property shape: the validation layer shows the shape's message while the text is not an amount. The field and its category tag sit in a row, " ui:ex-budget-m-row ", that takes its columns from the sheet's own tracks, " ui:ex-budget-m-columns ", so every row lines up." ) .
 ui:ex-budget-w3 a c:WalkthroughStep ; rdfs:label "Typing becomes data" ;
-    c:children ( "Typing is a beh:Input event. The field's own reaction keeps its text; " ui:ex-budget-m-edit ", a CONSTRUCT pair that serves every field of the sheet, writes the number to the entry the field edits and stamps " ui:ex-budget-m-sheet2 " with the time. Text that is not a number changes nothing but the field." ) .
+    c:children ( "Typing is a beh:Input event. The field's own reaction keeps its text; " ui:ex-budget-m-edit ", a CONSTRUCT pair that serves every field of the sheet, writes the number to the entry the field edits and stamps " ui:ex-budget-m-sheet2 " with the time. It reads what a number looks like from the same shape, " ui:ex-budget-m-shape2 ", so text that is not an amount (nothing, 1e3, -5) changes only the field, and the field says so; the figures keep the last good amount." ) .
 ui:ex-budget-w4 a c:WalkthroughStep ; rdfs:label "Every figure is a query" ;
     c:children ( "The Stats show SELECTs (sem:View s). " ui:ex-budget-m-balance " takes its figure from " ui:ex-budget-m-Balance ": the framework runs it before the components render and writes the first row's ?value as the Stat's value, and ?tone as its tone - that is how the balance turns red below zero. " ui:ex-budget-m-income-stat " and the expenses share one query, " ui:ex-budget-m-total ", each naming the kind it sums; " ui:ex-budget-m-rate " divides." ) .
 ui:ex-budget-w5 a c:WalkthroughStep ; rdfs:label "Tables and charts too" ;
     c:children ( "The category table " ui:ex-budget-m-table " shows the rows of " ui:ex-budget-m-by ", a GROUP BY; the chart " ui:ex-budget-m-chart " draws " ui:ex-budget-m-spending ". Both sit on flippable cards: turn one over to read the query it runs, straight from the graph." ) .
 ui:ex-budget-w6 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
-    c:children ( "Every view names " ui:ex-budget-m-sheet3 " as its dataset (c:dataset), so a view re-runs only when the sheet's stamp changes: a keystroke that is an amount re-runs seven small SELECTs over eight entries, and nothing else. On any other page they are parked, and an edit costs no query at all." ) .
+    c:children ( "Every view names " ui:ex-budget-m-sheet3 " as its dataset (c:dataset), so a view re-runs only when the sheet's stamp changes: a keystroke that makes an amount re-runs seven small SELECTs over eight entries, and nothing else. On any other page they are parked, and an edit costs no query at all." ) .
 
 ui:ex-budget-m-sheet a c:Mention ; c:label "bud:sheet" ; c:mentions bud:sheet .
 ui:ex-budget-m-sheet2 a c:Mention ; c:label "the sheet" ; c:mentions bud:sheet .
@@ -254,6 +259,7 @@ ui:ex-budget-m-salary a c:Mention ; c:label "bud:Salary" ; c:mentions bud:Salary
 ui:ex-budget-m-TextField a c:Mention ; c:label "c:TextField" ; c:mentions c:TextField ; c:to c:TextField .
 ui:ex-budget-m-field a c:Mention ; c:label "the rent field" ; c:mentions ui:ex-budget-f-rent .
 ui:ex-budget-m-shape a c:Mention ; c:label "bud:AmountShape" ; c:mentions bud:AmountShape .
+ui:ex-budget-m-shape2 a c:Mention ; c:label "bud:AmountShape" ; c:mentions bud:AmountShape .
 ui:ex-budget-m-row a c:Mention ; c:label "a subgrid" ; c:mentions ui:ex-budget-r-rent .
 ui:ex-budget-m-columns a c:Mention ; c:label "bud:SheetColumns" ; c:mentions bud:SheetColumns .
 ui:ex-budget-m-edit a c:Mention ; c:label "bud:EditAmount" ; c:mentions bud:EditAmount .
