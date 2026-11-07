@@ -228,6 +228,11 @@ the component set. The demo's **Components** page shows all of it.
   else the panel. A menu or popover marks `data-sem-takes-focus` instead: its
   popup while open (the first item), its trigger once closed. The host does
   none of this.
+- A text field the bus or the renderer focuses has its caret after its text, not
+  before it, where a browser leaves a field it has not edited. A field marked
+  `data-sem-select-on-focus` (a sheet's cell) holds a value typing replaces: its
+  text is selected however it is entered, a click as Tab, and a press in it while
+  it has the focus places the caret.
 - Each event, with the size of the change it caused, becomes an immutable
   member of the `beh:ChangeLog` `ldes:EventStream` (timestamp and sequence
   paths, a SHACL shape, a `tree:view`). The stream names its newest member

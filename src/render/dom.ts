@@ -2,6 +2,20 @@ import { SVG_NS } from '../ns.ts'
 import type { HtmlIndex } from './html-index.ts'
 
 /**
+ * Give an element the focus on the framework's own account, nobody having pressed on it. The browser
+ * leaves a text field it has not edited with its caret before the text, where typing would prepend: it
+ * goes after the text, or, in a field marked data-sem-select-on-focus, around it as Tab does. A caret
+ * the field already has elsewhere stays (a number field has none to read, and keeps what it does).
+ */
+export function takeFocus(el: HTMLElement, options?: FocusOptions) {
+  el.focus?.(options)
+  const field = el as HTMLInputElement
+  if (field.ownerDocument.activeElement !== field || !field.value || field.selectionStart !== 0 || field.selectionEnd !== 0) return
+  if (field.hasAttribute('data-sem-select-on-focus')) field.select()
+  else field.setSelectionRange(field.value.length, field.value.length)
+}
+
+/**
  * Patches a live DOM subtree from an HtmlIndex. Each RDF/HTML node maps to one
  * DOM node for its whole life (stable IRIs give stable identity), so updates
  * are attribute/text writes and keyed child moves, never re-creation.
@@ -224,7 +238,7 @@ export class DomRenderer {
     for (const { at, next, previous } of ancestors) {
       if (!at.isConnected) continue
       const target = first(next) ?? first(previous, true) ?? first(at)
-      if (target) return (this.refocused = target), target.focus?.({ preventScroll: true })
+      if (target) return (this.refocused = target), takeFocus(target, { preventScroll: true })
     }
   }
 

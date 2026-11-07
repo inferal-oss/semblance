@@ -213,8 +213,9 @@ CONSTRUCT {
         rdfhtml:attribute ?kindAttr , ?numericAttr .
   ?kindAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue ?kind .
   ?numericAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-numeric" ; rdfhtml:attributeValue "true" .
-  ?content a ?element ; rdfhtml:type ?type ; rdfhtml:value ?inputValue ; rdfhtml:hasChild ?outText ; rdfhtml:attribute ?nameAttr .
+  ?content a ?element ; rdfhtml:type ?type ; rdfhtml:value ?inputValue ; rdfhtml:hasChild ?outText ; rdfhtml:attribute ?nameAttr , ?selectAttr .
   ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?name .
+  ?selectAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-select-on-focus" ; rdfhtml:attributeValue "" .
   ?outText a rdfhtml:Text ; rdfhtml:data ?outData .
 }
 WHERE {
@@ -230,6 +231,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-kind")) AS ?kindAttr)
   BIND(IF(COALESCE(REGEX(?v, "^-?[0-9]+([.][0-9]+)?$"), false), IRI(CONCAT(STR($this), "/~root-data-sem-numeric")), ?none) AS ?numericAttr)
   BIND(IRI(CONCAT(STR($this), "/~content-aria-label")) AS ?nameAttr)
+  # However a value cell takes the focus, its text is selected, so that typing replaces it.
+  BIND(IF(?formula, ?none, IRI(CONCAT(STR($this), "/~content-data-sem-select-on-focus"))) AS ?selectAttr)
   BIND(IF(?formula, rdfhtml:Output, rdfhtml:Input) AS ?element)
   BIND(IF(?formula, ?none, "text") AS ?type)
   BIND(IF(?formula, ?none, ?v) AS ?inputValue)
@@ -483,6 +486,28 @@ WHERE {
   BIND(IF(REGEX(?v, "^-?[0-9]+([.][0-9]+)?$"), STRDT(?v, xsd:decimal), ?v) AS ?new)
 }""" ;
     sem:function "sheet:edit" .
+
+# What a value cell holds as it takes the focus, or as an edit is committed (Enter, or leaving it), is
+# kept (c:valueOnEntry) for Escape to put back: typing changes c:value at once, and the bar and
+# the formulas follow it. An empty cell keeps nothing, and Escape empties it again.
+c:valueOnEntry a owl:DatatypeProperty ; rdfs:domain c:SheetCell ; beh:viewState true ;
+    rdfs:comment "State on a value cell: what Escape puts back, its c:value when it took the focus or an edit was last committed."@en .
+c:RememberSheetCell a beh:Reaction ;
+    rdfs:label "Remember a cell's value"@en ;
+    beh:when beh:Focus , beh:Change ;
+    beh:sourceClass c:SheetCell ;
+    beh:deletes """CONSTRUCT { $this c:valueOnEntry ?old } WHERE { $this c:valueOnEntry ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:valueOnEntry ?v } WHERE { FILTER NOT EXISTS { $this c:valueQuery ?q } $this c:value ?v }""" ;
+    sem:function "sheet:remember" .
+c:SheetEscapeKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "escape" ;
+    rdfs:comment "Escape in a sheet's cell: puts back what it held (c:valueOnEntry)."@en .
+c:RestoreSheetCell a beh:Reaction ;
+    rdfs:label "Put a cell's value back"@en ;
+    beh:when c:SheetEscapeKey ;
+    beh:sourceClass c:SheetCell ;
+    beh:deletes """CONSTRUCT { $this c:value ?old } WHERE { FILTER NOT EXISTS { $this c:valueQuery ?q } $this c:value ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?kept } WHERE { FILTER NOT EXISTS { $this c:valueQuery ?q } $this c:valueOnEntry ?kept }""" ;
+    sem:function "sheet:restore" .
 
 # Clicking or focusing a cell selects it, and only it. With Shift held (beh:modifiers) it does not:
 # the range is extended instead.

@@ -3,6 +3,7 @@ import type { FnRule } from '../engine/context.ts'
 import { formatLocale } from '../engine/context.ts'
 import { sortKey } from '../../rdf-engine/host/intl.ts'
 import { md5Key } from '../components/data.ts'
+import { takeFocus } from '../render/dom.ts'
 import { TUPLE } from '../render/order-key.ts'
 import { H, KEY, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { isTrue, labelOf, str } from '../components/util.ts'
@@ -70,7 +71,7 @@ export function trapTab(e: KeyboardEvent, host: Element): boolean {
   const last = parts.at(-1) ?? (modal as HTMLElement)
   const to = !modal.contains(active) ? first : e.shiftKey && (active === first || active === modal) ? last : !e.shiftKey && active === last ? first : undefined
   if (!to) return false
-  to.focus()
+  takeFocus(to)
   return true
 }
 

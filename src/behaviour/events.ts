@@ -2,7 +2,7 @@ import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { BEH, EVENTS_GRAPH, KEY, LDES, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration, quadKey } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
-import type { DomRenderer, ElementPlace } from '../render/dom.ts'
+import { type DomRenderer, type ElementPlace, takeFocus } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
 import { comboOf, mirrored, modifiersOf, navigate, normalizeShortcut, rightToLeft, rove, trapTab } from '../layers/keyboard.ts'
 import { storeFailure } from '../store/types.ts'
@@ -617,6 +617,8 @@ export class EventBus {
           this.placeCaret(renderer, focus)
           this.placeText(renderer, focus)
           this.placeFocus(renderer, focus, before)
+          // An Escape a field used put it back as it was on entering: its text selected, for typing to replace.
+          if (combo === 'escape') (e.target as Element).closest?.<HTMLInputElement>('[data-sem-select-on-focus]')?.select?.()
           return
         }
       }
@@ -647,6 +649,22 @@ export class EventBus {
       if (field.value !== value) field.value = value
     }
     renderer.host.addEventListener('input', controlled)
+    // A field marked data-sem-select-on-focus holds a value typing replaces (a sheet's cell). The press
+    // that enters it selects its text, as Tab does: once the click is over, for the browser places a
+    // caret where the press was, unless the press dragged a selection of its own. A press in it
+    // while it has the focus places the caret as usual.
+    let entering: Element | null | undefined
+    const pressedInto = (e: Event) => {
+      const field = (e.target as Element).closest?.('[data-sem-select-on-focus]')
+      entering = field !== doc.activeElement ? field : undefined
+    }
+    const selectEntered = (e: Event) => {
+      const field = entering as HTMLInputElement | null | undefined
+      entering = undefined
+      if (field && field === e.target && field.selectionStart === field.selectionEnd) field.select?.()
+    }
+    renderer.host.addEventListener('pointerdown', pressedInto, true)
+    renderer.host.addEventListener('click', selectEntered)
     const gestures = (e: Event) => renderer.inSlot(e.target as Node) || this.gesture(e as PointerEvent, renderer, drags)
     renderer.host.addEventListener('pointerdown', gestures)
     renderer.host.addEventListener('pointerdown', press, true)
@@ -816,6 +834,8 @@ export class EventBus {
     return () => {
       for (const t of domTypes) renderer.host.removeEventListener(t, listener)
       renderer.host.removeEventListener('input', controlled)
+      renderer.host.removeEventListener('pointerdown', pressedInto, true)
+      renderer.host.removeEventListener('click', selectEntered)
       renderer.host.removeEventListener('pointerdown', gestures)
       renderer.host.removeEventListener('pointerdown', press, true)
       renderer.host.removeEventListener('pointerup', press, true)
@@ -989,7 +1009,7 @@ export class EventBus {
       }
     }
     const target = nearest(true) ?? (lost && now !== renderer.refocused ? nearest(false) : undefined)
-    if (target && target !== target.ownerDocument.activeElement) target.focus?.(lost ? { preventScroll: true } : undefined)
+    if (target && target !== target.ownerDocument.activeElement) takeFocus(target, lost ? { preventScroll: true } : undefined)
   }
 
   /**
@@ -1217,7 +1237,7 @@ class ModalFocus {
       const item = this.itemShown(back, shows)
       const stayed = address === this.address()
       if (item) item.focus?.()
-      else if (back?.isConnected && this.shown(back)) (back as HTMLElement).focus?.({ preventScroll: !seen || !stayed })
+      else if (back?.isConnected && this.shown(back)) takeFocus(back as HTMLElement, { preventScroll: !seen || !stayed })
       else if (back && !back.isConnected && stayed) this.renderer.focusNear(place)
     }
     for (const panel of now) {
@@ -1225,7 +1245,7 @@ class ModalFocus {
       const back = doc.activeElement
       this.open.push({ panel, back, place: back ? this.renderer.placeOf(back) : [], seen: !!back && back !== doc.body && this.inView(back), address: this.address(), shows: this.showing(panel) })
       const first = [...panel.querySelectorAll<HTMLElement>('[autofocus]')].filter(this.shown).map((el) => controlIn(el, this.shown)).find((el) => el) ?? panel
-      if (!panel.contains(doc.activeElement)) first.focus?.({ preventScroll: true })
+      if (!panel.contains(doc.activeElement)) takeFocus(first, { preventScroll: true })
     }
   }
 
@@ -1237,9 +1257,9 @@ class ModalFocus {
     const active = top.ownerDocument.activeElement
     if (!parts.length) return top.focus?.(), true
     const at = parts.indexOf(active as HTMLElement)
-    if (at < 0) return parts[0]!.focus?.(), true
-    if (k.shiftKey && at === 0) return parts.at(-1)!.focus?.(), true
-    if (!k.shiftKey && at === parts.length - 1) return parts[0]!.focus?.(), true
+    if (at < 0) return takeFocus(parts[0]!), true
+    if (k.shiftKey && at === 0) return takeFocus(parts.at(-1)!), true
+    if (!k.shiftKey && at === parts.length - 1) return takeFocus(parts[0]!), true
     return false
   }
 }
