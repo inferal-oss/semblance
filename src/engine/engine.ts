@@ -943,10 +943,16 @@ export class Engine {
    * graph): one lookup across all graphs where that is as cheap as one (store.crossGraphMatch),
    * else graph by graph.
    */
-  private holds(s: Term, p: Term, o: Term | null, keys: ReadonlySet<string>): boolean {
+  private holds(s: Term | null, p: Term, o: Term | null, keys: ReadonlySet<string>): boolean {
     if (!this.store.crossGraphMatch) return this.graphs.some((g) => keys.has(g.value) && this.store.match(s, p, o, g).length > 0)
     for (const q of this.store.match(s, p, o)) if (keys.has(q.graph.value)) return true
     return false
+  }
+
+  /** The matches of a pattern in this projection's graphs: one lookup across them all where that is as cheap as one (store.crossGraphMatch). */
+  private matchAll(s: Term | null, p: Term | null, o: Term | null): Quad[] {
+    if (!this.store.crossGraphMatch) return this.graphs.flatMap((g) => this.store.match(s, p, o, g))
+    return this.store.match(s, p, o).filter((q) => this.graphKeys.has(q.graph.value))
   }
 
   /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
@@ -1089,18 +1095,20 @@ export class Engine {
     // (Rendered output - RDF/HTML structure, placement, provenance - is never what a path follows,
     // and a rule that watches predicates is not walked to for others: this runs for every triple.)
     if (this.inverseFollowers.length && q.subject.termType === 'NamedNode' && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
+      // Followers often share their last step: each lookup from this node is made once.
+      const memo = new Map<string, string[]>()
       for (const { rule: r, path } of this.inverseFollowers) {
         const last = path[path.length - 1]!
         if (last.startsWith('^@')) {
           // Against a predicate named in the data: only one some node names that way, and only to the foci that name it.
           const via = last.slice(2).split(' ')
           const f = this.store.factory
-          if (!this.graphs.some((g) => this.store.match(null, f.namedNode(via[via.length - 1]!), q.predicate, g).length)) continue
-          for (const x of this.walkBack(new Set([s]), [...path.slice(0, -1), '^' + p], sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.names(x, [via], p)) this.markFocus(r, x)
+          if (!this.holds(null, f.namedNode(via[via.length - 1]!), q.predicate, this.graphKeys)) continue
+          for (const x of this.walkBack(new Set([s]), [...path.slice(0, -1), '^' + p], sign < 0 ? q : undefined, memo)) if (this.isInstance(x, r) && this.names(x, [via], p)) this.markFocus(r, x)
           continue
         }
         if (r.watches && !r.watchesVia && !r.watchesMarked && !r.watches.has(p)) continue
-        for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
+        for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined, memo)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
       }
     }
     // Function rules that read this subject (traced) re-run if they read this predicate.
@@ -1765,8 +1773,11 @@ export class Engine {
   }
 
   /** Back along a path's steps, from the nodes at its end to the nodes at its start. */
-  /** Back along the steps to the nodes they start from; `removed`, a triple just removed, is walked as if still there. */
-  private walkBack(nodes: Set<string>, steps: string[], removed?: Quad): Set<string> {
+  /**
+   * Back along the steps to the nodes they start from; `removed`, a triple just removed, is walked as if still there.
+   * `memo` keeps the store's answers to the steps against a predicate, for walks made while the store stays as it is.
+   */
+  private walkBack(nodes: Set<string>, steps: string[], removed?: Quad, memo?: Map<string, string[]>): Set<string> {
     const f = this.store.factory
     for (let i = steps.length - 1; i >= 0 && nodes.size; i--) {
       const step = steps[i]!
@@ -1781,7 +1792,13 @@ export class Engine {
         for (const n of nodes) {
           // (A list cell on the way is a blank node, never the subject of a named step.)
           if (!IRI_LIKE.test(n)) continue
-          for (const g of this.graphs) for (const q of this.store.match(f.namedNode(n), p, null, g)) if (q.object.termType === 'NamedNode') next.add(q.object.value)
+          const key = n + SEP + p.value
+          let objects = memo?.get(key)
+          if (!objects) {
+            objects = this.matchAll(f.namedNode(n), p, null).flatMap((q) => (q.object.termType === 'NamedNode' ? [q.object.value] : []))
+            memo?.set(key, objects)
+          }
+          for (const o of objects) next.add(o)
           // A link that is going away still led here: what it linked to read it.
           if (removed && removed.subject.value === n && removed.predicate.value === p.value && removed.object.termType === 'NamedNode') next.add(removed.object.value)
         }

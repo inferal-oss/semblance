@@ -690,7 +690,9 @@ WHERE {
 }""" .
 
 # Text blocks whose class names an element (blk:element): that element, with the text, and the
-# blocks it holds after it. The most specific class's element wins.
+# blocks it holds after it. The most specific class's element wins. (Its test starts from the classes
+# that name an element and asks whether $this is one: Oxigraph runs the same test begun from $this
+# in about 0.2 s a focus, #376.)
 blk:TextBlockRendering a sem:Rendering ; sem:targets blk:TextBlock ; sem:modality mod:Screen ; sem:stratum 0 ;
     sem:watches rdf:type , po:contains .
 blk:TextBlockRendering-fn a sem:Rule ; sem:implements blk:TextBlockRendering ; sem:function "blk:text-block" .
@@ -703,7 +705,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* ?cls . ?cls blk:element ?element .
-  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?more . ?more rdfs:subClassOf+ ?cls . ?more blk:element ?other }
+  FILTER NOT EXISTS { ?more blk:element ?other ; rdfs:subClassOf+ ?cls FILTER EXISTS { $this a/rdfs:subClassOf* ?more } }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(STR(?root) AS ?rootId)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
@@ -725,7 +727,7 @@ WHERE {
   $this a/rdfs:subClassOf* blk:TextBlock .
   { SELECT (COUNT(?outer) AS ?depth) WHERE { ?outer po:contains+ $this . ?outer a/rdfs:subClassOf* blk:List } }
   OPTIONAL { $this a/rdfs:subClassOf* ?pc . ?pc blk:prefix ?own
-    FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?pmore . ?pmore rdfs:subClassOf+ ?pc . ?pmore blk:prefix ?pother } }
+    FILTER NOT EXISTS { ?pmore blk:prefix ?pother ; rdfs:subClassOf+ ?pc FILTER EXISTS { $this a/rdfs:subClassOf* ?pmore } } }
   OPTIONAL { $this c:icon ?iconValue }
   BIND(IF(EXISTS { ?list po:contains $this . ?list a/rdfs:subClassOf* blk:NumberedList }, "1. ",
        IF(EXISTS { $this a/rdfs:subClassOf* blk:TodoItem }, IF(EXISTS { $this blk:checked true }, "- [x] ", "- [ ] "), "- ")) AS ?marker)
@@ -767,7 +769,7 @@ blk:ContainerRendering-sparql a sem:Rule ; sem:implements blk:ContainerRendering
 CONSTRUCT { ?root a ?element ; sem:renders $this ; rdfhtml:id ?rootId . }
 WHERE {
   $this a/rdfs:subClassOf* ?cls . ?cls blk:element ?element .
-  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?more . ?more rdfs:subClassOf+ ?cls . ?more blk:element ?other }
+  FILTER NOT EXISTS { ?more blk:element ?other ; rdfs:subClassOf+ ?cls FILTER EXISTS { $this a/rdfs:subClassOf* ?more } }
   FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:TextBlock }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(STR(?root) AS ?rootId)
@@ -780,7 +782,7 @@ blk:ContainerAsText-sparql a sem:Rule ; sem:implements blk:ContainerAsText ;
 CONSTRUCT { ?root a ?element ; sem:renders $this . }
 WHERE {
   $this a/rdfs:subClassOf* ?cls . ?cls blk:element ?screen .
-  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?more . ?more rdfs:subClassOf+ ?cls . ?more blk:element ?other }
+  FILTER NOT EXISTS { ?more blk:element ?other ; rdfs:subClassOf+ ?cls FILTER EXISTS { $this a/rdfs:subClassOf* ?more } }
   FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:TextBlock }
   OPTIONAL { ?cls blk:textElement ?textElement }
   BIND(COALESCE(?textElement, rdfhtml:Div) AS ?element)

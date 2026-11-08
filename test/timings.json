@@ -15,7 +15,7 @@
   "test/disclosure.test.ts": 2.2,
   "test/dom.test.ts": 1.7,
   "test/dragdrop.test.ts": 263,
-  "test/engine.test.ts": 35.2,
+  "test/engine.test.ts": 80,
   "test/events.test.ts": 1.2,
   "test/ex-activity.test.ts": 79.6,
   "test/ex-budget.test.ts": 80.2,
