@@ -230,6 +230,13 @@ hints show `⌘K` rather than `Ctrl+K` from the start. A page the client renders
 when it mounts (`markPlatform`), alike. Either way a hint's box holds both spellings and is as wide
 as the wider one, so nothing moves when the platform is marked, late or never.
 
+`STICKY_TOP_SCRIPT` (`src/web/sticky-top.ts`) sits in the head too: it finds the app bar as the
+parser adds it and follows its size, setting `--sem-sticky-top` (the bar's height and 12px when it
+sticks), so a side column that sticks to the top (`pos:StickToTop`) is laid out below the bar in
+the first paint, not at the stylesheet's fallback for a bar of two rows and then moved. A ResizeObserver
+reports before the frame is painted. Once the document is parsed the client follows the bar
+(`attachStickyTop`, which `mount` attaches), as it does on a page it renders itself.
+
 The script `rememberedScript` makes (`src/web/remembered.ts`) sits ahead of the template's first
 stylesheet, and puts back what the visitor chose before the first paint: colours are `light-dark()`
 pairs and themes are attributes over one stylesheet, so nothing needs rendering twice, only the

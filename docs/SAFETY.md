@@ -390,8 +390,8 @@ Content-Security-Policy:
 - `form-action 'self'`: an authored form may name an `https:` action; the CSP keeps it on your
   origin.
 
-**A server-rendered page** ([SSR.md](SSR.md)) carries inline scripts: the platform mark, the event
-capture before take-over (`capture: false` leaves it out), and, when the page remembers something,
+**A server-rendered page** ([SSR.md](SSR.md)) carries inline scripts: the platform mark, the app bar's
+measure for what sticks below it, the event capture before take-over (`capture: false` leaves it out), and, when the page remembers something,
 the first-paint script, which differs per page. Until documents can carry a nonce (#403), such a page
 needs `'unsafe-inline'` in `script-src`, or the hashes of the scripts it carries. Link the stylesheet
 (`stylesheet: { href }`, which the static build does) rather than inlining it, or allow its hash.
