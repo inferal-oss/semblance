@@ -488,7 +488,9 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   the drop says where: `file:uploadTo` (an HTTP POST of a form with the file; `send` replaces it) or
   `file:handler`, the name of a handler you give it, which reports progress and is aborted when the
   file is removed. File contents never enter the graph: read them with `files.fileOf(fileIri)`.
-  `mount` attaches it (options: `files: { handlers, send, picker }`, or `false`); wiring by hand,
+  An upload goes only to the page's own origin or one the host lists (`uploadOrigins`); elsewhere it
+  fails with the reason ([SAFETY.md](SAFETY.md)).
+  `mount` attaches it (options: `files: { handlers, send, picker, uploadOrigins }`, or `false`); wiring by hand,
   `new Files(bus, { handlers, onHandled: () => renderer.flush() }).attach(renderer)`. Tests pass a
   stand-in `picker` and handlers (`test/harness.ts`).
 
