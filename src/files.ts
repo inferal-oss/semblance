@@ -36,6 +36,7 @@ import { decodeThumbnail, type FileStoreBackend, indexedDbFileStore, PREVIEW_SIZ
 import { DND, FILE, FILES_GRAPH, NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
 import { mint, type Delta } from './rdf.ts'
 import type { DomRenderer } from './render/dom.ts'
+import type { GraphStore } from './store/types.ts'
 
 const XSD_DATETIME = NS.xsd + 'dateTime'
 const XSD_ANYURI = NS.xsd + 'anyURI'
@@ -100,6 +101,12 @@ export interface FilesOptions {
   urls?: { create(contents: Blob | FileLike): string | undefined; revoke(url: string): void }
   /** After each event a reaction handled (e.g. to patch the DOM). */
   onHandled?: (h: Handled) => void
+  /**
+   * Where a target's file:handler and file:uploadTo are read: the trusted graphs when the page
+   * renders authored content (mount's `trusted`), so an author cannot pick a handler or an address;
+   * the runtime's store otherwise.
+   */
+  trusted?: GraphStore
 }
 
 interface Zone {
@@ -495,7 +502,8 @@ export class Files {
     const nn = (iri: string) => f.namedNode(iri)
     const target = store.match(null, nn(FILE.file), file, f.defaultGraph())[0]?.subject
     if (target?.termType !== 'NamedNode') return
-    const read = (s: Term, p: string) => store.match(s as NamedNode, nn(p), null, f.defaultGraph())[0]?.object.value
+    const said = this.opts.trusted ?? store
+    const read = (s: Term, p: string) => said.match(s as NamedNode, nn(p), null, f.defaultGraph())[0]?.object.value
     const contents = this.fileOf(file.value)
     const handler = read(target, FILE.handler)
     const url = read(target, FILE.uploadTo)

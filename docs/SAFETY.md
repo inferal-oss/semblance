@@ -23,9 +23,9 @@ Trust is the host's decision, never the graph's: no triple makes a graph trusted
   `renderToString({ …, policy })`, `compileStyles(store, { policy, onRefused })`.
 
 The policy is read from a **trusted** store: one with the ontology and your own graphs, and not the
-author's, which could add to its lists. `mount` reads it before it loads `authored`; the live
-examples read it from the site's store (their sources are text there, not triples); `authoredPolicy`
-and `readPolicy` take the store you trust.
+author's, which could add to its lists. `mount` reads it from a store of `graphs` alone, kept apart
+from the one `authored` is loaded into; the live examples read it from the ontology alone;
+`authoredPolicy` and `readPolicy` take the store you trust.
 
 ## What an authored graph may do
 
@@ -76,8 +76,18 @@ and `readPolicy` take the store you trust.
   not the graph is authored, since the graph says where and the host says where may be.
 - **No store elsewhere:** a remote source (`src:Source`, [REMOTE.md](REMOTE.md)) names no endpoint
   in the graph at all: the host maps each source's IRI to its URL and credentials, and a source it
-  does not map stays `src:Unbound`. An authored graph can declare a source, but cannot point it
-  anywhere.
+  does not map stays `src:Unbound`. An authored graph cannot point a source anywhere.
+- **No reconfiguring the host's effects:** under `mount({ authored })` the effects read their
+  configuration from the trusted graphs alone (`app.trusted`, a store of the ontology and `graphs`):
+  remote sources (`src:`), the location and whether there is one (`nav:`), where and by what a drop
+  uploads (`file:uploadTo`, `file:handler`), which module an island loads (`ext:module`), and, when
+  you attach persistence with `{ trusted: app.trusted }`, its policies and their storage keys
+  (`per:`). An authored graph cannot add a source or widen one, turn navigation on or add a
+  dimension, pick an upload handler, have a module loaded, or name a stored key. It changes state
+  (the values the effects carry), as the interface does.
+
+Authored rules read the whole store: your graphs as well as the author's. What an author must not
+see (a token, someone else's data) does not belong in the store they render from.
 
 ## What happens to what is refused
 
@@ -115,5 +125,13 @@ without `unsafe-inline` is #157.
 - What a foreign component the policy lists does with its inputs once mounted: it is the host's
   code. A live example's sandbox attaches no islands effect.
 - Host effects you attach yourself: navigation, persistence and network capture act on graph state
-  as the host configured them. A live example's sandbox attaches none of them (its full screen is
-  shown over the page).
+  as the host configured them; give them `trusted` (above) when the store holds authored graphs. A
+  live example's sandbox attaches none of them (its full screen is shown over the page).
+
+## Remembered state
+
+Restoring brings back only what a persistence policy covers: its subject's listed properties
+(`per:subject`, `per:properties`), or what its query's template can produce (`per:construct`), into
+its graph (`per:graph`); a stored switch only for a policy there is. Whatever else storage holds
+stays there. The live examples' policy is read from the ontology alone, never from the site's store,
+which holds what was restored.

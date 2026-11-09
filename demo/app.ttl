@@ -663,7 +663,8 @@ ui:rememberLanguage a per:Policy ; per:scope per:Session ;
 # What the command palette ran lately: kept on this device.
 ui:rememberPalette a per:Policy ; per:scope per:Device ;
     rdfs:label "Recent commands" , "Нещодавні команди"@uk , "Zuletzt verwendete Befehle"@de , "الأوامر الأخيرة"@ar ;
-    per:construct """CONSTRUCT { ?run ?p ?o } WHERE { ?run c:recentOf ui:palette ; ?p ?o }""" .
+    per:construct """CONSTRUCT { ?run a c:RecentRun ; c:recentOf ui:palette ; c:entryFor ?item ; c:recentRank ?rank }
+WHERE { ?run c:recentOf ui:palette ; c:entryFor ?item ; c:recentRank ?rank }""" .
 
 # Opt-in: the change log itself, so the Change log, Activity and Timeline survive a reload.
 # It reads the change log only (an input graph): kept as a view, a write stores the members that came and went.

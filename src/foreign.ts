@@ -17,6 +17,7 @@ import { EXT, NS, RDFS_SUBCLASS, RDF_TYPE } from './ns.ts'
 import type { DomRenderer } from './render/dom.ts'
 import { isCustomElementName, type IslandInput } from './render/html-index.ts'
 import { islandProblem, type SafetyPolicy } from './safety.ts'
+import type { GraphStore } from './store/types.ts'
 
 const XSD = NS.xsd
 const RDF_JSON = NS.rdf + 'JSON'
@@ -79,6 +80,11 @@ export interface IslandsOptions {
    * mounts. The graph names a module; only the host decides what code that is.
    */
   modules?: Record<string, () => Promise<unknown>>
+  /**
+   * Where ext:module is read: the trusted graphs when the page renders authored content (mount's
+   * `trusted`), so an author cannot have a registered module loaded; the runtime's store otherwise.
+   */
+  trusted?: GraphStore
   /** After each output a reaction handled (to patch the DOM). */
   onHandled?: (h: Handled) => void
   onError?: (e: Error, island: string) => void
@@ -279,9 +285,9 @@ export class Islands {
     const f = store.factory
     const dg = f.defaultGraph()
     const classes = this.classesOf(island)
-    const said = (p: string) => {
+    const said = (p: string, from = store) => {
       for (const s of [island, ...classes]) {
-        const o = store.match(f.namedNode(s), f.namedNode(p), null, dg)[0]?.object
+        const o = from.match(f.namedNode(s), f.namedNode(p), null, dg)[0]?.object
         if (o) return o.value
       }
       return undefined
@@ -293,7 +299,7 @@ export class Islands {
     if (index.nodes.get(key)?.tag !== undefined && tag === undefined) return
     const adapterIri = said(EXT.adapter) ?? (tag ? EXT.CustomElement : EXT.Widget)
     const widget = said(EXT.widget)
-    const module = said(EXT.module)
+    const module = said(EXT.module, this.opts.trusted ?? store)
     if (policy) {
       const why = islandProblem(policy, { adapter: adapterIri, tag, widget, module })
       if (why) return index.refuse(key, 'element', `island <${island}>: ${why}; rendered as its element`)

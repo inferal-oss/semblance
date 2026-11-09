@@ -45,13 +45,15 @@ ui:ly-tiled-spec a c:Specimen ; c:demonstrates c:TiledWorkspace ; c:label "Tiled
 ui:rememberWorkspace a per:Policy ; per:scope per:Session ;
     rdfs:label "The workspace's panes" , "Панелі робочого простору"@uk , "Die Bereiche des Arbeitsbereichs"@de , "أجزاء مساحة العمل"@ar ;
     per:construct """
-CONSTRUCT { ui:ly-tiled-workspace c:rootTile ?root . ?n ?p ?o . ?cell rdf:first ?tab ; rdf:rest ?rest }
+CONSTRUCT { ui:ly-tiled-workspace c:rootTile ?root . ?cell rdf:first ?tab ; rdf:rest ?rest .
+            ?n a ?type ; c:primary ?primary ; c:secondary ?secondary ; c:ratio ?ratio ; pos:direction ?direction ; c:tabs ?tabs ; c:selected ?selected }
 WHERE {
   { ui:ly-tiled-workspace c:rootTile ?root }
-  UNION { ui:ly-tiled-workspace c:rootTile/(c:primary|c:secondary)* ?n . ?n ?p ?o
-          FILTER(?p IN (rdf:type, c:primary, c:secondary, c:ratio, pos:direction, c:tabs, c:selected)) }
+  UNION { ui:ly-tiled-workspace c:rootTile/(c:primary|c:secondary)* ?n .
+          { ?n a ?type } UNION { ?n c:primary ?primary } UNION { ?n c:secondary ?secondary } UNION { ?n c:ratio ?ratio }
+          UNION { ?n pos:direction ?direction } UNION { ?n c:tabs ?tabs } UNION { ?n c:selected ?selected } }
   UNION { ui:ly-tiled-workspace c:rootTile/(c:primary|c:secondary)* ?n . ?n c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?rest }
-  UNION { VALUES ?n { ui:ly-tiled-main ui:ly-tiled-inspector ui:ly-tiled-notes } ?n c:tabs rdf:nil BIND(c:tabs AS ?p) BIND(rdf:nil AS ?o) }
+  UNION { VALUES ?n { ui:ly-tiled-main ui:ly-tiled-inspector ui:ly-tiled-notes } ?n c:tabs rdf:nil BIND(rdf:nil AS ?tabs) }
 }""" .
 
 # --- SplitView: a list beside its details ---------------------------------------------------------
