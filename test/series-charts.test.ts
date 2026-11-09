@@ -79,6 +79,17 @@ ex:a a c:BoxPlot ; rdfs:label "Spread" ; c:view ex:Spread ; c:categoryVariable "
 ex:b a c:BoxPlot ; rdfs:label "One set" ; c:view ex:Spread ; c:categoryVariable "group" ; c:valueVariable "ms" ; c:hiddenSeries "nothing" .
 `
 
+const AXES = `${PREFIXES}${SALES}
+ex:web2 a c:series ; rdfs:label "Online" ; c:key "Web" .
+ex:store2 a c:series ; rdfs:label "Shop share" ; c:key "Store" ; c:axis c:SecondaryAxis .
+ex:a a c:ColumnChart ; rdfs:label "Dual" ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ;
+  c:unit "€" ; c:secondaryUnit "%" ; c:legend ( ex:web2 ex:store2 ) ; c:annotation ex:budget , ex:normal , ex:broken .
+ex:budget a c:Threshold ; rdfs:label "Budget"@en , "Бюджет"@uk ; c:at 300 .
+ex:normal a c:MarkedRange ; rdfs:label "Normal" ; c:fromValue 100 ; c:toValue 130 .
+ex:broken a c:Threshold ; rdfs:label "Nothing" .
+ex:b a c:AreaChart ; rdfs:label "Notes" ; c:view ex:Totals ; c:categoryVariable "month" ; c:annotation ex:budget .
+`
+
 describe('series charts', () => {
   it('scales on steps of 1, 2 or 5 × 10ⁿ', () => {
     expect(niceScale(0, 201)).toMatchObject({ min: 0, max: 250, step: 50 })
@@ -237,6 +248,32 @@ describe('series charts', () => {
       both((h) => h.set('v11', 'group', 'c') || h.set('v11', 'set', 'x') || h.set('v11', 'ms', 20))
     }, 120_000)
   }
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`renders dual axes and annotations as their function twins do (${kind})`, () => {
+      const { s, both } = parity(AXES, kind, ['a', 'b'])
+      const [a, b] = s.html()
+      // A series on the secondary axis has a scale of its own; the primary spans the annotations.
+      expect(a).toContain('<figure style="--lo: 0; --hi: 300; --lo2: -20; --hi2: 80;')
+      expect(a).toContain('class="sem-chart-ticks sem-secondary"')
+      expect(a).toContain('class="sem-point sem-column-point sem-secondary"')
+      expect(a).toContain('<li data-sem-c="chart-series" class="sem-secondary">')
+      expect(a).toContain('Jan · Shop share: 80 %')
+      expect(a).toContain('<span style="--at: 300" class="sem-threshold">Budget: 300 €</span>')
+      expect(a).toContain('<span style="--from: 100; --to: 130" class="sem-marked-range">Normal: 100 – 130 €</span>')
+      expect(a).not.toContain('Nothing')
+      expect(b).toContain('Budget: 300')
+      expect(s.text()[0]).toContain('Budget: 300 €')
+      both((h) => h.set('s4', 'amount', 160))
+      both((h) => h.runtime.apply({ remove: h.store.match(h.store.factory.namedNode(EX + 'budget'), null, null), add: [] }))
+      expect(s.html()[0]).not.toContain('Budget')
+    }, 120_000)
+  }
+
+  it('says its annotations in the viewer\'s language', () => {
+    const { s } = parity(AXES, 'wat', ['a'], ['uk'])
+    expect(s.html()[0]).toContain('Бюджет: 300 €')
+  }, 60_000)
 
   for (const chart of ['AreaChart', 'ColumnChart']) it(`re-renders the points a changed row moves, whatever the number of categories (${chart}, wat, SPARQL)`, () => {
     const cost = (n: number) => {

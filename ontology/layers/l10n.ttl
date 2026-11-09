@@ -300,6 +300,7 @@ c:trigger l10n:pickedAs l10n:trigger .
 c:unit l10n:pickedAs l10n:unit .
 c:xLabel l10n:pickedAs l10n:xLabel .
 c:sizeLabel l10n:pickedAs l10n:sizeLabel .
+c:secondaryUnit l10n:pickedAs l10n:secondaryUnit .
 c:deltaUnit l10n:pickedAs l10n:deltaUnit .
 sh:name l10n:pickedAs l10n:shapeName .
 sh:description l10n:pickedAs l10n:description .
@@ -324,6 +325,7 @@ l10n:attribution a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): th
 l10n:trigger a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:trigger in the viewer's language."@en .
 l10n:unit a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:unit in the viewer's language."@en .
 l10n:xLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:xLabel in the viewer's language."@en .
+l10n:secondaryUnit a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:secondaryUnit in the viewer's language."@en .
 l10n:sizeLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:sizeLabel in the viewer's language."@en .
 l10n:deltaUnit a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:deltaUnit in the viewer's language."@en .
 l10n:shapeName a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the sh:name in the viewer's language."@en .

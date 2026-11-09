@@ -1748,6 +1748,53 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ".sem-box" ; sty:state ":is(:hover, :focus-visible)" ;
     sty:declares [ sty:property "box-shadow" ; sty:token tok:ring ] .
 
+# Dual axes: the secondary axis's ticks in a gutter at the plot's inline end (no gridlines of their own); a
+# point of a series on it reads the secondary scale. Its legend swatch is outlined.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-plot:has(> .sem-secondary)" ;
+    sty:declares [ sty:property "margin-inline-end" ; sty:raw "var(--axis)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-ticks.sem-secondary" ;
+    sty:declares [ sty:property "--lo" ; sty:raw "var(--lo2)" ] ,
+                 [ sty:property "--hi" ; sty:raw "var(--hi2)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-ticks.sem-secondary > .sem-chart-tick" ;
+    sty:declares [ sty:property "inset-inline" ; sty:raw "calc(100% + 6px) auto" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-ticks.sem-secondary > .sem-chart-tick::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-marks > .sem-point.sem-secondary" ;
+    sty:declares [ sty:property "--lo" ; sty:raw "var(--lo2)" ] ,
+                 [ sty:property "--hi" ; sty:raw "var(--hi2)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:state ":has(.sem-chart-ticks.sem-secondary)" ; sty:part ".sem-chart-categories" ;
+    sty:declares [ sty:property "margin-inline-end" ; sty:raw "var(--axis)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:state ":has(.sem-chart-ticks.sem-secondary)" ; sty:part ".sem-chart-xticks" ;
+    sty:declares [ sty:property "margin-inline-end" ; sty:raw "var(--axis)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SeriesChart ; sty:part ".sem-legend > .sem-secondary > i" ;
+    sty:declares [ sty:property "outline" ; sty:raw "1.5px solid var(--sem-text)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "1px" ] .
+# Annotations: a threshold is a dashed line at its value, a marked range a tinted band; each names itself at
+# the inline end, over the plot and under its marks.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-annotations" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "font-size" ; sty:raw "10px" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-annotations > span" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline" ; sty:raw "0" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-threshold" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "calc((var(--at) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "align-items" ; sty:raw "flex-end" ] ,
+                 [ sty:property "border-block-end" ; sty:raw "1.5px dashed var(--sem-danger-9)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-danger-11)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-marked-range" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "calc((var(--from) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "block-size" ; sty:raw "calc((var(--to) - var(--from)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "align-items" ; sty:raw "flex-start" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--sem-accent-9) 12%, transparent)" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" ] ,
