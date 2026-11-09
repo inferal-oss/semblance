@@ -40,6 +40,13 @@ ex:a a c:ScatterChart ; rdfs:label "Cities" ; c:view ex:Cities ; c:categoryVaria
 ex:b a c:ScatterChart ; rdfs:label "Bubbles" ; c:view ex:Cities ; c:categoryVariable "name" ; c:xVariable "area" ; c:valueVariable "people" ; c:sizeVariable "age" ; c:sizeLabel "years" .
 `
 
+const PIES = `${PREFIXES}${SALES}
+ex:a a c:PieChart ; rdfs:label "Totals" ; c:view ex:Totals ; c:categoryVariable "month" ; c:unit "€" .
+ex:b a c:DonutChart ; rdfs:label "Donut" ; c:view ex:Totals ; c:categoryVariable "month" ; c:unit "€" .
+ex:c a c:PieChart ; rdfs:label "By channel" ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" .
+ex:d a c:DonutChart ; c:view ex:None ; c:emptyText "Nothing yet." .
+`
+
 describe('series charts', () => {
   it('scales on steps of 1, 2 or 5 × 10ⁿ', () => {
     expect(niceScale(0, 201)).toMatchObject({ min: 0, max: 250, step: 50 })
@@ -120,6 +127,25 @@ describe('series charts', () => {
     const { s } = parity(SCATTER, 'wat', ['a'], ['uk'])
     expect(s.html()[0]).toMatch(/Kyiv · East: площа, км² 839, 2,95 M/u)
   }, 60_000)
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`renders pie and donut charts as their function twins do (${kind})`, () => {
+      const { s, both } = parity(PIES, kind, ['a', 'b', 'c', 'd'])
+      const [a, b, c, d] = s.html()
+      // Shares of the positive total (Mar's 80 of 480.5), in each category's color; a key, no axes.
+      expect(a).toContain('class="sem-pie"')
+      expect(a).not.toContain('sem-chart-tick')
+      expect(a).toMatch(/Mar: 80 € \(16\.6%\)/)
+      expect(a).toContain('--from: 0.8335; --share: 0.1665; --color: var(--sem-series-3)')
+      expect(a).not.toContain('sem-pie-total')
+      expect(b).toContain('<span class="sem-pie-total" aria-hidden="true">480.5 €</span>')
+      // Two series: each its slices; a negative value has no share.
+      expect(c).toContain('Mar · Store: -20 (0%)')
+      expect(d).toBe('<p data-sem-c="donut-chart" class="sem-empty">Nothing yet.</p>')
+      both((h) => h.set('s1', 'amount', 400))
+      both((h) => (h.set('s9', 'month', 'Apr'), h.set('s9', 'channel', 'Web'), h.set('s9', 'at', 4), h.set('s9', 'amount', 10)))
+    }, 120_000)
+  }
 
   for (const chart of ['AreaChart', 'ColumnChart']) it(`re-renders the points a changed row moves, whatever the number of categories (${chart}, wat, SPARQL)`, () => {
     const cost = (n: number) => {

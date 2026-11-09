@@ -20,7 +20,7 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -331,6 +331,15 @@ ui:dt-scatter a c:Flippable ; c:front ui:dt-scatter-spec .
 ui:dt-scatter-spec a c:Specimen ; c:demonstrates c:ScatterChart ; c:label "Scatter and bubble chart" , "Точкова й бульбашкова діаграма"@uk , "Streu- und Blasendiagramm"@de , "مخطط مبعثر وفقاعي"@ar ;
     c:help "A point per row label (c:categoryVariable) at its x (c:xVariable) and value, a color per series; the scales need not start at zero. With c:sizeVariable each bubble's area grows with its size. A point says its x and size in words, named by c:xLabel and c:sizeLabel." ;
     c:children ( ui:dt-scatter-chart ui:dt-bubble-chart ) .
+
+ui:dt-pie-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Sales by channel" ; sem:select """
+SELECT ?channel (SUM(?amount) AS ?total) WHERE { ?s ui:saleChannel ?channel ; ui:saleAmount ?amount } GROUP BY ?channel ORDER BY DESC(?total)""" .
+ui:dt-pie-chart a c:PieChart ; c:label "Sales by channel" ; c:view ui:dt-pie-view ; c:categoryVariable "channel" ; c:valueVariable "total" ; c:unit "k€" .
+ui:dt-donut-chart a c:DonutChart ; c:label "Sales by channel" ; c:view ui:dt-pie-view ; c:categoryVariable "channel" ; c:valueVariable "total" ; c:unit "k€" .
+ui:dt-pie a c:Flippable ; c:front ui:dt-pie-spec .
+ui:dt-pie-spec a c:Specimen ; c:demonstrates c:PieChart , c:DonutChart ; c:label "Pie and donut chart" , "Кругова й кільцева діаграма"@uk , "Kreis- und Ringdiagramm"@de , "مخطط دائري وحلقي"@ar ;
+    c:help "Each category's share of the whole, from a maintained view: a slice in its color, a key of the categories. A slice says its value and share; the arrow keys move between slices. A donut (c:DonutChart) shows the total in its hole. Right to left, the slices run counter-clockwise." ;
+    c:children ( ui:dt-pie-chart ui:dt-donut-chart ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 
