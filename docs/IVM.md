@@ -49,7 +49,7 @@ dependencies, the workbench "Live switch" of phase 4 without a circuit.
 
 | phase | what | replaces or enables |
 |---|---|---|
-| 2, the rest | SPARQL renderings of charts and tables over the result-set rows (with the SPARQL coverage work); the rdf-engine's parser behind `ViewCompiler` once main has its algebra (its ABI is v1: no algebra export) | no function-only chart; one algebra |
+| 2, the rest | the rdf-engine's parser behind `ViewCompiler` once main has its algebra (its ABI is v1: no algebra export) | one algebra |
 | 3, the rest | exact dependencies as the engine's default, once the full suite passes with `SEMBLANCE_EXACT_DEPS=1` and their probes are cheaper (compiled per pattern, or in the engine, phase 6); then `sem:follows` / `sem:watches` / `sem:readsMinted` deleted from SPARQL rules | one way to say what a rule reads |
 | 6: into the engine | the operators in Rust inside rdf-engine (ABI v2), the TypeScript runtime as the reference | only if profiling shows the JS runtime or the boundary dominating |
 
@@ -1534,7 +1534,10 @@ What uses it:
   finding list and formulas are plain SPARQL over those rows (`c:BarChartRendering-sparql`,
   `c:FindingListRendering-sparql`, `c:Formula-sparql`; #1): a row's value of `?v` read by its IRI
   `<row>-v`, `rs:index` (else the row's node) as the order, with function twins that read the same
-  rows and render the same HTML (`test/charts-sparql.test.ts`). A formula whose query reads `$this`
+  rows and render the same HTML (`test/charts-sparql.test.ts`); so are the heatmap, the line chart
+  (`test/heatmap-linechart-sparql.test.ts`), the Gantt chart (`test/gantt.test.ts`), tables (`c:TableRuns`),
+  stats and chips' counts, and the charts' Text modality, a line per row (`c:RowChartText`,
+  `test/chart-text.test.ts`): no chart or table over a view's rows renders through a function rule alone. A formula whose query reads `$this`
   is a view per component that asks it (`iv:perReferrer c:valueQuery`). A query over what rules or
   the runtime derive (a sheet's formulas, a view's figures) is a view too since #147 (§27).
 
