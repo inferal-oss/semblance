@@ -6,7 +6,7 @@ import { labelOf, rdfList, str, text } from './util.ts'
 import { maintainedRows } from '../view/rows.ts'
 import { md5Key } from './data.ts'
 import { compareKeys, tupleKey } from '../render/order-key.ts'
-import { measures } from './series.ts'
+import { isKind, measures } from './series.ts'
 
 const NUMERIC = new Set(['integer', 'decimal', 'double', 'float', 'int', 'long', 'short', 'byte', 'nonNegativeInteger', 'positiveInteger', 'negativeInteger', 'nonPositiveInteger', 'unsignedInt', 'unsignedLong', 'unsignedShort', 'unsignedByte'].map((t) => NS.xsd + t))
 
@@ -245,6 +245,8 @@ const linechart: FnRule = (ctx, focus) => {
  * the view's order, "facet · category · series: value unit", the value in the viewer's locale.
  */
 const rowsText: FnRule = (ctx, focus) => {
+  // A series chart says its points instead (c:SeriesChartText).
+  if (isKind(ctx, focus, NS.c + 'SeriesChart')) return []
   const view = ctx.object(focus, C.view)
   if (!view || !ctx.object(view, SEM.select)) return message(ctx, focus, 'No view.')
   if (!ctx.match(view, RDF_TYPE, NS.rs + 'ResultSet').length) return message(ctx, focus, `${labelOf(ctx, view)} is not a maintained view (iv:View, iv:materialize iv:Graph).`)

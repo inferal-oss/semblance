@@ -47,6 +47,15 @@ ex:c a c:PieChart ; rdfs:label "By channel" ; c:view ex:Sales ; c:categoryVariab
 ex:d a c:DonutChart ; c:view ex:None ; c:emptyText "Nothing yet." .
 `
 
+const HISTOGRAMS = `${PREFIXES}
+${[12, 15, 15.5, 18, 21, 22, 22.5, 23, 27, 31, 33.3, 48].map((v, i) => `ex:h${i} ex:ms ${v} ; ex:kind "${i % 3 ? 'warm' : 'cold'}" .`).join('\n')}
+ex:Times a sem:View , iv:View ; iv:materialize iv:Graph ;
+  sem:select """SELECT ?ms ?kind WHERE { ?h <https://example.org/#ms> ?ms ; <https://example.org/#kind> ?kind }""" .
+ex:a a c:Histogram ; rdfs:label "Times" ; c:view ex:Times ; c:valueVariable "ms" ; c:unit "ms" .
+ex:b a c:Histogram ; rdfs:label "By kind" ; c:view ex:Times ; c:valueVariable "ms" ; c:seriesVariable "kind" ; c:binCount 4 ; c:stacked true .
+ex:c a c:Histogram ; c:view ex:Times ; c:valueVariable "nothing" ; c:emptyText "x" .
+`
+
 describe('series charts', () => {
   it('scales on steps of 1, 2 or 5 × 10ⁿ', () => {
     expect(niceScale(0, 201)).toMatchObject({ min: 0, max: 250, step: 50 })
@@ -144,6 +153,23 @@ describe('series charts', () => {
       expect(d).toBe('<p data-sem-c="donut-chart" class="sem-empty">Nothing yet.</p>')
       both((h) => h.set('s1', 'amount', 400))
       both((h) => (h.set('s9', 'month', 'Apr'), h.set('s9', 'channel', 'Web'), h.set('s9', 'at', 4), h.set('s9', 'amount', 10)))
+    }, 120_000)
+  }
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`renders histograms as their function twins do (${kind})`, () => {
+      const { s, both } = parity(HISTOGRAMS, kind, ['a', 'b', 'c'])
+      const [a, b] = s.html()
+      // Bins of 5 from 10 to 50 (about ten); each a column as tall as its count, named by its bounds.
+      expect(a).toContain('--n: 8;')
+      expect(a).toContain('>10 – 15</span>')
+      expect(a).toContain('20 – 25 ms: 4')
+      expect(a!.match(/sem-column-point/g)).toHaveLength(6)
+      expect(b).toContain('--n: 4;')
+      expect(s.text()[0]).toContain('20 – 25 ms: 4')
+      both((h) => h.set('h11', 'ms', 24))
+      expect(s.html()[0]).toContain('20 – 25 ms: 5')
+      both((h) => h.set('h0', 'ms', -3))
     }, 120_000)
   }
 
