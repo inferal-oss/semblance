@@ -6,9 +6,12 @@ part, then receives the store's changes to it as they happen. Its own changes go
 writes. The store stays the authority.
 
 Nothing in the engines changes for this: they still leave out `SERVICE` and HTTP `LOAD`
-(`rdf-engine/README.md`). What arrives from the store is an ordinary input change, applied
-with `runtime.apply`. Rules and views take it in as they take in a click, so a change from the
-store costs what it changes, however large the store is.
+(`rdf-engine/README.md`, and [below](#not-service-not-load) for why). What arrives from the store
+is an ordinary input change, applied with `runtime.apply`. Rules and views take it in as they take
+in a click, so a change from the store costs what it changes, however large the store is.
+
+The site's docs have the same guide, shorter: [Remote data](https://semblance.dev/docs/remote/)
+(`demo/gallery/_docs.ttl`, `ui:doc-remote`).
 
 This guide covers how a page declares a source, the effect that binds it, the protocol, the
 reference server in the repository, and what the effect does (for a host that wants to do it
@@ -20,6 +23,30 @@ npx vite --config examples/remote/vite.config.ts
 
 Open it in two windows. What one window changes, the other shows. A todo label longer than 40
 characters is refused by the store, and the page puts back what the store holds.
+
+## Not SERVICE, not LOAD
+
+SPARQL has two ways to reach data elsewhere: `SERVICE`, which sends part of a query to an
+endpoint while the query runs, and `LOAD`, which fetches a document into the store. The engines
+leave both out on purpose, and a source is neither:
+
+- **The store is the authority.** `SERVICE` asks a question of another store and keeps no part
+  of its answer in step; `LOAD` copies a document once, after which the copy and the original
+  drift apart. A source binds the page's part of the store for as long as the page is open: the
+  page holds what the store holds, and a write the store refuses is put back to what it holds.
+- **Only deltas reach the page.** After one snapshot, the store sends what changed, as it changes,
+  and nothing else. A query never waits on the network: the rules read the page's own store, and
+  the store's changes reach them as input changes, between turns.
+- **Nothing in the graph names an endpoint.** A `SERVICE` or a `LOAD` names its URL in the query,
+  so a graph that holds one decides where the page connects, and with what. A source names only
+  what it covers; the host maps its IRI to a URL and credentials, and a source it does not map
+  stays `src:Unbound`. An authored graph cannot point a page at a server.
+- **A change costs the change.** The server tells which pages a changed statement concerns by its
+  predicate, its subject or its subject's type, one indexed lookup; the page applies it as one
+  input change. Neither side re-reads the store or the page's part of it.
+
+Data you only need once, a document to import, is the host's to fetch and pass to `mount`'s
+`graphs` or `runtime.apply`.
 
 ## Declaring a source
 
