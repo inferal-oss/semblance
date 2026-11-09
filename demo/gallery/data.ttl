@@ -20,7 +20,7 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -299,6 +299,15 @@ ui:dt-area a c:Flippable ; c:front ui:dt-area-spec .
 ui:dt-area-spec a c:Specimen ; c:demonstrates c:AreaChart ; c:label "Area chart" , "Діаграма з областями"@uk , "Flächendiagramm"@de , "مخطط مساحي"@ar ;
     c:help "Values of each series across the categories of a maintained view (iv:View, iv:materialize iv:Graph): a line and the area under it; with c:stacked true each series starts where the earlier ones end. The value axis is on nice steps. Each point is a list item with its value in words: Tab reaches the chart, the arrow keys move between points and show each one's value. A changed row re-renders its points alone. In a right-to-left language the categories run right to left." ;
     c:children ( ui:dt-area-chart ui:dt-area-stacked ) .
+
+ui:dt-columns-grouped a c:ColumnChart ; c:label "Sales by channel" ; c:view ui:dt-sales-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ;
+    c:legend ( ui:dt-sales-web ui:dt-sales-store ui:dt-sales-partner ) .
+ui:dt-columns-stacked a c:ColumnChart ; c:label "Sales, stacked" ; c:view ui:dt-sales-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ;
+    c:stacked true ; c:legend ( ui:dt-sales-web ui:dt-sales-store ui:dt-sales-partner ) .
+ui:dt-columns a c:Flippable ; c:front ui:dt-columns-spec .
+ui:dt-columns-spec a c:Specimen ; c:demonstrates c:ColumnChart ; c:label "Column chart" , "Стовпчикова діаграма"@uk , "Säulendiagramm"@de , "مخطط أعمدة"@ar ;
+    c:help "A bar per series and category of a maintained view: grouped side by side, or with c:stacked true one bar per category with the series on each other. It shares the area chart's parts - the value axis, the legend, the points as list items you move between with the arrow keys - and draws its points as bars." ;
+    c:children ( ui:dt-columns-grouped ui:dt-columns-stacked ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 

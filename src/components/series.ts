@@ -140,8 +140,10 @@ const layout: FnRule = (ctx, focus) => {
   if (!points.length) return o.quads
   const dbl = (n: number) => ctx.f.literal(String(n), ctx.nn(XSD_DOUBLE))
   let first = points[0]!
+  // A point's rank: how many shown series with points come before its series (a group's place).
+  const shown = [...new Set(points.map((p) => p.si))]
   for (const p of points) {
-    o.t(p.node, c('base'), dbl(p.base))
+    o.t(p.node, c('base'), dbl(p.base)).t(p.node, c('rank'), ctx.f.literal(String(shown.filter((si) => si < p.si).length), ctx.nn(NS.xsd + 'integer')))
     const next = points.find((q) => q.si === p.si && q.ci === p.ci + 1)
     if (next) o.t(p.node, c('nextValue'), dbl(next.v)).t(p.node, c('nextBase'), dbl(next.base))
     if (p.si < first.si || (p.si === first.si && p.ci < first.ci)) first = p
@@ -187,7 +189,9 @@ const frame: FnRule = (ctx, focus) => {
     .map((t) => ({ k: Number(str(ctx.object(t, c('index')))), at: Number(str(ctx.object(t, c('at')))) }))
     .sort((a, b) => a.k - b.k)
     .map(({ k, at }) => o.el(`tick-${k}`, 'Span', { class: 'sem-chart-tick', style: `--at: ${cssNumber(at)}` }, [o.text(`tick-${k}-text`, formatNumber(at, locale, 'maximumFractionDigits=4'))]))
-  const style = scale ? `--lo: ${cssNumber(Number(str(ctx.object(scale, c('min')))))}; --hi: ${cssNumber(Number(str(ctx.object(scale, c('max')))))}; --n: ${categories.length}` : `--n: ${categories.length}`
+  const k = new Set(ctx.match(null, c('inChart'), focus).map((q) => q.subject).filter((p) => ctx.match(p, RDF_TYPE, c('ChartPoint')).length).map((p) => str(ctx.object(p, c('seriesIndex'))))).size
+  const counts = `--n: ${categories.length}; --k: ${k}`
+  const style = scale ? `--lo: ${cssNumber(Number(str(ctx.object(scale, c('min')))))}; --hi: ${cssNumber(Number(str(ctx.object(scale, c('max')))))}; ${counts}` : counts
   const plot = o.el('plot', 'Div', { class: 'sem-chart-plot' }, [
     o.el('ticks', 'Div', { class: 'sem-chart-ticks', 'aria-hidden': 'true' }, ticks),
     o.el('marks', 'Ol', { class: 'sem-chart-marks', 'aria-label': labelOf(ctx, focus) }),
@@ -219,7 +223,7 @@ export function pointWords(ctx: RuleContext, point: NamedNode, chart: Term): str
 /** The custom properties every point writes: its category, value, base, next point, and color. */
 export function pointStyle(ctx: RuleContext, point: NamedNode): string {
   const n = (p: string) => str(ctx.object(point, c(p)))
-  const parts = [`--i: ${n('categoryIndex')}`, `--s: ${n('seriesIndex')}`, `--v: ${cssNumber(Number(n('value')))}`, `--b: ${cssNumber(Number(n('base') ?? 0))}`]
+  const parts = [`--i: ${n('categoryIndex')}`, `--s: ${n('seriesIndex')}`, `--r: ${n('rank') ?? 0}`, `--v: ${cssNumber(Number(n('value')))}`, `--b: ${cssNumber(Number(n('base') ?? 0))}`]
   if (n('nextValue') !== undefined) parts.push(`--nv: ${cssNumber(Number(n('nextValue')))}`, `--nb: ${cssNumber(Number(n('nextBase') ?? 0))}`)
   parts.push(`--color: ${seriesColor(Number(n('seriesIndex')))}`)
   return parts.join('; ')
@@ -249,10 +253,21 @@ const areaPoint: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** A column chart's point: a bar from its base to its value; side by side with the other series' (grouped), or on them (c:stacked). */
+const columnPoint: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const chart = ctx.object(focus, c('inChart'))
+  if (!chart) return o.quads
+  const stacked = ctx.object(chart, c('stacked'))?.value === 'true'
+  pointItem(ctx, o, focus, chart, stacked ? 'sem-column-point sem-stacked' : 'sem-column-point', [o.el('bar', 'Span', { class: 'sem-bar', 'aria-hidden': 'true' })])
+  return o.quads
+}
+
 export const seriesFunctions: Record<string, FnRule> = {
   'series:plan': plan,
   'series:layout': layout,
   'series:frame': frame,
   'series:legend-item': seriesItem,
   'series:area-point': areaPoint,
+  'series:column-point': columnPoint,
 }

@@ -1733,7 +1733,7 @@ c:SeriesLayout-fn a sem:Rule ; sem:implements c:SeriesLayout ; sem:function "ser
 c:SeriesLayout-sparql a sem:Rule ; sem:implements c:SeriesLayout ; sem:needsExtension sx:Math , sx:Locale ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?p c:base ?base ; c:nextValue ?nv ; c:nextBase ?nb ; c:first ?first .
+  ?p c:base ?base ; c:rank ?rank ; c:nextValue ?nv ; c:nextBase ?nb ; c:first ?first .
   ?chart c:valueScale ?scale . ?scale a c:ValueScale ; c:min ?min ; c:max ?max ; c:tick ?tick . ?tick c:at ?at ; c:index ?k .
 }
 WHERE {
@@ -1754,6 +1754,11 @@ WHERE {
     BIND(?vN AS ?nv) BIND(IF(BOUND(?vN), IF(?stacked, ?belowN, 0e0), ?unset) AS ?nb)
     { SELECT (MIN(?si3 * 1000000 + ?ci3) AS ?firstKey) WHERE { ?p3 a c:ChartPoint ; c:inChart $this ; c:seriesIndex ?si3 ; c:categoryIndex ?ci3 } }
     BIND(IF(?si * 1000000 + ?ci = ?firstKey, true, ?unset) AS ?first)
+    # Its rank: how many shown series with points come before its series (a group's place).
+    { SELECT ?si (COUNT(DISTINCT ?siBefore) AS ?rank) WHERE {
+      ?pr a c:ChartPoint ; c:inChart $this ; c:seriesIndex ?si .
+      OPTIONAL { ?pb a c:ChartPoint ; c:inChart $this ; c:seriesIndex ?siBefore FILTER(?siBefore < ?si) }
+    } GROUP BY ?si }
   } UNION {
     # The value scale: from the least to the greatest end of any point (with zero), on nice steps.
     { SELECT (MIN(?lo1) AS ?lo0) (MAX(?hi1) AS ?hi0) WHERE {
@@ -1830,13 +1835,14 @@ WHERE {
     BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
     OPTIONAL { $this c:valueScale ?scale . ?scale a c:ValueScale ; c:min ?min ; c:max ?max }
     { SELECT (COUNT(?cn) AS ?n) WHERE { ?cn a c:ChartCategory ; c:inChart $this } }
+    { SELECT (COUNT(DISTINCT ?psi) AS ?k) WHERE { OPTIONAL { ?pp a c:ChartPoint ; c:inChart $this ; c:seriesIndex ?psi } } }
     VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
       ("root" rdfhtml:Figure UNDEF UNDEF UNDEF) ("plot" rdfhtml:Div "sem-chart-plot" "root" 0) ("ticks" rdfhtml:Div "sem-chart-ticks" "plot" 0)
       ("marks" rdfhtml:Ol "sem-chart-marks" "plot" 1) ("categories" rdfhtml:Div "sem-chart-categories" "root" 1) ("legend" rdfhtml:Ul "sem-legend" "root" 2) }
     BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
     BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
     BIND(IF(BOUND(?parentLocal), IRI(CONCAT(?me, "/~", ?parentLocal)), ?unset) AS ?parent)
-    BIND(IF(?local = "root", IF(BOUND(?min), CONCAT("--lo: ", sx:formatNumber(?min + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --hi: ", sx:formatNumber(?max + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --n: ", STR(?n)), CONCAT("--n: ", STR(?n))), ?unset) AS ?style)
+    BIND(IF(?local = "root", IF(BOUND(?min), CONCAT("--lo: ", sx:formatNumber(?min + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --hi: ", sx:formatNumber(?max + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --n: ", STR(?n), "; --k: ", STR(?k)), CONCAT("--n: ", STR(?n), "; --k: ", STR(?k))), ?unset) AS ?style)
     LATERAL { OPTIONAL {
       VALUES (?forLocal ?an ?av0) { ("ticks" "aria-hidden" "true") ("marks" "aria-label" UNDEF) ("categories" "aria-hidden" "true") }
       FILTER(?forLocal = ?local)
@@ -1918,7 +1924,7 @@ CONSTRUCT {
 WHERE {
   $this a c:AreaPoint ; c:inChart ?chart ; c:value ?v ; c:seriesIndex ?si ; c:categoryIndex ?ci ; c:category ?cat0 ; c:series ?series .
   ?series c:label ?seriesLabel .
-  OPTIONAL { $this c:base ?b0 } OPTIONAL { $this c:nextValue ?nv } OPTIONAL { $this c:nextBase ?nb0 }
+  OPTIONAL { $this c:base ?b0 } OPTIONAL { $this c:rank ?rank0 } OPTIONAL { $this c:nextValue ?nv } OPTIONAL { $this c:nextBase ?nb0 }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
   OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
@@ -1927,13 +1933,70 @@ WHERE {
   BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
   BIND(CONCAT(?cat, IF(?cat != "" && ?ser != "", " · ", ""), ?ser) AS ?head)
   BIND(CONCAT(?head, ": ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit))) AS ?words)
-  BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
+  BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
     IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     "; --color: var(--sem-series-", STR(xsd:integer(?si - FLOOR(?si / 6) * 6 + 1)), ")") AS ?pointStyle)
   BIND(STR($this) AS ?me)
-  VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li "sem-point sem-area-point" UNDEF) ("area" rdfhtml:Span "sem-area" 0) ("line" rdfhtml:Span "sem-segment" 1) ("dot" rdfhtml:Span "sem-dot" 2) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
+  VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("area" rdfhtml:Span "sem-area" 0) ("line" rdfhtml:Span "sem-segment" 1) ("dot" rdfhtml:Span "sem-dot" 2) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
   FILTER(!(?local IN ("area", "line")) || BOUND(?nv))
-  BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+  BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
+  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-area-point"), ?cls0) AS ?cls)
+  BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
+  BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~root"))) AS ?parent)
+  BIND(IF(?local = "root", ?pointStyle, ?unset) AS ?style)
+  BIND(IF(?local = "root", ?words, ?unset) AS ?tip)
+  BIND(IF(?local = "root", IF(EXISTS { $this c:first true }, "0", "-1"), ?unset) AS ?tabindex)
+  BIND(IF(?local = "root" || ?local = "words", ?unset, IRI(CONCAT(?me, "/~", ?local, "-aria-hidden"))) AS ?attr)
+  BIND(IF(BOUND(?attr), "aria-hidden", ?unset) AS ?an) BIND(IF(BOUND(?attr), "true", ?unset) AS ?av)
+  BIND(IF(?local = "words", IRI(CONCAT(?me, "/~words-text")), ?unset) AS ?textNode)
+  BIND(IF(?local = "words", ?words, ?unset) AS ?data)
+}""" .
+
+
+# --- Column chart ---------------------------------------------------------------------------------------
+# A point is a bar from its base to its value: side by side with the other shown series' in its category
+# (grouped, by its rank among them), or on the earlier series' (c:stacked true). Negative values hang below zero.
+c:ColumnChart a owl:Class ; rdfs:subClassOf c:AxisChart ;
+    rdfs:label "Column chart"@en , "Стовпчикова діаграма"@uk , "Säulendiagramm"@de , "مخطط أعمدة"@ar ;
+    rdfs:comment "A bar per series and category, grouped side by side; c:stacked stacks the series in one bar per category."@en ;
+    c:pointClass c:ColumnPoint ;
+    sem:slug "column-chart" .
+c:ColumnPoint a owl:Class ; rdfs:subClassOf c:ChartPoint ;
+    rdfs:comment "Internal: a point of a column chart: a bar from its base to its value."@en ;
+    sem:slug "column-point" .
+c:rank a owl:DatatypeProperty ; rdfs:comment "Derived: how many shown series with points come before a point's series."@en .
+c:ColumnPointRendering-fn a sem:Rule ; sem:implements c:ColumnPointRendering ; sem:function "series:column-point" .
+
+c:ColumnPointRendering a sem:Rendering ; sem:targets c:ColumnPoint ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:inChart .
+c:ColumnPointRendering-sparql a sem:Rule ; sem:implements c:ColumnPointRendering ; sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a c:ColumnPoint ; c:inChart ?chart ; c:value ?v ; c:seriesIndex ?si ; c:categoryIndex ?ci ; c:category ?cat0 ; c:series ?series .
+  ?series c:label ?seriesLabel .
+  OPTIONAL { $this c:base ?b0 } OPTIONAL { $this c:rank ?rank0 } OPTIONAL { $this c:nextValue ?nv } OPTIONAL { $this c:nextBase ?nb0 }
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
+  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+  # What it says: "category · series: value unit", the series when the chart has more than one.
+  BIND(EXISTS { ?chart c:seriesVariable ?anySv } || EXISTS { ?chart c:legend ?anyLegend } AS ?many)
+  BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
+  BIND(CONCAT(?cat, IF(?cat != "" && ?ser != "", " · ", ""), ?ser) AS ?head)
+  BIND(CONCAT(?head, ": ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit))) AS ?words)
+  BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
+    IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
+    "; --color: var(--sem-series-", STR(xsd:integer(?si - FLOOR(?si / 6) * 6 + 1)), ")") AS ?pointStyle)
+  BIND(STR($this) AS ?me)
+  VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("bar" rdfhtml:Span "sem-bar" 0) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
+  FILTER(true)
+  BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
+  BIND(IF(?local = "root", CONCAT("sem-point ", IF(EXISTS { ?chart c:stacked true }, "sem-column-point sem-stacked", "sem-column-point")), ?cls0) AS ?cls)
   BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
   BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~root"))) AS ?parent)
   BIND(IF(?local = "root", ?pointStyle, ?unset) AS ?style)

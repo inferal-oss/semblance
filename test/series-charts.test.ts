@@ -19,6 +19,14 @@ ex:f a c:AreaChart .
 ex:g a c:AreaChart ; rdfs:label "Hidden" ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:hiddenSeries "Store" .
 `
 
+const COLUMNS = `${PREFIXES}${SALES}
+ex:a a c:ColumnChart ; rdfs:label "Grouped" ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "€" .
+ex:b a c:ColumnChart ; rdfs:label "Stacked" ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:stacked true ;
+  c:legend ( ex:web ex:store ) .
+ex:c a c:ColumnChart ; rdfs:label "Totals" ; c:view ex:Totals ; c:categoryVariable "month" .
+ex:d a c:ColumnChart ; rdfs:label "Hidden" ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:hiddenSeries "Store" .
+`
+
 describe('series charts', () => {
   it('scales on steps of 1, 2 or 5 × 10ⁿ', () => {
     expect(niceScale(0, 201)).toMatchObject({ min: 0, max: 250, step: 50 })
@@ -32,7 +40,7 @@ describe('series charts', () => {
       const roots = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
       const { s, both } = parity(AREAS, kind, roots)
       const [a, b, c, d, e, f, g] = s.html()
-      expect(a).toContain('<figure style="--lo: -50; --hi: 150; --n: 3"')
+      expect(a).toContain('<figure style="--lo: -50; --hi: 150; --n: 3; --k: 2"')
       expect(a).toContain('Mar · Web: 100 €')
       expect(a!.match(/class="sem-area"/g)).toHaveLength(4)
       expect(a!.match(/tabindex="0"/g)).toHaveLength(1)
@@ -53,14 +61,35 @@ describe('series charts', () => {
     }, 120_000)
   }
 
-  it('re-renders the points a changed row moves, whatever the number of categories (wat, SPARQL)', () => {
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`renders column charts, grouped and stacked, as their function twins do (${kind})`, () => {
+      const { s, both } = parity(COLUMNS, kind, ['a', 'b', 'c', 'd'])
+      const [a, b, c, d] = s.html()
+      // Grouped: each series by its rank among the shown ones; stacked: on the earlier series.
+      expect(a).toContain('<figure style="--lo: -50; --hi: 150; --n: 3; --k: 2"')
+      expect(a).toContain('class="sem-point sem-column-point"')
+      expect(a).toContain('--i: 0; --s: 1; --r: 1; --v: 120.5')
+      expect(b).toContain('class="sem-point sem-column-point sem-stacked"')
+      expect(b).toContain('--i: 0; --s: 1; --r: 1; --v: 80; --b: 120.5')
+      expect(c!.match(/sem-column-point/g)).toHaveLength(3)
+      expect(d).toContain('--k: 1"')
+      expect(d).toContain('--i: 0; --s: 1; --r: 0;')
+      both((h) => h.set('s2', 'amount', 95))
+      both((h) => h.runtime.apply({ remove: h.store.match(h.store.factory.namedNode(EX + 'd'), h.store.factory.namedNode(C + 'hiddenSeries'), null), add: [] }))
+      expect(s.html()[3]).toContain('--k: 2"')
+      both((h) => h.runtime.apply({ add: [h.store.factory.quad(h.store.factory.namedNode(EX + 'a'), h.store.factory.namedNode(C + 'stacked'), h.store.factory.literal('true', h.store.factory.namedNode('http://www.w3.org/2001/XMLSchema#boolean')))], remove: [] }))
+      expect(s.html()[0]).toContain('sem-stacked')
+    }, 120_000)
+  }
+
+  for (const chart of ['AreaChart', 'ColumnChart']) it(`re-renders the points a changed row moves, whatever the number of categories (${chart}, wat, SPARQL)`, () => {
     const cost = (n: number) => {
       const rows = Array.from({ length: n }, (_, i) => `ex:r${i} ex:month "m${String(i).padStart(3, '0')}" ; ex:channel "${i % 2 ? 'Web' : 'Store'}" ; ex:amount ${10 + (i % 7)} ; ex:at ${i} .`).join('\n')
       const view = `ex:Sales a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """SELECT ?month ?channel ?amount WHERE { ?s <https://example.org/#month> ?month ; <https://example.org/#channel> ?channel ; <https://example.org/#at> ?at . OPTIONAL { ?s <https://example.org/#amount> ?amount } } ORDER BY ?at""" .`
-      const h = mount(`${PREFIXES}${rows}\n${view}\nex:a a c:AreaChart ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" .`, 'wat', 'sparql', ['a'])
+      const h = mount(`${PREFIXES}${rows}\n${view}\nex:a a c:${chart} ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" .`, 'wat', 'sparql', ['a'])
       h.html()
       const { engine } = h.shown[0]!.screen
-      const runs = () => [...engine.stats.byRule.entries()].filter(([rule]) => /AreaPointRendering|ChartSeriesRendering|AxisChartRendering/.test(rule)).reduce((a, [, st]) => a + st.runs, 0)
+      const runs = () => [...engine.stats.byRule.entries()].filter(([rule]) => /PointRendering|ChartSeriesRendering|AxisChartRendering/.test(rule)).reduce((a, [, st]) => a + st.runs, 0)
       const before = { written: engine.stats.derivedAdded + engine.stats.derivedRemoved, runs: runs() }
       // Within the scale: the frame and the other points stay as they are.
       h.set('r3', 'amount', 12.5)
