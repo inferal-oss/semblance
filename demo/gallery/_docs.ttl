@@ -29,8 +29,9 @@ ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" , "Стилі й
 ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" , "Збереження"@uk , "Persistenz"@de , "الحفظ"@ar ; sem:order 11 ; ui:key "persistence" .
 ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقل"@ar ; sem:order 12 ; ui:key "navigation" .
 ui:DocViews a ui:DocSection ; rdfs:label "Maintained views" , "Підтримувані подання"@uk , "Gepflegte Ansichten"@de , "العروض المُصانة"@ar ; sem:order 13 ; ui:key "views" .
-ui:DocTools a ui:DocSection ; rdfs:label "Tools" , "Інструменти"@uk , "Werkzeuge"@de , "الأدوات"@ar ; sem:order 14 ; ui:key "tools" .
-ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 15 ; ui:key "performance" .
+ui:DocJelly a ui:DocSection ; rdfs:label "Binary RDF (Jelly)" , "Двійковий RDF (Jelly)"@uk , "Binäres RDF (Jelly)"@de , "RDF الثنائي (Jelly)"@ar ; sem:order 14 ; ui:key "jelly" .
+ui:DocTools a ui:DocSection ; rdfs:label "Tools" , "Інструменти"@uk , "Werkzeuge"@de , "الأدوات"@ar ; sem:order 15 ; ui:key "tools" .
+ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 16 ; ui:key "performance" .
 
 ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:docsSide ui:docPages ) .
@@ -38,7 +39,7 @@ ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:s
 ui:docsSide a c:Stack ; pos:direction pos:Column ; pos:sticky pos:StickToTop ; c:children ( ui:docsNav ) .
 ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
-    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-views ui:dcs-tools ui:dcs-performance ) .
+    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-views ui:dcs-jelly ui:dcs-tools ui:dcs-performance ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
 ui:dcs-start c:when ui:DocStart ; c:content ui:doc-start .
 ui:dcs-recipes c:when ui:DocRecipes ; c:content ui:doc-recipes .
@@ -52,8 +53,92 @@ ui:dcs-styling c:when ui:DocStyling ; c:content ui:doc-styling .
 ui:dcs-persistence c:when ui:DocPersistence ; c:content ui:doc-persistence .
 ui:dcs-navigation c:when ui:DocNavigation ; c:content ui:doc-navigation .
 ui:dcs-views c:when ui:DocViews ; c:content ui:doc-views .
+ui:dcs-jelly c:when ui:DocJelly ; c:content ui:doc-jelly .
 ui:dcs-tools c:when ui:DocTools ; c:content ui:doc-tools .
 ui:dcs-performance c:when ui:DocPerformance ; c:content ui:doc-performance .
+
+# --- Binary RDF (Jelly) ---
+ui:doc-jelly a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-jl-h ui:doc-jl-1 ui:doc-jl-2
+                 ui:doc-jl-when-h ui:doc-jl-when-1 ui:doc-jl-table ui:doc-jl-when-2 ui:doc-jl-when-list
+                 ui:doc-jl-store-h ui:doc-jl-store-1 ui:doc-jl-store-code
+                 ui:doc-jl-stream-h ui:doc-jl-stream-1 ui:doc-jl-stream-code ui:doc-jl-stream-2
+                 ui:doc-jl-remote-h ui:doc-jl-remote-1 ui:doc-jl-remote-code ui:doc-jl-remote-2
+                 ui:doc-jl-how-h ui:doc-jl-how
+                 ui:doc-jl-not-h ui:doc-jl-not ) .
+ui:doc-jl-h a c:Heading ; c:level 1 ; c:label "Binary RDF (Jelly)" .
+ui:doc-jl-1 a c:Text ; c:label "Jelly is a binary format for RDF, built on Protocol Buffers, with a streaming protocol. A stream is a series of frames, each a batch of statements. IRIs are written once into lookup tables that last from frame to frame, so after that an IRI costs an identifier of a byte or two, and a value repeated in consecutive statements costs nothing at all. Semblance reads Jelly 1.2 and the older 1.0 and 1.1 streams, and writes 1.2. Both engines do this in WebAssembly, and a TypeScript codec does it for the stores without an engine." .
+ui:doc-jl-2 a c:Text ; c:label "Text formats parse character by character and spell out every IRI they name. A Jelly reader reads lengths and identifiers. It never scans for the end of a token, and it resolves an IRI it has already seen without looking at its text. It can also stop at any frame: memory stays bounded, and each frame costs what it holds, however long the stream has run." .
+
+ui:doc-jl-when-h a c:Heading ; c:level 2 ; c:label "When it is better" .
+ui:doc-jl-when-1 a c:Text ; c:label "We measured it on Semblance's own data before using it anywhere. Jelly wins wherever data arrives as a stream of statements that name the same things again and again. It loses where a graph is mostly long strings that are shipped compressed, which is what Semblance's ontology is. Before is what Semblance used: server-sent events of JSON and N-Triples for a remote source, Turtle for the ontology." .
+ui:doc-jl-table a c:Table ; c:label "Jelly against the format used before" ; c:query ui:JellyNumbers ; c:dataset ui:JellyNumbers ;
+    c:tableColumns ( ui:jlc-what ui:jlc-before ui:jlc-jelly ui:jlc-verdict ) .
+ui:jlc-what a c:Column ; c:variable "what" ; c:label "Measured" ; c:sortable false .
+ui:jlc-before a c:Column ; c:variable "before" ; c:label "Before" ; c:align "end" ; c:sortable false .
+ui:jlc-jelly a c:Column ; c:variable "jelly" ; c:label "Jelly" ; c:align "end" ; c:sortable false .
+ui:jlc-verdict a c:Column ; c:variable "verdict" ; c:label "Used" ; c:sortable false .
+ui:JellyNumbers a sem:View ;
+    sem:select """SELECT ?what ?before ?jelly ?verdict WHERE { ?m a ui:JellyMeasurement ; rdfs:label ?what ; ui:before ?before ; ui:jelly ?jelly ; ui:verdict ?verdict ; sem:order ?o } ORDER BY ?o""" .
+ui:jm-delta a ui:JellyMeasurement ; sem:order 1 ; rdfs:label "A remote delta (a todo edited)" ; ui:before "275 B" ; ui:jelly "85 B" ; ui:verdict "yes" .
+ui:jm-snapshot a ui:JellyMeasurement ; sem:order 2 ; rdfs:label "A remote snapshot (900 statements)" ; ui:before "97.3 KiB" ; ui:jelly "12.1 KiB" ; ui:verdict "yes" .
+ui:jm-stream a ui:JellyMeasurement ; sem:order 3 ; rdfs:label "That stream, gzipped and flushed per message" ; ui:before "55.3 KiB" ; ui:jelly "44.3 KiB" ; ui:verdict "yes" .
+ui:jm-decode a ui:JellyMeasurement ; sem:order 4 ; rdfs:label "Decoding its 2,001 messages" ; ui:before "8.9 ms" ; ui:jelly "3.6 ms" ; ui:verdict "yes" .
+ui:jm-load a ui:JellyMeasurement ; sem:order 5 ; rdfs:label "The ontology into the WASM engine" ; ui:before "28.5 ms" ; ui:jelly "13.5 ms" ; ui:verdict "dumps" .
+ui:jm-raw a ui:JellyMeasurement ; sem:order 6 ; rdfs:label "The ontology, uncompressed" ; ui:before "4,315 KiB" ; ui:jelly "3,889 KiB" ; ui:verdict "dumps" .
+ui:jm-gzip a ui:JellyMeasurement ; sem:order 7 ; rdfs:label "The ontology over the wire, gzip" ; ui:before "638 KiB" ; ui:jelly "731 KiB" ; ui:verdict "no" .
+ui:jm-brotli a ui:JellyMeasurement ; sem:order 8 ; rdfs:label "The ontology over the wire, brotli" ; ui:before "440 KiB" ; ui:jelly "489 KiB" ; ui:verdict "no" .
+ui:doc-jl-when-2 a c:Text ; c:label "Why the ontology is the exception: almost three quarters of its bytes are string literals (rule queries, style rules, documentation), which Jelly stores as they are. Compression then works on what is left, and Turtle's repeated prefixed names compress better than Jelly's identifiers do. A page also gets the ontology only once, while a remote source sends one message after another for as long as the page is open. The rule of thumb:" .
+ui:doc-jl-when-list a c:DescriptionList ; c:of ui:doc-jl-when-items ; c:fields ( ui:jlw-stream ui:jlw-dump ui:jlw-binary ui:jlw-turtle ) .
+ui:doc-jl-when-items ui:jlw-stream "Use Jelly for streams of changes: many small messages naming the same subjects and predicates, as a remote store, a log or a feed sends them." ;
+    ui:jlw-dump "Use it for dumps and loads between stores and processes: a store's contents written and read back in WebAssembly, twice as fast as Turtle, without text in between." ;
+    ui:jlw-binary "Use it where nothing compresses: storage, a message queue, a socket. There it is the smallest form." ;
+    ui:jlw-turtle "Keep Turtle for graphs people write and read, and for literal-heavy graphs a server compresses once and serves many times, such as an app's own graphs and the ontology." .
+ui:jlw-stream rdfs:label "Streams" . ui:jlw-dump rdfs:label "Dumps" . ui:jlw-binary rdfs:label "Uncompressed" . ui:jlw-turtle rdfs:label "Not here" .
+
+ui:doc-jl-store-h a c:Heading ; c:level 2 ; c:label "In a store" .
+ui:doc-jl-store-1 a c:Text ; c:label "Every store reads and writes it. The engine stores do it natively; N3.js, Oxigraph and the hybrid store go through the TypeScript codec. loadJelly is all or nothing. loadJellyStream reads a stream as it arrives, adding each frame once it is whole, so memory holds one frame at a time; if the stream breaks, the frames that arrived stay in the store. dumpJellyStream writes frames while the reader takes them." .
+ui:doc-jl-store-code a c:Code ; c:block true ; c:language "typescript" ; c:label """const bytes = store.dumpJelly()            // what the store holds, as a stream of quads
+const one = store.dumpJelly(graph)         // one graph
+other.loadJelly(bytes)                     // returns how many statements it read
+other.loadJelly(triples, graph)            // a stream of triples, into a graph
+
+// As the bytes arrive, and as the reader takes them:
+await loadJellyStream(store, (await fetch('/data.jelly')).body)
+return new Response(dumpJellyStream(store), { headers: { 'content-type': 'application/x-jelly-rdf' } })""" .
+
+ui:doc-jl-stream-h a c:Heading ; c:level 2 ; c:label "Frame by frame" .
+ui:doc-jl-stream-1 a c:Text ; c:label "A stream need not arrive whole. FrameSplitter cuts the frames out of chunks as they come (a fetch body, a socket), and a reader takes one frame at a time. A writer hands back frames as they fill." .
+ui:doc-jl-stream-code a c:Code ; c:block true ; c:language "typescript" ; c:label """import { FrameSplitter, JellyReader, JellyWriter, delimit } from '@inferal-oss/semblance'
+
+const split = new FrameSplitter()
+const reader = new JellyReader(DataFactory)
+for await (const chunk of response.body)
+  for (const frame of split.push(chunk)) reader.frame(frame, { quad: (q) => store.add(q) })
+
+const writer = new JellyWriter({ physical: 2 })       // 2: quads
+for (const q of quads) for (const frame of writer.add(q)) socket.send(delimit(frame))
+socket.send(delimit(writer.flush()))""" .
+ui:doc-jl-stream-2 a c:Text ; c:label "In an engine, the same goes through Engine.jellyReader() and jellyWriter(), and statements cross into WebAssembly as identifiers, never as text. A stream of RDF Messages (one change, one event) marks where each message ends, and blank nodes are scoped to their message." .
+
+ui:doc-jl-remote-h a c:Heading ; c:level 2 ; c:label "Remote sources" .
+ui:doc-jl-remote-1 a c:Text ; c:label "A page bound to a remote store asks for Jelly first. A server that offers it, as the reference SourceServer does, answers with one Jelly stream per subscription: a frame per message, with removals first. The message's kind and cursor ride in the frame's metadata, and the lookups carry over from one message to the next. A server that answers with server-sent events works as before, and writes stay JSON." .
+ui:doc-jl-remote-code a c:Code ; c:block true ; c:language "typescript" ; c:label """httpTransport({ url: 'https://example.org/store/' })                 // Jelly when offered
+httpTransport({ url: 'https://example.org/store/', jelly: false })   // server-sent events only""" .
+ui:doc-jl-remote-2 a c:Text ; c:label "Nothing else changes for the page: the same snapshot, deltas and cursors, applied through the runtime as one change each." .
+
+ui:doc-jl-how-h a c:Heading ; c:level 2 ; c:label "What you can rely on" .
+ui:doc-jl-how a c:DescriptionList ; c:of ui:doc-jl-how-items ; c:fields ( ui:jlh-conformance ui:jlh-bytes ui:jlh-speed ui:jlh-bounded ui:jlh-limits ) .
+ui:doc-jl-how-items ui:jlh-conformance "Both engines and the TypeScript codec pass the Jelly conformance suite: every test of Jelly 1.2 and of reading 1.0 and 1.1, apart from those that need generalized RDF." ;
+    ui:jlh-bytes "Where the format leaves a writer free (how an IRI splits into prefix and name, which lookup entry to reuse, when a frame ends), every writer here makes the same choice, so all three write the same bytes from the same statements. A test checks it." ;
+    ui:jlh-speed "The hand-written WebAssembly engine writes the whole ontology in 14 ms and reads it back in 13 ms; the Rust build takes 25 and 17." ;
+    ui:jlh-bounded "A reader holds its lookups, and a writer its lookups and the frame in progress. Neither does work that grows with what came before." ;
+    ui:jlh-limits "A stream that asks for more than 16,384 names, 4,096 prefixes or 256 datatypes, or a batch of more than a million rows, is refused before anything is allocated." .
+ui:jlh-conformance rdfs:label "Conformance" . ui:jlh-bytes rdfs:label "The same bytes" . ui:jlh-speed rdfs:label "Speed" .
+ui:jlh-bounded rdfs:label "Bounded memory" . ui:jlh-limits rdfs:label "Limits" .
+
+ui:doc-jl-not-h a c:Heading ; c:level 2 ; c:label "Not supported" .
+ui:doc-jl-not a c:Text ; c:label "Writing the older 1.0 and 1.1 streams: any reader of 1.2 reads what Semblance writes. Generalized RDF (a literal as a subject, a blank node as a predicate) is refused, as RDF 1.2 refuses it. Namespace declarations are reported by the TypeScript reader and skipped by the engines." .
 
 # --- Overview ---
 ui:doc-overview a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
@@ -531,17 +616,18 @@ const screen = runtime.project({ modality: MOD.Screen, layers, roots: [root] })
 const renderer = new DomRenderer(screen.index, element, root)
 renderer.flush()
 new EventBus(runtime, screen).attach(renderer, () => renderer.flush())""" .
-ui:doc-in-list a c:DescriptionList ; c:of ui:doc-in-items ; c:fields ( ui:in-data ui:in-proj ui:in-embed ui:in-ssr ui:in-per ui:in-nav ui:in-safe ) .
+ui:doc-in-list a c:DescriptionList ; c:of ui:doc-in-items ; c:fields ( ui:in-data ui:in-proj ui:in-embed ui:in-ssr ui:in-per ui:in-nav ui:in-safe ui:in-jelly ) .
 ui:doc-in-items ui:in-data "Change the graph with runtime.apply({ add, remove }) or runtime.transaction(…), then flush; read it with store.match or SPARQL. Keep your data in your own vocabulary and point components at it." ;
     ui:in-proj "runtime.project again for another root or the Text modality; every change reaches all projections once." ;
     ui:in-embed "Mount several roots into an existing page, or place an unstyled c:HostSlot inside a layout and mount existing content into renderer.slot(name)." ;
     ui:in-ssr "In Node, loadStore from @inferal-oss/semblance/node, project, and toHTML or toText." ;
     ui:in-per "per:Policy nodes say what to remember; attach Persistence before the first projection." ;
     ui:in-nav "nav:Location says which state lives in the address; attach Navigation, and links can point at resources (c:to)." ;
-    ui:in-safe "A graph from a visitor or a model goes in mount's authored, not graphs: it renders under the safe:Authored policy (no script, no embedded documents, no styles or images loaded from elsewhere on its own), and what is refused is reported to onRefused. The live examples here run that way; Safe authoring, in these docs, has how it works, extending the policy and a Content Security Policy to go with it." .
+    ui:in-safe "A graph from a visitor or a model goes in mount's authored, not graphs: it renders under the safe:Authored policy (no script, no embedded documents, no styles or images loaded from elsewhere on its own), and what is refused is reported to onRefused. The live examples here run that way; Safe authoring, in these docs, has how it works, extending the policy and a Content Security Policy to go with it." ;
+    ui:in-jelly "Jelly is a binary RDF format with a streaming protocol. store.loadJelly(bytes) takes a stream, and store.dumpJelly() gives what the store holds as one. The engines read and write it natively, and N3.js and Oxigraph go through the same codec. A remote source's stream travels as Jelly whenever the server offers it. Binary RDF (Jelly), in these docs, has when it pays and when Turtle is better." .
 ui:in-data rdfs:label "Your data" . ui:in-proj rdfs:label "Projections" . ui:in-embed rdfs:label "Embedding" .
 ui:in-ssr rdfs:label "Server" . ui:in-per rdfs:label "Remembering" . ui:in-nav rdfs:label "The address" .
-ui:in-safe rdfs:label "Untrusted graphs" .
+ui:in-safe rdfs:label "Untrusted graphs" . ui:in-jelly rdfs:label "Binary RDF (Jelly)" .
 ui:doc-in-stall-h a c:Heading ; c:level 2 ; c:label "When the page is busy" .
 ui:doc-in-stall-1 a c:Text ;
     c:children ( "A turn - an event, its reactions, the maintained views and every projection's rules - has a budget. The engine checks it between evaluations; over it, the turn is suspended at a consistent point and what is left is held, not lost. The stall effect records a " ui:doc-in-m-Stall ", raises an event on your " ui:doc-in-m-Watchdog " and its reaction opens your dialog, a " ui:doc-in-m-Report " in an ordinary c:Dialog. Hangs nothing could interrupt are noticed by a heartbeat worker and the browser's long-task observers, and logged to " ui:doc-in-m-Log " (Tools › Engine)." ) .

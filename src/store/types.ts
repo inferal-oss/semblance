@@ -1,4 +1,5 @@
 import type { DefaultGraph, Literal, NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
+import type { JellyDumpOptions, JellyStoreReader } from '../jelly/store.ts'
 
 export interface Factory {
   namedNode(value: string): NamedNode
@@ -44,6 +45,19 @@ export interface GraphStore {
    */
   constructFor?(query: string, variable: string, values: Term[], graphs: Quad_Graph[]): Quad[]
   loadTurtle(text: string): void
+  /**
+   * Load a Jelly-RDF stream (docs/JELLY.md): delimited frames, or one bare frame. The statements
+   * of a stream of triples go to `graph` (default: the default graph); a stream of quads keeps its
+   * graphs. All or nothing. Returns how many statements it read. Optional: the built-in stores all
+   * have it (the engines natively, N3.js and Oxigraph through src/jelly/).
+   */
+  loadJelly?(bytes: Uint8Array, graph?: Quad_Graph): number
+  /** What the store holds, in `graph` or every graph, as a Jelly-RDF 1.2 stream of quads. Optional, as loadJelly. */
+  dumpJelly?(graph?: Quad_Graph, options?: JellyDumpOptions): Uint8Array
+  /** A reader of one Jelly stream into the store, a frame at a time (loadJellyStream uses it). Optional, as loadJelly. */
+  jellyReader?(graph?: Quad_Graph): JellyStoreReader
+  /** What the store holds as delimited Jelly frames, each as it is written (dumpJellyStream uses it). Optional, as loadJelly. */
+  jellyFrames?(graph?: Quad_Graph, options?: JellyDumpOptions): Iterable<Uint8Array>
   /** How many quads it holds, in every graph, without listing them. Optional: else count a match of everything. */
   size?(): number
   /**

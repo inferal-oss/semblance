@@ -3,6 +3,7 @@ import type * as Ox from 'oxigraph'
 import { Parser } from 'n3'
 import { n3Store } from './n3.ts'
 import { plainResult } from './oxigraph.ts'
+import { jellyReaderInto, readJellyInto } from '../jelly/store.ts'
 import type { GraphStore } from './types.ts'
 
 /**
@@ -53,6 +54,11 @@ export function hybridStore(ox: typeof Ox): GraphStore {
     loadTurtle(text) {
       for (const q of new Parser().parse(text)) add(q as Quad)
     },
+    // Read once, as loadTurtle: one set of blank nodes for both copies.
+    loadJelly: (bytes, graph) => readJellyInto(add, bytes, graph),
+    dumpJelly: (graph, options) => mirror.dumpJelly!(graph, options),
+    jellyReader: (graph) => jellyReaderInto(add, graph),
+    jellyFrames: (graph, options) => mirror.jellyFrames!(graph, options),
     dispose() {
       if (disposed) return
       disposed = true

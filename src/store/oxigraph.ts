@@ -1,6 +1,7 @@
 import type { Quad, Quad_Graph, Quad_Object, Quad_Predicate, Quad_Subject, Term } from '@rdfjs/types'
 import type * as Ox from 'oxigraph'
 import { DataFactory } from 'n3'
+import { dumpJellyOf, jellyFramesOf, jellyReaderInto, readJellyInto } from '../jelly/store.ts'
 import type { Factory, GraphStore } from './types.ts'
 
 const COMPACT_MIN = 5_000
@@ -100,6 +101,10 @@ export function oxigraphStore(ox: typeof Ox): GraphStore {
       return plainResult(store.query(query, { default_graph: graphs as Ox.NamedNode[] }))
     },
     loadTurtle: (text) => store.load(text, { format: 'text/turtle' }),
+    loadJelly: (bytes, graph) => readJellyInto((q) => store.add(q as Ox.Quad), bytes, graph),
+    dumpJelly: (graph, options) => dumpJellyOf(store.match(null, null, null, (graph ?? null) as Ox.Term).map(plainQuad), options),
+    jellyReader: (graph) => jellyReaderInto((q) => store.add(q as Ox.Quad), graph),
+    jellyFrames: (graph, options) => jellyFramesOf(store.match(null, null, null, (graph ?? null) as Ox.Term).map(plainQuad), options),
     size: () => store.size,
     dispose() {
       // Once only: freeing twice would hand Oxigraph a dangling pointer.

@@ -257,15 +257,23 @@ describe('remote sources', () => {
     expect(measure({ extra: 10, more: 60 })).toEqual(small)
   })
 
-  it('speaks the protocol over HTTP', async () => {
+  it.each([true, false])('speaks the protocol over HTTP (a Jelly stream: %s)', async (jelly) => {
     const server = store()
     const handle = server.handler('/store/')
     const http = createServer((req, res) => void (handle(req, res) || res.writeHead(404).end()))
     await new Promise<void>((r) => http.listen(0, r))
     const url = `http://localhost:${(http.address() as AddressInfo).port}/store/`
     try {
-      const h = mount(httpTransport({ url }))
+      const types: string[] = []
+      const fetching: typeof fetch = async (u, init) => {
+        const res = await fetch(u, init)
+        types.push(res.headers.get('content-type') ?? '')
+        return res
+      }
+      const h = mount(httpTransport({ url, jelly, fetch: fetching }))
       await until(() => h.state() === SRC + 'Live')
+      // The page asks for Jelly (unless told not to) and the reference server answers with it.
+      expect(types[0]).toBe(jelly ? 'application/x-jelly-rdf' : 'text/event-stream')
       expect(h.labels()).toHaveLength(3)
       h.add('Over the wire')
       await h.sources.settled()

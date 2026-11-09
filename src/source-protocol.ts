@@ -1,9 +1,12 @@
 // The protocol between a page and a store elsewhere (docs/REMOTE.md): what a page binds to
 // (patterns), and the messages that carry a snapshot, the store's changes and the page's
-// writes. Statements travel as N-Triples. Shared by the client effect (src/remote.ts) and the
-// reference server (src/node/source-server.ts); any server that speaks it will do.
+// writes. Statements travel as N-Triples in server-sent events, or, when both ends speak it, as a
+// Jelly stream (docs/JELLY.md: a frame per message). Shared by the client effect (src/remote.ts)
+// and the reference server (src/node/source-server.ts); any server that speaks it will do.
 import type { Quad, Term } from '@rdfjs/types'
-import { Parser, Writer } from 'n3'
+import { DataFactory, Parser, Writer } from 'n3'
+import { FrameSplitter, type JellyFactory, JellyReader } from './jelly/decode.ts'
+import { delimit, JellyWriter } from './jelly/encode.ts'
 import type { Factory } from './store/types.ts'
 
 /**
@@ -80,6 +83,91 @@ export function fromNTriples(nt: string, f: Pick<Factory, 'namedNode' | 'literal
     .parse(nt)
     .filter((q) => q.subject.termType === 'NamedNode' && q.object.termType !== 'BlankNode')
     .map((q) => f.quad(term(q.subject as Term), term(q.predicate as Term), term(q.object as Term)))
+}
+
+/** A message of the stream with its statements as statements: what a server holds, and what a Jelly stream carries. */
+export interface SourceEvent {
+  cursor: number
+  add: readonly Quad[]
+  remove: readonly Quad[]
+  write?: string
+  reset?: boolean
+}
+
+/** The media type of a Jelly stream; a page asks for it first, and takes server-sent events from a server that answers with those. */
+export const JELLY_MEDIA_TYPE = 'application/x-jelly-rdf'
+
+/** A message as it travels in server-sent events: statements as N-Triples. */
+export function wireMessage(event: string, e: SourceEvent): Snapshot | DeltaMessage | { cursor: number } {
+  if (event === 'snapshot') return { cursor: e.cursor, add: toNTriples(e.add), ...(e.reset && { reset: true }) }
+  if (event === 'delta') return { cursor: e.cursor, add: toNTriples(e.add), remove: toNTriples(e.remove), ...(e.write && { write: e.write }) }
+  return { cursor: e.cursor }
+}
+
+/** A message's statements, in `f`'s terms, from N-Triples or from statements; those with a blank node are left out (fromNTriples). */
+export function statementsOf(x: string | readonly Quad[], f: Pick<Factory, 'namedNode' | 'literal' | 'quad'>): Quad[] {
+  if (typeof x === 'string') return fromNTriples(x, f)
+  const term = (t: Term): Term => (t.termType === 'Literal' ? f.literal(t.value, t.language || f.namedNode(t.datatype.value)) : f.namedNode(t.value))
+  return x.filter((q) => q.subject.termType === 'NamedNode' && q.object.termType !== 'BlankNode').map((q) => f.quad(term(q.subject), term(q.predicate), term(q.object)))
+}
+
+const utf8 = new TextEncoder()
+const text = new TextDecoder()
+
+/**
+ * The stream as Jelly: one stream of triples (RDF Messages), a frame per message (a large one, a
+ * snapshot, spans several); a delta's removals come first. The metadata of a message's last frame
+ * says which message it is: `event`, `cursor`, and `remove` (how many of its statements are
+ * removals), `write`, `reset` when there are some. One writer per subscription: its lookups carry
+ * the IRIs from one message to the next.
+ */
+export class JellyEventWriter {
+  private readonly w = new JellyWriter({ physical: 1, streamType: 1 })
+
+  frame(event: string, e: Partial<SourceEvent> & { cursor: number }): Uint8Array {
+    const remove = e.remove ?? []
+    const out: Uint8Array[] = []
+    for (const q of [...remove, ...(e.add ?? [])]) for (const f of this.w.add(q)) out.push(delimit(f))
+    if (e.add?.length || remove.length) this.w.endMessage()
+    const meta: Record<string, Uint8Array> = { event: utf8.encode(event), cursor: utf8.encode(String(e.cursor)) }
+    if (remove.length) meta.remove = utf8.encode(String(remove.length))
+    if (e.write) meta.write = utf8.encode(e.write)
+    if (e.reset) meta.reset = utf8.encode('true')
+    out.push(delimit(this.w.flush(meta)!))
+    if (out.length === 1) return out[0]!
+    const bytes = new Uint8Array(out.reduce((n, f) => n + f.length, 0))
+    out.reduce((at, f) => (bytes.set(f, at), at + f.length), 0)
+    return bytes
+  }
+}
+
+/** The messages of a Jelly stream (JellyEventWriter's), as they arrive. */
+export async function* jellySourceEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<{ event: string; data: SourceEvent }> {
+  const reader = body.getReader()
+  const split = new FrameSplitter()
+  const jelly = new JellyReader(DataFactory as unknown as JellyFactory)
+  let quads: Quad[] = []
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) return split.end()
+      for (const frame of split.push(value)) {
+        let meta = new Map<string, Uint8Array>()
+        jelly.frame(frame, { quad: (q) => void quads.push(q), metadata: (m) => void (meta = m) })
+        const get = (k: string) => (meta.has(k) ? text.decode(meta.get(k)) : undefined)
+        const event = get('event')
+        // A message's statements may span frames; its last frame says what it is.
+        if (!event) continue
+        const removes = Number(get('remove') ?? 0)
+        const write = get('write')
+        const data: SourceEvent = { cursor: Number(get('cursor')), remove: quads.slice(0, removes), add: quads.slice(removes), ...(write && { write }), ...(get('reset') && { reset: true }) }
+        quads = []
+        yield { event, data }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
 }
 
 /** Server-sent events from a stream of text: each `event:` with its `data:` (comments, used to keep the connection alive, are skipped). */
