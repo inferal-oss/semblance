@@ -172,6 +172,10 @@ shown, built and disposed while the page renders (`prerenderSandboxes`). The pag
 example before any script runs. Its frame says `data-sem-state="pending"` until the client's
 sandbox runs.
 
+An example's sources are authored content ([SAFETY.md](SAFETY.md)): its projections and its
+styles are rendered under the `safe:Authored` policy, read from the site's store, and what the
+policy refuses is listed among its warnings, on the server as in the browser.
+
 A build that fails writes its problem to the page's graph, as the browser's host does. The frame
 then shows it (`broken`), and the panes stay empty. A styled example (one that declares its own
 `sty:` rules) carries its scoped styles in a `<style>` beside its rendering.

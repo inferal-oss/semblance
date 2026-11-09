@@ -55,7 +55,7 @@ export function compileStyles(store: GraphStore, opts: CompileOptions = {}): str
       : as === 'attribute' ? (/^[a-z][a-z0-9-]*$/.test(text) ? undefined : `"${text}" is not an attribute name`)
       : cssProblem(policy, text, as)
     if (!why) return true
-    const message = `Refused a style of <${at.value}>: ${why}.`
+    const message = `Refused a style${at.termType === 'NamedNode' ? ` of <${at.value}>` : ''}: ${why}.`
     if (!reported.has(message)) reported.add(message), (opts.onRefused ?? ((e) => console.warn(e.message)))(new Refused(at.value, 'style', message))
     return false
   }
