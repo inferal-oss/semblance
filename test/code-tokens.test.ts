@@ -185,7 +185,7 @@ describe('the site’s code blocks', () => {
   it('each have a colored language', () => {
     const store = demo()
     const rows = store.select(`PREFIX c: <${C}> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-      SELECT ?code ?language WHERE { ?code a/rdfs:subClassOf* c:Code ; c:block ?block FILTER(STR(?block) = "true") OPTIONAL { ?code c:language ?language } }`)
+      SELECT ?code ?language WHERE { ?code a/rdfs:subClassOf* c:Code ; c:block ?block FILTER(STR(?block) = "true") OPTIONAL { ?code c:language ?language } }`, [store.factory.defaultGraph()])
     expect(rows.length).toBeGreaterThan(20)
     const plain = rows.filter((r) => !PLAIN.has(r.get('code')!.value) && !tokenizeCode('', r.get('language')?.value.toLowerCase())).map((r) => r.get('code')!.value)
     expect(plain).toEqual([])
