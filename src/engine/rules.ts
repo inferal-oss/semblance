@@ -34,7 +34,7 @@ export interface Rule {
   watches?: Set<string>
   /**
    * Paths from the focus to predicates the rule reads too (with `watches`; a step "^p" goes against
-   * p): a SPARQL rule whose variable predicates come from its focus (`$this c:property ?p . ?target
+   * p, a step "?p" keeps the nodes that have p): a SPARQL rule whose variable predicates come from its focus (`$this c:property ?p . ?target
    * ?p ?value`, focus-predicates.ts) watches, per focus, the predicates its focus names there.
    */
   watchesVia?: string[][]
