@@ -13,6 +13,7 @@ import { formatNumber } from '../../rdf-engine/host/intl.ts'
 import { encoding, message } from './charts.ts'
 import { md5Key } from './data.ts'
 import { labelOf, rdfList, str, text } from './util.ts'
+import { phrase } from './gantt.ts'
 
 const RS = NS.rs
 const c = (local: string) => NS.c + local
@@ -32,7 +33,7 @@ export function seriesMessage(ctx: RuleContext, chart: NamedNode): string | unde
   return undefined
 }
 
-type Row = { pos: number | string; cat: string; ser?: string; y?: number; x?: number; z?: number }
+type Row = { pos: number | string; cat: string; ser?: string; y?: number; x?: number; z?: number; n: number }
 
 /** A literal's number, if it is one (as xsd:double reads it): undefined for anything else. */
 const numberOf = (t: Term | undefined) => {
@@ -51,6 +52,8 @@ function rowsOf(ctx: RuleContext, chart: NamedNode, view: Term): Row[] {
     return {
       pos: index ? Number(index.value) : r.value, cat: str(value(e.category)) ?? '', ser: e.series ? str(value(e.series)) : '',
       y: numberOf(value(e.value)), x: xv === undefined ? undefined : numberOf(value(xv)), z: zv === undefined ? undefined : numberOf(value(zv)),
+      // A row the result has n times (iv:multiplicity) counts n times.
+      n: Number(str(ctx.object(r, NS.iv + 'multiplicity')) ?? 1),
     }
   })
 }
@@ -88,11 +91,11 @@ function mintSeries(ctx: RuleContext, o: Out, focus: NamedNode, rows: Row[]) {
 }
 const int = (ctx: RuleContext, n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'integer'))
 
-/** c:SeriesPlan: the chart's series, categories and points, from its view's rows (a binned kind has a plan of its own). */
+/** c:SeriesPlan: the chart's series, categories and points, from its view's rows (a kind with c:ownPlan has a plan of its own). */
 const plan: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const view = ctx.object(focus, C.view)
-  if (!view || !ctx.match(view, RDF_TYPE, RS + 'ResultSet').length || kindSays(ctx, focus, c('binned'), 'true')) return o.quads
+  if (!view || !ctx.match(view, RDF_TYPE, RS + 'ResultSet').length || kindSays(ctx, focus, c('ownPlan'), 'true')) return o.quads
   const rows = rowsOf(ctx, focus, view)
   const { series, hidden } = mintSeries(ctx, o, focus, rows)
   // Categories, as first seen in any row.
@@ -110,14 +113,14 @@ const plan: FnRule = (ctx, focus) => {
     if (hidden.has(s.key)) return
     categories.forEach((cat, ci) => {
       const these = rows.filter((r) => r.ser === s.key && r.cat === cat && r.y !== undefined)
-      const values = these.map((r) => r.y!)
+      const values = these.map((r) => r.y! * r.n)
       if (!values.length || (hasX && !these.some((r) => r.x !== undefined))) return
       const n = o.node(`point-${md5Key(s.key)}-${md5Key(cat)}`)
       o.t(n, RDF_TYPE, ctx.nn(c('ChartPoint'))).t(n, c('inChart'), focus).t(n, c('series'), o.node(`series-${md5Key(s.key)}`)).t(n, c('category'), cat)
       if (pointClass) o.t(n, RDF_TYPE, pointClass)
       o.t(n, c('value'), ctx.f.literal(String(values.reduce((a, b) => a + b, 0)), ctx.nn(XSD_DOUBLE)))
-      if (hasX) o.t(n, c('x'), ctx.f.literal(String(sum(these.map((r) => r.x))), ctx.nn(XSD_DOUBLE)))
-      if (hasZ) o.t(n, c('size'), ctx.f.literal(String(sum(these.map((r) => r.z))), ctx.nn(XSD_DOUBLE)))
+      if (hasX) o.t(n, c('x'), ctx.f.literal(String(sum(these.map((r) => (r.x === undefined ? undefined : r.x * r.n)))), ctx.nn(XSD_DOUBLE)))
+      if (hasZ) o.t(n, c('size'), ctx.f.literal(String(sum(these.map((r) => (r.z === undefined ? undefined : r.z * r.n)))), ctx.nn(XSD_DOUBLE)))
       o.t(n, c('seriesIndex'), int(ctx, si)).t(n, c('categoryIndex'), int(ctx, ci)).t(n, SEM.orderKey, tupleKey([si, ci]))
       o.t(o.node('marks'), NS.rdfhtml + 'hasChild', n)
     })
@@ -154,7 +157,7 @@ const histogramPlan: FnRule = (ctx, focus) => {
     o.t(n, c('lower'), dbl(lower)).t(n, c('upper'), dbl(upper))
     series.forEach((s, si) => {
       if (hidden.has(s.key)) return
-      const counted = rows.filter((r) => r.ser === s.key && r.y !== undefined && binOf(r.y) === k).length
+      const counted = rows.filter((r) => r.ser === s.key && r.y !== undefined && binOf(r.y) === k).reduce((a, r) => a + r.n, 0)
       if (!counted) return
       const p = o.node(`point-${md5Key(s.key)}-${md5Key(String(k))}`)
       o.t(p, RDF_TYPE, ctx.nn(c('ChartPoint'))).t(p, c('inChart'), focus).t(p, c('series'), o.node(`series-${md5Key(s.key)}`)).t(p, c('category'), `${cssNumber(lower)}–${cssNumber(upper)}`)
@@ -167,7 +170,49 @@ const histogramPlan: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-type Point = { node: NamedNode; si: number; ci: number; v: number; base: number; x?: number; z?: number }
+/** The p-quantile of ascending values, by linear interpolation between the closest ranks (h = (n − 1)p). */
+export function quantile(sorted: number[], p: number): number {
+  const h = (sorted.length - 1) * p
+  const i = Math.floor(h)
+  const j = Math.min(i + 1, sorted.length - 1)
+  return sorted[i]! + (h - i) * (sorted[j]! - sorted[i]!)
+}
+
+/**
+ * c:BoxPlan: a box plot's series, categories (first seen) and boxes: a box per shown series and category with
+ * values, its median (c:value), quartiles (c:q1, c:q3) and extent (c:low, c:high: the least and greatest value).
+ */
+const boxPlan: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const view = ctx.object(focus, C.view)
+  if (!view || !ctx.match(view, RDF_TYPE, RS + 'ResultSet').length) return o.quads
+  const rows = rowsOf(ctx, focus, view)
+  const { series, hidden } = mintSeries(ctx, o, focus, rows)
+  const categories = firstSeen(rows, (r) => r.cat)
+  categories.forEach((cat, i) => {
+    const n = o.node(`category-${md5Key(cat)}`)
+    o.t(n, RDF_TYPE, ctx.nn(c('ChartCategory'))).t(n, c('inChart'), focus).t(n, c('index'), int(ctx, i)).t(n, C.label, cat)
+  })
+  const pointClass = ctx.objects(focus, RDF_TYPE).flatMap((t) => ctx.objects(t, c('pointClass')))[0]
+  const dbl = (n: number) => ctx.f.literal(String(n), ctx.nn(XSD_DOUBLE))
+  series.forEach((s, si) => {
+    if (hidden.has(s.key)) return
+    categories.forEach((cat, ci) => {
+      const values = rows.filter((r) => r.ser === s.key && r.cat === cat && r.y !== undefined).flatMap((r) => Array.from({ length: r.n }, () => r.y!)).sort((a, b) => a - b)
+      if (!values.length) return
+      const n = o.node(`point-${md5Key(s.key)}-${md5Key(cat)}`)
+      o.t(n, RDF_TYPE, ctx.nn(c('ChartPoint'))).t(n, c('inChart'), focus).t(n, c('series'), o.node(`series-${md5Key(s.key)}`)).t(n, c('category'), cat)
+      if (pointClass) o.t(n, RDF_TYPE, pointClass)
+      o.t(n, c('value'), dbl(quantile(values, 0.5))).t(n, c('q1'), dbl(quantile(values, 0.25))).t(n, c('q3'), dbl(quantile(values, 0.75)))
+      o.t(n, c('low'), dbl(values[0]!)).t(n, c('high'), dbl(values[values.length - 1]!))
+      o.t(n, c('seriesIndex'), int(ctx, si)).t(n, c('categoryIndex'), int(ctx, ci)).t(n, SEM.orderKey, tupleKey([si, ci]))
+      o.t(o.node('marks'), NS.rdfhtml + 'hasChild', n)
+    })
+  })
+  return o.quads
+}
+
+type Point = { node: NamedNode; si: number; ci: number; v: number; base: number; x?: number; z?: number; low?: number; high?: number }
 
 /** Whether the chart's class (or a class it is a subclass of) says `p value`: a kind's defaults, as c:fromZero false or c:polar true. */
 export function kindSays(ctx: RuleContext, chart: Term, p: string, value: string): boolean {
@@ -189,7 +234,7 @@ function pointsOf(ctx: RuleContext, chart: NamedNode): Point[] {
     .filter((p) => ctx.match(p, RDF_TYPE, c('ChartPoint')).length)
     .map((node) => ({
       node, si: Number(str(ctx.object(node, c('seriesIndex')))), ci: Number(str(ctx.object(node, c('categoryIndex')))), v: Number(str(ctx.object(node, c('value')))), base: 0,
-      x: numberOf(ctx.object(node, c('x'))), z: numberOf(ctx.object(node, c('size'))),
+      x: numberOf(ctx.object(node, c('x'))), z: numberOf(ctx.object(node, c('size'))), low: numberOf(ctx.object(node, c('low'))), high: numberOf(ctx.object(node, c('high'))),
     }))
   if (stacked) for (const p of points) p.base = points.filter((q) => q.ci === p.ci && q.si < p.si).reduce((a, q) => a + q.v, 0)
   return points
@@ -241,7 +286,7 @@ const layout: FnRule = (ctx, focus) => {
   }
   // A point's ends: its value, and its base when it is stacked on others.
   const stacked = ctx.object(focus, c('stacked'))?.value === 'true'
-  const ends = points.flatMap((p) => (stacked ? [p.base, p.base + p.v] : [p.v]))
+  const ends = points.flatMap((p) => (stacked ? [p.base, p.base + p.v] : [p.v, ...(p.low === undefined ? [] : [p.low]), ...(p.high === undefined ? [] : [p.high])]))
   writeScale('scale', 'valueScale', Math.min(...zero, ...ends), Math.max(...zero, ...ends))
   // An x scale over the points' x, and the greatest size, when the chart has them.
   const xs = points.filter((p) => p.x !== undefined).map((p) => p.x!)
@@ -347,6 +392,14 @@ export function pointWords(ctx: RuleContext, point: NamedNode, chart: Term): str
     return `${[bounds, seriesLabel].filter((x) => x !== '').join(' · ')}: ${formatNumber(Number(str(ctx.object(point, c('value')))), locale, 'maximumFractionDigits=2')}`
   }
   const head = [str(ctx.object(point, c('category'))) ?? '', seriesLabel].filter((x) => x !== '').join(' · ')
+  // A box: its median, quartiles and range.
+  const q1 = numberOf(ctx.object(point, c('q1')))
+  if (q1 !== undefined) {
+    ctx.readsLanguage()
+    const locale = formatLocale(ctx.languages)
+    const f = (p: string) => formatNumber(Number(str(ctx.object(point, c(p)))), locale, 'maximumFractionDigits=2')
+    return `${head}: ${phrase(ctx, chart, 'BoxMedianPhrase')} ${valueText(ctx, chart, Number(str(ctx.object(point, c('value')))))}; ${phrase(ctx, chart, 'BoxQuartilesPhrase')} ${f('q1')} – ${f('q3')}; ${phrase(ctx, chart, 'BoxRangePhrase')} ${f('low')} – ${f('high')}`
+  }
   const share = numberOf(ctx.object(point, c('share')))
   const percent = share === undefined ? '' : ` (${formatNumber(share, formatLocale(ctx.languages), 'style=percent;maximumFractionDigits=1')})`
   return `${head}: ${measures(ctx, chart, Number(str(ctx.object(point, c('value')))), numberOf(ctx.object(point, c('x'))), numberOf(ctx.object(point, c('size'))))}${percent}`
@@ -359,6 +412,7 @@ export function pointStyle(ctx: RuleContext, point: NamedNode, colorBy: 'seriesI
   if (n('nextValue') !== undefined) parts.push(`--nv: ${cssNumber(Number(n('nextValue')))}`, `--nb: ${cssNumber(Number(n('nextBase') ?? 0))}`)
   if (n('x') !== undefined) parts.push(`--x: ${cssNumber(Number(n('x')))}`)
   if (n('size') !== undefined) parts.push(`--z: ${cssNumber(Number(n('size')))}`)
+  if (n('q1') !== undefined) parts.push(`--q1: ${cssNumber(Number(n('q1')))}`, `--q3: ${cssNumber(Number(n('q3')))}`, `--low: ${cssNumber(Number(n('low')))}`, `--high: ${cssNumber(Number(n('high')))}`)
   if (n('share') !== undefined) parts.push(`--from: ${cssNumber(Number(n('from')))}`, `--share: ${cssNumber(Number(n('share')))}`)
   parts.push(`--color: ${seriesColor(Number(n(colorBy)))}`)
   return parts.join('; ')
@@ -480,9 +534,21 @@ const sparklineFrame: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** A box plot's point: a whisker over its range, a box over its quartiles, a line at its median. */
+const boxPoint: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const chart = ctx.object(focus, c('inChart'))
+  if (!chart) return o.quads
+  const mark = (local: string) => o.el(local, 'Span', { class: `sem-${local}`, 'aria-hidden': 'true' })
+  pointItem(ctx, o, focus, chart, 'sem-box-point', [mark('whisker'), mark('box'), mark('median')])
+  return o.quads
+}
+
 export const seriesFunctions: Record<string, FnRule> = {
   'series:plan': plan,
   'series:histogram-plan': histogramPlan,
+  'series:box-plan': boxPlan,
+  'series:box-point': boxPoint,
   'series:text': textFrame,
   'series:point-text': pointText,
   'series:layout': layout,

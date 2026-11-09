@@ -3,7 +3,7 @@
 // points render the same HTML in SPARQL as their function twins on Oxigraph and on Semblance's own
 // engine, after each change the rows go through; a changed row re-renders its points, not the chart.
 import { describe, expect, it } from 'vitest'
-import { niceScale } from '../src/components/series.ts'
+import { niceScale, quantile } from '../src/components/series.ts'
 import { EX, mount, parity, PREFIXES, SALES } from './series-harness.ts'
 
 const C = 'https://semblance.dev/ns/component#'
@@ -69,6 +69,14 @@ ex:Channels a sem:View , iv:View ; iv:materialize iv:Graph ;
 ex:t a c:Table ; c:label "Channels" ; c:query ex:Channels ; c:tableColumns ( ex:col-channel ex:col-trend ) .
 ex:col-channel a c:Column ; c:variable "channel" ; c:label "Channel" .
 ex:col-trend a c:Column ; c:variable "trend" ; c:label "Trend" ; c:format "component" .
+`
+
+const BOXES = `${PREFIXES}
+${[['a', 'x', 1], ['a', 'x', 2], ['a', 'x', 4], ['a', 'x', 4], ['a', 'x', 10], ['a', 'y', 3], ['a', 'y', 5], ['b', 'x', 7], ['b', 'y', 2], ['b', 'y', 8], ['b', 'y', 8.5]].map(([g, s, v], i) => `ex:v${i} ex:group "${g}" ; ex:set "${s}" ; ex:ms ${v} .`).join('\n')}
+ex:Spread a sem:View , iv:View ; iv:materialize iv:Graph ;
+  sem:select """SELECT ?group ?set ?ms WHERE { ?v <https://example.org/#group> ?group ; <https://example.org/#set> ?set ; <https://example.org/#ms> ?ms } ORDER BY ?group ?set ?ms""" .
+ex:a a c:BoxPlot ; rdfs:label "Spread" ; c:view ex:Spread ; c:categoryVariable "group" ; c:seriesVariable "set" ; c:valueVariable "ms" ; c:unit "ms" .
+ex:b a c:BoxPlot ; rdfs:label "One set" ; c:view ex:Spread ; c:categoryVariable "group" ; c:valueVariable "ms" ; c:hiddenSeries "nothing" .
 `
 
 describe('series charts', () => {
@@ -202,6 +210,31 @@ describe('series charts', () => {
       expect(s.text()[1]).toContain('Web trend')
       both((h) => h.set('s5', 'amount', 300))
       expect(s.html()[0]).toContain('--hi: 350')
+    }, 120_000)
+  }
+
+  it('takes quantiles between the closest ranks', () => {
+    expect(quantile([1, 2, 4, 4, 10], 0.25)).toBe(2)
+    expect(quantile([1, 2, 4, 4, 10], 0.5)).toBe(4)
+    expect(quantile([3, 5], 0.25)).toBe(3.5)
+    expect(quantile([7], 0.75)).toBe(7)
+  })
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`renders box plots as their function twins do (${kind})`, () => {
+      const { s, both } = parity(BOXES, kind, ['a', 'b'])
+      const [a, b] = s.html()
+      // A box per series and category: median, quartiles, range; the scale spans the whiskers.
+      expect(a).toContain('a · x: median 4 ms; quartiles 2 – 4; range 1 – 10')
+      expect(a).toContain('a · y: median 4 ms; quartiles 3.5 – 4.5; range 3 – 5')
+      expect(a).toContain('--q1: 2; --q3: 4; --low: 1; --high: 10')
+      expect(a).toContain('<figure style="--lo: 0; --hi: 10;')
+      expect(a!.match(/sem-box-point/g)).toHaveLength(4)
+      expect(b).toContain('b: median 7.5; quartiles 5.75 – 8.13; range 2 – 8.5')
+      expect(s.text()[0]).toContain('a · x: median 4 ms')
+      both((h) => h.set('v4', 'ms', 3))
+      expect(s.html()[0]).toContain('a · x: median 3 ms; quartiles 2 – 4; range 1 – 4')
+      both((h) => h.set('v11', 'group', 'c') || h.set('v11', 'set', 'x') || h.set('v11', 'ms', 20))
     }, 120_000)
   }
 
