@@ -5,12 +5,13 @@
 // Platform-neutral: the caller loads the store (src/node/load.ts, src/web/load.ts or its own
 // engine module), so this runs in Node, Deno and workers alike.
 import type { FnRule } from '../engine/context.ts'
-import { Navigation, readAddress, readLocations, spellAddress } from '../navigation.ts'
+import { addressDelta, currentValues, type Location, Navigation, readAddress, readLocations, type Reader, spellAddress } from '../navigation.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../ns.ts'
 import type { HostRenderer } from '../render/hosts.ts'
 import { toHTML } from '../render/serialize.ts'
 import { type Projection, Runtime } from '../runtime.ts'
-import { prerenderSandboxes, type SandboxOptions } from '../sandbox.ts'
+import { prerenderSandboxes, type PrerenderOptions, type SandboxOptions } from '../sandbox.ts'
+import type { Delta } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
 import type { SafetyPolicy } from '../safety.ts'
@@ -39,7 +40,7 @@ export interface RenderOptions {
    * browser builds it: how to load a sandbox's store (the client's store kind), and its turn limit.
    * Without it their slots are empty until the client builds them.
    */
-  sandboxes?: Pick<SandboxOptions, 'load' | 'budgetMs'>
+  sandboxes?: Pick<SandboxOptions, 'load' | 'budgetMs'> & Pick<PrerenderOptions, 'cache'>
   /**
    * Render the store as authored content (src/safety.ts): elements, attributes and styles the policy
    * refuses are left out, and reported. Read it from a trusted store (authoredPolicy), not this one.
@@ -80,17 +81,42 @@ const noHistory = { pushState() {}, replaceState() {} }
  * projection), and say whether it names a place: a path whose every segment was read.
  */
 export async function readUrl(store: GraphStore, root: string, url: string): Promise<{ found: boolean; address?: string }> {
-  const location = urlOf(url)
-  const navigation = new Navigation(store, { root, location, history: noHistory, events: new EventTarget(), links: new EventTarget() })
+  const navigation = new Navigation(store, { root, location: urlOf(url), history: noHistory, events: new EventTarget(), links: new EventTarget() })
   await navigation.restore()
-  const loc = navigation.location()
+  return addressStatus(storeReader(store), navigation.location(), url)
+}
+
+/** A reader of a store's default graph (what the navigation model reads). */
+export function storeReader(store: GraphStore): Reader {
+  return { f: store.factory, match: (s, p, o) => store.match(s, p ? store.factory.namedNode(p) : null, o, store.factory.defaultGraph()) }
+}
+
+/**
+ * Whether `url`, once read into the graph `r` reads, names a place (a path whose every segment
+ * was read), and the address as the graph spells it (Navigation.href).
+ */
+export function addressStatus(r: Reader, loc: Location | undefined, url: string): { found: boolean; address?: string } {
+  const location = urlOf(url)
   if (!loc) return { found: location.pathname === '/' || location.pathname.endsWith('/index.html'), address: undefined }
-  const r = { f: store.factory, match: (s: Parameters<GraphStore['match']>[0], p: string | null, o: Parameters<GraphStore['match']>[2]) => store.match(s, p ? store.factory.namedNode(p) : null, o, store.factory.defaultGraph()) }
   const path = location.pathname.replace(/\/index\.html?$/, '/')
   const want = path.endsWith('/') ? path : path + '/'
   // A place is found when what the address says spells it back: every segment was read.
   const found = !loc.paths || want === loc.base || spellAddress(r, loc, readAddress(r, loc, want)).path === want
-  return { found, address: navigation.href() }
+  const spelled = spellAddress(r, loc, currentValues(r, loc))
+  const params = new URLSearchParams(location.search)
+  for (const [k, v] of spelled.query) v === undefined ? params.delete(k) : params.set(k, v)
+  const search = params.toString()
+  return { found, address: (loc.paths ? spelled.path : location.pathname) + (search ? '?' + search : '') + spelled.fragment }
+}
+
+/** What reading `url` into the graph `r` reads changes (readUrl, as a change), for the location of `root`. */
+export function urlDelta(r: Reader, root: string, url: string): { loc?: Location; delta: Delta } {
+  const loc = readLocations(r).find((l) => l.root === root)
+  if (!loc) return { delta: { add: [], remove: [] } }
+  const u = urlOf(url)
+  // What the client's location reads: the path (without index.html) when the location has paths, the query, the fragment.
+  const address = (loc.paths ? u.pathname.replace(/\/index\.html?$/, '/') : '') + u.search + u.hash
+  return { loc, delta: addressDelta(r, loc, address).delta }
 }
 
 /** The document's language and direction: the projection's first language, and its l10n:direction. */
@@ -103,13 +129,15 @@ export function documentLanguage(store: GraphStore, code: string): { lang: strin
 
 /** The languages a store's graph states for an app: the l10n:language of the location's subjects, else none. */
 export function graphLanguages(store: GraphStore, root: string): string[] {
-  const f = store.factory
-  const r = { f, match: (s: Parameters<GraphStore['match']>[0], p: string | null, o: Parameters<GraphStore['match']>[2]) => store.match(s, p ? f.namedNode(p) : null, o, f.defaultGraph()) }
+  return readerLanguages(storeReader(store), root)
+}
+
+/** graphLanguages, of the graph a reader reads. */
+export function readerLanguages(r: Reader, root: string): string[] {
   const loc = readLocations(r).find((l) => l.root === root)
-  const subjects = [f.namedNode(root), ...(loc?.dimensions.map((d) => d.subject) ?? [])]
-  for (const s of subjects) {
-    const language = store.match(s, f.namedNode(NS.l10n + 'language'), null, f.defaultGraph())[0]?.object
-    const code = language && store.match(language as never, f.namedNode(NS.l10n + 'code'), null)[0]?.object.value
+  for (const s of [r.f.namedNode(root), ...(loc?.dimensions.map((d) => d.subject) ?? [])]) {
+    const language = r.match(s, NS.l10n + 'language', null)[0]?.object
+    const code = language && r.match(language, NS.l10n + 'code', null)[0]?.object.value
     if (code) return [code]
   }
   return []
@@ -139,11 +167,11 @@ export function project(opts: RenderOptions, languages: string[]): Pick<Rendered
  * The root's HTML as the projection has it now, with the live examples it shows rendered in
  * their slots (with `sandboxes`): what a page rendered beforehand holds, at each address.
  */
-export function serializeRoot(runtime: Runtime, projection: Projection, root: string, opts: Pick<RenderOptions, 'sandboxes' | 'prefer' | 'functions' | 'hosts'> & { siteCss?: () => string }): string {
+export function serializeRoot(runtime: Runtime, projection: Projection, root: string, opts: Pick<RenderOptions, 'sandboxes' | 'prefer' | 'functions' | 'hosts'> & { siteCss?: () => string; shownOnly?: boolean }): string {
   const slots = opts.sandboxes ? prerenderSandboxes(runtime, projection, { ...opts.sandboxes, prefer: opts.prefer ?? 'sparql', functions: opts.functions, roots: [root], siteCss: opts.siteCss }) : undefined
   const hosts = opts.hosts?.(projection.index, { runtime, projection })
   try {
-    return toHTML(projection.index, root, { ...(slots?.size ? { slots: (name: string) => slots.get(name) } : {}), hosts })
+    return toHTML(projection.index, root, { ...(slots?.size ? { slots: (name: string) => slots.get(name) } : {}), hosts, shownOnly: opts.shownOnly })
   } finally {
     hosts?.dispose()
   }

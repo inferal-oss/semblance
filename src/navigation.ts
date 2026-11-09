@@ -29,7 +29,7 @@ const GO_TO = NAV + 'goTo'
 // --- the model, read from the graph ----------------------------------------------------------
 
 /** What the model reads through: the store's default graph, or a rule's view. */
-interface Reader {
+export interface Reader {
   f: Factory
   match(s: Term | null, p: string | null, o: Term | null): Quad[]
 }
@@ -639,6 +639,59 @@ export function followDelta(r: Reader, loc: Location, address: string): Delta {
   return delta
 }
 
+/**
+ * What reading an address into the graph changes, as the client does before its first projection
+ * (Navigation.restore) and a warm server runtime does to render a request's address: each
+ * dimension the address spells gets its value, unless a carrier before the URL's (storage) has
+ * restored one (`restored`); one it does not spell keeps the graph's. What shows the target (a
+ * tab, an expanded item) is opened. `target`: the resource the address names, to reveal.
+ */
+export function addressDelta(r: Reader, loc: Location, address: string, restored: (dimension: string) => boolean = () => false): { delta: Delta; changed: number; target?: Term } {
+  const read = readAddress(r, loc, address)
+  const f = r.f
+  const delta: Delta = { add: [], remove: [] }
+  let changed = 0
+  for (const d of loc.dimensions) {
+    const next = read.get(d.iri)
+    // The first carrier that has a value wins; none: the graph's own value (the default).
+    const winner = d.carriers.find((c) => (URL_CARRIERS.has(c) ? !!next : restored(d.iri)))
+    if (!winner || !URL_CARRIERS.has(winner)) continue // storage's value is in the graph already
+    const now = r.match(d.subject, d.property, null)
+    if (now.length === 1 && same(now[0]!.object, next)) continue
+    delta.remove.push(...now)
+    delta.add.push(f.quad(d.subject, f.namedNode(d.property), next as Quad['object']))
+    changed++
+  }
+  const dimension = loc.dimensions.find((d) => d.target)
+  const target = dimension && read.get(dimension.iri)
+  if (!target) return { delta, changed }
+  // Opened as the graph is once the dimensions have their values.
+  const open = opening(overlay(r, delta), loc, target)
+  return { delta: compose(delta, open), changed, target }
+}
+
+/** A reader of what `r` reads with `delta` applied. */
+export function overlay(r: Reader, delta: Delta): Reader {
+  const key = (q: Quad) => `${q.subject.value} ${q.predicate.value} ${q.object.termType}:${q.object.value}`
+  const removed = new Set(delta.remove.map(key))
+  const fits = (q: Quad, s: Term | null, p: string | null, o: Term | null) => (!s || q.subject.equals(s)) && (!p || q.predicate.value === p) && (!o || q.object.equals(o))
+  return {
+    f: r.f,
+    match: (s, p, o) => [...r.match(s, p, o).filter((q) => !removed.has(key(q))), ...delta.add.filter((q) => fits(q, s, p, o))],
+  }
+}
+
+/** `a` then `b`, as one change. */
+export function compose(a: Delta, b: Delta): Delta {
+  const key = (q: Quad) => `${q.subject.value} ${q.predicate.value} ${q.object.termType}:${q.object.value}`
+  const bRemoved = new Set(b.remove.map(key))
+  const aAdded = new Set(a.add.map(key))
+  return {
+    remove: [...a.remove, ...b.remove.filter((q) => !aAdded.has(key(q)))],
+    add: [...a.add.filter((q) => !bRemoved.has(key(q))), ...b.add],
+  }
+}
+
 const storeReader = (store: GraphStore): Reader => ({ f: store.factory, match: (s, p, o) => store.match(s, p ? store.factory.namedNode(p) : null, o, store.factory.defaultGraph()) })
 const ruleReader = (ctx: RuleContext): Reader => ({ f: ctx.f, match: (s, p, o) => ctx.match(s, p, o) })
 
@@ -784,28 +837,12 @@ export class Navigation {
   async restore(): Promise<number> {
     const loc = this.location()
     if (!loc) return 0
-    const read = readAddress(this.r, loc, this.address())
+    const { delta, changed, target } = addressDelta(this.r, loc, this.address(), (d) => !!this.opts.persistence?.restored(d))
+    if (target) this.revealing = target.value
     const f = this.store.factory
-    let n = 0
-    for (const d of loc.dimensions) {
-      const next = read.get(d.iri)
-      // The first carrier that has a value wins; none: the graph's own value (the default).
-      const winner = d.carriers.find((c) => (URL_CARRIERS.has(c) ? !!next : !!this.opts.persistence?.restored(d.iri)))
-      if (!winner || !URL_CARRIERS.has(winner)) continue // storage's value is in the graph already
-      const now = this.store.match(d.subject, f.namedNode(d.property), null, f.defaultGraph())
-      if (now.length === 1 && same(now[0]!.object, next)) continue
-      for (const q of now) this.store.delete(q)
-      this.store.add(f.quad(d.subject, f.namedNode(d.property), next as Quad['object'], f.defaultGraph()))
-      n++
-    }
-    const target = loc.dimensions.find((d) => d.target)
-    if (target && read.has(target.iri)) {
-      this.revealing = read.get(target.iri)!.value
-      const open = opening(this.r, loc, read.get(target.iri)!)
-      for (const q of open.remove) this.store.delete(q)
-      for (const q of open.add) this.store.add(f.quad(q.subject, q.predicate, q.object, f.defaultGraph()))
-    }
-    return n
+    for (const q of delta.remove) this.store.delete(q)
+    for (const q of delta.add) this.store.add(f.quad(q.subject, q.predicate, q.object, f.defaultGraph()))
+    return changed
   }
 
   /** Follow input changes and the URL from now on. With a bus, URL changes are recorded as nav:Navigate events. */

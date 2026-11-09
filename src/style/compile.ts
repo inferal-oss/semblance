@@ -225,6 +225,8 @@ export function compileStyles(store: GraphStore, opts: CompileOptions = {}): str
       .map((c) => nn(c))
       .flatMap((c) => parts.map((p) => sel(typeAttr, slug(c)) + when + (intent ? sel(intentAttr, slug(intent)) : '') + (state ?? '') + (p ? ' ' + p : '')))
       .join(', ')
+    // No class it applies to has a slug here (an abstract class whose subclasses are not loaded): it styles nothing.
+    if (!selector) continue
     const classRank = Math.min(...classes.map(classDepth))
     ;(intent ? intentRules : when ? variantRules : componentRules).push([classRank, block(selector, declarations(r)), media])
   }

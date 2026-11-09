@@ -29,7 +29,8 @@
     "./node": "./src/node/index.ts",
     "./ontology/*": "./ontology/*",
     "./package.json": "./package.json",
-    "./server": "./src/server/index.ts"
+    "./server": "./src/server/index.ts",
+    "./virtual": { "types": "./src/virtual.d.ts" }
   },
   "files": [
     "src",

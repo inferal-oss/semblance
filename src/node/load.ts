@@ -4,6 +4,7 @@ import * as ox from 'oxigraph'
 import { engineStore } from '../../rdf-engine/host/store.ts'
 import { layoutKinds, provideLayoutModule, type LayoutKind } from '../layout/engine.ts'
 import { ONTOLOGY_FILES } from '../ontology.ts'
+import { ontologySubset, type Subset, type SubsetOptions } from '../subset.ts'
 import { hybridStore } from '../store/hybrid.ts'
 import { n3Store } from '../store/n3.ts'
 import { oxigraphStore } from '../store/oxigraph.ts'
@@ -104,5 +105,17 @@ export function loadStore(kind: StoreKind, ...data: string[]): GraphStore {
 export function loadStoreWith(kind: StoreKind, options: StoreOptions, ...data: string[]): GraphStore {
   const store = createStore(kind, options)
   for (const ttl of [...ontologySources(), ...data]) store.loadTurtle(ttl)
+  return store
+}
+
+/** The part of the framework's ontology an app's graphs (Turtle) use (src/subset.ts): its `turtle` loads in place of the whole. */
+export function appOntology(app: string[], opts: SubsetOptions = {}): Subset {
+  return ontologySubset(ontologySources(), app, opts)
+}
+
+/** A store with `ontology` (an app's subset: appOntology) in place of the framework's whole ontology, and the given app data. */
+export function loadStoreWithOntology(kind: StoreKind, ontology: string, ...data: string[]): GraphStore {
+  const store = createStore(kind)
+  for (const ttl of [ontology, ...data]) store.loadTurtle(ttl)
   return store
 }

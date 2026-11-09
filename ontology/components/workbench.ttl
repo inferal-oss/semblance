@@ -31,6 +31,7 @@
 
 c:QueryWorkbench a owl:Class ;
     rdfs:subClassOf sem:Component ;
+    sem:readsWholeOntology true ;
     rdfs:label "SPARQL workbench"@en , "Робоче місце SPARQL"@uk , "SPARQL-Werkbank"@de , "منضدة SPARQL"@ar ;
     rdfs:comment """A place to write and run SPARQL over the live graph: sample queries (c:samples, sem:Query
 nodes with rdfs:label and rdfs:comment), an editor (c:editor, a c:QueryEditor), header components

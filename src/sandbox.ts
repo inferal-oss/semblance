@@ -420,6 +420,12 @@ export interface PrerenderOptions extends SandboxOptions {
   roots: Iterable<string>
   /** The site's stylesheet, or how to get it (a styled sandbox's own rules are what it adds). */
   siteCss?: string | (() => string)
+  /**
+   * What examples rendered to, kept across renders of a site whose examples' sources do not change
+   * (a warm server runtime, src/server/warm.ts): an example built once with the same sources, in
+   * the same languages, for the same slots, is not built again.
+   */
+  cache?: Map<string, Map<string, string>>
 }
 
 /**
@@ -443,6 +449,14 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
     const slots = slotsOf(iri)
     if (!screen.index.slots.has(slots.screen) || !screen.index.isShown(iri, roots)) continue
     const spec = exampleSpec(store, iri)
+    const id = `ssr-${++n}`
+    const wanted = [slots.screen, ...[slots.text, slots.data].filter((sl) => screen.index.slots.has(sl))]
+    const key = JSON.stringify([iri, id, languages, opts.urlBase ?? screen.index.urlBase, wanted, spec])
+    const cached = opts.cache?.get(key)
+    if (cached) {
+      for (const [slot, html] of cached) out.set(slot, html)
+      continue
+    }
     const built = buildExample(spec, { ...opts, urlBase: opts.urlBase ?? screen.index.urlBase, languages })
     const sandbox = built.sandbox
     if (!sandbox) {
@@ -452,7 +466,6 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
       continue
     }
     try {
-      const id = `ssr-${++n}`
       const css = sandbox.css ? scopedCss(sandbox.css, typeof opts.siteCss === 'function' ? opts.siteCss() : (opts.siteCss ?? ''), `[${SANDBOX_ATTRIBUTE}="${id}"]`) : ''
       const style = css ? `<style ${SANDBOX_STYLES_ATTRIBUTE}>${css.replace(/<\/style/gi, '<\\/style')}</style>` : ''
       out.set(slots.screen, `${style}<div ${SANDBOX_ATTRIBUTE}="${id}" ${SSR_ATTRIBUTE}>${toHTML(sandbox.screen.index, sandbox.root)}</div>`)
@@ -461,6 +474,7 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
         const data = projectData(sandbox, spec.dataQuery, spec.sources, new Set(), { ...opts, urlBase: opts.urlBase ?? screen.index.urlBase, languages })
         out.set(slots.data, `<div>${toHTML(data.index, DATA_VIEWER)}</div>`)
       }
+      opts.cache?.set(key, new Map([...out].filter(([slot]) => wanted.includes(slot))))
     } finally {
       sandbox.runtime.dispose()
     }

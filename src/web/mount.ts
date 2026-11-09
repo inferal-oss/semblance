@@ -16,7 +16,7 @@ import { attachSnaps } from './snap.ts'
 import { attachLightboxes } from './lightbox.ts'
 import { attachAnchoredPopups } from './anchored-popups.ts'
 import { attachSizeHandles } from './size-handles.ts'
-import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
+import { hasStore, initWeb, loadStore, loadStoreWithOntology, type StoreKind } from './load.ts'
 import { serverRendered, serverStyled, takeOver } from './takeover.ts'
 import { markPlatform } from './platform.ts'
 import { graphLanguages } from '../server/render.ts'
@@ -41,6 +41,11 @@ export interface MountOptions {
   policy?: SafetyPolicy
   /** Hear about what the policy refused (by default console.warn). */
   onRefused?: (e: Error) => void
+  /**
+   * Semblance's ontology as the app ships it: the part its graphs use (docs/SUBSET.md; the Vite
+   * plugin's `virtual:semblance/ontology`), in place of the whole ontology, which is then not fetched.
+   */
+  ontology?: string
   /** The store; Semblance's own WASM engine when this build has it, else Hybrid. */
   store?: StoreKind
   /** Which implementation of a rendering to use when it has both: SPARQL (the default) or a function. */
@@ -122,18 +127,20 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const kind = opts.store ?? (hasStore('wat') ? 'wat' : 'hybrid')
   // A store without SPARQL (N3) can only run function rules.
   const prefer = kind === 'n3' ? 'function' : (opts.prefer ?? 'sparql')
-  await initWeb(kind)
+  await initWeb(kind, { ontology: opts.ontology === undefined })
+  // Over the whole ontology, or the part the app ships (opts.ontology).
+  const load = (...graphs: string[]) => (opts.ontology === undefined ? loadStore(kind, ...graphs) : loadStoreWithOntology(kind, {}, opts.ontology, ...graphs))
   // Authored content: the policy is read before the author's graphs are in the store (they could add to it).
   let policy = opts.policy
   if (!policy && opts.authored) {
-    const trusted = loadStore(kind, ...(opts.graphs ?? []))
+    const trusted = load(...(opts.graphs ?? []))
     try {
       policy = readPolicy(trusted)
     } finally {
       trusted.dispose?.()
     }
   }
-  const store = loadStore(kind, ...(opts.graphs ?? []), ...(opts.authored ?? []))
+  const store = load(...(opts.graphs ?? []), ...(opts.authored ?? []))
   const onRefused = opts.onRefused ?? ((e: Error) => console.warn('[semblance]', e.message))
   // Where we are, before the first projection: the address (a server rendered the same one).
   const declared = store.match(null, store.factory.namedNode(NS.nav + 'root'), store.factory.namedNode(opts.root)).length > 0
