@@ -27,6 +27,19 @@ ex:c a c:ColumnChart ; rdfs:label "Totals" ; c:view ex:Totals ; c:categoryVariab
 ex:d a c:ColumnChart ; rdfs:label "Hidden" ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:hiddenSeries "Store" .
 `
 
+const SCATTER = `${PREFIXES}
+ex:k1 ex:name "Kyiv" ; ex:region "East" ; ex:area 839 ; ex:people 2.95 ; ex:age 1482 .
+ex:k2 ex:name "Lviv" ; ex:region "West" ; ex:area 182 ; ex:people 0.72 ; ex:age 770 .
+ex:k3 ex:name "Odesa" ; ex:region "South" ; ex:area 236 ; ex:people 1.01 ; ex:age 230 .
+ex:k4 ex:name "Kharkiv" ; ex:region "East" ; ex:area 350 ; ex:people 1.42 .
+ex:k5 ex:name "Nowhere" ; ex:region "West" ; ex:people 0.1 ; ex:age 10 .
+ex:Cities a sem:View , iv:View ; iv:materialize iv:Graph ;
+  sem:select """SELECT ?name ?region ?area ?people ?age WHERE { ?c <https://example.org/#name> ?name ; <https://example.org/#region> ?region ; <https://example.org/#people> ?people . OPTIONAL { ?c <https://example.org/#area> ?area } OPTIONAL { ?c <https://example.org/#age> ?age } } ORDER BY ?name""" .
+ex:a a c:ScatterChart ; rdfs:label "Cities" ; c:view ex:Cities ; c:categoryVariable "name" ; c:seriesVariable "region" ; c:xVariable "area" ; c:valueVariable "people" ;
+  c:unit "M" ; c:xLabel "area, km²"@en , "площа, км²"@uk .
+ex:b a c:ScatterChart ; rdfs:label "Bubbles" ; c:view ex:Cities ; c:categoryVariable "name" ; c:xVariable "area" ; c:valueVariable "people" ; c:sizeVariable "age" ; c:sizeLabel "years" .
+`
+
 describe('series charts', () => {
   it('scales on steps of 1, 2 or 5 × 10ⁿ', () => {
     expect(niceScale(0, 201)).toMatchObject({ min: 0, max: 250, step: 50 })
@@ -81,6 +94,32 @@ describe('series charts', () => {
       expect(s.html()[0]).toContain('sem-stacked')
     }, 120_000)
   }
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`renders scatter and bubble charts as their function twins do (${kind})`, () => {
+      const { s, both } = parity(SCATTER, kind, ['a', 'b'])
+      const [a, b] = s.html()
+      // Scales that need not start at zero; x ticks below the plot; no point without an x.
+      expect(a).toContain('<figure style="--lo: 0.5; --hi: 3; --xlo: 0; --xhi: 1000; --n: 5; --k: 3"')
+      expect(a).toContain('class="sem-chart-xticks"')
+      expect(a).not.toContain('class="sem-chart-categories"')
+      expect(a).toContain('Kyiv · East: area, km² 839, 2.95 M')
+      expect(a).not.toContain('Nowhere')
+      expect(b).toContain('--zmax: 1482;')
+      expect(b).toContain('--x: 236; --z: 230')
+      expect(b).toContain('Odesa: area 236, 1.01, years 230')
+      expect(s.text()[0]).toContain('Kyiv · East: area, km² 839, 2.95 M')
+      both((h) => h.set('k5', 'area', 1500))
+      expect(s.html()[0]).toContain('--xhi: 1500')
+      both((h) => h.set('k2', 'people', 3.5))
+      both((h) => h.set('k1', 'area', undefined))
+    }, 120_000)
+  }
+
+  it('speaks the viewer\'s language in its words', () => {
+    const { s } = parity(SCATTER, 'wat', ['a'], ['uk'])
+    expect(s.html()[0]).toMatch(/Kyiv · East: площа, км² 839, 2,95 M/u)
+  }, 60_000)
 
   for (const chart of ['AreaChart', 'ColumnChart']) it(`re-renders the points a changed row moves, whatever the number of categories (${chart}, wat, SPARQL)`, () => {
     const cost = (n: number) => {

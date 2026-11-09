@@ -1592,6 +1592,33 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "box-shadow" ; sty:token tok:ring ] ,
                  [ sty:property "z-index" ; sty:raw "1" ] .
 
+# A scatter chart's x scale below the plot: a tick's value at its place, a gridline up the plot.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-xticks" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "block-size" ; sty:raw "1.25rem" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "var(--axis)" ] ,
+                 [ sty:property "font-size" ; sty:raw "11px" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-xtick" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--at) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] ,
+                 [ sty:property "translate" ; sty:raw "-50%" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-xtick:dir(rtl)" ;
+    sty:declares [ sty:property "translate" ; sty:raw "50%" ] .
+# A scatter point sits at its x; a bubble's area grows with its size (--z of the greatest, --zmax).
+[] a sty:StyleRule ; sty:appliesTo c:ScatterChart ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc((var(--x) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ScatterPoint ; sty:part ".sem-dot" ;
+    sty:declares [ sty:property "--d" ; sty:raw "calc(8px + sqrt(var(--z, 0) / var(--zmax, 1)) * 26px)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "var(--d)" ] ,
+                 [ sty:property "block-size" ; sty:raw "var(--d)" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--d) / -2)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc(var(--d) / -2)" ] ,
+                 [ sty:property "border-width" ; sty:raw "1.5px" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--color) 72%, transparent)" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" ] ,

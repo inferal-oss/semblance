@@ -6,8 +6,7 @@ import { labelOf, rdfList, str, text } from './util.ts'
 import { maintainedRows } from '../view/rows.ts'
 import { md5Key } from './data.ts'
 import { compareKeys, tupleKey } from '../render/order-key.ts'
-import { formatLocale } from '../engine/context.ts'
-import { formatNumber } from '../../rdf-engine/host/intl.ts'
+import { measures } from './series.ts'
 
 const NUMERIC = new Set(['integer', 'decimal', 'double', 'float', 'int', 'long', 'short', 'byte', 'nonNegativeInteger', 'positiveInteger', 'negativeInteger', 'nonPositiveInteger', 'unsignedInt', 'unsignedLong', 'unsignedShort', 'unsignedByte'].map((t) => NS.xsd + t))
 
@@ -258,8 +257,6 @@ const rowsText: FnRule = (ctx, focus) => {
     const s = legend.find((n) => (str(ctx.object(n, C.key)) ?? n.value) === key)
     return s ? labelOf(ctx, s) : key
   }
-  ctx.readsLanguage()
-  const locale = formatLocale(ctx.languages)
   const o = ctx.out(focus)
   const lines = solutions
     .map((r) => ({ r, key: tupleKey([ctx.object(r, NS.rs + 'index') ? Number(ctx.object(r, NS.rs + 'index')!.value) : r.value]) }))
@@ -270,9 +267,14 @@ const rowsText: FnRule = (ctx, focus) => {
       const facet = value(e.facet)
       const series = value(e.series)
       const head = [facet === undefined ? '' : e.facetLabel.replace('{value}', facet), value(e.category) ?? '', series === undefined ? '' : seriesLabel(series)].filter((x) => x !== '').join(' · ')
-      const raw = value(e.value)
-      const v = raw === undefined || raw.trim() === '' ? NaN : Number(raw)
-      const shown = Number.isNaN(v) ? '…' : `${formatNumber(v, locale, 'maximumFractionDigits=2')}${e.unit ? ' ' + e.unit : ''}`
+      const number = (variable: string | undefined) => {
+        const raw = value(variable)
+        const n = raw === undefined || raw.trim() === '' ? NaN : Number(raw)
+        return Number.isNaN(n) ? undefined : n
+      }
+      const v = number(e.value)
+      // The value, with the x and size of a chart that has them (as its points say them).
+      const shown = v === undefined ? '…' : measures(ctx, focus, v, number(str(ctx.object(focus, NS.c + 'xVariable'))), number(str(ctx.object(focus, NS.c + 'sizeVariable'))))
       const id = `row-${md5Key(r.value)}`
       return o.el(id, 'P', {}, [o.text(`${id}-text`, `${head}: ${shown}`)])
     })
