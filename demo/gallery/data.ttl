@@ -20,7 +20,7 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -308,6 +308,29 @@ ui:dt-columns a c:Flippable ; c:front ui:dt-columns-spec .
 ui:dt-columns-spec a c:Specimen ; c:demonstrates c:ColumnChart ; c:label "Column chart" , "Стовпчикова діаграма"@uk , "Säulendiagramm"@de , "مخطط أعمدة"@ar ;
     c:help "A bar per series and category of a maintained view: grouped side by side, or with c:stacked true one bar per category with the series on each other. It shares the area chart's parts - the value axis, the legend, the points as list items you move between with the arrow keys - and draws its points as bars." ;
     c:children ( ui:dt-columns-grouped ui:dt-columns-stacked ) .
+
+ui:dt-city-0 ui:cityName "Kyiv" ; ui:cityRegion "Center" ; ui:cityArea 839 ; ui:cityPeople 2.95 ; ui:cityAge 1482 .
+ui:dt-city-1 ui:cityName "Kharkiv" ; ui:cityRegion "East" ; ui:cityArea 350 ; ui:cityPeople 1.42 ; ui:cityAge 370 .
+ui:dt-city-2 ui:cityName "Odesa" ; ui:cityRegion "South" ; ui:cityArea 236 ; ui:cityPeople 1.01 ; ui:cityAge 230 .
+ui:dt-city-3 ui:cityName "Dnipro" ; ui:cityRegion "East" ; ui:cityArea 409 ; ui:cityPeople 0.97 ; ui:cityAge 250 .
+ui:dt-city-4 ui:cityName "Lviv" ; ui:cityRegion "West" ; ui:cityArea 182 ; ui:cityPeople 0.72 ; ui:cityAge 770 .
+ui:dt-city-5 ui:cityName "Zaporizhzhia" ; ui:cityRegion "South" ; ui:cityArea 331 ; ui:cityPeople 0.71 ; ui:cityAge 250 .
+ui:dt-city-6 ui:cityName "Vinnytsia" ; ui:cityRegion "Center" ; ui:cityArea 113 ; ui:cityPeople 0.37 ; ui:cityAge 660 .
+ui:dt-city-7 ui:cityName "Chernivtsi" ; ui:cityRegion "West" ; ui:cityArea 153 ; ui:cityPeople 0.26 ; ui:cityAge 620 .
+ui:dt-city-8 ui:cityName "Poltava" ; ui:cityRegion "Center" ; ui:cityArea 103 ; ui:cityPeople 0.28 ; ui:cityAge 1125 .
+ui:dt-city-9 ui:cityName "Uzhhorod" ; ui:cityRegion "West" ; ui:cityArea 40 ; ui:cityPeople 0.11 ; ui:cityAge 1130 .
+ui:dt-cities-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Cities" ; sem:select """
+SELECT ?city ?region ?area ?people ?age WHERE { ?c ui:cityName ?city ; ui:cityRegion ?region ; ui:cityArea ?area ; ui:cityPeople ?people ; ui:cityAge ?age }
+ORDER BY DESC(?people)""" .
+ui:dt-scatter-chart a c:ScatterChart ; c:label "Cities by area and people" ; c:view ui:dt-cities-view ; c:categoryVariable "city" ; c:seriesVariable "region" ;
+    c:xVariable "area" ; c:valueVariable "people" ; c:unit "M" ; c:xLabel "area, km²" , "площа, км²"@uk , "Fläche, km²"@de , "المساحة، كم²"@ar .
+ui:dt-bubble-chart a c:ScatterChart ; c:label "Cities by age" ; c:view ui:dt-cities-view ; c:categoryVariable "city" ; c:seriesVariable "region" ;
+    c:xVariable "area" ; c:valueVariable "people" ; c:unit "M" ; c:sizeVariable "age" ;
+    c:xLabel "area, km²" , "площа, км²"@uk , "Fläche, km²"@de , "المساحة، كم²"@ar ; c:sizeLabel "years" , "років"@uk , "Jahre"@de , "سنة"@ar .
+ui:dt-scatter a c:Flippable ; c:front ui:dt-scatter-spec .
+ui:dt-scatter-spec a c:Specimen ; c:demonstrates c:ScatterChart ; c:label "Scatter and bubble chart" , "Точкова й бульбашкова діаграма"@uk , "Streu- und Blasendiagramm"@de , "مخطط مبعثر وفقاعي"@ar ;
+    c:help "A point per row label (c:categoryVariable) at its x (c:xVariable) and value, a color per series; the scales need not start at zero. With c:sizeVariable each bubble's area grows with its size. A point says its x and size in words, named by c:xLabel and c:sizeLabel." ;
+    c:children ( ui:dt-scatter-chart ui:dt-bubble-chart ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 
