@@ -9,3 +9,4 @@ export { renderToString, readUrl, type RenderOptions, type Rendered } from '../s
 export { renderToStream } from '../server/stream.ts'
 export { renderDocument, type DocumentOptions } from '../server/document.ts'
 export { defineSite, type Site } from '../server/site.ts'
+export { SourceServer, type SourceServerOptions } from './source-server.ts'
