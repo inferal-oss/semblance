@@ -27,6 +27,10 @@ safe:Policy a owl:Class ;
 
 safe:element a owl:ObjectProperty ; rdfs:domain safe:Policy ;
     rdfs:comment "An element class an authored rendering may have."@en .
+safe:hostComponent a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A host component (ext:component, docs/HOSTED.md) an authored graph may have drawn; none by default. Any other renders as its projected element."@en .
+safe:customElement a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A custom element (ext:tag on a hosted class) an authored rendering may be created as; none by default. Any other renders as its projected element."@en .
 safe:attribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
     rdfs:comment "A content attribute name an authored rendering may have."@en .
 safe:attributePrefix a owl:DatatypeProperty ; rdfs:domain safe:Policy ;

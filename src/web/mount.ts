@@ -3,6 +3,7 @@ import type { FnRule } from '../engine/context.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../ns.ts'
 import { Islands, type IslandAdapter, type WidgetLike } from '../foreign.ts'
 import { DomRenderer } from '../render/dom.ts'
+import type { HostContext, HostRenderer } from '../render/hosts.ts'
 import { RenderedState } from '../rendered.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
@@ -63,6 +64,11 @@ export interface MountOptions {
   modules?: Record<string, () => Promise<unknown>>
   /** Adapters for kinds of foreign component beyond the built-in ones, by their ext:Adapter IRI. */
   adapters?: Record<string, IslandAdapter>
+  /**
+   * A component library that draws hosted components (ext:Hosted, docs/HOSTED.md): `reactHosts(…)`
+   * from @inferal-oss/semblance-react, or an adapter of your own.
+   */
+  hosts?: HostRenderer
   /**
    * The navigation effect (nav:Location in the graph): the address is read before the first
    * projection, written back after changes, and links to the location's paths are followed in
@@ -152,7 +158,9 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet]
   }
 
-  const renderer = new DomRenderer(projection.index, element, opts.root)
+  const hostContext: HostContext = { runtime, projection }
+  const hosts = opts.hosts?.(projection.index, hostContext)
+  const renderer = new DomRenderer(projection.index, element, opts.root, hosts)
   // The server's DOM is taken over as it is: no node is created for what it already shows.
   const adopted = ssr ? takeOver(renderer) : undefined
   const flush = () => renderer.flush()
@@ -174,6 +182,12 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   }
 
   const bus = new EventBus(runtime, projection, { functions: opts.reactions, prefer })
+  hostContext.bus = bus
+  hostContext.onHandled = (h) => {
+    flush()
+    scheduleWarmup()
+    opts.onHandled?.(h)
+  }
   const detach = bus.attach(renderer, (h) => {
     flush()
     scheduleWarmup()
@@ -271,6 +285,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachFiles?.()
       detachFullscreen?.()
       detachIslands()
+      hosts?.dispose()
       connectors.dispose()
       snaps.dispose()
       lightboxes.dispose()

@@ -3,6 +3,7 @@
 // (`semblance build`, the Vite plugin), the request handler (`semblance serve`) and renderSite
 // all use it.
 import type { FnRule } from '../engine/context.ts'
+import type { HostRenderer } from '../render/hosts.ts'
 import type { GraphStore } from '../store/types.ts'
 
 export interface Site {
@@ -33,6 +34,8 @@ export interface Site {
   layers?(store: GraphStore): Iterable<string>
   prefer?: 'sparql' | 'function'
   functions?: Record<string, FnRule>
+  /** A component library that draws hosted components (docs/HOSTED.md): the same the client mounts with. */
+  hosts?: HostRenderer
   /** What the client sets on <html> from the graph, besides lang and dir. */
   documentAttributes?(store: GraphStore): Record<string, string>
   /** The addresses to render beforehand: the navigation model's (routesOf) by default; this may change them. */
