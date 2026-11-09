@@ -318,7 +318,7 @@ describe('reconfiguration and layers', () => {
     const screen = runtime.project({ modality: MOD.Screen })
     const f = store.factory
     const nn = (s: string) => f.namedNode('urn:w:' + s)
-    expect(loadRules(store).find((r) => r.iri === 'urn:w:Field')!.watchesVia).toEqual([['urn:w:property']])
+    expect(loadRules(store).find((r) => r.iri === 'urn:w:Field')!.watchesVia).toEqual([['?urn:w:controls', 'urn:w:property']])
     const runs = () => screen.engine.stats.byRule.get('urn:w:Field')?.runs ?? 0
     const shows = (s: string) => store.match(nn(s), nn('shows'), null).map((q) => q.object.value)
     const set = (s: string, p: string, v: string) => runtime.apply({ remove: store.match(nn(s), nn(p), null), add: [f.quad(nn(s), nn(p), f.literal(v))] })

@@ -280,7 +280,14 @@ WHERE {
             } GROUP BY ?self ?cell }
         } UNION {
           FILTER NOT EXISTS { $this c:options ?explicit }
-          { $this c:optionClass ?class } UNION { FILTER NOT EXISTS { $this c:optionClass ?declared } FILTER NOT EXISTS { $this c:optionsFrom ?lister } $this c:property/rdfs:range ?class }
+          # A value created is a new instance of the class: its controlled property is read here too,
+          # so that is heard (and, by a typeahead whose options are not of a class, it is not).
+          { $this c:optionClass ?class . OPTIONAL { $this c:controls ?classNode ; c:property ?classProperty . ?classNode ?classProperty ?classValue } }
+          UNION {
+            FILTER NOT EXISTS { $this c:optionClass ?declared } FILTER NOT EXISTS { $this c:optionsFrom ?lister }
+            $this c:property ?rangedProperty . ?rangedProperty rdfs:range ?class .
+            OPTIONAL { $this c:controls ?rangedNode . ?rangedNode ?rangedProperty ?rangedValue }
+          }
           ?term a ?class FILTER(isIRI(?term))
           OPTIONAL { ?term sem:order ?order }
           BIND(COALESCE(xsd:integer(ROUND(xsd:decimal(?order))), 0) AS ?position)

@@ -1816,12 +1816,20 @@ export class Engine {
     return out
   }
 
-  /** Whether the predicate is reached from the focus along one of these paths (Rule.watchesVia; a step "^p" goes against p). */
+  /**
+   * Whether the predicate is reached from the focus along one of these paths (Rule.watchesVia; a
+   * step "^p" goes against p, a step "?p" keeps the nodes that have p).
+   */
   private names(focus: string, via: string[][], predicate: string): boolean {
     const f = this.store.factory
     return via.some((path) => {
       let nodes: Term[] = [f.namedNode(focus)]
       for (const step of path) {
+        if (step.startsWith('?')) {
+          const p = f.namedNode(step.slice(1))
+          nodes = nodes.filter((n) => n.termType !== 'Literal' && this.graphs.some((g) => this.store.match(n as never, p, null, g).length > 0))
+          continue
+        }
         const back = step.startsWith('^')
         const p = f.namedNode(back ? step.slice(1) : step)
         nodes = nodes.flatMap((n) => this.graphs.flatMap((g) => (back ? this.store.match(null, p, n as never, g).map((q) => q.subject) : n.termType === 'Literal' ? [] : this.store.match(n as never, p, null, g).map((q) => q.object))))

@@ -9,11 +9,13 @@
 // (as a member-wise rule's sem:memberWatchesVia). Anything else - a variable predicate bound by
 // another pattern, a VALUES row or a subquery, or one that may be unbound where its pattern is
 // evaluated - reads every predicate: undefined. Never too little.
+import { RDF_TYPE } from '../ns.ts'
 import { type Expr, type Group, type Item, itemVars, type Node, type Path, parseQuery, projectedVars } from '../view/sparql.ts'
 
 /**
  * Where a query's variable predicates come from: the nodes reached from the focus along the paths
- * in `via` (a step "^p" goes against p), and `iris`.
+ * in `via` (a step "^p" goes against p; a step "?p" keeps only nodes that have p: a path starts with
+ * those its pattern needs the focus to have), and `iris`.
  */
 export interface FocusPredicates {
   via: string[][]
@@ -188,13 +190,29 @@ export function focusPredicates(query: string, prefixes: Map<string, string>): F
     return each.reduce((a, b) => merge(a!, b!), { paths: [], iris: [], marked: [] })
   }
 
+  // What the focus, or the predicate, must have for a pattern to be read at all: the properties its
+  // group, and each group around it, require of them (`$this q ?x`, `?p q ?x` there, not in an
+  // OPTIONAL or a branch of its own). Without one, that group has no solutions whatever the pattern
+  // would match, so it reads nothing: a typeahead's options in use (`$this c:optionsInUse ?u ;
+  // c:property ?p . ?n ?p ?o`) read its property only when it has c:optionsInUse, and the options
+  // of its property's range (`?p rdfs:range ?class`) only when that property has a range.
+  const guards = (scope: Scope, v: string, skip?: string): string[] => {
+    const out = new Set<string>()
+    for (let s: Scope | undefined = scope; s; s = s.parent)
+      for (const it of s.g.items)
+        if (it.k === 'triples') for (const t of it.triples) if (t.s.k === 'var' && t.s.v === v && t.p.k === 'link' && t.p.iri !== skip && (v !== 'this' || t.p.iri !== RDF_TYPE)) out.add(t.p.iri)
+    return [...out].sort().map((g) => '?' + g)
+  }
   const out: FocusPredicates = { via: [], iris: new Set(), marked: new Set(), named }
   const seenPaths = new Set<string>()
   for (const { v, scope } of uses) {
     const vals = certain(v, scope)
     // A variable predicate that is the focus itself is no predicate the focus names.
     if (!vals || vals.paths.some((p) => !p.length)) return undefined
-    for (const p of vals.paths) if (!seenPaths.has(p.join(' '))) seenPaths.add(p.join(' ')), out.via.push(p)
+    for (const p0 of vals.paths) {
+      const p = [...guards(scope, 'this', p0[0]), ...p0, ...guards(scope, v)]
+      if (!seenPaths.has(p.join(' '))) seenPaths.add(p.join(' ')), out.via.push(p)
+    }
     for (const i of vals.iris) out.iris.add(i)
     for (const m of vals.marked) out.marked.add(m)
   }
