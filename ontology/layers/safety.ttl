@@ -5,7 +5,14 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 # Safety: what a rendering from an untrusted author (a person, a page, a model) may contain, so a
-# graph can describe an interface without running code or reaching the network on its own.
+# graph can describe an interface without running code or reaching outside what it renders.
+#
+# Remote resources: an authored rendering names an http(s) address only in an attribute, a link
+# (followed when a person follows it) or an image, audio or video source (safe:resourceAttribute,
+# loaded as it is rendered, as in any page). The policy limits their schemes; their origins are the
+# host's to limit, with a Content-Security-Policy (img-src, media-src). CSS loads nothing from an
+# address: a style rule reaches beyond the element it is written for, and loads on states (a hover)
+# that render nothing to check.
 #
 # Trust is the host's, not the graph's: a projection is authored when the host projects it with a
 # policy (Runtime.project({ policy }), every live example's sandbox), and the policy is read from a
@@ -17,6 +24,7 @@
 #   an element of a class not listed   -> an empty <sem-refused data-sem-refused="script">
 #   an attribute not listed            -> left out (the element stays)
 #   a URL of a scheme not listed       -> the attribute is left out
+#   an id reference to an id the rendering does not have -> the attribute is left out
 #   a style declaration that fails     -> left out of the style attribute or the stylesheet
 
 <https://semblance.dev/ns/safety> a owl:Ontology ;
@@ -43,6 +51,16 @@ safe:attribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
     rdfs:comment "A content attribute name an authored rendering may have."@en .
 safe:attributePrefix a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
     rdfs:comment "Every attribute named with this prefix (and only letters, digits and hyphens after it) is allowed."@en .
+safe:refusedAttributePrefix a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "Every attribute named with this prefix is refused, though a safe:attributePrefix allows it, unless its name is a safe:attribute itself."@en .
+safe:refusedLinkType a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A link type an authored rel may not hold."@en .
+safe:idReferenceAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is an id: an element of the same authored rendering must have it. Authored content renders in the host's document, where any other id is the host's."@en .
+safe:idReferenceListAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is a list of ids, each held as a safe:idReferenceAttribute is."@en .
+safe:fragmentAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A URL attribute whose fragment, when the URL is only one (#id), names an element of the document: it is held as a safe:idReferenceAttribute is. # alone names none."@en .
 safe:urlAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
     rdfs:comment "An attribute whose value is one URL: it must be relative, a fragment, or of a safe:scheme."@en .
 safe:urlListAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
@@ -93,6 +111,16 @@ safe:Authored a safe:Policy ;
         svg:Svg , svg:G , svg:Defs , svg:LinearGradient , svg:Stop , svg:Rect , svg:Circle , svg:Line ,
         svg:Path , svg:Text , svg:Title ;
     safe:attributePrefix "data-" , "aria-" ;
+    # The framework's own hooks are refused, except those its components render (an authored graph
+    # has them by using the component anyway): data-sem-sandbox, data-sem-ssr and the like, which
+    # the host sets, are not listed. test/safety.test.ts checks every hook the ontology renders is.
+    safe:refusedAttributePrefix "data-sem-" ;
+    safe:refusedLinkType "opener" ;
+    safe:idReferenceAttribute "for" , "form" , "list" , "commandfor" , "popovertarget" ,
+        "aria-activedescendant" , "data-sem-anchor" , "data-sem-origin" ;
+    safe:idReferenceListAttribute "headers" , "itemref" , "aria-controls" , "aria-describedby" ,
+        "aria-details" , "aria-errormessage" , "aria-flowto" , "aria-labelledby" , "aria-owns" ;
+    safe:fragmentAttribute "href" , "usemap" ;
     safe:attribute
         # HTML
         "abbr" , "accept" , "accept-charset" , "accesskey" , "action" , "alt" , "autocapitalize" ,
@@ -106,7 +134,7 @@ safe:Authored a safe:Policy ;
         "kind" , "label" , "lang" , "list" , "loading" , "loop" , "low" , "max" , "maxlength" , "media" ,
         "method" , "min" , "minlength" , "multiple" , "muted" , "name" , "novalidate" , "open" ,
         "optimum" , "pattern" , "placeholder" , "playsinline" , "popover" , "popovertarget" ,
-        "popovertargetaction" , "poster" , "preload" , "readonly" , "referrerpolicy" , "rel" ,
+        "popovertargetaction" , "poster" , "preload" , "readonly" , "rel" ,
         "required" , "reversed" , "role" , "rows" , "rowspan" , "scope" , "selected" , "shape" , "size" ,
         "sizes" , "slot" , "span" , "spellcheck" , "src" , "srclang" , "srcset" , "start" , "step" ,
         "style" , "tabindex" , "target" , "title" , "translate" , "type" , "usemap" , "value" , "width" ,
@@ -117,7 +145,43 @@ safe:Authored a safe:Policy ;
         "stroke" , "stroke-width" , "stroke-opacity" , "stroke-linecap" , "stroke-linejoin" ,
         "stroke-dasharray" , "stroke-dashoffset" , "vector-effect" , "opacity" , "offset" ,
         "stop-color" , "stop-opacity" , "gradientUnits" , "gradientTransform" , "text-anchor" ,
-        "dominant-baseline" , "font-size" , "font-weight" , "focusable" , "paint-order" ;
+        "dominant-baseline" , "font-size" , "font-weight" , "focusable" , "paint-order" ,
+        # The framework's hooks its components render
+        "data-sem-align" , "data-sem-anchor" , "data-sem-anchor-width" , "data-sem-axis" ,
+        "data-sem-backdrop" , "data-sem-c" , "data-sem-caret" , "data-sem-cells" ,
+        "data-sem-change" , "data-sem-color-scheme" , "data-sem-compact-as" ,
+        "data-sem-concealed" , "data-sem-contrast" , "data-sem-control" , "data-sem-controlled" ,
+        "data-sem-current" , "data-sem-density" , "data-sem-direction" ,
+        "data-sem-dismiss-outside" , "data-sem-done" , "data-sem-drag" , "data-sem-drag-status" ,
+        "data-sem-drop" , "data-sem-drop-after" , "data-sem-drop-before" ,
+        "data-sem-drop-ordered" , "data-sem-drop-over" , "data-sem-drop-reason" ,
+        "data-sem-drop-zone" , "data-sem-edge" , "data-sem-elevation" , "data-sem-emphasis" ,
+        "data-sem-end" , "data-sem-entered" , "data-sem-escape" , "data-sem-file-state" ,
+        "data-sem-fill" , "data-sem-focus" , "data-sem-from" , "data-sem-fullscreen" ,
+        "data-sem-gap" , "data-sem-gesture" , "data-sem-guides" , "data-sem-heads" ,
+        "data-sem-highlighted" , "data-sem-inset" , "data-sem-intent" , "data-sem-item" ,
+        "data-sem-justify" , "data-sem-keep-focus" , "data-sem-key-hint" ,
+        "data-sem-key-hint-apple" , "data-sem-kind" , "data-sem-label-placement" ,
+        "data-sem-layout" , "data-sem-leader" , "data-sem-lifted" , "data-sem-line" ,
+        "data-sem-link" , "data-sem-lit" , "data-sem-mark" , "data-sem-max" , "data-sem-measure" ,
+        "data-sem-mentions" , "data-sem-min" , "data-sem-mixin" , "data-sem-motion" ,
+        "data-sem-move-size" , "data-sem-nav-activate" , "data-sem-nav-items" ,
+        "data-sem-nav-node" , "data-sem-nav-orientation" , "data-sem-nav-toggle" ,
+        "data-sem-nav-wrap" , "data-sem-numeric" , "data-sem-origin" , "data-sem-outline" ,
+        "data-sem-outlines" , "data-sem-part" , "data-sem-part-at" , "data-sem-placed" ,
+        "data-sem-placeholder" , "data-sem-privacy" , "data-sem-range" , "data-sem-recalculated" ,
+        "data-sem-refused" , "data-sem-remembered" , "data-sem-return-cue" , "data-sem-role" ,
+        "data-sem-route" , "data-sem-row-span" , "data-sem-rows" , "data-sem-rule" ,
+        "data-sem-salience" , "data-sem-scroll" , "data-sem-select-on-focus" ,
+        "data-sem-selected" , "data-sem-sensitive" , "data-sem-shape-invalid" ,
+        "data-sem-shortcut" , "data-sem-shortcut-apple" , "data-sem-shortcut-other" ,
+        "data-sem-shown-while" , "data-sem-sign" , "data-sem-size" , "data-sem-sizes" ,
+        "data-sem-snap" , "data-sem-sources" , "data-sem-state" , "data-sem-step" ,
+        "data-sem-sticky" , "data-sem-strength" , "data-sem-takes-focus" ,
+        "data-sem-tear-back-cue" , "data-sem-tear-cue" , "data-sem-tear-distance" ,
+        "data-sem-term" , "data-sem-text" , "data-sem-text-align" , "data-sem-text-root" ,
+        "data-sem-text-style" , "data-sem-theme" , "data-sem-tile-layout" , "data-sem-tiled" ,
+        "data-sem-to" , "data-sem-tone" , "data-sem-tooltip" , "data-sem-window-state" ;
     safe:urlAttribute "href" , "src" , "action" , "formaction" , "poster" , "cite" , "itemid" , "itemtype" ;
     safe:urlListAttribute "srcset" ;
     safe:resourceAttribute "src" , "srcset" , "poster" ;

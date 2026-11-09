@@ -5,7 +5,7 @@ import { ATTRIBUTE_NAMES, TAG_NAMES, VOID_ELEMENTS } from '../vocab/rdfhtml.gene
 import { linearize, OrderingError } from './ordering.ts'
 import { compareKeys } from './order-key.ts'
 import { SVG_TAG_NAMES } from '../vocab/svg.ts'
-import { allowsCustomElement, allowsElement, allowsHostComponent, ATTRIBUTE_NAME, attributeProblem, inputProblem, Refused, type SafetyPolicy } from '../safety.ts'
+import { allowsCustomElement, allowsElement, allowsHostComponent, ATTRIBUTE_NAME, attributeProblem, idReferences, inputProblem, Refused, type SafetyPolicy } from '../safety.ts'
 
 /** The tag a refused element renders as (empty, with data-sem-refused naming what it was). */
 export const REFUSED_TAG = 'sem-refused'
@@ -170,6 +170,67 @@ export class HtmlIndex {
     readonly policy?: SafetyPolicy,
   ) {}
 
+  /**
+   * Authored content: the ids its elements have (how many have each), so an id reference can be held
+   * to the projection; and, both ways, which ids each element's references name, so an element is
+   * checked again when an id it names comes or goes.
+   */
+  private ids = new Map<string, number>()
+  private idOf = new Map<string, string>()
+  private referrers = new Map<string, Set<string>>()
+  private referenced = new Map<string, readonly string[]>()
+
+  /** The id an element of authored content has as rendered (none when it is refused). */
+  private mintedId(key: string): string | undefined {
+    const n = this.nodes.get(key)
+    if (!n?.cls || n.cls === 'Text' || this.isRefused(key)) return undefined
+    const own = n.props.get('id')
+    if (own?.size) return [...own].sort()[0]
+    for (const a of n.attrNodes) {
+      const rec = this.attrs.get(a)
+      if (rec?.name === 'id' && rec.value !== undefined) return rec.value
+    }
+    return undefined
+  }
+
+  /** Record an element's id; the ids that came or went are added to `changed`. */
+  private trackId(key: string, changed: Set<string>) {
+    const had = this.idOf.get(key)
+    const id = this.mintedId(key)
+    if (had === id) return
+    if (had !== undefined) {
+      const left = (this.ids.get(had) ?? 1) - 1
+      if (left) this.ids.set(had, left)
+      else this.ids.delete(had), changed.add(had)
+      this.idOf.delete(key)
+    }
+    if (id !== undefined) {
+      const count = this.ids.get(id) ?? 0
+      this.ids.set(id, count + 1)
+      if (!count) changed.add(id)
+      this.idOf.set(key, id)
+    }
+  }
+
+  /** Record which ids an element names (for checking it again when one of them comes or goes). */
+  private trackReferences(key: string, names: readonly string[]) {
+    const had = this.referenced.get(key)
+    if (had) for (const id of had) {
+      const r = this.referrers.get(id)
+      if (r && (r.delete(key), !r.size)) this.referrers.delete(id)
+    }
+    if (!names.length) {
+      this.referenced.delete(key)
+      return
+    }
+    this.referenced.set(key, names)
+    for (const id of names) {
+      let r = this.referrers.get(id)
+      if (!r) this.referrers.set(id, (r = new Set()))
+      r.add(key)
+    }
+  }
+
   /** Report what the policy kept out of a node, once per reason (the islands effect reports an island it does not mount). */
   refuse(key: string, kind: Refused['kind'], message: string) {
     let reasons = this.refusals.get(key)
@@ -196,7 +257,17 @@ export class HtmlIndex {
     for (const q of delta.add) this.quad(q, 1)
     // Authored content: what the policy refuses is reported as it arrives, not when it is first shown.
     if (this.checking.size) {
-      for (const k of this.checking) if (this.nodes.get(k)?.cls) this.isRefused(k) || this.attributes(k)
+      // Ids first, so a reference is checked against every id of this delta; an element naming an id
+      // that came or went is checked (and shown) again.
+      const changed = new Set<string>()
+      for (const k of this.checking) this.trackId(k, changed)
+      const again: string[] = []
+      for (const id of changed) for (const k of this.referrers.get(id) ?? []) if (!this.checking.has(k)) again.push(k)
+      for (const k of again) this.mark('attrs', k)
+      for (const k of this.checking) {
+        if (this.nodes.get(k)?.cls) this.isRefused(k) || this.attributes(k)
+        else if (this.referenced.has(k)) this.trackReferences(k, [])
+      }
       this.checking.clear()
     }
     // Forget nodes and attribute occurrences nothing describes any more, so the
@@ -212,6 +283,7 @@ export class HtmlIndex {
   private collect(key: string) {
     const n = this.nodes.get(key)
     if (n && this.refusals.size && !n.cls) this.refusals.delete(key)
+    if (n && !n.cls && this.referenced.has(key)) this.trackReferences(key, [])
     if (n && !n.cls && n.data === undefined && !n.props.size && !n.attrNodes.size && !n.children.size && !n.parents.size && n.slot === undefined && n.orderKey === undefined && n.island === undefined && n.tag === undefined && n.component === undefined && !n.inputs?.size) {
       this.nodes.delete(key)
       this.chainParent.delete(key)
@@ -404,10 +476,21 @@ export class HtmlIndex {
       else this.refuse(key, 'attribute', `"${rec.name}" is not an attribute name`)
     }
     if (this.policy) {
+      let names: string[] | undefined
       for (const [name, value] of out) {
         const why = attributeProblem(this.policy, name, value)
-        if (why) out.delete(name), this.refuse(key, why.kind, `${name}: ${why.reason}`)
+        if (why) {
+          out.delete(name), this.refuse(key, why.kind, `${name}: ${why.reason}`)
+          continue
+        }
+        // An id reference names only ids of this projection: authored content renders in the host's
+        // document, where any other id is the host's.
+        const ids = idReferences(this.policy, name, value)
+        if (!ids?.length) continue
+        ;(names ??= []).push(...ids)
+        if (ids.some((id) => !this.ids.has(id))) out.delete(name), this.refuse(key, 'attribute', `${name}: authored content may refer only to its own ids`)
       }
+      this.trackReferences(key, names ?? [])
     }
     if (this.urlBase !== undefined) for (const [name, value] of out) if (URL_ATTRIBUTES.has(name)) out.set(name, resolveUrl(value, this.urlBase))
     return [...out].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

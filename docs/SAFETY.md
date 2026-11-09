@@ -2,8 +2,7 @@
 
 A Semblance interface is a graph, and a graph can come from someone you do not trust: a person
 typing in a live example, a page, a model. **Authored content** is rendered under a policy, so that
-Turtle and SPARQL describe an interface without running code or loading anything from elsewhere on
-their own. The policy is vocabulary (`ontology/layers/safety.ttl`), applied in one place every
+Turtle and SPARQL describe an interface without running code or reaching outside what it renders. The policy is vocabulary (`ontology/layers/safety.ttl`), applied in one place every
 output reads from.
 
 ## Trusted and authored
@@ -32,10 +31,21 @@ from the one `authored` is loaded into; the live examples read it from the ontol
 - Render any element of the framework's components and of your own, built from the elements
   `safe:Authored` lists (`safe:element`): text, headings, lists, tables, forms and their controls,
   `details`, `dialog`, images, audio and video, the SVG extension's elements.
-- Give them attributes from `safe:attribute`, and any `data-…` or `aria-…` one.
+- Give them attributes from `safe:attribute`, and any `data-…` or `aria-…` one but the framework's
+  own hooks (below).
+- Refer to its own elements by id: `for`, `form`, `list`, `commandfor`, `popovertarget`, `headers`,
+  `itemref`, the ARIA relationships (`aria-labelledby`, `aria-controls`, …) and a link to `#id` must
+  name ids that elements of the same rendering have (`safe:idReferenceAttribute`,
+  `safe:idReferenceListAttribute`, `safe:fragmentAttribute`). The framework's components mint their
+  ids from their IRIs, so their ARIA relationships hold.
 - Link and load by URL when the URL is relative, a fragment, or `http:`, `https:`, `mailto:` or
   `tel:`; an image, audio or video source (`src`, `srcset`, `poster`) may also be `data:image/…` or
   `blob:`.
+- **Remote resources, the one rule:** an `http(s)` address appears only in an attribute: a link,
+  followed when a person follows it, or an image, audio or video source, loaded as it renders, as in
+  any page. The policy limits their schemes; a CSP limits their origins (`img-src`, `media-src`).
+  CSS loads nothing from an address, since a style rule reaches beyond the element it is written for
+  and loads on states (a hover) that render nothing to check.
 - Style with `sty:StyleRule`s, tokens and keyframes, and `style` attributes, whose values pass the
   CSS check below; `url()` of a fragment (`url(#gradient)`) or of a `data:image/…` loads nothing from
   elsewhere and is allowed.
@@ -62,7 +72,18 @@ from the one `authored` is loaded into; the live examples read it from the ontol
 - **No element that runs or embeds:** `script`, `iframe`, `object`, `embed`, `base`, `link`, `meta`,
   `style`, `noscript`, `template`, `slot`, nor `html`, `head`, `body` or `title`.
 - **No attribute outside the list:** no event handler (`on…`), `srcdoc`, `is`, `nonce`, `ping`,
-  `http-equiv`, `sandbox`, `allow`, `integrity`, `shadowrootmode`.
+  `http-equiv`, `sandbox`, `allow`, `integrity`, `shadowrootmode`, `referrerpolicy` (the page's own
+  policy decides what an address is told).
+- **No reach into the host's page by id:** authored content renders in the host's document, so an id
+  reference to an id the rendering does not have (the host's login form, its theme picker) is left
+  out.
+- **No framework hooks the host sets:** `data-sem-…` is refused (`safe:refusedAttributePrefix`), but
+  for the hooks the framework's components render, which `safe:Authored` lists (an authored graph has
+  them by using the component); `data-sem-sandbox`, `data-sem-ssr` and the other hooks the host sets
+  are not among them. `data-sem-anchor` and `data-sem-origin` name ids, and are held as id
+  references.
+- **No `opener`:** a link's `rel` may not hold `opener` (`safe:refusedLinkType`), so a page it opens
+  does not get the host's window.
 - **No other URL scheme:** no `javascript:`, `vbscript:`, `data:` (but an image's) or `file:`, however
   it is spelled (case, spaces, tabs and newlines are read as a browser reads them).
 - **No CSS that loads or escapes:** no `url()` to an address, `image-set()`, `image()`,
@@ -121,6 +142,7 @@ without `unsafe-inline` is #157.
 ## Not covered
 
 - Where an `http(s)` link goes or an image comes from: use a CSP.
+- An id the rendering has that the host's page has too: the browser takes the first in the document.
 - DOM clobbering by `id` or `name` (a host script that reads `window.someId`).
 - What a foreign component the policy lists does with its inputs once mounted: it is the host's
   code. A live example's sandbox attaches no islands effect.
