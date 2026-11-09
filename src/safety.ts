@@ -107,6 +107,10 @@ export const ATTRIBUTE_NAME = /^[^\s"'<>/=\u0000-\u001f\u007f]+$/
 
 /** Whether an element class (as the HTML index names it) is allowed. */
 export const allowsElement = (policy: SafetyPolicy, cls: string): boolean => policy.elements.has(cls)
+/** Whether authored content may have a component drawn by this host component (ext:component, docs/HOSTED.md). */
+export const allowsHostComponent = (policy: SafetyPolicy, name: string): boolean => policy.hostComponents.has(name)
+/** Whether authored content may have a component's root created as this custom element (ext:tag). */
+export const allowsCustomElement = (policy: SafetyPolicy, tag: string): boolean => policy.customElements.has(tag)
 
 /**
  * Why an attribute is refused, or undefined when it is allowed: its name is listed or has a listed
