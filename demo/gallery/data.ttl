@@ -20,7 +20,7 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-histogram ui:dt-sparkline ui:dt-boxplot ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-histogram ui:dt-sparkline ui:dt-boxplot ui:dt-axes ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -462,6 +462,22 @@ ui:dt-boxplot a c:Flippable ; c:front ui:dt-boxplot-spec .
 ui:dt-boxplot-spec a c:Specimen ; c:demonstrates c:BoxPlot ; c:label "Box plot" , "Коробкова діаграма"@uk , "Boxplot"@de , "مخطط صندوقي"@ar ;
     c:help "How each category's values spread: a box from the first to the third quartile, a line at the median, whiskers to the least and greatest value; with a series variable, a box per series side by side. A box says its median, quartiles and range in the viewer's language." ;
     c:children ( ui:dt-boxplot-chart ) .
+
+ui:dt-axes-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Sales and partner share" ; sem:select """
+SELECT ?month ?channel ?amount WHERE {
+  { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleAmount ?amount . BIND("Total" AS ?channel) }
+  UNION { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel "Partner" ; ui:saleAmount ?amount . BIND("Partner" AS ?channel) }
+} ORDER BY ?at""" .
+ui:dt-axes-total a c:series ; c:key "Total" ; rdfs:label "All sales" , "Усі продажі"@uk , "Alle Verkäufe"@de , "كل المبيعات"@ar .
+ui:dt-axes-partner a c:series ; c:key "Partner" ; c:axis c:SecondaryAxis ; rdfs:label "Partners (right axis)" , "Партнери (права вісь)"@uk , "Partner (rechte Achse)"@de , "الشركاء (المحور الثاني)"@ar .
+ui:dt-axes-budget a c:Threshold ; c:at 140 ; rdfs:label "Target" , "Ціль"@uk , "Ziel"@de , "الهدف"@ar .
+ui:dt-axes-season a c:MarkedRange ; c:fromValue 60 ; c:toValue 90 ; rdfs:label "Usual" , "Звично"@uk , "Üblich"@de , "المعتاد"@ar .
+ui:dt-axes-chart a c:AreaChart ; c:label "Sales and partners" ; c:view ui:dt-axes-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ;
+    c:unit "k€" ; c:secondaryUnit "k€" ; c:legend ( ui:dt-axes-total ui:dt-axes-partner ) ; c:annotation ui:dt-axes-budget , ui:dt-axes-season .
+ui:dt-axes a c:Flippable ; c:front ui:dt-axes-spec .
+ui:dt-axes-spec a c:Specimen ; c:demonstrates c:Threshold , c:MarkedRange , c:Axis ; c:label "Dual axes and annotations" , "Дві осі й позначки"@uk , "Zwei Achsen und Markierungen"@de , "محوران وتعليقات"@ar ;
+    c:help "A legend's series with c:axis c:SecondaryAxis is scaled on its own, its ticks at the plot's inline end, its values in c:secondaryUnit. c:annotation draws a c:Threshold (a dashed line at c:at) or a c:MarkedRange (a band from c:fromValue to c:toValue), named by its label, on screen and as text; the value scale keeps them in view." ;
+    c:children ( ui:dt-axes-chart ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 

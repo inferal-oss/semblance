@@ -1549,6 +1549,20 @@ c:seriesIndex a owl:DatatypeProperty . c:categoryIndex a owl:DatatypeProperty . 
 c:base a owl:DatatypeProperty . c:nextValue a owl:DatatypeProperty . c:nextBase a owl:DatatypeProperty .
 c:first a owl:DatatypeProperty ; rdfs:range xsd:boolean .
 c:min a owl:DatatypeProperty . c:max a owl:DatatypeProperty .
+# Dual axes and annotations. A declared legend's series on the secondary axis (c:axis c:SecondaryAxis) is
+# scaled on its own (c:secondaryScale, ticks at the plot's inline end) and says c:secondaryUnit. A chart's
+# annotations (c:annotation) are thresholds (c:Threshold, c:at) and marked ranges (c:MarkedRange,
+# c:fromValue, c:toValue), named by their labels; the primary scale includes their values.
+c:axis a owl:ObjectProperty ; rdfs:range c:Axis ; rdfs:comment "On a legend's series: the value axis it is drawn on (default the primary)."@en .
+c:Axis a owl:Class . c:PrimaryAxis a c:Axis . c:SecondaryAxis a c:Axis ; rdfs:comment "The value axis at the plot's inline end."@en .
+c:secondaryUnit a owl:DatatypeProperty ; rdfs:comment "The unit of the values on the secondary axis."@en .
+c:secondary a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Derived: a series, or a point, is on the secondary axis."@en .
+c:secondaryScale a owl:ObjectProperty ; rdfs:range c:ValueScale ; rdfs:comment "Derived: the secondary axis's scale."@en .
+c:annotation a owl:ObjectProperty ; rdfs:range c:Annotation ; rdfs:comment "A threshold or a marked range drawn on a chart's plot."@en .
+c:Annotation a owl:Class ; rdfs:comment "A mark on a chart's value axis, named by its label."@en .
+c:Threshold a owl:Class ; rdfs:subClassOf c:Annotation ; rdfs:comment "A line at a value (c:at): a target, a budget, a limit."@en .
+c:MarkedRange a owl:Class ; rdfs:subClassOf c:Annotation ; rdfs:comment "A band from c:fromValue to c:toValue: a normal range, a period of note."@en .
+c:fromValue a owl:DatatypeProperty . c:toValue a owl:DatatypeProperty .
 
 c:SeriesPlan a sem:Rendering ; sem:targets c:SeriesChart ; sem:stratum -2 ; sem:inputOnly true ;
     sem:follows c:dataset , c:hiddenSeries , ( c:view rs:solution rs:binding ) , ( c:legend [ sem:zeroOrMore rdf:rest ] rdf:first ) .
@@ -1556,7 +1570,7 @@ c:SeriesPlan-fn a sem:Rule ; sem:implements c:SeriesPlan ; sem:function "series:
 c:SeriesPlan-sparql a sem:Rule ; sem:implements c:SeriesPlan ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; sem:orderKey ?okey ;
+  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; c:secondary ?secondary ; sem:orderKey ?okey ;
     c:series ?seriesNode ; c:category ?category ; c:value ?value ; c:x ?xOut ; c:size ?zOut ; c:seriesIndex ?seriesIndex ; c:categoryIndex ?categoryIndex .
   ?container rdfhtml:hasChild ?node .
 }
@@ -1622,6 +1636,7 @@ WHERE {
     BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?skey), 1, 8))) AS ?node)
     BIND(c:ChartSeries AS ?type) BIND(?skey AS ?key) BIND(?slabel AS ?label) BIND(?si AS ?index)
     BIND(IF(EXISTS { $this c:hiddenSeries ?h FILTER(STR(?h) = ?skey) }, true, ?unset) AS ?hidden)
+    BIND(IF(EXISTS { $this c:legend/rdf:rest*/rdf:first ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
     BIND(CONCAT("\\u0001n", STR(?si)) AS ?okey)
     BIND(IRI(CONCAT(?me, "/~legend")) AS ?container)
   } UNION {
@@ -1754,13 +1769,16 @@ WHERE {
     OPTIONAL { $this a ?kind . ?kind c:pointClass ?type2 }
     BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?ser), 1, 8))) AS ?seriesNode)
     BIND(?cat AS ?category) BIND(?sum AS ?value) BIND(?si AS ?seriesIndex) BIND(?ci AS ?categoryIndex)
+    BIND(IF(EXISTS { $this c:legend/rdf:rest*/rdf:first ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
+
     BIND(CONCAT("\\u0001n", STR(?si), "\\u0001n", STR(?ci)) AS ?okey)
     BIND(IRI(CONCAT(?me, "/~marks")) AS ?container)
   }
   }
 }""" .
 
-c:SeriesLayout a sem:Rendering ; sem:targets c:SeriesChart ; sem:stratum -1 ; sem:readsMinted true .
+c:SeriesLayout a sem:Rendering ; sem:targets c:SeriesChart ; sem:stratum -1 ; sem:readsMinted true ;
+    sem:follows c:annotation , ( c:annotation c:at ) , ( c:annotation c:fromValue ) , ( c:annotation c:toValue ) , ( c:annotation rdfs:label ) .
 c:SeriesLayout-fn a sem:Rule ; sem:implements c:SeriesLayout ; sem:function "series:layout" .
 c:SeriesLayout-sparql a sem:Rule ; sem:implements c:SeriesLayout ; sem:needsExtension sx:Math , sx:Locale ; sem:bulk false ;
     sem:construct """
@@ -1795,6 +1813,7 @@ WHERE {
     # The value scale, from the least to the greatest end of any point; the x scale over their x.
     {
       { SELECT (MIN(?lo1) AS ?lo0) (MAX(?hi1) AS ?hi0) WHERE {
+        {
         { SELECT ?pS ?siS ?ciS ?vS (SUM(COALESCE(?ovS, 0e0)) AS ?belowS) WHERE {
       ?pS a c:ChartPoint ; c:inChart $this ; c:seriesIndex ?siS ; c:categoryIndex ?ciS ; c:value ?vS .
       OPTIONAL { ?oS a c:ChartPoint ; c:inChart $this ; c:categoryIndex ?ciS ; c:seriesIndex ?osiS ; c:value ?ovS . FILTER(?osiS < ?siS) }
@@ -1806,8 +1825,31 @@ WHERE {
         OPTIONAL { ?pS c:low ?lowS ; c:high ?highS }
         BIND(IF(?stackedS && ?b < ?b + ?vS, ?b, ?b + ?vS) AS ?lo2) BIND(IF(?stackedS && ?b > ?b + ?vS, ?b, ?b + ?vS) AS ?hi2)
         BIND(IF(BOUND(?lowS) && ?lowS < ?lo2, ?lowS, ?lo2) AS ?lo1) BIND(IF(BOUND(?highS) && ?highS > ?hi2, ?highS, ?hi2) AS ?hi1)
+        FILTER NOT EXISTS { ?pS c:secondary true }
+        } UNION {
+          # The annotations' values, so a threshold or a marked range is in view.
+          $this c:annotation ?an . VALUES ?ap { c:at c:fromValue c:toValue } ?an ?ap ?av .
+          BIND(xsd:double(?av) AS ?lo1) BIND(?lo1 AS ?hi1)
+        }
       } }
       BIND(c:valueScale AS ?scaleLink) BIND("scale" AS ?scaleLocal)
+    } UNION {
+      # Points of a series on the secondary axis (c:axis c:SecondaryAxis) have a scale of their own.
+      { SELECT (MIN(?lo1) AS ?lo0) (MAX(?hi1) AS ?hi0) WHERE {
+        { SELECT ?pS ?siS ?ciS ?vS (SUM(COALESCE(?ovS, 0e0)) AS ?belowS) WHERE {
+      ?pS a c:ChartPoint ; c:inChart $this ; c:seriesIndex ?siS ; c:categoryIndex ?ciS ; c:value ?vS .
+      OPTIONAL { ?oS a c:ChartPoint ; c:inChart $this ; c:categoryIndex ?ciS ; c:seriesIndex ?osiS ; c:value ?ovS . FILTER(?osiS < ?siS) }
+    } GROUP BY ?pS ?siS ?ciS ?vS }
+        # A point's ends: its value, and its base when it is stacked on others.
+        BIND(EXISTS { $this c:stacked true } AS ?stackedS)
+        BIND(IF(?stackedS, ?belowS, 0e0) AS ?b)
+        # A box's whiskers are ends too.
+        OPTIONAL { ?pS c:low ?lowS ; c:high ?highS }
+        BIND(IF(?stackedS && ?b < ?b + ?vS, ?b, ?b + ?vS) AS ?lo2) BIND(IF(?stackedS && ?b > ?b + ?vS, ?b, ?b + ?vS) AS ?hi2)
+        BIND(IF(BOUND(?lowS) && ?lowS < ?lo2, ?lowS, ?lo2) AS ?lo1) BIND(IF(BOUND(?highS) && ?highS > ?hi2, ?highS, ?hi2) AS ?hi1)
+        FILTER EXISTS { ?pS c:secondary true }
+      } }
+      BIND(c:secondaryScale AS ?scaleLink) BIND("scale2" AS ?scaleLocal)
     } UNION {
       { SELECT (MIN(?px) AS ?lo0) (MAX(?px) AS ?hi0) WHERE { ?pxn a c:ChartPoint ; c:inChart $this ; c:x ?px } }
       BIND(c:xScale AS ?scaleLink) BIND("xscale" AS ?scaleLocal)
@@ -1859,7 +1901,8 @@ WHERE {
 }""" .
 
 
-c:AxisChartRendering a sem:Rendering ; sem:targets c:AxisChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset , c:view ; sem:readsMinted true .
+c:AxisChartRendering a sem:Rendering ; sem:targets c:AxisChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:readsMinted true ;
+    sem:follows c:dataset , c:view , c:annotation , ( c:annotation c:at ) , ( c:annotation c:fromValue ) , ( c:annotation c:toValue ) , ( c:annotation rdfs:label ) .
 c:AxisChartRendering-fn a sem:Rule ; sem:implements c:AxisChartRendering ; sem:function "series:frame" .
 c:AxisChartRendering-sparql a sem:Rule ; sem:implements c:AxisChartRendering ; sem:needsExtension sx:Locale ; sem:bulk false ;
     sem:construct """
@@ -1904,23 +1947,27 @@ WHERE {
     BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
     OPTIONAL { $this c:valueScale ?scale . ?scale a c:ValueScale ; c:min ?min ; c:max ?max }
     OPTIONAL { $this c:xScale ?xscale . ?xscale a c:ValueScale ; c:min ?xmin ; c:max ?xmax }
+    OPTIONAL { $this c:secondaryScale ?scale2 . ?scale2 a c:ValueScale ; c:min ?min2 ; c:max ?max2 }
+    BIND(EXISTS { $this c:annotation ?a0 FILTER(isIRI(?a0)) { ?a0 c:at ?x0 FILTER(isNumeric(xsd:double(?x0))) } UNION { ?a0 c:fromValue ?f0 ; c:toValue ?t0 FILTER(isNumeric(xsd:double(?f0)) && isNumeric(xsd:double(?t0))) } } AS ?annotated)
     OPTIONAL { $this c:sizeMax ?zmax }
     { SELECT (COUNT(?cn) AS ?n) WHERE { ?cn a c:ChartCategory ; c:inChart $this } }
     { SELECT (COUNT(DISTINCT ?psi) AS ?k) WHERE { OPTIONAL { ?pp a c:ChartPoint ; c:inChart $this ; c:seriesIndex ?psi } } }
     VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
       ("root" rdfhtml:Figure UNDEF UNDEF UNDEF) ("plot" rdfhtml:Div "sem-chart-plot" "root" 0) ("ticks" rdfhtml:Div "sem-chart-ticks" "plot" 0)
+      ("ticks2" rdfhtml:Div "sem-chart-ticks sem-secondary" "plot" 0.5) ("annotations" rdfhtml:Div "sem-chart-annotations" "plot" 0.7)
       ("marks" rdfhtml:Ol "sem-chart-marks" "plot" 1) ("categories" rdfhtml:Div "sem-chart-categories" "root" 1) ("xticks" rdfhtml:Div "sem-chart-xticks" "root" 1)
       ("legend" rdfhtml:Ul "sem-legend" "root" 2) }
     # Below the plot: the x scale's ticks when the chart has one, else its categories.
-    FILTER(IF(?local = "xticks", BOUND(?xscale), IF(?local = "categories", !BOUND(?xscale), true)))
+    FILTER(IF(?local = "xticks", BOUND(?xscale), IF(?local = "categories", !BOUND(?xscale), IF(?local = "ticks2", BOUND(?scale2), IF(?local = "annotations", ?annotated, true)))))
     BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
     BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
     BIND(IF(BOUND(?parentLocal), IRI(CONCAT(?me, "/~", ?parentLocal)), ?unset) AS ?parent)
     BIND(IF(?local = "root", CONCAT(IF(BOUND(?min), CONCAT("--lo: ", sx:formatNumber(?min + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --hi: ", sx:formatNumber(?max + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; "), ""),
+      IF(BOUND(?min2), CONCAT("--lo2: ", sx:formatNumber(?min2 + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --hi2: ", sx:formatNumber(?max2 + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; "), ""),
       IF(BOUND(?xmin), CONCAT("--xlo: ", sx:formatNumber(?xmin + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --xhi: ", sx:formatNumber(?xmax + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; "), ""),
       IF(BOUND(?zmax), CONCAT("--zmax: ", sx:formatNumber(?zmax + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; "), ""), "--n: ", STR(?n), "; --k: ", STR(?k)), ?unset) AS ?style)
     LATERAL { OPTIONAL {
-      VALUES (?forLocal ?an ?av0) { ("ticks" "aria-hidden" "true") ("marks" "aria-label" UNDEF) ("categories" "aria-hidden" "true") ("xticks" "aria-hidden" "true") }
+      VALUES (?forLocal ?an ?av0) { ("ticks" "aria-hidden" "true") ("marks" "aria-label" UNDEF) ("categories" "aria-hidden" "true") ("xticks" "aria-hidden" "true") ("ticks2" "aria-hidden" "true") }
       FILTER(?forLocal = ?local)
       BIND(IRI(CONCAT(?me, "/~", ?local, "-", ?an)) AS ?attr) BIND(COALESCE(?av0, ?label) AS ?av)
     } }
@@ -1928,11 +1975,36 @@ WHERE {
     # A tick per step of a scale (the value scale's, the x scale's), at its value, in the viewer's locale.
     FILTER(!BOUND(?message))
     ?viewer l10n:formatLocale ?locale .
-    VALUES (?scaleLink ?tickLocal ?ticksLocal ?tickClass) { (c:valueScale "tick" "ticks" "sem-chart-tick") (c:xScale "xtick" "xticks" "sem-chart-xtick") }
+    VALUES (?scaleLink ?tickLocal ?ticksLocal ?tickClass) { (c:valueScale "tick" "ticks" "sem-chart-tick") (c:xScale "xtick" "xticks" "sem-chart-xtick") (c:secondaryScale "tick2" "ticks2" "sem-chart-tick") }
     $this ?scaleLink ?scale . ?scale a c:ValueScale ; c:tick ?tick . ?tick c:at ?at ; c:index ?k .
     BIND(IRI(CONCAT(?me, "/~", ?tickLocal, "-", STR(?k))) AS ?el) BIND(rdfhtml:Span AS ?tag) BIND(?tickClass AS ?cls) BIND(?k AS ?key)
     BIND(IRI(CONCAT(?me, "/~", ?ticksLocal)) AS ?parent) BIND(CONCAT("--at: ", sx:formatNumber(?at + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")) AS ?style)
     BIND(IRI(CONCAT(?me, "/~", ?tickLocal, "-", STR(?k), "-text")) AS ?textNode) BIND(sx:formatNumber(?at + 0e0, ?locale, "maximumFractionDigits=4") AS ?data)
+  } UNION {
+    # The annotations, in order of their values: a threshold line at its value, a marked range as a band, each with its words.
+    FILTER(!BOUND(?message))
+    ?viewer l10n:formatLocale ?locale .
+    $this c:annotation ?ann . FILTER(isIRI(?ann))
+    OPTIONAL { ?ann c:at ?annAt0 } OPTIONAL { ?ann c:fromValue ?annFrom0 } OPTIONAL { ?ann c:toValue ?annTo0 }
+    BIND(xsd:double(?annAt0) AS ?annAt) BIND(xsd:double(?annFrom0) AS ?annFrom) BIND(xsd:double(?annTo0) AS ?annTo)
+    OPTIONAL { ?annUnitAt l10n:of $this ; l10n:unit ?annU0 }
+    OPTIONAL { FILTER(!BOUND(?annU0)) $this c:unit ?annU1 FILTER(isLiteral(?annU1)) } BIND(COALESCE(STR(?annU0), STR(?annU1), "") AS ?annUnit)
+    OPTIONAL { ?annLabelAt0 l10n:of ?ann ; l10n:label ?annLabel0 }
+    OPTIONAL { FILTER(!BOUND(?annLabel0)) ?ann c:label ?annLabel1 FILTER(isLiteral(?annLabel1)) }
+    OPTIONAL { ?annLabelAt2 l10n:of ?ann ; l10n:name ?annLabel2 }
+    OPTIONAL { FILTER(!BOUND(?annLabel2)) ?ann rdfs:label ?annLabel3 FILTER(isLiteral(?annLabel3)) }
+    BIND(STR(COALESCE(?annLabel0, ?annLabel1, ?annLabel2, ?annLabel3, REPLACE(STR(?ann), "^.*[#/]", ""))) AS ?annLabel)
+    BIND(IF(BOUND(?annAt), sx:formatNumber(?annAt, ?locale, "maximumFractionDigits=2"),
+      IF(BOUND(?annFrom) && BOUND(?annTo), CONCAT(sx:formatNumber(?annFrom, ?locale, "maximumFractionDigits=2"), " – ", sx:formatNumber(?annTo, ?locale, "maximumFractionDigits=2")), ?unset)) AS ?annValue)
+    FILTER(BOUND(?annValue))
+    BIND(CONCAT(?annLabel, ": ", ?annValue, IF(?annUnit = "", "", CONCAT(" ", ?annUnit))) AS ?annWords)
+    BIND(CONCAT("\\u0001n", STR(COALESCE(?annAt, ?annFrom, 0)), "\\u0001s", STR(?ann)) AS ?annKey)
+    BIND(CONCAT(STR($this), "/~annotation-", SUBSTR(MD5(STR(?ann)), 1, 8)) AS ?annId)
+    BIND(IRI(?annId) AS ?el) BIND(rdfhtml:Span AS ?tag) BIND(?annKey AS ?key)
+    BIND(IF(BOUND(?annAt), "sem-threshold", "sem-marked-range") AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~annotations")) AS ?parent)
+    BIND(IF(BOUND(?annAt), CONCAT("--at: ", sx:formatNumber(?annAt + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), CONCAT("--from: ", sx:formatNumber(?annFrom + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --to: ", sx:formatNumber(?annTo + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"))) AS ?style)
+    BIND(IRI(CONCAT(?annId, "-text")) AS ?textNode) BIND(?annWords AS ?data)
   } UNION {
     # The categories, each at its place (a chart with an x scale has none below it).
     FILTER(!BOUND(?message))
@@ -1964,6 +2036,7 @@ WHERE {
   $this a c:ChartSeries ; c:inChart ?chart ; c:index ?i ; c:label ?label .
   BIND(STR($this) AS ?me)
   VALUES ?local { "root" "swatch" }
+  BIND(IF(?local = "root" && EXISTS { $this c:secondary true }, "sem-secondary", ?unset) AS ?cls)
   BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el)
   BIND(IF(?local = "root", rdfhtml:Li, rdfhtml:I) AS ?tag)
   BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
@@ -2010,7 +2083,11 @@ WHERE {
   OPTIONAL { $this c:q1 ?pq1 ; c:q3 ?pq3 ; c:low ?plow ; c:high ?phigh }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
-  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit0)
+  # A point of a series on the secondary axis says the secondary unit.
+  OPTIONAL { ?unit2At l10n:of ?chart ; l10n:secondaryUnit ?su0 }
+  OPTIONAL { FILTER(!BOUND(?su0)) ?chart c:secondaryUnit ?su1 FILTER(isLiteral(?su1)) }
+  BIND(IF(EXISTS { $this c:secondary true }, COALESCE(STR(?su0), STR(?su1), ""), ?unit0) AS ?unit)
   # What it says: "category · series: value unit", the series when the chart has more than one.
   BIND(EXISTS { ?chart c:seriesVariable ?anySv } || EXISTS { ?chart c:legend ?anyLegend } AS ?many)
   BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
@@ -2053,7 +2130,7 @@ WHERE {
   VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("area" rdfhtml:Span "sem-area" 0) ("line" rdfhtml:Span "sem-segment" 1) ("dot" rdfhtml:Span "sem-dot" 2) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
   FILTER(!(?local IN ("area", "line")) || BOUND(?nv))
   BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
-  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-area-point"), ?cls0) AS ?cls)
+  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-area-point", IF(EXISTS { $this c:secondary true }, " sem-secondary", "")), ?cls0) AS ?cls)
   BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
   BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~root"))) AS ?parent)
   BIND(IF(?local = "root", ?pointStyle, ?unset) AS ?style)
@@ -2098,7 +2175,11 @@ WHERE {
   OPTIONAL { $this c:q1 ?pq1 ; c:q3 ?pq3 ; c:low ?plow ; c:high ?phigh }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
-  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit0)
+  # A point of a series on the secondary axis says the secondary unit.
+  OPTIONAL { ?unit2At l10n:of ?chart ; l10n:secondaryUnit ?su0 }
+  OPTIONAL { FILTER(!BOUND(?su0)) ?chart c:secondaryUnit ?su1 FILTER(isLiteral(?su1)) }
+  BIND(IF(EXISTS { $this c:secondary true }, COALESCE(STR(?su0), STR(?su1), ""), ?unit0) AS ?unit)
   # What it says: "category · series: value unit", the series when the chart has more than one.
   BIND(EXISTS { ?chart c:seriesVariable ?anySv } || EXISTS { ?chart c:legend ?anyLegend } AS ?many)
   BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
@@ -2141,7 +2222,7 @@ WHERE {
   VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("bar" rdfhtml:Span "sem-bar" 0) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
   FILTER(true)
   BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
-  BIND(IF(?local = "root", CONCAT("sem-point ", IF(EXISTS { ?chart c:stacked true }, "sem-column-point sem-stacked", "sem-column-point")), ?cls0) AS ?cls)
+  BIND(IF(?local = "root", CONCAT("sem-point ", IF(EXISTS { ?chart c:stacked true }, "sem-column-point sem-stacked", "sem-column-point"), IF(EXISTS { $this c:secondary true }, " sem-secondary", "")), ?cls0) AS ?cls)
   BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
   BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~root"))) AS ?parent)
   BIND(IF(?local = "root", ?pointStyle, ?unset) AS ?style)
@@ -2195,7 +2276,11 @@ WHERE {
   OPTIONAL { $this c:q1 ?pq1 ; c:q3 ?pq3 ; c:low ?plow ; c:high ?phigh }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
-  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit0)
+  # A point of a series on the secondary axis says the secondary unit.
+  OPTIONAL { ?unit2At l10n:of ?chart ; l10n:secondaryUnit ?su0 }
+  OPTIONAL { FILTER(!BOUND(?su0)) ?chart c:secondaryUnit ?su1 FILTER(isLiteral(?su1)) }
+  BIND(IF(EXISTS { $this c:secondary true }, COALESCE(STR(?su0), STR(?su1), ""), ?unit0) AS ?unit)
   # What it says: "category · series: value unit", the series when the chart has more than one.
   BIND(EXISTS { ?chart c:seriesVariable ?anySv } || EXISTS { ?chart c:legend ?anyLegend } AS ?many)
   BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
@@ -2238,7 +2323,7 @@ WHERE {
   VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("dot" rdfhtml:Span "sem-dot" 0) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
   FILTER(true)
   BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
-  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-scatter-point"), ?cls0) AS ?cls)
+  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-scatter-point", IF(EXISTS { $this c:secondary true }, " sem-secondary", "")), ?cls0) AS ?cls)
   BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
   BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~root"))) AS ?parent)
   BIND(IF(?local = "root", ?pointStyle, ?unset) AS ?style)
@@ -2295,7 +2380,11 @@ WHERE {
   OPTIONAL { $this c:q1 ?pq1 ; c:q3 ?pq3 ; c:low ?plow ; c:high ?phigh }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
-  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit0)
+  # A point of a series on the secondary axis says the secondary unit.
+  OPTIONAL { ?unit2At l10n:of ?chart ; l10n:secondaryUnit ?su0 }
+  OPTIONAL { FILTER(!BOUND(?su0)) ?chart c:secondaryUnit ?su1 FILTER(isLiteral(?su1)) }
+  BIND(IF(EXISTS { $this c:secondary true }, COALESCE(STR(?su0), STR(?su1), ""), ?unit0) AS ?unit)
   # What it says: "category · series: value unit", the series when the chart has more than one.
   BIND(EXISTS { ?chart c:seriesVariable ?anySv } || EXISTS { ?chart c:legend ?anyLegend } AS ?many)
   BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
@@ -2338,7 +2427,7 @@ WHERE {
   VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("slice" rdfhtml:Span "sem-slice" 0) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
   FILTER(true)
   BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
-  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-slice-point"), ?cls0) AS ?cls)
+  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-slice-point", IF(EXISTS { $this c:secondary true }, " sem-secondary", "")), ?cls0) AS ?cls)
   BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
   BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~root"))) AS ?parent)
   BIND(IF(?local = "root", ?pointStyle, ?unset) AS ?style)
@@ -2458,7 +2547,7 @@ c:HistogramPlan-fn a sem:Rule ; sem:implements c:HistogramPlan ; sem:function "s
 c:HistogramPlan-sparql a sem:Rule ; sem:implements c:HistogramPlan ; sem:needsExtension sx:Math ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; sem:orderKey ?okey ;
+  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; c:secondary ?secondary ; sem:orderKey ?okey ;
     c:series ?seriesNode ; c:category ?category ; c:value ?value ; c:seriesIndex ?seriesIndex ; c:categoryIndex ?categoryIndex ; c:lower ?lower ; c:upper ?upper .
   ?container rdfhtml:hasChild ?node .
 }
@@ -2547,6 +2636,7 @@ WHERE {
     BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?skey), 1, 8))) AS ?node)
     BIND(c:ChartSeries AS ?type) BIND(?skey AS ?key) BIND(?slabel AS ?label) BIND(?si AS ?index)
     BIND(IF(EXISTS { $this c:hiddenSeries ?h FILTER(STR(?h) = ?skey) }, true, ?unset) AS ?hidden)
+    BIND(IF(EXISTS { $this c:legend/rdf:rest*/rdf:first ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
     BIND(CONCAT("\\u0001n", STR(?si)) AS ?okey)
     BIND(IRI(CONCAT(?me, "/~legend")) AS ?container)
   } UNION {
@@ -2717,9 +2807,10 @@ WHERE {
 
 # --- Series charts as text ------------------------------------------------------------------------------------
 # A series chart's Text modality: its name, then its points, each a line of the words it says on screen.
-c:SeriesChartText a sem:Rendering ; sem:targets c:SeriesChart ; sem:modality mod:Text ; sem:stratum 0 ; sem:follows c:dataset , c:view ; sem:readsMinted true .
+c:SeriesChartText a sem:Rendering ; sem:targets c:SeriesChart ; sem:modality mod:Text ; sem:stratum 0 ; sem:readsMinted true ;
+    sem:follows c:dataset , c:view , c:annotation , ( c:annotation c:at ) , ( c:annotation c:fromValue ) , ( c:annotation c:toValue ) , ( c:annotation rdfs:label ) .
 c:SeriesChartText-fn a sem:Rule ; sem:implements c:SeriesChartText ; sem:function "series:text" .
-c:SeriesChartText-sparql a sem:Rule ; sem:implements c:SeriesChartText ; sem:bulk false ;
+c:SeriesChartText-sparql a sem:Rule ; sem:implements c:SeriesChartText ; sem:needsExtension sx:Locale ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
   ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
@@ -2759,12 +2850,34 @@ WHERE {
     OPTIONAL { ?labelAt2 l10n:of $this ; l10n:name ?label2 }
     OPTIONAL { FILTER(!BOUND(?label2)) $this rdfs:label ?label3 FILTER(isLiteral(?label3)) }
     BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
-    VALUES (?local ?tag0 ?key0) { ("root" rdfhtml:Div UNDEF) ("title" rdfhtml:P 0) ("marks" rdfhtml:Div 1) }
+    VALUES (?local ?tag0 ?key0) { ("root" rdfhtml:Div UNDEF) ("title" rdfhtml:P "\\u0001n0") ("marks" rdfhtml:Div "\\u0001n1") }
     BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
     BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
     BIND(IF(?local = "root", ?unset, ?root) AS ?parent)
     BIND(IF(?local = "title", IRI(CONCAT(?me, "/~title-text")), ?unset) AS ?textNode)
     BIND(IF(?local = "title", ?label, ?unset) AS ?data)
+  } UNION {
+    # Its annotations, a line each, after its points.
+    FILTER(!BOUND(?message))
+    ?viewer l10n:formatLocale ?locale .
+    $this c:annotation ?ann . FILTER(isIRI(?ann))
+    OPTIONAL { ?ann c:at ?annAt0 } OPTIONAL { ?ann c:fromValue ?annFrom0 } OPTIONAL { ?ann c:toValue ?annTo0 }
+    BIND(xsd:double(?annAt0) AS ?annAt) BIND(xsd:double(?annFrom0) AS ?annFrom) BIND(xsd:double(?annTo0) AS ?annTo)
+    OPTIONAL { ?annUnitAt l10n:of $this ; l10n:unit ?annU0 }
+    OPTIONAL { FILTER(!BOUND(?annU0)) $this c:unit ?annU1 FILTER(isLiteral(?annU1)) } BIND(COALESCE(STR(?annU0), STR(?annU1), "") AS ?annUnit)
+    OPTIONAL { ?annLabelAt0 l10n:of ?ann ; l10n:label ?annLabel0 }
+    OPTIONAL { FILTER(!BOUND(?annLabel0)) ?ann c:label ?annLabel1 FILTER(isLiteral(?annLabel1)) }
+    OPTIONAL { ?annLabelAt2 l10n:of ?ann ; l10n:name ?annLabel2 }
+    OPTIONAL { FILTER(!BOUND(?annLabel2)) ?ann rdfs:label ?annLabel3 FILTER(isLiteral(?annLabel3)) }
+    BIND(STR(COALESCE(?annLabel0, ?annLabel1, ?annLabel2, ?annLabel3, REPLACE(STR(?ann), "^.*[#/]", ""))) AS ?annLabel)
+    BIND(IF(BOUND(?annAt), sx:formatNumber(?annAt, ?locale, "maximumFractionDigits=2"),
+      IF(BOUND(?annFrom) && BOUND(?annTo), CONCAT(sx:formatNumber(?annFrom, ?locale, "maximumFractionDigits=2"), " – ", sx:formatNumber(?annTo, ?locale, "maximumFractionDigits=2")), ?unset)) AS ?annValue)
+    FILTER(BOUND(?annValue))
+    BIND(CONCAT(?annLabel, ": ", ?annValue, IF(?annUnit = "", "", CONCAT(" ", ?annUnit))) AS ?annWords)
+    BIND(CONCAT("\\u0001n", STR(COALESCE(?annAt, ?annFrom, 0)), "\\u0001s", STR(?ann)) AS ?annKey)
+    BIND(CONCAT(STR($this), "/~annotation-", SUBSTR(MD5(STR(?ann)), 1, 8)) AS ?annId)
+    BIND(IRI(?annId) AS ?el) BIND(rdfhtml:P AS ?tag) BIND(?root AS ?parent) BIND(CONCAT("\\u0001n2", ?annKey) AS ?key)
+    BIND(IRI(CONCAT(?annId, "-text")) AS ?textNode) BIND(?annWords AS ?data)
   }
   }
 }""" .
@@ -2787,7 +2900,11 @@ WHERE {
   OPTIONAL { $this c:q1 ?pq1 ; c:q3 ?pq3 ; c:low ?plow ; c:high ?phigh }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
-  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit0)
+  # A point of a series on the secondary axis says the secondary unit.
+  OPTIONAL { ?unit2At l10n:of ?chart ; l10n:secondaryUnit ?su0 }
+  OPTIONAL { FILTER(!BOUND(?su0)) ?chart c:secondaryUnit ?su1 FILTER(isLiteral(?su1)) }
+  BIND(IF(EXISTS { $this c:secondary true }, COALESCE(STR(?su0), STR(?su1), ""), ?unit0) AS ?unit)
   # What it says: "category · series: value unit", the series when the chart has more than one.
   BIND(EXISTS { ?chart c:seriesVariable ?anySv } || EXISTS { ?chart c:legend ?anyLegend } AS ?many)
   BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
@@ -2921,7 +3038,7 @@ c:BoxPlan-fn a sem:Rule ; sem:implements c:BoxPlan ; sem:function "series:box-pl
 c:BoxPlan-sparql a sem:Rule ; sem:implements c:BoxPlan ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; sem:orderKey ?okey ;
+  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; c:secondary ?secondary ; sem:orderKey ?okey ;
     c:series ?seriesNode ; c:category ?category ; c:value ?value ; c:q1 ?q1 ; c:q3 ?q3 ; c:low ?low ; c:high ?high ; c:seriesIndex ?seriesIndex ; c:categoryIndex ?categoryIndex .
   ?container rdfhtml:hasChild ?node .
 }
@@ -2984,6 +3101,7 @@ WHERE {
     BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?skey), 1, 8))) AS ?node)
     BIND(c:ChartSeries AS ?type) BIND(?skey AS ?key) BIND(?slabel AS ?label) BIND(?si AS ?index)
     BIND(IF(EXISTS { $this c:hiddenSeries ?h FILTER(STR(?h) = ?skey) }, true, ?unset) AS ?hidden)
+    BIND(IF(EXISTS { $this c:legend/rdf:rest*/rdf:first ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
     BIND(CONCAT("\\u0001n", STR(?si)) AS ?okey)
     BIND(IRI(CONCAT(?me, "/~legend")) AS ?container)
   } UNION {
@@ -3217,7 +3335,11 @@ WHERE {
   OPTIONAL { $this c:q1 ?pq1 ; c:q3 ?pq3 ; c:low ?plow ; c:high ?phigh }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
-  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit0)
+  # A point of a series on the secondary axis says the secondary unit.
+  OPTIONAL { ?unit2At l10n:of ?chart ; l10n:secondaryUnit ?su0 }
+  OPTIONAL { FILTER(!BOUND(?su0)) ?chart c:secondaryUnit ?su1 FILTER(isLiteral(?su1)) }
+  BIND(IF(EXISTS { $this c:secondary true }, COALESCE(STR(?su0), STR(?su1), ""), ?unit0) AS ?unit)
   # What it says: "category · series: value unit", the series when the chart has more than one.
   BIND(EXISTS { ?chart c:seriesVariable ?anySv } || EXISTS { ?chart c:legend ?anyLegend } AS ?many)
   BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
@@ -3260,7 +3382,7 @@ WHERE {
   VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("whisker" rdfhtml:Span "sem-whisker" 0) ("box" rdfhtml:Span "sem-box" 1) ("median" rdfhtml:Span "sem-median" 2) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
   FILTER(true)
   BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
-  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-box-point"), ?cls0) AS ?cls)
+  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-box-point", IF(EXISTS { $this c:secondary true }, " sem-secondary", "")), ?cls0) AS ?cls)
   BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
   BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~root"))) AS ?parent)
   BIND(IF(?local = "root", ?pointStyle, ?unset) AS ?style)

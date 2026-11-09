@@ -75,8 +75,8 @@ function firstSeen(rows: Row[], key: (r: Row) => string | undefined): string[] {
 function mintSeries(ctx: RuleContext, o: Out, focus: NamedNode, rows: Row[]) {
   const e = encoding(ctx, focus)
   const declared = rdfList(ctx, ctx.object(focus, C.legend))
-  const series = declared.length
-    ? declared.map((s) => ({ key: str(ctx.object(s, C.key)) ?? s.value, label: labelOf(ctx, s) }))
+  const series: { key: string; label: string; secondary?: boolean }[] = declared.length
+    ? declared.map((s) => ({ key: str(ctx.object(s, C.key)) ?? s.value, label: labelOf(ctx, s), secondary: ctx.object(s, c('axis'))?.value === c('SecondaryAxis') }))
     : e.series
       ? firstSeen(rows, (r) => r.ser).map((k) => ({ key: k, label: k }))
       : [{ key: '', label: labelOf(ctx, focus) }]
@@ -85,6 +85,7 @@ function mintSeries(ctx: RuleContext, o: Out, focus: NamedNode, rows: Row[]) {
     const n = o.node(`series-${md5Key(s.key)}`)
     o.t(n, RDF_TYPE, ctx.nn(c('ChartSeries'))).t(n, c('inChart'), focus).t(n, C.key, s.key).t(n, C.label, s.label).t(n, c('index'), int(ctx, i)).t(n, SEM.orderKey, tupleKey([i]))
     if (hidden.has(s.key)) o.t(n, c('hidden'), ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
+    if (s.secondary) o.t(n, c('secondary'), ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     o.t(o.node('legend'), NS.rdfhtml + 'hasChild', n)
   })
   return { series, hidden }
@@ -119,6 +120,7 @@ const plan: FnRule = (ctx, focus) => {
       o.t(n, RDF_TYPE, ctx.nn(c('ChartPoint'))).t(n, c('inChart'), focus).t(n, c('series'), o.node(`series-${md5Key(s.key)}`)).t(n, c('category'), cat)
       if (pointClass) o.t(n, RDF_TYPE, pointClass)
       o.t(n, c('value'), ctx.f.literal(String(values.reduce((a, b) => a + b, 0)), ctx.nn(XSD_DOUBLE)))
+      if (s.secondary) o.t(n, c('secondary'), ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
       if (hasX) o.t(n, c('x'), ctx.f.literal(String(sum(these.map((r) => (r.x === undefined ? undefined : r.x * r.n)))), ctx.nn(XSD_DOUBLE)))
       if (hasZ) o.t(n, c('size'), ctx.f.literal(String(sum(these.map((r) => (r.z === undefined ? undefined : r.z * r.n)))), ctx.nn(XSD_DOUBLE)))
       o.t(n, c('seriesIndex'), int(ctx, si)).t(n, c('categoryIndex'), int(ctx, ci)).t(n, SEM.orderKey, tupleKey([si, ci]))
@@ -212,7 +214,7 @@ const boxPlan: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-type Point = { node: NamedNode; si: number; ci: number; v: number; base: number; x?: number; z?: number; low?: number; high?: number }
+type Point = { node: NamedNode; si: number; ci: number; v: number; base: number; x?: number; z?: number; low?: number; high?: number; secondary: boolean }
 
 /** Whether the chart's class (or a class it is a subclass of) says `p value`: a kind's defaults, as c:fromZero false or c:polar true. */
 export function kindSays(ctx: RuleContext, chart: Term, p: string, value: string): boolean {
@@ -234,7 +236,7 @@ function pointsOf(ctx: RuleContext, chart: NamedNode): Point[] {
     .filter((p) => ctx.match(p, RDF_TYPE, c('ChartPoint')).length)
     .map((node) => ({
       node, si: Number(str(ctx.object(node, c('seriesIndex')))), ci: Number(str(ctx.object(node, c('categoryIndex')))), v: Number(str(ctx.object(node, c('value')))), base: 0,
-      x: numberOf(ctx.object(node, c('x'))), z: numberOf(ctx.object(node, c('size'))), low: numberOf(ctx.object(node, c('low'))), high: numberOf(ctx.object(node, c('high'))),
+      x: numberOf(ctx.object(node, c('x'))), z: numberOf(ctx.object(node, c('size'))), low: numberOf(ctx.object(node, c('low'))), high: numberOf(ctx.object(node, c('high'))), secondary: !!ctx.object(node, c('secondary')),
     }))
   if (stacked) for (const p of points) p.base = points.filter((q) => q.ci === p.ci && q.si < p.si).reduce((a, q) => a + q.v, 0)
   return points
@@ -286,8 +288,14 @@ const layout: FnRule = (ctx, focus) => {
   }
   // A point's ends: its value, and its base when it is stacked on others.
   const stacked = ctx.object(focus, c('stacked'))?.value === 'true'
-  const ends = points.flatMap((p) => (stacked ? [p.base, p.base + p.v] : [p.v, ...(p.low === undefined ? [] : [p.low]), ...(p.high === undefined ? [] : [p.high])]))
-  writeScale('scale', 'valueScale', Math.min(...zero, ...ends), Math.max(...zero, ...ends))
+  const endsOf = (ps: Point[]) => ps.flatMap((p) => (stacked ? [p.base, p.base + p.v] : [p.v, ...(p.low === undefined ? [] : [p.low]), ...(p.high === undefined ? [] : [p.high])]))
+  // The primary scale also spans the annotations' values, so a threshold or a marked range is in view.
+  const marked = ctx.objects(focus, c('annotation')).flatMap((a) => [c('at'), c('fromValue'), c('toValue')].map((p) => numberOf(ctx.object(a, p)))).filter((v): v is number => v !== undefined)
+  const ends = [...endsOf(points.filter((p) => !p.secondary)), ...marked]
+  if (ends.length) writeScale('scale', 'valueScale', Math.min(...zero, ...ends), Math.max(...zero, ...ends))
+  // Points of a series on the secondary axis (c:axis c:SecondaryAxis) have a scale of their own.
+  const ends2 = endsOf(points.filter((p) => p.secondary))
+  if (ends2.length) writeScale('scale2', 'secondaryScale', Math.min(...zero, ...ends2), Math.max(...zero, ...ends2))
   // An x scale over the points' x, and the greatest size, when the chart has them.
   const xs = points.filter((p) => p.x !== undefined).map((p) => p.x!)
   if (xs.length) writeScale('xscale', 'xScale', Math.min(...zero, ...xs), Math.max(...zero, ...xs))
@@ -310,10 +318,39 @@ const layout: FnRule = (ctx, focus) => {
 const unitOf = (ctx: RuleContext, chart: Term) => text(ctx, chart, C.unit) ?? ''
 
 /** A value in the viewer's locale, with the chart's unit: what a point says and its tooltip shows. */
-export function valueText(ctx: RuleContext, chart: Term, v: number): string {
+export function valueText(ctx: RuleContext, chart: Term, v: number, secondary = false): string {
   ctx.readsLanguage()
-  const unit = unitOf(ctx, chart)
+  const unit = secondary ? text(ctx, chart, c('secondaryUnit')) ?? '' : unitOf(ctx, chart)
   return `${formatNumber(v, formatLocale(ctx.languages), 'maximumFractionDigits=2')}${unit ? ' ' + unit : ''}`
+}
+
+/** A chart's annotations (c:annotation), in order of their values: what each says, e.g. "Budget: 100 €" or "Peak: 20 – 40 €". */
+function annotationsOf(ctx: RuleContext, chart: NamedNode) {
+  ctx.readsLanguage()
+  const locale = formatLocale(ctx.languages)
+  const unit = unitOf(ctx, chart)
+  return ctx
+    .objects(chart, c('annotation'))
+    .filter((a): a is NamedNode => a.termType === 'NamedNode')
+    .map((a) => {
+      const at = numberOf(ctx.object(a, c('at'))), from = numberOf(ctx.object(a, c('fromValue'))), to = numberOf(ctx.object(a, c('toValue')))
+      const f = (v: number) => formatNumber(v, locale, 'maximumFractionDigits=2')
+      const value = at !== undefined ? f(at) : from !== undefined && to !== undefined ? `${f(from)} – ${f(to)}` : undefined
+      return { a, at, from, to, words: value === undefined ? undefined : `${labelOf(ctx, a)}: ${value}${unit ? ' ' + unit : ''}`, key: tupleKey([at ?? from ?? 0, a.value]) }
+    })
+    .filter((x) => x.words !== undefined)
+    .sort((x, y) => compareKeys(x.key, y.key))
+}
+
+/** The annotations drawn on the plot: a threshold line at its value, a marked range as a band, each with its words. */
+function annotations(ctx: RuleContext, o: Out, chart: NamedNode): NamedNode[] {
+  const list = annotationsOf(ctx, chart)
+  if (!list.length) return []
+  return [o.el('annotations', 'Div', { class: 'sem-chart-annotations' }, list.map(({ a, at, from, to, words }) => {
+    const id = `annotation-${md5Key(a.value)}`
+    const style = at !== undefined ? `--at: ${cssNumber(at)}` : `--from: ${cssNumber(from!)}; --to: ${cssNumber(to!)}`
+    return o.el(id, 'Span', { class: at !== undefined ? 'sem-threshold' : 'sem-marked-range', style }, [o.text(`${id}-text`, words!)])
+  }))]
 }
 
 /** The frame of a chart with axes (its scale and number of categories as custom properties): the plot with its ticks and marks, the categories, the legend. */
@@ -344,9 +381,12 @@ const frame: FnRule = (ctx, focus) => {
   const sizeMax = ctx.object(focus, c('sizeMax'))
   const k = new Set(ctx.match(null, c('inChart'), focus).map((q) => q.subject).filter((p) => ctx.match(p, RDF_TYPE, c('ChartPoint')).length).map((p) => str(ctx.object(p, c('seriesIndex'))))).size
   const range = (s: Term | undefined, lo: string, hi: string) => (s ? [`${lo}: ${cssNumber(Number(str(ctx.object(s, c('min')))))}`, `${hi}: ${cssNumber(Number(str(ctx.object(s, c('max')))))}`] : [])
-  const style = [...range(scale, '--lo', '--hi'), ...range(xScale, '--xlo', '--xhi'), ...(sizeMax ? [`--zmax: ${cssNumber(Number(sizeMax.value))}`] : []), `--n: ${categories.length}`, `--k: ${k}`].join('; ')
+  const scale2 = ctx.objects(focus, c('secondaryScale')).find((s) => ctx.match(s, RDF_TYPE, c('ValueScale')).length)
+  const style = [...range(scale, '--lo', '--hi'), ...range(scale2, '--lo2', '--hi2'), ...range(xScale, '--xlo', '--xhi'), ...(sizeMax ? [`--zmax: ${cssNumber(Number(sizeMax.value))}`] : []), `--n: ${categories.length}`, `--k: ${k}`].join('; ')
   const plot = o.el('plot', 'Div', { class: 'sem-chart-plot' }, [
     o.el('ticks', 'Div', { class: 'sem-chart-ticks', 'aria-hidden': 'true' }, ticks),
+    ...(scale2 ? [o.el('ticks2', 'Div', { class: 'sem-chart-ticks sem-secondary', 'aria-hidden': 'true' }, tickEls(scale2, 'tick2', 'sem-chart-tick'))] : []),
+    ...annotations(ctx, o, focus),
     o.el('marks', 'Ol', { class: 'sem-chart-marks', 'aria-label': labelOf(ctx, focus) }),
   ])
   // Below the plot: the x scale's ticks when the chart has one, else its categories.
@@ -364,18 +404,18 @@ const seriesItem: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   if (!ctx.object(focus, c('inChart'))) return o.quads
   const i = Number(str(ctx.object(focus, c('index'))))
-  o.renders(o.el('root', 'Li', {}, [o.el('swatch', 'I', { style: `background: ${seriesColor(i)}`, 'aria-hidden': 'true' }), o.text('label', str(ctx.object(focus, C.label)) ?? '')]))
+  o.renders(o.el('root', 'Li', { class: ctx.object(focus, c('secondary')) ? 'sem-secondary' : undefined }, [o.el('swatch', 'I', { style: `background: ${seriesColor(i)}`, 'aria-hidden': 'true' }), o.text('label', str(ctx.object(focus, C.label)) ?? '')]))
   return o.quads
 }
 
 /** A point's x and size in words, around its value: "xLabel x, value unit, sizeLabel size" (the labels default to the variables' names). */
-export function measures(ctx: RuleContext, chart: Term, y: number, x: number | undefined, z: number | undefined): string {
+export function measures(ctx: RuleContext, chart: Term, y: number, x: number | undefined, z: number | undefined, secondary = false): string {
   ctx.readsLanguage()
   const locale = formatLocale(ctx.languages)
   const label = (p: string, v: string) => text(ctx, chart, c(p)) ?? str(ctx.object(chart, c(v))) ?? ''
   const xPart = x === undefined ? '' : `${label('xLabel', 'xVariable')} ${formatNumber(x, locale, 'maximumFractionDigits=2')}, `
   const zPart = z === undefined ? '' : `, ${label('sizeLabel', 'sizeVariable')} ${formatNumber(z, locale, 'maximumFractionDigits=2')}`
-  return `${xPart}${valueText(ctx, chart, y)}${zPart}`
+  return `${xPart}${valueText(ctx, chart, y, secondary)}${zPart}`
 }
 
 /** What a point says: "category · series: value unit" (the series when the chart has more than one; x and size when it has them). */
@@ -402,7 +442,7 @@ export function pointWords(ctx: RuleContext, point: NamedNode, chart: Term): str
   }
   const share = numberOf(ctx.object(point, c('share')))
   const percent = share === undefined ? '' : ` (${formatNumber(share, formatLocale(ctx.languages), 'style=percent;maximumFractionDigits=1')})`
-  return `${head}: ${measures(ctx, chart, Number(str(ctx.object(point, c('value')))), numberOf(ctx.object(point, c('x'))), numberOf(ctx.object(point, c('size'))))}${percent}`
+  return `${head}: ${measures(ctx, chart, Number(str(ctx.object(point, c('value')))), numberOf(ctx.object(point, c('x'))), numberOf(ctx.object(point, c('size'))), !!ctx.object(point, c('secondary')))}${percent}`
 }
 
 /** The custom properties every point writes: its category, value, base, next point, x, size, share, and color (by its series, or its category in a pie). */
@@ -421,7 +461,7 @@ export function pointStyle(ctx: RuleContext, point: NamedNode, colorBy: 'seriesI
 /** A point: a list item (a tab stop when it is the first) holding its marks, its words hidden on screen, and its tooltip. */
 export function pointItem(ctx: RuleContext, o: Out, point: NamedNode, chart: Term, cls: string, marks: NamedNode[], colorBy: 'seriesIndex' | 'categoryIndex' = 'seriesIndex') {
   const words = pointWords(ctx, point, chart)
-  const li = o.el('root', 'Li', { class: `sem-point ${cls}`, style: pointStyle(ctx, point, colorBy), tabindex: ctx.object(point, c('first')) ? '0' : '-1' }, [
+  const li = o.el('root', 'Li', { class: `sem-point ${cls}${ctx.object(point, c('secondary')) ? ' sem-secondary' : ''}`, style: pointStyle(ctx, point, colorBy), tabindex: ctx.object(point, c('first')) ? '0' : '-1' }, [
     ...marks,
     o.el('words', 'Span', { class: 'sem-visually-hidden' }, [o.text('words-text', words)]),
   ])
@@ -509,7 +549,8 @@ const textFrame: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const msg = seriesMessage(ctx, focus)
   if (msg !== undefined) return message(ctx, focus, msg)
-  o.renders(o.el('root', 'Div', {}, [o.el('title', 'P', {}, [o.text('title-text', labelOf(ctx, focus))]), o.el('marks', 'Div')]))
+  const notes = annotationsOf(ctx, focus).map(({ a, words }) => o.el(`annotation-${md5Key(a.value)}`, 'P', {}, [o.text(`annotation-${md5Key(a.value)}-text`, words!)]))
+  o.renders(o.el('root', 'Div', {}, [o.el('title', 'P', {}, [o.text('title-text', labelOf(ctx, focus))]), o.el('marks', 'Div'), ...notes]))
   return o.quads
 }
 
