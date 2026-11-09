@@ -8,6 +8,7 @@ import { RenderedState } from '../rendered.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
+import { BOX_ATTRIBUTE, boxSelector, scopedCss } from '../style/scope.ts'
 import { readPolicy, Refused, type SafetyPolicy } from '../safety.ts'
 import { Files, type FilesOptions } from '../files.ts'
 import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
@@ -124,6 +125,9 @@ export interface MountedApp {
   unmount(): void
 }
 
+/** Authored mounts so far: each is a box of its own (src/style/scope.ts). */
+let authoredBoxes = 0
+
 /**
  * Mount a component graph into an element: load the store, compile the theme, project the
  * root on screen, patch it into `element` and route the element's events to reactions.
@@ -139,9 +143,11 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   // Over the whole ontology, or the part the app ships (opts.ontology).
   const load = (...graphs: string[]) => (opts.ontology === undefined ? loadStore(kind, ...graphs) : loadStoreWithOntology(kind, {}, opts.ontology, ...graphs))
   // Authored content: the policy, and the effects' configuration, are read from the trusted graphs
-  // alone, kept apart from the store the author's graphs go into (they could add to either).
+  // alone, kept apart from the store the author's graphs go into (they could add to either). Their
+  // stylesheet is the page's; what the author's graphs add is scoped to the element (src/style/scope.ts).
   const trusted = opts.authored ? load(...(opts.graphs ?? [])) : undefined
   const policy = opts.policy ?? (trusted && readPolicy(trusted))
+  const trustedCss = trusted && !serverStyled(element.ownerDocument) ? compileStyles(trusted) : ''
   const store = load(...(opts.graphs ?? []), ...(opts.authored ?? []))
   const config = trusted ?? store
   const onRefused = opts.onRefused ?? ((e: Error) => console.warn('[semblance]', e.message))
@@ -171,8 +177,11 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   markPlatform(doc)
   // A server-rendered page links the stylesheet the server compiled: the same, so it is not compiled again.
   const sheet = serverStyled(doc) ? undefined : new (doc.defaultView ?? globalThis).CSSStyleSheet()
+  // Authored content stays in its box: the element (as the server marked it, or a box of its own).
+  if (policy && !element.hasAttribute(BOX_ATTRIBUTE)) element.setAttribute(BOX_ATTRIBUTE, `authored-${++authoredBoxes}`)
   if (sheet) {
-    sheet.replaceSync(compileStyles(store, { policy, onRefused }))
+    const css = compileStyles(store, { policy, onRefused })
+    sheet.replaceSync(policy ? [trustedCss, scopedCss(css, trustedCss, boxSelector(element.getAttribute(BOX_ATTRIBUTE)!))].filter(Boolean).join('\n\n') : css)
     doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet]
   }
 

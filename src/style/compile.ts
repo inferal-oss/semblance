@@ -2,6 +2,7 @@ import type { Term } from '@rdfjs/types'
 import { NS, RDFS_RANGE, RDFS_SUBCLASS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY } from '../ns.ts'
 import type { GraphStore } from '../store/types.ts'
 import { cssProblem, propertyProblem, Refused, type SafetyPolicy } from '../safety.ts'
+import { splitSelectors } from './scope.ts'
 
 /**
  * Compile the style graph to CSS.
@@ -283,26 +284,4 @@ export function compileStyles(store: GraphStore, opts: CompileOptions = {}): str
   ]
     .filter(Boolean)
     .join('\n\n')
-}
-
-/** Split a selector list on its top-level commas (not those inside :is(), :not(), [attr="a,b"]). */
-function splitSelectors(list: string): string[] {
-  const out: string[] = []
-  let depth = 0
-  let quote = ''
-  let start = 0
-  for (let i = 0; i < list.length; i++) {
-    const ch = list[i]!
-    if (quote) {
-      if (ch === quote) quote = ''
-    } else if (ch === '"' || ch === "'") quote = ch
-    else if (ch === '(' || ch === '[') depth++
-    else if (ch === ')' || ch === ']') depth--
-    else if (ch === ',' && depth === 0) {
-      out.push(list.slice(start, i).trim())
-      start = i + 1
-    }
-  }
-  out.push(list.slice(start).trim())
-  return out.filter(Boolean)
 }

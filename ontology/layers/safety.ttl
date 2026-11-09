@@ -3,6 +3,7 @@
 @prefix svg: <https://semblance.dev/ns/svg#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
 
 # Safety: what a rendering from an untrusted author (a person, a page, a model) may contain, so a
 # graph can describe an interface without running code or reaching outside what it renders.
@@ -192,3 +193,12 @@ safe:Authored a safe:Policy ;
     safe:fetchingFunction "url" , "image-set" , "-webkit-image-set" , "image" , "cross-fade" ,
         "-webkit-cross-fade" , "element" , "-moz-element" , "src" , "expression" , "paint" ;
     safe:refusedProperty "behavior" , "-moz-binding" .
+
+# The authored box: the element authored content renders in (a live example's sandbox, an authored
+# mount element, the mount element of a page rendered under a policy; src/style/scope.ts). The
+# styles authored graphs add are scoped to it, and it contains them: fixed and absolute positions
+# resolve to it rather than to the page, and what is drawn outside it is clipped - beyond a margin
+# as wide as a live example's preview pads it, so a focus ring or a shadow at its edge still shows.
+[] a sty:StyleRule ; sty:part "[data-sem-sandbox]" ;
+    sty:declares [ sty:property "contain" ; sty:raw "layout paint" ] ,
+                 [ sty:property "overflow-clip-margin" ; sty:raw "var(--sem-space-3)" ] .

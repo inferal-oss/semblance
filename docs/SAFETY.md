@@ -92,6 +92,13 @@ from the one `authored` is loaded into; the live examples read it from the ontol
   `url`), quotes and brackets that balance; no `behavior` or `-moz-binding`. The same holds for every
   string the style compiler writes from the graph: properties, values, slugs, parts, states, media
   conditions, keyframe names and steps.
+- **CSS is read as the browser tokenizes it** (css-syntax-3), in one pass, linear in its length:
+  strings end where the browser ends them; an unquoted `url(` is one url token up to its `)`; a name
+  after a number or a `#` calls no function. What the check could read otherwise than the browser is
+  refused: a comment (inside one a quote starts no string), a string a newline ends, and a bad url
+  (an unquoted `url(` holding a quote, `(`, `\`, a control character or a space before its end).
+- **No reaching outside the authored box:** a part, state or media condition may not name `&` or
+  `:scope`. Authored styles stay in the element the content renders in (below).
 - **No upload elsewhere:** `file:uploadTo` posts only to the page's own origin, or to an origin the
   host lists (`files: { uploadOrigins: ['https://uploads.example.com'] }`); this holds whether or
   not the graph is authored, since the graph says where and the host says where may be.
@@ -109,6 +116,29 @@ from the one `authored` is loaded into; the live examples read it from the ontol
 
 Authored rules read the whole store: your graphs as well as the author's. What an author must not
 see (a token, someone else's data) does not belong in the store they render from.
+
+## The authored box
+
+Authored content renders in an element of its own, the **authored box**, marked `data-sem-sandbox`:
+a live example's sandbox, the element `mount({ authored })` renders into, the mount element of a
+page `renderToString({ policy })` rendered. One scoping applies in all three
+(`scopedCss`, `src/style/scope.ts`):
+
+- The trusted stylesheet (the ontology and your own graphs) is the page's. Every style rule the
+  authored graphs add, or change, is rewritten so that each of its selectors starts at the box
+  (`[data-sem-sandbox="…"] p`); `:root` is the box itself, and a selector that starts at a sibling
+  (`~ p`, `+ p`) is left out. A rule with no `sty:appliesTo`, or an authored class given a framework
+  slug, styles only what is in the box.
+- Keyframes the authored graphs add are renamed for the box, as are the animations of its rules
+  that name them: a framework animation keeps its own keyframes outside.
+- The box has `contain: layout paint` (a rule of `ontology/layers/safety.ttl`): fixed and absolute
+  positions resolve to it rather than to the page, and what is drawn outside it is clipped (beyond
+  a margin of `--sem-space-3`, so a focus ring at its edge shows). The top
+  layer (a modal `dialog`, a popover) is not contained by it.
+
+`renderToString({ policy, trusted })` takes the store the policy was read from, whose stylesheet is
+the page's; without it the whole stylesheet is scoped to the box. `Rendered.box` names the box, and
+`renderDocument` marks the mount element with it, so `mount` takes it over in the same box.
 
 ## What happens to what is refused
 

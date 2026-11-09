@@ -6,6 +6,7 @@
 // before the first paint, and the one that keeps what the visitor does until the client is ready
 // (src/web/takeover.ts). Platform-neutral string work: used by the static build, the request handler
 // and anyone's own server.
+import { BOX_ATTRIBUTE } from '../style/scope.ts'
 import { CAPTURE_SCRIPT, SSR_ATTRIBUTE, STYLES_ATTRIBUTE } from '../web/takeover.ts'
 import { PLATFORM_SCRIPT } from '../web/platform.ts'
 import { COLOR_SCHEME_META, rememberedScript } from '../web/remembered.ts'
@@ -58,7 +59,7 @@ function rememberedHead(doc: string, remembered: Rendered['remembered'], mount: 
  * The document around the root's HTML: everything before it (up to the mount element's opening
  * tag) and after it. The head can go out before the projection is done (renderToStream).
  */
-export function documentParts(template: string, rendered: Pick<Rendered, 'css' | 'lang' | 'dir'> & Partial<Pick<Rendered, 'remembered'>>, opts: DocumentOptions = {}): [string, string] {
+export function documentParts(template: string, rendered: Pick<Rendered, 'css' | 'lang' | 'dir'> & Partial<Pick<Rendered, 'remembered' | 'box'>>, opts: DocumentOptions = {}): [string, string] {
   const mount = opts.mount ?? 'app'
   let doc = htmlAttributes(template, { lang: rendered.lang, dir: rendered.dir, ...opts.attributes })
   const sheet = opts.stylesheet ?? 'inline'
@@ -73,11 +74,13 @@ export function documentParts(template: string, rendered: Pick<Rendered, 'css' |
   if (!m) throw new Error(`The template has no empty <div id="${mount}"></div> to render into`)
   // Before the mount element: what is clicked while the rest of the HTML streams in is kept too.
   const capture = opts.capture === false ? '' : `<script>${CAPTURE_SCRIPT}</script>`
-  return [doc.slice(0, m.index) + `${capture}<div id="${mount}"${m[1]} ${SSR_ATTRIBUTE}>`, '</div>' + doc.slice(m.index + m[0].length)]
+  // Authored content: the mount element is the box its stylesheet is scoped to (src/style/scope.ts).
+  const box = rendered.box ? ` ${BOX_ATTRIBUTE}="${escapeAttr(rendered.box)}"` : ''
+  return [doc.slice(0, m.index) + `${capture}<div id="${mount}"${m[1]} ${SSR_ATTRIBUTE}${box}>`, '</div>' + doc.slice(m.index + m[0].length)]
 }
 
 /** The document: `template` with `rendered` in its mount element. */
-export function renderDocument(template: string, rendered: Pick<Rendered, 'html' | 'css' | 'lang' | 'dir'> & Partial<Pick<Rendered, 'remembered'>>, opts: DocumentOptions = {}): string {
+export function renderDocument(template: string, rendered: Pick<Rendered, 'html' | 'css' | 'lang' | 'dir'> & Partial<Pick<Rendered, 'remembered' | 'box'>>, opts: DocumentOptions = {}): string {
   const [before, after] = documentParts(template, rendered, opts)
   return before + rendered.html + after
 }

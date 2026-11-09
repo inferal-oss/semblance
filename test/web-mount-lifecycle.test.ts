@@ -23,7 +23,7 @@ function host() {
   const { document, window } = parseHTML('<!doctype html><html><body><main id="app"></main></body></html>')
   const original = { replaceSync() {} } as unknown as CSSStyleSheet
   document.adoptedStyleSheets = [original]
-  class Sheet { replaceSync() {} }
+  class Sheet { text = ''; replaceSync(text: string) { this.text = text } }
   Object.defineProperty(window, 'CSSStyleSheet', { value: Sheet, configurable: true })
   Object.defineProperty(window, 'requestAnimationFrame', { value: () => 1, configurable: true })
   Object.defineProperty(window, 'cancelAnimationFrame', { value: () => {}, configurable: true })
@@ -92,5 +92,19 @@ describe('web mount lifecycle', () => {
     expect(app.runtime.apply({ add: [f.quad(f.namedNode(root), f.namedNode(NS.rdfs + 'label'), f.literal('late'))], remove: [] })).toEqual({ add: [], remove: [] })
     expect(has).not.toHaveBeenCalled()
     expect(match).not.toHaveBeenCalled()
+  })
+
+  it('scopes what authored graphs add to the mount element, which is a box of its own', async () => {
+    const { document, element } = host()
+    const authored = `@prefix sty: <https://semblance.dev/ns/style#> .
+[] a sty:StyleRule ; sty:part "body" ; sty:declares [ sty:property "visibility" ; sty:raw "hidden" ] .`
+    const app = await mount(element, { root, graphs: [graph], authored: [authored], store: 'wat', files: false, fullscreen: false, onRefused: () => {} })
+    apps.push(app)
+    const box = element.getAttribute('data-sem-sandbox')
+    expect(box).toMatch(/^authored-\d+$/)
+    const css = (document.adoptedStyleSheets.at(-1) as unknown as { text: string }).text
+    expect(css).toContain(`[data-sem-sandbox="${box}"] body { visibility: hidden; }`)
+    expect(css).not.toMatch(/^ {2}body \{ visibility/m)
+    expect(css).toMatch(/^ {2}\[data-sem-sandbox\] \{ contain: layout paint;/m)
   })
 })
