@@ -8,4 +8,7 @@ const read = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8')
 export default defineSite({
   root: 'https://example.org/hello#page',
   graphs: () => [read('tally.ttl'), read('app.ttl')],
+  // Only the part of Semblance's ontology these graphs use (docs/SUBSET.md): the client loads it
+  // (virtual:semblance/ontology) in place of the whole, and the pages are rendered from it.
+  subset: true,
 })

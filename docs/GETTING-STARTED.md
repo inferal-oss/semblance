@@ -259,6 +259,16 @@ To serve an app already rendered, describe it once as a site (`semblance.config.
 page the browser paints before any script runs, and `npx semblance serve` renders per request.
 `mount()` takes the rendered page over without rendering it again. See [SSR.md](SSR.md).
 
+An app needs only part of Semblance's ontology: the components it uses, with their rules, styles
+and shapes. Say `subset: true` in its site description, and pass the Vite plugin's module to
+`mount`; the app then ships that part rather than all of it (examples/hello: 171 KiB rather than
+704, and a stylesheet a tenth the size). See [SUBSET.md](SUBSET.md).
+
+```ts
+import ontology from 'virtual:semblance/ontology'
+await mount(element, { root: 'https://example.org/hello#page', graphs: [tally, app], ontology })
+```
+
 ## Stores
 
 `mount` uses Semblance's own WebAssembly engine (`wat`, about 30 KB) when the build has it, else

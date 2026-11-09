@@ -5,3 +5,4 @@ export { renderToString, readUrl, readyToRender, project, type RenderOptions, ty
 export { renderToStream, type StreamOptions } from './stream.ts'
 export { documentParts, renderDocument, type DocumentOptions } from './document.ts'
 export { defineSite, type Site } from './site.ts'
+export { warmRenderer, type WarmOptions, type WarmRenderer, type WarmRendered } from './warm.ts'

@@ -5,6 +5,7 @@
 import type { FnRule } from '../engine/context.ts'
 import type { HostRenderer } from '../render/hosts.ts'
 import type { GraphStore } from '../store/types.ts'
+import type { SubsetOptions } from '../subset.ts'
 
 export interface Site {
   /** The component the client mounts: the root of the projection. */
@@ -40,6 +41,13 @@ export interface Site {
   documentAttributes?(store: GraphStore): Record<string, string>
   /** The addresses to render beforehand: the navigation model's (routesOf) by default; this may change them. */
   routes?(found: string[]): string[]
+  /**
+   * Ship only the part of the framework's ontology the app's graphs use (docs/SUBSET.md): the
+   * server renders from it, and the client loads it in place of the whole (the Vite plugin's
+   * `virtual:semblance/ontology`, mount's `ontology`). `classes`: classes the host makes instances
+   * of itself, beyond those the graphs reach.
+   */
+  subset?: boolean | SubsetOptions
   /** The store kind (Semblance's WASM engine by default). */
   store?: 'wat' | 'rust' | 'oxigraph' | 'hybrid'
   /** The mount element's id in the page (default "app"). */

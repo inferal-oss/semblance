@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Plugin, ResolvedConfig } from 'vite'
-import { buildSite } from './site.ts'
+import { buildSite, loadSite, siteOntology } from './site.ts'
 import { minifyTurtle } from './turtle-min.ts'
 
 export interface SemblancePluginOptions {
@@ -41,6 +41,9 @@ interface Chunk {
 
 const ontologyDir = fileURLToPath(new URL('../../ontology/', import.meta.url))
 
+/** The module the plugin serves: the part of the ontology the site's graphs use (Site.subset), or undefined. */
+export const ONTOLOGY_MODULE = 'virtual:semblance/ontology'
+
 /**
  * Render every page of the site after the client build (`vite build`); and bundle the framework's
  * ontology without its comments and indentation (the same triples, a fifth fewer bytes).
@@ -56,7 +59,34 @@ export function semblance(opts: SemblancePluginOptions = {}): Plugin[] {
       return `export default ${JSON.stringify(minifyTurtle(readFileSync(path!, 'utf8')))}`
     },
   }
-  return [turtle, site(opts)]
+  return [turtle, subset(opts), site(opts)]
+}
+
+/**
+ * `virtual:semblance/ontology`: the part of the framework's ontology the site's graphs use, as Turtle
+ * without comments (docs/SUBSET.md), for mount's `ontology`; undefined when the site ships it whole.
+ * Computed when first imported, again when a Turtle file changes (in the dev server).
+ */
+function subset(opts: SemblancePluginOptions): Plugin {
+  const id = '\0' + ONTOLOGY_MODULE
+  return {
+    name: NAME + ':subset',
+    resolveId: (source) => (source === ONTOLOGY_MODULE ? id : null),
+    async load(source) {
+      if (source !== id) return null
+      // A fresh description each time: the dev server computes it again after an edit.
+      const site = { ...(await loadSite(resolve(opts.config ?? 'semblance.config.ts'))) }
+      const found = await siteOntology(site)
+      return `export default ${found ? JSON.stringify(minifyTurtle(found.turtle)) : 'undefined'}`
+    },
+    configureServer(server) {
+      server.watcher.on('change', (file) => {
+        if (!file.endsWith('.ttl')) return
+        const mod = server.moduleGraph.getModuleById(id)
+        if (mod) server.moduleGraph.invalidateModule(mod), server.ws.send({ type: 'full-reload' })
+      })
+    },
+  }
 }
 
 function site(opts: SemblancePluginOptions): Plugin {

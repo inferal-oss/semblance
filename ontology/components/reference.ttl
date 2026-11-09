@@ -24,6 +24,7 @@
 
 c:TermTree a owl:Class ;
     rdfs:subClassOf sem:Component ;
+    sem:readsWholeOntology true ;
     rdfs:comment """A navigation tree (role=tree) of vocabularies, derived from the ontology in the store. Its
 sections (c:sections, an rdf:List of c:TermSection) list branches: the instances of the section's
 c:branchClass, by sem:order, then name. A branch's terms are the subjects that point at it through
@@ -381,6 +382,7 @@ c:TermTree key:navigation key:TreeNavigation .
 
 c:TermOverview a owl:Class ;
     rdfs:subClassOf sem:Component , c:Selector ;
+    sem:readsWholeOntology true ;
     rdfs:comment """What the ontology says about one term: the term c:bindProperty of c:bindFrom holds (a
 selection). A header (its prefixed name, its kind, its IRI) and its rdfs:comment, then its facts:
 what it says, by predicate, and what points at it (c:InverseFacet, and its shape). Values that are

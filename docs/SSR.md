@@ -137,10 +137,28 @@ the request from a fresh store. The status is 404 when no location names the add
 is one self-contained document. `createHandler` returns `(Request) => Promise<Response>`, so it
 also serves from Deno, Bun or a worker.
 
-Rendering per request costs one load of the graph and one first projection. That is about 0.3 s
-for semblance.dev's whole graph and a few milliseconds for a small app. A site that large is better
-built beforehand. Forking a warm runtime would make per-request rendering of large graphs cheap;
-that belongs to the engine (#9).
+Rendering per request from a fresh store costs one load of the graph and one first projection:
+about 0.3 to 0.5 s for semblance.dev's whole graph, and 0.1 s for examples/hello. With `warm: true`
+the handler renders from runtimes loaded once, one per language, and moves one to each request's
+address instead (`siteRenderer`, `warmRenderer` in `src/server/warm.ts`; #383):
+
+```ts
+await listen(createHandler({ site, assets: 'dist', warm: true }), 3000)
+```
+
+A move is one change: back from what the last address read into the graph, then what this one
+reads, as the client reads its URL before its first projection (`addressDelta`, which
+`Navigation.restore` uses too). The page is serialized without the components placed under a
+hidden element (`shownOnly`): a section an earlier request showed is not on a page a fresh store
+renders. A live example's rendering is kept by its sources and languages, since they do not change
+on a server. Requests are rendered one at a time; a render that fails drops the runtimes. A test
+renders the site's addresses in an order that crosses pages, sections, languages, a Reference term
+and a 404, warm and from a fresh store, and finds them the same (`test/warm.test.ts`).
+
+On semblance.dev, the first request in a language costs what a fresh store costs; after that, an
+address costs what it changes: 50 to 300 ms the first time a page is shown (its rules run), 7 to
+10 ms when it is shown again, where a fresh store took 300 to 500 ms each time. The handler does not
+call `prepare` per request, so a site's `prepare` must not depend on the address.
 
 ## What the visitor's settings do before scripts run
 

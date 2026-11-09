@@ -154,3 +154,10 @@ export function loadStoreOf(kind: StoreKind, options: StoreOptions, ontology: It
   for (const ttl of data) store.loadTurtle(ttl)
   return store
 }
+
+/** A store with `ontology` (the app's subset of the framework's ontology, built beforehand: src/subset.ts) in place of the whole, and the given app data. */
+export function loadStoreWithOntology(kind: StoreKind, options: StoreOptions, ontology: string, ...data: string[]): GraphStore {
+  const store = createStore(kind, options)
+  for (const ttl of [ontology, ...data]) store.loadTurtle(ttl)
+  return store
+}

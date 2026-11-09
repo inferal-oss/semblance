@@ -10,6 +10,12 @@ export interface SerializeOptions {
   slots?: (name: string) => string | undefined
   /** Draws the nodes a host component library draws (ext:component): its server markup, in a <sem-host>. */
   hosts?: HostAdapter
+  /**
+   * Leave out the components placed under a hidden element, as a projection that never showed them
+   * has none there (their rules wait until they are shown): a warm runtime's page, moved from an
+   * address that showed them, as a fresh store renders it (src/server/warm.ts).
+   */
+  shownOnly?: boolean
 }
 
 /** Static HTML for a component instance (server-side rendering, tests). */
@@ -18,7 +24,7 @@ export function toHTML(index: HtmlIndex, focus: string, opts: SerializeOptions =
   return root ? node(index, root, opts) : ''
 }
 
-function node(index: HtmlIndex, k: string, opts: SerializeOptions = {}): string {
+function node(index: HtmlIndex, k: string, opts: SerializeOptions = {}, hidden = false): string {
   const n = index.nodes.get(k)!
   if (n.cls === 'Text') return escapeText(n.data ?? '')
   if (hostedBy(index, opts.hosts, k) !== undefined) return `<${HOST_ELEMENT}>${opts.hosts!.html(k)}</${HOST_ELEMENT}>`
@@ -27,11 +33,13 @@ function node(index: HtmlIndex, k: string, opts: SerializeOptions = {}): string 
   const open = `<${tag}${attrs.join('')}>`
   if (index.isVoid(k)) return open
   if (n.slot !== undefined) return `${open}${opts.slots?.(n.slot) ?? island(index, k)}</${tag}>`
+  const under = hidden || (!!opts.shownOnly && n.props.has('hidden'))
   const inner = index
     .childrenOf(k)
-    .map((slot) => index.resolve(slot))
+    // A component (a slot that resolves to another node, its root) under a hidden element is left out with shownOnly.
+    .map((slot) => (under && index.resolve(slot) !== slot ? undefined : index.resolve(slot)))
     .filter((r): r is string => r !== undefined)
-    .map((r) => node(index, r, opts))
+    .map((r) => node(index, r, opts, under))
     .join('')
   return `${open}${inner}</${tag}>`
 }
