@@ -54,6 +54,7 @@ export const NS = {
   doco: 'http://purl.org/spar/doco/',
   oa: 'http://www.w3.org/ns/oa#',
   co: 'http://purl.org/co/',
+  safe: 'https://semblance.dev/ns/safety#',
 } as const
 
 /** Prepended to every SPARQL rule body. */

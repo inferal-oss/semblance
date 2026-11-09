@@ -4,6 +4,7 @@ import { type Delta, mint, quadKey } from './rdf.ts'
 import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
+import type { SafetyPolicy } from './safety.ts'
 import type { GraphStore } from './store/types.ts'
 import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, NS, PERF_GRAPH, PERSIST_GRAPH, RENDERED_GRAPH, SEM } from './ns.ts'
 import { docsFunctions } from './layers/docs.ts'
@@ -19,9 +20,12 @@ import { Watchdog } from './engine/watchdog.ts'
 
 /**
  * What a projection renders: `roots` (optional) are the instances it is mounted at; `urlBase` is
- * where relative URLs in what it renders resolve (by default the store's nav:base, see HtmlIndex).
+ * where relative URLs in what it renders resolve (by default the store's nav:base, see HtmlIndex);
+ * `policy` makes it authored content (src/safety.ts): what the policy refuses is not rendered, and
+ * is reported through the projection's onError. Read it from a trusted store (authoredPolicy), never
+ * from this one.
  */
-export type ProjectOptions = EngineOptions & { roots?: string[]; urlBase?: string }
+export type ProjectOptions = EngineOptions & { roots?: string[]; urlBase?: string; policy?: SafetyPolicy }
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -333,7 +337,7 @@ export class Runtime {
       ...opts,
       functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
-    const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase())
+    const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase(), opts.policy)
     engine.watchdog = this.watchdog
     engine.arriving = this.isArriving
     engine.onChange((d) => index.apply(d))

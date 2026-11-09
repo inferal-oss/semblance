@@ -5,6 +5,11 @@ import { ATTRIBUTE_NAMES, TAG_NAMES, VOID_ELEMENTS } from '../vocab/rdfhtml.gene
 import { linearize, OrderingError } from './ordering.ts'
 import { compareKeys } from './order-key.ts'
 import { SVG_TAG_NAMES } from '../vocab/svg.ts'
+import { allowsElement, ATTRIBUTE_NAME, attributeProblem, Refused, type SafetyPolicy } from '../safety.ts'
+
+/** The tag a refused element renders as (empty, with data-sem-refused naming what it was). */
+export const REFUSED_TAG = 'sem-refused'
+export const REFUSED_ATTRIBUTE = 'data-sem-refused'
 
 export interface HNode {
   /** RDF/HTML class local name ("Button", "Text"...). */
@@ -142,14 +147,50 @@ export class HtmlIndex {
    * absolute path ending in '/'): a relative src or href is written against it, so an asset in the
    * data ("photos/harbour.jpg") is the same file on every page. Absent: URLs are written as given.
    */
+  /**
+   * What the policy (`policy`) kept out, by node: each reason once, reported through onError when
+   * first met. Forgotten with the node.
+   */
+  readonly refusals = new Map<string, Set<string>>()
+
   constructor(
     readonly onError: (e: Error) => void = (e) => console.error(e),
     readonly urlBase?: string,
+    /**
+     * Authored content (src/safety.ts): an element of a class the policy does not list renders as an
+     * empty sem-refused element, and an attribute it refuses is left out. Absent: trusted, as given.
+     */
+    readonly policy?: SafetyPolicy,
   ) {}
+
+  private refuse(key: string, kind: Refused['kind'], message: string) {
+    let reasons = this.refusals.get(key)
+    if (reasons?.has(message)) return
+    if (!reasons) this.refusals.set(key, (reasons = new Set()))
+    reasons.add(message)
+    this.onError(new Refused(key, kind, `Refused on <${key}>: ${message}.`))
+  }
+
+  /** Whether a node is an element the policy refuses (rendered empty, as sem-refused). */
+  isRefused(key: string): boolean {
+    const cls = this.nodes.get(key)?.cls
+    if (!this.policy || !cls || cls === 'Text' || allowsElement(this.policy, cls)) return false
+    this.refuse(key, 'element', `authored content may not have a ${this.tagOf(cls) ?? cls} element`)
+    return true
+  }
+
+  private tagOf(cls: string): string | undefined {
+    return cls.startsWith('svg:') ? SVG_TAG_NAMES[cls.slice(4)] : TAG_NAMES[cls]
+  }
 
   apply(delta: Delta): void {
     for (const q of delta.remove) this.quad(q, -1)
     for (const q of delta.add) this.quad(q, 1)
+    // Authored content: what the policy refuses is reported as it arrives, not when it is first shown.
+    if (this.checking.size) {
+      for (const k of this.checking) if (this.nodes.get(k)?.cls) this.isRefused(k) || this.attributes(k)
+      this.checking.clear()
+    }
     // Forget nodes and attribute occurrences nothing describes any more, so the
     // index stays the size of what is derived, however much came and went.
     if (delta.remove.length) {
@@ -162,6 +203,7 @@ export class HtmlIndex {
 
   private collect(key: string) {
     const n = this.nodes.get(key)
+    if (n && this.refusals.size && !n.cls) this.refusals.delete(key)
     if (n && !n.cls && n.data === undefined && !n.props.size && !n.attrNodes.size && !n.children.size && !n.parents.size && n.slot === undefined && n.orderKey === undefined && n.island === undefined && n.tag === undefined && !n.inputs?.size) {
       this.nodes.delete(key)
       this.chainParent.delete(key)
@@ -265,23 +307,26 @@ export class HtmlIndex {
   tagName(key: string): string | undefined {
     const cls = this.nodes.get(key)?.cls
     if (!cls || cls === 'Text') return undefined
-    return cls.startsWith('svg:') ? SVG_TAG_NAMES[cls.slice(4)] : TAG_NAMES[cls]
+    if (this.policy && this.isRefused(key)) return REFUSED_TAG
+    return this.tagOf(cls)
   }
 
   /** Whether a node is an element of the SVG extension (created in the SVG namespace). */
   isSvg(key: string): boolean {
-    return this.nodes.get(key)?.cls?.startsWith('svg:') ?? false
+    return (this.nodes.get(key)?.cls?.startsWith('svg:') ?? false) && !(this.policy && this.isRefused(key))
   }
 
   isVoid(key: string): boolean {
     const cls = this.nodes.get(key)?.cls
-    return cls !== undefined && VOID_ELEMENTS.has(cls)
+    return cls !== undefined && VOID_ELEMENTS.has(cls) && !(this.policy && this.isRefused(key))
   }
 
   /** Ordered child slots (unresolved), including chain-derived children. */
   childrenOf(parent: string): string[] {
     const n = this.nodes.get(parent)
     if (!n || !n.children.size) return []
+    // A refused element is rendered empty: what it holds is not shown.
+    if (this.policy && this.isRefused(parent)) return []
     const all = new Set(n.children)
     const todo = [...all]
     while (todo.length) {
@@ -316,6 +361,7 @@ export class HtmlIndex {
   attributes(key: string): [string, string][] {
     const n = this.nodes.get(key)
     if (!n) return []
+    if (this.policy && n.cls && this.isRefused(key)) return [[REFUSED_ATTRIBUTE, this.tagOf(n.cls) ?? n.cls]]
     const out = new Map<string, string>()
     const set = (name: string, value: string) => {
       const had = out.get(name)
@@ -326,6 +372,17 @@ export class HtmlIndex {
     for (const a of n.attrNodes) {
       const rec = this.attrs.get(a)
       if (rec?.name !== undefined && rec.value !== undefined) set(rec.name, rec.value)
+    }
+    for (const [name, value] of out) {
+      // A name that is no attribute name would break the markup it is written in, trusted or not.
+      if (!ATTRIBUTE_NAME.test(name)) {
+        out.delete(name)
+        this.refuse(key, 'attribute', `"${name}" is not an attribute name`)
+        continue
+      }
+      if (!this.policy) continue
+      const why = attributeProblem(this.policy, name, value)
+      if (why) out.delete(name), this.refuse(key, why.kind, `${name}: ${why.reason}`)
     }
     if (this.urlBase !== undefined) for (const [name, value] of out) if (URL_ATTRIBUTES.has(name)) out.set(name, resolveUrl(value, this.urlBase))
     return [...out].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -350,7 +407,11 @@ export class HtmlIndex {
     return i
   }
 
+  /** Elements whose class or attributes changed in this delta, to check against the policy. */
+  private checking = new Set<string>()
+
   private mark(field: keyof Dirty, key: string) {
+    if (this.policy && (field === 'attrs' || field === 'recreate')) this.checking.add(key)
     for (const c of this.consumers) c[field].add(key)
   }
 
