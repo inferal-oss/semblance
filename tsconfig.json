@@ -11,7 +11,14 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": false,
+    "jsx": "react-jsx",
+    "paths": {
+      "@inferal-oss/semblance": ["./src/index.ts"],
+      "@inferal-oss/semblance/*": ["./src/*/index.ts"],
+      "@inferal-oss/semblance-react": ["./packages/react/src/index.ts"],
+      "@inferal-oss/semblance-react/server": ["./packages/react/src/server.ts"]
+    }
   },
-  "include": ["src", "test", "bench", "demo", "scripts", "rdf-engine", "examples"]
+  "include": ["src", "test", "bench", "demo", "scripts", "rdf-engine", "examples", "packages"]
 }

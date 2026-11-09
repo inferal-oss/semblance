@@ -1,0 +1,22 @@
+{
+  "name": "@inferal-oss/semblance-react",
+  "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "description": "React as the component library under Semblance: hosted components drawn by React, with events and server rendering",
+  "keywords": ["semblance", "react", "rdf", "ui"],
+  "homepage": "https://semblance.dev",
+  "repository": { "type": "git", "url": "git+https://github.com/inferal-oss/semblance.git", "directory": "packages/react" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./package.json": "./package.json"
+  },
+  "files": ["src", "README.md"],
+  "publishConfig": { "access": "public" },
+  "peerDependencies": {
+    "@inferal-oss/semblance": "^0.1.0",
+    "react": ">=19",
+    "react-dom": ">=19"
+  }
+}

@@ -6,6 +6,11 @@ below is implemented (`ontology/layers/foreign.ttl`, `src/foreign.ts`, the islan
 site's **Coffee tasting** example, which integrates four well-known open-source libraries loaded from a
 CDN: Shoelace's `<sl-rating>`, Chart.js, Leaflet and flatpickr. What is still open is listed at the end.
 
+Islands are for code Semblance does not render. To have a component library draw the components
+Semblance projects (a React design system, a kit of custom elements), with their children and in
+one tree, see [Hosted components](HOSTED.md): it shares this layer's vocabulary for inputs and
+outputs.
+
 A *foreign component* is anything that owns a DOM subtree Semblance did not render: a Web Component
 (custom element, shadow DOM), a React, Vue, Svelte or Solid component, or a vanilla JS widget (a chart,
 a map, a rich-text editor). This document covers how to wrap one so that:
@@ -160,7 +165,9 @@ interface IslandHandle { update(changed: ReadonlyMap<string, Input>): void; dest
 - **`ext:Widget`** (built in). It calls a registered `mount(element, inputs, emit)`. A widget may be
   `{ load(): Promise<Widget> }`, which gives loading on demand by dynamic import: the module is fetched
   the first time an island of that kind is shown.
-- **React** fits behind `ext:Widget`. It is not a dependency of Semblance; this is the whole adapter:
+- **React** fits behind `ext:Widget` for an island (a React widget that owns its subtree). To have React
+  draw Semblance's own components, with children, use `@inferal-oss/semblance-react` ([HOSTED.md](HOSTED.md)).
+  React is not a dependency of Semblance; this is the whole island adapter:
 
   ```ts
   import { createElement } from 'react'
@@ -361,15 +368,15 @@ reaction that rewrites the value.
 2. **Where the island concept lives in the index.** Should the slot-with-inputs be a general RDF/HTML
    extension (any host-owned slot can carry inputs for whatever the host mounts), with `ext:` only
    adding the adapters?
-3. **Custom elements as the root.** For custom elements, should the patcher render the element itself
-   (an `rdfhtml:` class for arbitrary tags, `sem:tagName`), owning its attributes, with only its children
-   and properties foreign? That would remove the wrapper for the most common kind, at the cost of
-   sharing an element's attributes.
+3. **Custom elements as the root.** Answered by hosted components ([HOSTED.md](HOSTED.md)): `ext:tag` on
+   an `ext:Hosted` class creates the component's root as that custom element. The patcher owns its
+   attributes and children (light DOM) and sets its props as properties; no wrapper.
 4. **A Custom Elements Manifest importer.** Generate an island class's Turtle (inputs, outputs, parts,
    CSS properties, slots) from `custom-elements.json`, with SHACL shapes for the bindings.
-5. **Slots and children.** Passing Semblance-rendered children into a foreign component (`<slot>` in
-   shadow DOM, React `children`). This needs nested projections: a `DomRenderer` per child mounted in
-   the foreign subtree, as live examples mount a renderer in a slot. It is out of scope for the first cut.
+5. **Slots and children.** Answered by hosted components ([HOSTED.md](HOSTED.md)): a component the
+   library draws gets its projected children (React `children`; a custom element's light DOM, to slot),
+   and hosted components nested in the graph are nested in the library's tree. No nested projection
+   is needed: the adapter draws the index's nodes under a hosted root itself.
 6. **Rendered state** (`urn:semblance:foreign`): together with #35's `urn:semblance:rendered`, or a
    graph of its own?
 7. **Forms.** Form-associated custom elements report validity through `ElementInternals`. Should that
@@ -420,8 +427,9 @@ one push and the same rule runs and DOM operations with 2 islands or 62).
    reporting created and removed slot elements), and a soak case.
 2. **Rendered state from foreign components.** `ext:state` bindings written to a named graph without
    reactions (shared with #35).
-3. **A React adapter package** (`@inferal-oss/semblance-react`, with React a peer dependency), and Vue,
-   Svelte and Solid recipes.
+3. **Vue, Svelte and Solid adapters.** The React one is done: `@inferal-oss/semblance-react`
+   (`packages/react/`, React a peer dependency) draws hosted components, with events and server
+   rendering ([HOSTED.md](HOSTED.md)). The others implement the same `HostAdapter`.
 4. **Loading on demand.** `ext:loading` (`ext:Eager`, `ext:Idle`, `ext:Visible`, `ext:Media`) with the
    IntersectionObserver / idle effect, plus import maps for widgets.
 5. **Sandboxed islands.** An `ext:Sandboxed` adapter: an iframe without same-origin, a `postMessage`
@@ -430,10 +438,11 @@ one push and the same rule runs and DOM operations with 2 islands or 62).
    for every island, route `key:shortcut` activation to the foreign element, and adopt Reference Target
    where it ships.
 7. **Server rendering of islands.** `ext:fallback` content, and Declarative Shadow DOM snapshots for
-   kinds that have a server renderer.
+   kinds that have a server renderer. Hosted components already render on the server (the library's
+   markup, hydrated on take-over); a component that needs server markup can be hosted instead.
 8. **A Custom Elements Manifest importer.** Generate island classes and shapes from
     `custom-elements.json`.
 9. **JSON inputs from SPARQL.** A building block for building `rdf:JSON` values (ordered,
     escaped), or array inputs from member-wise bindings.
-10. **Children into foreign components.** Nested projections in shadow-DOM `<slot>`s and React
-    `children` (research).
+10. **Children into foreign components.** Done as hosted components ([HOSTED.md](HOSTED.md)); an
+    island keeps owning its whole subtree.

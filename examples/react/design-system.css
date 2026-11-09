@@ -1,0 +1,62 @@
+/* The example design system's own stylesheet. It reads Semblance's tokens (--sem-*), which every theme,
+   color scheme, contrast and density re-values, so it follows the page's theme without a rule of
+   Semblance's; everything else is its own look. Unlayered, so it wins over Semblance's component
+   styles (in @layer) where both set a property. Logical properties: it reads right to left too. */
+
+.ds-stack { display: flex; flex-direction: column; gap: var(--ds-gap); min-inline-size: 0; }
+.ds-stack--row { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.ds-density--comfortable { --ds-gap: var(--sem-space-4); --ds-pad: var(--sem-space-3); }
+.ds-density--compact { --ds-gap: var(--sem-space-2); --ds-pad: var(--sem-space-1); }
+
+.ds-heading {
+  margin: 0;
+  font-family: var(--sem-font);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sem-text);
+  border-block-end: 3px solid var(--sem-accent);
+  padding-block-end: var(--sem-space-1);
+}
+/* Semblance's heading draws an accent bar of its own; this design system's rule is its border. */
+.ds-heading::after { content: none; }
+
+.ds-button {
+  font: inherit;
+  font-weight: 650;
+  min-block-size: 2.5rem;
+  padding-block: 0;
+  padding-inline: calc(var(--ds-pad, var(--sem-space-3)) * 1.6);
+  border-radius: 999px;
+  border: 2px solid var(--sem-accent);
+  background: transparent;
+  color: var(--sem-accent-strong);
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+.ds-button:hover { background: var(--sem-accent-soft); }
+.ds-button:focus-visible { outline: none; box-shadow: var(--sem-ring); }
+.ds-button--primary { background: var(--sem-accent); color: var(--sem-on-accent); }
+.ds-button--primary:hover { background: var(--sem-accent-strong); }
+.ds-button--small { min-block-size: 2rem; font-size: var(--sem-font-size-small); }
+
+.ds-field { display: grid; gap: var(--sem-space-1); }
+.ds-field label { font-weight: 650; color: var(--sem-text); }
+.ds-field input {
+  font: inherit;
+  min-block-size: 2.5rem;
+  padding-inline: var(--sem-space-3);
+  border-radius: var(--sem-radius-control);
+  border: 2px solid var(--sem-border-strong);
+  background: var(--sem-surface);
+  color: var(--sem-text);
+}
+.ds-field input:focus-visible { outline: none; border-color: var(--sem-accent); box-shadow: var(--sem-ring); }
+.ds-field--invalid input { border-color: var(--sem-danger); }
+
+.ds-list {
+  border: 2px solid var(--sem-border);
+  border-radius: var(--sem-radius-card);
+  background: var(--sem-surface);
+  padding: var(--ds-pad, var(--sem-space-3));
+}
+.ds-list { list-style: none; margin: 0; display: grid; gap: var(--ds-gap); }
