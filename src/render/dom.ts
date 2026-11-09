@@ -1,6 +1,8 @@
+import { applyInputs, inputValue } from '../foreign.ts'
 import { SVG_NS } from '../ns.ts'
 import { sameDecimal } from '../rdf.ts'
 import type { HtmlIndex } from './html-index.ts'
+import { HOST_ELEMENT, hostedBy, type HostAdapter, type HostMount } from './hosts.ts'
 
 /**
  * Give an element the focus on the framework's own account, nobody having pressed on it. The browser
@@ -29,9 +31,12 @@ export class DomRenderer {
   private els = new Map<string, Node>()
   private keys = new WeakMap<Node, string>()
   private applied = new Map<string, Map<string, string>>()
-  /** The DOM node rendered for an RDF/HTML node, if it is mounted. */
+  /** What a host library draws, by the node whose <sem-host> element it draws in (src/render/hosts.ts). */
+  private hosted = new Map<string, HostMount>()
+  /** The DOM node rendered for an RDF/HTML node, if it is mounted (a host library's own, where it drew one). */
   nodeOf(key: string): Node | undefined {
-    return this.els.get(key)
+    const drawn = this.hosts?.nodeOf(key)
+    return drawn?.isConnected ? drawn : (this.els.get(key) ?? drawn)
   }
 
   /** Sizes of the renderer's maps, for leak checks. */
@@ -56,13 +61,15 @@ export class DomRenderer {
     readonly index: HtmlIndex,
     readonly host: Element,
     readonly rootFocus: string,
+    /** Draws the nodes a host component library draws (ext:component), each subtree in a <sem-host>. */
+    readonly hosts?: HostAdapter,
   ) {
     this.doc = host.ownerDocument
     this.takeDirty = index.consumer()
   }
 
   keyOf(node: Node): string | undefined {
-    return this.keys.get(node)
+    return this.keys.get(node) ?? this.hosts?.keyOf(node)
   }
 
   /** The element of a host-owned slot (see sem:slot), once rendered. */
@@ -77,7 +84,7 @@ export class DomRenderer {
   /** Whether a DOM node sits inside host-owned slot content. */
   inSlot(node: Node): boolean {
     for (let n: Node | null = node.parentNode; n && n !== this.host; n = n.parentNode) {
-      const k = this.keys.get(n)
+      const k = this.keyOf(n)
       if (k && this.index.nodes.get(k)?.slot !== undefined) return true
     }
     return false
@@ -120,6 +127,19 @@ export class DomRenderer {
         parent.insertBefore(empty, dom)
         return empty
       }
+      if (hostedBy(this.index, this.hosts, k) !== undefined) {
+        // What a host library drew on the server: it takes its own markup over (hydration).
+        if (dom?.nodeType !== 1 || (dom as Element).localName !== HOST_ELEMENT) {
+          mismatches++
+          const el = this.element(k)
+          parent.insertBefore(el, dom)
+          return el
+        }
+        this.els.set(k, dom)
+        this.keys.set(dom, k)
+        this.hosted.set(k, this.hosts!.mount(dom as Element, k, true))
+        return dom
+      }
       const tag = this.index.tagName(k) ?? 'sem-unknown'
       // Case-blind: an HTML parser may lower an SVG element's name (linearGradient) that a browser keeps.
       if (dom?.nodeType !== 1 || (dom as Element).localName.toLowerCase() !== tag.toLowerCase()) {
@@ -135,6 +155,7 @@ export class DomRenderer {
       const actual = new Map(Array.from(el.attributes, (a) => [a.name, a.value]))
       this.applied.set(k, actual)
       if (desired.size !== actual.size || [...desired].some(([name, v]) => actual.get(name) !== v)) mismatches++, this.syncAttrs(k)
+      this.syncProps(k)
       if (this.index.isVoid(k) || n.slot !== undefined) return el
       let cursor = el.firstChild
       for (const slot of this.index.childrenOf(k)) {
@@ -176,7 +197,7 @@ export class DomRenderer {
         if ((dom as Text).data !== data) ((dom as Text).data = data), this.ops++
         return
       }
-      if (dom.nodeType !== 1 || this.index.isVoid(k) || n.slot !== undefined) return
+      if (dom.nodeType !== 1 || this.index.isVoid(k) || n.slot !== undefined || this.hosted.has(k)) return
       this.reconcile(dom, this.desired(k), true)
       for (const slot of this.index.childrenOf(k)) {
         const r = this.index.resolve(slot)
@@ -256,6 +277,8 @@ export class DomRenderer {
       retired.push(el)
       this.els.delete(k)
       this.applied.delete(k)
+      this.hosted.get(k)?.destroy()
+      this.hosted.delete(k)
     }
     for (const k of d.data) {
       const el = this.els.get(k)
@@ -271,6 +294,7 @@ export class DomRenderer {
       }
     }
     for (const k of d.attrs) if (this.els.has(k)) this.syncAttrs(k)
+    for (const k of d.islands) if (this.els.has(k)) this.syncProps(k)
     for (const k of d.children) if (this.els.has(k)) this.syncChildren(k)
     const root = this.index.resolve(this.rootFocus)
     this.reconcile(this.host, root ? [this.element(root)] : [])
@@ -286,6 +310,8 @@ export class DomRenderer {
     this.reattach(removed)
     this.pendingPrune.clear()
     this.deferred = []
+    // What a host library draws follows the same change: it draws again exactly what changed.
+    this.hosts?.patch()
   }
 
   /** What a reconciled parent no longer has leaves it (collected in `removed`). */
@@ -324,6 +350,14 @@ export class DomRenderer {
     let el = this.els.get(k)
     if (el) return el
     const n = this.index.nodes.get(k)!
+    if (n.cls !== 'Text' && hostedBy(this.index, this.hosts, k) !== undefined) {
+      const container = this.doc.createElement(HOST_ELEMENT)
+      this.ops++
+      this.els.set(k, container)
+      this.keys.set(container, k)
+      this.hosted.set(k, this.hosts!.mount(container, k, false))
+      return container
+    }
     if (n.cls === 'Text') el = this.doc.createTextNode(n.data ?? '')
     else if (this.index.isSvg(k)) el = this.doc.createElementNS(SVG_NS, this.index.tagName(k) ?? 'g')
     else el = this.doc.createElement(this.index.tagName(k) ?? 'sem-unknown')
@@ -332,14 +366,24 @@ export class DomRenderer {
     this.keys.set(el, k)
     if (n.cls !== 'Text') {
       this.syncAttrs(k)
+      this.syncProps(k)
       this.syncChildren(k)
     }
     return el
   }
 
+  /** A custom element's props (ext:input on a node that is not an island's slot), set as properties or attributes. */
+  private syncProps(k: string) {
+    const n = this.index.nodes.get(k)
+    if (!n?.inputs?.size || n.tag === undefined || this.index.tagName(k) !== n.tag || this.hosted.has(k)) return
+    const el = this.els.get(k) as Element
+    if (el?.nodeType !== 1) return
+    applyInputs(el, [...this.index.islandInputs(k).values()].map((i) => ({ name: i.name, value: inputValue(i.value), as: i.as })))
+  }
+
   private syncAttrs(k: string) {
     const el = this.els.get(k) as Element
-    if (el.nodeType !== 1) return
+    if (el.nodeType !== 1 || this.hosted.has(k)) return
     const desired = new Map(this.index.attributes(k))
     const prev = this.applied.get(k) ?? new Map<string, string>()
     for (const name of prev.keys()) if (!desired.has(name)) el.removeAttribute(name), this.reflect(el, name, undefined), this.ops++
@@ -370,7 +414,7 @@ export class DomRenderer {
 
   private syncChildren(k: string) {
     const el = this.els.get(k)!
-    if (el.nodeType !== 1 || this.index.isVoid(k) || this.index.nodes.get(k)?.slot !== undefined) return
+    if (el.nodeType !== 1 || this.index.isVoid(k) || this.index.nodes.get(k)?.slot !== undefined || this.hosted.has(k)) return
     this.reconcile(el, this.desired(k))
   }
 

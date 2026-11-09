@@ -152,6 +152,65 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
 }""" .
 
+# --- hosted components: a component library draws a projected component --------------------------
+# Islands mount code Semblance does not render. A hosted component is the other way round: Semblance
+# projects it as usual (its renderings, every modality), and a host component library draws its root
+# and everything under it, with its projected children as the host component's children
+# (docs/HOSTED.md). A binding says which classes, in the app's or the design system's own Turtle:
+#
+#   c:Button rdfs:subClassOf ext:Hosted ; ext:component "Button" ;
+#       ext:input [ ext:name "tone" ; ext:from sty:intent ] .
+#
+# The rule below states on the component's root which host component draws it (ext:component), or
+# which custom element it is created as (ext:tag), and its props' current values (ext:input nodes,
+# as an island's slot has them). A renderer given a host adapter (src/render/hosts.ts) draws such a
+# root with the library; without one, the root renders as its RDF/HTML element, unchanged.
+
+ext:Hosted a owl:Class ;
+    rdfs:label "Hosted component"@en , "Компонент бібліотеки"@uk , "Bibliothekskomponente"@de , "مكوّن من مكتبة"@ar ;
+    rdfs:comment """A mark on component classes a host component library draws (a React design system, a kit of
+custom elements), not a component of its own: make a component class a subclass of it and say ext:component (or ext:tag), and its props as ext:input
+bindings. Its renderings stay what they are: the library gets the root's attributes, the props and the
+projected children."""@en .
+ext:component a owl:DatatypeProperty ;
+    rdfs:comment """On a hosted class (or instance): the name of the host component that draws it, as the host
+registered it with its adapter. A name, not code: what runs is the host's choice. Derived on the
+component's root: the name its renderer looks up."""@en .
+
+ext:HostedRendering a sem:Rendering ;
+    rdfs:comment "A hosted component's host component (ext:component), custom element tag (ext:tag) and props' current values (ext:input), stated on its root."@en ;
+    sem:targets ext:Hosted ;
+    sem:modality mod:Screen ;
+    sem:stratum 20 ;
+    sem:follows c:of .
+ext:HostedRendering-fn a sem:Rule ; sem:implements ext:HostedRendering ; sem:function "foreign:hosted" .
+ext:HostedRendering-sparql a sem:Rule ;
+    sem:implements ext:HostedRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root ext:component ?component ; ext:tag ?tag ; ext:input ?in .
+  ?in ext:name ?name ; ext:value ?value ; ext:as ?as .
+}
+WHERE {
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  {
+    { $this ext:component ?component } UNION { $this a/rdfs:subClassOf* ?named . ?named ext:component ?component }
+  } UNION {
+    { $this ext:tag ?tag } UNION { $this a/rdfs:subClassOf* ?tagged . ?tagged ext:tag ?tag }
+  } UNION {
+    { $this ext:input ?binding } UNION { $this a/rdfs:subClassOf* ?declaring . ?declaring ext:input ?binding }
+    ?binding ext:name ?name ; ext:from ?from .
+    OPTIONAL { ?binding ext:through ?link . $this ?link ?linked }
+    BIND(COALESCE(?linked, $this) AS ?source)
+    LATERAL { ?source ?from ?raw }
+    OPTIONAL { ?raw sem:slug ?slug }
+    BIND(COALESCE(?slug, ?raw) AS ?value)
+    OPTIONAL { ?binding ext:as ?declared }
+    BIND(COALESCE(?declared, ext:Property) AS ?as)
+    BIND(IRI(CONCAT(STR($this), "/~prop-", ENCODE_FOR_URI(?name))) AS ?in)
+  }
+}""" .
+
 # --- outlines: which parts of a page are islands -----------------------------------------------------
 # An island's outline (ontology/layers/outline.ttl) is named by what it mounts, its tag or its widget's
 # name, unless it has an ol:label of its own: a component that ol:shows outlines shows which parts of a
@@ -182,4 +241,7 @@ WHERE {
 [] a sty:StyleRule ; sty:appliesTo ext:Island ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] , [ sty:property "min-inline-size" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:appliesTo ext:Island ; sty:part "> .sem-island-mount" ;
+    sty:declares [ sty:property "display" ; sty:raw "contents" ] .
+# The element a host library draws in (src/render/hosts.ts): no box of its own, no role.
+[] a sty:StyleRule ; sty:part "sem-host" ;
     sty:declares [ sty:property "display" ; sty:raw "contents" ] .

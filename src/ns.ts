@@ -476,6 +476,7 @@ export const EXT = {
   as: NS.ext + 'as', Property: NS.ext + 'Property', Attribute: NS.ext + 'Attribute', on: NS.ext + 'on', emits: NS.ext + 'emits',
   path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module',
   CustomElement: NS.ext + 'CustomElement', Widget: NS.ext + 'Widget',
+  Hosted: NS.ext + 'Hosted', component: NS.ext + 'component',
 } as const
 /** The outlines layer (ontology/layers/outline.ttl). */
 export const OL = { label: NS.ol + 'label', defaultLabel: NS.ol + 'defaultLabel', shows: NS.ol + 'shows' } as const
