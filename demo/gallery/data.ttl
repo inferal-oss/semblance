@@ -20,7 +20,7 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-histogram ui:dt-sparkline ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-histogram ui:dt-sparkline ui:dt-boxplot ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -454,6 +454,14 @@ ui:dt-sparkline a c:Flippable ; c:front ui:dt-sparkline-spec .
 ui:dt-sparkline-spec a c:Specimen ; c:demonstrates c:Sparkline ; c:label "Sparkline" , "Спарклайн"@uk , "Sparkline"@de , "خط بياني مصغّر"@ar ;
     c:help "A word-sized line of a view's values, no axes, its last point marked: in a tile under its figure, or in a table's cells, where a column with c:format \"component\" holds the component each row names. Its points are list items with their words, as any chart's." ;
     c:children ( ui:dt-channels-table ui:dt-spark-tile ) .
+
+ui:dt-boxplot-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Response times by hour" ; sem:select """
+SELECT ?route ?ms ?r WHERE { ?r ui:requestMs ?ms ; ui:requestRoute ?route }""" .
+ui:dt-boxplot-chart a c:BoxPlot ; c:label "Response times by route" ; c:view ui:dt-boxplot-view ; c:categoryVariable "route" ; c:valueVariable "ms" ; c:unit "ms" .
+ui:dt-boxplot a c:Flippable ; c:front ui:dt-boxplot-spec .
+ui:dt-boxplot-spec a c:Specimen ; c:demonstrates c:BoxPlot ; c:label "Box plot" , "Коробкова діаграма"@uk , "Boxplot"@de , "مخطط صندوقي"@ar ;
+    c:help "How each category's values spread: a box from the first to the third quartile, a line at the median, whiskers to the least and greatest value; with a series variable, a box per series side by side. A box says its median, quartiles and range in the viewer's language." ;
+    c:children ( ui:dt-boxplot-chart ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 

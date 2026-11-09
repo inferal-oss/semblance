@@ -1717,6 +1717,37 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "bottom" ; sty:raw "-3px" ] ,
                  [ sty:property "border-width" ; sty:raw "1px" ] .
 
+# A box plot's box: placed by its series' rank in the band as a grouped column is; a whisker over its
+# range, a box over its quartiles, a line at its median (the point's anchor).
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ;
+    sty:declares [ sty:property "--band" ; sty:raw "calc(100cqw / var(--n))" ] ,
+                 [ sty:property "--yq1" ; sty:raw "calc((var(--q1) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--yq3" ; sty:raw "calc((var(--q3) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--ylow" ; sty:raw "calc((var(--low) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--yhigh" ; sty:raw "calc((var(--high) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ":is(.sem-whisker, .sem-box, .sem-median)" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * (-0.4 + var(--r) * 0.8 / var(--k)) + var(--band) * 0.1 / var(--k))" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--band) * 0.6 / var(--k))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ".sem-whisker" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "calc((var(--ylow) - var(--y)) * 1cqh)" ] ,
+                 [ sty:property "block-size" ; sty:raw "calc((var(--yhigh) - var(--ylow)) * 1cqh)" ] ,
+                 [ sty:property "border-block" ; sty:raw "1.5px solid var(--color)" ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(var(--color), var(--color)) center / 1.5px 100% no-repeat" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ".sem-box" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "calc((var(--yq1) - var(--y)) * 1cqh)" ] ,
+                 [ sty:property "block-size" ; sty:raw "calc((var(--yq3) - var(--yq1)) * 1cqh)" ] ,
+                 [ sty:property "min-block-size" ; sty:raw "2px" ] ,
+                 [ sty:property "border" ; sty:raw "1.5px solid var(--color)" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--color) 30%, var(--sem-surface))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ".sem-median" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "-1.5px" ] ,
+                 [ sty:property "block-size" ; sty:raw "3px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ".sem-box" ; sty:state ":is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:token tok:ring ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" ] ,
