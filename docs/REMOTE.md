@@ -10,8 +10,9 @@ Nothing in the engines changes for this: they still leave out `SERVICE` and HTTP
 with `runtime.apply`. Rules and views take it in as they take in a click, so a change from the
 store costs what it changes, however large the store is.
 
-This guide covers the protocol, the reference server in the repository, and the pattern a page
-follows. The example is `examples/remote/`, a shared todo list:
+This guide covers how a page declares a source, the effect that binds it, the protocol, the
+reference server in the repository, and what the effect does (for a host that wants to do it
+itself). The example is `examples/remote/`, a shared todo list:
 
 ```bash
 npx vite --config examples/remote/vite.config.ts
@@ -19,6 +20,67 @@ npx vite --config examples/remote/vite.config.ts
 
 Open it in two windows. What one window changes, the other shows. A todo label longer than 40
 characters is refused by the store, and the page puts back what the store holds.
+
+## Declaring a source
+
+The graph says what lives elsewhere. The host says where (`ontology/layers/source.ttl`, prefix
+`src:`):
+
+```turtle
+ex:store a src:Source ;
+    src:pattern [ src:class ex:Todo ] , [ src:subject ex:todos ; src:predicate c:item ] ;
+    src:writable true .
+ex:todos src:awaits ex:store .
+```
+
+```ts
+await mount(element, {
+  root: EX + 'page',
+  graphs: [app],
+  sources: { endpoints: { [EX + 'store']: { url: '/store/', headers: { authorization } } } },
+})
+```
+
+- `src:pattern`: what the source covers (see below). The page binds to their union.
+- `src:graph` (optional): the named graph its statements land in. By default they land in the
+  default graph, where components read.
+- `src:writable`: the page's changes to the source's statements go back to the store. Without it
+  they stay in the page.
+- `src:awaits` on a component: it is `st:busy` (`aria-busy`, the theme's shimmer) while the source
+  loads or reconnects.
+
+The graph never names an endpoint or credentials, so an authored graph cannot point a page at a
+server. A source the host gives no endpoint stays `src:Unbound`. An endpoint is a URL with
+headers, or any `SourceTransport` (an object with `follow` and `write`), for a store reached some
+other way.
+
+Without `mount`, the effect is `new RemoteSources(runtime, { endpoints, bus, onChange }).attach()`.
+
+### What the page can see
+
+What the effect knows is graph data in `urn:semblance:sources`:
+
+- on each source: `src:state` (`src:Unbound`, `src:Loading`, `src:Live`, `src:Reconnecting`),
+  `src:cursor`, `src:pending` (writes not yet answered), `src:attempts` and `src:lastError`;
+- `src:SyncLog`, a bounded LDES (`logSize`, default 100) of what happened:
+  - `src:Snapshot` (with `src:reset` when it replaced what the page held);
+  - `src:Received`;
+  - `src:Write`, `prov:wasInformedBy` the change-log member of the event that made it;
+  - `src:Confirmed` and `src:Refused` (`src:of` the write, with `src:reason`).
+
+What the page should do about it is up to its reactions. The effect emits events targeted at the
+source: `src:WentLive`, `src:Lost` (with `src:lastError`) and `src:WriteRefused` (with
+`src:reason`). The example's badge follows them:
+
+```turtle
+ex:ShowRefused a beh:Reaction ; beh:when src:WriteRefused ; beh:source ex:store ;
+    beh:deletes """CONSTRUCT { ex:status c:label ?l ; sty:tone ?t } WHERE { … }""" ;
+    beh:inserts """CONSTRUCT { ex:status c:label ?label ; sty:tone sty:Danger }
+WHERE { $event src:reason ?reason BIND(IF(?reason = "stale", "Changed elsewhere: shown as it is now", ?reason) AS ?label) }""" .
+```
+
+The page's own change log stays the record of the page's events. Changes from the store are not
+page events, so they are recorded in `src:SyncLog`, not in the change log.
 
 ## What a page binds to
 
@@ -98,31 +160,43 @@ It is a starting point and a test double, not a database. A deployment puts the 
 front of its own triple store, and checks who may read which patterns and write which
 statements.
 
-## The pattern
+## What the effect does
 
-`examples/remote/main.ts` binds the page by hand, in four parts:
+`src/remote.ts` does the following for each source. A host that binds a store some other way does
+the same:
 
-1. **Follow the stream.** Apply the snapshot, then each delta, with `runtime.apply`, and call
-   `flush()` to patch the DOM. Keep the last cursor. Mark what you apply as coming from the
-   store, so it is not sent back as a write.
-2. **Reset when told.** A `reset` snapshot replaces what the page holds: remove the statements
-   that match the patterns and are not in it, then add the rest.
-3. **Reconnect.** When the stream breaks, wait (with backoff) and open it again with
-   `after={cursor}`. The server sends what was missed, or a reset when the gap is longer than its
-   log.
-4. **Send writes.** `runtime.onInput` hears every change to the input. Keep the statements that
-   match the patterns (a removed statement by its subject's types *before* the change), collect
-   them per tick into one write, and send the writes one at a time, in order. A local change is
-   shown at once (optimistic). A refused write's `repair` is applied as a change from the store.
-   A write that cannot reach the server waits and is sent when the server answers again.
+1. **It follows the stream.** It applies the snapshot, then each delta, with `runtime.apply` (or
+   `runtime.write` for a `src:graph`). These changes are marked as coming from the store, so they
+   are not sent back. A snapshot replaces what the page holds of the source: the statements that
+   match the patterns and are not in it go. That costs the page's part, matched pattern by
+   pattern, not the page.
+2. **It reconnects.** When the stream breaks, it waits with doubling backoff (`backoff`), then
+   opens the stream again with `after={cursor}`. The server sends what was missed, or a reset
+   snapshot when the gap is longer than its log.
+3. **It sends writes.** `runtime.onInput` hears every change to the input. The effect keeps the
+   statements that match the patterns, judging a removed statement by its subject's types before
+   the change. Everything one tick changes becomes one write. A batch is closed early when a
+   change from the store arrives, so a write never spans one. Writes go one at a time, in order. A
+   local change is shown at once (optimistic). A refused write's `repair` is applied as a change
+   from the store. A write that cannot reach the server waits and is sent when the server answers
+   again. Local changes made meanwhile keep queueing behind it.
 
-Each part costs what it handles. The page's engine sees a change from the store as an input
-change. Matching a local change against the patterns is a lookup per statement.
+Each step costs what it handles. The page's engine sees a change from the store as one input
+change. Matching a local change against the patterns is a lookup per statement. `test/remote.test.ts`
+holds the rule runs, derived output, store reads and server checks of one change from the store
+equal for a store with 10 and with 20 000 statements the page does not bind to, and for a list of 3
+and of 63 todos.
 
-## Next
+## Consistency, in short
 
-The host effect `RemoteSources` does the above for every source the graph declares: the patterns
-become vocabulary (`src:Source`, `src:pattern`), the host maps each source to its endpoint, and
-the state of each source (loading, live, reconnecting, writes pending, a write refused) is graph
-data and events. That is the second step of
-[#382](https://github.com/inferal-oss/semblance/issues/382).
+- The store is the authority, and its cursor orders everything: deltas are applied in cursor
+  order, and a page resumes from the cursor it last saw.
+- Local changes are optimistic. A write is compare-and-set on the statements it removes, so a
+  write made from a stale state is refused, and the page is repaired to what the store holds.
+  When two pages change one value at once, the first write the store takes wins, and the other
+  page shows it.
+- Between a local change and its answer, a change from elsewhere can show beside it (two values
+  of one property) until the refusal repairs it. That is the window optimism opens, and it closes
+  with the answer.
+- Writes made while the store is unreachable stay applied in the page, wait in order, and meet
+  the same check when they are sent.
