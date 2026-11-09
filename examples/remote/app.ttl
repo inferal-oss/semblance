@@ -4,10 +4,18 @@
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix src: <https://semblance.dev/ns/source#> .
 @prefix ex: <https://example.org/remote#> .
 
 # The page. The todos themselves are not here: they live in the store (todos.ttl, on the
 # server), and reach the page as changes. The list reads them as it reads anything else.
+
+# What lives in the store: every todo, and the list's links to them. The page's changes to them go
+# back. Where the store is, the host says (main.ts), not the graph.
+ex:store a src:Source ;
+    src:pattern [ src:class ex:Todo ] , [ src:subject ex:todos ; src:predicate c:item ] ;
+    src:writable true .
+ex:todos src:awaits ex:store .
 
 ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ;
     c:children ( ex:title ex:intro ex:status ex:entry ex:todos ex:clear ) .
@@ -37,3 +45,22 @@ WHERE {
 ex:ClearDone a beh:Reaction ; beh:when beh:Click ; beh:source ex:clear ;
     beh:deletes """PREFIX ex: <https://example.org/remote#>
 CONSTRUCT { ?t ?p ?o . ex:todos c:item ?t } WHERE { ex:todos c:item ?t . ?t ex:done true ; ?p ?o }""" .
+
+# What the store's connection is doing, said by the badge: the effect reports it as events.
+ex:ShowLive a beh:Reaction ; beh:when src:WentLive ; beh:source ex:store ;
+    beh:deletes """PREFIX ex: <https://example.org/remote#>
+CONSTRUCT { ex:status c:label ?l ; sty:tone ?t } WHERE { ex:status c:label ?l OPTIONAL { ex:status sty:tone ?t } }""" ;
+    beh:inserts """PREFIX ex: <https://example.org/remote#>
+CONSTRUCT { ex:status c:label "Live" ; sty:tone sty:Success } WHERE {}""" .
+ex:ShowLost a beh:Reaction ; beh:when src:Lost ; beh:source ex:store ;
+    beh:deletes """PREFIX ex: <https://example.org/remote#>
+CONSTRUCT { ex:status c:label ?l ; sty:tone ?t } WHERE { ex:status c:label ?l OPTIONAL { ex:status sty:tone ?t } }""" ;
+    beh:inserts """PREFIX ex: <https://example.org/remote#>
+CONSTRUCT { ex:status c:label "Reconnecting" ; sty:tone sty:Warning } WHERE {}""" .
+# A refused write: the list already shows what the store holds; the badge says why.
+ex:ShowRefused a beh:Reaction ; beh:when src:WriteRefused ; beh:source ex:store ;
+    beh:deletes """PREFIX ex: <https://example.org/remote#>
+CONSTRUCT { ex:status c:label ?l ; sty:tone ?t } WHERE { ex:status c:label ?l OPTIONAL { ex:status sty:tone ?t } }""" ;
+    beh:inserts """PREFIX ex: <https://example.org/remote#>
+CONSTRUCT { ex:status c:label ?label ; sty:tone sty:Danger }
+WHERE { $event src:reason ?reason BIND(IF(?reason = "stale", "Changed elsewhere: shown as it is now", ?reason) AS ?label) }""" .

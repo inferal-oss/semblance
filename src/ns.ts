@@ -55,6 +55,7 @@ export const NS = {
   oa: 'http://www.w3.org/ns/oa#',
   co: 'http://purl.org/co/',
   safe: 'https://semblance.dev/ns/safety#',
+  src: 'https://semblance.dev/ns/source#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -359,6 +360,8 @@ export const FILES_GRAPH = 'urn:semblance:files'
 export const NETWORK_GRAPH = 'urn:semblance:network'
 /** What the rendered-state effect measures (rnd:State, rnd:Viewport; src/rendered.ts): unrecorded. */
 export const RENDERED_GRAPH = 'urn:semblance:rendered'
+/** What the remote-sources effect knows (src/remote.ts): each source's state and src:SyncLog. */
+export const SOURCES_GRAPH = 'urn:semblance:sources'
 export const SVG_NS = 'http://www.w3.org/2000/svg'
 
 export const BEH = {

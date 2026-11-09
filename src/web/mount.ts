@@ -20,6 +20,7 @@ import { serverRendered, serverStyled, takeOver } from './takeover.ts'
 import { markPlatform } from './platform.ts'
 import { graphLanguages } from '../server/render.ts'
 import { Navigation, type NavigationOptions, rendererReveal, windowScroll } from '../navigation.ts'
+import { RemoteSources, type RemoteSourcesOptions } from '../remote.ts'
 
 export { DEFAULT_LAYERS }
 
@@ -73,6 +74,11 @@ export interface MountOptions {
   prepare?: (store: GraphStore) => void
   /** Record provenance (ontology/layers/provenance.ttl). */
   provenance?: boolean
+  /**
+   * Remote sources (src:Source, docs/REMOTE.md): each source's store, by the source's IRI. The graph
+   * says what a page binds to; the host, here, says where it is and with what credentials.
+   */
+  sources?: Omit<RemoteSourcesOptions, 'bus' | 'onChange'>
 }
 
 export interface MountedApp {
@@ -91,6 +97,8 @@ export interface MountedApp {
   islands: Islands
   /** The rendered state of the components that ask for it (rnd:observes; ontology/layers/rendered.ttl). */
   rendered: RenderedState
+  /** The remote-sources effect, when `sources` was given. */
+  sources?: RemoteSources
   /** Patch the DOM with whatever changed since (after changing the store through runtime.apply). */
   flush(): void
   /** Detach effects, release the owned runtime and store, and remove injected styles. The DOM is left as it is. Safe to call again; the runtime and store must not be used afterwards. */
@@ -249,6 +257,9 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const win = element.ownerDocument.defaultView
   const scroll = win && !(opts.navigation && opts.navigation.location) ? windowScroll(win) : undefined
   const detachNavigation = navigation?.attach(runtime, { bus, links: element, onNavigate: flush, reveal: rendererReveal(renderer), scroll })
+  // Remote sources: their part of the graph is loaded, follows the stores, and is written back.
+  const sources = opts.sources && new RemoteSources(runtime, { ...opts.sources, bus, onChange: () => (flush(), scheduleWarmup()) })
+  const detachSources = sources?.attach()
   // What the visitor did before now (a click, typing) happens now, on the adopted nodes.
   const takeover = adopted && { nodes: adopted.nodes, mismatches: adopted.mismatches, replayed: adopted.replay() }
 
@@ -263,6 +274,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     takeover,
     islands,
     rendered,
+    sources,
     flush,
     unmount() {
       if (stopped) return
@@ -278,6 +290,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       sizeHandles()
       detachRendered()
       detachNavigation?.()
+      detachSources?.()
       if (sheet) doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
       runtime.dispose()
     },

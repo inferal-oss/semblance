@@ -29,6 +29,7 @@ export const ONTOLOGY_FILES = [
   'layers/safety.ttl',
   'layers/fullscreen.ttl',
   'layers/foreign.ttl',
+  'layers/source.ttl',
   'layers/rendered.ttl',
   'layers/watchdog.ttl',
   'layers/outline.ttl',
