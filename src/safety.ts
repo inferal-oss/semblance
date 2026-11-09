@@ -3,7 +3,7 @@
 // every element and attribute it hands out (src/render/html-index.ts), and the style compiler to
 // every string it writes from the graph (src/style/compile.ts). What is refused is reported, never
 // dropped silently.
-import { H, NS, RDF_TYPE } from './ns.ts'
+import { EXT, H, NS, RDF_TYPE } from './ns.ts'
 import type { GraphStore } from './store/types.ts'
 
 const SAFE = NS.safe
@@ -24,6 +24,10 @@ export const SAFETY = {
   refusedProperty: SAFE + 'refusedProperty',
   hostComponent: SAFE + 'hostComponent',
   customElement: SAFE + 'customElement',
+  widget: SAFE + 'widget',
+  module: SAFE + 'module',
+  adapter: SAFE + 'adapter',
+  property: SAFE + 'property',
 } as const
 
 /** A safe:Policy, read for use: element classes as the HTML index names them ("Div", "svg:Rect"). */
@@ -44,6 +48,12 @@ export interface SafetyPolicy {
   /** Host components (ext:component) and custom elements (ext:tag) an authored graph may name (docs/HOSTED.md). */
   hostComponents: ReadonlySet<string>
   customElements: ReadonlySet<string>
+  /** What an authored island may mount (docs/FOREIGN.md): widgets (ext:widget), modules (ext:module) and adapters (ext:adapter) by name. */
+  widgets: ReadonlySet<string>
+  modules: ReadonlySet<string>
+  adapters: ReadonlySet<string>
+  /** Properties an authored input (ext:Property) may set on an island or a custom element. */
+  properties: ReadonlySet<string>
 }
 
 /**
@@ -77,6 +87,10 @@ export function readPolicy(store: GraphStore, iri: string = SAFETY.Authored): Sa
     refusedProperties: new Set(lower(SAFETY.refusedProperty)),
     hostComponents: new Set(values(SAFETY.hostComponent)),
     customElements: new Set(lower(SAFETY.customElement)),
+    widgets: new Set(values(SAFETY.widget)),
+    modules: new Set(values(SAFETY.module)),
+    adapters: new Set(values(SAFETY.adapter)),
+    properties: new Set(values(SAFETY.property)),
   }
 }
 
@@ -111,6 +125,41 @@ export const allowsElement = (policy: SafetyPolicy, cls: string): boolean => pol
 export const allowsHostComponent = (policy: SafetyPolicy, name: string): boolean => policy.hostComponents.has(name)
 /** Whether authored content may have a component's root created as this custom element (ext:tag). */
 export const allowsCustomElement = (policy: SafetyPolicy, tag: string): boolean => policy.customElements.has(tag)
+
+/**
+ * Properties an authored input never sets, listed or not: those that take markup, event handlers,
+ * the names React keeps for itself, and the prototype chain.
+ */
+const NEVER_PROPERTY = new Set(['innerhtml', 'outerhtml', 'srcdoc', 'dangerouslysetinnerhtml', 'sethtmlunsafe', 'insertadjacenthtml', 'ref', 'key', 'children', '__proto__', 'constructor', 'prototype'])
+
+/** Why an authored input (ext:input) is refused, or undefined: an attribute passes attributeProblem; a property must be listed. */
+export function inputProblem(policy: SafetyPolicy, name: string, value: string, asAttribute: boolean): { kind: Refused['kind']; reason: string } | undefined {
+  if (asAttribute) return attributeProblem(policy, name, value)
+  const lower = name.toLowerCase()
+  if (NEVER_PROPERTY.has(lower) || lower.startsWith('on') || !policy.properties.has(name)) return { kind: 'attribute', reason: `authored content may not set the property ${name}` }
+  return undefined
+}
+
+/** What an island names to be mounted with (read from the island and its classes, docs/FOREIGN.md). */
+export interface IslandRoute {
+  adapter: string
+  tag?: string
+  widget?: string
+  module?: string
+}
+
+/**
+ * Why an island is refused, or undefined: its custom element, widget and module are listed, and its
+ * adapter is either a built-in one (its tag or widget listed) or listed itself.
+ */
+export function islandProblem(policy: SafetyPolicy, island: IslandRoute): string | undefined {
+  if (island.tag !== undefined && !allowsCustomElement(policy, island.tag.toLowerCase())) return `custom element ${island.tag} is not allowed in authored content`
+  if (island.widget !== undefined && !policy.widgets.has(island.widget)) return `widget ${island.widget} is not allowed in authored content`
+  if (island.module !== undefined && !policy.modules.has(island.module)) return `module ${island.module} is not allowed in authored content`
+  if (island.adapter === EXT.CustomElement ? island.tag === undefined : island.adapter === EXT.Widget ? island.widget === undefined : !policy.adapters.has(island.adapter))
+    return `adapter <${island.adapter}> is not allowed in authored content`
+  return undefined
+}
 
 /**
  * Why an attribute is refused, or undefined when it is allowed: its name is listed or has a listed

@@ -372,7 +372,7 @@ export class DomRenderer {
     return el
   }
 
-  /** A custom element's props (ext:input on a node that is not an island's slot), set as properties or attributes. */
+  /** A custom element's props (ext:input on a node that is not an island's slot), set as properties or attributes (as the index's policy allows them). */
   private syncProps(k: string) {
     const n = this.index.nodes.get(k)
     if (!n?.inputs?.size || n.tag === undefined || this.index.tagName(k) !== n.tag || this.hosted.has(k)) return

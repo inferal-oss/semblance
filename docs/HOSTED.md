@@ -178,6 +178,10 @@ Only names the host registered draw anything. In an authored projection ([SAFETY
 policy also decides which host components and custom elements a graph may name (`safe:hostComponent`,
 `safe:customElement` on the policy; none by default); any other renders as its RDF/HTML element.
 Attributes reach `root` through the index, so the attribute and URL checks apply to host components too.
+So do inputs: a host component's or a custom element's props pass the policy's input check (an
+attribute input the attribute check, a property input `safe:property`, none by default), and under a
+policy the React adapter never takes `dangerouslySetInnerHTML`, `ref`, `key`, `children` or an `on…`
+name from the graph.
 
 ## Hosted components and islands
 

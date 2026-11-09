@@ -253,6 +253,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const sizeHandles = attachSizeHandles(renderer)
   // Foreign components are mounted in their islands' slots after each patch (nothing to do while there is none).
   const islands = new Islands(bus, renderer, {
+    // Authored content mounts only the islands the policy allows (src/safety.ts).
+    policy,
     widgets: opts.widgets,
     modules: opts.modules,
     adapters: opts.adapters,

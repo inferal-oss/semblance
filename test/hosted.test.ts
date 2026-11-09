@@ -10,6 +10,7 @@ import type { HostContext, HostRenderer } from '../src/render/hosts.ts'
 import { toHTML } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
 import { compileStyles } from '../src/style/compile.ts'
+import { readPolicy, type SafetyPolicy } from '../src/safety.ts'
 import { DEFAULT_LAYERS } from '../src/web/mount.ts'
 import { type ReactHosts, reactHosts } from '../packages/react/src/server.ts'
 import { components } from '../examples/react/design-system.tsx'
@@ -226,5 +227,44 @@ describe('hosted components (React)', () => {
     expect(h.$('h1:not(.ds-heading)')?.textContent).toBe('Todos')
     expect(h.$$('.ds-button')).toHaveLength(0)
 
+  })
+  it('under a policy, a host component takes only the inputs it allows, and never a prop React reads itself', () => {
+    const ontology = loadStore('wat')
+    const policy: SafetyPolicy = { ...readPolicy(ontology), hostComponents: new Set(['Probe']), properties: new Set(['label', 'dangerouslySetInnerHTML', 'children', 'key', 'ref', 'onClick']) }
+    ontology.dispose?.()
+    const authored = `
+@prefix sem: <${NS.sem}> . @prefix ext: <${NS.ext}> . @prefix rdf: <${NS.rdf}> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix t: <${T}> .
+t:Probe a owl:Class ; rdfs:subClassOf sem:Component , ext:Hosted ; sem:slug "t-probe" ; ext:component "Probe" ;
+    ext:input [ ext:name "label" ; ext:from t:v ] , [ ext:name "title" ; ext:from t:v ; ext:as ext:Attribute ] ,
+      [ ext:name "dangerouslySetInnerHTML" ; ext:from t:j ] , [ ext:name "children" ; ext:from t:v ] ,
+      [ ext:name "key" ; ext:from t:v ] , [ ext:name "ref" ; ext:from t:v ] , [ ext:name "onClick" ; ext:from t:v ] ,
+      [ ext:name "onfocus" ; ext:from t:v ; ext:as ext:Attribute ] , [ ext:name "unlisted" ; ext:from t:v ] .
+t:ProbeRendering a sem:Rendering ; sem:targets t:Probe ; sem:stratum 0 .
+t:ProbeRendering-sparql a sem:Rule ; sem:implements t:ProbeRendering ; sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this . } WHERE { BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .
+t:it a t:Probe ; t:v "v" ; t:j "{\\"__html\\": \\"<b>x</b>\\"}"^^rdf:JSON .`
+    const store = loadStore('wat', authored)
+    const runtime = new Runtime(store)
+    const refused: string[] = []
+    const screen = runtime.project({ modality: MOD.Screen, layers: DEFAULT_LAYERS, prefer: 'sparql', name: 'screen', roots: [T + 'it'], policy }, (e) => refused.push(e.message))
+    const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="app"></div></body></html>')
+    Object.assign(globalThis, { window })
+    const received: Record<string, unknown>[] = []
+    const Probe = (props: Record<string, unknown>) => (received.push(props), createElement('div', { ...(props.root as object), className: 't-probe' }))
+    const hosts = reactHosts({ components: { Probe } })(screen.index, { runtime, projection: screen })
+    const renderer = new DomRenderer(screen.index, document.getElementById('app')!, T + 'it', hosts)
+    renderer.flush()
+    const props = received.at(-1)!
+    expect(document.querySelector('.t-probe'), document.body.innerHTML).not.toBeNull()
+    expect(props.label).toBe('v')
+    expect(props.title).toBe('v')
+    for (const name of ['dangerouslySetInnerHTML', 'children', 'key', 'onClick', 'onfocus', 'unlisted']) expect(props, name).not.toHaveProperty(name)
+    expect(typeof (props.root as { ref?: unknown }).ref).toBe('function')
+    expect(document.querySelector('.t-probe b')).toBeNull()
+    expect(refused.join('\n')).toContain('unlisted: authored content may not set the property unlisted')
+    hosts?.dispose()
+    runtime.dispose()
   })
 })
