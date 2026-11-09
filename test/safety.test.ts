@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { Parser, Store } from 'n3'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -12,7 +12,7 @@ import { DomRenderer } from '../src/render/dom.ts'
 import type { HostAdapter } from '../src/render/hosts.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
-import { authoredPolicy, cssProblem, declarationsProblem, readPolicy, type SafetyPolicy, urlProblem } from '../src/safety.ts'
+import { attributeProblem, authoredPolicy, cssProblem, declarationsProblem, idReferences, readPolicy, type SafetyPolicy, urlProblem } from '../src/safety.ts'
 import { DEFAULT_LAYERS } from '../src/web/mount.ts'
 import { buildSandbox, type Sandbox, type SandboxSource } from '../src/sandbox.ts'
 import { compileStyles } from '../src/style/compile.ts'
@@ -39,6 +39,9 @@ WHERE { $this a ex:Evil . BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) BIND(
 ex:it a ex:Evil .
 ${extra}`
 }
+
+/** BINDs of more minted nodes for evil's markup (`$this/~<name>`). */
+const bind = (...vars: string[]) => vars.map((v) => `BIND(IRI(CONCAT(STR($this), "/~${v.slice(1)}")) AS ${v})`).join(' ')
 
 /** Build the source in a sandbox (authored), and render it as the browser does and as a server does. */
 function render(text: string) {
@@ -183,6 +186,43 @@ ex:evil-token a sty:Token ; sem:slug "evil" ; sty:value "url(https://evil.exampl
     expect(refused.join('\n')).toMatch(/may not hold "}" here/)
     expect(refused.join('\n')).toMatch(/may not escape characters outside a string/)
     expect(refused.join('\n')).toMatch(/may not set -moz-binding/)
+  })
+
+  it('refer by id to an element it does not render (the page it is shown in has others)', () => {
+    const attr = (v: string, name: string, value: string) => `${v} rdfhtml:attribute ${v}A . ${v}A a rdfhtml:Attribute ; rdfhtml:attributeName "${name}" ; rdfhtml:attributeValue "${value}" .`
+    const r = render(
+      evil(`?x a rdfhtml:Button ; rdfhtml:form "elsewhere" ; rdfhtml:commandfor "elsewhere" ; rdfhtml:popovertarget "elsewhere" ; rdfhtml:hasChild ?t . ?t a rdfhtml:Text ; rdfhtml:data "Go" .
+            ?root rdfhtml:hasChild ?a . ?a a rdfhtml:A ; rdfhtml:href "#elsewhere" .
+            ${attr('?a', 'aria-describedby', 'elsewhere')}
+            ${attr('?x', 'data-sem-anchor', 'elsewhere')}`, bind('?aA', '?xA')),
+    )
+    for (const out of [r.dom, r.html]) {
+      expect(out).not.toContain('elsewhere')
+      expect(out).toMatch(/<button[^>]*>Go<\/button>/)
+    }
+    const why = r.warnings.join('\n')
+    for (const name of ['form', 'commandfor', 'popovertarget', 'href', 'aria-describedby', 'data-sem-anchor']) expect(why).toContain(`${name}: authored content may refer only to its own ids`)
+  })
+
+  it('keep the opener of a page it opens, set a referrer policy, or set the hooks the host sets', () => {
+    const r = render(
+      evil(`?x a rdfhtml:A ; rdfhtml:href "https://example.org/" ; rdfhtml:target "_blank" ; rdfhtml:rel "noreferrer Opener" .
+            ?root rdfhtml:hasChild ?a . ?a a rdfhtml:Img ; rdfhtml:src "a.png" ; rdfhtml:alt "" ; rdfhtml:attribute ?p, ?h .
+            ?p a rdfhtml:Attribute ; rdfhtml:attributeName "referrerpolicy" ; rdfhtml:attributeValue "no-referrer" .
+            ?h a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-ssr" ; rdfhtml:attributeValue "" .`,
+        bind('?p', '?h'),
+      ),
+    )
+    for (const out of [r.dom, r.html]) {
+      expect(out).not.toMatch(/ rel=/)
+      expect(out).not.toContain('referrerpolicy')
+      expect(out).not.toContain('data-sem-ssr')
+      expect(out).toContain('target="_blank"')
+    }
+    expect(attributeProblem(policy, 'rel', 'noopener noreferrer')).toBeUndefined()
+    expect(attributeProblem(policy, 'rel', 'next\topener')?.reason).toMatch(/link type opener/)
+    expect(attributeProblem(policy, 'DATA-SEM-SANDBOX', '1')).toBeDefined()
+    expect(attributeProblem(policy, 'data-sem-c', 'ex-thing')).toBeUndefined()
   })
 
   it('use a refused element to smuggle what it holds: a refused element is empty in every modality', () => {
@@ -340,6 +380,36 @@ describe('an island input', () => {
   })
 })
 
+describe('an authored graph can still refer to its own elements by id', () => {
+  it('as the framework’s components do (labels, ARIA relationships, fragments)', () => {
+    const r = render(
+      evil(`?x a rdfhtml:Label ; rdfhtml:for "ex-name" ; rdfhtml:hasChild ?t . ?t a rdfhtml:Text ; rdfhtml:data "Name" .
+            ?root rdfhtml:hasChild ?a . ?a a rdfhtml:Input ; rdfhtml:id "ex-name" ; rdfhtml:attribute ?d . ?d a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue " ex-name  ex-name " .
+            ?x rdfhtml:attribute ?l . ?l a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue "ex-name" .`, bind('?d', '?l')),
+    )
+    for (const out of [r.dom, r.html]) {
+      expect(out).toContain('for="ex-name"')
+      expect(out).toContain('aria-labelledby="ex-name"')
+      expect(out).toMatch(/<input[^>]*aria-describedby=" ex-name  ex-name "/)
+    }
+    expect(r.warnings.filter((w) => w.startsWith('Refused'))).toEqual([])
+  })
+
+  it('whichever comes first, the reference or the id, and not once the id is gone', () => {
+    const parse = (t: string) => new Parser().parse(`@prefix h: <https://ia2.dev/spec/rdf-html#> . @prefix ui: <https://example.org/ui#> . ${t}`)
+    const refused: string[] = []
+    const index = new HtmlIndex((e) => refused.push(e.message), undefined, policy)
+    const read = () => toHTML(index, 'https://example.org/ui#root')
+    index.apply({ add: parse('ui:root a h:Div ; h:hasChild ui:label, ui:field . ui:label a h:Label ; h:for "f" . ui:field a h:Input .'), remove: [] })
+    expect(read()).not.toContain('for=')
+    index.apply({ add: parse('ui:field h:id "f" .'), remove: [] })
+    expect(read()).toContain('<label for="f">')
+    index.apply({ add: [], remove: parse('ui:field h:id "f" .') })
+    expect(read()).not.toContain('for=')
+    expect(refused.length).toBeGreaterThan(0)
+  })
+})
+
 describe('the policy', () => {
   it('is read from a trusted store: what an authored graph adds to it does not count', () => {
     const r = render(evil('?x a rdfhtml:Script .', '', 'safe:Authored safe:element rdfhtml:Script ; safe:attribute "onclick" .'))
@@ -357,6 +427,39 @@ describe('the policy', () => {
     expect(urlProblem(policy, 'data:image/png;base64,AA')).toBeDefined()
     expect(urlProblem(policy, 'data:image/png;base64,AA', true)).toBeUndefined()
     expect(urlProblem(policy, 'blob:https://x/1', true)).toBeUndefined()
+  })
+
+  it('trims a URL in time linear in its length', () => {
+    const spaced = 'a' + ' '.repeat(1_000_000) + 'b'
+    const start = performance.now()
+    expect(urlProblem(policy, spaced)).toBeUndefined()
+    expect(performance.now() - start).toBeLessThan(500)
+  })
+
+  it('reads id references: one id, a list of them, or a URL that is a fragment', () => {
+    expect(idReferences(policy, 'for', 'a b')).toEqual(['a b'])
+    expect(idReferences(policy, 'aria-labelledby', ' a\tb ')).toEqual(['a', 'b'])
+    expect(idReferences(policy, 'href', ' #top')).toEqual(['top'])
+    expect(idReferences(policy, 'href', '#')).toEqual([])
+    expect(idReferences(policy, 'href', 'page#top')).toBeUndefined()
+    expect(idReferences(policy, 'title', 'a')).toBeUndefined()
+  })
+
+  it('allows every hook of the framework its components render, and no other data-sem- one', () => {
+    // A data-sem- name the ontology renders is a string literal of its own there (an attribute
+    // node's name, a hook attribute, a keyboard binding's attribute).
+    const names = new Set<string>()
+    const walk = (dir: URL) => {
+      for (const f of readdirSync(dir)) {
+        const at = new URL(f, dir)
+        if (statSync(at).isDirectory()) walk(new URL(f + '/', dir))
+        else if (f.endsWith('.ttl') && f !== 'safety.ttl') for (const m of readFileSync(at, 'utf8').matchAll(/"(data-sem-[a-z0-9-]+)"/g)) names.add(m[1]!)
+      }
+    }
+    walk(new URL('../ontology/', import.meta.url))
+    expect(names.size).toBeGreaterThan(50)
+    expect([...names].filter((n) => attributeProblem(policy, n, '') !== undefined)).toEqual([])
+    expect(attributeProblem(policy, 'data-sem-sandbox', '1')).toBeDefined()
   })
 
   it('reads CSS far enough to know it stays a value', () => {

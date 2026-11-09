@@ -13,6 +13,11 @@ export const SAFETY = {
   element: SAFE + 'element',
   attribute: SAFE + 'attribute',
   attributePrefix: SAFE + 'attributePrefix',
+  refusedAttributePrefix: SAFE + 'refusedAttributePrefix',
+  refusedLinkType: SAFE + 'refusedLinkType',
+  idReferenceAttribute: SAFE + 'idReferenceAttribute',
+  idReferenceListAttribute: SAFE + 'idReferenceListAttribute',
+  fragmentAttribute: SAFE + 'fragmentAttribute',
   urlAttribute: SAFE + 'urlAttribute',
   urlListAttribute: SAFE + 'urlListAttribute',
   resourceAttribute: SAFE + 'resourceAttribute',
@@ -36,6 +41,14 @@ export interface SafetyPolicy {
   elements: ReadonlySet<string>
   attributes: ReadonlySet<string>
   prefixes: readonly string[]
+  /** Prefixes refused even under an allowed one (the framework's own hooks); a name listed outright is still allowed. */
+  refusedPrefixes: readonly string[]
+  /** Link types (rel tokens) refused. */
+  refusedLinkTypes: ReadonlySet<string>
+  /** Attributes whose value is one id, a list of ids, or a URL whose fragment is one: each must be minted in the same projection. */
+  idReferenceAttributes: ReadonlySet<string>
+  idReferenceListAttributes: ReadonlySet<string>
+  fragmentAttributes: ReadonlySet<string>
   urlAttributes: ReadonlySet<string>
   urlListAttributes: ReadonlySet<string>
   resourceAttributes: ReadonlySet<string>
@@ -76,6 +89,11 @@ export function readPolicy(store: GraphStore, iri: string = SAFETY.Authored): Sa
     elements,
     attributes: new Set(values(SAFETY.attribute)),
     prefixes: lower(SAFETY.attributePrefix),
+    refusedPrefixes: lower(SAFETY.refusedAttributePrefix),
+    refusedLinkTypes: new Set(lower(SAFETY.refusedLinkType)),
+    idReferenceAttributes: new Set(lower(SAFETY.idReferenceAttribute)),
+    idReferenceListAttributes: new Set(lower(SAFETY.idReferenceListAttribute)),
+    fragmentAttributes: new Set(lower(SAFETY.fragmentAttribute)),
     urlAttributes: new Set(lower(SAFETY.urlAttribute)),
     urlListAttributes: new Set(lower(SAFETY.urlListAttribute)),
     resourceAttributes: new Set(lower(SAFETY.resourceAttribute)),
@@ -162,13 +180,20 @@ export function islandProblem(policy: SafetyPolicy, island: IslandRoute): string
 }
 
 /**
- * Why an attribute is refused, or undefined when it is allowed: its name is listed or has a listed
- * prefix, and a URL, a srcset or a style in it passes its check.
+ * Why an attribute is refused, or undefined when it is allowed: its name is listed, or has a listed
+ * prefix and no refused one, its link types are not refused, and a URL, a srcset or a style in it
+ * passes its check. Where an id reference points is checked by the HTML index (idReferences).
  */
 export function attributeProblem(policy: SafetyPolicy, name: string, value: string): { kind: Refused['kind']; reason: string } | undefined {
   const lower = name.toLowerCase()
-  const named = policy.attributes.has(name) || policy.attributes.has(lower) || policy.prefixes.some((p) => lower.startsWith(p) && /^[a-z0-9][a-z0-9-]*$/.test(lower.slice(p.length)))
+  const named =
+    policy.attributes.has(name) ||
+    policy.attributes.has(lower) ||
+    (policy.prefixes.some((p) => lower.startsWith(p) && /^[a-z0-9][a-z0-9-]*$/.test(lower.slice(p.length))) && !policy.refusedPrefixes.some((p) => lower.startsWith(p)))
   if (!named) return { kind: 'attribute', reason: `authored content may not have the attribute ${name}` }
+  if (lower === 'rel' && policy.refusedLinkTypes.size) {
+    for (const token of tokens(value)) if (policy.refusedLinkTypes.has(token.toLowerCase())) return { kind: 'attribute', reason: `authored content may not have the link type ${token.toLowerCase()}` }
+  }
   const resource = policy.resourceAttributes.has(lower)
   let url: string | undefined
   if (policy.urlAttributes.has(lower)) url = urlProblem(policy, value, resource)
@@ -184,12 +209,43 @@ export function attributeProblem(policy: SafetyPolicy, name: string, value: stri
 }
 
 /**
+ * The ids an attribute's value names, when it is an id reference (safe:idReferenceAttribute, its
+ * list form, or a URL of a safe:fragmentAttribute that is only a fragment), or undefined. A URL of
+ * an empty fragment ("#") names none.
+ */
+export function idReferences(policy: SafetyPolicy, name: string, value: string): string[] | undefined {
+  const lower = name.toLowerCase()
+  if (policy.idReferenceAttributes.has(lower)) return [value]
+  if (policy.idReferenceListAttributes.has(lower)) return tokens(value)
+  if (policy.fragmentAttributes.has(lower)) {
+    const v = browserTrim(value)
+    return v.startsWith('#') ? (v.length > 1 ? [v.slice(1)] : []) : undefined
+  }
+  return undefined
+}
+
+/** The tokens of a space-separated list (HTML's ASCII whitespace). */
+function tokens(value: string): string[] {
+  return value.split(/[\t\n\f\r ]+/).filter(Boolean)
+}
+
+/** A URL as a browser reads it: tabs and newlines anywhere, and spaces and controls around it, removed (in linear time). */
+function browserTrim(url: string): string {
+  const v = url.replace(/[\t\n\r]/g, '')
+  let start = 0
+  let end = v.length
+  while (start < end && v.charCodeAt(start) <= 0x20) start++
+  while (end > start && v.charCodeAt(end - 1) <= 0x20) end--
+  return v.slice(start, end)
+}
+
+/**
  * Why a URL is refused, or undefined: relative, a fragment, or of a listed scheme (`resource`: also
  * of a listed resource scheme). Read as a browser reads it: tabs and newlines anywhere, and spaces
  * and controls around it, do not count.
  */
 export function urlProblem(policy: SafetyPolicy, url: string, resource = false): string | undefined {
-  const v = url.replace(/[\t\n\r]/g, '').replace(/^[\u0000- ]+|[\u0000- ]+$/g, '')
+  const v = browserTrim(url)
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(v)?.[1]
   if (scheme === undefined) return undefined
   const lower = v.toLowerCase()
