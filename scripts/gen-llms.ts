@@ -33,6 +33,7 @@ const GUIDES: [string, string, string][] = [
   ['Getting started', 'docs/GETTING-STARTED.md', 'build a small app with a component of its own'],
   ['Building components', 'docs/COMPONENTS.md', 'rules, reactions, layers and integrating with your app'],
   ['Foreign components', 'docs/FOREIGN.md', 'web components and framework components as parts of a Semblance UI'],
+  ['Safe authoring', 'docs/SAFETY.md', 'what a graph from an untrusted author may and may not render'],
   ['Maintained views (IVM)', 'docs/IVM.md', 'incremental view maintenance under SPARQL views'],
   ['Design', 'DESIGN.md', 'the design system: tokens, components, themes'],
   ['Persistence', 'PERSISTENCE.md', 'what is remembered, where, and for how long'],

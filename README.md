@@ -180,6 +180,10 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   back as events. A host effect (`src/foreign.ts`) mounts each through the adapter of its kind (custom
   element, widget, or one an app registers), loads its code on demand, pushes only changed inputs and
   suppresses echoes. See [docs/FOREIGN.md](docs/FOREIGN.md).
+- **Safe authoring** (`safe:`): a graph from someone you do not trust (a person, a page, a model)
+  renders under a policy that is vocabulary: elements, attributes, URL schemes and CSS from allow-lists,
+  checked where the HTML index takes a rendering, so the DOM, server-rendered HTML and text agree; what
+  is refused is reported. The live example editors run in it. See [docs/SAFETY.md](docs/SAFETY.md).
 - **Network capture**: a host effect (`src/network.ts`) records the page's own
   fetches, WebSockets and the events and spans it reports as members of
   `net:Capture`, a bounded LDES in the network graph

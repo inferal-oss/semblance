@@ -7,6 +7,7 @@ import { RenderedState } from '../rendered.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
+import { readPolicy, Refused, type SafetyPolicy } from '../safety.ts'
 import { Files, type FilesOptions } from '../files.ts'
 import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
 import { attachConnectors } from './connectors.ts'
@@ -27,6 +28,17 @@ export interface MountOptions {
   root: string
   /** Turtle to load besides Semblance's own ontology: your app's components, your component classes and their rules. */
   graphs?: string[]
+  /**
+   * Turtle from an untrusted author (a person, a page, a model), loaded after `graphs`: the root is
+   * then rendered as authored content (src/safety.ts, docs/SAFETY.md). What the policy refuses
+   * (script, event handler attributes, javascript: URLs, CSS that loads a resource, …) is left out and
+   * reported through `onRefused`. The policy is read from the ontology and `graphs` alone.
+   */
+  authored?: string[]
+  /** The policy of authored content, instead of the framework's safe:Authored (read from a trusted store). */
+  policy?: SafetyPolicy
+  /** Hear about what the policy refused (by default console.warn). */
+  onRefused?: (e: Error) => void
   /** The store; Semblance's own WASM engine when this build has it, else Hybrid. */
   store?: StoreKind
   /** Which implementation of a rendering to use when it has both: SPARQL (the default) or a function. */
@@ -97,7 +109,18 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   // A store without SPARQL (N3) can only run function rules.
   const prefer = kind === 'n3' ? 'function' : (opts.prefer ?? 'sparql')
   await initWeb(kind)
-  const store = loadStore(kind, ...(opts.graphs ?? []))
+  // Authored content: the policy is read before the author's graphs are in the store (they could add to it).
+  let policy = opts.policy
+  if (!policy && opts.authored) {
+    const trusted = loadStore(kind, ...(opts.graphs ?? []))
+    try {
+      policy = readPolicy(trusted)
+    } finally {
+      trusted.dispose?.()
+    }
+  }
+  const store = loadStore(kind, ...(opts.graphs ?? []), ...(opts.authored ?? []))
+  const onRefused = opts.onRefused ?? ((e: Error) => console.warn('[semblance]', e.message))
   // Where we are, before the first projection: the address (a server rendered the same one).
   const declared = store.match(null, store.factory.namedNode(NS.nav + 'root'), store.factory.namedNode(opts.root)).length > 0
   const located = !!(opts.navigation && opts.navigation.location) || 'location' in globalThis
@@ -116,7 +139,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     provenance: opts.provenance,
     name: 'screen',
     roots: [opts.root],
-  })
+    policy,
+  }, policy ? (e) => (e instanceof Refused ? onRefused(e) : console.error(e)) : undefined)
 
   const doc = element.ownerDocument
   // The key hints' spelling (a server-rendered page's head has marked it already).
@@ -124,7 +148,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   // A server-rendered page links the stylesheet the server compiled: the same, so it is not compiled again.
   const sheet = serverStyled(doc) ? undefined : new (doc.defaultView ?? globalThis).CSSStyleSheet()
   if (sheet) {
-    sheet.replaceSync(compileStyles(store))
+    sheet.replaceSync(compileStyles(store, { policy, onRefused }))
     doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet]
   }
 

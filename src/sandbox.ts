@@ -25,6 +25,7 @@ import { toHTML } from './render/serialize.ts'
 import { type Projection, Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
 import { compileStyles } from './style/compile.ts'
+import { authoredPolicy, readPolicy, type SafetyPolicy } from './safety.ts'
 import { attachAnchoredPopups } from './web/anchored-popups.ts'
 import { attachSizeHandles } from './web/size-handles.ts'
 import { replayKept, SSR_ATTRIBUTE } from './web/takeover.ts'
@@ -97,6 +98,28 @@ export interface SandboxOptions {
   budgetMs?: number
   /** Where relative URLs in the examples resolve: the site's (its screen projection's urlBase, src/render/html-index.ts). */
   urlBase?: string
+  /**
+   * What an example may render (src/safety.ts): its sources are authored content, so what the
+   * policy refuses is left out and reported as a warning. Read from a trusted store (the site's,
+   * authoredPolicy); by default from a store of the ontology alone (`load()`), never the sandbox's.
+   */
+  policy?: SafetyPolicy
+}
+
+const ontologyPolicies = new WeakMap<SandboxOptions['load'], SafetyPolicy>()
+/** The policy of authored content, read from a store of the ontology alone (once per loader). */
+function trustedPolicy(opts: SandboxOptions): SafetyPolicy {
+  if (opts.policy) return opts.policy
+  let p = ontologyPolicies.get(opts.load)
+  if (!p) {
+    const store = opts.load()
+    try {
+      ontologyPolicies.set(opts.load, (p = readPolicy(store)))
+    } finally {
+      store.dispose?.()
+    }
+  }
+  return p
 }
 
 /** What a stalled sandbox says: the budget, and the slowest work of the turn. */
@@ -118,6 +141,8 @@ export interface Sandbox {
   data?: Projection
   /** Whether its sources declare styles of their own (sty:StyleRule, sty:Token, sty:Keyframes). */
   styled: boolean
+  /** Its store's stylesheet, compiled under the policy, when it is styled (scopedCss takes what it adds to the site's). */
+  css?: string
 }
 
 export interface Build {
@@ -173,11 +198,12 @@ export function buildSandbox(sources: SandboxSource[], root: string, opts: Sandb
     return failed()
   }
   const warnings: string[] = []
+  const policy = trustedPolicy(opts)
   try {
     runtime = new Runtime(store)
     const budgetMs = opts.budgetMs ?? 1500
     runtime.watchdog.budgetMs = budgetMs
-    const base = { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [root], urlBase: opts.urlBase }
+    const base = { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [root], urlBase: opts.urlBase, policy }
     const screen = runtime.project({ ...base, modality: MOD.Screen, name: 'screen' }, (e) => warnings.push(e.message))
     const text = opts.withText ? runtime.project({ ...base, modality: MOD.Text, name: 'text' }, (e) => warnings.push(e.message)) : undefined
     // Over budget: the sandbox stops itself, and the build is broken (the site never waits on it).
@@ -187,10 +213,11 @@ export function buildSandbox(sources: SandboxSource[], root: string, opts: Sandb
       return failed()
     }
     if (!screen.index.resolve(root)) problems.push({ message: `${short(root, sources)} renders nothing: is it an instance of a component class with a rendering?`, severity: 'error' })
+    const css = styled ? compileStyles(store, { policy, onRefused: (e) => warnings.push(e.message) }) : undefined
     for (const w of new Set(warnings)) problems.push({ message: w, severity: 'warning' })
     problems.push(...violations(store, sources))
     if (problems.some((p) => p.severity === 'error')) return failed()
-    return done({ root, store, runtime, screen, text, styled })
+    return done({ root, store, runtime, screen, text, styled, css })
   } catch (e) {
     problems.push({ message: (e as Error).message, severity: 'error' })
     return failed()
@@ -375,7 +402,7 @@ function projectData(sandbox: Sandbox, query: string, sources: SandboxSource[], 
   const quads = readData(sandbox, query, sources)
   if (quads) showData(sandbox, quads, seen, sources)
   return (sandbox.data = sandbox.runtime.project(
-    { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [DATA_VIEWER], modality: MOD.Screen, name: 'data', urlBase: opts.urlBase },
+    { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [DATA_VIEWER], modality: MOD.Screen, name: 'data', urlBase: opts.urlBase, policy: trustedPolicy(opts) },
     (e) => console.warn('[semblance] the data of a live example', e.message),
   ))
 }
@@ -409,6 +436,8 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
   const roots = new Set(opts.roots)
   const languages = [...screen.engine.languages]
   let n = 0
+  // The site's store is trusted (its examples' sources are text in it, not triples): the policy is read there.
+  opts = { ...opts, policy: opts.policy ?? authoredPolicy(store) }
   for (const q of store.match(null, f.namedNode(RDF_TYPE), f.namedNode(LIVE.LiveExample), f.defaultGraph())) {
     const iri = q.subject.value
     const slots = slotsOf(iri)
@@ -424,7 +453,7 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
     }
     try {
       const id = `ssr-${++n}`
-      const css = sandbox.styled ? scopedCss(compileStyles(sandbox.store), typeof opts.siteCss === 'function' ? opts.siteCss() : (opts.siteCss ?? ''), `[${SANDBOX_ATTRIBUTE}="${id}"]`) : ''
+      const css = sandbox.css ? scopedCss(sandbox.css, typeof opts.siteCss === 'function' ? opts.siteCss() : (opts.siteCss ?? ''), `[${SANDBOX_ATTRIBUTE}="${id}"]`) : ''
       const style = css ? `<style ${SANDBOX_STYLES_ATTRIBUTE}>${css.replace(/<\/style/gi, '<\\/style')}</style>` : ''
       out.set(slots.screen, `${style}<div ${SANDBOX_ATTRIBUTE}="${id}" ${SSR_ATTRIBUTE}>${toHTML(sandbox.screen.index, sandbox.root)}</div>`)
       if (sandbox.text && screen.index.slots.has(slots.text)) out.set(slots.text, `<div>${toHTML(sandbox.text.index, sandbox.root)}</div>`)
@@ -546,6 +575,10 @@ export class Sandboxes {
     readonly screen: Projection,
     private readonly opts: SandboxesOptions,
   ) {
+    // The site's store is trusted (its examples' sources are text in it, not triples): the policy is
+    // read there, when the first sandbox is built (a page may load the ontology's graphs after it starts).
+    let policy = opts.policy
+    this.opts = Object.defineProperty({ ...opts }, 'policy', { get: () => (policy ??= authoredPolicy(runtime.store)), enumerable: true })
     created?.(this)
   }
 
@@ -825,7 +858,7 @@ export class Sandboxes {
     )
     const detachRefresh = sandbox.runtime.onRefresh(flush)
     const detachTimer = sandbox.runtime.onTimer(flush)
-    const sheet = sandbox.styled ? this.sheet(doc, sandbox.store, n) : undefined
+    const sheet = sandbox.css ? this.sheet(doc, sandbox.css, n) : undefined
     // The new rendering replaces the old in one step (the server's styles go once its own are in).
     this.unmountSandbox(m)
     if (!taken.includes(host)) m.slot.replaceChildren(host)
@@ -863,11 +896,11 @@ export class Sandboxes {
   }
 
   /** The style rules the sandbox adds to the site's, scoped to its own element. */
-  private sheet(doc: Document, store: GraphStore, n: number): CSSStyleSheet | undefined {
+  private sheet(doc: Document, compiled: string, n: number): CSSStyleSheet | undefined {
     const Sheet = (doc.defaultView as (Window & typeof globalThis) | null)?.CSSStyleSheet
     if (!Sheet || !('adoptedStyleSheets' in doc)) return undefined
     const site = typeof this.opts.siteCss === 'function' ? this.opts.siteCss() : (this.opts.siteCss ?? '')
-    const css = scopedCss(compileStyles(store), site, `[data-sem-sandbox="${n}"]`)
+    const css = scopedCss(compiled, site, `[data-sem-sandbox="${n}"]`)
     if (!css) return undefined
     const sheet = new Sheet()
     sheet.replaceSync(css)

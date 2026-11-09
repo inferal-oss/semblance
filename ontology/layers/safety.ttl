@@ -1,0 +1,118 @@
+@prefix safe: <https://semblance.dev/ns/safety#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix svg: <https://semblance.dev/ns/svg#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Safety: what a rendering from an untrusted author (a person, a page, a model) may contain, so a
+# graph can describe an interface without running code or reaching the network on its own.
+#
+# Trust is the host's, not the graph's: a projection is authored when the host projects it with a
+# policy (Runtime.project({ policy }), every live example's sandbox), and the policy is read from a
+# trusted store (the framework's ontology and the app's own Turtle), never from the store the
+# authored graph is in, which could add to these lists. The HTML index applies it, so the DOM
+# patcher, the HTML and text serializers, server rendering and take-over give the same answer; the
+# style compiler applies its CSS part. Everything refused is reported (src/safety.ts).
+#
+#   an element of a class not listed   -> an empty <sem-refused data-sem-refused="script">
+#   an attribute not listed            -> left out (the element stays)
+#   a URL of a scheme not listed       -> the attribute is left out
+#   a style declaration that fails     -> left out of the style attribute or the stylesheet
+
+<https://semblance.dev/ns/safety> a owl:Ontology ;
+    rdfs:label "Semblance safety layer"@en .
+
+safe:Policy a owl:Class ;
+    rdfs:comment "What an authored rendering may contain: elements, attributes, URL schemes and CSS."@en .
+
+safe:element a owl:ObjectProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An element class an authored rendering may have."@en .
+safe:attribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A content attribute name an authored rendering may have."@en .
+safe:attributePrefix a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "Every attribute named with this prefix (and only letters, digits and hyphens after it) is allowed."@en .
+safe:urlAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is one URL: it must be relative, a fragment, or of a safe:scheme."@en .
+safe:urlListAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is a list of image candidates (srcset): each URL is checked."@en .
+safe:resourceAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A URL attribute that loads an image or media: it also takes a safe:resourceScheme."@en .
+safe:scheme a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A URL scheme (with its colon) any URL attribute may have."@en .
+safe:resourceScheme a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "The start of a URL (a scheme, or a scheme and a media type) that only a safe:resourceAttribute may have, since it loads nothing that runs."@en .
+safe:styleAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is CSS declarations: each must pass the CSS check."@en .
+safe:cssValueAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is one CSS value (an SVG paint, which can name a resource with url()): it must pass the CSS check."@en .
+safe:fetchingFunction a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A CSS function whose argument names a resource: refused in a value, except url() of a fragment or of a safe:resourceScheme, which loads nothing from elsewhere. The set of such functions is closed, so it is listed rather than every function CSS has."@en .
+safe:refusedProperty a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A CSS property that binds behaviour or code, refused whatever its value."@en .
+
+# The policy of authored content: what the framework itself emits, and nothing that runs code,
+# loads another document, or names where the page is or what it may run.
+#
+# Never listed: rdfhtml:Script, rdfhtml:Iframe, rdfhtml:Object, rdfhtml:Embed, rdfhtml:Base,
+# rdfhtml:Link, rdfhtml:Meta, rdfhtml:Style, rdfhtml:Noscript, rdfhtml:Template, rdfhtml:Slot,
+# rdfhtml:Html, rdfhtml:Head, rdfhtml:Body, rdfhtml:Title; no on… attribute, srcdoc, is, nonce,
+# ping, http-equiv, sandbox, allow, integrity, shadowrootmode; no javascript:, vbscript: or data:
+# except an image's.
+safe:Authored a safe:Policy ;
+    rdfs:label "authored"@en ;
+    safe:element
+        rdfhtml:A , rdfhtml:Abbr , rdfhtml:Address , rdfhtml:Area , rdfhtml:Article , rdfhtml:Aside ,
+        rdfhtml:Audio , rdfhtml:B , rdfhtml:Bdi , rdfhtml:Bdo , rdfhtml:Blockquote , rdfhtml:Br ,
+        rdfhtml:Button , rdfhtml:Canvas , rdfhtml:Caption , rdfhtml:Cite , rdfhtml:Code , rdfhtml:Col ,
+        rdfhtml:Colgroup , rdfhtml:Data , rdfhtml:Datalist , rdfhtml:Dd , rdfhtml:Del , rdfhtml:Details ,
+        rdfhtml:Dfn , rdfhtml:Dialog , rdfhtml:Div , rdfhtml:Dl , rdfhtml:Dt , rdfhtml:Em ,
+        rdfhtml:Fieldset , rdfhtml:Figcaption , rdfhtml:Figure , rdfhtml:Footer , rdfhtml:Form ,
+        rdfhtml:H1 , rdfhtml:H2 , rdfhtml:H3 , rdfhtml:H4 , rdfhtml:H5 , rdfhtml:H6 , rdfhtml:Header ,
+        rdfhtml:Hgroup , rdfhtml:Hr , rdfhtml:I , rdfhtml:Img , rdfhtml:Input , rdfhtml:Ins ,
+        rdfhtml:Kbd , rdfhtml:Label , rdfhtml:Legend , rdfhtml:Li , rdfhtml:Main , rdfhtml:Map ,
+        rdfhtml:Mark , rdfhtml:Menu , rdfhtml:Meter , rdfhtml:Nav , rdfhtml:Ol , rdfhtml:Optgroup ,
+        rdfhtml:Option , rdfhtml:Output , rdfhtml:P , rdfhtml:Picture , rdfhtml:Pre , rdfhtml:Progress ,
+        rdfhtml:Q , rdfhtml:Rp , rdfhtml:Rt , rdfhtml:Ruby , rdfhtml:S , rdfhtml:Samp , rdfhtml:Search ,
+        rdfhtml:Section , rdfhtml:Select , rdfhtml:Selectedcontent , rdfhtml:Small , rdfhtml:Source ,
+        rdfhtml:Span , rdfhtml:Strong , rdfhtml:Sub , rdfhtml:Summary , rdfhtml:Sup , rdfhtml:Table ,
+        rdfhtml:Tbody , rdfhtml:Td , rdfhtml:Textarea , rdfhtml:Tfoot , rdfhtml:Th , rdfhtml:Thead ,
+        rdfhtml:Time , rdfhtml:Tr , rdfhtml:Track , rdfhtml:U , rdfhtml:Ul , rdfhtml:Var ,
+        rdfhtml:Video , rdfhtml:Wbr ,
+        svg:Svg , svg:G , svg:Defs , svg:LinearGradient , svg:Stop , svg:Rect , svg:Circle , svg:Line ,
+        svg:Path , svg:Text , svg:Title ;
+    safe:attributePrefix "data-" , "aria-" ;
+    safe:attribute
+        # HTML
+        "abbr" , "accept" , "accept-charset" , "accesskey" , "action" , "alt" , "autocapitalize" ,
+        "autocomplete" , "autocorrect" , "autofocus" , "autoplay" , "checked" , "cite" , "class" ,
+        "closedby" , "color" , "cols" , "colspan" , "command" , "commandfor" , "contenteditable" ,
+        "controls" , "coords" , "datetime" , "decoding" , "default" , "dir" , "dirname" , "disabled" ,
+        "download" , "draggable" , "enctype" , "enterkeyhint" , "fetchpriority" , "for" , "form" ,
+        "formaction" , "formenctype" , "formmethod" , "formnovalidate" , "formtarget" , "headers" ,
+        "headingoffset" , "headingreset" , "height" , "hidden" , "high" , "href" , "hreflang" , "id" ,
+        "inert" , "inputmode" , "ismap" , "itemid" , "itemprop" , "itemref" , "itemscope" , "itemtype" ,
+        "kind" , "label" , "lang" , "list" , "loading" , "loop" , "low" , "max" , "maxlength" , "media" ,
+        "method" , "min" , "minlength" , "multiple" , "muted" , "name" , "novalidate" , "open" ,
+        "optimum" , "pattern" , "placeholder" , "playsinline" , "popover" , "popovertarget" ,
+        "popovertargetaction" , "poster" , "preload" , "readonly" , "referrerpolicy" , "rel" ,
+        "required" , "reversed" , "role" , "rows" , "rowspan" , "scope" , "selected" , "shape" , "size" ,
+        "sizes" , "slot" , "span" , "spellcheck" , "src" , "srclang" , "srcset" , "start" , "step" ,
+        "style" , "tabindex" , "target" , "title" , "translate" , "type" , "usemap" , "value" , "width" ,
+        "wrap" , "writingsuggestions" ,
+        # SVG presentation and geometry
+        "viewBox" , "preserveAspectRatio" , "xmlns" , "x" , "y" , "x1" , "x2" , "y1" , "y2" , "cx" , "cy" ,
+        "r" , "rx" , "ry" , "d" , "points" , "transform" , "fill" , "fill-opacity" , "fill-rule" ,
+        "stroke" , "stroke-width" , "stroke-opacity" , "stroke-linecap" , "stroke-linejoin" ,
+        "stroke-dasharray" , "stroke-dashoffset" , "vector-effect" , "opacity" , "offset" ,
+        "stop-color" , "stop-opacity" , "gradientUnits" , "gradientTransform" , "text-anchor" ,
+        "dominant-baseline" , "font-size" , "font-weight" , "focusable" , "paint-order" ;
+    safe:urlAttribute "href" , "src" , "action" , "formaction" , "poster" , "cite" , "itemid" , "itemtype" ;
+    safe:urlListAttribute "srcset" ;
+    safe:resourceAttribute "src" , "srcset" , "poster" ;
+    safe:scheme "http:" , "https:" , "mailto:" , "tel:" ;
+    safe:resourceScheme "data:image/" , "blob:" ;
+    safe:styleAttribute "style" ;
+    safe:cssValueAttribute "fill" , "stroke" ;
+    safe:fetchingFunction "url" , "image-set" , "-webkit-image-set" , "image" , "cross-fade" ,
+        "-webkit-cross-fade" , "element" , "-moz-element" , "src" , "expression" , "paint" ;
+    safe:refusedProperty "behavior" , "-moz-binding" .

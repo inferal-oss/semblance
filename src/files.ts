@@ -84,6 +84,12 @@ export interface FilesOptions {
   handlers?: Record<string, Uploader>
   /** How a target's file:uploadTo is sent (by default an XMLHttpRequest POST of a form whose field "file" is the file). */
   send?: Uploader
+  /**
+   * The origins a file:uploadTo may name ("https://uploads.example.com"), besides the page's own:
+   * the graph says where, the host says where may be. An address elsewhere fails the upload, with
+   * the reason. The page's own origin is always allowed; "*" allows any (a host that trusts its graph).
+   */
+  uploadOrigins?: readonly string[]
   /** At least this many milliseconds between two progress events of one upload (default 100). */
   progressEvery?: number
   /** Where kept files go (file:keepIn): IndexedDB by default where there is one; null: nothing can be kept. */
@@ -493,6 +499,7 @@ export class Files {
     const contents = this.fileOf(file.value)
     const handler = read(target, FILE.handler)
     const url = read(target, FILE.uploadTo)
+    const refused = url !== undefined && handler === undefined ? uploadRefused(url, this.opts.uploadOrigins) : undefined
     const uploader = handler !== undefined ? this.opts.handlers?.[handler] : url !== undefined ? (this.opts.send ?? xhrSend) : undefined
     const controller = new AbortController()
     this.uploads.set(file.value, controller)
@@ -515,6 +522,7 @@ export class Files {
     // Started after the change that asked has been applied: its reports are events of their own.
     const sent = Promise.resolve().then(() => {
       if (!contents) throw new Error('This file is no longer available in this page.')
+      if (refused) throw new Error(refused)
       if (!uploader) throw new Error(handler !== undefined ? `No upload handler is named “${handler}”.` : 'Nowhere to upload it to.')
       return uploader(contents, { drop: target.value, file: file.value, url, onProgress, signal: controller.signal })
     })
@@ -643,6 +651,23 @@ export class Files {
       end()
     }
   }
+}
+
+/**
+ * Why a file:uploadTo is refused, or undefined: it resolves (against the page) to the page's own
+ * origin or one the host allows, over http or https.
+ */
+export function uploadRefused(url: string, allowed: readonly string[] = []): string | undefined {
+  const page = (globalThis as { location?: { href?: string; origin?: string } }).location
+  let target: URL
+  try {
+    target = new URL(url, page?.href ?? 'http://localhost/')
+  } catch {
+    return `“${url}” is not an address to upload to.`
+  }
+  if (target.protocol !== 'https:' && target.protocol !== 'http:') return `Files are not uploaded to ${target.protocol} addresses.`
+  if (allowed.includes('*') || target.origin === (page?.origin ?? 'http://localhost') || allowed.includes(target.origin)) return undefined
+  return `Files are not uploaded to ${target.origin}: this page does not allow it.`
 }
 
 /** A file:uploadTo: an XMLHttpRequest POST of a form whose field "file" is the file, with its upload's progress. */
