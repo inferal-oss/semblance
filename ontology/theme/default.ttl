@@ -1570,6 +1570,28 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-area:dir(rtl)" ;
     sty:declares [ sty:property "clip-path" ; sty:raw "polygon(100% calc(100% - var(--y) * 1%), 0 calc(100% - var(--ny) * 1%), 0 calc(100% - var(--nyb) * 1%), 100% calc(100% - var(--yb) * 1%))" ] .
 
+# A column: a bar from its base to its value. Grouped, the band's 80% is shared by the shown series (--k) in
+# their order (--r); stacked, one bar 60% of the band holds them all.
+[] a sty:StyleRule ; sty:appliesTo c:ColumnPoint ; sty:part ".sem-bar" ;
+    sty:declares [ sty:property "--band" ; sty:raw "calc(100cqw / var(--n))" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * (-0.4 + var(--r) * 0.8 / var(--k)))" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--band) * 0.8 / var(--k))" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc((min(var(--y), var(--yb)) - var(--y)) * 1cqh)" ] ,
+                 [ sty:property "block-size" ; sty:raw "calc((max(var(--y), var(--yb)) - min(var(--y), var(--yb))) * 1cqh)" ] ,
+                 [ sty:property "border-inline" ; sty:raw "1px solid var(--sem-surface)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "3px 3px 0 0" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ColumnPoint ; sty:part ".sem-bar" ; sty:state ".sem-stacked" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * -0.3)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--band) * 0.6)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "border-block-start" ; sty:raw "1px solid var(--sem-surface)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ColumnPoint ; sty:part ".sem-bar" ; sty:state ":is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:token tok:ring ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" ] ,
