@@ -56,6 +56,21 @@ ex:b a c:Histogram ; rdfs:label "By kind" ; c:view ex:Times ; c:valueVariable "m
 ex:c a c:Histogram ; c:view ex:Times ; c:valueVariable "nothing" ; c:emptyText "x" .
 `
 
+const SPARKS = `${PREFIXES}${SALES}
+ex:WebTrend a sem:View , iv:View ; iv:materialize iv:Graph ;
+  sem:select """SELECT ?month ?amount WHERE { ?s <https://example.org/#month> ?month ; <https://example.org/#channel> "Web" ; <https://example.org/#at> ?at ; <https://example.org/#amount> ?amount } ORDER BY ?at""" .
+ex:StoreTrend a sem:View , iv:View ; iv:materialize iv:Graph ;
+  sem:select """SELECT ?month ?amount WHERE { ?s <https://example.org/#month> ?month ; <https://example.org/#channel> "Store" ; <https://example.org/#at> ?at ; <https://example.org/#amount> ?amount } ORDER BY ?at""" .
+ex:web-spark a c:Sparkline ; rdfs:label "Web trend" ; c:view ex:WebTrend ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "€" .
+ex:store-spark a c:Sparkline ; rdfs:label "Store trend" ; c:view ex:StoreTrend ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "€" .
+ex:web ex:spark ex:web-spark . ex:store ex:spark ex:store-spark .
+ex:Channels a sem:View , iv:View ; iv:materialize iv:Graph ;
+  sem:select """SELECT ?channel ?trend WHERE { ?c <https://semblance.dev/ns/component#key> ?channel ; <https://example.org/#spark> ?trend } ORDER BY ?channel""" .
+ex:t a c:Table ; c:label "Channels" ; c:query ex:Channels ; c:tableColumns ( ex:col-channel ex:col-trend ) .
+ex:col-channel a c:Column ; c:variable "channel" ; c:label "Channel" .
+ex:col-trend a c:Column ; c:variable "trend" ; c:label "Trend" ; c:format "component" .
+`
+
 describe('series charts', () => {
   it('scales on steps of 1, 2 or 5 × 10ⁿ', () => {
     expect(niceScale(0, 201)).toMatchObject({ min: 0, max: 250, step: 50 })
@@ -170,6 +185,23 @@ describe('series charts', () => {
       both((h) => h.set('h11', 'ms', 24))
       expect(s.html()[0]).toContain('20 – 25 ms: 5')
       both((h) => h.set('h0', 'ms', -3))
+    }, 120_000)
+  }
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`renders sparklines, alone and in a table's cells, as their function twins do (${kind})`, () => {
+      const { s, both } = parity(SPARKS, kind, ['web-spark', 't'])
+      const [spark, table] = s.html()
+      // A small plot on a scale of its own values; no axes, no legend.
+      expect(spark).toMatch(/^<span style="--lo: 100; --hi: 140; --n: 3; --k: 1" data-sem-c="sparkline"><ol class="sem-chart-marks" aria-label="Web trend">/)
+      expect(spark).not.toContain('sem-legend')
+      expect(spark).toContain('Mar: 100 €')
+      // The table's component column holds each row's sparkline.
+      expect(table!.match(/data-sem-c="sparkline"/g)).toHaveLength(2)
+      expect(table).toContain('aria-label="Store trend"')
+      expect(s.text()[1]).toContain('Web trend')
+      both((h) => h.set('s5', 'amount', 300))
+      expect(s.html()[0]).toContain('--hi: 350')
     }, 120_000)
   }
 

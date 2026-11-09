@@ -324,7 +324,11 @@ const table: FnRule = (ctx, focus) => {
         const slotKey = row.get(c.slotVariable ?? c.variable)?.value
         const slotName = c.slotPrefix !== undefined && slotKey !== undefined ? c.slotPrefix + slotKey : undefined
         const v = cell(row, c)
-        const content = c.slotPrefix !== undefined ? [] : c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])] : [o.text(`${id}-c${ci}-text`, v)]
+        // A component column's cell holds the component its value names (a sparkline, a badge); else the value as text.
+        const component = c.format === 'component' ? row.get(c.variable) : undefined
+        const content = c.slotPrefix !== undefined ? []
+          : component?.termType === 'NamedNode' ? [component as NamedNode]
+          : c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])] : [o.text(`${id}-c${ci}-text`, v)]
         const cellEl = el(o, `${id}-c${ci}`, ci === 0 ? 'Th' : 'Td', { scope: ci === 0 ? 'row' : undefined, class: alignClass(c) }, content)
         if (slotName !== undefined) o.t(cellEl, SEM.slot, slotName)
         return cellEl

@@ -20,7 +20,7 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-histogram ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-histogram ui:dt-sparkline ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -424,6 +424,36 @@ ui:dt-histogram a c:Flippable ; c:front ui:dt-histogram-spec .
 ui:dt-histogram-spec a c:Specimen ; c:demonstrates c:Histogram ; c:label "Histogram" , "Гістограма"@uk , "Histogramm"@de , "مدرج تكراري"@ar ;
     c:help "How a view's values are distributed: the values fall in bins of nice bounds (about c:binCount of them), each a column as tall as its count. With a series variable the series share a bin, side by side or stacked. A bin says its bounds and count, on screen and as text." ;
     c:children ( ui:dt-histogram-chart ui:dt-histogram-routes ) .
+
+ui:dt-trend-web-view a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """
+SELECT ?month ?amount WHERE { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel "Web" ; ui:saleAmount ?amount } ORDER BY ?at""" .
+ui:dt-trend-web a c:Sparkline ; c:label "Web by month" ; c:view ui:dt-trend-web-view ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "k€" .
+ui:dt-sales-web ui:trend ui:dt-trend-web .
+ui:dt-trend-store-view a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """
+SELECT ?month ?amount WHERE { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel "Store" ; ui:saleAmount ?amount } ORDER BY ?at""" .
+ui:dt-trend-store a c:Sparkline ; c:label "Store by month" ; c:view ui:dt-trend-store-view ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "k€" .
+ui:dt-sales-store ui:trend ui:dt-trend-store .
+ui:dt-trend-partner-view a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """
+SELECT ?month ?amount WHERE { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel "Partner" ; ui:saleAmount ?amount } ORDER BY ?at""" .
+ui:dt-trend-partner a c:Sparkline ; c:label "Partner by month" ; c:view ui:dt-trend-partner-view ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "k€" .
+ui:dt-sales-partner ui:trend ui:dt-trend-partner .
+ui:dt-channels-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Channels" ; sem:select """
+SELECT ?channel (SUM(?amount) AS ?total) ?trend WHERE {
+  ?series c:key ?key ; ui:trend ?trend ; rdfs:label ?channel FILTER(LANG(?channel) = "")
+  ?s ui:saleChannel ?key ; ui:saleAmount ?amount
+} GROUP BY ?channel ?trend ORDER BY DESC(?total)""" .
+ui:dt-channels-table a c:Table ; c:label "Channels" ; c:query ui:dt-channels-view ; c:tableColumns ( ui:dt-channels-col-name ui:dt-channels-col-total ui:dt-channels-col-trend ) .
+ui:dt-channels-col-name a c:Column ; c:variable "channel" ; c:label "Channel" , "Канал"@uk , "Kanal"@de , "القناة"@ar .
+ui:dt-channels-col-total a c:Column ; c:variable "total" ; c:label "Total" , "Разом"@uk , "Summe"@de , "المجموع"@ar ; c:align "end" ; c:format "number" ; c:unit "k€" .
+ui:dt-channels-col-trend a c:Column ; c:variable "trend" ; c:label "Trend" , "Динаміка"@uk , "Verlauf"@de , "الاتجاه"@ar ; c:format "component" ; c:sortable false .
+ui:dt-spark-stat a c:Stat ; c:label "Online sales, June" ; c:value 80 ; c:unit "k€" ; c:delta 11 ; c:deltaUnit "%" .
+ui:dt-spark-tile-line a c:Sparkline ; c:label "Online sales by month" ; c:view ui:dt-trend-web-view ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "k€" .
+ui:dt-spark-tile-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:dt-spark-stat ui:dt-spark-tile-line ) .
+ui:dt-spark-tile a c:Card ; c:label "Tile" ; c:content ui:dt-spark-tile-body .
+ui:dt-sparkline a c:Flippable ; c:front ui:dt-sparkline-spec .
+ui:dt-sparkline-spec a c:Specimen ; c:demonstrates c:Sparkline ; c:label "Sparkline" , "Спарклайн"@uk , "Sparkline"@de , "خط بياني مصغّر"@ar ;
+    c:help "A word-sized line of a view's values, no axes, its last point marked: in a tile under its figure, or in a table's cells, where a column with c:format \"component\" holds the component each row names. Its points are list items with their words, as any chart's." ;
+    c:children ( ui:dt-channels-table ui:dt-spark-tile ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 

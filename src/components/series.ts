@@ -468,6 +468,18 @@ const pointText: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** A sparkline's frame: a small plot of its points (its scale as custom properties), no axes, no legend. */
+const sparklineFrame: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const msg = seriesMessage(ctx, focus)
+  if (msg !== undefined) return message(ctx, focus, msg)
+  const scale = ctx.objects(focus, c('valueScale')).find((s) => ctx.match(s, RDF_TYPE, c('ValueScale')).length)
+  const n = ctx.match(null, c('inChart'), focus).filter((q) => ctx.match(q.subject, RDF_TYPE, c('ChartCategory')).length).length
+  const style = [...(scale ? [`--lo: ${cssNumber(Number(str(ctx.object(scale, c('min')))))}`, `--hi: ${cssNumber(Number(str(ctx.object(scale, c('max')))))}`] : []), `--n: ${n}`, '--k: 1'].join('; ')
+  o.renders(o.el('root', 'Span', { style }, [o.el('marks', 'Ol', { class: 'sem-chart-marks', 'aria-label': labelOf(ctx, focus) })]))
+  return o.quads
+}
+
 export const seriesFunctions: Record<string, FnRule> = {
   'series:plan': plan,
   'series:histogram-plan': histogramPlan,
@@ -481,4 +493,5 @@ export const seriesFunctions: Record<string, FnRule> = {
   'series:scatter-point': scatterPoint,
   'series:slice-point': slicePoint,
   'series:pie-frame': pieFrame,
+  'series:sparkline-frame': sparklineFrame,
 }
