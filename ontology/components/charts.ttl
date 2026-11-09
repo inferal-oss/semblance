@@ -11,6 +11,7 @@
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
 
 # Charts. A chart projects a sem:View (a SPARQL SELECT, sem:select) in "long"
 # form: each solution is one value (c:valueVariable) of one series
@@ -1540,7 +1541,7 @@ c:ValueScale a owl:Class ; rdfs:comment "Derived: a value axis's range (c:min, c
 c:pointClass a owl:ObjectProperty ; rdfs:domain owl:Class ; rdfs:comment "On a series chart's class: the class of the points it mints (direct types only)."@en .
 c:stacked a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Series stack: a point starts where the earlier shown series end in its category."@en .
 c:hiddenSeries a owl:DatatypeProperty ; rdfs:comment "The key of a series the legend has hidden."@en .
-c:hidden a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Derived: a series is hidden."@en .
+c:seriesHidden a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Derived: a legend's series is hidden (c:hiddenSeries); not c:hidden, which takes a component out of view."@en .
 c:valueScale a owl:ObjectProperty ; rdfs:range c:ValueScale .
 c:series a owl:ObjectProperty ; rdfs:comment "Derived: a point's series."@en .
 c:category a owl:DatatypeProperty ; rdfs:comment "Derived: a point's category."@en .
@@ -1570,7 +1571,7 @@ c:SeriesPlan-fn a sem:Rule ; sem:implements c:SeriesPlan ; sem:function "series:
 c:SeriesPlan-sparql a sem:Rule ; sem:implements c:SeriesPlan ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; c:secondary ?secondary ; sem:orderKey ?okey ;
+  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:seriesHidden ?hidden ; c:secondary ?secondary ; sem:orderKey ?okey ;
     c:series ?seriesNode ; c:category ?category ; c:value ?value ; c:x ?xOut ; c:size ?zOut ; c:seriesIndex ?seriesIndex ; c:categoryIndex ?categoryIndex .
   ?container rdfhtml:hasChild ?node .
 }
@@ -1907,7 +1908,7 @@ c:AxisChartRendering-fn a sem:Rule ; sem:implements c:AxisChartRendering ; sem:f
 c:AxisChartRendering-sparql a sem:Rule ; sem:implements c:AxisChartRendering ; sem:needsExtension sx:Locale ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -2020,13 +2021,14 @@ WHERE {
   }
 }""" .
 
-# A legend item: the series' swatch and its name.
+# A legend item: a toggle button with the series' swatch and name, pressed while the series is shown. A click
+# hides the series in its chart (c:hiddenSeries, its key; the plan mints no points for it) or shows it again.
 c:ChartSeriesRendering a sem:Rendering ; sem:targets c:ChartSeries ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:inChart .
 c:ChartSeriesRendering-fn a sem:Rule ; sem:implements c:ChartSeriesRendering ; sem:function "series:legend-item" .
 c:ChartSeriesRendering-sparql a sem:Rule ; sem:implements c:ChartSeriesRendering ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -2035,19 +2037,27 @@ CONSTRUCT {
 WHERE {
   $this a c:ChartSeries ; c:inChart ?chart ; c:index ?i ; c:label ?label .
   BIND(STR($this) AS ?me)
-  VALUES ?local { "root" "swatch" }
-  BIND(IF(?local = "root" && EXISTS { $this c:secondary true }, "sem-secondary", ?unset) AS ?cls)
-  BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el)
-  BIND(IF(?local = "root", rdfhtml:Li, rdfhtml:I) AS ?tag)
+  VALUES (?local ?tag0 ?parentLocal) { ("root" rdfhtml:Li UNDEF) ("toggle" rdfhtml:Button "root") ("swatch" rdfhtml:I "toggle") }
+  BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag)
   BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
-  BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~root"))) AS ?parent)
-  BIND(IF(?local = "root", ?unset, 0) AS ?key)
-  BIND(IF(?local = "root", ?unset, CONCAT("background: var(--sem-series-", STR(xsd:integer(?i - FLOOR(?i / 6) * 6 + 1)), ")")) AS ?style)
-  BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~swatch-aria-hidden"))) AS ?attr)
-  BIND(IF(?local = "root", ?unset, "aria-hidden") AS ?an) BIND(IF(?local = "root", ?unset, "true") AS ?av)
-  BIND(IF(?local = "root", IRI(CONCAT(?me, "/~label")), ?unset) AS ?textNode)
-  BIND(IF(?local = "root", STR(?label), ?unset) AS ?data) BIND(IF(?local = "root", 1, ?unset) AS ?textKey)
+  BIND(IF(BOUND(?parentLocal), IRI(CONCAT(?me, "/~", ?parentLocal)), ?unset) AS ?parent)
+  BIND(IF(?local = "swatch", 0, ?unset) AS ?key)
+  BIND(IF(?local = "root" && EXISTS { $this c:secondary true }, "sem-secondary", ?unset) AS ?cls)
+  BIND(IF(?local = "toggle", "button", ?unset) AS ?type)
+  BIND(IF(?local = "swatch", CONCAT("background: var(--sem-series-", STR(xsd:integer(?i - FLOOR(?i / 6) * 6 + 1)), ")"), ?unset) AS ?style)
+  BIND(IF(?local = "swatch", "aria-hidden", IF(?local = "toggle", "aria-pressed", ?unset)) AS ?an)
+  BIND(IF(?local = "swatch", "true", IF(?local = "toggle", IF(EXISTS { $this c:seriesHidden true }, "false", "true"), ?unset)) AS ?av)
+  BIND(IF(BOUND(?an), IRI(CONCAT(?me, "/~", ?local, "-", ?an)), ?unset) AS ?attr)
+  BIND(IF(?local = "toggle", IRI(CONCAT(?me, "/~label")), ?unset) AS ?textNode)
+  BIND(IF(?local = "toggle", STR(?label), ?unset) AS ?data) BIND(IF(?local = "toggle", 1, ?unset) AS ?textKey)
 }""" .
+c:SeriesToggle a beh:Reaction ;
+    rdfs:label "Show or hide a series"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:ChartSeries ;
+    beh:deletes """CONSTRUCT { ?chart c:hiddenSeries ?h } WHERE { $this c:inChart ?chart ; c:key ?key . ?chart c:hiddenSeries ?h FILTER(STR(?h) = STR(?key)) }""" ;
+    beh:inserts """CONSTRUCT { ?chart c:hiddenSeries ?k } WHERE { $this c:inChart ?chart ; c:key ?key . FILTER NOT EXISTS { ?chart c:hiddenSeries ?h FILTER(STR(?h) = STR(?key)) } BIND(STR(?key) AS ?k) }""" ;
+    sem:function "series:toggle" .
 
 
 # --- Area chart ----------------------------------------------------------------------------------------
@@ -2069,7 +2079,7 @@ c:AreaPointRendering a sem:Rendering ; sem:targets c:AreaPoint ; sem:modality mo
 c:AreaPointRendering-sparql a sem:Rule ; sem:implements c:AreaPointRendering ; sem:needsExtension sx:Locale ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -2161,7 +2171,7 @@ c:ColumnPointRendering a sem:Rendering ; sem:targets c:ColumnPoint ; sem:modalit
 c:ColumnPointRendering-sparql a sem:Rule ; sem:implements c:ColumnPointRendering ; sem:needsExtension sx:Locale ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -2262,7 +2272,7 @@ c:ScatterPointRendering a sem:Rendering ; sem:targets c:ScatterPoint ; sem:modal
 c:ScatterPointRendering-sparql a sem:Rule ; sem:implements c:ScatterPointRendering ; sem:needsExtension sx:Locale ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -2366,7 +2376,7 @@ c:SlicePointRendering a sem:Rendering ; sem:targets c:SlicePoint ; sem:modality 
 c:SlicePointRendering-sparql a sem:Rule ; sem:implements c:SlicePointRendering ; sem:needsExtension sx:Locale ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -2445,7 +2455,7 @@ c:PieChartRendering-fn a sem:Rule ; sem:implements c:PieChartRendering ; sem:fun
 c:PieChartRendering-sparql a sem:Rule ; sem:implements c:PieChartRendering ; sem:needsExtension sx:Locale ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -2547,7 +2557,7 @@ c:HistogramPlan-fn a sem:Rule ; sem:implements c:HistogramPlan ; sem:function "s
 c:HistogramPlan-sparql a sem:Rule ; sem:implements c:HistogramPlan ; sem:needsExtension sx:Math ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; c:secondary ?secondary ; sem:orderKey ?okey ;
+  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:seriesHidden ?hidden ; c:secondary ?secondary ; sem:orderKey ?okey ;
     c:series ?seriesNode ; c:category ?category ; c:value ?value ; c:seriesIndex ?seriesIndex ; c:categoryIndex ?categoryIndex ; c:lower ?lower ; c:upper ?upper .
   ?container rdfhtml:hasChild ?node .
 }
@@ -2813,7 +2823,7 @@ c:SeriesChartText-fn a sem:Rule ; sem:implements c:SeriesChartText ; sem:functio
 c:SeriesChartText-sparql a sem:Rule ; sem:implements c:SeriesChartText ; sem:needsExtension sx:Locale ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -2886,7 +2896,7 @@ c:ChartPointText-fn a sem:Rule ; sem:implements c:ChartPointText ; sem:function 
 c:ChartPointText-sparql a sem:Rule ; sem:implements c:ChartPointText ; sem:needsExtension sx:Locale ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -2956,7 +2966,7 @@ c:SparklineRendering-fn a sem:Rule ; sem:implements c:SparklineRendering ; sem:f
 c:SparklineRendering-sparql a sem:Rule ; sem:implements c:SparklineRendering ; sem:needsExtension sx:Locale ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .
@@ -3038,7 +3048,7 @@ c:BoxPlan-fn a sem:Rule ; sem:implements c:BoxPlan ; sem:function "series:box-pl
 c:BoxPlan-sparql a sem:Rule ; sem:implements c:BoxPlan ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; c:secondary ?secondary ; sem:orderKey ?okey ;
+  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:seriesHidden ?hidden ; c:secondary ?secondary ; sem:orderKey ?okey ;
     c:series ?seriesNode ; c:category ?category ; c:value ?value ; c:q1 ?q1 ; c:q3 ?q3 ; c:low ?low ; c:high ?high ; c:seriesIndex ?seriesIndex ; c:categoryIndex ?categoryIndex .
   ?container rdfhtml:hasChild ?node .
 }
@@ -3321,7 +3331,7 @@ c:BoxPointRendering a sem:Rendering ; sem:targets c:BoxPoint ; sem:modality mod:
 c:BoxPointRendering-sparql a sem:Rule ; sem:implements c:BoxPointRendering ; sem:needsExtension sx:Locale ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
   ?parent rdfhtml:hasChild ?el .
   ?shownRoot sem:renders $this .

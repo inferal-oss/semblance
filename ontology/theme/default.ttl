@@ -1795,6 +1795,29 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "align-items" ; sty:raw "flex-start" ] ,
                  [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--sem-accent-9) 12%, transparent)" ] .
 
+# A series chart's legend items are toggles: plain text buttons; a hidden series' item is faded, its swatch hollow.
+[] a sty:StyleRule ; sty:appliesTo c:ChartSeries ; sty:part "button" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "padding" ; sty:raw "2px 4px" ] ,
+                 [ sty:property "margin" ; sty:raw "-2px -4px" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "color" ; sty:raw "inherit" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartSeries ; sty:part "button:is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartSeries ; sty:part "button[aria-pressed=false]" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.55" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "line-through" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartSeries ; sty:part "button[aria-pressed=false] > i" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent !important" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1.5px currentColor" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" ] ,

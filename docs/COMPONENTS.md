@@ -41,7 +41,10 @@ Series charts draw a maintained view's rows in long form, a value (`c:valueVaria
 (`c:seriesVariable`, optional) for a category (`c:categoryVariable`): `c:AreaChart`, `c:ColumnChart`
 (grouped, or `c:stacked true`), `c:ScatterChart` (an x, `c:xVariable`; bubbles with
 `c:sizeVariable`), `c:PieChart` and `c:DonutChart`, `c:Histogram` (bins of `c:valueVariable`, about
-`c:binCount`) and `c:Sparkline` (word-sized, for tiles and table cells). They share their parts: a
+`c:binCount`), `c:BoxPlot` (medians, quartiles and ranges) and `c:Sparkline` (word-sized, for tiles
+and table cells). A legend series with `c:axis c:SecondaryAxis` gets a second scale (`c:secondaryUnit`);
+`c:annotation` draws a `c:Threshold` (`c:at`) or a `c:MarkedRange` (`c:fromValue`, `c:toValue`); a
+legend item is a toggle that hides or shows its series (`c:hiddenSeries`). They share their parts: a
 plan mints the series (the legend's items, `c:legend` to name and order them), the categories and a
 point per series and category; a layout adds stack bases, the value scale (steps of 1, 2 or 5 × 10ⁿ)
 and its ticks. The frame writes the scale as custom properties and each point its own values, so the
