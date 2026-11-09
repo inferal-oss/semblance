@@ -47,7 +47,7 @@ c:slotVariable a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:range xsd:st
 c:align a owl:DatatypeProperty ; rdfs:domain c:Column ;
     rdfs:comment "\"end\" aligns the column's cells to the end (numbers); \"start\" (default) or \"center\"."@en .
 c:format a owl:DatatypeProperty ; rdfs:domain c:Column ;
-    rdfs:comment "How cells are written: \"number\" (grouped), \"decimal\" (2 places), \"percent\" (of a fraction), \"code\" (monospace), \"time\" (an xsd:dateTime's clock time). IRIs show their label."@en .
+    rdfs:comment "How cells are written: \"number\" (grouped), \"decimal\" (2 places), \"percent\" (of a fraction), \"code\" (monospace), \"time\" (an xsd:dateTime's clock time), \"component\" (the cell holds the component its value names, e.g. a c:Sparkline; as text, its label). IRIs show their label."@en .
 c:sortColumn a owl:ObjectProperty ; rdfs:domain c:Table ; rdfs:range c:Column ; rdfs:comment "The column the rows are sorted by."@en .
 c:sortDescending a owl:DatatypeProperty ; rdfs:domain c:Table ; rdfs:range xsd:boolean .
 c:sorts a owl:ObjectProperty ; rdfs:comment "On a rendered header: the c:Column that activating it sorts by."@en .
@@ -78,7 +78,7 @@ c:TableRendering-sparql-screen a sem:Rule ;
 CONSTRUCT {
   ?shownRoot sem:renders $this .
   ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:scope ?scope ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabIndex ; rdfhtml:colSpan ?colSpan ;
-      sem:orderKey ?key ; c:sorts ?sorts ; sem:slot ?slot ; rdfhtml:attribute ?attr ; rdfhtml:hasChild ?textNode .
+      sem:orderKey ?key ; c:sorts ?sorts ; sem:slot ?slot ; rdfhtml:attribute ?attr ; rdfhtml:hasChild ?textNode , ?component .
   ?parent rdfhtml:hasChild ?el .
   ?el ord:immediatelyPrecedes ?after .
   ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?attrName ; rdfhtml:attributeValue ?attrValue .
@@ -328,7 +328,9 @@ WHERE {
     BIND(IF(?cellPart = "cell", IRI(?rowId), IRI(?td)) AS ?parent)
     BIND(IF(?cellPart = "cell" && BOUND(?slotPrefix) && BOUND(?slotValue), CONCAT(?slotPrefix, STR(?slotValue)), ?none) AS ?slot)
     BIND(?format = "code" && ?cellText != "" AS ?asCode)
-    BIND(IF(!BOUND(?slotPrefix) && (?cellPart = "code" || !?asCode), IRI(CONCAT(?td, "-text")), ?none) AS ?textNode)
+    # A component column's cell holds the component its value names (a sparkline, a badge); else the value as text.
+    BIND(IF(?cellPart = "cell" && !BOUND(?slotPrefix) && ?format = "component" && isIRI(?cellValue), ?cellValue, ?none) AS ?component)
+    BIND(IF(!BOUND(?slotPrefix) && !BOUND(?component) && (?cellPart = "code" || !?asCode), IRI(CONCAT(?td, "-text")), ?none) AS ?textNode)
     BIND(?cellText AS ?data)
     BIND(IF(?cellPart = "cell" && ?ci + 1 < ?columnCount, IRI(CONCAT(?rowId, "-c", STR(?ci + 1))), ?none) AS ?after)
   } UNION {

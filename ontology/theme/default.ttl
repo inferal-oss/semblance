@@ -1516,12 +1516,13 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 # A point: an anchor at its value, in its category's middle (over the tooltip layer's position). Its y (and its
 # base's, its next point's) in percent of the plot.
-[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-marks > .sem-point" ;
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ;
     sty:declares [ sty:property "--y" ; sty:raw "calc((var(--v) + var(--b) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
                  [ sty:property "--yb" ; sty:raw "calc((var(--b) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
                  [ sty:property "--ny" ; sty:raw "calc((var(--nv, 0) + var(--nb, 0) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
-                 [ sty:property "--nyb" ; sty:raw "calc((var(--nb, 0) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
-                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "--nyb" ; sty:raw "calc((var(--nb, 0) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "inset-inline-start" ; sty:raw "calc((var(--i) + 0.5) / var(--n) * 100%)" ] ,
                  [ sty:property "bottom" ; sty:raw "calc(var(--y) * 1%)" ] ,
                  [ sty:property "inline-size" ; sty:raw "0" ] ,
@@ -1678,6 +1679,43 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "inline-size" ; sty:raw "var(--band)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Histogram ; sty:part ".sem-chart-categories > span" ;
     sty:declares [ sty:property "font-size" ; sty:raw "10px" ] .
+
+# A sparkline is word-sized and sits on the line of text it is in: no axes, its points' dots hidden but the
+# last one's (and the one hovered or focused), a thinner line.
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "inline-size" ; sty:raw "7.5em" ] ,
+                 [ sty:property "block-size" ; sty:raw "1.75em" ] ,
+                 [ sty:property "vertical-align" ; sty:raw "middle" ] ,
+                 [ sty:property "container-type" ; sty:raw "size" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "3px" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "container-type" ; sty:raw "size" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--i) / max(var(--n) - 1, 1) * 100%)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc(var(--y) * 1%)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "0" ] ,
+                 [ sty:property "block-size" ; sty:raw "0" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks > .sem-point .sem-segment" ;
+    sty:declares [ sty:property "--dx" ; sty:raw "calc(100cqw / max(var(--n) - 1, 1))" ] ,
+                 [ sty:property "block-size" ; sty:raw "1.5px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks > .sem-point .sem-area" ;
+    sty:declares [ sty:property "inline-size" ; sty:raw "calc(100cqw / max(var(--n) - 1, 1))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks > .sem-point:not(:last-child, :hover, :focus-visible) .sem-dot" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks .sem-dot" ;
+    sty:declares [ sty:property "inline-size" ; sty:raw "6px" ] ,
+                 [ sty:property "block-size" ; sty:raw "6px" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "-3px" ] ,
+                 [ sty:property "bottom" ; sty:raw "-3px" ] ,
+                 [ sty:property "border-width" ; sty:raw "1px" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,

@@ -37,6 +37,28 @@ SELECT ?task ?label ?start ?end WHERE {
 ex:plan a c:GanttChart ; c:label "Plan" ; c:view ex:planView .
 ```
 
+Series charts draw a maintained view's rows in long form, a value (`c:valueVariable`) of a series
+(`c:seriesVariable`, optional) for a category (`c:categoryVariable`): `c:AreaChart`, `c:ColumnChart`
+(grouped, or `c:stacked true`), `c:ScatterChart` (an x, `c:xVariable`; bubbles with
+`c:sizeVariable`), `c:PieChart` and `c:DonutChart`, `c:Histogram` (bins of `c:valueVariable`, about
+`c:binCount`) and `c:Sparkline` (word-sized, for tiles and table cells). They share their parts: a
+plan mints the series (the legend's items, `c:legend` to name and order them), the categories and a
+point per series and category; a layout adds stack bases, the value scale (steps of 1, 2 or 5 × 10ⁿ)
+and its ticks. The frame writes the scale as custom properties and each point its own values, so the
+theme places the marks: a changed row re-renders its points, not the chart. A point is a list item
+with its value in words and a tooltip; Tab reaches the chart and the arrow keys move between points.
+As text, a series chart is its name and its points' words; bar charts, heatmaps and line charts write
+a line per row. A table column with `c:format "component"` holds the component its value names in
+each cell, e.g. a row's sparkline.
+
+```turtle
+ex:sales a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """PREFIX ex: <https://example.org/>
+SELECT ?month ?channel ?amount WHERE { ?s ex:month ?month ; ex:channel ?channel ; ex:amount ?amount ; ex:at ?at }
+ORDER BY ?at""" .
+ex:chart a c:ColumnChart ; c:label "Sales" ; c:view ex:sales ; c:categoryVariable "month" ;
+  c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ; c:stacked true .
+```
+
 `c:RdfEditor` shows an RDF document as structure, and edits it when `c:editable true`. The document
 is the resources it lists (`c:entry`); each is a tree item with its predicates beside their objects,
 and what nests is nested under where it is used: a blank node, a list, the reifiers of a statement

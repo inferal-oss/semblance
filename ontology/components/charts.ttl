@@ -2729,6 +2729,74 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?el) BIND(?el AS ?shownRoot) BIND(rdfhtml:P AS ?tag)
   BIND(IRI(CONCAT(STR($this), "/~words-text")) AS ?textNode) BIND(?words AS ?data)
 }""" .
+
+# --- Sparkline ---------------------------------------------------------------------------------------------
+# A word-sized area chart: a series' line and the area under it, on a scale of its own values (c:fromZero
+# false), with no axes or legend, its last point marked. It goes where text goes: in a tile beside a figure,
+# or in a table's cell (a c:Column with c:format "component" whose value names it). Its points are list items
+# with their words, as any series chart's.
+c:Sparkline a owl:Class ; rdfs:subClassOf c:SeriesChart ;
+    rdfs:label "Sparkline"@en , "Спарклайн"@uk , "Sparkline"@de , "خط بياني مصغّر"@ar ;
+    rdfs:comment "A word-sized line of a view's values with the area under it, no axes; for tiles and table cells."@en ;
+    c:pointClass c:AreaPoint ; c:fromZero false ;
+    sem:slug "sparkline" .
+c:SparklineRendering a sem:Rendering ; sem:targets c:Sparkline ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset , c:view ; sem:readsMinted true .
+c:SparklineRendering-fn a sem:Rule ; sem:implements c:SparklineRendering ; sem:function "series:sparkline-frame" .
+c:SparklineRendering-sparql a sem:Rule ; sem:implements c:SparklineRendering ; sem:needsExtension sx:Locale ; sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Sparkline .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this c:view ?v . ?v sem:select ?anySelect }
+  BIND(COALESCE(?v, c:none) AS ?vNode)
+  LATERAL { OPTIONAL {
+    FILTER(NOT EXISTS { ?vNode a rs:ResultSet })
+    OPTIONAL { ?viewLabelAt0 l10n:of ?vNode ; l10n:label ?viewLabel0 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel0)) ?vNode c:label ?viewLabel1 FILTER(isLiteral(?viewLabel1)) }
+    OPTIONAL { ?viewLabelAt2 l10n:of ?vNode ; l10n:name ?viewLabel2 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel2)) ?vNode rdfs:label ?viewLabel3 FILTER(isLiteral(?viewLabel3)) }
+    BIND(STR(COALESCE(?viewLabel0, ?viewLabel1, ?viewLabel2, ?viewLabel3, REPLACE(STR(?vNode), "^.*[#/]", ""))) AS ?viewLabel)
+  } }
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+  OPTIONAL { FILTER(!BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+  BIND(IF(!BOUND(?v), "No view.",
+       IF(BOUND(?viewLabel), CONCAT(?viewLabel, " is not a maintained view (iv:View, iv:materialize iv:Graph)."),
+       IF(NOT EXISTS { ?v rs:solution ?anyRow }, STR(COALESCE(?e0, ?e1)), ?unset))) AS ?message)
+  LATERAL {
+  {
+    FILTER(BOUND(?message))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(?message AS ?data)
+  } UNION {
+    FILTER(!BOUND(?message))
+    OPTIONAL { ?labelAt0 l10n:of $this ; l10n:label ?label0 }
+    OPTIONAL { FILTER(!BOUND(?label0)) $this c:label ?label1 FILTER(isLiteral(?label1)) }
+    OPTIONAL { ?labelAt2 l10n:of $this ; l10n:name ?label2 }
+    OPTIONAL { FILTER(!BOUND(?label2)) $this rdfs:label ?label3 FILTER(isLiteral(?label3)) }
+    BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
+    OPTIONAL { $this c:valueScale ?scale . ?scale a c:ValueScale ; c:min ?min ; c:max ?max }
+    { SELECT (COUNT(?cn) AS ?n) WHERE { ?cn a c:ChartCategory ; c:inChart $this } }
+    VALUES ?local { "root" "marks" }
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el)
+    BIND(IF(?local = "root", rdfhtml:Span, rdfhtml:Ol) AS ?tag)
+    BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
+    BIND(IF(?local = "root", ?unset, ?root) AS ?parent)
+    BIND(IF(?local = "root", ?unset, 0) AS ?key)
+    BIND(IF(?local = "marks", "sem-chart-marks", ?unset) AS ?cls)
+    BIND(IF(?local = "root", CONCAT(IF(BOUND(?min), CONCAT("--lo: ", sx:formatNumber(?min + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --hi: ", sx:formatNumber(?max + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; "), ""), "--n: ", STR(?n), "; --k: 1"), ?unset) AS ?style)
+    BIND(IF(?local = "marks", IRI(CONCAT(?me, "/~marks-aria-label")), ?unset) AS ?attr)
+    BIND(IF(?local = "marks", "aria-label", ?unset) AS ?an) BIND(IF(?local = "marks", ?label, ?unset) AS ?av)
+  }
+  }
+}""" .
 # --- Gantt ---------------------------------------------------------------------------------------
 # Dated tasks from a maintained SELECT view (as the bar chart reads it): one row per task, or a row
 # per predecessor of a task. c:GanttPlan reads the rows once and mints the chart's tasks

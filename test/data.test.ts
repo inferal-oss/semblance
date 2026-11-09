@@ -333,11 +333,11 @@ describe('c:Tree', () => {
     click(twisty)
     expect(objects(UI + 'dt-tree-classes', NS.c + 'expandedNode')).toContain(NS.c + 'Chart')
     expect(item('Chart').getAttribute('aria-expanded')).toBe('true')
-    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['BarChart', 'Gantt chart', 'Heatmap', 'LineChart'])
-    expect(item('BarChart').getAttribute('aria-level')).toBe('3')
+    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['Gantt chart', 'RowChart'])
+    expect(item('RowChart').getAttribute('aria-level')).toBe('3')
     click(item('Chart').querySelector('.sem-twisty')!)
     expect(item('Chart').getAttribute('aria-expanded')).toBe('false')
-    expect(item('BarChart')).toBeUndefined()
+    expect(item('RowChart')).toBeUndefined()
   })
 
   it('selects a node from its label, and the breadcrumbs follow and navigate back up', () => {
