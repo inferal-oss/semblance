@@ -9,7 +9,7 @@ import { parseTurtle, Runtime } from '../src/runtime.ts'
 import { renderDocument } from '../src/server/document.ts'
 import type { Site } from '../src/server/site.ts'
 import { graphLanguages, serializeRoot } from '../src/server/render.ts'
-import { sliceAddition } from '../src/slices.ts'
+import { arrive, sliceAddition } from '../src/slices.ts'
 import { sourceQuads } from '../src/sources.ts'
 import { takeOver } from '../src/web/takeover.ts'
 import { prepareSite, ROOT, siteLayers, siteSources, UI } from '../demo/site.ts'
@@ -272,6 +272,39 @@ describe('every page reached by a click is the page loaded directly', () => {
         // (A text in every language may say so in passing, before the graph that picks one: not what is left at the end.)
         const diff = difference(shown(c.host), want)
         if (diff) wrong.push(`${url}: ${diff}`)
+      })
+      c.runtime.dispose()
+    }
+    expect(wrong).toEqual([])
+  }, 900_000)
+
+  // A first visit (#378): the page is taken over with the graphs it names, the rest arrive in idle
+  // time as the site's client takes them in (arrive, demo/main.ts), and the visitor clicks into an
+  // example or a doc before the last has arrived. What is left is taken in at once, not an idle
+  // period at a time (seconds, in a browser with few of them), and the page is the page loaded directly.
+  it('a first visit: a click while the rest arrive', async () => {
+    const wrong: string[] = []
+    for (const url of routes.filter((r) => /^\/(docs|examples)\//.test(r))) {
+      const c = await takenOver(site, FROM)
+      await direct(url, async (to, want) => {
+        let clicked = false
+        let waits = 0
+        let early = ''
+        await arrive(await restOf(site, c), {
+          runtime: c.runtime,
+          // The click comes while the third idle period is awaited.
+          idle: async () => {
+            if (clicked) early ||= 'an idle period awaited after the click'
+            if (++waits === 3) follow(c, to), (clicked = true)
+            return { timeRemaining: () => 0 }
+          },
+          urgent: () => clicked,
+          flush: () => c.renderer.flush(),
+        })
+        idle(c)
+        // (A text in every language may say so in passing, before the graph that picks one: not what is left at the end.)
+        const diff = difference(shown(c.host), want)
+        if (early || diff) wrong.push(`${url}: ${early} ${diff}`)
       })
       c.runtime.dispose()
     }
