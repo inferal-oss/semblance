@@ -716,9 +716,42 @@ c:quotedPattern a owl:DatatypeProperty ; rdfs:domain c:CodeLexicon ;
     rdfs:comment "The tokens of c:tokenPattern that can hold a quote (comments, strings, IRIs), long strings in group 2: where they start and end, for a rule that tokenizes line by line."@en .
 c:keyword a owl:DatatypeProperty ; rdfs:domain c:CodeLexicon ; rdfs:comment "A word colored as a keyword, as written (case matters)."@en .
 c:SparqlLexicon a c:CodeLexicon ;
+    c:language "sparql" , "turtle" ;
     c:tokenPattern "(#[^\\n]*)|(\"\"\"[\\s\\S]*?\"\"\"|\"(?:[^\"\\\\\\n]|\\\\.)*\")|([?$][A-Za-z_][A-Za-z0-9_]*)|(<[^<>\\s]*>)|((?:[Gg][Rr][Oo][Uu][Pp]|[Oo][Rr][Dd][Ee][Rr])[ \\t]+[Bb][Yy][A-Za-z0-9_]*)|([A-Za-z][A-Za-z0-9_-]*:(?:[A-Za-z_][A-Za-z0-9_-]*|/)?)|(@(?:prefix|base)[A-Za-z0-9_]*)|([0-9]+(?:\\.[0-9]+)?[A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*)|[^#\"?$<@A-Za-z0-9_\\n]+|[\\s\\S]" ;
     c:quotedPattern "(#[^\\n]*)|(\"\"\"[\\s\\S]*?\"\"\")|(\"(?:[^\"\\\\\\n]|\\\\.)*\")|(<[^<>\\s]*>)" ;
     c:keyword "CONSTRUCT" , "SELECT" , "WHERE" , "PREFIX" , "LIMIT" , "OPTIONAL" , "FILTER" , "BIND" , "AS" , "UNION" , "VALUES" , "NOT" , "EXISTS" , "MINUS" , "LATERAL" , "DISTINCT" , "IF" , "COALESCE" , "CONCAT" , "STR" , "STRLEN" , "STRAFTER" , "UCASE" , "IRI" , "ENCODE_FOR_URI" , "REPLACE" , "BOUND" , "ROUND" , "MIN" , "MAX" , "AVG" , "SUM" , "COUNT" , "true" , "false" , "a" .
+
+# Other languages' lexicons (c:Code colors a sample in any of them; src/sparql-tokens.ts states the same
+# as LEXICONS, and a test checks they agree). Simpler than SPARQL's: each group of the pattern has one
+# kind (c:groupKinds, in order), "word" being a keyword when it is one of the lexicon's c:keyword and
+# text otherwise; what no group holds is text. A lexicon says the names of its language by c:language.
+c:LanguageLexicon a owl:Class ; rdfs:subClassOf c:CodeLexicon ;
+    rdfs:comment "A lexicon whose pattern's groups each have one kind (c:groupKinds)."@en .
+c:groupKinds a owl:DatatypeProperty ; rdfs:domain c:LanguageLexicon ;
+    rdfs:comment "The kinds of a lexicon's groups, in order, separated by spaces: comment, string, var, iri, pname, number, keyword, or word (a keyword when it is a c:keyword, text otherwise)."@en .
+c:TypeScriptLexicon a c:LanguageLexicon ; rdfs:comment "TypeScript and JavaScript: comments, strings (template literals over lines), numbers, keywords; a member after a dot is text."@en ;
+    c:language "typescript" , "ts" , "javascript" , "js" ;
+    c:tokenPattern "(//[^\\n]*|/\\*[\\s\\S]*?\\*/)|(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|`(?:[^`\\\\]|\\\\[\\s\\S])*`)|(0[xXbBoO][0-9A-Fa-f_]+n?|[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?(?:[eE][+-]?[0-9]+)?n?)|([A-Za-z_$][A-Za-z0-9_$]*)|\\.[A-Za-z_$][A-Za-z0-9_$]*|[^/\"'`0-9A-Za-z_$.\\n]+|[\\s\\S]" ;
+    c:groupKinds "comment string number word" ;
+    c:keyword "abstract" , "as" , "async" , "await" , "break" , "case" , "catch" , "class" , "const" , "continue" , "declare" , "default" , "delete" , "do" , "else" , "enum" , "export" , "extends" , "false" , "finally" , "for" , "from" , "function" , "if" , "implements" , "import" , "in" , "instanceof" , "interface" , "keyof" , "let" , "namespace" , "new" , "null" , "of" , "private" , "protected" , "public" , "readonly" , "return" , "satisfies" , "static" , "super" , "switch" , "this" , "throw" , "true" , "try" , "type" , "typeof" , "undefined" , "var" , "void" , "while" , "yield" .
+c:ShellLexicon a c:LanguageLexicon ; rdfs:comment "Shell: comments, strings, variables, the command a line starts with, options, keywords."@en ;
+    c:language "shell" , "sh" , "bash" ;
+    c:tokenPattern "(#[^\\n]*)|(\"(?:[^\"\\\\]|\\\\[\\s\\S])*\"|'[^']*')|(\\$(?:\\{[^}\\n]*\\}|[A-Za-z_][A-Za-z0-9_]*|[0-9@#?$!*-]))|((?:^|\\n)[ \\t]*[A-Za-z_][A-Za-z0-9_.-]*)|(--?[A-Za-z0-9][A-Za-z0-9_-]*)|([A-Za-z0-9_./~:@%+=,][A-Za-z0-9_./~:@%+=,#-]*)|[^#\"'$A-Za-z0-9_./~:@%+=,\\n-]+|[\\s\\S]" ;
+    c:groupKinds "comment string var keyword pname word" ;
+    c:keyword "case" , "do" , "done" , "elif" , "else" , "esac" , "export" , "fi" , "for" , "function" , "if" , "in" , "local" , "return" , "then" , "until" , "while" .
+c:JsonLexicon a c:LanguageLexicon ; rdfs:comment "JSON: a member's name (with its colon), strings, numbers, true, false and null."@en ;
+    c:language "json" ;
+    c:tokenPattern "(\"(?:[^\"\\\\\\n]|\\\\.)*\"[ \\t]*:)|(\"(?:[^\"\\\\\\n]|\\\\.)*\")|(-?[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)|([A-Za-z_][A-Za-z0-9_]*)|[^\"0-9A-Za-z_\\n-]+|[\\s\\S]" ;
+    c:groupKinds "pname string number word" ;
+    c:keyword "false" , "null" , "true" .
+c:HtmlLexicon a c:LanguageLexicon ; rdfs:comment "HTML and XML: comments, tags, attribute names (with their =), double-quoted values, character references."@en ;
+    c:language "html" , "xml" ;
+    c:tokenPattern "(<!--[\\s\\S]*?-->)|(</?[A-Za-z][A-Za-z0-9:-]*|<![A-Za-z]+|/?>)|([A-Za-z_:@][A-Za-z0-9_:.-]*=)|(\"[^\"]*\")|(&[#A-Za-z0-9]+;)|[A-Za-z_:@][A-Za-z0-9_:.-]*|[^<>\"&A-Za-z_:@/\\n]+|[\\s\\S]" ;
+    c:groupKinds "comment keyword pname string var" .
+c:HttpLexicon a c:LanguageLexicon ; rdfs:comment "HTTP headers: a header's name (with its colon) where a line starts, quoted values, URLs."@en ;
+    c:language "http" ;
+    c:tokenPattern "((?:^|\\n)[A-Za-z][A-Za-z0-9-]*:)|('[^'\\n]*'|\"[^\"\\n]*\")|([a-z][a-z0-9+.-]*://[^\\s;,'\"]+)|[A-Za-z][A-Za-z0-9_-]*|[^'\"A-Za-z\\n]+|[\\s\\S]" ;
+    c:groupKinds "pname string iri" .
 
 c:SuggestionsPhrase a c:Phrase ; rdfs:label "Suggestions"@en , "Підказки"@uk , "Vorschläge"@de , "اقتراحات"@ar .
 c:EditorKeysPhrase a c:Phrase ;

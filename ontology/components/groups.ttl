@@ -96,7 +96,7 @@ c:MonthGrid sem:group c:InputsGroup . c:DateField sem:group c:InputsGroup . c:Da
 c:TimeField sem:group c:InputsGroup . c:MonthGridKey sem:group c:InputsGroup . c:TimeFieldKey sem:group c:InputsGroup .
 # A code editor's text is its value, like any field's; the SPARQL editor is one in SPARQL. The
 # words of the languages they know (c:CodeWord) and their key event are their parts.
-c:CodeEditor sem:group c:InputsGroup . c:CodeLexicon sem:group c:InputsGroup . c:QueryEditor sem:group c:InputsGroup . c:EditorKey sem:group c:InputsGroup .
+c:CodeEditor sem:group c:InputsGroup . c:CodeLexicon sem:group c:InputsGroup . c:LanguageLexicon sem:group c:InputsGroup . c:QueryEditor sem:group c:InputsGroup . c:EditorKey sem:group c:InputsGroup .
 c:CodeWord sem:group c:InputsGroup . c:CodeKeyword sem:group c:InputsGroup . c:CodeFunction sem:group c:InputsGroup .
 c:TurtleKeyword sem:group c:InputsGroup .
 c:SparqlWord sem:group c:InputsGroup . c:SparqlKeyword sem:group c:InputsGroup . c:SparqlFunction sem:group c:InputsGroup . c:CodeLexicon sem:group c:InputsGroup .

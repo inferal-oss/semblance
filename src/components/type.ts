@@ -3,7 +3,7 @@ import type { NamedNode } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { C, MOD, NS } from '../ns.ts'
-import { matchTokens, tokenizeCode } from '../sparql-tokens.ts'
+import { isColored, matchCode } from '../sparql-tokens.ts'
 import { isTrue, labelOf, named, num, rdfList, str, text } from './util.ts'
 
 const C_LINK = NS.c + 'Link'
@@ -122,27 +122,27 @@ const kbd: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-const tokens = tokenizeCode
-
 /** A sample's tokens, each keyed by where it starts (as c:CodeColoredRendering-sparql keys them). */
 function colored(o: Out, key: string, source: string, language: string | undefined): NamedNode[] {
-  if (!tokens('', language)) return [o.text(`${key}-text`, source)]
-  return matchTokens(source, language === 'turtle').map((t) =>
+  const tokens = matchCode(source, language)
+  if (!tokens) return [o.text(`${key}-text`, source)]
+  return tokens.map((t) =>
     t.kind === 'text' ? o.text(`${key}-${t.start}`, t.text) : o.el(`${key}-${t.start}`, 'Span', { class: 'tok-' + t.kind }, [o.text(`${key}-${t.start}-text`, t.text)]),
   )
 }
 
 /**
  * Inline code, or with c:block a <pre><code> block; c:language colors its tokens. Two
- * renderings share this: c:CodeRendering (`coloredSample` false) renders every sample except SPARQL
- * and Turtle on screen, which c:CodeColoredRendering (`coloredSample` true) renders token by token.
+ * renderings share this: c:CodeRendering (`coloredSample` false) renders every sample except those on
+ * screen in a language a lexicon colors, which c:CodeColoredRendering (`coloredSample` true) renders
+ * token by token.
  */
 const codeRun = (coloredSample: boolean): FnRule => (ctx, focus) => {
   const source = text(ctx, focus, C.label) ?? str(ctx.object(focus, C.value))
   if (source === undefined) return []
   const block = isTrue(ctx.object(focus, C_BLOCK))
   const language = str(ctx.object(focus, C_LANGUAGE))?.toLowerCase()
-  if ((ctx.modality !== MOD.Text && tokens("", language) !== undefined) !== coloredSample) return []
+  if ((ctx.modality !== MOD.Text && isColored(language)) !== coloredSample) return []
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
     const body = block ? source.replace(/\s+$/, '').split('\n').map((l) => '    ' + l).join('\n') : '`' + source + '`'

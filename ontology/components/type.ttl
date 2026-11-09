@@ -462,14 +462,15 @@ WHERE {
 
 c:Code a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment """Code: inline (<code>) or, with c:block true, a block (<pre><code>). With c:language
-"sparql" or "turtle" its tokens are colored with the same palette as the rule sources on the
-back of every card. c:label is the code."""@en ;
+    rdfs:comment """Code: inline (<code>) or, with c:block true, a block (<pre><code>). With a c:language
+some lexicon colors ("sparql", "turtle", "typescript", "shell", "json", "html", "http": c:CodeLexicon)
+its tokens are colored with the same palette as the rule sources on the back of every card.
+c:label is the code."""@en ;
     sem:slug "code" .
 c:block a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Render as a block rather than inline."@en .
-c:language a owl:DatatypeProperty ; rdfs:comment "The language of a code sample (\"sparql\", \"turtle\"), for coloring."@en .
+c:language a owl:DatatypeProperty ; rdfs:comment "The language of a code sample (\"sparql\", \"turtle\", \"typescript\", …), for coloring; on a lexicon, a name of the language it colors."@en .
 # Code is two renderings: c:CodeRendering for everything but colored samples, and
-# c:CodeColoredRendering for SPARQL and Turtle samples on screen (their tokens colored).
+# c:CodeColoredRendering for samples on screen in a language a lexicon colors (their tokens colored).
 c:CodeRendering a sem:Rendering ; sem:targets c:Code ; sem:stratum 0 .
 c:CodeRendering-fn a sem:Rule ; sem:implements c:CodeRendering ; sem:function "code" .
 
@@ -503,8 +504,8 @@ WHERE {
   OPTIONAL { $this c:language ?language0 }
   BIND(LCASE(STR(?language0)) AS ?language)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  # SPARQL and Turtle samples are colored token by token: c:CodeColoredRendering.
-  FILTER(!BOUND(?language) || !(?language IN ("sparql", "turtle")))
+  # Samples in a language a lexicon colors are colored token by token: c:CodeColoredRendering.
+  FILTER(!BOUND(?language) || NOT EXISTS { ?lexicon c:tokenPattern ?lexiconPattern ; c:language ?language })
   BIND(IF(?block, rdfhtml:Pre, rdfhtml:Code) AS ?element)
   BIND(REPLACE(?source, "^\\n+|[ \\t\\n\\r]+$", "") AS ?trimmed)
   BIND(IF(!?block, IRI(CONCAT(STR($this), "/~code-text")), ?none) AS ?inlineText)
@@ -547,8 +548,9 @@ WHERE {
 }""" .
 c:CodeColoredRendering a sem:Rendering ; sem:targets c:Code ; sem:modality mod:Screen ; sem:stratum 0 .
 c:CodeColoredRendering-fn a sem:Rule ; sem:implements c:CodeColoredRendering ; sem:function "code:colored" .
-# Its tokens by the shared lexicon (c:SparqlLexicon, sx:matches), each keyed by where it starts, so
-# both sides mint the same nodes: plain text as text, the rest as spans of class tok-<kind>.
+# Its tokens by its language's lexicon (sx:matches), each keyed by where it starts, so both sides mint
+# the same nodes: plain text as text, the rest as spans of class tok-<kind>. SPARQL and Turtle split by
+# c:SparqlLexicon's groups; any other lexicon (c:LanguageLexicon) gives each group its c:groupKinds.
 c:CodeColoredRendering-sparql a sem:Rule ;
     sem:implements c:CodeColoredRendering ;
     sem:needsExtension sx:Matches ;
@@ -578,7 +580,9 @@ WHERE {
   FILTER(BOUND(?source))
   OPTIONAL { $this c:language ?language0 }
   BIND(LCASE(STR(?language0)) AS ?language)
-  FILTER(?language IN ("sparql", "turtle"))
+  # Its language's lexicon (compared, so that a sample with no language has none).
+  ?lexicon c:tokenPattern ?pattern ; c:language ?lexiconLanguage . FILTER(STR(?lexiconLanguage) = ?language)
+  OPTIONAL { ?lexicon c:groupKinds ?kinds }
   BIND(EXISTS { $this c:block ?block0 FILTER(STR(?block0) = "true") } AS ?block)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IF(?block, rdfhtml:Pre, rdfhtml:Code) AS ?element)
@@ -593,17 +597,21 @@ WHERE {
   BIND(STRLEN(?src) AS ?length)
   BIND(CONCAT(STR($this), "/~code-") AS ?key)
   LATERAL { OPTIONAL {
-    c:SparqlLexicon c:tokenPattern ?pattern .
     LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
     BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
     BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
-    BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+    # A lexicon of c:groupKinds: the kind of the group that matched (the n-th of its kinds).
+    BIND(IF(BOUND(?g1), 1, IF(BOUND(?g2), 2, IF(BOUND(?g3), 3, IF(BOUND(?g4), 4, IF(BOUND(?g5), 5,
+      IF(BOUND(?g6), 6, IF(BOUND(?g7), 7, IF(BOUND(?g8), 8, IF(BOUND(?g9), 9, 0))))))))) AS ?group)
+    BIND(IF(?group = 0, "text", REPLACE(?kinds, CONCAT("^(?:[^ ]+ ){", STR(?group - 1), "}([^ ]+).*$"), "$1")) AS ?groupKind)
+    BIND(IF(BOUND(?kinds), IF(?groupKind = "word", IF(EXISTS { ?lexicon c:keyword ?m }, "keyword", "text"), ?groupKind),
+      IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
       IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
       IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
       IF(BOUND(?g7), IF(?turtle && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
       IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
-      IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text"))))))))) AS ?kind)
-    BIND(IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m))) AS ?headLen)
+      IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text")))))))))) AS ?kind)
+    BIND(IF(BOUND(?kinds), STRLEN(?m), IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m)))) AS ?headLen)
     BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
     BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
     BIND(?at + STRLEN(?m) AS ?next)
