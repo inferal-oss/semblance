@@ -188,7 +188,8 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
 - **Safe authoring** (`safe:`): a graph from someone you do not trust (a person, a page, a model)
   renders under a policy that is vocabulary: elements, attributes, URL schemes and CSS from allow-lists,
   checked where the HTML index takes a rendering, so the DOM, server-rendered HTML and text agree; what
-  is refused is reported. The live example editors run in it. See [docs/SAFETY.md](docs/SAFETY.md).
+  is refused is reported. The live example editors run in it. [docs/SAFETY.md](docs/SAFETY.md) and the site's
+  [Safe authoring](https://semblance.dev/docs/safety/) docs cover how it works, extending the policy, and a Content Security Policy to go with it.
 - **Network capture**: a host effect (`src/network.ts`) records the page's own
   fetches, WebSockets and the events and spans it reports as members of
   `net:Capture`, a bounded LDES in the network graph

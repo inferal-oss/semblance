@@ -160,6 +160,18 @@ address costs what it changes: 50 to 300 ms the first time a page is shown (its 
 10 ms when it is shown again, where a fresh store took 300 to 500 ms each time. The handler does not
 call `prepare` per request, so a site's `prepare` must not depend on the address.
 
+## Authored content and a Content Security Policy
+
+A graph you do not trust renders on the server under the same policy as in the browser: pass
+`policy: authoredPolicy(trustedStore)` to `renderToString` or `renderToStream`, read from a store
+without the author's graph. The HTML is the browser's, refused nodes included, so the take-over
+matches. A site's own graphs are trusted; its live examples are rendered authored (below).
+
+A rendered document carries inline scripts (the platform mark, the event capture, and the
+first-paint script of what the visitor chose) and, by default, an inline stylesheet. A Content
+Security Policy for it, and what it needs until documents carry a nonce (#403), is in
+[SAFETY.md](SAFETY.md#content-security-policy).
+
 ## What the visitor's settings do before scripts run
 
 - **Colour scheme and reduced motion** follow the system in CSS (`light-dark()`,

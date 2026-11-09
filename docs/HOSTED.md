@@ -182,6 +182,8 @@ So do inputs: a host component's or a custom element's props pass the policy's i
 attribute input the attribute check, a property input `safe:property`, none by default), and under a
 policy the React adapter never takes `dangerouslySetInnerHTML`, `ref`, `key`, `children` or an `on…`
 name from the graph.
+To let authored graphs use one of yours, list it in your own Turtle (`safe:Authored safe:hostComponent "Chart"`;
+see [Extending or narrowing the policy](SAFETY.md#extending-or-narrowing-the-policy)).
 
 ## Hosted components and islands
 
