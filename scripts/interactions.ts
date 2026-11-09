@@ -79,9 +79,10 @@ const nav = async (c: Ctx, label: string) => {
   if (c.phone) await c.page.locator('select[aria-label="Page"]').selectOption({ label })
   else await click(c, label, '[data-sem-c=segmented][aria-label="Page"]')
 }
-/** A section's own list of pages (docs, components, examples): a picker at phone width. */
+/** A section's own list of pages (docs, components, examples): a picker at phone width. The other sections'
+ * lists are in the document too once they are prepared (hidden), hence the visible filter. */
 const section = async (c: Ctx, label: string) => {
-  const list = c.page.locator('[data-sem-c=nav-list]').first()
+  const list = c.page.locator('[data-sem-c=nav-list]').filter({ visible: true }).first()
   if (c.phone) await list.locator('select').selectOption({ label })
   else await list.getByRole('button', { name: label, exact: true }).click()
 }
@@ -117,14 +118,14 @@ const INTERACTIONS: Interaction[] = [
   {
     id: 'home todo check',
     path: '/',
-    act: (c) => c.page.locator(`${live} [data-sem-c=list-item] input[type=checkbox]`).first().click(),
-    undo: (c) => c.page.locator(`${live} [data-sem-c=list-item] input[type=checkbox]`).first().click(),
+    act: (c) => c.page.locator(`${live} [data-sem-c=list-item] input[type=checkbox]`).filter({ visible: true }).first().click(),
+    undo: (c) => c.page.locator(`${live} [data-sem-c=list-item] input[type=checkbox]`).filter({ visible: true }).first().click(),
   },
   {
     id: 'home todo add',
     path: '/',
     prepare: async (c) => {
-      await c.page.locator(`${live} [data-sem-c=text-field] input`).first().click()
+      await c.page.locator(`${live} [data-sem-c=text-field] input`).filter({ visible: true }).first().click()
       await type(c, 'Milk')
     },
     act: (c) => click(c, 'Add', live),
@@ -134,7 +135,7 @@ const INTERACTIONS: Interaction[] = [
     id: 'sheet cell edit',
     path: '/examples/sheet/',
     prepare: async (c) => {
-      await c.page.locator('[data-sem-c=sheet-cell] input[aria-label="B2"], input[aria-label="B2"]').first().dblclick()
+      await c.page.locator('[data-sem-c=sheet-cell] input[aria-label="B2"], input[aria-label="B2"]').filter({ visible: true }).first().dblclick()
       await press(c, 'Meta+A')
     },
     act: async (c) => {
@@ -150,7 +151,7 @@ const INTERACTIONS: Interaction[] = [
     id: 'chat send',
     path: '/examples/chat/',
     prepare: async (c) => {
-      await c.page.locator('[data-sem-c=text-area] textarea').first().click()
+      await c.page.locator('[data-sem-c=text-area] textarea').filter({ visible: true }).first().click()
       await type(c, 'Hello')
     },
     act: (c) => click(c, 'Send'),
@@ -158,14 +159,14 @@ const INTERACTIONS: Interaction[] = [
   {
     id: 'settings field',
     path: '/examples/settings/',
-    prepare: (c) => c.page.locator('[data-sem-c=text-field] input').first().click(),
+    prepare: (c) => c.page.locator('[data-sem-c=text-field] input').filter({ visible: true }).first().click(),
     act: (c) => type(c, 'x'),
     undo: (c) => press(c, 'Backspace'),
   },
   {
     id: 'block editor typing',
     path: '/examples/block-types/',
-    prepare: (c) => c.page.locator('[data-sem-c=block-editor] [data-sem-c=blk-paragraph] .sem-text').first().click(),
+    prepare: (c) => c.page.locator('[data-sem-c=block-editor] [data-sem-c=blk-paragraph] .sem-text').filter({ visible: true }).first().click(),
     act: (c) => type(c, 'x'),
     undo: (c) => press(c, 'Backspace'),
   },
@@ -176,7 +177,7 @@ const INTERACTIONS: Interaction[] = [
     path: '/',
     prepare: async (c) => {
       await click(c, 'Search')
-      await c.page.locator('[data-sem-c=command-palette] input').first().waitFor()
+      await c.page.locator('[data-sem-c=command-palette] input').filter({ visible: true }).first().waitFor()
     },
     act: (c) => type(c, 'kanban'),
     undo: (c) => press(c, 'Escape'),
@@ -196,10 +197,10 @@ const INTERACTIONS: Interaction[] = [
     id: 'theme',
     path: '/',
     prepare: displayMenu,
-    act: async (c) => void (await c.page.locator('select:has(option:text-is("Classic"))').first().selectOption({ label: 'Classic' })),
+    act: async (c) => void (await c.page.locator('select:has(option:text-is("Classic"))').filter({ visible: true }).first().selectOption({ label: 'Classic' })),
     undo: async (c) => {
       await displayMenu(c)
-      await c.page.locator('select:has(option:text-is("Classic"))').first().selectOption({ label: 'Semblance' })
+      await c.page.locator('select:has(option:text-is("Classic"))').filter({ visible: true }).first().selectOption({ label: 'Semblance' })
     },
   },
   // The inspector and the workbench.
