@@ -727,6 +727,12 @@ export interface NavigationOptions {
   links?: EventTarget
   /** The persistence effect, which restores dimensions carried by storage scopes (restore it first). */
   persistence?: { restored(policy: string): boolean }
+  /**
+   * Where the locations are declared (nav:Location, its root, base, paths and dimensions): the
+   * trusted graphs when the page renders authored content (mount's `trusted`), so an author cannot
+   * add a location or reshape one; the store otherwise.
+   */
+  trusted?: GraphStore
   /** Bring a target's rendered root into view; false while it is not rendered yet (see rendererReveal). */
   reveal?: (iri: string, opts: { smooth: boolean }) => boolean
   /** The page's scroll position: a step to another place starts at the top, a step back in history where it was (see windowScroll). */
@@ -800,18 +806,21 @@ export class Navigation {
   private leaving?: ScrollOffset
   private model?: Location | null
   private readonly r: Reader
+  /** Where the location is read (opts.trusted, else the store). */
+  private readonly declarations: Reader
 
   constructor(
     readonly store: GraphStore,
     readonly opts: NavigationOptions = {},
   ) {
     this.r = storeReader(store)
+    this.declarations = opts.trusted ? storeReader(opts.trusted) : this.r
   }
 
   /** The location this effect serves (re-read when navigation declarations change). */
   location(): Location | undefined {
     if (this.model === undefined) {
-      const all = readLocations(this.r)
+      const all = readLocations(this.declarations)
       this.model = (this.opts.root ? all.find((l) => l.root === this.opts.root) : all[0]) ?? null
     }
     return this.model ?? undefined

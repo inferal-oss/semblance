@@ -13,6 +13,7 @@ import type { EventBus } from './behaviour/events.ts'
 import { BEH, NS, RDF_TYPE, SOURCES_GRAPH, XSD_INTEGER } from './ns.ts'
 import { type Delta, quadKey } from './rdf.ts'
 import type { Runtime } from './runtime.ts'
+import type { GraphStore } from './store/types.ts'
 import { concerns, type DeltaMessage, fromNTriples, type Pattern, serverSentEvents, type Snapshot, toNTriples, type WriteRequest, type WriteResult } from './source-protocol.ts'
 
 const SRC = NS.src
@@ -68,6 +69,12 @@ export interface RemoteSourcesOptions {
   backoff?: { minMs?: number; maxMs?: number }
   /** How many members src:SyncLog keeps (default 100). */
   logSize?: number
+  /**
+   * Where the sources are declared (src:Source, src:pattern, src:writable, src:graph, src:awaits):
+   * the trusted graphs when the page renders authored content (mount's `trusted`), so an author
+   * cannot widen a source the host bound; the runtime's store otherwise.
+   */
+  trusted?: GraphStore
 }
 
 interface Queued {
@@ -151,9 +158,9 @@ export class RemoteSources {
     }
   }
 
-  /** The sources the graph declares, with the host's endpoints. */
+  /** The sources the trusted graph declares, with the host's endpoints. */
   private read(): Bound[] {
-    const store = this.runtime.store
+    const store = this.opts.trusted ?? this.runtime.store
     const dg = this.f.defaultGraph()
     const one = (s: Term, p: string) => store.match(s, this.nn(p), null, dg)[0]?.object
     return store.match(null, this.nn(RDF_TYPE), this.nn(SRC + 'Source'), dg).map(({ subject: node }) => {

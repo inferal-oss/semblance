@@ -50,7 +50,9 @@ await mount(element, {
   loads or reconnects.
 
 The graph never names an endpoint or credentials, so an authored graph cannot point a page at a
-server. A source the host gives no endpoint stays `src:Unbound`. An endpoint is a URL with
+server. Under `mount({ authored })` the sources are read from the trusted graphs alone, so an
+authored graph cannot declare one, nor widen the patterns of one the host bound or make it
+writable. A source the host gives no endpoint stays `src:Unbound`. An endpoint is a URL with
 headers, or any `SourceTransport` (an object with `follow` and `write`), for a store reached some
 other way.
 

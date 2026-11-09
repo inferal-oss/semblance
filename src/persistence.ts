@@ -110,6 +110,8 @@ interface Policy {
   dimension?: true
   /** per:acrossTabs: an open tab takes what another tab stores. */
   acrossTabs?: true
+  /** The triple patterns of per:construct's template: what it may store, and so restore (read once). */
+  template?: Quad[]
 }
 
 interface Blob {
@@ -164,8 +166,14 @@ export class Persistence {
   constructor(
     readonly store: GraphStore,
     readonly backends: Record<string, Backend>,
-    /** onFollowed: another tab's write was taken (per:acrossTabs), so the host shows the change, as after an event. */
-    readonly opts: { prefix?: string; delayMs?: number; onFollowed?: () => void } = {},
+    /**
+     * onFollowed: another tab's write was taken (per:acrossTabs), so the host shows the change, as after an event.
+     * trusted: where the policies are declared (per:Policy, its subject, properties, query, scope and
+     * graph, and storage-carried dimensions): the trusted graphs when the page renders authored
+     * content (mount's `trusted`), so an author cannot add a policy or pick a storage key; the store
+     * otherwise. Whether a policy is on (per:enabled) is state, read from the store.
+     */
+    readonly opts: { prefix?: string; delayMs?: number; onFollowed?: () => void; trusted?: GraphStore } = {},
   ) {
     created?.(this)
   }
@@ -192,11 +200,17 @@ export class Persistence {
     return (this.cachedPolicies ??= this.readPolicies())
   }
 
+  /** Where the policies are declared. */
+  private get declared(): GraphStore {
+    return this.opts.trusted ?? this.store
+  }
+
   private readPolicies(): Policy[] {
-    const s = this.store
+    const s = this.declared
     const f = s.factory
     const nn = (x: string) => f.namedNode(x)
     const one = (subject: Term, p: string) => s.match(subject, nn(p), null)[0]?.object
+    const enabled = (p: Term) => this.store.match(p, nn(PER + 'enabled'), null)[0]?.object.value !== 'false'
     const policies = s.match(null, nn(RDF_TYPE), nn(PER + 'Policy')).map(({ subject: p }) => {
       const construct = one(p, PER + 'construct')?.value
       const listHead = one(p, PER + 'properties')
@@ -209,7 +223,7 @@ export class Persistence {
       return {
         iri: p.value,
         scope: one(p, PER + 'scope')?.value ?? PER + 'Session',
-        enabled: one(p, PER + 'enabled')?.value !== 'false',
+        enabled: enabled(p),
         version: one(p, PER + 'version')?.value ?? '1',
         graph: one(p, PER + 'graph')?.value,
         retentionMs: duration ? parseDuration(duration) : undefined,
@@ -241,7 +255,7 @@ export class Persistence {
   }
   private declaredPrefixes(): Record<string, string> {
     const out: Record<string, string> = {}
-    for (const line of prefixesFor(this.store).split('\n')) {
+    for (const line of prefixesFor(this.declared).split('\n')) {
       const m = /^PREFIX (\S*): <([^>]*)>/.exec(line)
       if (m) out[m[1]!] = m[2]!
     }
@@ -257,12 +271,16 @@ export class Persistence {
     // The switches themselves are remembered on the device.
     const flags = await this.backend(PER + 'Device').get(this.key('enabled'))
     if (flags) {
+      // Only the switches of the policies declared: a stored flag names no other node.
+      const declared = new Set(this.policies().filter((p) => !p.dimension).map((p) => p.iri))
       for (const [iri, on] of Object.entries(JSON.parse(flags) as Record<string, boolean>)) {
+        if (!declared.has(iri) || typeof on !== 'boolean') continue
         const p = f.namedNode(iri)
         for (const q of this.store.match(p, f.namedNode(PER + 'enabled'), null)) this.store.delete(q)
         this.store.add(f.quad(p, f.namedNode(PER + 'enabled'), f.literal(String(on), f.namedNode(XSD_BOOLEAN))))
       }
     }
+    this.cachedPolicies = undefined
     let total = 0
     for (const policy of this.policies()) {
       this.considered.add(policy.iri)
@@ -337,7 +355,8 @@ export class Persistence {
       for (const q of this.parse(chunk.remove)) held.delete(quadKey(q))
       for (const q of this.parse(chunk.add)) held.set(quadKey(q), q)
     }
-    const add = [...held.values()].map((q) => f.quad(q.subject, q.predicate, q.object, g))
+    // Only what the policy covers comes back: whatever else storage holds stays there.
+    const add = [...held.values()].filter((q) => this.covers(policy, q)).map((q) => f.quad(q.subject, q.predicate, q.object, g))
     // What is restored replaces the current values of the same subject and property.
     // Keyed by the terms themselves (a remembered subject may be a blank node, not an IRI).
     const pairs = new Map(add.map((q) => [termKey(q.subject) + ' ' + termKey(q.predicate), q] as const))
@@ -345,6 +364,43 @@ export class Persistence {
     const remove: Quad[] = []
     if (!policy.graph) for (const { subject, predicate } of pairs.values()) for (const q of this.store.match(subject, predicate, null, g)) if (!keep.has(quadKey(q))) remove.push(q)
     return { add, remove }
+  }
+
+  /**
+   * Whether a policy covers a stored triple, so restoring it may bring the triple back: its
+   * subject's properties (per:subject, per:properties), else a pattern of its query's template
+   * (per:construct), a sensitive property never. A policy with a graph (per:graph) restores into
+   * that graph alone, but the same holds there.
+   */
+  private covers(policy: Policy, q: Quad): boolean {
+    if (this.isSensitive(q.predicate)) return false
+    if (policy.subject) return termKey(q.subject) === termKey(policy.subject) && policy.properties.includes(q.predicate.value)
+    if (!policy.construct) return false
+    policy.template ??= this.templateOf(policy.construct)
+    const fits = (pattern: Term, t: Term) => pattern.termType === 'Variable' || pattern.termType === 'BlankNode' || pattern.equals(t)
+    return policy.template.some((p) => fits(p.subject, q.subject) && fits(p.predicate, q.predicate) && fits(p.object, q.object))
+  }
+
+  /** The triple patterns of a CONSTRUCT query's template (none when it cannot be read: nothing is restored). */
+  private templateOf(query: string): Quad[] {
+    const at = /\bCONSTRUCT\s*\{/i.exec(query)
+    if (!at) return []
+    const start = at.index + at[0].length
+    // Braces outside IRIs, strings and comments, until the template's own closes.
+    const token = /<[^>\s]*>|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|#[^\n]*|[{}]/g
+    token.lastIndex = start
+    let depth = 1
+    let end = -1
+    for (let m; end < 0 && (m = token.exec(query)); ) {
+      if (m[0] === '{') depth++
+      else if (m[0] === '}' && !--depth) end = m.index
+    }
+    if (end < 0) return []
+    try {
+      return new Parser({ format: 'N3' }).parse(prefixesFor(this.declared) + '\n' + query.slice(start, end).trim().replace(/\.?$/, ' .')) as Quad[]
+    } catch {
+      return []
+    }
   }
 
   /** Whether the last restore put back what a policy (or a storage-carried dimension) stored. */
@@ -583,7 +639,7 @@ export class Persistence {
     } else if (policy.construct && s.sparql) {
       const graphs = [f.defaultGraph(), f.namedNode(EVENTS_GRAPH), ...(this.runtime?.projections.map((p) => p.engine.graph) ?? [])]
       if (policy.graph) graphs.push(f.namedNode(policy.graph))
-      quads = s.construct(prefixesFor(s) + '\n' + policy.construct, graphs)
+      quads = s.construct(prefixesFor(this.declared) + '\n' + policy.construct, graphs)
     }
     return quads.filter((q) => !sensitive(q.predicate))
   }

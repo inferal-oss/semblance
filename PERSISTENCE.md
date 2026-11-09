@@ -23,8 +23,8 @@ change log records what was remembered and why.
 | `per:scope` | `per:Session` (sessionStorage: this tab, until closed), `per:Device` (localStorage: this browser profile), `per:Database` (IndexedDB: larger, structured), `per:Pod` (later: a Solid pod / server, shared across devices). |
 | `per:acrossTabs` | `xsd:boolean`, default false. In a scope other tabs share (`per:Device`): a tab already open takes what another tab stores under the policy, as one change, when it is stored. Without it an open tab keeps its own until it is reloaded. |
 | `per:enabled` | `xsd:boolean`. Default true. Graph state, so a switch can control it. |
-| `per:subject` + `per:properties` | The simple form: these properties of this node. |
-| `per:construct` | The general form: a SPARQL CONSTRUCT over the input and derived graphs whose result is remembered. Restoring writes it back to the input graph, the same contract as a reaction's `beh:inserts`. |
+| `per:subject` + `per:properties` | The simple form: these properties of this node. Restoring brings back these and nothing else that storage holds. |
+| `per:construct` | The general form: a SPARQL CONSTRUCT over the input and derived graphs whose result is remembered. Restoring writes it back to the input graph, the same contract as a reaction's `beh:inserts`. Only what its template can produce comes back: name the predicates (`?n c:ratio ?r`), since a variable one (`?n ?p ?o`) covers any triple. |
 | `per:forgets` | Optional CONSTRUCT of what to remove before restoring (default: the current values of what is restored). |
 | `per:retention` | Optional `xsd:duration` (e.g. `"P30D"`) after which stored state is dropped. |
 | `per:sensitive` | On a property: never remembered (password values, tokens). A shape rejects a policy covering one. |

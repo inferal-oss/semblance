@@ -100,7 +100,8 @@ describe('live examples rendered on the server', () => {
     const r = await renderToString({ store, root: ROOT, url: '/docs/start/', prepare: s.prepare, layers: s.layers?.(store), styles: false, sandboxes: { load: counted } })
     const shown = (r.html.match(/<div data-sem-sandbox="ssr-\d+"/g) ?? []).length
     expect(shown).toBeGreaterThanOrEqual(3)
-    expect(loaded.length).toBe(shown)
+    // One store per example, and one of the ontology alone that the policy is read from.
+    expect(loaded.length).toBe(shown + 1)
     expect(loaded.every((st) => disposed.has(st))).toBe(true)
     r.runtime.dispose()
   })

@@ -25,7 +25,7 @@ import { toHTML } from './render/serialize.ts'
 import { type Projection, Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
 import { compileStyles } from './style/compile.ts'
-import { authoredPolicy, readPolicy, type SafetyPolicy } from './safety.ts'
+import { readPolicy, type SafetyPolicy } from './safety.ts'
 import { attachAnchoredPopups } from './web/anchored-popups.ts'
 import { attachSizeHandles } from './web/size-handles.ts'
 import { replayKept, SSR_ATTRIBUTE } from './web/takeover.ts'
@@ -100,8 +100,9 @@ export interface SandboxOptions {
   urlBase?: string
   /**
    * What an example may render (src/safety.ts): its sources are authored content, so what the
-   * policy refuses is left out and reported as a warning. Read from a trusted store (the site's,
-   * authoredPolicy); by default from a store of the ontology alone (`load()`), never the sandbox's.
+   * policy refuses is left out and reported as a warning. Read from a trusted store (authoredPolicy);
+   * by default from a store of the ontology alone (`load()`), never the sandbox's nor one that
+   * restored remembered state.
    */
   policy?: SafetyPolicy
 }
@@ -442,8 +443,8 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
   const roots = new Set(opts.roots)
   const languages = [...screen.engine.languages]
   let n = 0
-  // The site's store is trusted (its examples' sources are text in it, not triples): the policy is read there.
-  opts = { ...opts, policy: opts.policy ?? authoredPolicy(store) }
+  // Read from the ontology alone, as the browser's Sandboxes do, so both render the same.
+  opts = { ...opts, policy: trustedPolicy(opts) }
   for (const q of store.match(null, f.namedNode(RDF_TYPE), f.namedNode(LIVE.LiveExample), f.defaultGraph())) {
     const iri = q.subject.value
     const slots = slotsOf(iri)
@@ -589,10 +590,8 @@ export class Sandboxes {
     readonly screen: Projection,
     private readonly opts: SandboxesOptions,
   ) {
-    // The site's store is trusted (its examples' sources are text in it, not triples): the policy is
-    // read there, when the first sandbox is built (a page may load the ontology's graphs after it starts).
-    let policy = opts.policy
-    this.opts = Object.defineProperty({ ...opts }, 'policy', { get: () => (policy ??= authoredPolicy(runtime.store)), enumerable: true })
+    // The policy is read from the ontology alone (trustedPolicy), when the first sandbox is built:
+    // never from the site's store, which holds what storage restored.
     created?.(this)
   }
 

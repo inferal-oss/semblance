@@ -34,7 +34,8 @@ export interface MountOptions {
    * Turtle from an untrusted author (a person, a page, a model), loaded after `graphs`: the root is
    * then rendered as authored content (src/safety.ts, docs/SAFETY.md). What the policy refuses
    * (script, event handler attributes, javascript: URLs, CSS that loads a resource, …) is left out and
-   * reported through `onRefused`. The policy is read from the ontology and `graphs` alone.
+   * reported through `onRefused`. The policy, and the host effects' configuration (sources, locations,
+   * uploads, modules), are read from the ontology and `graphs` alone (`trusted`).
    */
   authored?: string[]
   /** The policy of authored content, instead of the framework's safe:Authored (read from a trusted store). */
@@ -61,7 +62,7 @@ export interface MountOptions {
   /** Called after each event is handled and the DOM patched. */
   onHandled?: (h: Handled) => void
   /** The files effect (c:FileDrop: the picker, drops, uploads and their handlers); false leaves it off. */
-  files?: Omit<FilesOptions, 'onHandled'> | false
+  files?: Omit<FilesOptions, 'onHandled' | 'trusted'> | false
   /** The fullscreen effect (fs:fullscreen, fs:fullViewport): its host, or how long it may take; false leaves it off. */
   fullscreen?: Omit<FullscreenOptions, 'element' | 'onHandled'> | false
   /** Foreign components (ext:Island, docs/FOREIGN.md): widgets by their ext:widget name. */
@@ -89,7 +90,7 @@ export interface MountOptions {
    * Remote sources (src:Source, docs/REMOTE.md): each source's store, by the source's IRI. The graph
    * says what a page binds to; the host, here, says where it is and with what credentials.
    */
-  sources?: Omit<RemoteSourcesOptions, 'bus' | 'onChange'>
+  sources?: Omit<RemoteSourcesOptions, 'bus' | 'onChange' | 'trusted'>
 }
 
 export interface MountedApp {
@@ -110,6 +111,13 @@ export interface MountedApp {
   rendered: RenderedState
   /** The remote-sources effect, when `sources` was given. */
   sources?: RemoteSources
+  /**
+   * When content is authored: a store of the ontology and `graphs` alone, where the effects read
+   * their configuration (sources, locations, uploads, modules), so the author cannot reconfigure
+   * them. Give it to an effect you attach yourself (`new Persistence(app.store, backends, { trusted: app.trusted })`).
+   * Released on unmount.
+   */
+  trusted?: GraphStore
   /** Patch the DOM with whatever changed since (after changing the store through runtime.apply). */
   flush(): void
   /** Detach effects, release the owned runtime and store, and remove injected styles. The DOM is left as it is. Safe to call again; the runtime and store must not be used afterwards. */
@@ -130,22 +138,17 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   await initWeb(kind, { ontology: opts.ontology === undefined })
   // Over the whole ontology, or the part the app ships (opts.ontology).
   const load = (...graphs: string[]) => (opts.ontology === undefined ? loadStore(kind, ...graphs) : loadStoreWithOntology(kind, {}, opts.ontology, ...graphs))
-  // Authored content: the policy is read before the author's graphs are in the store (they could add to it).
-  let policy = opts.policy
-  if (!policy && opts.authored) {
-    const trusted = load(...(opts.graphs ?? []))
-    try {
-      policy = readPolicy(trusted)
-    } finally {
-      trusted.dispose?.()
-    }
-  }
+  // Authored content: the policy, and the effects' configuration, are read from the trusted graphs
+  // alone, kept apart from the store the author's graphs go into (they could add to either).
+  const trusted = opts.authored ? load(...(opts.graphs ?? [])) : undefined
+  const policy = opts.policy ?? (trusted && readPolicy(trusted))
   const store = load(...(opts.graphs ?? []), ...(opts.authored ?? []))
+  const config = trusted ?? store
   const onRefused = opts.onRefused ?? ((e: Error) => console.warn('[semblance]', e.message))
   // Where we are, before the first projection: the address (a server rendered the same one).
-  const declared = store.match(null, store.factory.namedNode(NS.nav + 'root'), store.factory.namedNode(opts.root)).length > 0
+  const declared = config.match(null, config.factory.namedNode(NS.nav + 'root'), config.factory.namedNode(opts.root)).length > 0
   const located = !!(opts.navigation && opts.navigation.location) || 'location' in globalThis
-  const navigation = opts.navigation === false || !declared || !located ? undefined : new Navigation(store, { ...opts.navigation, root: opts.root })
+  const navigation = opts.navigation === false || !declared || !located ? undefined : new Navigation(store, { ...opts.navigation, root: opts.root, trusted })
   await navigation?.restore()
   opts.prepare?.(store)
   const ssr = serverRendered(element)
@@ -219,6 +222,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       ? undefined
       : new Files(bus, {
           ...opts.files,
+          trusted,
           onHandled: (h) => {
             flush()
             scheduleWarmup()
@@ -258,6 +262,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     widgets: opts.widgets,
     modules: opts.modules,
     adapters: opts.adapters,
+    trusted,
     onHandled: (h) => {
       flush()
       scheduleWarmup()
@@ -281,7 +286,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const scroll = win && !(opts.navigation && opts.navigation.location) ? windowScroll(win) : undefined
   const detachNavigation = navigation?.attach(runtime, { bus, links: element, onNavigate: flush, reveal: rendererReveal(renderer), scroll })
   // Remote sources: their part of the graph is loaded, follows the stores, and is written back.
-  const sources = opts.sources && new RemoteSources(runtime, { ...opts.sources, bus, onChange: () => (flush(), scheduleWarmup()) })
+  const sources = opts.sources && new RemoteSources(runtime, { ...opts.sources, trusted, bus, onChange: () => (flush(), scheduleWarmup()) })
   const detachSources = sources?.attach()
   // What the visitor did before now (a click, typing) happens now, on the adopted nodes.
   const takeover = adopted && { nodes: adopted.nodes, mismatches: adopted.mismatches, replayed: adopted.replay() }
@@ -298,6 +303,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     islands,
     rendered,
     sources,
+    trusted,
     flush,
     unmount() {
       if (stopped) return
@@ -317,6 +323,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachSources?.()
       if (sheet) doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
       runtime.dispose()
+      trusted?.dispose?.()
     },
   }
 }
