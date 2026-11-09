@@ -188,6 +188,11 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   this device, the browser database) and whether; a host effect restores them
   before the first render and writes them back; `per:StateLog` records every
   write and restore. See [PERSISTENCE.md](PERSISTENCE.md).
+- **Remote stores**: a graph can live in a triple store behind a server. A page binds to the part it
+  needs (patterns), loads it, follows the store's changes as ordinary input deltas and sends its own
+  changes back as compare-and-set writes; a refused write is repaired from the store. A small protocol
+  (server-sent events and JSON) and a reference server (`src/node/source-server.ts`). See
+  [docs/REMOTE.md](docs/REMOTE.md).
 - **Navigation**: where we are is graph data. A `nav:Location` groups the
   dimensions of one app (`nav:Dimension`: a node's property, e.g. the page or the
   docs section), each saying where it is carried (the address's fragment or
