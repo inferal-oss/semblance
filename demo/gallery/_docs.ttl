@@ -29,11 +29,12 @@ ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" , "Пове�
 ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" , "Стилі й теми"@uk , "Stile und Designs"@de , "الأنماط والسمات"@ar ; sem:order 10 ; ui:key "styling" .
 ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" , "Збереження"@uk , "Persistenz"@de , "الحفظ"@ar ; sem:order 11 ; ui:key "persistence" .
 ui:DocRemote a ui:DocSection ; rdfs:label "Remote data" , "Віддалені дані"@uk , "Entfernte Daten"@de , "البيانات البعيدة"@ar ; sem:order 12 ; ui:key "remote" .
-ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقل"@ar ; sem:order 13 ; ui:key "navigation" .
-ui:DocViews a ui:DocSection ; rdfs:label "Maintained views" , "Підтримувані подання"@uk , "Gepflegte Ansichten"@de , "العروض المُصانة"@ar ; sem:order 14 ; ui:key "views" .
-ui:DocJelly a ui:DocSection ; rdfs:label "Binary RDF (Jelly)" , "Двійковий RDF (Jelly)"@uk , "Binäres RDF (Jelly)"@de , "RDF الثنائي (Jelly)"@ar ; sem:order 15 ; ui:key "jelly" .
-ui:DocTools a ui:DocSection ; rdfs:label "Tools" , "Інструменти"@uk , "Werkzeuge"@de , "الأدوات"@ar ; sem:order 16 ; ui:key "tools" .
-ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 17 ; ui:key "performance" .
+ui:DocFetching a ui:DocSection ; rdfs:label "SERVICE and LOAD" , "SERVICE і LOAD"@uk , "SERVICE und LOAD"@de , "SERVICE و LOAD"@ar ; sem:order 13 ; ui:key "fetching" .
+ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقل"@ar ; sem:order 14 ; ui:key "navigation" .
+ui:DocViews a ui:DocSection ; rdfs:label "Maintained views" , "Підтримувані подання"@uk , "Gepflegte Ansichten"@de , "العروض المُصانة"@ar ; sem:order 15 ; ui:key "views" .
+ui:DocJelly a ui:DocSection ; rdfs:label "Binary RDF (Jelly)" , "Двійковий RDF (Jelly)"@uk , "Binäres RDF (Jelly)"@de , "RDF الثنائي (Jelly)"@ar ; sem:order 16 ; ui:key "jelly" .
+ui:DocTools a ui:DocSection ; rdfs:label "Tools" , "Інструменти"@uk , "Werkzeuge"@de , "الأدوات"@ar ; sem:order 17 ; ui:key "tools" .
+ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 18 ; ui:key "performance" .
 
 ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:docsSide ui:docPages ) .
@@ -41,7 +42,7 @@ ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:s
 ui:docsSide a c:Stack ; pos:direction pos:Column ; pos:sticky pos:StickToTop ; c:children ( ui:docsNav ) .
 ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
-    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-remote ui:dcs-navigation ui:dcs-views ui:dcs-jelly ui:dcs-tools ui:dcs-performance ) .
+    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-remote ui:dcs-fetching ui:dcs-navigation ui:dcs-views ui:dcs-jelly ui:dcs-tools ui:dcs-performance ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
 ui:dcs-start c:when ui:DocStart ; c:content ui:doc-start .
 ui:dcs-recipes c:when ui:DocRecipes ; c:content ui:doc-recipes .
@@ -54,6 +55,7 @@ ui:dcs-behaviour c:when ui:DocBehaviour ; c:content ui:doc-behaviour .
 ui:dcs-styling c:when ui:DocStyling ; c:content ui:doc-styling .
 ui:dcs-persistence c:when ui:DocPersistence ; c:content ui:doc-persistence .
 ui:dcs-remote c:when ui:DocRemote ; c:content ui:doc-remote .
+ui:dcs-fetching c:when ui:DocFetching ; c:content ui:doc-fetching .
 ui:dcs-navigation c:when ui:DocNavigation ; c:content ui:doc-navigation .
 ui:dcs-views c:when ui:DocViews ; c:content ui:doc-views .
 ui:dcs-jelly c:when ui:DocJelly ; c:content ui:doc-jelly .
@@ -1084,15 +1086,16 @@ ui:doc-re-1 a c:Text ; c:label "An app's data does not have to live in the page.
 ui:doc-re-2 a c:Text ; c:children ( "The graph says what lives elsewhere, with a " ui:doc-re-m-Source " (ontology/layers/source.ttl, prefix src:); the host says where. The remote-sources effect (src/remote.ts) does the rest. What arrives from the store is an ordinary input change, applied with runtime.apply: rules and views take it in as they take in a click, so a change from the store costs what it changes, however large the store is." ) .
 ui:doc-re-m-Source a c:Mention ; c:label "src:Source" ; c:mentions src:Source ; c:to src:Source .
 
-ui:doc-re-not-h a c:Heading ; c:level 2 ; c:label "Not SERVICE, not LOAD" .
-ui:doc-re-not-1 a c:Text ; c:label "SPARQL has two ways to reach data elsewhere: SERVICE, which sends part of a query to an endpoint while the query runs, and LOAD, which fetches a document into the store. Semblance's engines leave both out (rdf-engine/README.md), on purpose. A source is neither:" .
+ui:doc-re-not-h a c:Heading ; c:level 2 ; c:label "A source, SERVICE or LOAD" .
+ui:doc-re-not-1 a c:Text ; c:label "SPARQL has two ways to reach data elsewhere: SERVICE, which sends part of a query to an endpoint while the query runs, and LOAD, which fetches a document into the store. The engines run both when the host asks, for a one-off question or import. A source is for something else:" .
 ui:doc-re-not a c:DescriptionList ; c:of ui:doc-re-not-items ; c:fields ( ui:re-n-authority ui:re-n-deltas ui:re-n-endpoint ui:re-n-cost ) .
-ui:doc-re-not-items ui:re-n-authority "The store is the authority. SERVICE asks a question of another store and keeps no part of its answer in step; LOAD copies a document once, after which the copy and the original drift apart. A source binds the page's part of the store for as long as the page is open: the page holds what the store holds, and a write the store refuses is put back to what it holds." ;
-    ui:re-n-deltas "Only deltas reach the page. After one snapshot, the store sends what changed, as it changes, and nothing else. A query never waits on the network: the rules read the page's own store, and the store's changes reach them as input changes, between turns." ;
-    ui:re-n-endpoint "Nothing in the graph names an endpoint. A SERVICE or a LOAD names its URL in the query, so a graph that holds one decides where the page connects, and with what. A source names only what it covers; the host maps its IRI to a URL and credentials, and a source it does not map stays src:Unbound. An authored graph cannot point a page at a server." ;
+ui:doc-re-not-items ui:re-n-authority "The store is the authority. A SERVICE answer and a LOADed document are copies as of when they were fetched, and drift from where they came from. A source binds the page's part of the store for as long as the page is open: the page holds what the store holds, and a write the store refuses is put back to what it holds." ;
+    ui:re-n-deltas "Only deltas reach the page. After one snapshot, the store sends what changed, as it changes, and nothing else. Rules and views see each change incrementally; they may not use SERVICE or LOAD, whose results are not." ;
+    ui:re-n-endpoint "Nothing in the graph decides where the page connects. A source names only what it covers; the host maps its IRI to a URL and credentials, and a source it does not map stays src:Unbound. SERVICE and LOAD name an IRI in the query, but only the host's own asynchronous calls fetch, from the IRIs its policy lists, mapped the same way. An authored graph cannot point a page at a server either way." ;
     ui:re-n-cost "A change costs the change. The server tells which pages a changed statement concerns by its predicate, its subject or its subject's type, one indexed lookup; the page applies it as one input change. Neither side re-reads the store or the page's part of it." .
-ui:re-n-authority rdfs:label "The authority" . ui:re-n-deltas rdfs:label "Deltas" . ui:re-n-endpoint rdfs:label "No endpoint" . ui:re-n-cost rdfs:label "Cost" .
-ui:doc-re-not-2 a c:Text ; c:label "A source is the page's part of a store, kept in step. Data you only need once, a document to import, is the host's to fetch and pass to mount's graphs or runtime.apply." .
+ui:re-n-authority rdfs:label "The authority" . ui:re-n-deltas rdfs:label "Deltas" . ui:re-n-endpoint rdfs:label "Where it connects" . ui:re-n-cost rdfs:label "Cost" .
+ui:doc-re-not-2 a c:Text ; c:children ( "Bind a source for data the page should follow; ask with SERVICE, or import with LOAD, for data it needs once. " ui:doc-re-to-fetching " has how." ) .
+ui:doc-re-to-fetching a c:Link , c:Setter ; c:label "SERVICE and LOAD" ; c:href "/docs/fetching/" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocFetching .
 
 ui:doc-re-decl-h a c:Heading ; c:level 2 ; c:label "Declaring a source" .
 ui:doc-re-decl-1 a c:Text ; c:label "The graph says what lives elsewhere. This is the todo list of examples/remote: every todo, and the list's links to them, live in the store, and the page's changes to them go back." .
@@ -1198,6 +1201,92 @@ ui:doc-re-try-1 a c:Text ; c:label "examples/remote is a shared todo list, serve
 ui:doc-re-try-sh a c:Code ; c:block true ; c:language "shell" ; c:label """npx vite --config examples/remote/vite.config.ts""" .
 ui:doc-re-try-2 a c:Text ; c:label "Open it in two windows: what one changes, the other shows. A label longer than 40 characters is refused by the store, and the page puts back what the store holds. A live example on this page, with a simulated store, is #442." .
 ui:doc-re-more a c:Text ; c:label "docs/REMOTE.md in the repository says the same, at more length." .
+
+# --- SERVICE and LOAD --- (docs/FETCHING.md says the same, at more length)
+ui:doc-fetching a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-fe-h ui:doc-fe-1 ui:doc-fe-when ui:doc-fe-2
+                 ui:doc-fe-ask-h ui:doc-fe-ask-1 ui:doc-fe-ask-ts ui:doc-fe-ask-2 ui:doc-fe-ask-mount
+                 ui:doc-fe-pol-h ui:doc-fe-pol-1 ui:doc-fe-pol ui:doc-fe-pol-2
+                 ui:doc-fe-wait-h ui:doc-fe-wait-1 ui:doc-fe-wait ui:doc-fe-wait-2
+                 ui:doc-fe-svc-h ui:doc-fe-svc-1 ui:doc-fe-svc
+                 ui:doc-fe-load-h ui:doc-fe-load-1
+                 ui:doc-fe-safe-h ui:doc-fe-safe
+                 ui:doc-fe-stores-h ui:doc-fe-stores ui:doc-fe-more ) .
+ui:doc-fe-h a c:Heading ; c:level 1 ; c:label "SERVICE and LOAD" .
+ui:doc-fe-1 a c:Text ; c:label "SERVICE sends part of a query to another SPARQL endpoint while the query runs; LOAD fetches a document into a graph. Semblance's engines run both, but only when the host asks, through an asynchronous call, and only for endpoints and documents the host lists. Rules, views and reactions never fetch." .
+ui:doc-fe-when a c:DescriptionList ; c:of ui:doc-fe-when-items ; c:fields ( ui:fe-w-source ui:fe-w-service ui:fe-w-load ) .
+ui:doc-fe-when-items ui:fe-w-source "Part of a server's store the page binds to and keeps current: loaded once, then deltas both ways; rules see each change incrementally." ;
+    ui:fe-w-service "A one-off question to a SPARQL endpoint the page does not hold: a lookup, a join of local rows with a public dataset, answered when asked." ;
+    ui:fe-w-load "A one-off import of a document (a dataset dump, a vocabulary) into a graph of the store." .
+ui:fe-w-source rdfs:label "A remote source" . ui:fe-w-service rdfs:label "SERVICE" . ui:fe-w-load rdfs:label "LOAD" .
+ui:doc-fe-2 a c:Text ; c:children ( "A SERVICE answer and a LOADed document are copies as of when they were fetched; nothing keeps them in step with where they came from. When the page should follow the data, bind a source: " ui:doc-fe-to-remote "." ) .
+ui:doc-fe-to-remote a c:Link , c:Setter ; c:label "Remote data" ; c:href "/docs/remote/" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocRemote .
+
+ui:doc-fe-ask-h a c:Heading ; c:level 2 ; c:label "Asking" .
+ui:doc-fe-ask-1 a c:Text ; c:label "store.fetching is the asynchronous side of a store: select, construct and update, each with a policy. The wasm engine stores (wat, rust) have it; Oxigraph and N3 do not." .
+ui:doc-fe-ask-ts a c:Code ; c:block true ; c:language "typescript" ; c:label """const policy: FetchPolicy = {
+  endpoints: { 'urn:ex:catalog': { url: 'https://data.example.org/sparql', headers: { authorization } } },
+  documents: { 'https://w3id.org/vocab/*': {} },
+  deadline: Date.now() + 5000,
+}
+
+const rows = await store.fetching!.select(`
+  SELECT ?item ?price WHERE {
+    ?item a ex:Item ; ex:sku ?sku .
+    SERVICE <urn:ex:catalog> { ?product ex:sku ?sku ; ex:price ?price }
+  }`, graphs, policy)
+
+await store.fetching!.update(`LOAD <https://w3id.org/vocab/terms.ttl> INTO GRAPH <urn:ex:vocab>`, policy)""" .
+ui:doc-fe-ask-2 a c:Text ; c:label "update changes the store directly: it is for a store no runtime drives - a server, a build step, a tool, a store seeded before mount. A mounted app takes remote data in through the runtime, so rules see it as an input change:" .
+ui:doc-fe-ask-mount a c:Code ; c:block true ; c:language "typescript" ; c:label """const quads = await app.store.fetching!.construct(query, graphs, policy)
+app.runtime.apply({ add: quads, remove: [] })""" .
+
+ui:doc-fe-pol-h a c:Heading ; c:level 2 ; c:label "The policy" .
+ui:doc-fe-pol-1 a c:Text ; c:label "Nothing is fetched unless the host lists it. The policy is code, passed with each call: no graph can add to it, and nothing in the graph configures fetching." .
+ui:doc-fe-pol a c:DescriptionList ; c:of ui:doc-fe-pol-items ; c:fields ( ui:fe-p-endpoints ui:fe-p-documents ui:fe-p-limits ui:fe-p-deadline ) .
+ui:doc-fe-pol-items ui:fe-p-endpoints "SERVICE: the endpoint IRI as the query names it, to how to reach it (url, headers, credentials). None listed: every SERVICE fails." ;
+    ui:fe-p-documents "LOAD: a document IRI, or a prefix ending in *, to how to reach it. None listed: every LOAD fails." ;
+    ui:fe-p-limits "timeoutMs (10 s by default) and maxBytes (16 MiB) per request, for all or per endpoint." ;
+    ui:fe-p-deadline "deadline bounds the whole operation, every round and every fetch; maxRounds (8) the rounds." .
+ui:fe-p-endpoints rdfs:label "endpoints" . ui:fe-p-documents rdfs:label "documents" . ui:fe-p-limits rdfs:label "timeoutMs, maxBytes" . ui:fe-p-deadline rdfs:label "deadline, maxRounds" .
+ui:doc-fe-pol-2 a c:Text ; c:label "The keys are the IRIs the query names; url maps one to where it really is, as remote sources map a source's IRI to its endpoint. A query can name <urn:ex:catalog> and never see a URL or a token. The list is checked for every request, including a SERVICE ?endpoint whose endpoint comes from data." .
+
+ui:doc-fe-wait-h a c:Heading ; c:level 2 ; c:label "How a query waits" .
+ui:doc-fe-wait-1 a c:Text ; c:label "An engine has no network, and a run is synchronous; a browser cannot block its main thread on a response. So a run that needs something from elsewhere stops, says what, and is run again once the host has it:" .
+ui:doc-fe-wait a c:DescriptionList ; c:of ui:doc-fe-wait-items ; c:fields ( ui:fe-r-ask ui:fe-r-fetch ui:fe-r-again ) .
+ui:doc-fe-wait-items ui:fe-r-ask "The run returns waiting, with every request it could name: evaluation goes on past the first missing answer." ;
+    ui:fe-r-fetch "The host fetches them in parallel, under the policy, and gives the engine each answer or failure." ;
+    ui:fe-r-again "The host runs the same query again. A request that needs an earlier answer (a SERVICE ?endpoint another SERVICE binds) shows up in a later round; the rounds end when the run returns anything else." .
+ui:fe-r-ask rdfs:label "1. Waiting" . ui:fe-r-fetch rdfs:label "2. Fetching" . ui:fe-r-again rdfs:label "3. Again" .
+ui:doc-fe-wait-2 a c:Text ; c:label "Each round re-evaluates the local part of the query, small next to a network round trip, under the engine's own deadline and fuel. Nothing is kept mid-evaluation, and the two engines do the same (rdf-engine/ABI.md, \"Optional: fetching\")." .
+
+ui:doc-fe-svc-h a c:Heading ; c:level 2 ; c:label "SERVICE" .
+ui:doc-fe-svc-1 a c:Text ; c:label "SERVICE [SILENT] (<iri> | ?var) { P } sends the endpoint SELECT * WHERE { P } over the SPARQL Protocol (POST, application/sparql-query; the answer is read as SPARQL results JSON, or XML)." .
+ui:doc-fe-svc a c:DescriptionList ; c:of ui:doc-fe-svc-items ; c:fields ( ui:fe-s-values ui:fe-s-join ui:fe-s-silent ui:fe-s-compile ) .
+ui:doc-fe-svc-items ui:fe-s-values "The solutions joined before the SERVICE, restricted to P's variables, are sent as VALUES after the pattern, so the endpoint answers only for the rows the page has. Blank nodes and triple terms cannot be sent and are left out. The endpoint joins them after evaluating P, so a FILTER inside P does not see them, as SPARQL scopes it." ;
+    ui:fe-s-join "An answer row belongs to the binding row it agrees with, so the result equals SERVICE evaluated alone and joined, whatever order the evaluator takes." ;
+    ui:fe-s-silent "A failed request - not listed, unreachable, a bad response, an unbound endpoint - gives the one empty solution, and the row passes as it is. Without SILENT the query fails with the reason." ;
+    ui:fe-s-compile "A query with SERVICE is not compiled; it runs in the interpreter." .
+ui:fe-s-values rdfs:label "Bindings go along" . ui:fe-s-join rdfs:label "The same result" . ui:fe-s-silent rdfs:label "SILENT" . ui:fe-s-compile rdfs:label "Compiling" .
+
+ui:doc-fe-load-h a c:Heading ; c:level 2 ; c:label "LOAD" .
+ui:doc-fe-load-1 a c:Text ; c:label "LOAD [SILENT] <iri> [INTO GRAPH <g>] fetches the document and adds its triples to g (the default graph without INTO), in the order of the update's operations; the update is all or nothing, as before. The host parses the document by its content type: Turtle and N-Triples by the engine's own parser, TriG and N-Quads their default graph, anything else by a parse the host gives. Blank nodes are fresh per document. A failed LOAD fails the update; LOAD SILENT does nothing." .
+
+ui:doc-fe-safe-h a c:Heading ; c:level 2 ; c:label "Authored content never reaches the network" .
+ui:doc-fe-safe a c:DescriptionList ; c:of ui:doc-fe-safe-items ; c:fields ( ui:fe-a-host ui:fe-a-rules ui:fe-a-list ui:fe-a-csp ) .
+ui:doc-fe-safe-items ui:fe-a-host "Only the host's own asynchronous calls fetch. Rules, views and reactions run the synchronous select and construct, where a waiting run is an error: an authored SPARQL rule with SERVICE fails like any failing rule, and nothing is fetched." ;
+    ui:fe-a-rules "Rules and views may not use SERVICE or LOAD: their results come from elsewhere, on no schedule the runtime sees, and are not incremental, so a rule over them could neither be maintained nor kept within a turn." ;
+    ui:fe-a-list "The allow-list is the host's, in code, and checked for every request." ;
+    ui:fe-a-csp "A Content Security Policy's connect-src lists the URLs the policy maps to." .
+ui:fe-a-host rdfs:label "The host fetches" . ui:fe-a-rules rdfs:label "Not in rules" . ui:fe-a-list rdfs:label "The allow-list" . ui:fe-a-csp rdfs:label "connect-src" .
+
+ui:doc-fe-stores-h a c:Heading ; c:level 2 ; c:label "Stores" .
+ui:doc-fe-stores a c:DescriptionList ; c:of ui:doc-fe-stores-items ; c:fields ( ui:fe-t-wasm ui:fe-t-oxigraph ui:fe-t-n3 ) .
+ui:doc-fe-stores-items ui:fe-t-wasm "store.fetching runs SERVICE and LOAD; in a synchronous query they are an error (waiting: …)." ;
+    ui:fe-t-oxigraph "No store.fetching: its JS build has no HTTP client. SERVICE errors and SERVICE SILENT is the empty solution; LOAD errors and LOAD SILENT does nothing." ;
+    ui:fe-t-n3 "No store.fetching, and no SPARQL." .
+ui:fe-t-wasm rdfs:label "wat, rust" . ui:fe-t-oxigraph rdfs:label "Oxigraph" . ui:fe-t-n3 rdfs:label "N3" .
+ui:doc-fe-more a c:Text ; c:label "docs/FETCHING.md in the repository says the same, at more length; rdf-engine/ABI.md has the engine's side." .
 
 # --- Navigation ---
 ui:doc-navigation a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
