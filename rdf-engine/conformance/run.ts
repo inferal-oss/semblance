@@ -6,18 +6,27 @@ import { fromResultGraph, parseSrj, parseSrx } from './results.ts'
 import type { Dataset, QueryResult, Target } from './target.ts'
 import { oxigraph, oxParse } from './targets/oxigraph.ts'
 import { isomorphic, key, type Row, rowKey, type T } from './terms.ts'
+import { JELLY_MANIFESTS, loadJellyManifest, runJellyTest, tsJelly } from './jelly.ts'
 
 export const SUITES: Record<string, string[]> = {
   sparql12: ['sparql/sparql12/manifest.ttl'],
   sparql11: ['sparql/sparql11/manifest-sparql11-query.ttl', 'sparql/sparql11/manifest-sparql11-update.ttl'],
   sparql10: ['sparql/sparql10/manifest-evaluation.ttl', 'sparql/sparql10/manifest-syntax.ttl'],
   rdf12: ['rdf/rdf12/rdf-turtle/manifest.ttl', 'rdf/rdf12/rdf-n-triples/manifest.ttl', 'rdf/rdf12/rdf-n-quads/manifest.ttl', 'rdf/rdf12/rdf-trig/manifest.ttl'],
+  /** jelly-protobuf's Jelly-RDF suite (jelly/, JELLY_MANIFESTS), for targets that read and write Jelly. */
+  jelly: [],
+}
+
+const NOT_W3C = () => {
+  throw new Error('not implemented')
 }
 
 const TARGETS: Record<string, () => Promise<Target>> = {
   oxigraph: async () => oxigraph,
   rust: async () => (await import('./targets/wasm.ts')).wasmTarget('rust'),
   wat: async () => (await import('./targets/wasm.ts')).wasmTarget('wat'),
+  // The TypeScript Jelly codec (src/jelly/), the N3 and Oxigraph stores' way to Jelly: the jelly suite only.
+  ts: async () => ({ name: 'ts', parse: NOT_W3C, parseQuery: NOT_W3C, parseUpdate: NOT_W3C, query: NOT_W3C, update: NOT_W3C, jelly: tsJelly }),
 }
 
 /**
@@ -192,17 +201,31 @@ async function main() {
     return out
   }
   const targetName = opt('--target')[0] ?? 'oxigraph'
-  const suites = opt('--suite').length ? opt('--suite') : Object.keys(SUITES)
   const only = opt('--only')[0]
   const verbose = args.includes('-v')
   show = args.includes('--show')
   const target = await TARGETS[targetName]!()
+  const suites = opt('--suite').length ? opt('--suite') : Object.keys(SUITES).filter((s) => (s === 'jelly' ? !!target.jelly : target.name !== 'ts'))
 
   const summary: Record<string, { pass: number; fail: number; skip: number; spelling: number }> = {}
   const failing: Record<string, string> = {}
   const spelling: string[] = []
   for (const suite of suites) {
     const s = (summary[suite] = { pass: 0, fail: 0, skip: 0, spelling: 0 })
+    if (suite === 'jelly') {
+      if (!target.jelly) throw new Error(`${target.name} does not read or write Jelly`)
+      for (const t of JELLY_MANIFESTS.flatMap(loadJellyManifest)) {
+        const id = 'jelly/' + t.id
+        if (only && !id.includes(only)) continue
+        const o = runJellyTest(target.jelly, t)
+        s[o.status]++
+        if (o.status === 'fail') {
+          failing[id] = o.reason
+          if (verbose) console.log(`FAIL ${id}\n     ${t.name}: ${o.reason}`)
+        }
+      }
+      continue
+    }
     const seen = new Set<string>()
     for (const t of SUITES[suite]!.flatMap((m) => loadManifest(m, seen))) {
       if (only && !t.id.includes(only)) continue

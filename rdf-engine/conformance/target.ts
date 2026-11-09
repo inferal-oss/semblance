@@ -1,3 +1,4 @@
+import type { JellyTarget } from './jelly.ts'
 import type { Row, T } from './terms.ts'
 
 export type RdfFormat = 'turtle' | 'ntriples' | 'nquads' | 'trig' | 'rdfxml'
@@ -35,4 +36,6 @@ export interface Target {
   query(dataset: Dataset, text: string, base: string): QueryResult
   /** Apply an update to the dataset and return every quad of the result. */
   update(dataset: Dataset, text: string, base: string): Row[]
+  /** Jelly (the `jelly` suite), when the target reads and writes it. */
+  jelly?: JellyTarget
 }
