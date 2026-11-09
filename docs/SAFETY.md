@@ -59,6 +59,10 @@ and `readPolicy` take the store you trust.
 - **No upload elsewhere:** `file:uploadTo` posts only to the page's own origin, or to an origin the
   host lists (`files: { uploadOrigins: ['https://uploads.example.com'] }`); this holds whether or
   not the graph is authored, since the graph says where and the host says where may be.
+- **No store elsewhere:** a remote source (`src:Source`, [REMOTE.md](REMOTE.md)) names no endpoint
+  in the graph at all: the host maps each source's IRI to its URL and credentials, and a source it
+  does not map stays `src:Unbound`. An authored graph can declare a source, but cannot point it
+  anywhere.
 
 ## What happens to what is refused
 
