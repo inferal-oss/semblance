@@ -180,6 +180,11 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   back as events. A host effect (`src/foreign.ts`) mounts each through the adapter of its kind (custom
   element, widget, or one an app registers), loads its code on demand, pushes only changed inputs and
   suppresses echoes. See [docs/FOREIGN.md](docs/FOREIGN.md).
+- **Hosted components** (`ext:Hosted`): an existing component library draws Semblance's components.
+  A class bound to a host component (`ext:component "Button"`) keeps its renderings; a renderer
+  adapter given to the DOM patcher, the HTML serializer and server rendering draws its root, its props
+  and its projected children with the library, nested components in one tree.
+  `@inferal-oss/semblance-react` (`packages/react/`) is the React adapter. See [docs/HOSTED.md](docs/HOSTED.md).
 - **Safe authoring** (`safe:`): a graph from someone you do not trust (a person, a page, a model)
   renders under a policy that is vocabulary: elements, attributes, URL schemes and CSS from allow-lists,
   checked where the HTML index takes a rendering, so the DOM, server-rendered HTML and text agree; what

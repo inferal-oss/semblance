@@ -41,6 +41,9 @@ and `readPolicy` take the store you trust.
   elsewhere and is allowed.
 - Define classes, renderings, SPARQL rules, reactions and shapes: they only produce triples, and
   what they produce is checked.
+- Have a component drawn by a host component library ([HOSTED.md](HOSTED.md)) only by a host
+  component (`safe:hostComponent`) or custom element (`safe:customElement`) the policy lists, none by
+  default; any other renders as its projected element.
 
 ## What it may not do
 
