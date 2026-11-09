@@ -76,7 +76,8 @@ async function siteGraphIndex(site: Site): Promise<GraphIndex> {
 export async function pageGraphs(site: Site, url: string, html: string, opts: RenderSiteOptions = {}): Promise<string[] | undefined> {
   const index = await siteGraphIndex(site)
   const traced = await renderSite(site, url, { ...opts, styles: false, prefer: 'function' })
-  const need = neededGraphs(index, traced.projection.engine, traced.runtime.store, ['ontology/core.ttl', ...(site.pageGraphs?.always ?? [])])
+  // The safety layer always: live examples read their policy from it (src/sandbox.ts), outside any rule.
+  const need = neededGraphs(index, traced.projection.engine, traced.runtime.store, ['ontology/core.ttl', 'ontology/layers/safety.ttl', ...(site.pageGraphs?.always ?? [])])
   traced.runtime.dispose()
   if (need.length === index.names.length) return undefined
   const only = await renderSite(site, url, { ...opts, styles: false, graphs: new Set(need) })

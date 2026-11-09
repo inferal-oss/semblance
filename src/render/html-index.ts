@@ -371,18 +371,17 @@ export class HtmlIndex {
     for (const [name, values] of n.props) for (const v of [...values].sort()) set(name, v)
     for (const a of n.attrNodes) {
       const rec = this.attrs.get(a)
-      if (rec?.name !== undefined && rec.value !== undefined) set(rec.name, rec.value)
+      if (rec?.name === undefined || rec.value === undefined) continue
+      // A name that is no attribute name (only an attribute node can have one) would break the markup
+      // it is written in, trusted or not.
+      if (ATTRIBUTE_NAME.test(rec.name)) set(rec.name, rec.value)
+      else this.refuse(key, 'attribute', `"${rec.name}" is not an attribute name`)
     }
-    for (const [name, value] of out) {
-      // A name that is no attribute name would break the markup it is written in, trusted or not.
-      if (!ATTRIBUTE_NAME.test(name)) {
-        out.delete(name)
-        this.refuse(key, 'attribute', `"${name}" is not an attribute name`)
-        continue
+    if (this.policy) {
+      for (const [name, value] of out) {
+        const why = attributeProblem(this.policy, name, value)
+        if (why) out.delete(name), this.refuse(key, why.kind, `${name}: ${why.reason}`)
       }
-      if (!this.policy) continue
-      const why = attributeProblem(this.policy, name, value)
-      if (why) out.delete(name), this.refuse(key, why.kind, `${name}: ${why.reason}`)
     }
     if (this.urlBase !== undefined) for (const [name, value] of out) if (URL_ATTRIBUTES.has(name)) out.set(name, resolveUrl(value, this.urlBase))
     return [...out].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

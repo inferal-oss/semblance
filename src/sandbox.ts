@@ -575,8 +575,10 @@ export class Sandboxes {
     readonly screen: Projection,
     private readonly opts: SandboxesOptions,
   ) {
-    // The site's store is trusted (its examples' sources are text in it, not triples): the policy is read there.
-    this.opts = { ...opts, policy: opts.policy ?? authoredPolicy(runtime.store) }
+    // The site's store is trusted (its examples' sources are text in it, not triples): the policy is
+    // read there, when the first sandbox is built (a page may load the ontology's graphs after it starts).
+    let policy = opts.policy
+    this.opts = Object.defineProperty({ ...opts }, 'policy', { get: () => (policy ??= authoredPolicy(runtime.store)), enumerable: true })
     created?.(this)
   }
 
