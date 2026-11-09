@@ -6,6 +6,7 @@ import { uploadRefused } from '../src/files.ts'
 import { loadStore } from '../src/node/load.ts'
 import { NS } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
+import type { HostAdapter } from '../src/render/hosts.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
 import { authoredPolicy, cssProblem, declarationsProblem, readPolicy, urlProblem } from '../src/safety.ts'
 import { buildSandbox, type Sandbox, type SandboxSource } from '../src/sandbox.ts'
@@ -61,6 +62,38 @@ describe('an authored graph (a live example) cannot', () => {
     }
     expect(r.text).not.toContain('pwned')
     expect(r.warnings.join('\n')).toMatch(/Refused on <[^>]+~x>: authored content may not have a script element/)
+  })
+
+  it('have a component drawn by a host component or created as a custom element the policy does not list', () => {
+    const hosted = evil('', '', `ex:Evil rdfs:subClassOf ext:Hosted ; ext:component "Evil" ; ext:tag "x-evil" .`)
+    const built = buildSandbox([{ name: 'evil.ttl', text: hosted }], EX + 'it', { load, withText: true })
+    const sandbox = built.sandbox as Sandbox
+    const index = sandbox.screen.index
+    // A host that has the component: it is not asked to draw it.
+    const drawn: string[] = []
+    const hosts: HostAdapter = {
+      has: () => true,
+      mount: (_c, key) => (drawn.push(key), { destroy() {} }),
+      html: () => '<x-drawn></x-drawn>',
+      patch() {},
+      keyOf: () => undefined,
+      nodeOf: () => undefined,
+      dispose() {},
+    }
+    const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+    const host = document.getElementById('app')!
+    new DomRenderer(index, host, sandbox.root, hosts).flush()
+    const html = toHTML(index, sandbox.root, { hosts })
+    expect(drawn).toEqual([])
+    for (const out of [host.innerHTML, html]) {
+      expect(out).not.toContain('sem-host')
+      expect(out).not.toContain('<x-evil')
+      expect(out).toContain('<div data-sem-c="ex-evil">')
+    }
+    const reasons = [...(index.refusals.get(EX + 'it/~root') ?? [])].join('\n')
+    expect(reasons).toContain('host component Evil is not allowed in authored content; rendered as its element')
+    expect(reasons).toContain('custom element x-evil is not allowed in authored content; rendered as its element')
+    sandbox.runtime.dispose()
   })
 
   it('render an iframe, object, embed, base, link, meta or style element', () => {

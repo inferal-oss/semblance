@@ -5,7 +5,7 @@ import { ATTRIBUTE_NAMES, TAG_NAMES, VOID_ELEMENTS } from '../vocab/rdfhtml.gene
 import { linearize, OrderingError } from './ordering.ts'
 import { compareKeys } from './order-key.ts'
 import { SVG_TAG_NAMES } from '../vocab/svg.ts'
-import { allowsElement, ATTRIBUTE_NAME, attributeProblem, Refused, type SafetyPolicy } from '../safety.ts'
+import { allowsCustomElement, allowsElement, allowsHostComponent, ATTRIBUTE_NAME, attributeProblem, Refused, type SafetyPolicy } from '../safety.ts'
 
 /** The tag a refused element renders as (empty, with data-sem-refused naming what it was). */
 export const REFUSED_TAG = 'sem-refused'
@@ -317,7 +317,10 @@ export class HtmlIndex {
     if (!cls || cls === 'Text') return undefined
     if (this.policy && this.isRefused(key)) return REFUSED_TAG
     // A hosted component created as a custom element (ext:tag on a node that is not an island's slot).
-    if (n.tag !== undefined && n.island === undefined && this.allowsCustomElement(n.tag)) return n.tag
+    if (n.tag !== undefined && n.island === undefined && isCustomElementName(n.tag)) {
+      if (!this.policy || allowsCustomElement(this.policy, n.tag)) return n.tag
+      this.refuse(key, 'element', `custom element ${n.tag} is not allowed in authored content; rendered as its element`)
+    }
     return this.tagOf(cls)
   }
 
@@ -327,15 +330,11 @@ export class HtmlIndex {
    */
   hostComponent(key: string): string | undefined {
     const name = this.nodes.get(key)?.component
-    return name !== undefined && this.allowsHostComponent(name) ? name : undefined
+    if (name === undefined || !this.policy || allowsHostComponent(this.policy, name)) return name
+    // Authored content (src/safety.ts): only a host component the policy lists.
+    this.refuse(key, 'element', `host component ${name} is not allowed in authored content; rendered as its element`)
+    return undefined
   }
-
-  /**
-   * Whether a projection may name this host component or custom element. Every name a host
-   * registered may be drawn in a trusted projection; an authored one's policy (#380) narrows it.
-   */
-  allowsHostComponent = (name: string): boolean => !this.policy || this.policy.hostComponents.has(name)
-  allowsCustomElement = (tag: string): boolean => isCustomElementName(tag) && (!this.policy || this.policy.customElements.has(tag))
 
   /** Whether a node is an element of the SVG extension (created in the SVG namespace). */
   isSvg(key: string): boolean {
