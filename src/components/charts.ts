@@ -27,7 +27,7 @@ const num = (t: Term | undefined) => (t ? Number(t.value) : undefined)
 const grouped = (s: string) => (/^(0|[1-9][0-9]{0,14})$/.test(s) ? s.replace(/\B(?=(\d{3})+$)/g, ',') : s)
 
 /** The chart's encoding: which SELECT variables play which role. */
-function encoding(ctx: RuleContext, focus: NamedNode) {
+export function encoding(ctx: RuleContext, focus: NamedNode) {
   const v = (p: string) => str(ctx.object(focus, p))
   return {
     facet: v(C.facetVariable),
@@ -72,7 +72,7 @@ const groupBy = <T,>(xs: T[], k: (x: T) => string) => {
   return m
 }
 
-function message(ctx: RuleContext, focus: NamedNode, text: string) {
+export function message(ctx: RuleContext, focus: NamedNode, text: string) {
   const o = ctx.out(focus)
   o.renders(o.el('root', 'P', { class: 'sem-empty' }, [o.text('empty', text)]))
   return o.quads
