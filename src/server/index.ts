@@ -6,3 +6,5 @@ export { renderToStream, type StreamOptions } from './stream.ts'
 export { documentParts, renderDocument, type DocumentOptions } from './document.ts'
 export { defineSite, type Site } from './site.ts'
 export { warmRenderer, type WarmOptions, type WarmRenderer, type WarmRendered } from './warm.ts'
+// The engine's store, over a WebAssembly module the platform hands over (a Worker's .wasm import, Deno's own compile).
+export { engineStore, type EngineStoreOptions } from '../../rdf-engine/host/store.ts'
