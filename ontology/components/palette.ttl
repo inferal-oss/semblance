@@ -365,18 +365,20 @@ WHERE {
       FILTER NOT EXISTS { ?item rdfs:comment ?commentLess FILTER(isLiteral(?commentLess) && STR(?commentLess) < STR(?commentAny)) } }
     BIND(STR(COALESCE(?commentPick, ?commentPlain, ?commentEn, ?commentEnx, ?commentAny)) AS ?comment)
     # (Walked up from the items that may need it - a component with a key, an entry - to a case of a
-    # switch under the location's root.)
+    # switch, and from that switch up to the location's root: up the tree, one parent a step, not
+    # down from the root through all of it. The positions are counted in the locations' dimension
+    # lists only, not in every list of the graph.)
     OPTIONAL { SELECT ?item (MIN(?shownKey) AS ?shown) WHERE {
       { ?item key:shortcut ?anyShortcut } UNION { $this c:entries/rdf:rest*/rdf:first ?item }
       FILTER(isIRI(?item))
       ?item (^nav:from/nav:to)* ?case2 . ?case2 c:when ?when2 .
       ?switch2 c:cases/rdf:rest*/rdf:first ?case2 ; c:controls ?subject2 ; c:property ?property2 .
       ?loc a nav:Location ; nav:root ?root ; nav:dimensions ?dims .
-      ?root (^nav:to/nav:from)* ?switch2 .
+      ?switch2 (^nav:from/nav:to)* ?root .
       ?dims rdf:rest* ?dimCell . ?dimCell rdf:first ?dim2 .
       ?dim2 nav:subject ?subject2 ; nav:property ?property2 .
       FILTER NOT EXISTS { ?dim2 a nav:TargetDimension }
-      { SELECT ?dims ?dimCell (COUNT(?before) AS ?dimAt) WHERE { ?dims rdf:rest* ?before . ?before rdf:rest+ ?dimCell } GROUP BY ?dims ?dimCell }
+      { SELECT ?dims ?dimCell (COUNT(?before) AS ?dimAt) WHERE { ?anyLoc a nav:Location ; nav:dimensions ?dims . ?dims rdf:rest* ?before . ?before rdf:rest+ ?dimCell } GROUP BY ?dims ?dimCell }
       # The first location by IRI, its innermost dimension: the least key wins.
       BIND(CONCAT(STR(?loc), " ", SUBSTR("000000", STRLEN(STR(1000 - ?dimAt)) + 1), STR(1000 - ?dimAt), " ", STR(?when2)) AS ?shownKey)
     } GROUP BY ?item }
