@@ -74,3 +74,39 @@ export function sliceAddition(quads: readonly Quad[], size = 2000): Slices {
   if (slice.length) rest.push(slice)
   return { rules, rest }
 }
+
+/** What takes an addition in (arrive): the runtime, idle periods, and the DOM to patch. */
+export interface Arrival {
+  runtime: { apply(delta: { add: Quad[]; remove: Quad[] }): unknown; arriving(on: boolean): void }
+  /** The next idle period. */
+  idle(): Promise<{ timeRemaining(): number }>
+  /** Whether what is left is needed now (the visitor moved to another page): then it is taken in at once. */
+  urgent(): boolean
+  /** Patch the DOM after a change. */
+  flush(): void
+}
+
+/**
+ * Take sliced additions in through the runtime: what defines rules at once, then as many slices
+ * per idle period as fit in it. Once `urgent()`, what is left goes in as one change: a page reached
+ * meanwhile may show what is among it (an example reached from another page, #378), and would
+ * otherwise stay empty until the last slice, seconds later where idle periods are few or short.
+ */
+export async function arrive({ rules, rest }: Slices, a: Arrival): Promise<void> {
+  a.runtime.arriving(true)
+  a.runtime.apply({ add: rules, remove: [] })
+  a.flush()
+  for (let i = 0; i < rest.length; ) {
+    if (a.urgent()) {
+      a.runtime.apply({ add: rest.slice(i).flat(), remove: [] })
+      a.flush()
+      break
+    }
+    const deadline = await a.idle()
+    do a.runtime.apply({ add: rest[i++]!, remove: [] })
+    while (i < rest.length && !a.urgent() && deadline.timeRemaining() > 8)
+    a.flush()
+  }
+  a.runtime.arriving(false)
+  a.flush()
+}

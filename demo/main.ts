@@ -23,7 +23,7 @@ import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { parseTurtle, Runtime } from '../src/runtime.ts'
 import { sourceQuads } from '../src/sources.ts'
-import { sliceAddition } from '../src/slices.ts'
+import { arrive, sliceAddition } from '../src/slices.ts'
 import type { Quad } from '@rdfjs/types'
 import { compileStyles } from '../src/style/compile.ts'
 import { hasStore, initWeb, loadOntology, loadStoreOf, loadStoreWith, ONTOLOGY_NAMES, ontologyText, type StoreKind } from '../src/web/load.ts'
@@ -62,6 +62,8 @@ const compile = compileParam ?? defaultCompile(kind)
 // The graphs a page rendered beforehand needs first (it names them; the build checked that they
 // render it): the rest load in idle time, once the page is interactive. Any other page loads all.
 const firstGraphs = serverRendered(document.getElementById('app')!) ? pageGraphs(document) : undefined
+// The page they render: another page reached before the rest have arrived needs them at once (#378).
+const loadedAt = location.pathname
 const wanted = (name: string) => !firstGraphs || firstGraphs.includes(name)
 // The Components page: one graph per component group (demo/gallery/*.ttl), each a chunk of its own.
 const galleryLoaders = Object.fromEntries(Object.entries(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>).map(([p, load]) => ['demo/' + p.slice(2), load]))
@@ -501,9 +503,6 @@ navigation.attach(runtime, {
 const checkPerf = perfRunner(runtime, flush)
 syncSettings()
 flush()
-// What the visitor did before the client was ready happens now (the page was taken over).
-if (takeover) takeover.replay()
-performance.mark('sem:ready')
 
 // Hidden views are evaluated in idle time, a slice at a time, so navigation finds
 // them ready and interactions never pay for them.
@@ -519,16 +518,24 @@ function warmup(deadline: { timeRemaining(): number }) {
 const scheduleWarmup = () => {
   if (!warming) (warming = true), idle(warmup)
 }
+// What the visitor did before the client was ready happens now (the page was taken over), once
+// what handling it calls is defined (a replayed click schedules warming up).
+if (takeover) takeover.replay()
+performance.mark('sem:ready')
 scheduleWarmup()
 if (firstGraphs) idle(() => void loadRest())
 
 /**
  * The graphs the page did not need first, in idle time: fetched, read a file per slice, then loaded
  * as one change through the runtime (their rules join the engine, their reactions the bus, their
- * remembered state is restored), with the sources of the examples among them.
+ * remembered state is restored), with the sources of the examples among them. Once the visitor
+ * moves to another page (a link, the menu, Back), what is left is read and taken in at once: that
+ * page may need some of it (#378).
  */
 async function loadRest() {
   performance.mark('sem:graphs-fetch')
+  const moved = () => location.pathname !== loadedAt
+  const nextIdle = () => new Promise<{ timeRemaining(): number }>((resolve) => idle(resolve))
   const ontology = ONTOLOGY_NAMES.filter((n) => !wanted(n))
   const gallery = Object.keys(galleryLoaders).filter((n) => !wanted(n))
   await Promise.all([loadOntology(ontology).then(() => ontologyFetched()), loadGallery(gallery)])
@@ -537,26 +544,15 @@ async function loadRest() {
   // As many files per idle period as fit in it (at least one): an idle callback comes once per idle
   // period (up to 50 ms apart on a quiet page), so a file per callback took seconds.
   for (let i = 0; i < texts.length; ) {
-    const deadline = await new Promise<{ timeRemaining(): number }>((resolve) => idle(resolve))
+    const deadline = moved() ? undefined : await nextIdle()
     do add.push(...parseTurtle(texts[i++]!, store.factory))
-    while (i < texts.length && deadline.timeRemaining() > 4)
+    while (i < texts.length && (!deadline || moved() || deadline.timeRemaining() > 4))
   }
   add.push(...sourceQuads(store.factory, siteSources(Object.fromEntries(gallery.map((n) => [n, galleryFiles[n]!])))))
   performance.mark('sem:graphs-parsed', { detail: { quads: add.length } })
   // Taken in as several changes, none a long task: what defines rules first (the rules are read
   // again once), then the rest a slice per idle period, whole descriptions at a time.
-  const { rules, rest } = sliceAddition(add, 150)
-  runtime.arriving(true)
-  runtime.apply({ add: rules, remove: [] })
-  flush()
-  for (let i = 0; i < rest.length; ) {
-    const deadline = await new Promise<{ timeRemaining(): number }>((resolve) => idle(resolve))
-    do runtime.apply({ add: rest[i++]!, remove: [] })
-    while (i < rest.length && deadline.timeRemaining() > 8)
-    flush()
-  }
-  runtime.arriving(false)
-  flush()
+  await arrive(sliceAddition(add, 150), { runtime, idle: nextIdle, urgent: moved, flush })
   await persistence.restoreAdded().catch((e) => console.warn('[semblance] could not restore remembered state', e))
   flush()
   scheduleWarmup()
