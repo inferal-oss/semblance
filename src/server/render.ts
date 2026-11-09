@@ -12,6 +12,7 @@ import { type Projection, Runtime } from '../runtime.ts'
 import { prerenderSandboxes, type SandboxOptions } from '../sandbox.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
+import type { SafetyPolicy } from '../safety.ts'
 import { rememberedPolicies, type RememberedPolicy } from './remembered.ts'
 
 export interface RenderOptions {
@@ -38,6 +39,11 @@ export interface RenderOptions {
    * Without it their slots are empty until the client builds them.
    */
   sandboxes?: Pick<SandboxOptions, 'load' | 'budgetMs'>
+  /**
+   * Render the store as authored content (src/safety.ts): elements, attributes and styles the policy
+   * refuses are left out, and reported. Read it from a trusted store (authoredPolicy), not this one.
+   */
+  policy?: SafetyPolicy
 }
 
 export interface Rendered {
@@ -119,8 +125,8 @@ export async function readyToRender(opts: RenderOptions): Promise<{ status: numb
 export function project(opts: RenderOptions, languages: string[]): Pick<Rendered, 'html' | 'css' | 'runtime' | 'projection'> {
   const { store, root } = opts
   const runtime = new Runtime(store)
-  const projection = runtime.project({ modality: MOD.Screen, layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer ?? 'sparql', functions: opts.functions, languages, provenance: opts.provenance, name: 'screen', roots: [root] })
-  const css = opts.styles === false ? undefined : compileStyles(store)
+  const projection = runtime.project({ modality: MOD.Screen, layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer ?? 'sparql', functions: opts.functions, languages, provenance: opts.provenance, name: 'screen', roots: [root], policy: opts.policy })
+  const css = opts.styles === false ? undefined : compileStyles(store, { policy: opts.policy })
   let siteCss = css
   const html = serializeRoot(runtime, projection, root, { ...opts, siteCss: () => (siteCss ??= compileStyles(store)) })
   return { html, css, runtime, projection }

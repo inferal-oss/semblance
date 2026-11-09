@@ -1,6 +1,7 @@
 import type { Term } from '@rdfjs/types'
 import { NS, RDFS_RANGE, RDFS_SUBCLASS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY } from '../ns.ts'
 import type { GraphStore } from '../store/types.ts'
+import { cssProblem, propertyProblem, Refused, type SafetyPolicy } from '../safety.ts'
 
 /**
  * Compile the style graph to CSS.
@@ -18,6 +19,11 @@ import type { GraphStore } from '../store/types.ts'
  * equal specificity it wins where the condition holds. With several, it applies at any of them.
  * A value with sty:underMedia (mot:System) gets a copy of every rule that selects the value it
  * stands for (mot:Reduced) inside the media condition, at the end of each layer.
+ *
+ * With a `policy` (authored content, src/safety.ts), every string written from the graph is checked
+ * first: a property, a value (sty:raw, a token's, a density's), a slug, a hook attribute, a part, a
+ * state, a media condition, a keyframes name and step. A declaration that fails is left out, as is a
+ * rule whose selector or condition fails; each is reported through `onRefused`.
  */
 const hyphens = (decl: string) => decl.slice(0, decl.indexOf(':')).split('-').length
 const STY_AT_WIDTH = NS.sty + 'atWidth'
@@ -25,14 +31,42 @@ const STY_MEDIA = NS.sty + 'media'
 const STY_UNDER_MEDIA = NS.sty + 'underMedia'
 const STY_AS = NS.sty + 'as'
 
-export function compileStyles(store: GraphStore): string {
+export interface CompileOptions {
+  /** Authored content: what the policy refuses is left out. */
+  policy?: SafetyPolicy
+  /** Hear about each refusal (by default console.warn). */
+  onRefused?: (e: Refused) => void
+}
+
+export function compileStyles(store: GraphStore, opts: CompileOptions = {}): string {
   const f = store.factory
   const nn = (iri: string) => f.namedNode(iri)
   const objects = (s: Term | null, p: string) => store.match(s, nn(p), null, f.defaultGraph()).map((q) => q.object)
   const object = (s: Term, p: string) => objects(s, p)[0]
   const subjects = (p: string, o: string) => store.match(null, nn(p), nn(o), f.defaultGraph()).map((q) => q.subject)
-  const slug = (t: Term) => object(t, SEM.slug)?.value
-  const cssVar = (token: Term) => `var(--sem-${slug(token)})`
+  const { policy } = opts
+  const reported = new Set<string>()
+  /** Whether a string from the graph may be written as `as` (always, without a policy); refusals are reported once. */
+  const allowed = (text: string, as: Parameters<typeof cssProblem>[2] | 'property' | 'slug' | 'attribute', at: Term): boolean => {
+    if (!policy) return true
+    const why =
+      as === 'property' ? propertyProblem(policy, text)
+      : as === 'slug' ? (/^[A-Za-z0-9_-]+$/.test(text) ? undefined : `"${text}" is not a slug`)
+      : as === 'attribute' ? (/^[a-z][a-z0-9-]*$/.test(text) ? undefined : `"${text}" is not an attribute name`)
+      : cssProblem(policy, text, as)
+    if (!why) return true
+    const message = `Refused a style of <${at.value}>: ${why}.`
+    if (!reported.has(message)) reported.add(message), (opts.onRefused ?? ((e) => console.warn(e.message)))(new Refused(at.value, 'style', message))
+    return false
+  }
+  const slug = (t: Term) => {
+    const v = object(t, SEM.slug)?.value
+    return v === undefined || allowed(v, 'slug', t) ? v : undefined
+  }
+  const cssVar = (token: Term) => {
+    const s = slug(token)
+    return s === undefined ? undefined : `var(--sem-${s})`
+  }
   const list = (head: Term | undefined) => {
     const out: Term[] = []
     for (let n = head; n && n.value !== RDF_NIL; n = object(n, RDF_REST)) out.push(object(n, RDF_FIRST)!)
@@ -45,15 +79,19 @@ export function compileStyles(store: GraphStore): string {
         const token = object(d, STY.token)
         const tokens = object(d, STY.tokens)
         const raw = object(d, STY.raw)?.value
-        const value = token ? cssVar(token) : tokens ? list(tokens).map(cssVar).join(' ') : raw
-        return prop && value !== undefined ? `${prop}: ${value};` : undefined
+        const vars = tokens && list(tokens).map(cssVar)
+        const value = token ? cssVar(token) : vars ? (vars.includes(undefined) ? undefined : vars.join(' ')) : raw !== undefined && allowed(raw, 'value', d) ? raw : undefined
+        return prop && allowed(prop, 'property', d) && value !== undefined ? `${prop}: ${value};` : undefined
       })
       .filter((d): d is string => d !== undefined)
       // RDF object lists are unordered; put shorthands (fewer hyphens) before
       // their longhands so `border` never overrides `border-color`.
       .sort((a, b) => hyphens(a) - hyphens(b) || (a < b ? -1 : 1))
   const block = (selector: string, decls: string[]) => (decls.length ? `  ${selector} { ${decls.join(' ')} }` : undefined)
-  const hookAttr = (property: string) => store.match(nn(property), nn(STY.hookAttribute), null)[0]?.object.value
+  const hookAttr = (property: string) => {
+    const attr = store.match(nn(property), nn(STY.hookAttribute), null)[0]?.object.value
+    return attr === undefined || allowed(attr, 'attribute', nn(property)) ? attr : undefined
+  }
   const sel = (attr: string | undefined, value: string | undefined) => `[${attr}="${value}"]`
   const layer = (name: string, rules: (string | undefined)[], ordered = false) => {
     const body = rules.filter(Boolean)
@@ -61,14 +99,19 @@ export function compileStyles(store: GraphStore): string {
     return body.length ? `@layer sem.${name} {\n${body.join('\n')}\n}` : ''
   }
 
+  /** A token's custom property and its value, or nothing when either is refused. */
+  const customProperty = (token: Term, value: string | undefined, at: Term): string[] => {
+    const s = slug(token)
+    return s !== undefined && (value === undefined || allowed(value, 'value', at)) ? [`--sem-${s}: ${value};`] : []
+  }
   const tokens = subjects(RDF_TYPE, STY.Token)
   const densityAttr = hookAttr(STY.density)
   const tokenRules = [
-    block(':root', tokens.map((t) => `--sem-${slug(t)}: ${object(t, STY.value)?.value};`).sort()),
+    block(':root', tokens.flatMap((t) => customProperty(t, object(t, STY.value)?.value, t)).sort()),
     ...subjects(RDF_TYPE, STY.Density).map((d) =>
       block(
         sel(densityAttr, slug(d)),
-        objects(d, STY.override).map((o) => `--sem-${slug(object(o, STY.token)!)}: ${object(o, STY.value)?.value};`),
+        objects(d, STY.override).flatMap((o) => customProperty(object(o, STY.token)!, object(o, STY.value)?.value, o)),
       ),
     ),
   ]
@@ -89,10 +132,14 @@ export function compileStyles(store: GraphStore): string {
   for (const q of hooked) {
     const group: (string | undefined)[] = []
     const attr = q.object.value
+    if (!allowed(attr, 'attribute', q.subject)) continue
     const cssProp = object(q.subject, STY.hookCssProperty)?.value
     const scale = object(q.subject, STY.tokenScale)
-    if (cssProp && scale) {
-      for (const t of subjects(STY.scale, scale.value)) group.push(block(sel(attr, slug(t)), [`${cssProp}: ${cssVar(t)};`]))
+    if (cssProp && scale && allowed(cssProp, 'property', q.subject)) {
+      for (const t of subjects(STY.scale, scale.value)) {
+        const v = cssVar(t)
+        if (v) group.push(block(sel(attr, slug(t)), [`${cssProp}: ${v};`]))
+      }
     }
     // Individuals in the property's range that carry declarations (pos:Row, ...).
     for (const range of objects(q.subject, RDFS_RANGE)) {
@@ -153,13 +200,15 @@ export function compileStyles(store: GraphStore): string {
     const intent = object(r, STY.intent)
     const state = object(r, STY.state)?.value
     const part = object(r, STY.part)?.value
+    if ((state !== undefined && !allowed(state, 'selector', r)) || (part !== undefined && !allowed(part, 'selector', r))) continue
     const when = objects(r, STY.when).map(whenAttr).filter(Boolean).sort().join('')
     // Several width classes: the rule applies at any of them (a media query list).
-    const media = objects(r, STY_AT_WIDTH)
+    const conditions = objects(r, STY_AT_WIDTH)
       .map((w) => object(w, STY_MEDIA)?.value)
       .filter((m): m is string => !!m)
-      .sort()
-      .join(', ')
+    // A refused condition leaves the rule out (without it, the rule would apply at every width).
+    if (!conditions.every((m) => allowed(m, 'media', r))) continue
+    const media = conditions.sort().join(', ')
     // Without sty:appliesTo, a rule styles its part wherever it appears (e.g. a mark any layer
     // may add), or every element carrying its sty:when value.
     if (!classes.length) {
@@ -184,9 +233,10 @@ export function compileStyles(store: GraphStore): string {
   const keyframes = subjects(RDF_TYPE, STY.Keyframes)
     .map((k) => {
       const name = object(k, STY.name)?.value
-      if (!name) return undefined
+      if (!name || !allowed(name, 'name', k)) return undefined
       const steps = objects(k, STY.step)
-        .map((st) => ({ at: object(st, STY.at)?.value ?? '0%', decls: declarations(st) }))
+        .map((st) => ({ at: object(st, STY.at)?.value ?? '0%', decls: declarations(st), st }))
+        .filter((st) => allowed(st.at, 'step', st.st))
         .sort((a, b) => (a.at === 'from' ? -1 : b.at === 'from' ? 1 : a.at === 'to' ? 1 : b.at === 'to' ? -1 : parseFloat(a.at) - parseFloat(b.at)))
       return `@keyframes ${name} {\n${steps.map((st) => `  ${st.at} { ${st.decls.join(' ')} }`).join('\n')}\n}`
     })
@@ -198,6 +248,7 @@ export function compileStyles(store: GraphStore): string {
   // is copied, with this value's attribute, into the condition after the layer's other rules.
   const aliases = store.match(null, nn(STY_UNDER_MEDIA), null, f.defaultGraph()).flatMap((q) => {
     const media = object(q.object, STY_MEDIA)?.value
+    if (media !== undefined && !allowed(media, 'media', q.object)) return []
     const as = object(q.object, STY_AS)
     const to = as && whenAttr(as)
     const from = whenAttr(q.subject)
