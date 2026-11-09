@@ -287,17 +287,24 @@ export function cssProblem(policy: SafetyPolicy, text: string, as: 'value' | 'se
 }
 
 /**
- * Read CSS text as a tokenizer would, far enough to know it stays what it is: no block, rule or
- * at-rule can start in it (no {, }, @, <, nor ; outside a declaration list), no escape outside a
- * string (an escape can spell url), quotes and brackets balance, and no function that fetches a
- * resource, except url() of a fragment or of a resource scheme. A declaration list comes back
- * split at its top-level semicolons; anything else as one piece. A string is a reason it is refused.
+ * Read CSS text as the css-syntax-3 tokenizer reads it, far enough to know it stays what it is, in
+ * one pass: strings end where the browser ends them, an unquoted url( is one url token up to its
+ * `)`, a number swallows the name after it (`1url(` calls nothing) and so does a hash (`#url(`).
+ * Refused: a comment (inside one a quote is no string, so the check and the browser would read on
+ * differently), a bad string or bad url, an escape outside a string (an escape can spell url), a
+ * `{`, `}`, `@` or `<` (a block, rule or at-rule), a `;` outside a declaration list, brackets that do
+ * not balance, and a function that fetches a resource, except url() of a fragment or of a resource
+ * scheme. In a selector or a media condition, also `&` and `:scope`, which would name the scope
+ * authored rules are kept in (src/style/scope.ts). A declaration list comes back split at its
+ * top-level semicolons; anything else as one piece. A string is a reason it is refused.
  */
 function scan(policy: SafetyPolicy, text: string, as: 'value' | 'selector' | 'media' | 'declarations'): string[] | string {
   const parts: string[] = []
   let start = 0
   const closers: string[] = []
-  for (let i = 0; i < text.length; i++) {
+  const selector = as === 'selector' || as === 'media'
+  const n = text.length
+  for (let i = 0; i < n; i++) {
     const ch = text[i]!
     if (ch === '"' || ch === "'") {
       const end = stringEnd(text, i)
@@ -305,23 +312,60 @@ function scan(policy: SafetyPolicy, text: string, as: 'value' | 'selector' | 'me
       i = end
       continue
     }
+    if (ch === '/' && text[i + 1] === '*') return 'authored styles may not hold a comment'
     if (ch === '\\') return 'authored styles may not escape characters outside a string'
     if (ch === '{' || ch === '}' || ch === '@' || ch === '<') return `authored styles may not hold "${ch}" here`
+    if (ch === '&' && selector) return 'an authored selector may not name "&"'
     if (ch === ';') {
       if (as !== 'declarations' || closers.length) return 'authored styles may not hold ";" here'
       parts.push(text.slice(start, i))
       start = i + 1
       continue
     }
+    if (startsNumber(text, i)) {
+      // A number, then a unit (a dimension) or %: a name after a number never calls a function.
+      i = numberEnd(text, i)
+      if (text[i] === '%') i++
+      else if (startsName(text, i)) i = nameEnd(text, i)
+      i--
+      continue
+    }
+    if (ch === '#' && i + 1 < n && isNameChar(text.charCodeAt(i + 1))) {
+      i = nameEnd(text, i + 1) - 1
+      continue
+    }
+    if (startsName(text, i)) {
+      const end = nameEnd(text, i)
+      const name = text.slice(i, end).toLowerCase()
+      if (selector && name === 'scope' && text[i - 1] === ':') return 'an authored selector may not name ":scope"'
+      if (text[end] !== '(') {
+        i = end - 1
+        continue
+      }
+      if (name === 'url') {
+        let j = end + 1
+        while (isSpace(text[j])) j++
+        if (text[j] !== '"' && text[j] !== "'") {
+          // An unquoted url( is one url token: anything but its `)` in a place the tokenizer would
+          // call it bad is refused, so that both read it to the same `)`.
+          const close = urlTokenEnd(text, j)
+          if (close < 0) return 'a CSS url() is not one the browser reads as written'
+          const why = fetchProblem(policy, text.slice(j, close))
+          if (why) return why
+          i = close
+          continue
+        }
+        // url( followed by a string: a function, whose string the loop reads next.
+        const stringClose = stringEnd(text, j)
+        const why = fetchProblem(policy, stringClose < 0 ? '' : text.slice(j + 1, stringClose))
+        if (why) return why
+      } else if (policy.fetchingFunctions.has(name)) return `authored styles may not load a resource (${name}())`
+      closers.push(')')
+      i = end
+      continue
+    }
     if (ch === '(' || ch === '[') {
       closers.push(ch === '(' ? ')' : ']')
-      if (ch === '(') {
-        const name = /([A-Za-z_-][A-Za-z0-9_-]*)$/.exec(text.slice(0, i))?.[1]?.toLowerCase()
-        if (name && policy.fetchingFunctions.has(name)) {
-          const why = fetchProblem(policy, name, text, i)
-          if (why) return why
-        }
-      }
       continue
     }
     if (ch === ')' || ch === ']') {
@@ -332,6 +376,44 @@ function scan(policy: SafetyPolicy, text: string, as: 'value' | 'selector' | 'me
   if (closers.length) return 'brackets in a CSS value do not balance'
   parts.push(text.slice(start))
   return parts
+}
+
+const isSpace = (ch: string | undefined) => ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f'
+const isDigit = (c: number) => c >= 48 && c <= 57
+/** A code point that may start a name (css-syntax-3 "ident-start code point"): a letter, _, or non-ASCII. */
+const isNameStart = (c: number) => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95 || c >= 0x80
+/** A code point that may continue a name. */
+const isNameChar = (c: number) => isNameStart(c) || isDigit(c) || c === 45
+/** Whether a name (an ident sequence) starts at `i`; escapes are refused before they get here. */
+function startsName(text: string, i: number): boolean {
+  const c = text.charCodeAt(i)
+  if (c === 45) {
+    const d = text.charCodeAt(i + 1)
+    return d === 45 || isNameStart(d)
+  }
+  return isNameStart(c)
+}
+const nameEnd = (text: string, i: number) => {
+  while (i < text.length && isNameChar(text.charCodeAt(i))) i++
+  return i
+}
+/** Whether a number starts at `i` (css-syntax-3 "start a number"). */
+function startsNumber(text: string, i: number): boolean {
+  let c = text.charCodeAt(i)
+  if (c === 43 || c === 45) c = text.charCodeAt(++i)
+  if (isDigit(c)) return true
+  return c === 46 && isDigit(text.charCodeAt(i + 1))
+}
+function numberEnd(text: string, i: number): number {
+  if (text[i] === '+' || text[i] === '-') i++
+  while (isDigit(text.charCodeAt(i))) i++
+  if (text[i] === '.' && isDigit(text.charCodeAt(i + 1))) for (i++; isDigit(text.charCodeAt(i)); ) i++
+  if (text[i] === 'e' || text[i] === 'E') {
+    let j = i + 1
+    if (text[j] === '+' || text[j] === '-') j++
+    if (isDigit(text.charCodeAt(j))) for (i = j; isDigit(text.charCodeAt(i)); ) i++
+  }
+  return i
 }
 
 /** The index of the quote that closes the string opened at `i`, or -1 (a newline ends it unclosed). */
@@ -346,21 +428,28 @@ function stringEnd(text: string, i: number): number {
   return -1
 }
 
-/** Why a fetching function at `open` (its parenthesis) is refused: only url() of a fragment or a resource scheme loads nothing. */
-function fetchProblem(policy: SafetyPolicy, name: string, text: string, open: number): string | undefined {
-  if (name === 'url') {
-    let j = open + 1
-    while (text[j] === ' ' || text[j] === '\t') j++
-    let arg: string
-    if (text[j] === '"' || text[j] === "'") {
-      const end = stringEnd(text, j)
-      arg = end < 0 ? '' : text.slice(j + 1, end)
-    } else {
-      const close = text.indexOf(')', j)
-      arg = close < 0 ? '' : text.slice(j, close)
+/**
+ * The index of the `)` that ends the unquoted url token whose body starts at `j`, or -1 when the
+ * tokenizer would read a bad url there: a quote, `(`, `\`, a non-printable code point, whitespace
+ * before anything but `)`, or no `)` at all.
+ */
+function urlTokenEnd(text: string, j: number): number {
+  for (; j < text.length; j++) {
+    const ch = text[j]!
+    const c = ch.charCodeAt(0)
+    if (ch === ')') return j
+    if (isSpace(ch)) {
+      while (isSpace(text[j + 1])) j++
+      return text[j + 1] === ')' ? j + 1 : -1
     }
-    const v = arg.trim().toLowerCase()
-    if (v.startsWith('#') || policy.resourceSchemes.some((p) => v.startsWith(p))) return undefined
+    if (ch === '"' || ch === "'" || ch === '(' || ch === '\\' || c <= 8 || c === 11 || (c >= 14 && c <= 31) || c === 127) return -1
   }
-  return `authored styles may not load a resource (${name}())`
+  return -1
+}
+
+/** Why a url() of this argument is refused: only one of a fragment or a resource scheme loads nothing. */
+function fetchProblem(policy: SafetyPolicy, arg: string): string | undefined {
+  const v = arg.trim().toLowerCase()
+  if (v.startsWith('#') || policy.resourceSchemes.some((p) => v.startsWith(p))) return undefined
+  return 'authored styles may not load a resource (url())'
 }

@@ -25,6 +25,7 @@ import { toHTML } from './render/serialize.ts'
 import { type Projection, Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
 import { compileStyles } from './style/compile.ts'
+import { BOX_ATTRIBUTE, boxSelector, scopedCss } from './style/scope.ts'
 import { readPolicy, type SafetyPolicy } from './safety.ts'
 import { attachAnchoredPopups } from './web/anchored-popups.ts'
 import { attachSizeHandles } from './web/size-handles.ts'
@@ -409,7 +410,7 @@ function projectData(sandbox: Sandbox, query: string, sources: SandboxSource[], 
 }
 
 /** The attribute of a sandbox's own element (its styles are scoped to it). */
-const SANDBOX_ATTRIBUTE = 'data-sem-sandbox'
+const SANDBOX_ATTRIBUTE = BOX_ATTRIBUTE
 /** The attribute of the style a server put beside a styled sandbox's rendering (the client's own sheet replaces it). */
 const SANDBOX_STYLES_ATTRIBUTE = 'data-sem-sandbox-styles'
 
@@ -467,7 +468,7 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
       continue
     }
     try {
-      const css = sandbox.css ? scopedCss(sandbox.css, typeof opts.siteCss === 'function' ? opts.siteCss() : (opts.siteCss ?? ''), `[${SANDBOX_ATTRIBUTE}="${id}"]`) : ''
+      const css = sandbox.css ? scopedCss(sandbox.css, typeof opts.siteCss === 'function' ? opts.siteCss() : (opts.siteCss ?? ''), boxSelector(id)) : ''
       const style = css ? `<style ${SANDBOX_STYLES_ATTRIBUTE}>${css.replace(/<\/style/gi, '<\\/style')}</style>` : ''
       out.set(slots.screen, `${style}<div ${SANDBOX_ATTRIBUTE}="${id}" ${SSR_ATTRIBUTE}>${toHTML(sandbox.screen.index, sandbox.root)}</div>`)
       if (sandbox.text && screen.index.slots.has(slots.text)) out.set(slots.text, `<div>${toHTML(sandbox.text.index, sandbox.root)}</div>`)
@@ -913,7 +914,7 @@ export class Sandboxes {
     const Sheet = (doc.defaultView as (Window & typeof globalThis) | null)?.CSSStyleSheet
     if (!Sheet || !('adoptedStyleSheets' in doc)) return undefined
     const site = typeof this.opts.siteCss === 'function' ? this.opts.siteCss() : (this.opts.siteCss ?? '')
-    const css = scopedCss(compiled, site, `[data-sem-sandbox="${n}"]`)
+    const css = scopedCss(compiled, site, boxSelector(String(n)))
     if (!css) return undefined
     const sheet = new Sheet()
     sheet.replaceSync(css)
@@ -1025,18 +1026,5 @@ export class Sandboxes {
   }
 }
 
-/**
- * The rules of `css` that `site` does not have, each cascade layer's nested under `scope` (so a
- * sandbox's style rules style only its own elements), and the keyframes it adds.
- */
-export function scopedCss(css: string, site: string, scope: string): string {
-  const siteLines = new Set(site.split('\n'))
-  const out: string[] = []
-  const layer = /@layer sem\.(\w+) \{\n([\s\S]*?)\n\}/g
-  for (const m of css.matchAll(layer)) {
-    const added = m[2]!.split('\n').filter((l) => l.trim() && !siteLines.has(l))
-    if (added.length) out.push(`@layer sem.${m[1]} {\n${scope} {\n${added.map((l) => l.replace(/^(\s*):root\b/, '$1&')).join('\n')}\n}\n}`)
-  }
-  for (const k of css.matchAll(/@keyframes [^{]+\{\n[\s\S]*?\n\}/g)) if (!site.includes(k[0])) out.push(k[0])
-  return out.length ? ['@layer sem.tokens, sem.hooks, sem.components, sem.variants, sem.intents;', ...out].join('\n\n') : ''
-}
+// Scoping a sandbox's styles is the scoping of every authored box (src/style/scope.ts).
+export { scopedCss }

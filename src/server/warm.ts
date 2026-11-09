@@ -11,7 +11,7 @@ import type { Delta } from '../rdf.ts'
 import type { Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
 import { rememberedPolicies } from './remembered.ts'
-import { addressStatus, documentLanguage, project, readerLanguages, type Rendered, type RenderOptions, serializeRoot, storeReader, urlDelta } from './render.ts'
+import { addressStatus, authoredBox, documentLanguage, project, readerLanguages, type Rendered, type RenderOptions, serializeRoot, storeReader, urlDelta } from './render.ts'
 
 export interface WarmOptions extends Omit<RenderOptions, 'store' | 'url' | 'layers'> {
   /** A fresh store with the ontology (or the app's subset of it) and the app's graphs: called once per language. */
@@ -83,7 +83,7 @@ export function warmRenderer(opts: WarmOptions): WarmRenderer {
     const loc = readLocations(r).find((l) => l.root === opts.root)
     const { found, address } = addressStatus(r, loc, url)
     const html = serializeRoot(w.runtime, w.projection, opts.root, { ...opts, sandboxes, shownOnly: true })
-    return { html, css: w.css, status: found ? 200 : 404, address, remembered: rememberedPolicies(w.store, opts.root), attributes: opts.attributes?.(w.store) ?? {}, ...documentLanguage(w.store, w.languages[0] ?? 'en') }
+    return { html, css: w.css, status: found ? 200 : 404, address, remembered: rememberedPolicies(w.store, opts.root), attributes: opts.attributes?.(w.store) ?? {}, ...documentLanguage(w.store, w.languages[0] ?? 'en'), ...(authoredBox(opts) && { box: authoredBox(opts) }) }
   }
 
   const render = async (url: string) => {

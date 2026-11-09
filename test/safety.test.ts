@@ -14,8 +14,11 @@ import { toHTML, toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
 import { attributeProblem, authoredPolicy, cssProblem, declarationsProblem, idReferences, readPolicy, type SafetyPolicy, urlProblem } from '../src/safety.ts'
 import { DEFAULT_LAYERS } from '../src/web/mount.ts'
-import { buildSandbox, type Sandbox, type SandboxSource } from '../src/sandbox.ts'
+import { buildSandbox, completeSource, type Sandbox, type SandboxSource } from '../src/sandbox.ts'
+import { renderDocument } from '../src/server/document.ts'
+import { renderToString } from '../src/server/render.ts'
 import { compileStyles } from '../src/style/compile.ts'
+import { boxSelector, scopedCss, splitSelectors } from '../src/style/scope.ts'
 
 // Safe authoring (ontology/layers/safety.ttl, src/safety.ts, docs/SAFETY.md): a graph from an
 // untrusted author renders without running code or loading a resource from elsewhere. Each vector
@@ -475,12 +478,105 @@ describe('the policy', () => {
     expect(declarationsProblem(policy, 'content: "a;b"; color: red')).toBeUndefined()
   })
 
+  it('reads CSS as the browser tokenizes it: comments, bad strings and bad urls are refused', () => {
+    expect(cssProblem(policy, 'red /* a note */', 'value')).toMatch(/comment/)
+    expect(cssProblem(policy, '"a\nb"', 'value')).toMatch(/not closed/)
+    for (const bad of ['url(#a b)', "url(#a'b)", 'url(#a(b)', 'url(#a', 'url(#a\u0001)']) expect(cssProblem(policy, bad, 'value'), bad).toMatch(/url\(\)/)
+    expect(cssProblem(policy, 'url( #a )', 'value')).toBeUndefined()
+    expect(cssProblem(policy, "url( '#a' )", 'value')).toBeUndefined()
+    expect(cssProblem(policy, 'URL(https://example.org/a.png)', 'value')).toMatch(/load a resource/)
+    // A name after a number or a hash is no function, and a function's name is the whole name.
+    expect(cssProblem(policy, '1url(x)', 'value')).toBeUndefined()
+    expect(cssProblem(policy, '#url(x)', 'value')).toBeUndefined()
+    expect(cssProblem(policy, 'my-url(x)', 'value')).toBeUndefined()
+    expect(cssProblem(policy, '-url(x)', 'value')).toBeUndefined()
+    expect(cssProblem(policy, 'calc(1e3px + 2.5em)', 'value')).toBeUndefined()
+  })
+
+  it('reads CSS in time linear in its length', () => {
+    const t = performance.now()
+    expect(declarationsProblem(policy, 'color: ' + 'a'.repeat(20000) + '('.repeat(2000))).toBeDefined()
+    expect(urlProblem(policy, 'a' + ' '.repeat(100000) + 'b')).toBeUndefined()
+    expect(performance.now() - t).toBeLessThan(1000)
+  })
+
+  it('refuses & and :scope in an authored selector or media condition', () => {
+    expect(cssProblem(policy, ':not(&)', 'selector')).toMatch(/&/)
+    expect(cssProblem(policy, ':is(:SCOPE) a', 'selector')).toMatch(/:scope/)
+    expect(cssProblem(policy, '(min-width: 1px) and &', 'media')).toMatch(/&/)
+    expect(cssProblem(policy, '[data-x="&"] :scoped', 'selector')).toBeUndefined()
+  })
+
   it('lets uploads go to the page’s own origin and the origins the host allows, nowhere else', () => {
     expect(uploadRefused('/upload')).toBeUndefined()
     expect(uploadRefused('https://evil.example/upload')).toMatch(/not uploaded to https:\/\/evil\.example/)
     expect(uploadRefused('https://uploads.example.com/f', ['https://uploads.example.com'])).toBeUndefined()
     expect(uploadRefused('javascript:alert(1)')).toMatch(/javascript:/)
     expect(uploadRefused('https://evil.example/upload', ['*'])).toBeUndefined()
+  })
+})
+
+/** Every selector of every style rule (not keyframe steps) in a sheet (compileStyles' or scopedCss' output). */
+function selectors(css: string): string[] {
+  const rules = css.replace(/^@keyframes [^\n]*\{\n[\s\S]*?\n\}$/gm, '')
+  return [...rules.matchAll(/^ +([^@\n][^\n]*?) \{ [^\n]* \}$/gm)].flatMap((m) => splitSelectors(m[1]!))
+}
+
+describe('authored styles stay in the authored box', () => {
+  const SCOPE = boxSelector('1')
+
+  it('every selector the box adds starts at the box; keyframes are renamed for it', () => {
+    const r = render(
+      evil(
+        '?x a rdfhtml:Span .',
+        '',
+        `[] a sty:StyleRule ; sty:part "p" ; sty:declares [ sty:property "color" ; sty:raw "red" ] .
+[] a sty:StyleRule ; sty:part "~ p, + p, :root" ; sty:declares [ sty:property "--ex-x" ; sty:raw "1" ] .
+[] a sty:StyleRule ; sty:appliesTo ex:Evil ; sty:state ":hover, p" ; sty:declares [ sty:property "animation" ; sty:raw "sem-caret-blink 1s" ] .
+[] a sty:Keyframes ; sty:name "sem-caret-blink" ; sty:step [ sty:at "to" ; sty:declares [ sty:property "opacity" ; sty:raw "0" ] ] .`,
+      ),
+    )
+    expect(r.warnings.filter((w) => w.startsWith('Refused'))).toEqual([])
+    const site = compileStyles(ontology)
+    const scoped = scopedCss(r.css, site, SCOPE)
+    const all = selectors(scoped)
+    expect(all.length).toBeGreaterThan(2)
+    for (const s of all) expect(s.startsWith(SCOPE), s).toBe(true)
+    // What the site has is not repeated; a sibling of the box is outside it; :root is the box.
+    expect(all).not.toContain(`${SCOPE} ~ p`)
+    expect(all).toContain(SCOPE)
+    expect(scoped).not.toMatch(/^@keyframes sem-caret-blink /m)
+    expect(scoped).toMatch(/^@keyframes sem-caret-blink__data-sem-sandbox-1 \{/m)
+    expect(scoped).toContain('animation: sem-caret-blink__data-sem-sandbox-1 1s;')
+    expect(scopedCss(site, site, SCOPE)).toBe('')
+  })
+
+  it('the box contains what it holds (a trusted rule of the safety layer)', () => {
+    expect(compileStyles(ontology)).toMatch(/^ {2}\[data-sem-sandbox\] \{ contain: layout paint; overflow-clip-margin: var\(--sem-space-3\); \}$/m)
+  })
+
+  it('a page rendered under a policy is a box: the trusted sheet is the page’s, what the store adds is scoped to the mount element', async () => {
+    const authored = evil('?x a rdfhtml:Span .', '', `[] a sty:StyleRule ; sty:part "body" ; sty:declares [ sty:property "visibility" ; sty:raw "hidden" ] .`)
+    const store = loadStore('wat', completeSource(authored))
+    try {
+      const rendered = await renderToString({ store, root: EX + 'it', policy, trusted: ontology })
+      const box = boxSelector(rendered.box!)
+      const site = compileStyles(ontology)
+      expect(rendered.css!.startsWith(site)).toBe(true)
+      const added = rendered.css!.slice(site.length)
+      expect(selectors(added).length).toBeGreaterThan(0)
+      for (const s of selectors(added)) expect(s.startsWith(box), s).toBe(true)
+      expect(added).toContain(`${box} body { visibility: hidden; }`)
+      const page = renderDocument('<!doctype html><html><head></head><body><div id="app"></div></body></html>', rendered)
+      expect(page).toContain(`data-sem-sandbox="${rendered.box}"`)
+      // Without the trusted store, the whole sheet is scoped.
+      const all = await renderToString({ store, root: EX + 'it', policy })
+      for (const s of selectors(all.css!)) expect(s.startsWith(box), s).toBe(true)
+      all.runtime.dispose()
+      rendered.runtime.dispose()
+    } finally {
+      store.dispose?.()
+    }
   })
 })
 

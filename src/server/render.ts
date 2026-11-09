@@ -14,6 +14,7 @@ import { prerenderSandboxes, type PrerenderOptions, type SandboxOptions } from '
 import type { Delta } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
+import { boxSelector, scopedCss } from '../style/scope.ts'
 import type { SafetyPolicy } from '../safety.ts'
 import { rememberedPolicies, type RememberedPolicy } from './remembered.ts'
 
@@ -46,6 +47,12 @@ export interface RenderOptions {
    * refuses are left out, and reported. Read it from a trusted store (authoredPolicy), not this one.
    */
   policy?: SafetyPolicy
+  /**
+   * With a policy: the store it was read from (the ontology and the app's own graphs). Its stylesheet
+   * is the page's, and only what the rendered store adds is scoped to the authored box (the mount
+   * element, `Rendered.box`); without it the whole stylesheet is scoped to the box.
+   */
+  trusted?: GraphStore
   /** A component library that draws hosted components (as mount's `hosts`): their server markup, which the client hydrates. */
   hosts?: HostRenderer
 }
@@ -55,6 +62,8 @@ export interface Rendered {
   html: string
   /** The compiled stylesheet (unless styles: false). */
   css?: string
+  /** With a policy: the authored box the mount element is (its BOX_ATTRIBUTE, src/style/scope.ts), which the stylesheet is scoped to. */
+  box?: string
   /** 200, or 404 when the address names a place no location knows. */
   status: number
   /** The document's language and direction, for <html lang dir>. */
@@ -153,15 +162,22 @@ export async function readyToRender(opts: RenderOptions): Promise<{ status: numb
 }
 
 /** Project the prepared store and serialize the root (after readyToRender). */
-export function project(opts: RenderOptions, languages: string[]): Pick<Rendered, 'html' | 'css' | 'runtime' | 'projection'> {
+export function project(opts: RenderOptions, languages: string[]): Pick<Rendered, 'html' | 'css' | 'box' | 'runtime' | 'projection'> {
   const { store, root } = opts
   const runtime = new Runtime(store)
   const projection = runtime.project({ modality: MOD.Screen, layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer ?? 'sparql', functions: opts.functions, languages, provenance: opts.provenance, name: 'screen', roots: [root], policy: opts.policy })
-  const css = opts.styles === false ? undefined : compileStyles(store, { policy: opts.policy })
-  let siteCss = css
-  const html = serializeRoot(runtime, projection, root, { ...opts, siteCss: () => (siteCss ??= compileStyles(store)) })
-  return { html, css, runtime, projection }
+  // Authored: the trusted sheet is the page's, what the store adds stays in the box (src/style/scope.ts).
+  const box = authoredBox(opts)
+  const trustedCss = box && opts.styles !== false && opts.trusted ? compileStyles(opts.trusted) : ''
+  const compiled = opts.styles === false ? undefined : compileStyles(store, { policy: opts.policy })
+  const css = box && compiled !== undefined ? [trustedCss, scopedCss(compiled, trustedCss, boxSelector(box))].filter(Boolean).join('\n\n') : compiled
+  let siteCss = box ? undefined : css
+  const html = serializeRoot(runtime, projection, root, { ...opts, siteCss: () => (siteCss ??= box ? trustedCss : compileStyles(store)) })
+  return { html, css, runtime, projection, ...(box && { box }) }
 }
+
+/** The authored box of a rendering under a policy (the mount element's BOX_ATTRIBUTE), or none. */
+export const authoredBox = (opts: Pick<RenderOptions, 'policy'>): string | undefined => (opts.policy ? 'authored' : undefined)
 
 /**
  * The root's HTML as the projection has it now, with the live examples it shows rendered in
