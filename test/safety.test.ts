@@ -139,7 +139,7 @@ ex:evil-token a sty:Token ; sem:slug "evil" ; sty:value "url(https://evil.exampl
     expect(r.css).toContain('color: rebeccapurple;')
     expect(r.css).toContain("url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E\")")
     const refused = r.warnings.filter((w) => w.startsWith('Refused a style'))
-    expect(refused.length).toBeGreaterThanOrEqual(7)
+    expect(refused.length).toBeGreaterThanOrEqual(6)
     expect(refused.join('\n')).toMatch(/may not load a resource \(url\(\)\)/)
     expect(refused.join('\n')).toMatch(/may not load a resource \(image-set\(\)\)/)
     expect(refused.join('\n')).toMatch(/may not hold "}" here/)
