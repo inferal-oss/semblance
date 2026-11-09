@@ -155,6 +155,13 @@ sem:OnIntent a sem:Warmth ; rdfs:label "on intent"@en ;
 or focusing, a control that would show them (a navigation item, a tab). By the time they
 click, it is rendered."""@en .
 
+sem:anticipates a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """On a choice (a navigation item's control, tabs): once the page is quiet, what each of its
+options would show is evaluated in idle time, an option at a time, as when it is pointed at (where its
+warmth allows: sem:OnIntent, sem:Eager), and kept. A first click shows it at once, and so does a tap,
+which no pointing comes before. Only what the option would show: an inner switch's other cases stay
+parked. For the few choices a visitor is likely to make next, such as a site's sections."""@en .
+
 # What a control would show, when it is pointed at: intent previews. Each is a
 # SELECT with $control (the component the pointed element belongs to) and
 # $option (what the element c:selects) that returns ?content - the hidden

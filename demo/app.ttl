@@ -193,7 +193,9 @@ ui:themePicker a c:Choice ; c:controls ui:shell ; c:property sty:theme .
 ui:logo a c:GraphMark ; rdfs:label "Semblance" .
 ui:theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
 # On a phone the page switcher is a picker (one line, the current page shown), which fits the bar.
-ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page ; c:compactAs c:Picker .
+# What each section shows now is prepared once the page is quiet (sem:anticipates), so a first
+# click or tap on it - which has no pointing before it - shows it at once.
+ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page ; c:compactAs c:Picker ; sem:anticipates true .
 
 # The site: a landing page, the docs, the component gallery and complete examples
 # (demo/gallery/_home.ttl, _docs.ttl, _examples.ttl). Each page is evaluated when

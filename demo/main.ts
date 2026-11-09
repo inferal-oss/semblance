@@ -11,7 +11,7 @@ import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { Navigation, rendererReveal, setBase, windowScroll } from '../src/navigation.ts'
-import { attachIntent } from '../src/intent.ts'
+import { anticipate, attachIntent } from '../src/intent.ts'
 import { NetworkCapture } from '../src/network.ts'
 import { Sandboxes } from '../src/sandbox.ts'
 import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
@@ -523,7 +523,9 @@ const scheduleWarmup = () => {
 if (takeover) takeover.replay()
 performance.mark('sem:ready')
 scheduleWarmup()
-if (firstGraphs) idle(() => void loadRest())
+// Once the page has its graphs: what the sections would show is prepared, in idle time (sem:anticipates).
+if (firstGraphs) idle(() => void loadRest().then(() => anticipate(runtime, { flush })))
+else anticipate(runtime, { flush })
 
 /**
  * The graphs the page did not need first, in idle time: fetched, read a file per slice, then loaded

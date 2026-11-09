@@ -154,6 +154,7 @@ export const SEM = {
   Lazy: sem + 'Lazy',
   OnIntent: sem + 'OnIntent',
   IntentPreview: sem + 'IntentPreview',
+  anticipates: sem + 'anticipates',
   select: sem + 'select',
   text: sem + 'text',
   verdict: sem + 'verdict',

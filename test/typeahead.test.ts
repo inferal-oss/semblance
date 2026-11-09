@@ -456,3 +456,22 @@ describe('typeahead keystroke cost', () => {
     expect(after.typing.ruleRuns - before.typing.ruleRuns).toBe(200)
   }, 600_000)
 })
+
+/**
+ * The SPARQL rules fold a text as fold() does: mostly as the whole text's sx:sortKey (a call, not a
+ * row per character), else a character at a time where that differs - a combining mark, a final Σ
+ * (#379). c:TypeaheadQuery folds what is typed so, as the texts rules fold labels.
+ */
+describe('folding in SPARQL', () => {
+  it('is fold(), whether the whole text or a character at a time', async () => {
+    const { loadStore } = await import('../src/node/load.ts')
+    const { Runtime } = await import('../src/runtime.ts')
+    const words = ['Café', 'Café', 'ΟΔΟΣ ΚΑΙ', 'Straße', 'İstanbul', 'Ǆemal', 'naïve', 'à́b', '😀x', 'Ålborg', 'ﬁne']
+    const turtle = `@prefix c: <${NS.c}> . @prefix ex: <urn:fold:> .\n` + words.map((w, i) => `ex:t${i} a c:Combobox ; c:controls ex:form ; c:property ex:p ; c:value ${JSON.stringify(w)} .`).join('\n')
+    const store = loadStore('wat', turtle)
+    const screen = new Runtime(store).project({ modality: MOD.Screen, prefer: 'sparql' })
+    const folded = (i: number) => store.match(store.factory.namedNode(`urn:fold:t${i}`), store.factory.namedNode(NS.c + 'foldedQuery'), null)[0]?.object.value
+    expect(screen.engine.stats.byRule.get(NS.c + 'TypeaheadQuery-sparql')?.runs).toBeGreaterThan(0)
+    expect(words.map((_, i) => folded(i))).toEqual(words.map(fold))
+  })
+})
