@@ -68,14 +68,9 @@ function firstSeen(rows: Row[], key: (r: Row) => string | undefined): string[] {
   return [...first].sort((a, b) => (before(a[1], b[1]) ? -1 : 1)).map(([k]) => k)
 }
 
-/** c:SeriesPlan: the chart's series, categories and points, from its view's rows. */
-const plan: FnRule = (ctx, focus) => {
-  const o = ctx.out(focus)
-  const view = ctx.object(focus, C.view)
-  if (!view || !ctx.match(view, RDF_TYPE, RS + 'ResultSet').length) return o.quads
+/** The chart's series, minted as its legend's items: a declared legend (c:legend: by c:key, else the node), else the series variable's values as first seen, else one named by the chart. */
+function mintSeries(ctx: RuleContext, o: Out, focus: NamedNode, rows: Row[]) {
   const e = encoding(ctx, focus)
-  const rows = rowsOf(ctx, focus, view)
-  // Series: a declared legend (c:legend: by c:key, else the node), else the series variable's values as first seen, else one named by the chart.
   const declared = rdfList(ctx, ctx.object(focus, C.legend))
   const series = declared.length
     ? declared.map((s) => ({ key: str(ctx.object(s, C.key)) ?? s.value, label: labelOf(ctx, s) }))
@@ -83,18 +78,28 @@ const plan: FnRule = (ctx, focus) => {
       ? firstSeen(rows, (r) => r.ser).map((k) => ({ key: k, label: k }))
       : [{ key: '', label: labelOf(ctx, focus) }]
   const hidden = new Set(ctx.objects(focus, c('hiddenSeries')).map((t) => t.value))
-  const int = (n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'integer'))
   series.forEach((s, i) => {
     const n = o.node(`series-${md5Key(s.key)}`)
-    o.t(n, RDF_TYPE, ctx.nn(c('ChartSeries'))).t(n, c('inChart'), focus).t(n, C.key, s.key).t(n, C.label, s.label).t(n, c('index'), int(i)).t(n, SEM.orderKey, tupleKey([i]))
+    o.t(n, RDF_TYPE, ctx.nn(c('ChartSeries'))).t(n, c('inChart'), focus).t(n, C.key, s.key).t(n, C.label, s.label).t(n, c('index'), int(ctx, i)).t(n, SEM.orderKey, tupleKey([i]))
     if (hidden.has(s.key)) o.t(n, c('hidden'), ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     o.t(o.node('legend'), NS.rdfhtml + 'hasChild', n)
   })
+  return { series, hidden }
+}
+const int = (ctx: RuleContext, n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'integer'))
+
+/** c:SeriesPlan: the chart's series, categories and points, from its view's rows (a binned kind has a plan of its own). */
+const plan: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const view = ctx.object(focus, C.view)
+  if (!view || !ctx.match(view, RDF_TYPE, RS + 'ResultSet').length || kindSays(ctx, focus, c('binned'), 'true')) return o.quads
+  const rows = rowsOf(ctx, focus, view)
+  const { series, hidden } = mintSeries(ctx, o, focus, rows)
   // Categories, as first seen in any row.
   const categories = firstSeen(rows, (r) => r.cat)
   categories.forEach((cat, i) => {
     const n = o.node(`category-${md5Key(cat)}`)
-    o.t(n, RDF_TYPE, ctx.nn(c('ChartCategory'))).t(n, c('inChart'), focus).t(n, c('index'), int(i)).t(n, C.label, cat)
+    o.t(n, RDF_TYPE, ctx.nn(c('ChartCategory'))).t(n, c('inChart'), focus).t(n, c('index'), int(ctx, i)).t(n, C.label, cat)
   })
   // A point per shown series and category with a value: the sum of its rows' (and of their x and size, when the
   // chart has them; a chart with an x variable has no point without one).
@@ -113,10 +118,52 @@ const plan: FnRule = (ctx, focus) => {
       o.t(n, c('value'), ctx.f.literal(String(values.reduce((a, b) => a + b, 0)), ctx.nn(XSD_DOUBLE)))
       if (hasX) o.t(n, c('x'), ctx.f.literal(String(sum(these.map((r) => r.x))), ctx.nn(XSD_DOUBLE)))
       if (hasZ) o.t(n, c('size'), ctx.f.literal(String(sum(these.map((r) => r.z))), ctx.nn(XSD_DOUBLE)))
-      o.t(n, c('seriesIndex'), int(si)).t(n, c('categoryIndex'), int(ci)).t(n, SEM.orderKey, tupleKey([si, ci]))
+      o.t(n, c('seriesIndex'), int(ctx, si)).t(n, c('categoryIndex'), int(ctx, ci)).t(n, SEM.orderKey, tupleKey([si, ci]))
       o.t(o.node('marks'), NS.rdfhtml + 'hasChild', n)
     })
   })
+  return o.quads
+}
+
+/**
+ * c:HistogramPlan: a binned kind's series, bins and counts. The bins are nice steps (1, 2 or 5 × 10ⁿ) for about
+ * c:binCount of them (default 10, at most 50) from a step below the least value to past the greatest; each is a
+ * category (c:lower, c:upper) and a point per shown series counts its rows' values in it.
+ */
+const histogramPlan: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const view = ctx.object(focus, C.view)
+  if (!view || !ctx.match(view, RDF_TYPE, RS + 'ResultSet').length) return o.quads
+  const rows = rowsOf(ctx, focus, view)
+  const values = rows.filter((r) => r.y !== undefined).map((r) => r.y!)
+  if (!values.length) return o.quads
+  const { series, hidden } = mintSeries(ctx, o, focus, rows)
+  const asked = Math.floor(Number(str(ctx.object(focus, c('binCount'))) ?? 10))
+  const bins = Number.isNaN(asked) ? 10 : Math.min(50, Math.max(1, asked))
+  const lo = Math.min(...values), hi = Math.max(...values)
+  const step = niceStep((hi - lo > 0 ? hi - lo : 1) / bins)
+  const start = Math.floor(lo / step) * step
+  const count = Math.floor((hi - start) / step) + 1
+  const dbl = (n: number) => ctx.f.literal(String(n), ctx.nn(XSD_DOUBLE))
+  const pointClass = ctx.objects(focus, RDF_TYPE).flatMap((t) => ctx.objects(t, c('pointClass')))[0]
+  const binOf = (y: number) => Math.floor((y - start) / step)
+  for (let k = 0; k < count; k++) {
+    const lower = start + k * step, upper = start + (k + 1) * step
+    const n = o.node(`category-${md5Key(String(k))}`)
+    o.t(n, RDF_TYPE, ctx.nn(c('ChartCategory'))).t(n, c('inChart'), focus).t(n, c('index'), int(ctx, k)).t(n, C.label, `${cssNumber(lower)}–${cssNumber(upper)}`)
+    o.t(n, c('lower'), dbl(lower)).t(n, c('upper'), dbl(upper))
+    series.forEach((s, si) => {
+      if (hidden.has(s.key)) return
+      const counted = rows.filter((r) => r.ser === s.key && r.y !== undefined && binOf(r.y) === k).length
+      if (!counted) return
+      const p = o.node(`point-${md5Key(s.key)}-${md5Key(String(k))}`)
+      o.t(p, RDF_TYPE, ctx.nn(c('ChartPoint'))).t(p, c('inChart'), focus).t(p, c('series'), o.node(`series-${md5Key(s.key)}`)).t(p, c('category'), `${cssNumber(lower)}–${cssNumber(upper)}`)
+      if (pointClass) o.t(p, RDF_TYPE, pointClass)
+      o.t(p, c('value'), dbl(counted)).t(p, c('lower'), dbl(lower)).t(p, c('upper'), dbl(upper))
+      o.t(p, c('seriesIndex'), int(ctx, si)).t(p, c('categoryIndex'), int(ctx, k)).t(p, SEM.orderKey, tupleKey([si, k]))
+      o.t(o.node('marks'), NS.rdfhtml + 'hasChild', p)
+    })
+  }
   return o.quads
 }
 
@@ -149,12 +196,16 @@ function pointsOf(ctx: RuleContext, chart: NamedNode): Point[] {
 }
 
 /** A nice scale over [lo, hi] (each at least including 0): a step of 1, 2 or 5 × 10ⁿ that needs about five, its ends on steps. */
-export function niceScale(lo: number, hi: number) {
-  const span = hi - lo > 0 ? hi - lo : 1
-  const raw = span / 5
+/** The least step of 1, 2 or 5 × 10ⁿ at least `raw`. */
+export function niceStep(raw: number) {
   const mag = Math.pow(10, Math.floor(Math.log10(raw)))
   const r = raw / mag
-  const step = (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * mag
+  return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * mag
+}
+
+export function niceScale(lo: number, hi: number) {
+  const span = hi - lo > 0 ? hi - lo : 1
+  const step = niceStep(span / 5)
   const min = Math.floor(lo / step) * step
   const max = Math.max(Math.ceil(hi / step) * step, min + step)
   const count = Math.round((max - min) / step)
@@ -234,6 +285,11 @@ const frame: FnRule = (ctx, focus) => {
     .sort((a, b) => a.i - b.i)
   ctx.readsLanguage()
   const locale = formatLocale(ctx.languages)
+  // A bin is named by its bounds, in the viewer's locale.
+  for (const cat of categories) {
+    const lower = numberOf(ctx.object(cat.n, c('lower'))), upper = numberOf(ctx.object(cat.n, c('upper')))
+    if (lower !== undefined && upper !== undefined) cat.label = `${formatNumber(lower + 0, locale, 'maximumFractionDigits=4')} – ${formatNumber(upper + 0, locale, 'maximumFractionDigits=4')}`
+  }
   const tickEls = (s: Term | undefined, local: string, cls: string) => (s ? ctx.objects(s, c('tick')) : [])
     .map((t) => ({ k: Number(str(ctx.object(t, c('index')))), at: Number(str(ctx.object(t, c('at')))) }))
     .sort((a, b) => a.k - b.k)
@@ -281,7 +337,16 @@ export function measures(ctx: RuleContext, chart: Term, y: number, x: number | u
 export function pointWords(ctx: RuleContext, point: NamedNode, chart: Term): string {
   const series = ctx.object(point, c('series'))
   const many = !!ctx.object(chart, C.seriesVariable) || !!ctx.object(chart, C.legend)
-  const head = [str(ctx.object(point, c('category'))) ?? '', many && series ? str(ctx.object(series, C.label)) ?? '' : ''].filter((x) => x !== '').join(' · ')
+  const seriesLabel = many && series ? str(ctx.object(series, C.label)) ?? '' : ''
+  // A bin: its bounds with the chart's unit, then how many values fall in it.
+  const lower = numberOf(ctx.object(point, c('lower'))), upper = numberOf(ctx.object(point, c('upper')))
+  if (lower !== undefined && upper !== undefined) {
+    ctx.readsLanguage()
+    const locale = formatLocale(ctx.languages), unit = unitOf(ctx, chart)
+    const bounds = `${formatNumber(lower + 0, locale, 'maximumFractionDigits=4')} – ${formatNumber(upper + 0, locale, 'maximumFractionDigits=4')}${unit ? ' ' + unit : ''}`
+    return `${[bounds, seriesLabel].filter((x) => x !== '').join(' · ')}: ${formatNumber(Number(str(ctx.object(point, c('value')))), locale, 'maximumFractionDigits=2')}`
+  }
+  const head = [str(ctx.object(point, c('category'))) ?? '', seriesLabel].filter((x) => x !== '').join(' · ')
   const share = numberOf(ctx.object(point, c('share')))
   const percent = share === undefined ? '' : ` (${formatNumber(share, formatLocale(ctx.languages), 'style=percent;maximumFractionDigits=1')})`
   return `${head}: ${measures(ctx, chart, Number(str(ctx.object(point, c('value')))), numberOf(ctx.object(point, c('x'))), numberOf(ctx.object(point, c('size'))))}${percent}`
@@ -374,8 +439,40 @@ const pieFrame: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** Whether a node is an instance of the class, or of a subclass of it. */
+export function isKind(ctx: RuleContext, node: Term, cls: string): boolean {
+  const seen = new Set<string>()
+  const up = (t: Term): boolean => {
+    if (seen.has(t.value)) return false
+    seen.add(t.value)
+    return t.value === cls || ctx.objects(t, NS.rdfs + 'subClassOf').some(up)
+  }
+  return ctx.objects(node, RDF_TYPE).some(up)
+}
+
+/** A series chart as text: its name, then its points, each a line of its words. */
+const textFrame: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const msg = seriesMessage(ctx, focus)
+  if (msg !== undefined) return message(ctx, focus, msg)
+  o.renders(o.el('root', 'Div', {}, [o.el('title', 'P', {}, [o.text('title-text', labelOf(ctx, focus))]), o.el('marks', 'Div')]))
+  return o.quads
+}
+
+/** A point as a line of text: its words. */
+const pointText: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const chart = ctx.object(focus, c('inChart'))
+  if (!chart) return o.quads
+  o.renders(o.el('root', 'P', {}, [o.text('words-text', pointWords(ctx, focus, chart))]))
+  return o.quads
+}
+
 export const seriesFunctions: Record<string, FnRule> = {
   'series:plan': plan,
+  'series:histogram-plan': histogramPlan,
+  'series:text': textFrame,
+  'series:point-text': pointText,
   'series:layout': layout,
   'series:frame': frame,
   'series:legend-item': seriesItem,

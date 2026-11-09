@@ -20,7 +20,7 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-histogram ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -340,6 +340,90 @@ ui:dt-pie a c:Flippable ; c:front ui:dt-pie-spec .
 ui:dt-pie-spec a c:Specimen ; c:demonstrates c:PieChart , c:DonutChart ; c:label "Pie and donut chart" , "Кругова й кільцева діаграма"@uk , "Kreis- und Ringdiagramm"@de , "مخطط دائري وحلقي"@ar ;
     c:help "Each category's share of the whole, from a maintained view: a slice in its color, a key of the categories. A slice says its value and share; the arrow keys move between slices. A donut (c:DonutChart) shows the total in its hole. Right to left, the slices run counter-clockwise." ;
     c:children ( ui:dt-pie-chart ui:dt-donut-chart ) .
+
+ui:dt-req-0 ui:requestMs 225 ; ui:requestRoute "/page" .
+ui:dt-req-1 ui:requestMs 271 ; ui:requestRoute "/api" .
+ui:dt-req-2 ui:requestMs 226 ; ui:requestRoute "/api" .
+ui:dt-req-3 ui:requestMs 221 ; ui:requestRoute "/page" .
+ui:dt-req-4 ui:requestMs 184 ; ui:requestRoute "/api" .
+ui:dt-req-5 ui:requestMs 227 ; ui:requestRoute "/api" .
+ui:dt-req-6 ui:requestMs 307 ; ui:requestRoute "/page" .
+ui:dt-req-7 ui:requestMs 265 ; ui:requestRoute "/api" .
+ui:dt-req-8 ui:requestMs 302 ; ui:requestRoute "/api" .
+ui:dt-req-9 ui:requestMs 255 ; ui:requestRoute "/page" .
+ui:dt-req-10 ui:requestMs 264 ; ui:requestRoute "/api" .
+ui:dt-req-11 ui:requestMs 251 ; ui:requestRoute "/api" .
+ui:dt-req-12 ui:requestMs 140 ; ui:requestRoute "/page" .
+ui:dt-req-13 ui:requestMs 291 ; ui:requestRoute "/api" .
+ui:dt-req-14 ui:requestMs 270 ; ui:requestRoute "/api" .
+ui:dt-req-15 ui:requestMs 270 ; ui:requestRoute "/page" .
+ui:dt-req-16 ui:requestMs 139 ; ui:requestRoute "/api" .
+ui:dt-req-17 ui:requestMs 135 ; ui:requestRoute "/api" .
+ui:dt-req-18 ui:requestMs 187 ; ui:requestRoute "/page" .
+ui:dt-req-19 ui:requestMs 212 ; ui:requestRoute "/api" .
+ui:dt-req-20 ui:requestMs 258 ; ui:requestRoute "/api" .
+ui:dt-req-21 ui:requestMs 237 ; ui:requestRoute "/page" .
+ui:dt-req-22 ui:requestMs 271 ; ui:requestRoute "/api" .
+ui:dt-req-23 ui:requestMs 201 ; ui:requestRoute "/api" .
+ui:dt-req-24 ui:requestMs 259 ; ui:requestRoute "/page" .
+ui:dt-req-25 ui:requestMs 264 ; ui:requestRoute "/api" .
+ui:dt-req-26 ui:requestMs 200 ; ui:requestRoute "/api" .
+ui:dt-req-27 ui:requestMs 343 ; ui:requestRoute "/page" .
+ui:dt-req-28 ui:requestMs 273 ; ui:requestRoute "/api" .
+ui:dt-req-29 ui:requestMs 312 ; ui:requestRoute "/api" .
+ui:dt-req-30 ui:requestMs 203 ; ui:requestRoute "/page" .
+ui:dt-req-31 ui:requestMs 196 ; ui:requestRoute "/api" .
+ui:dt-req-32 ui:requestMs 219 ; ui:requestRoute "/api" .
+ui:dt-req-33 ui:requestMs 234 ; ui:requestRoute "/page" .
+ui:dt-req-34 ui:requestMs 278 ; ui:requestRoute "/api" .
+ui:dt-req-35 ui:requestMs 255 ; ui:requestRoute "/api" .
+ui:dt-req-36 ui:requestMs 213 ; ui:requestRoute "/page" .
+ui:dt-req-37 ui:requestMs 183 ; ui:requestRoute "/api" .
+ui:dt-req-38 ui:requestMs 209 ; ui:requestRoute "/api" .
+ui:dt-req-39 ui:requestMs 313 ; ui:requestRoute "/page" .
+ui:dt-req-40 ui:requestMs 192 ; ui:requestRoute "/api" .
+ui:dt-req-41 ui:requestMs 255 ; ui:requestRoute "/api" .
+ui:dt-req-42 ui:requestMs 266 ; ui:requestRoute "/page" .
+ui:dt-req-43 ui:requestMs 151 ; ui:requestRoute "/api" .
+ui:dt-req-44 ui:requestMs 243 ; ui:requestRoute "/api" .
+ui:dt-req-45 ui:requestMs 318 ; ui:requestRoute "/page" .
+ui:dt-req-46 ui:requestMs 119 ; ui:requestRoute "/api" .
+ui:dt-req-47 ui:requestMs 221 ; ui:requestRoute "/api" .
+ui:dt-req-48 ui:requestMs 234 ; ui:requestRoute "/page" .
+ui:dt-req-49 ui:requestMs 191 ; ui:requestRoute "/api" .
+ui:dt-req-50 ui:requestMs 270 ; ui:requestRoute "/api" .
+ui:dt-req-51 ui:requestMs 236 ; ui:requestRoute "/page" .
+ui:dt-req-52 ui:requestMs 152 ; ui:requestRoute "/api" .
+ui:dt-req-53 ui:requestMs 290 ; ui:requestRoute "/api" .
+ui:dt-req-54 ui:requestMs 280 ; ui:requestRoute "/page" .
+ui:dt-req-55 ui:requestMs 297 ; ui:requestRoute "/api" .
+ui:dt-req-56 ui:requestMs 326 ; ui:requestRoute "/api" .
+ui:dt-req-57 ui:requestMs 262 ; ui:requestRoute "/page" .
+ui:dt-req-58 ui:requestMs 247 ; ui:requestRoute "/api" .
+ui:dt-req-59 ui:requestMs 162 ; ui:requestRoute "/api" .
+ui:dt-req-60 ui:requestMs 445 ; ui:requestRoute "/page" .
+ui:dt-req-61 ui:requestMs 396 ; ui:requestRoute "/api" .
+ui:dt-req-62 ui:requestMs 402 ; ui:requestRoute "/api" .
+ui:dt-req-63 ui:requestMs 369 ; ui:requestRoute "/page" .
+ui:dt-req-64 ui:requestMs 381 ; ui:requestRoute "/api" .
+ui:dt-req-65 ui:requestMs 399 ; ui:requestRoute "/api" .
+ui:dt-req-66 ui:requestMs 472 ; ui:requestRoute "/page" .
+ui:dt-req-67 ui:requestMs 339 ; ui:requestRoute "/api" .
+ui:dt-req-68 ui:requestMs 362 ; ui:requestRoute "/api" .
+ui:dt-req-69 ui:requestMs 430 ; ui:requestRoute "/page" .
+ui:dt-req-70 ui:requestMs 478 ; ui:requestRoute "/api" .
+ui:dt-req-71 ui:requestMs 443 ; ui:requestRoute "/api" .
+ui:dt-req-72 ui:requestMs 344 ; ui:requestRoute "/page" .
+ui:dt-req-73 ui:requestMs 319 ; ui:requestRoute "/api" .
+ui:dt-req-74 ui:requestMs 434 ; ui:requestRoute "/api" .
+ui:dt-requests-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Response times" ; sem:select """
+SELECT ?ms ?route WHERE { ?r ui:requestMs ?ms ; ui:requestRoute ?route }""" .
+ui:dt-histogram-chart a c:Histogram ; c:label "Response times" ; c:view ui:dt-requests-view ; c:valueVariable "ms" ; c:unit "ms" ; c:binCount 12 .
+ui:dt-histogram-routes a c:Histogram ; c:label "Response times by route" ; c:view ui:dt-requests-view ; c:valueVariable "ms" ; c:seriesVariable "route" ; c:unit "ms" ; c:stacked true .
+ui:dt-histogram a c:Flippable ; c:front ui:dt-histogram-spec .
+ui:dt-histogram-spec a c:Specimen ; c:demonstrates c:Histogram ; c:label "Histogram" , "Гістограма"@uk , "Histogramm"@de , "مدرج تكراري"@ar ;
+    c:help "How a view's values are distributed: the values fall in bins of nice bounds (about c:binCount of them), each a column as tall as its count. With a series variable the series share a bin, side by side or stacked. A bin says its bounds and count, on screen and as text." ;
+    c:children ( ui:dt-histogram-chart ui:dt-histogram-routes ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 

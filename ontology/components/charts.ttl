@@ -1410,6 +1410,8 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* c:RowChart .
+  # A series chart says its points instead (c:SeriesChartText).
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* c:SeriesChart }
   BIND(STR($this) AS ?me)
   BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
   OPTIONAL { $this c:view ?v . ?v sem:select ?anySelect }
@@ -1561,6 +1563,8 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:SeriesChart ; c:view ?theView .
   ?theView a rs:ResultSet .
+  # A binned kind has a plan of its own (c:HistogramPlan).
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?binnedKind . ?binnedKind c:binned true }
   BIND(STR($this) AS ?me)
   LATERAL {
   {
@@ -1925,9 +1929,12 @@ WHERE {
     FILTER(!BOUND(?message))
     FILTER NOT EXISTS { $this c:xScale ?anyXScale }
     ?cn a c:ChartCategory ; c:inChart $this ; c:index ?i ; c:label ?cl .
+    # A bin is named by its bounds, in the viewer's locale.
+    OPTIONAL { ?cn c:lower ?clo ; c:upper ?cup . ?viewer l10n:formatLocale ?locale }
     BIND(IRI(CONCAT(?me, "/~cat-", STR(?i))) AS ?el) BIND(rdfhtml:Span AS ?tag) BIND(?i AS ?key)
     BIND(IRI(CONCAT(?me, "/~categories")) AS ?parent) BIND(CONCAT("--i: ", STR(?i)) AS ?style)
-    BIND(IRI(CONCAT(?me, "/~cat-", STR(?i), "-text")) AS ?textNode) BIND(STR(?cl) AS ?data)
+    BIND(IRI(CONCAT(?me, "/~cat-", STR(?i), "-text")) AS ?textNode)
+    BIND(IF(BOUND(?clo), CONCAT(sx:formatNumber(?clo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?cup + 0e0, ?locale, "maximumFractionDigits=4")), STR(?cl)) AS ?data)
   }
   }
 }""" .
@@ -2008,7 +2015,11 @@ WHERE {
   BIND(IF(BOUND(?pz), CONCAT(", ", COALESCE(STR(?zLabel0), STR(?zLabel1), STR(?zLabel2), ""), " ", sx:formatNumber(?pz, ?locale, "maximumFractionDigits=2")), "") AS ?zPart)
   BIND(CONCAT(?xPart, sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)), ?zPart) AS ?measures)
   BIND(IF(BOUND(?pshare), CONCAT(" (", sx:formatNumber(?pshare, ?locale, "style=percent;maximumFractionDigits=1"), ")"), "") AS ?percent)
-  BIND(CONCAT(?head, ": ", ?measures, ?percent) AS ?words)
+  # A bin: its bounds with the chart's unit, then how many values fall in it.
+  OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
+  BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
+  BIND(IF(BOUND(?bounds), CONCAT(?bounds, IF(?ser != "", " · ", ""), ?ser, ": ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2")), CONCAT(?head, ": ", ?measures, ?percent)) AS ?words)
+
   BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
     IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     IF(BOUND(?px), CONCAT("; --x: ", sx:formatNumber(?px + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""), IF(BOUND(?pz), CONCAT("; --z: ", sx:formatNumber(?pz + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
@@ -2077,7 +2088,11 @@ WHERE {
   BIND(IF(BOUND(?pz), CONCAT(", ", COALESCE(STR(?zLabel0), STR(?zLabel1), STR(?zLabel2), ""), " ", sx:formatNumber(?pz, ?locale, "maximumFractionDigits=2")), "") AS ?zPart)
   BIND(CONCAT(?xPart, sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)), ?zPart) AS ?measures)
   BIND(IF(BOUND(?pshare), CONCAT(" (", sx:formatNumber(?pshare, ?locale, "style=percent;maximumFractionDigits=1"), ")"), "") AS ?percent)
-  BIND(CONCAT(?head, ": ", ?measures, ?percent) AS ?words)
+  # A bin: its bounds with the chart's unit, then how many values fall in it.
+  OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
+  BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
+  BIND(IF(BOUND(?bounds), CONCAT(?bounds, IF(?ser != "", " · ", ""), ?ser, ": ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2")), CONCAT(?head, ": ", ?measures, ?percent)) AS ?words)
+
   BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
     IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     IF(BOUND(?px), CONCAT("; --x: ", sx:formatNumber(?px + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""), IF(BOUND(?pz), CONCAT("; --z: ", sx:formatNumber(?pz + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
@@ -2155,7 +2170,11 @@ WHERE {
   BIND(IF(BOUND(?pz), CONCAT(", ", COALESCE(STR(?zLabel0), STR(?zLabel1), STR(?zLabel2), ""), " ", sx:formatNumber(?pz, ?locale, "maximumFractionDigits=2")), "") AS ?zPart)
   BIND(CONCAT(?xPart, sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)), ?zPart) AS ?measures)
   BIND(IF(BOUND(?pshare), CONCAT(" (", sx:formatNumber(?pshare, ?locale, "style=percent;maximumFractionDigits=1"), ")"), "") AS ?percent)
-  BIND(CONCAT(?head, ": ", ?measures, ?percent) AS ?words)
+  # A bin: its bounds with the chart's unit, then how many values fall in it.
+  OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
+  BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
+  BIND(IF(BOUND(?bounds), CONCAT(?bounds, IF(?ser != "", " · ", ""), ?ser, ": ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2")), CONCAT(?head, ": ", ?measures, ?percent)) AS ?words)
+
   BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
     IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     IF(BOUND(?px), CONCAT("; --x: ", sx:formatNumber(?px + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""), IF(BOUND(?pz), CONCAT("; --z: ", sx:formatNumber(?pz + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
@@ -2236,7 +2255,11 @@ WHERE {
   BIND(IF(BOUND(?pz), CONCAT(", ", COALESCE(STR(?zLabel0), STR(?zLabel1), STR(?zLabel2), ""), " ", sx:formatNumber(?pz, ?locale, "maximumFractionDigits=2")), "") AS ?zPart)
   BIND(CONCAT(?xPart, sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)), ?zPart) AS ?measures)
   BIND(IF(BOUND(?pshare), CONCAT(" (", sx:formatNumber(?pshare, ?locale, "style=percent;maximumFractionDigits=1"), ")"), "") AS ?percent)
-  BIND(CONCAT(?head, ": ", ?measures, ?percent) AS ?words)
+  # A bin: its bounds with the chart's unit, then how many values fall in it.
+  OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
+  BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
+  BIND(IF(BOUND(?bounds), CONCAT(?bounds, IF(?ser != "", " · ", ""), ?ser, ": ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2")), CONCAT(?head, ": ", ?measures, ?percent)) AS ?words)
+
   BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
     IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     IF(BOUND(?px), CONCAT("; --x: ", sx:formatNumber(?px + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""), IF(BOUND(?pz), CONCAT("; --z: ", sx:formatNumber(?pz + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
@@ -2341,6 +2364,370 @@ WHERE {
     BIND(IF(?part = "item", STR(?cl), ?unset) AS ?data) BIND(IF(?part = "item", 1, ?unset) AS ?textKey)
   }
   }
+}""" .
+
+# --- Histogram ---------------------------------------------------------------------------------------------
+# A binned kind (c:binned true) has a plan of its own: its values (c:valueVariable, one per row) fall in bins
+# of a nice step (1, 2 or 5 × 10ⁿ) for about c:binCount of them (default 10, at most 50), from a step below
+# the least value to past the greatest. Each bin is a category (c:lower, c:upper, named by its bounds in the
+# viewer's locale) and a point per shown series counts its rows' values in it, drawn as a column; the bars
+# touch. A bin says its bounds and its count.
+c:Histogram a owl:Class ; rdfs:subClassOf c:AxisChart ;
+    rdfs:label "Histogram"@en , "Гістограма"@uk , "Histogramm"@de , "مدرج تكراري"@ar ;
+    rdfs:comment "How a view's values are distributed: a column per bin of nice bounds, as tall as its count; c:binCount bins, about (default 10)."@en ;
+    c:pointClass c:ColumnPoint ; c:binned true ;
+    sem:slug "histogram" .
+c:binned a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:boolean ; rdfs:comment "On a chart kind: its categories are bins of its values (c:HistogramPlan)."@en .
+c:binCount a owl:DatatypeProperty ; rdfs:comment "About how many bins a histogram has (default 10, at most 50)."@en .
+c:lower a owl:DatatypeProperty ; rdfs:comment "Derived: a bin's least value."@en .
+c:upper a owl:DatatypeProperty ; rdfs:comment "Derived: a bin's bound (its values are below it)."@en .
+
+c:HistogramPlan a sem:Rendering ; sem:targets c:Histogram ; sem:stratum -2 ; sem:inputOnly true ;
+    sem:follows c:dataset , c:hiddenSeries , ( c:view rs:solution rs:binding ) , ( c:legend [ sem:zeroOrMore rdf:rest ] rdf:first ) .
+c:HistogramPlan-fn a sem:Rule ; sem:implements c:HistogramPlan ; sem:function "series:histogram-plan" .
+c:HistogramPlan-sparql a sem:Rule ; sem:implements c:HistogramPlan ; sem:needsExtension sx:Math ; sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?node a ?type , ?type2 ; c:inChart $this ; c:key ?key ; c:label ?label ; c:index ?index ; c:hidden ?hidden ; sem:orderKey ?okey ;
+    c:series ?seriesNode ; c:category ?category ; c:value ?value ; c:seriesIndex ?seriesIndex ; c:categoryIndex ?categoryIndex ; c:lower ?lower ; c:upper ?upper .
+  ?container rdfhtml:hasChild ?node .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Histogram ; c:view ?theView .
+  ?theView a rs:ResultSet .
+  BIND(STR($this) AS ?me)
+  LATERAL {
+  {
+    # Its series, as a series chart's (when it has values).
+    { SELECT ?start ?step ?count WHERE {
+      { SELECT (MIN(?bx) AS ?lo) (MAX(?bx) AS ?hi) WHERE {
+        $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv }
+      BIND(STR(?r) AS ?rs) BIND(COALESCE(?idx, ?rs) AS ?pos)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } } LATERAL { OPTIONAL { ?sb rs:value ?s0 } }
+      BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(IF(BOUND(?sv), STR(?s0), "") AS ?ser)
+        BIND(xsd:double(?v0) AS ?bx) FILTER(BOUND(?bx))
+      } }
+      FILTER(BOUND(?lo))
+      OPTIONAL { $this c:binCount ?bc0 } BIND(COALESCE(xsd:integer(FLOOR(xsd:double(?bc0))), 10) AS ?asked)
+      BIND(IF(?asked < 1, 1, IF(?asked > 50, 50, ?asked)) AS ?bins)
+      BIND(IF(?hi - ?lo > 0, ?hi - ?lo, 1e0) / ?bins AS ?raw)
+      BIND(sx:pow(10, FLOOR(sx:log10(?raw))) AS ?mag) BIND(?raw / ?mag AS ?ratio)
+      BIND(IF(?ratio <= 1, 1, IF(?ratio <= 2, 2, IF(?ratio <= 5, 5, 10))) * ?mag AS ?step)
+      BIND(FLOOR(?lo / ?step) * ?step AS ?start)
+      BIND(xsd:integer(FLOOR((?hi - ?start) / ?step)) + 1 AS ?count)
+    } }
+    { SELECT ?skey ?si ?slabel WHERE {
+      {
+        # A declared legend (c:legend): its series in order, by c:key (else the node).
+        $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
+        OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of ?sn ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) ?sn rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR(?sn), "^.*[#/]", ""))) AS ?slabel)
+      } UNION {
+        # Else the values of the series variable, in the order they are first seen.
+        FILTER NOT EXISTS { $this c:legend ?anyList }
+        { SELECT ?skey (COUNT(DISTINCT ?ser2) AS ?si) WHERE {
+          { SELECT ?skey (MIN(?pos) AS ?spos) WHERE {
+            $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+            FILTER(BOUND(?ser)) BIND(?ser AS ?skey)
+          } GROUP BY ?skey }
+          OPTIONAL {
+            $this c:view ?view2 ; c:seriesVariable ?sv2 . ?view2 rs:solution ?r2 . ?r2 rs:binding ?b2 . ?b2 rs:variable ?svs2 ; rs:value ?s2 .
+            FILTER(?svs2 = STR(?sv2)) OPTIONAL { ?r2 rs:index ?i2 } BIND(STR(?s2) AS ?ser2)
+            FILTER(COALESCE(?i2, STR(?r2)) < ?spos)
+          }
+        } GROUP BY ?skey }
+        BIND(?skey AS ?slabel)
+      } UNION {
+        # Without a series variable, every value is one series, named by the chart.
+        FILTER NOT EXISTS { $this c:legend ?anyList } FILTER NOT EXISTS { $this c:seriesVariable ?anySv }
+        BIND("" AS ?skey) BIND(0 AS ?si)
+        OPTIONAL { $this l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) $this c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of $this ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) $this rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?slabel)
+      }
+    } }
+    BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?skey), 1, 8))) AS ?node)
+    BIND(c:ChartSeries AS ?type) BIND(?skey AS ?key) BIND(?slabel AS ?label) BIND(?si AS ?index)
+    BIND(IF(EXISTS { $this c:hiddenSeries ?h FILTER(STR(?h) = ?skey) }, true, ?unset) AS ?hidden)
+    BIND(CONCAT("\\u0001n", STR(?si)) AS ?okey)
+    BIND(IRI(CONCAT(?me, "/~legend")) AS ?container)
+  } UNION {
+    # A category per bin.
+    { SELECT ?start ?step ?count WHERE {
+      { SELECT (MIN(?bx) AS ?lo) (MAX(?bx) AS ?hi) WHERE {
+        $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv }
+      BIND(STR(?r) AS ?rs) BIND(COALESCE(?idx, ?rs) AS ?pos)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } } LATERAL { OPTIONAL { ?sb rs:value ?s0 } }
+      BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(IF(BOUND(?sv), STR(?s0), "") AS ?ser)
+        BIND(xsd:double(?v0) AS ?bx) FILTER(BOUND(?bx))
+      } }
+      FILTER(BOUND(?lo))
+      OPTIONAL { $this c:binCount ?bc0 } BIND(COALESCE(xsd:integer(FLOOR(xsd:double(?bc0))), 10) AS ?asked)
+      BIND(IF(?asked < 1, 1, IF(?asked > 50, 50, ?asked)) AS ?bins)
+      BIND(IF(?hi - ?lo > 0, ?hi - ?lo, 1e0) / ?bins AS ?raw)
+      BIND(sx:pow(10, FLOOR(sx:log10(?raw))) AS ?mag) BIND(?raw / ?mag AS ?ratio)
+      BIND(IF(?ratio <= 1, 1, IF(?ratio <= 2, 2, IF(?ratio <= 5, 5, 10))) * ?mag AS ?step)
+      BIND(FLOOR(?lo / ?step) * ?step AS ?start)
+      BIND(xsd:integer(FLOOR((?hi - ?start) / ?step)) + 1 AS ?count)
+    } }
+    VALUES ?k { 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 }
+    FILTER(?k < ?count)
+    BIND(IRI(CONCAT(?me, "/~category-", SUBSTR(MD5(STR(?k)), 1, 8))) AS ?node)
+    BIND(c:ChartCategory AS ?type) BIND(?k AS ?index)
+    BIND(?start + ?k * ?step AS ?lower) BIND(?start + (?k + 1) * ?step AS ?upper)
+    BIND(CONCAT(sx:formatNumber(?lower + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "–", sx:formatNumber(?upper + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")) AS ?label)
+  } UNION {
+    # A point per shown series and bin with values: how many.
+    { SELECT ?ser ?k (COUNT(*) AS ?n) WHERE {
+      { SELECT ?start ?step ?count WHERE {
+      { SELECT (MIN(?bx) AS ?lo) (MAX(?bx) AS ?hi) WHERE {
+        $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv }
+      BIND(STR(?r) AS ?rs) BIND(COALESCE(?idx, ?rs) AS ?pos)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } } LATERAL { OPTIONAL { ?sb rs:value ?s0 } }
+      BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(IF(BOUND(?sv), STR(?s0), "") AS ?ser)
+        BIND(xsd:double(?v0) AS ?bx) FILTER(BOUND(?bx))
+      } }
+      FILTER(BOUND(?lo))
+      OPTIONAL { $this c:binCount ?bc0 } BIND(COALESCE(xsd:integer(FLOOR(xsd:double(?bc0))), 10) AS ?asked)
+      BIND(IF(?asked < 1, 1, IF(?asked > 50, 50, ?asked)) AS ?bins)
+      BIND(IF(?hi - ?lo > 0, ?hi - ?lo, 1e0) / ?bins AS ?raw)
+      BIND(sx:pow(10, FLOOR(sx:log10(?raw))) AS ?mag) BIND(?raw / ?mag AS ?ratio)
+      BIND(IF(?ratio <= 1, 1, IF(?ratio <= 2, 2, IF(?ratio <= 5, 5, 10))) * ?mag AS ?step)
+      BIND(FLOOR(?lo / ?step) * ?step AS ?start)
+      BIND(xsd:integer(FLOOR((?hi - ?start) / ?step)) + 1 AS ?count)
+    } }
+      $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv }
+      BIND(STR(?r) AS ?rs) BIND(COALESCE(?idx, ?rs) AS ?pos)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } } LATERAL { OPTIONAL { ?sb rs:value ?s0 } }
+      BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(IF(BOUND(?sv), STR(?s0), "") AS ?ser)
+      BIND(xsd:double(?v0) AS ?x) FILTER(BOUND(?x) && BOUND(?ser))
+      BIND(xsd:integer(FLOOR((?x - ?start) / ?step)) AS ?k)
+    } GROUP BY ?ser ?k }
+    { SELECT ?start ?step ?count WHERE {
+      { SELECT (MIN(?bx) AS ?lo) (MAX(?bx) AS ?hi) WHERE {
+        $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv }
+      BIND(STR(?r) AS ?rs) BIND(COALESCE(?idx, ?rs) AS ?pos)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } } LATERAL { OPTIONAL { ?sb rs:value ?s0 } }
+      BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(IF(BOUND(?sv), STR(?s0), "") AS ?ser)
+        BIND(xsd:double(?v0) AS ?bx) FILTER(BOUND(?bx))
+      } }
+      FILTER(BOUND(?lo))
+      OPTIONAL { $this c:binCount ?bc0 } BIND(COALESCE(xsd:integer(FLOOR(xsd:double(?bc0))), 10) AS ?asked)
+      BIND(IF(?asked < 1, 1, IF(?asked > 50, 50, ?asked)) AS ?bins)
+      BIND(IF(?hi - ?lo > 0, ?hi - ?lo, 1e0) / ?bins AS ?raw)
+      BIND(sx:pow(10, FLOOR(sx:log10(?raw))) AS ?mag) BIND(?raw / ?mag AS ?ratio)
+      BIND(IF(?ratio <= 1, 1, IF(?ratio <= 2, 2, IF(?ratio <= 5, 5, 10))) * ?mag AS ?step)
+      BIND(FLOOR(?lo / ?step) * ?step AS ?start)
+      BIND(xsd:integer(FLOOR((?hi - ?start) / ?step)) + 1 AS ?count)
+    } }
+    { SELECT ?skey ?si ?slabel WHERE {
+      {
+        # A declared legend (c:legend): its series in order, by c:key (else the node).
+        $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
+        OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of ?sn ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) ?sn rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR(?sn), "^.*[#/]", ""))) AS ?slabel)
+      } UNION {
+        # Else the values of the series variable, in the order they are first seen.
+        FILTER NOT EXISTS { $this c:legend ?anyList }
+        { SELECT ?skey (COUNT(DISTINCT ?ser2) AS ?si) WHERE {
+          { SELECT ?skey (MIN(?pos) AS ?spos) WHERE {
+            $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+            FILTER(BOUND(?ser)) BIND(?ser AS ?skey)
+          } GROUP BY ?skey }
+          OPTIONAL {
+            $this c:view ?view2 ; c:seriesVariable ?sv2 . ?view2 rs:solution ?r2 . ?r2 rs:binding ?b2 . ?b2 rs:variable ?svs2 ; rs:value ?s2 .
+            FILTER(?svs2 = STR(?sv2)) OPTIONAL { ?r2 rs:index ?i2 } BIND(STR(?s2) AS ?ser2)
+            FILTER(COALESCE(?i2, STR(?r2)) < ?spos)
+          }
+        } GROUP BY ?skey }
+        BIND(?skey AS ?slabel)
+      } UNION {
+        # Without a series variable, every value is one series, named by the chart.
+        FILTER NOT EXISTS { $this c:legend ?anyList } FILTER NOT EXISTS { $this c:seriesVariable ?anySv }
+        BIND("" AS ?skey) BIND(0 AS ?si)
+        OPTIONAL { $this l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) $this c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of $this ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) $this rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?slabel)
+      }
+    } }
+    FILTER(?skey = ?ser)
+    FILTER NOT EXISTS { $this c:hiddenSeries ?h FILTER(STR(?h) = ?skey) }
+    BIND(IRI(CONCAT(?me, "/~point-", SUBSTR(MD5(?ser), 1, 8), "-", SUBSTR(MD5(STR(?k)), 1, 8))) AS ?node)
+    BIND(c:ChartPoint AS ?type)
+    OPTIONAL { $this a ?kind . ?kind c:pointClass ?type2 }
+    BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?ser), 1, 8))) AS ?seriesNode)
+    BIND(?start + ?k * ?step AS ?lower) BIND(?start + (?k + 1) * ?step AS ?upper)
+    BIND(CONCAT(sx:formatNumber(?lower + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "–", sx:formatNumber(?upper + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")) AS ?category)
+    BIND(?n AS ?value) BIND(?si AS ?seriesIndex) BIND(?k AS ?categoryIndex)
+    BIND(CONCAT("\\u0001n", STR(?si), "\\u0001n", STR(?k)) AS ?okey)
+    BIND(IRI(CONCAT(?me, "/~marks")) AS ?container)
+  }
+  }
+}""" .
+
+# --- Series charts as text ------------------------------------------------------------------------------------
+# A series chart's Text modality: its name, then its points, each a line of the words it says on screen.
+c:SeriesChartText a sem:Rendering ; sem:targets c:SeriesChart ; sem:modality mod:Text ; sem:stratum 0 ; sem:follows c:dataset , c:view ; sem:readsMinted true .
+c:SeriesChartText-fn a sem:Rule ; sem:implements c:SeriesChartText ; sem:function "series:text" .
+c:SeriesChartText-sparql a sem:Rule ; sem:implements c:SeriesChartText ; sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:SeriesChart .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this c:view ?v . ?v sem:select ?anySelect }
+  BIND(COALESCE(?v, c:none) AS ?vNode)
+  LATERAL { OPTIONAL {
+    FILTER(NOT EXISTS { ?vNode a rs:ResultSet })
+    OPTIONAL { ?viewLabelAt0 l10n:of ?vNode ; l10n:label ?viewLabel0 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel0)) ?vNode c:label ?viewLabel1 FILTER(isLiteral(?viewLabel1)) }
+    OPTIONAL { ?viewLabelAt2 l10n:of ?vNode ; l10n:name ?viewLabel2 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel2)) ?vNode rdfs:label ?viewLabel3 FILTER(isLiteral(?viewLabel3)) }
+    BIND(STR(COALESCE(?viewLabel0, ?viewLabel1, ?viewLabel2, ?viewLabel3, REPLACE(STR(?vNode), "^.*[#/]", ""))) AS ?viewLabel)
+  } }
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+  OPTIONAL { FILTER(!BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+  BIND(IF(!BOUND(?v), "No view.",
+       IF(BOUND(?viewLabel), CONCAT(?viewLabel, " is not a maintained view (iv:View, iv:materialize iv:Graph)."),
+       IF(NOT EXISTS { ?v rs:solution ?anyRow }, STR(COALESCE(?e0, ?e1)), ?unset))) AS ?message)
+  LATERAL {
+  {
+    FILTER(BOUND(?message))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(?message AS ?data)
+  } UNION {
+    FILTER(!BOUND(?message))
+    OPTIONAL { ?labelAt0 l10n:of $this ; l10n:label ?label0 }
+    OPTIONAL { FILTER(!BOUND(?label0)) $this c:label ?label1 FILTER(isLiteral(?label1)) }
+    OPTIONAL { ?labelAt2 l10n:of $this ; l10n:name ?label2 }
+    OPTIONAL { FILTER(!BOUND(?label2)) $this rdfs:label ?label3 FILTER(isLiteral(?label3)) }
+    BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
+    VALUES (?local ?tag0 ?key0) { ("root" rdfhtml:Div UNDEF) ("title" rdfhtml:P 0) ("marks" rdfhtml:Div 1) }
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
+    BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
+    BIND(IF(?local = "root", ?unset, ?root) AS ?parent)
+    BIND(IF(?local = "title", IRI(CONCAT(?me, "/~title-text")), ?unset) AS ?textNode)
+    BIND(IF(?local = "title", ?label, ?unset) AS ?data)
+  }
+  }
+}""" .
+c:ChartPointText a sem:Rendering ; sem:targets c:ChartPoint ; sem:modality mod:Text ; sem:stratum 0 ; sem:follows c:inChart .
+c:ChartPointText-fn a sem:Rule ; sem:implements c:ChartPointText ; sem:function "series:point-text" .
+c:ChartPointText-sparql a sem:Rule ; sem:implements c:ChartPointText ; sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a c:ChartPoint ; c:inChart ?chart ; c:value ?v ; c:seriesIndex ?si ; c:categoryIndex ?ci ; c:category ?cat0 ; c:series ?series .
+  ?series c:label ?seriesLabel .
+  OPTIONAL { $this c:base ?b0 } OPTIONAL { $this c:rank ?rank0 } OPTIONAL { $this c:nextValue ?nv } OPTIONAL { $this c:nextBase ?nb0 }
+  OPTIONAL { $this c:x ?px } OPTIONAL { $this c:size ?pz } OPTIONAL { $this c:from ?pfrom ; c:share ?pshare }
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
+  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+  # What it says: "category · series: value unit", the series when the chart has more than one.
+  BIND(EXISTS { ?chart c:seriesVariable ?anySv } || EXISTS { ?chart c:legend ?anyLegend } AS ?many)
+  BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
+  BIND(CONCAT(?cat, IF(?cat != "" && ?ser != "", " · ", ""), ?ser) AS ?head)
+  OPTIONAL { ?xLabelAt l10n:of ?chart ; l10n:xLabel ?xLabel0 }
+  OPTIONAL { FILTER(!BOUND(?xLabel0)) ?chart c:xLabel ?xLabel1 FILTER(isLiteral(?xLabel1)) }
+  OPTIONAL { ?chart c:xVariable ?xLabel2 }
+  OPTIONAL { ?zLabelAt l10n:of ?chart ; l10n:sizeLabel ?zLabel0 }
+  OPTIONAL { FILTER(!BOUND(?zLabel0)) ?chart c:sizeLabel ?zLabel1 FILTER(isLiteral(?zLabel1)) }
+  OPTIONAL { ?chart c:sizeVariable ?zLabel2 }
+  BIND(IF(BOUND(?px), CONCAT(COALESCE(STR(?xLabel0), STR(?xLabel1), STR(?xLabel2), ""), " ", sx:formatNumber(?px, ?locale, "maximumFractionDigits=2"), ", "), "") AS ?xPart)
+  BIND(IF(BOUND(?pz), CONCAT(", ", COALESCE(STR(?zLabel0), STR(?zLabel1), STR(?zLabel2), ""), " ", sx:formatNumber(?pz, ?locale, "maximumFractionDigits=2")), "") AS ?zPart)
+  BIND(CONCAT(?xPart, sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)), ?zPart) AS ?measures)
+  BIND(IF(BOUND(?pshare), CONCAT(" (", sx:formatNumber(?pshare, ?locale, "style=percent;maximumFractionDigits=1"), ")"), "") AS ?percent)
+  # A bin: its bounds with the chart's unit, then how many values fall in it.
+  OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
+  BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
+  BIND(IF(BOUND(?bounds), CONCAT(?bounds, IF(?ser != "", " · ", ""), ?ser, ": ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2")), CONCAT(?head, ": ", ?measures, ?percent)) AS ?words)
+
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?el) BIND(?el AS ?shownRoot) BIND(rdfhtml:P AS ?tag)
+  BIND(IRI(CONCAT(STR($this), "/~words-text")) AS ?textNode) BIND(?words AS ?data)
 }""" .
 # --- Gantt ---------------------------------------------------------------------------------------
 # Dated tasks from a maintained SELECT view (as the bar chart reads it): one row per task, or a row

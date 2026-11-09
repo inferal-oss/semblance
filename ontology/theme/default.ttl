@@ -1668,6 +1668,17 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:DonutChart ; sty:part ".sem-slice" ;
     sty:declares [ sty:property "mask" ; sty:raw "radial-gradient(closest-side, transparent 58%, #000 calc(58% + 0.5px) calc(100% - 0.5px), transparent 100%)" ] .
 
+# A histogram's bins touch: a column is its bin's whole width (shared by the series when grouped).
+[] a sty:StyleRule ; sty:appliesTo c:Histogram ; sty:part ".sem-chart-marks .sem-bar" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * (-0.5 + var(--r) / var(--k)))" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--band) / var(--k))" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Histogram ; sty:part ".sem-chart-marks .sem-stacked .sem-bar" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * -0.5)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "var(--band)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Histogram ; sty:part ".sem-chart-categories > span" ;
+    sty:declares [ sty:property "font-size" ; sty:raw "10px" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" ] ,
