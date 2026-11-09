@@ -12,6 +12,7 @@ import { BOX_ATTRIBUTE, boxSelector, scopedCss } from '../style/scope.ts'
 import { readPolicy, Refused, type SafetyPolicy } from '../safety.ts'
 import { Files, type FilesOptions } from '../files.ts'
 import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
+import { type IdleDeadline, whenIdle } from '../idle.ts'
 import { attachConnectors } from './connectors.ts'
 import { attachSnaps } from './snap.ts'
 import { attachLightboxes } from './lightbox.ts'
@@ -194,11 +195,10 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const flush = () => renderer.flush()
 
   // Hidden parts (other tabs, closed panels) are evaluated a slice at a time when the page is idle.
-  const idle = (cb: (d: { timeRemaining(): number }) => void) =>
-    'requestIdleCallback' in globalThis ? requestIdleCallback(cb, { timeout: 1000 }) : setTimeout(() => cb({ timeRemaining: () => 8 }), 30)
+  const idle = whenIdle
   let warming = false
   let stopped = false
-  const warm = (deadline: { timeRemaining(): number }) => {
+  const warm = (deadline: IdleDeadline) => {
     if (stopped) return
     const more = runtime.warm(Math.max(2, deadline.timeRemaining() - 2))
     flush()

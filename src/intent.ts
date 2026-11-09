@@ -2,6 +2,7 @@
 // the person points at or focuses a choice - a navigation item, a tab - the
 // component it would show is evaluated (and its DOM built, hidden) ahead of the
 // click. What a choice would show is graph data: the sem:IntentPreview queries.
+import { whenIdle } from './idle.ts'
 import { C, RDF_TYPE, SEM } from './ns.ts'
 import { prefixesFor } from './prefixes.ts'
 import { owningFocus } from './rdf.ts'
@@ -9,15 +10,14 @@ import type { DomRenderer } from './render/dom.ts'
 import type { Runtime } from './runtime.ts'
 
 export interface IntentOptions {
-  /** How to get idle time (defaults to requestIdleCallback, else a timeout). */
+  /** How to get idle time (defaults to whenIdle, src/idle.ts). */
   idle?: (run: (budgetMs: number) => void) => void
   /** Called after each slice, to build what was evaluated (e.g. renderer.flush). */
   flush?: () => void
 }
 
 type Idle = (run: (budgetMs: number) => void) => void
-const defaultIdle: Idle = (run) =>
-  'requestIdleCallback' in globalThis ? requestIdleCallback((d) => run(Math.max(4, d.timeRemaining() - 2)), { timeout: 200 }) : setTimeout(() => run(8), 16)
+const defaultIdle: Idle = (run) => whenIdle((d) => run(Math.max(4, d.timeRemaining() - 2)), 200)
 
 /** What a choice's option would show: the sem:IntentPreview queries' ?content, cached per control and option. */
 function previewsOf(runtime: Runtime, key: string, seen: Map<string, string[]>): string[] {

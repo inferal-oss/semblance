@@ -12,6 +12,7 @@ import { EX, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { Navigation, rendererReveal, setBase, windowScroll } from '../src/navigation.ts'
 import { anticipate, attachIntent } from '../src/intent.ts'
+import { type IdleDeadline, whenIdle } from '../src/idle.ts'
 import { NetworkCapture } from '../src/network.ts'
 import { Sandboxes } from '../src/sandbox.ts'
 import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
@@ -509,10 +510,9 @@ flush()
 
 // Hidden views are evaluated in idle time, a slice at a time, so navigation finds
 // them ready and interactions never pay for them.
-const idle = (cb: (d: { timeRemaining(): number }) => void) =>
-  'requestIdleCallback' in window ? requestIdleCallback(cb, { timeout: 1000 }) : setTimeout(() => cb({ timeRemaining: () => 8 }), 30)
+const idle = whenIdle
 let warming = false
-function warmup(deadline: { timeRemaining(): number }) {
+function warmup(deadline: IdleDeadline) {
   const more = runtime.warm(Math.max(2, deadline.timeRemaining() - 2))
   flush()
   warming = more
