@@ -1,13 +1,18 @@
 // The WAT and Rust builds of Semblance's engine match one to one (#13): the same W3C failures,
-// and the same results on Semblance's own queries over the site's graph, interpreted and compiled.
+// the same results on Semblance's own queries over the site's graph, interpreted and compiled, and
+// the same Jelly bytes and statements (#433).
 // Results are compared by term (blank nodes as one: they are fresh per run), never by id.
 import { existsSync, readFileSync } from 'node:fs'
+import type { Term as RdfTerm } from '@rdfjs/types'
+import { Parser } from 'n3'
 import { describe, expect, it } from 'vitest'
 import '../src/behaviour/events.ts'
 import { SPARQL_PREFIXES } from '../src/ns.ts'
 import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } from '../rdf-engine/host/engine.ts'
 import { semblanceQueries } from '../rdf-engine/host/parse-check.ts'
 import { type EngineStore, engineStoreHooks } from '../rdf-engine/host/store.ts'
+import { frames } from '../src/jelly/decode.ts'
+import { delimit, JellyWriter } from '../src/jelly/encode.ts'
 import { mountShell } from './harness.ts'
 
 const KINDS = ['rust', 'wat'] as const
@@ -241,3 +246,112 @@ describe.skipIf(!built)('Semblance queries on both builds', () => {
       }
   }, 300_000)
 })
+
+describe.skipIf(!built)('Jelly on both builds (#433)', () => {
+  // The same statements, in the same order, into each build: N3.js parses, each engine interns.
+  const texts = ['ontology/core.ttl', 'ontology/layers/style.ttl', 'demo/app.ttl'].map((f) => readFileSync(new URL('../' + f, import.meta.url), 'utf8'))
+  const quads = texts.flatMap((t) => new Parser().parse(t))
+  const intern = (e: Engine, t: RdfTerm): number => {
+    switch (t.termType) {
+      case 'NamedNode':
+        return e.iri(t.value)
+      case 'BlankNode':
+        return e.bnode(t.value)
+      case 'Literal':
+        return t.language ? e.langLiteral(t.value, t.language) : e.literal(t.value, e.iri(t.datatype.value))
+      case 'Quad':
+        return e.triple(intern(e, t.subject), intern(e, t.predicate), intern(e, t.object))
+      default:
+        return DEFAULT_GRAPH
+    }
+  }
+  const builds = Object.fromEntries(
+    KINDS.map((k) => {
+      const e = new Engine(new WebAssembly.Module(readFileSync(wasm(k))))
+      const ids = new Uint32Array(quads.length * 4)
+      quads.forEach((q, i) => ids.set([intern(e, q.subject), intern(e, q.predicate), intern(e, q.object), intern(e, q.graph)], i * 4))
+      return [k, { e, ids }]
+    }),
+  ) as Record<(typeof KINDS)[number], { e: Engine; ids: Uint32Array }>
+  const OPTIONS = [{ physical: 2 as const }, { physical: 2 as const, frameRows: 50, maxNames: 128, maxPrefixes: 8, maxDatatypes: 4 }, { physical: 1 as const, maxPrefixes: 0, streamType: 1 as const }]
+  const write = (k: (typeof KINDS)[number], o: (typeof OPTIONS)[number]) => {
+    const w = builds[k].e.jellyWriter(o)
+    const parts: Uint8Array[] = []
+    for (let i = 0; i < quads.length; i += 100) {
+      parts.push(w.write(builds[k].ids.subarray(i * 4, Math.min(quads.length, i + 100) * 4)))
+      if (o.streamType) w.message()
+    }
+    parts.push(w.flush())
+    w.release()
+    return concat(parts)
+  }
+  const text = (e: Engine, ids: Uint32Array) => {
+    const out: string[] = []
+    for (let i = 0; i < ids.length; i += 4) out.push(Array.from(ids.subarray(i, i + 4), (x) => (e.kind(x) === Kind.BlankNode ? '_' : termText(e, x))).join(' '))
+    return out
+  }
+
+  it('write the same bytes as each other and as the TypeScript codec', () => {
+    for (const o of OPTIONS) {
+      const [rust, wat] = [write('rust', o), write('wat', o)]
+      expect(Buffer.from(wat).equals(Buffer.from(rust)), JSON.stringify(o)).toBe(true)
+      const ts = new JellyWriter(o)
+      const parts: Uint8Array[] = []
+      for (let i = 0; i < quads.length; i++) {
+        parts.push(...ts.add(quads[i]!).map(delimit))
+        if (o.streamType && (i + 1) % 100 === 0) ts.endMessage()
+      }
+      if (o.streamType && quads.length % 100) ts.endMessage()
+      parts.push(delimit(ts.flush()!))
+      expect(Buffer.from(concat(parts)).equals(Buffer.from(wat)), 'ts ' + JSON.stringify(o)).toBe(true)
+    }
+  })
+
+  it('read every stream back, frame by frame, to the same statements and message ends', () => {
+    const expected = text(builds.wat.e, builds.wat.ids)
+    for (const o of OPTIONS) {
+      const bytes = write('wat', o)
+      const seen: number[][] = []
+      for (const k of KINDS) {
+        const e = new Engine(new WebAssembly.Module(readFileSync(wasm(k))))
+        const r = e.jellyReader()
+        const got: string[] = []
+        const ends: number[] = []
+        for (const f of frames(bytes)) {
+          const at = got.length
+          got.push(...text(e, r.read(f, true)))
+          for (const end of r.ends()) ends.push(at + end)
+        }
+        if (r.finish()) ends.push(got.length)
+        // A stream of triples puts its statements in the default graph.
+        expect(got).toEqual(o.physical === 1 ? expected.map((s) => s.replace(/ \S+$/, ' DEFAULT')) : expected)
+        seen.push(ends)
+      }
+      expect(seen[0]).toEqual(seen[1])
+      if (o.streamType) expect(seen[0]!.length).toBe(Math.ceil(quads.length / 100))
+    }
+  })
+
+  it('refuse the same malformed frames', () => {
+    const good = write('wat', OPTIONS[0]!)
+    const frame = [...frames(good)][0]!
+    for (let cut = 1; cut < Math.min(frame.length, 400); cut += 7) {
+      const outcome = KINDS.map((k) => {
+        const e = new Engine(new WebAssembly.Module(readFileSync(wasm(k))))
+        try {
+          return String(e.jellyReader().read(frame.subarray(0, cut)).length)
+        } catch {
+          return 'error'
+        }
+      })
+      expect(outcome[0], `cut at ${cut}`).toBe(outcome[1])
+    }
+  })
+})
+
+function concat(parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+  let at = 0
+  for (const p of parts) out.set(p, (at += p.length) - p.length)
+  return out
+}

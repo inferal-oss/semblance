@@ -3,7 +3,7 @@
 
 import { intlImport, MATH_OPS } from './intl.ts'
 
-export const ABI_VERSION = 2
+export const ABI_VERSION = 3
 
 export enum Kind {
   Free = 0,
@@ -19,7 +19,27 @@ export enum Format {
   NQuads = 2,
   Turtle = 3,
   TriG = 4,
+  /** A whole Jelly-RDF stream (delimited, or one bare frame): bytes, through `loadBytes`. */
+  Jelly = 5,
 }
+
+/** Jelly stream options for a writer (ABI.md "Jelly"). */
+export interface JellyOptions {
+  /** 1 triples, 2 quads. */
+  physical: 1 | 2
+  /** 0 FLAT, 1 MESSAGES. */
+  streamType?: 0 | 1
+  /** 0 unspecified, 1 RDF 1.1, 2 RDF 1.2 basic, 3 RDF 1.2. */
+  rdfVersion?: 0 | 1 | 2 | 3
+  maxNames?: number
+  maxPrefixes?: number
+  maxDatatypes?: number
+  /** Statements per frame (default 4,096). */
+  frameRows?: number
+}
+
+/** The writer's defaults: the lookups `src/jelly/encode.ts` uses (WRITER_DEFAULTS). */
+export const JELLY_DEFAULTS = { maxNames: 4096, maxPrefixes: 1024, maxDatatypes: 32, frameRows: 4096 }
 
 export enum Form {
   Select = 1,
@@ -85,6 +105,15 @@ interface Exports {
   extensions?(): number
   /** Optional (compiled queries): module bytes for query h, at result_ptr(). */
   compile?(h: number): number
+  jelly_reader(graph: number): number
+  jelly_frame(h: number, len: number, mode: number): number
+  jelly_ends(h: number): number
+  jelly_finish(h: number): number
+  jelly_writer(physical: number, streamType: number, rdfVersion: number, maxNames: number, maxPrefixes: number, maxDatatypes: number, frameRows: number): number
+  jelly_write(h: number, count: number): number
+  jelly_message(h: number): number
+  jelly_flush(h: number): number
+  jelly_release(h: number): void
 }
 
 /** A compiled query module's instance (see ABI.md, "Optional: compiled queries"). */
@@ -226,7 +255,18 @@ export class Engine {
 
   private putIds(ids: ArrayLike<number>): void {
     const at = this.x.input(ids.length * 4)
+    if (!ids.length) return
     new Uint32Array(this.x.memory.buffer, at, ids.length).set(ids)
+  }
+
+  private putBytes(bytes: Uint8Array): void {
+    const at = this.x.input(bytes.length)
+    new Uint8Array(this.x.memory.buffer, at, bytes.length).set(bytes)
+  }
+
+  /** A copy of `n` result bytes. */
+  private resultBytes(n: number): Uint8Array {
+    return new Uint8Array(this.x.memory.buffer, this.x.result_ptr(), n).slice()
   }
 
   private str(ptr: number, len: number): string {
@@ -339,9 +379,57 @@ export class Engine {
     const [t, b] = this.put(text, base)
     return this.check(this.x.load(format, t!, b!, graph))
   }
+  /** Load bytes: a Jelly stream (Format.Jelly). */
+  loadBytes(format: Format, bytes: Uint8Array, graph = DEFAULT_GRAPH): number {
+    this.putBytes(bytes)
+    return this.check(this.x.load(format, bytes.length, 0, graph))
+  }
   /** Free unused terms; returns the freed ids. */
   collect(): Uint32Array {
     return this.results(this.check(this.x.collect()))
+  }
+
+  // --- Jelly (ABI.md "Jelly") ------------------------------------------------
+
+  /** A reader of one Jelly stream; the statements of a stream of triples go to `graph`. */
+  jellyReader(graph = DEFAULT_GRAPH): JellyReader {
+    return new JellyReader(this, this.check(this.x.jelly_reader(graph)))
+  }
+  /** A writer of one Jelly-RDF 1.2 stream. */
+  jellyWriter(o: JellyOptions): JellyWriter {
+    const d = JELLY_DEFAULTS
+    return new JellyWriter(this, this.check(this.x.jelly_writer(o.physical, o.streamType ?? 0, o.rdfVersion ?? 0, o.maxNames ?? d.maxNames, o.maxPrefixes ?? d.maxPrefixes, o.maxDatatypes ?? d.maxDatatypes, o.frameRows ?? d.frameRows)))
+  }
+  /** @internal */
+  jellyFrame(h: number, frame: Uint8Array, mode: number): Uint32Array | number {
+    this.putBytes(frame)
+    const n = this.check(this.x.jelly_frame(h, frame.length, mode))
+    return mode & 2 ? this.results(n * 4) : n
+  }
+  /** @internal */
+  jellyEnds(h: number): Uint32Array {
+    return this.results(this.check(this.x.jelly_ends(h)))
+  }
+  /** @internal */
+  jellyFinish(h: number): boolean {
+    return this.check(this.x.jelly_finish(h)) === 1
+  }
+  /** @internal */
+  jellyWrite(h: number, quads: ArrayLike<number>): Uint8Array {
+    this.putIds(quads)
+    return this.resultBytes(this.check(this.x.jelly_write(h, quads.length / 4)))
+  }
+  /** @internal */
+  jellyMessage(h: number): void {
+    this.check(this.x.jelly_message(h))
+  }
+  /** @internal */
+  jellyFlush(h: number): Uint8Array {
+    return this.resultBytes(this.check(this.x.jelly_flush(h)))
+  }
+  /** @internal */
+  jellyRelease(h: number): void {
+    this.x?.jelly_release(h)
   }
 
   // --- queries --------------------------------------------------------------
@@ -673,5 +761,55 @@ export class Query {
     for (const p of this.profiles.values()) this.engine.candidates.delete(p)
     for (const c of this.compiled.values()) if (typeof c === 'object') this.engine.dropModule()
     this.engine.releaseQuery(this.handle)
+  }
+}
+
+/** A reader of one Jelly stream (Engine.jellyReader): one frame at a time. */
+export class JellyReader {
+  constructor(
+    private readonly e: Engine,
+    readonly handle: number,
+  ) {}
+  /** Read a bare frame into the store; returns how many statements it had. */
+  add(frame: Uint8Array): number {
+    return this.e.jellyFrame(this.handle, frame, 1) as number
+  }
+  /** Read a bare frame; returns its statements (4 ids each, in order), adding them to the store too when `add`. */
+  read(frame: Uint8Array, add = false): Uint32Array {
+    return this.e.jellyFrame(this.handle, frame, add ? 3 : 2) as Uint32Array
+  }
+  /** Where RDF Messages ended in the last frame read: statements before each end. */
+  ends(): Uint32Array {
+    return this.e.jellyEnds(this.handle)
+  }
+  /** The end of the stream: whether the message in progress ends here. */
+  finish(): boolean {
+    return this.e.jellyFinish(this.handle)
+  }
+  release(): void {
+    this.e.jellyRelease(this.handle)
+  }
+}
+
+/** A writer of one Jelly-RDF 1.2 stream (Engine.jellyWriter). Its output is delimited frames. */
+export class JellyWriter {
+  constructor(
+    private readonly e: Engine,
+    readonly handle: number,
+  ) {}
+  /** Add statements (4 ids each); returns the frames they completed (often none). */
+  write(quads: ArrayLike<number>): Uint8Array {
+    return this.e.jellyWrite(this.handle, quads)
+  }
+  /** End the current RDF Message. */
+  message(): void {
+    this.e.jellyMessage(this.handle)
+  }
+  /** The pending statements as a frame (the first carries the stream options). */
+  flush(): Uint8Array {
+    return this.e.jellyFlush(this.handle)
+  }
+  release(): void {
+    this.e.jellyRelease(this.handle)
   }
 }

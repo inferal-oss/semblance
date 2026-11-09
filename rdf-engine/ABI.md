@@ -1,4 +1,4 @@
-# Engine ABI (version 2)
+# Engine ABI (version 3)
 
 The contract every engine build implements: Rust (`rust/`) and hand-written
 WebAssembly (`wat/`). One host adapter (`host/`) drives any of them, so the
@@ -98,7 +98,7 @@ scoped to the instance: interning the same label twice gives the same node.
 | `match(s, p, o, g) -> n` | Quads matching the pattern (`0` = any; `g = 1` = default graph only, `g = 0` = all graphs), as `n × 4` ids. Order unspecified. |
 | `apply(removes, adds) -> 0` | Batch: the input buffer holds `removes` quads, then `adds` quads (4 ids each). Removes first. |
 | `quad_count() -> n` | |
-| `load(format, text_len, base_len, graph) -> n` | Parse and add. `format`: 1 N-Triples, 2 N-Quads, 3 Turtle, 4 TriG. Triples go to `graph`; quads keep theirs. Blank node labels are scoped to this document. Returns the number of statements parsed, duplicates included. On a syntax error nothing is added. |
+| `load(format, text_len, base_len, graph) -> n` | Parse and add. `format`: 1 N-Triples, 2 N-Quads, 3 Turtle, 4 TriG, 5 Jelly (a whole delimited stream, or one bare frame, of `text_len` bytes; `base_len` is 0; see "Jelly"). Triples go to `graph`; quads keep theirs. Blank node labels are scoped to this document. Returns the number of statements parsed, duplicates included. On a syntax error nothing is added. |
 | `collect() -> n` | Free terms that no quad, prepared query or pending result uses; their ids are listed in the result buffer and may be reused afterwards. Hosts must forget them. |
 
 ## Queries (SPARQL 1.2)
@@ -125,11 +125,33 @@ results are specified.
 Terms computed by a query (`CONCAT`, `IRI()`, `BNODE()`, aggregates, CONSTRUCT
 blank nodes) are interned and appear in results like any other term.
 
+## Jelly
+
+[Jelly-RDF](https://w3id.org/jelly) streams, read and written frame by frame (JELLY.md has the
+design). A reader reads 1.2 (the column layout) and 1.0/1.1 (the row layout); a writer writes
+1.2. A frame on the wire is a bare `RdfStreamFrame`; the writer's output is delimited (each frame
+after its length as a varint). Readers and writers are handles, released with `jelly_release`.
+
+| export | |
+|---|---|
+| `jelly_reader(graph) -> h` | A reader of one stream. The statements of a TRIPLES stream (and the default graph of a GRAPHS one) go to `graph` (0: the default graph). Blank node labels are the stream's own (FLAT) or each message's (MESSAGES). |
+| `jelly_frame(h, len, mode) -> n` | Read one frame: `len` bytes of the input buffer. `mode` bit 1 adds its statements to the store, bit 2 lists them at `result_ptr()` as `n × 4` ids, in stream order (duplicates kept). All or nothing: on an error nothing of the frame is added, and the reader refuses every later frame. |
+| `jelly_ends(h) -> k` | The RDF Messages that ended in the last frame read: `k` positions at `result_ptr()`, each the number of the frame's statements before that end (an end before any statement is 0; restated stream options end a message too). |
+| `jelly_finish(h) -> 0 \| 1` | The end of the stream: 1 when the message in progress had statements and so ends here. |
+| `jelly_writer(physical, stream_type, rdf_version, max_names, max_prefixes, max_datatypes, frame_rows) -> h` | A writer of one stream, with these stream options (`physical` 1 triples, 2 quads; `stream_type` 0 FLAT, 1 MESSAGES; `rdf_version` 0-3; `max_names` at least 128; `frame_rows` statements per frame, 0 for 4,096). |
+| `jelly_write(h, count) -> n` | Add `count` statements (the input buffer holds `count × 4` ids, in order); returns `n` bytes at `result_ptr()`: the frames they completed (often none). A statement the stream cannot hold (a literal subject, a triple term in RDF 1.1, a typed literal without a datatype lookup) is an error, after which the writer must be released. |
+| `jelly_message(h) -> 0` | End the current RDF Message (MESSAGES streams). |
+| `jelly_flush(h) -> n` | The statements and message ends since the last frame, as a frame: `n` bytes at `result_ptr()`. The first frame also carries the stream options, so a writer that wrote nothing flushes the options alone. Nothing pending later: 0 bytes. |
+| `jelly_release(h)` | |
+
+The writer's choices (IRI split, least-recently-used lookups, runs) are fixed (JELLY.md,
+"Decisions"), so both builds write the same bytes from the same statements.
+
 ## Housekeeping
 
 | export | |
 |---|---|
-| `abi_version() -> 2` | Version 2 added the `math` and `intl` imports and `extensions`. |
+| `abi_version() -> 3` | Version 2 added the `math` and `intl` imports and `extensions`; version 3 added Jelly (`load` format 5 and the `jelly_*` exports). |
 | `extensions() -> bits` | Optional: the SPARQL extension groups the engine implements (EXTENSIONS.md, "Capabilities"); absent means none. |
 | `input(len) -> ptr` | |
 | `result_ptr() -> ptr` | |

@@ -8,7 +8,7 @@ the two can be compared on size and speed:
 - `wat/`: WebAssembly text, written by hand (plus whatever small macro layer
   lives in `wat/` and counts as part of that engine).
 
-Both implement [ABI.md](ABI.md). Everything around them is shared: the host
+Both implement [ABI.md](ABI.md), RDF Jelly included ([JELLY.md](JELLY.md)). Everything around them is shared: the host
 adapter (`host/`), the W3C conformance runner (`conformance/`), and Semblance's
 own tests and benchmarks.
 
@@ -18,11 +18,12 @@ own tests and benchmarks.
 rdf-engine/conformance/fetch.sh               # W3C rdf-tests, pinned (gitignored)
 npm run engine:build                          # build/rust.wasm, build/wat.wasm + sizes
 npm run engine:check -- rust                  # term and store checks against ABI.md
-npm run conformance -- --target rust          # or wat, oxigraph; --suite rdf12 --only <iri part> -v --show
+npm run conformance -- --target rust          # or wat, oxigraph, ts (Jelly only); --suite rdf12|jelly --only <iri part> -v --show
 npm run engine:compare                        # size and speed matrix -> results/compare.md
 npx tsx rdf-engine/host/compiled-bench.ts rust  # compiled vs interpreted queries -> results/compiled.md
 npm run engine:sizes                          # where each build's bytes go, side by side ([file.wasm] [top])
 npm run engine:speed                          # WAT at least as fast as Rust (--rounds 3 --margin 0.15)
+npx tsx rdf-engine/host/jelly-bench.ts wat     # Jelly: the ontology written and read back, and loaded from Turtle (ms)
 SEMBLANCE_ENGINE_COMPILE=idle npx tsx rdf-engine/host/compiled-pages.ts wat pages  # whole pages: 0, 2 or idle; pages, warehouse or grid
 ```
 
@@ -43,10 +44,12 @@ engine:
   failing tests and the same counts. It also renders the shell on WAT and replays every query it
   ran (with its foci) on a fresh engine of each build holding the same graph, interpreted and
   compiled, and runs every corpus query (`semblanceQueries()`) on its own. Results are compared
-  by term.
+  by term. For Jelly, both builds and `src/jelly/` write the same bytes from the same statements,
+  read every stream back to the same statements and message ends, and refuse the same cut frames.
 - Conformance runs on both builds, and the results must equal the committed ones.
 - `engine:speed` alternates `compiled-bench.ts` (median and total per call, interpreted and
-  compiled) and `compiled-pages.ts` (best page revisits) between the builds and fails when WAT
+  compiled), `compiled-pages.ts` (best page revisits) and `jelly-bench.ts` (the ontology written
+  and read as Jelly) between the builds and fails when WAT
   is slower than Rust by more than the margin on any of them.
 
 ## Benchmarks
@@ -66,7 +69,9 @@ its failures are Oxigraph's own deviations (it canonicalizes literals such as
 
 Suites: `sparql12` (with the SPARQL 1.1 tests it revises), `sparql11` (query and
 update), `sparql10`, `rdf12` (Turtle, N-Triples, N-Quads, TriG, including the
-RDF 1.1 tests they include). Expected results are read with Oxigraph as the
+RDF 1.1 tests they include), and `jelly` (jelly-protobuf's Jelly-RDF suite, vendored
+in `conformance/jelly/`: 339 pass and 28 that need generalized RDF are skipped, on
+`wat`, `rust` and `ts`, the TypeScript codec). Expected results are read with Oxigraph as the
 reference parser.
 
 ## Phases
@@ -97,6 +102,7 @@ The engines move in lockstep; each phase ends with both passing the same tests.
 | 3. Semblance's SPARQL | done: every Semblance page renders as on Oxigraph, with SPARQL and function rules | done: the same |
 | 4. SPARQL 1.2 query and update | done: no W3C failures; 2,309 of 2,317 pass and 8 differ only in number spelling (Oxigraph: 2,227 pass, 20 spelling, 70 fail) | done: the same as Rust, test for test |
 | 5. Housekeeping and speed | `collect`; size pass (344 to 262 KiB); sessions flat at 17–24 ms/event | `collect`; the fastest store on Semblance's pages |
+| Jelly (ABI 3, #433) | Jelly-RDF 1.2 and 1.0/1.1 read, 1.2 written: 339/339; the ontology written in 25 ms, read in 17 | the same, byte for byte: written in 14 ms, read in 13 (Turtle: 28) |
 
 Both engines write numbers as Oxigraph does, which Semblance's output relies
 on: decimals without trailing zeros (`"2"`, `"2.5"`), doubles and floats as the

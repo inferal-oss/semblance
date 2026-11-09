@@ -46,6 +46,10 @@ impl IdMap {
         self.entries.len()
     }
 
+    pub fn values(&self) -> impl Iterator<Item = u32> + '_ {
+        self.entries.iter().map(|e| e[3])
+    }
+
     fn key(&self, e: &[u32; 4]) -> &[u32] {
         &self.keys[e[0] as usize..(e[0] + e[1]) as usize]
     }

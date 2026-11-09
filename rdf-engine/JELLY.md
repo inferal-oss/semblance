@@ -32,7 +32,9 @@ engine term's tag is. Blank node labels are scoped as the spec says: a FLAT stre
 never meet another reader's, or a `load`'s.
 
 **Limits** (the spec's recommended defaults; a stream that asks for more is refused): 16,384
-names, 4,096 prefixes, 256 datatypes; triple terms nested 100 deep; 2^27 - 1 rows per batch.
+names, 4,096 prefixes, 256 datatypes; triple terms nested 100 deep; 2^27 - 1 rows per batch, and
+of those at most 2^20 (a batch of a few bytes may declare millions of rows: the reader's own
+limit, as the spec recommends). A writer takes no larger lookups than a reader would.
 
 **Errors.** A frame is all or nothing: its statements reach the store only when the whole frame
 has read. After an error the reader refuses every later frame (a stream cannot be picked up
@@ -101,6 +103,18 @@ reads it back. Tests that need generalized RDF are skipped (unsupported, as the 
 Results go to `conformance/results/<target>.json` like the W3C suites', and the parity guard
 compares the builds' failures.
 
+## Numbers
+
+`npx tsx rdf-engine/host/jelly-bench.ts <build>`, the whole ontology (65,666 quads, 3.8 MB of
+Jelly), best of 7 on a laptop:
+
+| | WAT | Rust |
+|---|---:|---:|
+| write (ms) | 13.7 | 25.4 |
+| read frame by frame into a fresh store (ms) | 13.5 | 17.2 |
+| for comparison: load the Turtle (ms) | 28.5 | 41.5 |
+| build size (gzip), before and after | 50.7 → 59.1 KiB | 153.8 → 170.2 KiB |
+
 ## Where Semblance uses it
 
 Each use is measured before and after (`scripts/jelly-measure.ts`, #433):
@@ -111,9 +125,11 @@ Each use is measured before and after (`scripts/jelly-measure.ts`, #433):
   prefixed names.
 - **Stores**: `GraphStore.loadJelly(bytes, graph?)` and `dumpJelly(graph?, options?)`; the engines
   natively, N3 and Oxigraph through the TypeScript codec.
-- **Remote-source deltas** (#382, `docs/REMOTE.md`): offered as a Jelly stream when the page asks
-  for it, if the numbers show the gain the JSON/N-Triples events leave on the table.
-- **The change log** (`beh:ChangeLog`): exported and replayed as a MESSAGES stream, one message per
-  member.
+- **Remote-source streams** (#382, `docs/REMOTE.md`): a Jelly stream when both ends speak it, a
+  frame per message. A todo list's delta goes from 275 to 85 bytes; the stream, gzipped with a
+  flush per event, from 55 to 44 KiB; decoding from 8.9 to 3.6 ms
+  (`scripts/jelly-remote-measure.ts`).
+- **The change log** (`beh:ChangeLog`): not used. Its members live and retire in the graph, and
+  nothing exports or replays them yet.
 - **SSR take-over**: the client loads the same graphs as the shipped ones (Turtle chunks), so the
   same numbers apply: not used.

@@ -60,6 +60,8 @@ export const DEFAULT_LIMITS: JellyLimits = { names: 16384, prefixes: 4096, datat
 /** The newest version tag this reader knows. */
 export const JELLY_VERSION = 3
 const MAX_ROWS = 2 ** 27 - 1
+/** Rows per batch this reader takes (a batch of a few bytes may declare millions of rows). */
+export const BATCH_ROWS = 2 ** 20
 /** Triple terms nest at most this deep. */
 const MAX_DEPTH = 100
 
@@ -69,6 +71,8 @@ export interface JellySink {
   message?(): void
   /** A namespace declaration (cosmetic: a prefix and its IRI). */
   namespace?(name: string, iri: string): void
+  /** The frame's metadata (`RdfStreamFrame.metadata`), before its statements; only when it has some. */
+  metadata?(entries: Map<string, Uint8Array>): void
 }
 
 /** A run value of a column: a term, or one that holds blank nodes and so depends on the message it is in. */
@@ -119,12 +123,27 @@ export class JellyReader {
     const r = new ProtoReader(bytes)
     const rows: [number, number][] = []
     let columns: [number, number] | undefined
+    let metadata: Map<string, Uint8Array> | undefined
     while (!r.done) {
       const [field, wire] = r.tag()
       if (field === 1 && wire === LEN) rows.push(r.len())
       else if (field === 2 && wire === LEN) columns = r.len()
-      else r.skip(wire)
+      else if (field === 15 && wire === LEN && sink.metadata) {
+        const e = r.sub()
+        let k = ''
+        let v = new Uint8Array(0)
+        while (!e.done) {
+          const [f, w] = e.tag()
+          if (f === 1 && w === LEN) k = e.string()
+          else if (f === 2 && w === LEN) {
+            const [s, end] = e.len()
+            v = bytes.slice(s, end)
+          } else e.skip(w)
+        }
+        ;(metadata ??= new Map()).set(k, v)
+      } else r.skip(wire)
     }
+    if (metadata) sink.metadata!(metadata)
     let n = 0
     // Jelly-RDF 1.2: at most one row, the stream options. A 1.0/1.1 stream's rows are read in
     // order once its options (its first row) say which it is.
@@ -449,6 +468,7 @@ export class JellyReader {
       else r.skip(wire)
     }
     if (rows > MAX_ROWS) throw new JellyError(`row_count ${rows} is larger than 2^27 - 1`)
+    if (rows > BATCH_ROWS) throw new JellyError(`a batch of ${rows} rows is larger than this reader's limit (${BATCH_ROWS})`)
     if (columns[3] && o.physical === Physical.Triples) throw new JellyError('a graphs column in a stream of triples')
     if (lengths.length && o.streamType !== StreamType.Messages) throw new JellyError('message boundaries in a FLAT stream')
     let sum = 0
