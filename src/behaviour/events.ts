@@ -90,6 +90,8 @@ interface Reaction {
 export class EventBus {
   readonly graph: NamedNode
   private sequence = 0
+  /** How deep in emit() this bus is (an event raised while handling another). */
+  private depth = 0
   private readonly graphs: Quad_Graph[]
   /** Retained members, oldest first, so retirement touches only what expires. */
   private retained?: { event: NamedNode; at: number }[]
@@ -260,8 +262,24 @@ export class EventBus {
     // An effect's late answer (an upload, the host's full screen, a widget) after the runtime ended.
     if (this.runtime.ended) return { recorded: false, event: this.f.namedNode(BEH.ChangeLog), type, target: this.f.namedNode(target), reactions: [], delta: { add: [], remove: [] } }
     reactions ??= this.reactionsFor(type, target)
-    // An event, its reactions and the tick they cause are one turn of the watchdog's budget.
-    return this.runtime.watchdog.turn(() => this.emitWatched(type, target, detail, reactions))
+    const runs = () => this.runtime.projections.reduce((n, p) => n + p.engine.stats.ruleRuns, 0)
+    const before = runs()
+    this.depth++
+    let handled: Handled
+    try {
+      // An event, its reactions and the tick they cause are one turn of the watchdog's budget.
+      handled = this.runtime.watchdog.turn(() => this.emitWatched(type, target, detail, reactions))
+    } finally {
+      this.depth--
+    }
+    // On the page's timeline (DevTools, scripts/interactions.ts): which event and how many rule runs
+    // it took (an event raised while handling another counts in that one). Only the latest is kept
+    // in the buffer; an observer sees every one.
+    if (!this.depth && typeof performance !== 'undefined' && performance.mark) {
+      performance.clearMarks('sem:turn')
+      performance.mark('sem:turn', { detail: { type, runs: runs() - before } })
+    }
+    return handled
   }
 
   private emitWatched(type: string, target: string, detail: EventDetail, reactions: Reaction[]): Handled {
