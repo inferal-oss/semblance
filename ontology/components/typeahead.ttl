@@ -204,7 +204,10 @@ c:AlreadyAdded a c:Phrase ; rdfs:label "“{}” is already added"@en , "«{}» 
 # Search keys are folded one character at a time (typeahead.ts fold(): its base letter lower-cased
 # when that is one character, else the character lower-cased when that is one, else the character),
 # so a match is at the same place in the label: in SPARQL, sx:sortKey of each character (sx:chars),
-# joined in order (GROUP_CONCAT over an ordered sub-select).
+# joined in order (GROUP_CONCAT over an ordered sub-select). Mostly that is the whole text's
+# sx:sortKey, which costs a call, not a row per character: when it is as long as the text (no
+# character folded away; none folds into two) and has no Σ (lower-cased by its place in a word), it
+# is used as it is (#379).
 
 c:TypeaheadTexts a sem:Rendering ;
     sem:targets c:Typeahead ;
@@ -318,28 +321,40 @@ WHERE {
   LATERAL { OPTIONAL { SELECT ?ns (MIN(?prefix0) AS ?prefix) WHERE { ?declared sh:prefix ?prefix0 ; sh:namespace ?ns0 FILTER(STR(?ns0) = ?ns) } GROUP BY ?ns } }
   BIND(IF(BOUND(?ns), IF(BOUND(?prefix) && REGEX(?local, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?prefix), ":", ?local), CONCAT("<", STR(?term), ">")), ?none) AS ?name)
   BIND(BOUND(?name) && !STRSTARTS(?name, "<") AS ?named)
-  LATERAL { OPTIONAL { SELECT ?said (GROUP_CONCAT(?saidKeyPart; separator="") AS ?saidKey) WHERE {
-    { SELECT ?said ?saidKeyPart WHERE { (?said) sx:chars (?saidKeyCh ?saidKeyAt)
+  BIND(sx:sortKey(?said, "en") AS ?saidKeyWhole)
+  BIND(STRLEN(?saidKeyWhole) = STRLEN(?said) && !CONTAINS(?said, "Σ") AS ?saidKeyExact)
+  LATERAL { OPTIONAL { SELECT ?said ?saidKeyExact (GROUP_CONCAT(?saidKeyPart; separator="") AS ?saidKeyChars) WHERE {
+    { SELECT ?said ?saidKeyExact ?saidKeyPart WHERE { FILTER(!?saidKeyExact) (?said) sx:chars (?saidKeyCh ?saidKeyAt)
         BIND(sx:sortKey(?saidKeyCh, "en") AS ?saidKeyBase) BIND(LCASE(?saidKeyCh) AS ?saidKeyLower)
         BIND(IF(STRLEN(?saidKeyBase) = 1, ?saidKeyBase, IF(STRLEN(?saidKeyLower) = 1, ?saidKeyLower, ?saidKeyCh)) AS ?saidKeyPart) } ORDER BY ?saidKeyAt }
-  } GROUP BY ?said } }
-  LATERAL { OPTIONAL { SELECT ?name (GROUP_CONCAT(?nameKeyPart; separator="") AS ?nameKey) WHERE {
-    { SELECT ?name ?nameKeyPart WHERE { (?name) sx:chars (?nameKeyCh ?nameKeyAt)
+  } GROUP BY ?said ?saidKeyExact } }
+  BIND(IF(?saidKeyExact, ?saidKeyWhole, ?saidKeyChars) AS ?saidKey)
+  BIND(sx:sortKey(?name, "en") AS ?nameKeyWhole)
+  BIND(STRLEN(?nameKeyWhole) = STRLEN(?name) && !CONTAINS(?name, "Σ") AS ?nameKeyExact)
+  LATERAL { OPTIONAL { SELECT ?name ?nameKeyExact (GROUP_CONCAT(?nameKeyPart; separator="") AS ?nameKeyChars) WHERE {
+    { SELECT ?name ?nameKeyExact ?nameKeyPart WHERE { FILTER(!?nameKeyExact) (?name) sx:chars (?nameKeyCh ?nameKeyAt)
         BIND(sx:sortKey(?nameKeyCh, "en") AS ?nameKeyBase) BIND(LCASE(?nameKeyCh) AS ?nameKeyLower)
         BIND(IF(STRLEN(?nameKeyBase) = 1, ?nameKeyBase, IF(STRLEN(?nameKeyLower) = 1, ?nameKeyLower, ?nameKeyCh)) AS ?nameKeyPart) } ORDER BY ?nameKeyAt }
-  } GROUP BY ?name } }
-  LATERAL { OPTIONAL { SELECT ?local (GROUP_CONCAT(?localKeyPart; separator="") AS ?localKey) WHERE {
-    { SELECT ?local ?localKeyPart WHERE { (?local) sx:chars (?localKeyCh ?localKeyAt)
+  } GROUP BY ?name ?nameKeyExact } }
+  BIND(IF(?nameKeyExact, ?nameKeyWhole, ?nameKeyChars) AS ?nameKey)
+  BIND(sx:sortKey(?local, "en") AS ?localKeyWhole)
+  BIND(STRLEN(?localKeyWhole) = STRLEN(?local) && !CONTAINS(?local, "Σ") AS ?localKeyExact)
+  LATERAL { OPTIONAL { SELECT ?local ?localKeyExact (GROUP_CONCAT(?localKeyPart; separator="") AS ?localKeyChars) WHERE {
+    { SELECT ?local ?localKeyExact ?localKeyPart WHERE { FILTER(!?localKeyExact) (?local) sx:chars (?localKeyCh ?localKeyAt)
         BIND(sx:sortKey(?localKeyCh, "en") AS ?localKeyBase) BIND(LCASE(?localKeyCh) AS ?localKeyLower)
         BIND(IF(STRLEN(?localKeyBase) = 1, ?localKeyBase, IF(STRLEN(?localKeyLower) = 1, ?localKeyLower, ?localKeyCh)) AS ?localKeyPart) } ORDER BY ?localKeyAt }
-  } GROUP BY ?local } }
+  } GROUP BY ?local ?localKeyExact } }
+  BIND(IF(?localKeyExact, ?localKeyWhole, ?localKeyChars) AS ?localKey)
   BIND(IF(?named && BOUND(?said) && ?saidKey != COALESCE(?nameKey, "") && ?saidKey != COALESCE(?localKey, ""), ?said, ?none) AS ?detail)
   BIND(IF(isLiteral(?term), STR(?term), IF(?named, ?name, COALESCE(?said, ?local))) AS ?label)
-  LATERAL { OPTIONAL { SELECT ?label (GROUP_CONCAT(?searchKey0Part; separator="") AS ?searchKey0) WHERE {
-    { SELECT ?label ?searchKey0Part WHERE { (?label) sx:chars (?searchKey0Ch ?searchKey0At)
+  BIND(sx:sortKey(?label, "en") AS ?searchKey0Whole)
+  BIND(STRLEN(?searchKey0Whole) = STRLEN(?label) && !CONTAINS(?label, "Σ") AS ?searchKey0Exact)
+  LATERAL { OPTIONAL { SELECT ?label ?searchKey0Exact (GROUP_CONCAT(?searchKey0Part; separator="") AS ?searchKey0Chars) WHERE {
+    { SELECT ?label ?searchKey0Exact ?searchKey0Part WHERE { FILTER(!?searchKey0Exact) (?label) sx:chars (?searchKey0Ch ?searchKey0At)
         BIND(sx:sortKey(?searchKey0Ch, "en") AS ?searchKey0Base) BIND(LCASE(?searchKey0Ch) AS ?searchKey0Lower)
         BIND(IF(STRLEN(?searchKey0Base) = 1, ?searchKey0Base, IF(STRLEN(?searchKey0Lower) = 1, ?searchKey0Lower, ?searchKey0Ch)) AS ?searchKey0Part) } ORDER BY ?searchKey0At }
-  } GROUP BY ?label } }
+  } GROUP BY ?label ?searchKey0Exact } }
+  BIND(IF(?searchKey0Exact, ?searchKey0Whole, ?searchKey0Chars) AS ?searchKey0)
   BIND(COALESCE(?searchKey0, "") AS ?searchKey)
   BIND(IF(BOUND(?detail), CONCAT(?searchKey, "\\n", COALESCE(?saidKey, "")), ?searchKey) AS ?matchKey)
   BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?term)))) AS ?node)
@@ -382,28 +397,40 @@ WHERE {
   LATERAL { OPTIONAL { SELECT ?ns (MIN(?prefix0) AS ?prefix) WHERE { ?declared sh:prefix ?prefix0 ; sh:namespace ?ns0 FILTER(STR(?ns0) = ?ns) } GROUP BY ?ns } }
   BIND(IF(BOUND(?ns), IF(BOUND(?prefix) && REGEX(?local, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?prefix), ":", ?local), CONCAT("<", STR(?term), ">")), ?none) AS ?name)
   BIND(BOUND(?name) && !STRSTARTS(?name, "<") AS ?named)
-  LATERAL { OPTIONAL { SELECT ?said (GROUP_CONCAT(?saidKeyPart; separator="") AS ?saidKey) WHERE {
-    { SELECT ?said ?saidKeyPart WHERE { (?said) sx:chars (?saidKeyCh ?saidKeyAt)
+  BIND(sx:sortKey(?said, "en") AS ?saidKeyWhole)
+  BIND(STRLEN(?saidKeyWhole) = STRLEN(?said) && !CONTAINS(?said, "Σ") AS ?saidKeyExact)
+  LATERAL { OPTIONAL { SELECT ?said ?saidKeyExact (GROUP_CONCAT(?saidKeyPart; separator="") AS ?saidKeyChars) WHERE {
+    { SELECT ?said ?saidKeyExact ?saidKeyPart WHERE { FILTER(!?saidKeyExact) (?said) sx:chars (?saidKeyCh ?saidKeyAt)
         BIND(sx:sortKey(?saidKeyCh, "en") AS ?saidKeyBase) BIND(LCASE(?saidKeyCh) AS ?saidKeyLower)
         BIND(IF(STRLEN(?saidKeyBase) = 1, ?saidKeyBase, IF(STRLEN(?saidKeyLower) = 1, ?saidKeyLower, ?saidKeyCh)) AS ?saidKeyPart) } ORDER BY ?saidKeyAt }
-  } GROUP BY ?said } }
-  LATERAL { OPTIONAL { SELECT ?name (GROUP_CONCAT(?nameKeyPart; separator="") AS ?nameKey) WHERE {
-    { SELECT ?name ?nameKeyPart WHERE { (?name) sx:chars (?nameKeyCh ?nameKeyAt)
+  } GROUP BY ?said ?saidKeyExact } }
+  BIND(IF(?saidKeyExact, ?saidKeyWhole, ?saidKeyChars) AS ?saidKey)
+  BIND(sx:sortKey(?name, "en") AS ?nameKeyWhole)
+  BIND(STRLEN(?nameKeyWhole) = STRLEN(?name) && !CONTAINS(?name, "Σ") AS ?nameKeyExact)
+  LATERAL { OPTIONAL { SELECT ?name ?nameKeyExact (GROUP_CONCAT(?nameKeyPart; separator="") AS ?nameKeyChars) WHERE {
+    { SELECT ?name ?nameKeyExact ?nameKeyPart WHERE { FILTER(!?nameKeyExact) (?name) sx:chars (?nameKeyCh ?nameKeyAt)
         BIND(sx:sortKey(?nameKeyCh, "en") AS ?nameKeyBase) BIND(LCASE(?nameKeyCh) AS ?nameKeyLower)
         BIND(IF(STRLEN(?nameKeyBase) = 1, ?nameKeyBase, IF(STRLEN(?nameKeyLower) = 1, ?nameKeyLower, ?nameKeyCh)) AS ?nameKeyPart) } ORDER BY ?nameKeyAt }
-  } GROUP BY ?name } }
-  LATERAL { OPTIONAL { SELECT ?local (GROUP_CONCAT(?localKeyPart; separator="") AS ?localKey) WHERE {
-    { SELECT ?local ?localKeyPart WHERE { (?local) sx:chars (?localKeyCh ?localKeyAt)
+  } GROUP BY ?name ?nameKeyExact } }
+  BIND(IF(?nameKeyExact, ?nameKeyWhole, ?nameKeyChars) AS ?nameKey)
+  BIND(sx:sortKey(?local, "en") AS ?localKeyWhole)
+  BIND(STRLEN(?localKeyWhole) = STRLEN(?local) && !CONTAINS(?local, "Σ") AS ?localKeyExact)
+  LATERAL { OPTIONAL { SELECT ?local ?localKeyExact (GROUP_CONCAT(?localKeyPart; separator="") AS ?localKeyChars) WHERE {
+    { SELECT ?local ?localKeyExact ?localKeyPart WHERE { FILTER(!?localKeyExact) (?local) sx:chars (?localKeyCh ?localKeyAt)
         BIND(sx:sortKey(?localKeyCh, "en") AS ?localKeyBase) BIND(LCASE(?localKeyCh) AS ?localKeyLower)
         BIND(IF(STRLEN(?localKeyBase) = 1, ?localKeyBase, IF(STRLEN(?localKeyLower) = 1, ?localKeyLower, ?localKeyCh)) AS ?localKeyPart) } ORDER BY ?localKeyAt }
-  } GROUP BY ?local } }
+  } GROUP BY ?local ?localKeyExact } }
+  BIND(IF(?localKeyExact, ?localKeyWhole, ?localKeyChars) AS ?localKey)
   BIND(IF(?named && BOUND(?said) && ?saidKey != COALESCE(?nameKey, "") && ?saidKey != COALESCE(?localKey, ""), ?said, ?none) AS ?detail)
   BIND(IF(isLiteral(?term), STR(?term), IF(?named, ?name, COALESCE(?said, ?local))) AS ?label)
-  LATERAL { OPTIONAL { SELECT ?label (GROUP_CONCAT(?searchKey0Part; separator="") AS ?searchKey0) WHERE {
-    { SELECT ?label ?searchKey0Part WHERE { (?label) sx:chars (?searchKey0Ch ?searchKey0At)
+  BIND(sx:sortKey(?label, "en") AS ?searchKey0Whole)
+  BIND(STRLEN(?searchKey0Whole) = STRLEN(?label) && !CONTAINS(?label, "Σ") AS ?searchKey0Exact)
+  LATERAL { OPTIONAL { SELECT ?label ?searchKey0Exact (GROUP_CONCAT(?searchKey0Part; separator="") AS ?searchKey0Chars) WHERE {
+    { SELECT ?label ?searchKey0Exact ?searchKey0Part WHERE { FILTER(!?searchKey0Exact) (?label) sx:chars (?searchKey0Ch ?searchKey0At)
         BIND(sx:sortKey(?searchKey0Ch, "en") AS ?searchKey0Base) BIND(LCASE(?searchKey0Ch) AS ?searchKey0Lower)
         BIND(IF(STRLEN(?searchKey0Base) = 1, ?searchKey0Base, IF(STRLEN(?searchKey0Lower) = 1, ?searchKey0Lower, ?searchKey0Ch)) AS ?searchKey0Part) } ORDER BY ?searchKey0At }
-  } GROUP BY ?label } }
+  } GROUP BY ?label ?searchKey0Exact } }
+  BIND(IF(?searchKey0Exact, ?searchKey0Whole, ?searchKey0Chars) AS ?searchKey0)
   BIND(COALESCE(?searchKey0, "") AS ?searchKey)
   BIND(IF(BOUND(?detail), CONCAT(?searchKey, "\\n", COALESCE(?saidKey, "")), ?searchKey) AS ?matchKey)
   BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?term)))) AS ?node)
@@ -425,11 +452,14 @@ WHERE {
   # Trimmed as JavaScript trims (its white space and line terminators), then folded.
   BIND(REPLACE(STR(?value), "^[\\\\s\u000B\u000C\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+|[\\\\s\u000B\u000C\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+$", "") AS ?typed)
   FILTER(?typed != "")
-  LATERAL { OPTIONAL { SELECT ?typed (GROUP_CONCAT(?foldedPart; separator="") AS ?folded) WHERE {
-    { SELECT ?typed ?foldedPart WHERE { (?typed) sx:chars (?foldedCh ?foldedAt)
+  BIND(sx:sortKey(?typed, "en") AS ?foldedWhole)
+  BIND(STRLEN(?foldedWhole) = STRLEN(?typed) && !CONTAINS(?typed, "Σ") AS ?foldedExact)
+  LATERAL { OPTIONAL { SELECT ?typed ?foldedExact (GROUP_CONCAT(?foldedPart; separator="") AS ?foldedChars) WHERE {
+    { SELECT ?typed ?foldedExact ?foldedPart WHERE { FILTER(!?foldedExact) (?typed) sx:chars (?foldedCh ?foldedAt)
         BIND(sx:sortKey(?foldedCh, "en") AS ?foldedBase) BIND(LCASE(?foldedCh) AS ?foldedLower)
         BIND(IF(STRLEN(?foldedBase) = 1, ?foldedBase, IF(STRLEN(?foldedLower) = 1, ?foldedLower, ?foldedCh)) AS ?foldedPart) } ORDER BY ?foldedAt }
-  } GROUP BY ?typed } }
+  } GROUP BY ?typed ?foldedExact } }
+  BIND(IF(?foldedExact, ?foldedWhole, ?foldedChars) AS ?folded)
 }""" .
 
 # --- the field, the popup and their state ------------------------------------------------------------
