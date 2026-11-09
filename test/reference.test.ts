@@ -60,6 +60,8 @@ describe('the reference tree', () => {
     expect(h.item(components, 'label')).toBeTruthy()
     expect(h.item(components, 'Window')).toBeUndefined()
     expect(h.item(h.open('Semblance persistence'), 'Policy')).toBeTruthy()
+    // The Safe authoring docs mention the safety layer's terms.
+    expect(h.item(h.open('Semblance safety layer'), 'Policy')).toBeTruthy()
   })
 
   it('opens the branch that holds the selection, and marks its item selected', () => {

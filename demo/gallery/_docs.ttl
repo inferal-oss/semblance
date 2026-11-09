@@ -570,7 +570,8 @@ ui:doc-safety a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:doc-sa-h ui:doc-sa-1 ui:doc-sa-2
                  ui:doc-sa-trust-h ui:doc-sa-trust-1 ui:doc-sa-trust-code ui:doc-sa-trust-2 ui:doc-sa-trust-3
                  ui:doc-sa-try-h ui:doc-sa-try-1 ui:sa-live ui:doc-sa-try-2
-                 ui:doc-sa-may-h ui:doc-sa-may ui:doc-sa-not-h ui:doc-sa-not
+                 ui:doc-sa-may-h ui:doc-sa-may ui:doc-sa-not-h ui:doc-sa-not ui:doc-sa-not-2
+                 ui:doc-sa-box-h ui:doc-sa-box-1 ui:doc-sa-box ui:doc-sa-box-2
                  ui:doc-sa-how-h ui:doc-sa-how-1 ui:doc-sa-how-code ui:doc-sa-how-2 ui:doc-sa-how-list ui:doc-sa-how-3
                  ui:doc-sa-ref-h ui:doc-sa-ref ui:doc-sa-rep-1 ui:doc-sa-rep
                  ui:doc-sa-ext-h ui:doc-sa-ext-1 ui:doc-sa-ext-code ui:doc-sa-ext-2 ui:doc-sa-ext-ts ui:doc-sa-ext-3 ui:doc-sa-ext-own ui:doc-sa-ext-4
@@ -579,7 +580,7 @@ ui:doc-safety a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
                  ui:doc-sa-not-cov-h ui:doc-sa-not-cov
                  ui:doc-sa-ex-h ui:doc-sa-ex-1 ui:doc-sa-ex ui:doc-sa-more ) .
 ui:doc-sa-h a c:Heading ; c:level 1 ; c:label "Safe authoring" .
-ui:doc-sa-1 a c:Text ; c:label "A Semblance interface is a graph, and a graph can come from someone you do not trust: a person typing in a live example, a page, a model. Authored content is rendered under a policy, so that Turtle and SPARQL describe an interface without running code or loading anything from elsewhere on their own." .
+ui:doc-sa-1 a c:Text ; c:label "A Semblance interface is a graph, and a graph can come from someone you do not trust: a person typing in a live example, a page, a model. Authored content is rendered under a policy, so that Turtle and SPARQL describe an interface without running code or reaching outside what it renders." .
 ui:doc-sa-2 a c:Text ; c:children ( "The policy is vocabulary, " ui:doc-sa-m-Authored " (a " ui:doc-sa-m-Policy ", ontology/layers/safety.ttl), applied in one place every output reads from. What it refuses is left out and reported, never dropped silently." ) .
 ui:doc-sa-m-Authored a c:Mention ; c:label "safe:Authored" ; c:mentions safe:Authored ; c:to safe:Authored .
 ui:doc-sa-m-Policy a c:Mention ; c:label "safe:Policy" ; c:mentions safe:Policy ; c:to safe:Policy .
@@ -592,8 +593,8 @@ ui:doc-sa-trust-code a c:Code ; c:block true ; c:label """await mount(element, {
 runtime.project({ …, policy: authoredPolicy(trusted) })
 renderToString({ …, policy })
 compileStyles(store, { policy, onRefused })""" .
-ui:doc-sa-trust-2 a c:Text ; c:label "The policy is read from a trusted store: one with the ontology and your own graphs, not the author's, which could add to its lists. mount reads it before it loads authored; the live examples read it from the site's store, where their sources are text, not triples." .
-ui:doc-sa-trust-3 a c:Text ; c:label "Authored is a property of a projection, not of triples. A projection with a policy checks everything it renders, your own components included. In mount({ authored }) your graphs and the author's are one store, so the author's triples can also describe your resources and its reactions can change any state of the store; when that matters, give the author a store of its own, as the live examples do." .
+ui:doc-sa-trust-2 a c:Text ; c:label "The policy is read from a trusted store: one with the ontology and your own graphs, not the author's, which could add to its lists. mount reads it from a store of graphs alone, kept apart from the one authored is loaded into; the live examples read it from the ontology alone." .
+ui:doc-sa-trust-3 a c:Text ; c:label "Authored is a property of a projection, not of triples. A projection with a policy checks everything it renders, your own components included. In mount({ authored }) your graphs and the author's are one store, so the author's triples can also describe your resources and its reactions can change any state of the store. The host's effects are not part of that: they read their configuration from the trusted graphs alone (app.trusted). When the rest matters, give the author a store of its own, as the live examples do." .
 
 ui:doc-sa-try-h a c:Heading ; c:level 2 ; c:label "Try it" .
 ui:doc-sa-try-1 a c:Text ; c:label "This example is authored, like every live example here. It links to a web address and to a script address, and brings a component of its own whose SPARQL rendering asks for a script element and whose style loads an image from elsewhere. Edit it and watch the warnings under the editor." .
@@ -625,25 +626,47 @@ ex:sneaky a ex:Sneaky .
 ui:doc-sa-try-2 a c:Text ; c:label "The script link renders without its address; the component's script is an empty sem-refused element inside its outlined div; the background is left out of the stylesheet. The link's shape flags the javascript: address too, but a shape only describes: the policy is what keeps it out." .
 
 ui:doc-sa-may-h a c:Heading ; c:level 2 ; c:label "What an authored graph may do" .
-ui:doc-sa-may a c:DescriptionList ; c:of ui:doc-sa-may-items ; c:fields ( ui:sa-elements ui:sa-attributes ui:sa-urls ui:sa-styles ui:sa-rules ui:sa-hosted ) .
+ui:doc-sa-may a c:DescriptionList ; c:of ui:doc-sa-may-items ; c:fields ( ui:sa-elements ui:sa-attributes ui:sa-ids ui:sa-urls ui:sa-remote ui:sa-styles ui:sa-rules ui:sa-hosted ui:sa-islands ui:sa-inputs ) .
 ui:doc-sa-may-items ui:sa-elements "Any element of the framework's components and of your own, built from the elements safe:Authored lists (safe:element): text, headings, lists, tables, forms and their controls, details, dialog, images, audio and video, the SVG extension's elements." ;
-    ui:sa-attributes "Attributes from safe:attribute, and any data-… or aria-… one." ;
+    ui:sa-attributes "Attributes from safe:attribute, and any data-… or aria-… one but the framework's own hooks." ;
+    ui:sa-ids "References to its own elements by id: for, form, list, commandfor, popovertarget, headers, itemref, the ARIA relationships (aria-labelledby, aria-controls, …) and a link to #id must name ids that elements of the same rendering have (safe:idReferenceAttribute, safe:idReferenceListAttribute, safe:fragmentAttribute). The framework's components mint their ids from their IRIs, so their ARIA relationships hold." ;
     ui:sa-urls "Links and sources that are relative, a fragment, or http:, https:, mailto: or tel:; an image, audio or video source (src, srcset, poster) may also be data:image/… or blob:." ;
+    ui:sa-remote "The one rule for remote resources: an http(s) address appears only in an attribute, a link followed when a person follows it or an image, audio or video source loaded as it renders, as in any page. The policy limits their schemes, a CSP their origins. CSS loads nothing from an address: a style rule reaches beyond the element it is written for, and loads on states (a hover) that render nothing to check." ;
     ui:sa-styles "sty:StyleRules, tokens, keyframes and style attributes whose values pass the CSS check; url() of a fragment (url(#gradient)) or of a data:image/… loads nothing from elsewhere and is allowed." ;
     ui:sa-rules "Classes, renderings, SPARQL rules, reactions and shapes: they only produce triples, and what they produce is checked." ;
-    ui:sa-hosted "A component drawn by a host component library only by a host component (safe:hostComponent) or custom element (safe:customElement) the policy lists, none by default; any other renders as its projected element." .
+    ui:sa-hosted "A component drawn by a host component library only by a host component (safe:hostComponent) or custom element (safe:customElement) the policy lists, none by default; any other renders as its projected element." ;
+    ui:sa-islands "A foreign component (ext:Island) only by what the policy lists, none by default: its custom element (safe:customElement), widget (safe:widget), module (safe:module) and, beyond the built-in custom element and widget adapters, its adapter (safe:adapter). Any other is not mounted: its slot stays its projected element, empty, and it is reported, in the DOM, in the HTML a server writes and on take-over." ;
+    ui:sa-inputs "Inputs to an island or a custom element (ext:input): an attribute input passes the attribute check; a property input names only a property in safe:property, none by default. A property that takes markup (innerHTML, outerHTML, srcdoc, dangerouslySetInnerHTML), an event handler, React's own props (ref, key, children) and prototype names are never set, listed or not." .
 
 ui:doc-sa-not-h a c:Heading ; c:level 2 ; c:label "What it may not do" .
-ui:doc-sa-not a c:DescriptionList ; c:of ui:doc-sa-not-items ; c:fields ( ui:sa-elements ui:sa-attributes ui:sa-schemes ui:sa-styles ui:sa-uploads ui:sa-stores ) .
+ui:doc-sa-not a c:DescriptionList ; c:of ui:doc-sa-not-items ; c:fields ( ui:sa-elements ui:sa-attributes ui:sa-ids ui:sa-hooks ui:sa-opener ui:sa-schemes ui:sa-styles ui:sa-tokens ui:sa-box ui:sa-uploads ui:sa-stores ui:sa-effects ) .
 ui:doc-sa-not-items ui:sa-elements "No element that runs or embeds: script, iframe, object, embed, base, link, meta, style, noscript, template, slot, nor html, head, body or title." ;
-    ui:sa-attributes "No attribute outside the list: no event handler (on…), srcdoc, is, nonce, ping, http-equiv, sandbox, allow, integrity, shadowrootmode." ;
+    ui:sa-attributes "No attribute outside the list: no event handler (on…), srcdoc, is, nonce, ping, http-equiv, sandbox, allow, integrity, shadowrootmode, referrerpolicy (the page's own policy decides what an address is told)." ;
+    ui:sa-ids "No reach into the host's page by id: authored content renders in the host's document, so an id reference to an id the rendering does not have (the host's login form, its theme picker) is left out." ;
+    ui:sa-hooks "No framework hooks the host sets: data-sem-… is refused (safe:refusedAttributePrefix), but for the hooks the framework's components render, which safe:Authored lists; data-sem-sandbox, data-sem-ssr and the other hooks the host sets are not among them. data-sem-anchor and data-sem-origin name ids, and are held as id references." ;
+    ui:sa-opener "A link's rel may not hold opener (safe:refusedLinkType), so a page it opens does not get the host's window." ;
     ui:sa-schemes "No javascript:, vbscript:, data: (but an image's) or file:, however it is spelled: case, spaces, tabs and newlines are read as a browser reads them." ;
     ui:sa-styles "No url() to an address, image-set(), image(), cross-fade(), element(), src(), paint() or expression(); no {, }, @, < or ; that would start another rule or at-rule (@import); no escape outside a string; quotes and brackets that balance; no behavior or -moz-binding. The same holds for every string the style compiler writes from the graph: properties, values, slugs, parts, states, media conditions, keyframe names and steps." ;
+    ui:sa-tokens "CSS is read as the browser tokenizes it (css-syntax-3), in one pass, linear in its length: strings end where the browser ends them, an unquoted url( is one url token up to its ), a name after a number or a # calls no function. What the check could read otherwise than the browser is refused: a comment, a string a newline ends, and a bad url." ;
+    ui:sa-box "A part, state or media condition may not name & or :scope: authored styles stay in the authored box (below)." ;
     ui:sa-uploads "file:uploadTo posts only to the page's own origin, or to an origin the host lists (files: { uploadOrigins }), whether or not the graph is authored: the graph says where, the host says where may be." ;
-    ui:sa-stores "A remote source (src:Source) names no endpoint in the graph: the host maps each source's IRI to its URL and credentials, and one it does not map stays src:Unbound." .
+    ui:sa-stores "A remote source (src:Source) names no endpoint in the graph: the host maps each source's IRI to its URL and credentials, and one it does not map stays src:Unbound." ;
+    ui:sa-effects "Under mount({ authored }) the effects read their configuration from the trusted graphs alone (app.trusted, a store of the ontology and graphs): remote sources, the location and whether there is one, where and by what a drop uploads, which module an island loads, and, when persistence is attached with { trusted: app.trusted }, its policies and storage keys. An authored graph changes state, the values the effects carry, as the interface does; it cannot reconfigure them." .
+ui:doc-sa-not-2 a c:Text ; c:label "Authored rules read the whole store: your graphs as well as the author's. What an author must not see (a token, someone else's data) does not belong in the store they render from." .
 ui:sa-elements rdfs:label "Elements" . ui:sa-attributes rdfs:label "Attributes" . ui:sa-urls rdfs:label "URLs" . ui:sa-schemes rdfs:label "URL schemes" .
 ui:sa-styles rdfs:label "Styles" . ui:sa-rules rdfs:label "Rules" . ui:sa-hosted rdfs:label "Host components" .
-ui:sa-uploads rdfs:label "Uploads" . ui:sa-stores rdfs:label "Remote stores" .
+ui:sa-uploads rdfs:label "Uploads" . ui:sa-stores rdfs:label "Remote stores" . ui:sa-ids rdfs:label "Id references" .
+ui:sa-remote rdfs:label "Remote resources" . ui:sa-inputs rdfs:label "Island inputs" . ui:sa-hooks rdfs:label "Framework hooks" .
+ui:sa-opener rdfs:label "Opener" . ui:sa-tokens rdfs:label "CSS tokens" . ui:sa-box rdfs:label "Scope" . ui:sa-effects rdfs:label "Host effects" .
+
+ui:doc-sa-box-h a c:Heading ; c:level 2 ; c:label "The authored box" .
+ui:doc-sa-box-1 a c:Text ; c:label "Authored content renders in an element of its own, the authored box, marked data-sem-sandbox: a live example's sandbox, the element mount({ authored }) renders into, the mount element of a page renderToString({ policy }) rendered. One scoping applies in all three (scopedCss, src/style/scope.ts):" .
+ui:doc-sa-box a c:DescriptionList ; c:of ui:doc-sa-box-items ; c:fields ( ui:sa-b-rules ui:sa-b-keyframes ui:sa-b-contain ) .
+ui:doc-sa-box-items ui:sa-b-rules "The trusted stylesheet (the ontology and your own graphs) is the page's. Every style rule the authored graphs add, or change, is rewritten so that each of its selectors starts at the box ([data-sem-sandbox=\"…\"] p); :root is the box itself, and a selector that starts at a sibling (~ p, + p) is left out. A rule with no sty:appliesTo, or an authored class given a framework slug, styles only what is in the box." ;
+    ui:sa-b-keyframes "Keyframes the authored graphs add are renamed for the box, as are the animations of its rules that name them: a framework animation keeps its own keyframes outside." ;
+    ui:sa-b-contain "The box has contain: layout paint (a rule of ontology/layers/safety.ttl): fixed and absolute positions resolve to it rather than to the page, and what is drawn outside it is clipped, beyond a margin of --sem-space-3 so a focus ring at its edge shows. The top layer (a modal dialog, a popover) is not contained by it." .
+ui:sa-b-rules rdfs:label "Style rules" . ui:sa-b-keyframes rdfs:label "Keyframes" . ui:sa-b-contain rdfs:label "Containment" .
+ui:doc-sa-box-2 a c:Text ; c:label "renderToString({ policy, trusted }) takes the store the policy was read from, whose stylesheet is the page's; without it the whole stylesheet is scoped to the box. Rendered.box names the box, and renderDocument marks the mount element with it, so mount takes it over in the same box." .
 
 ui:doc-sa-how-h a c:Heading ; c:level 2 ; c:label "How it works" .
 ui:doc-sa-how-1 a c:Text ; c:label "safe:Authored is triples: the element classes, attribute names and prefixes, which attributes hold URLs and which of those load a resource, the URL schemes, which attributes hold CSS, the CSS functions that fetch and the properties that bind code, and the host components and custom elements an author may name." .
@@ -661,21 +684,24 @@ ui:doc-sa-how-code a c:Code ; c:block true ; c:language "turtle" ; c:label """sa
     safe:fetchingFunction "url" , "image-set" , "image" , "cross-fade" , "element" , "src" , "expression" , "paint" , … ;
     safe:refusedProperty "behavior" , "-moz-binding" .""" .
 ui:doc-sa-how-2 a c:Text ; c:label "readPolicy(store, iri) reads those triples from a trusted store into a SafetyPolicy of plain sets (it throws when the IRI is not a safe:Policy there); authoredPolicy(store) does the same for safe:Authored, once per store. From then on the policy is data in the host, and nothing an author adds to a store changes it. Where it is applied:" .
-ui:doc-sa-how-list a c:DescriptionList ; c:of ui:doc-sa-how-items ; c:fields ( ui:sa-index ui:sa-outputs ui:sa-compiler ui:sa-files ui:sa-hosts ui:sa-islands ) .
-ui:doc-sa-how-items ui:sa-index "Every projection writes its RDF/HTML into an HtmlIndex, and runtime.project({ policy }) gives it the policy. Under it, tagName answers sem-refused for an element class the policy does not list and a custom element only if listed; attributes checks each attribute by name, then its URL, srcset or CSS; childrenOf is empty under a refused element; hostComponent answers a host component only if listed. The index checks a delta as it arrives, so a refusal in a hidden part of the page is reported too. A relative URL is checked as written, then resolved against the site's base." ;
+ui:doc-sa-how-list a c:DescriptionList ; c:of ui:doc-sa-how-items ; c:fields ( ui:sa-index ui:sa-outputs ui:sa-compiler ui:sa-files ui:sa-hosts ui:sa-islands ui:sa-restore ) .
+ui:doc-sa-how-items ui:sa-index "Every projection writes its RDF/HTML into an HtmlIndex, and runtime.project({ policy }) gives it the policy. Under it, tagName answers sem-refused for an element class the policy does not list and a custom element only if listed; attributes checks each attribute by name (a rel by its link types), then its URL, srcset or CSS, and keeps an id reference only while the projection mints that id; childrenOf is empty under a refused element; hostComponent answers a host component only if listed. The index checks a delta as it arrives, so a refusal in a hidden part of the page is reported too. A relative URL is checked as written, then resolved against the site's base." ;
     ui:sa-outputs "Everything reads the index, never the triples: the DOM patcher (creating, patching, and taking over server-rendered HTML), toHTML, toIndentedHTML and toText, renderToString and renderToStream, the live examples' prerendered HTML, and a host component adapter. A SPARQL rule and its function twin produce the same triples, checked after, so parity is unchanged." ;
-    ui:sa-compiler "compileStyles(store, { policy, onRefused }) checks every string it takes from the graph: a property, a value, a selector part, a state, a media condition, a slug, a keyframe name and step. A declaration that fails is left out of its rule; a rule whose selector or condition fails is left out whole. The CSS scan reads the text as a tokenizer would, far enough to know it stays a value." ;
+    ui:sa-compiler "compileStyles(store, { policy, onRefused }) checks every string it takes from the graph: a property, a value, a selector part, a state, a media condition, a slug, a keyframe name and step. A declaration that fails is left out of its rule; a rule whose selector or condition fails is left out whole. The CSS scan reads the text as the css-syntax-3 tokenizer does, in one pass, far enough to know it stays a value. Where authored content has a box, the host then scopes what the authored graphs added to the stylesheet to it." ;
     ui:sa-files "The files effect checks uploads for every graph: an http(s) address on the page's own origin or one in uploadOrigins (\"*\" allows any). A refused upload is not sent; the file becomes file:Failed with the reason, announced." ;
     ui:sa-hosts "Host components and custom elements are asked of the index, so an authored projection draws one only if the policy lists it and the host adapter has it; the attributes it is given are the index's, already checked." ;
-    ui:sa-islands "A foreign component (ext:island) mounts only what the host registered by name: the graph names one, it cannot bring one." .
+    ui:sa-islands "The islands effect checks each island against the policy (islandProblem, src/foreign.ts), and the index each input (inputProblem); the server and take-over ask the same. Even a listed island mounts only what the host registered by name: the graph names one, it cannot bring one." ;
+    ui:sa-restore "Restoring brings back only what a persistence policy covers: its subject's listed properties, or what its query's template can produce, into its graph; a stored switch only for a policy there is. Whatever else storage holds stays there." .
 ui:sa-index rdfs:label "The HTML index" . ui:sa-outputs rdfs:label "Every output" . ui:sa-compiler rdfs:label "The style compiler" .
-ui:sa-files rdfs:label "Uploads" . ui:sa-hosts rdfs:label "Host components" . ui:sa-islands rdfs:label "Islands" .
+ui:sa-files rdfs:label "Uploads" . ui:sa-hosts rdfs:label "Host components" . ui:sa-islands rdfs:label "Islands" . ui:sa-restore rdfs:label "Remembered state" .
 ui:doc-sa-how-3 a c:Text ; c:label "One check holds for trusted projections as well: an attribute node whose name is no attribute name (a space, a quote, <, >, /, =) is left out and reported, since it would break the markup it is written in. An authored projection costs one set lookup per attribute more, a scheme test for a URL and a scan for CSS." .
 
 ui:doc-sa-ref-h a c:Heading ; c:level 2 ; c:label "What happens to what is refused" .
-ui:doc-sa-ref a c:DescriptionList ; c:of ui:doc-sa-ref-items ; c:fields ( ui:sa-r-element ui:sa-r-hosted ui:sa-r-attribute ui:sa-r-url ui:sa-r-style ui:sa-r-rule ui:sa-r-upload ) .
+ui:doc-sa-ref a c:DescriptionList ; c:of ui:doc-sa-ref-items ; c:fields ( ui:sa-r-element ui:sa-r-hosted ui:sa-r-island ui:sa-r-idref ui:sa-r-attribute ui:sa-r-url ui:sa-r-style ui:sa-r-rule ui:sa-r-upload ) .
 ui:doc-sa-ref-items ui:sa-r-element "An empty <sem-refused data-sem-refused=\"script\">, without its attributes or children, in the DOM and in HTML; nothing in text. Reported as kind element." ;
     ui:sa-r-hosted "The projected element, drawn by Semblance. Reported as kind element." ;
+    ui:sa-r-island "The island's slot, its projected element, empty; an input that fails is not set. Reported as kind element, or attribute for an input." ;
+    ui:sa-r-idref "An id reference to an id the projection does not mint is left out. Reported as kind attribute." ;
     ui:sa-r-attribute "Left out; the element stays. Reported as kind attribute." ;
     ui:sa-r-url "Its attribute is left out; the element stays. Reported as kind url." ;
     ui:sa-r-style "A style attribute that fails is left out; a declaration in a style rule that fails is left out of the sheet. Reported as kind style." ;
@@ -683,6 +709,7 @@ ui:doc-sa-ref-items ui:sa-r-element "An empty <sem-refused data-sem-refused=\"sc
     ui:sa-r-upload "Not sent; the file is file:Failed with the reason." .
 ui:sa-r-element rdfs:label "An element" . ui:sa-r-hosted rdfs:label "A host component" . ui:sa-r-attribute rdfs:label "An attribute" .
 ui:sa-r-url rdfs:label "A URL" . ui:sa-r-style rdfs:label "A CSS value" . ui:sa-r-rule rdfs:label "A style rule" . ui:sa-r-upload rdfs:label "An upload" .
+ui:sa-r-island rdfs:label "An island" . ui:sa-r-idref rdfs:label "An id reference" .
 ui:doc-sa-rep-1 a c:Text ; c:label "Each is a Refused error (src/safety.ts) with at (the node's IRI, or the style rule's), kind and a message such as \"Refused on <…#it/~x>: authored content may not have a script element.\" It is reported once per node and reason. Where it goes:" .
 ui:doc-sa-rep a c:DescriptionList ; c:of ui:doc-sa-rep-items ; c:fields ( ui:sa-p-mount ui:sa-p-project ui:sa-p-compile ui:sa-p-string ui:sa-p-stream ui:sa-p-live ui:sa-p-index ) .
 ui:doc-sa-rep-items ui:sa-p-mount "onRefused, from both the projection and the stylesheet; by default console.warn." ;
@@ -700,8 +727,9 @@ ui:doc-sa-ext-1 a c:Text ; c:label "The policy is triples, so extending it is Tu
 ui:doc-sa-ext-code a c:Code ; c:block true ; c:language "turtle" ; c:label """safe:Authored
     safe:scheme "sms:" ;                 # links to sms: addresses
     safe:hostComponent "Chart" ;         # your library's Chart may draw an authored chart
-    safe:customElement "ds-badge" .      # and ds-badge may be created for an authored badge""" .
-ui:doc-sa-ext-2 a c:Text ; c:label "An element is an RDF/HTML class or one of the SVG extension's: those are what the index can create, so your own element is a custom element (ext:tag, listed in safe:customElement) or a host component. A component you write needs nothing from the policy while it renders listed elements and attributes; prefix your own attributes with data- and they are allowed already. A stricter policy is a SafetyPolicy of your own; the quickest is the framework's with some sets replaced:" .
+    safe:customElement "ds-badge" ;      # and ds-badge may be created for an authored badge
+    safe:property "value" .              # an island's or custom element's value property may be set""" .
+ui:doc-sa-ext-2 a c:Text ; c:label "An element is an RDF/HTML class or one of the SVG extension's: those are what the index can create, so your own element is a custom element (ext:tag, listed in safe:customElement) or a host component. A component you write needs nothing from the policy while it renders listed elements and attributes; prefix your own attributes with data- (not data-sem-) and they are allowed already. A stricter policy is a SafetyPolicy of your own; the quickest is the framework's with some sets replaced:" .
 ui:doc-sa-ext-ts a c:Code ; c:block true ; c:label """const strict: SafetyPolicy = { ...authoredPolicy(trusted), schemes: new Set(['https:']), resourceSchemes: [] }
 await mount(element, { root, graphs: [appTtl], authored: [fromTheModel], policy: strict })""" .
 ui:doc-sa-ext-3 a c:Text ; c:label "Or a safe:Policy of its own in your Turtle, read with readPolicy(trusted, ex + 'Plain'). It lists everything it allows; nothing is inherited from safe:Authored." .
@@ -709,10 +737,10 @@ ui:doc-sa-ext-own a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:
     safe:element rdfhtml:Div , rdfhtml:Span , rdfhtml:P ;
     safe:attribute "class" , "lang" , "dir" ;
     safe:attributePrefix "data-" , "aria-" .""" .
-ui:doc-sa-ext-4 a c:Text ; c:label "Why it must come from a trusted store: the policy is the only thing between the author and the page, and it is triples. Read from a store that holds the authored graph, the author could write safe:Authored safe:element rdfhtml:Script and allow itself anything. So it is read before the authored graph is loaded (mount), or from the site's store, where an example's Turtle is only text, and handed to the projection as data. When the framework starts to emit an element or attribute the policy does not list, it is added to safe:Authored: a test renders every live example of this site under the policy and fails on any refusal." .
+ui:doc-sa-ext-4 a c:Text ; c:label "Why it must come from a trusted store: the policy is the only thing between the author and the page, and it is triples. Read from a store that holds the authored graph, the author could write safe:Authored safe:element rdfhtml:Script and allow itself anything. So it is read from a store without the authored graph (mount's store of graphs alone), or from the ontology alone (the live examples), and handed to the projection as data. When the framework starts to emit an element or attribute the policy does not list, it is added to safe:Authored: a test renders every live example of this site under the policy and fails on any refusal." .
 
 ui:doc-sa-csp-h a c:Heading ; c:level 2 ; c:label "A Content Security Policy" .
-ui:doc-sa-csp-1 a c:Text ; c:label "The policy limits the schemes of what is rendered, a CSP their origins: an authored graph may link to and load images from any https: address, and a CSP says which ones the browser fetches and where forms may submit. For a page that mounts in the browser:" .
+ui:doc-sa-csp-1 a c:Text ; c:label "The policy limits the schemes of what is rendered, a CSP their origins: an authored graph may link to and load images from any https: address, and a CSP says which ones the browser fetches and where forms may submit. This is what the current code needs; a stricter setup, with Trusted Types and authored content in a shadow root, is #414. For a page that mounts in the browser:" .
 ui:doc-sa-csp-code a c:Code ; c:block true ; c:label """Content-Security-Policy:
   default-src 'self';
   script-src 'self' 'wasm-unsafe-eval';
@@ -749,14 +777,16 @@ ui:sa-d-sandbox rdfs:label "Sandboxes" . ui:sa-d-remote rdfs:label "Remote sourc
 ui:sa-d-shapes rdfs:label "Shapes describe" . ui:sa-d-cost rdfs:label "Cost" .
 
 ui:doc-sa-not-cov-h a c:Heading ; c:level 2 ; c:label "Not covered" .
-ui:doc-sa-not-cov a c:DescriptionList ; c:of ui:doc-sa-not-cov-items ; c:fields ( ui:sa-n-origins ui:sa-n-store ui:sa-n-clobber ui:sa-n-effects ui:sa-n-time ) .
+ui:doc-sa-not-cov a c:DescriptionList ; c:of ui:doc-sa-not-cov-items ; c:fields ( ui:sa-n-origins ui:sa-n-dup ui:sa-n-store ui:sa-n-clobber ui:sa-n-island ui:sa-n-effects ui:sa-n-time ) .
 ui:doc-sa-not-cov-items ui:sa-n-origins "Where an http(s) link goes or an image comes from: use a CSP." ;
+    ui:sa-n-dup "An id the rendering has that the host's page has too: the browser takes the first in the document." ;
+    ui:sa-n-island "What a foreign component the policy lists does with its inputs once mounted: it is the host's code. A live example's sandbox attaches no islands effect." ;
     ui:sa-n-store "What the author's triples say about your resources, and what its reactions change, when it shares your store: give it a store of its own to keep it out." ;
     ui:sa-n-clobber "DOM clobbering by id or name (a host script that reads window.someId)." ;
-    ui:sa-n-effects "Host effects you attach yourself (navigation, persistence, network capture) act on graph state as the host configured them, authored triples included." ;
+    ui:sa-n-effects "Host effects you attach yourself (navigation, persistence, network capture) act on graph state as the host configured them; give them trusted when the store holds authored graphs." ;
     ui:sa-n-time "How long a graph takes to render: budgets and the stall watchdog, not the policy." .
 ui:sa-n-origins rdfs:label "Origins" . ui:sa-n-store rdfs:label "A shared store" . ui:sa-n-clobber rdfs:label "Clobbering" .
-ui:sa-n-effects rdfs:label "Host effects" . ui:sa-n-time rdfs:label "Time" .
+ui:sa-n-effects rdfs:label "Host effects" . ui:sa-n-dup rdfs:label "Duplicate ids" . ui:sa-n-island rdfs:label "Listed islands" . ui:sa-n-time rdfs:label "Time" .
 
 ui:doc-sa-ex-h a c:Heading ; c:level 2 ; c:label "Worked examples" .
 ui:doc-sa-ex-1 a c:Text ; c:label "Each is backed by a test: test/safety.test.ts renders every vector in a live example's sandbox, in the DOM and as a server writes it; test/safety-guide.test.ts runs the examples that go through mount and renderToString." .
