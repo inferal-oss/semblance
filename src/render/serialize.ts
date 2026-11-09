@@ -49,8 +49,9 @@ function node(index: HtmlIndex, k: string, opts: SerializeOptions = {}, hidden =
  * inputs (ext:Attribute), which upgrades in place when its definition loads; anything else is empty.
  */
 function island(index: HtmlIndex, k: string): string {
-  const tag = index.nodes.get(k)?.tag
-  if (!tag || !/^[a-z][a-z0-9._]*-[a-z0-9._-]*$/.test(tag)) return ''
+  // Through the index's checked accessors only: a valid tag and input names, and under a policy what it allows.
+  const tag = index.islandTag(k)
+  if (!tag) return ''
   const attrs = [...index.islandInputs(k).values()]
     .filter((i) => i.as === EXT.Attribute)
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))

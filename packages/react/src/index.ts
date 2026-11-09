@@ -28,6 +28,9 @@ import { reactAttributes } from './attributes.ts'
 
 export { reactAttributes, styleObject, propName } from './attributes.ts'
 
+/** Props React reads itself: never taken from an authored graph. */
+const REACT_RESERVED = new Set(['dangerouslySetInnerHTML', 'ref', 'key', 'children', 'suppressHydrationWarning', 'suppressContentEditableWarning'])
+
 /** The root element's attributes in React's naming, with the ref that registers it: spread them on the component's root element. */
 export type RootProps = Record<string, unknown> & { ref: Ref<Element> }
 
@@ -244,11 +247,16 @@ export class ReactHosts implements HostAdapter {
     return out
   }
 
-  /** The props a hosted node's root states (ext:input), typed. */
+  /** The props a hosted node's root states (ext:input), typed, as the index's policy allows them. */
   private props(k: string): Record<string, unknown> {
     const out: Record<string, unknown> = {}
-    for (const [name, i] of this.index.islandInputs(k)) out[name] = inputValue(i.value)
+    for (const [name, i] of this.index.islandInputs(k)) if (!this.reserved(name)) out[name] = inputValue(i.value)
     return out
+  }
+
+  /** Under a policy (authored content), the names React gives a meaning of its own are never props from the graph. */
+  private reserved(name: string): boolean {
+    return !!this.index.policy && (REACT_RESERVED.has(name) || /^on/i.test(name))
   }
 
   /** One callback per output the instance declares (ext:output), stable per instance; it reports through the bus once there is one. */
@@ -261,6 +269,8 @@ export class ReactHosts implements HostAdapter {
       const bindings: OutputBinding[] = outputsOf({ runtime, projection }, focus)
       cbs = {}
       for (const on of new Set(bindings.map((b) => b.on))) {
+        // A callback the adapter makes is a function of its own, but not one React reads as something else.
+        if (this.index.policy && REACT_RESERVED.has(on)) continue
         cbs[on] = (payload: unknown) => {
           const bus = this.ctx.bus
           if (!bus) return

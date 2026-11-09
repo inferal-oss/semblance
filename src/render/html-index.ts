@@ -5,7 +5,7 @@ import { ATTRIBUTE_NAMES, TAG_NAMES, VOID_ELEMENTS } from '../vocab/rdfhtml.gene
 import { linearize, OrderingError } from './ordering.ts'
 import { compareKeys } from './order-key.ts'
 import { SVG_TAG_NAMES } from '../vocab/svg.ts'
-import { allowsCustomElement, allowsElement, allowsHostComponent, ATTRIBUTE_NAME, attributeProblem, Refused, type SafetyPolicy } from '../safety.ts'
+import { allowsCustomElement, allowsElement, allowsHostComponent, ATTRIBUTE_NAME, attributeProblem, inputProblem, Refused, type SafetyPolicy } from '../safety.ts'
 
 /** The tag a refused element renders as (empty, with data-sem-refused naming what it was). */
 export const REFUSED_TAG = 'sem-refused'
@@ -170,7 +170,8 @@ export class HtmlIndex {
     readonly policy?: SafetyPolicy,
   ) {}
 
-  private refuse(key: string, kind: Refused['kind'], message: string) {
+  /** Report what the policy kept out of a node, once per reason (the islands effect reports an island it does not mount). */
+  refuse(key: string, kind: Refused['kind'], message: string) {
     let reasons = this.refusals.get(key)
     if (reasons?.has(message)) return
     if (!reasons) this.refusals.set(key, (reasons = new Set()))
@@ -412,7 +413,25 @@ export class HtmlIndex {
     return [...out].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
   }
 
-  /** An island slot's current inputs, by name (an input stated twice: the least value by code point). */
+  /**
+   * The custom element mounted in an island's slot (ext:tag): a valid custom element name, and under
+   * a policy one it lists; anything else is refused (the slot stays its projected element).
+   */
+  islandTag(key: string): string | undefined {
+    const n = this.nodes.get(key)
+    const tag = n?.island !== undefined ? n.tag : undefined
+    if (tag === undefined) return undefined
+    if (!isCustomElementName(tag)) return void this.refuse(key, 'element', `"${tag}" is not a custom element name`)
+    if (!this.policy || allowsCustomElement(this.policy, tag)) return tag
+    this.refuse(key, 'element', `custom element ${tag} is not allowed in authored content; rendered as its element`)
+    return undefined
+  }
+
+  /**
+   * An island slot's (or a custom element's) current inputs, by name (an input stated twice: the
+   * least value by code point). A name that is no attribute name is never handed out; under a policy
+   * an attribute input passes the attribute check and a property input must be listed (src/safety.ts).
+   */
   islandInputs(key: string): Map<string, IslandInput> {
     const out = new Map<string, IslandInput>()
     for (const i of this.nodes.get(key)?.inputs ?? []) {
@@ -421,6 +440,15 @@ export class HtmlIndex {
       const had = out.get(rec.name)
       if (had && had.value.value <= rec.value.value) continue
       out.set(rec.name, { name: rec.name, value: rec.value, as: rec.as ?? EXT.Property })
+    }
+    for (const [name, i] of out) {
+      if (!ATTRIBUTE_NAME.test(name)) {
+        out.delete(name)
+        this.refuse(key, 'attribute', `"${name}" is not an input name`)
+        continue
+      }
+      const why = this.policy && inputProblem(this.policy, name, i.value.value, i.as === EXT.Attribute)
+      if (why) out.delete(name), this.refuse(key, why.kind, `${name}: ${why.reason}`)
     }
     return out
   }

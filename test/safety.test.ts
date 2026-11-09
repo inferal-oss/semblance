@@ -2,13 +2,18 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { Parser, Store } from 'n3'
 import { afterAll, describe, expect, it } from 'vitest'
+import { EventBus } from '../src/behaviour/events.ts'
 import { uploadRefused } from '../src/files.ts'
+import { Islands, type IslandAdapter, type Widget } from '../src/foreign.ts'
+import { HtmlIndex } from '../src/render/html-index.ts'
 import { loadStore } from '../src/node/load.ts'
-import { NS } from '../src/ns.ts'
+import { MOD, NS } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import type { HostAdapter } from '../src/render/hosts.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
-import { authoredPolicy, cssProblem, declarationsProblem, readPolicy, urlProblem } from '../src/safety.ts'
+import { Runtime } from '../src/runtime.ts'
+import { authoredPolicy, cssProblem, declarationsProblem, readPolicy, type SafetyPolicy, urlProblem } from '../src/safety.ts'
+import { DEFAULT_LAYERS } from '../src/web/mount.ts'
 import { buildSandbox, type Sandbox, type SandboxSource } from '../src/sandbox.ts'
 import { compileStyles } from '../src/style/compile.ts'
 
@@ -201,6 +206,137 @@ describe('an authored graph can still', () => {
       expect(out).toMatch(/style="color: red; --x: var\(--sem-accent\)"/)
     }
     expect(r.warnings.filter((w) => w.startsWith('Refused'))).toEqual([])
+  })
+})
+
+const PFX = `@prefix ex: <${EX}> .\n` + Object.entries(NS).filter(([k]) => /^[a-z]+$/.test(k)).map(([k, v]) => `@prefix ${k}: <${v}> .`).join('\n') + '\n'
+
+/**
+ * An authored graph as mount({ graphs, authored }) renders it (src/web/mount.ts): a screen projection
+ * with the policy, a DOM renderer, the event bus and the islands effect with the host's widgets,
+ * modules and adapters. `withPolicy`: the effect is given the policy as mount gives it; otherwise it
+ * reads the index's.
+ */
+function mounted(authored: string, pol: SafetyPolicy = policy, opts: { widgets?: Record<string, Widget>; modules?: Record<string, () => Promise<unknown>>; adapters?: Record<string, IslandAdapter>; withPolicy?: boolean } = {}) {
+  const store = load(PFX + authored)
+  const runtime = new Runtime(store)
+  const refused: string[] = []
+  const projection = runtime.project({ modality: MOD.Screen, layers: DEFAULT_LAYERS, prefer: 'sparql', name: 'screen', roots: [EX + 'it'], policy: pol }, (e) => refused.push(e.message))
+  const { document } = parseHTML('<!doctype html><html><head></head><body><div id="app"></div></body></html>')
+  const host = document.getElementById('app')!
+  const renderer = new DomRenderer(projection.index, host, EX + 'it')
+  renderer.flush()
+  const bus = new EventBus(runtime, projection)
+  bus.attach(renderer, () => renderer.flush())
+  const errors: string[] = []
+  const islands = new Islands(bus, renderer, { ...opts, policy: opts.withPolicy === false ? undefined : pol, onHandled: () => renderer.flush(), onError: (e) => errors.push(e.message) })
+  islands.attach()
+  const html = () => toHTML(projection.index, EX + 'it')
+  return { store, runtime, host, renderer, islands, refused, errors, html, dispose: () => runtime.dispose() }
+}
+
+describe('an authored island', () => {
+  it('cannot name a custom element the policy does not list: nothing is created, in the DOM, by the islands effect or in server HTML, and it is reported', async () => {
+    for (const withPolicy of [true, false]) {
+      const m = mounted(`ex:W a owl:Class ; rdfs:subClassOf ext:Island ; ext:tag "x-unlisted" ;
+  ext:input [ ext:name "title" ; ext:from ex:p ; ext:as ext:Attribute ] .
+ex:it a ex:W ; ex:p "hello" .`, policy, { withPolicy })
+      await m.islands.settled()
+      expect(m.host.querySelector('x-unlisted')).toBeNull()
+      expect(m.html()).not.toContain('x-unlisted>')
+      expect(m.html()).not.toContain('<x-unlisted')
+      expect(m.islands.size).toBe(0)
+      expect(m.refused.join('\n')).toMatch(/custom element x-unlisted is not allowed in authored content/)
+      m.dispose()
+    }
+  })
+
+  it('cannot mount a widget, a module or an adapter the policy does not list, though the host registered it', async () => {
+    let widgetMounts = 0
+    let loads = 0
+    let adapted = 0
+    const widget: Widget = { mount: () => (widgetMounts++, { update() {}, destroy() {} }) }
+    const opts = {
+      widgets: { w: widget },
+      modules: { m: async () => void loads++ },
+      adapters: { [EX + 'Adapter']: (() => (adapted++, { update() {}, destroy() {} })) as IslandAdapter },
+    }
+    const sources = [
+      `ex:it a ext:Island ; ext:widget "w" .`,
+      `ex:it a ext:Island ; ext:widget "w" ; ext:module "m" .`,
+      `ex:it a ext:Island ; ext:adapter ex:Adapter .`,
+    ]
+    for (const src of sources) {
+      const m = mounted(src, policy, opts)
+      await m.islands.settled()
+      expect(m.islands.counts.mounts).toBe(0)
+      expect(m.refused.join('\n')).toMatch(/is not allowed in authored content; rendered as its element/)
+      m.dispose()
+    }
+    expect([widgetMounts, loads, adapted]).toEqual([0, 0, 0])
+    // Listed, each mounts.
+    const listed: SafetyPolicy = { ...policy, widgets: new Set(['w']), modules: new Set(['m']), adapters: new Set([EX + 'Adapter']) }
+    for (const src of sources) {
+      const m = mounted(src, listed, opts)
+      await m.islands.settled()
+      expect(m.errors).toEqual([])
+      m.dispose()
+    }
+    expect([widgetMounts, loads, adapted]).toEqual([2, 1, 1])
+  })
+
+  it('sets only the inputs the policy allows on a custom element it lists: attributes pass the attribute check, properties must be listed, and none takes markup or a handler', async () => {
+    const listed: SafetyPolicy = { ...policy, customElements: new Set(['x-ok']), properties: new Set(['value', 'innerHTML', 'onclick']) }
+    const inputs = `ext:input [ ext:name "value" ; ext:from ex:v ] , [ ext:name "label" ; ext:from ex:v ] , [ ext:name "innerHTML" ; ext:from ex:v ] ,
+    [ ext:name "onclick" ; ext:from ex:v ] , [ ext:name "title" ; ext:from ex:v ; ext:as ext:Attribute ] ,
+    [ ext:name "onfocus" ; ext:from ex:v ; ext:as ext:Attribute ] , [ ext:name "href" ; ext:from ex:u ; ext:as ext:Attribute ]`
+    // An island in its slot, and a hosted component created as the custom element (its props set by the DOM renderer).
+    const island = `ex:W a owl:Class ; rdfs:subClassOf ext:Island ; ext:tag "x-ok" ;\n  ${inputs} .\nex:it a ex:W ; ex:v "<b>v</b>" ; ex:u "javascript:void 0" .`
+    const hosted = `ex:W a owl:Class ; rdfs:subClassOf ext:Hosted , sem:Component ; sem:slug "ex-ok" ; ext:tag "x-ok" ;\n  ${inputs} .
+ex:WRendering a sem:Rendering ; sem:targets ex:W ; sem:stratum 0 .
+ex:WRendering-sparql a sem:Rule ; sem:implements ex:WRendering ; sem:construct """
+PREFIX ex: <${EX}>
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this . } WHERE { $this a ex:W . BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .
+ex:it a ex:W ; ex:v "<b>v</b>" ; ex:u "javascript:void 0" .`
+    for (const src of [island, hosted]) {
+      const m = mounted(src, listed)
+      await m.islands.settled()
+      const el = m.host.querySelector('x-ok') as (Element & Record<string, unknown>) | null
+      expect(el, m.host.innerHTML + '\n' + m.errors.join('\n')).not.toBeNull()
+      expect(el!.value).toBe('<b>v</b>')
+      expect(el!.getAttribute('title')).toBe('<b>v</b>')
+      expect(el!.label).toBeUndefined()
+      expect(el!.children.length).toBe(0)
+      expect(typeof el!.onclick === 'string').toBe(false)
+      for (const name of ['onfocus', 'href', 'onclick']) expect(el!.hasAttribute(name)).toBe(false)
+      if (src === island) {
+        const html = m.html()
+        expect(html).toContain('<x-ok title="&lt;b&gt;v&lt;/b&gt;"></x-ok>')
+        expect(html).not.toMatch(/onfocus|javascript:/)
+      }
+      const reasons = m.refused.join('\n')
+      for (const name of ['label', 'innerHTML', 'onclick']) expect(reasons).toContain(`${name}: authored content may not set the property ${name}`)
+      expect(reasons).toContain('onfocus: authored content may not have the attribute onfocus')
+      expect(reasons).toMatch(/href: authored content may not have a javascript: URL/)
+      m.dispose()
+    }
+  })
+})
+
+describe('an island input', () => {
+  it('whose name is not an attribute name is never written, trusted or not', () => {
+    for (const pol of [undefined, { ...policy, customElements: new Set(['x-ok']) }]) {
+      const store = load(PFX + `ex:it a ext:Island ; ext:tag "x-ok" ; ext:input [ ext:name "a b" ; ext:from ex:v ; ext:as ext:Attribute ] , [ ext:name "c>d" ; ext:from ex:v ; ext:as ext:Attribute ] , [ ext:name "data-ok" ; ext:from ex:v ; ext:as ext:Attribute ] ; ex:v "1" .`)
+      const runtime = new Runtime(store)
+      const errors: string[] = []
+      const projection = runtime.project({ modality: MOD.Screen, layers: DEFAULT_LAYERS, prefer: 'sparql', name: 'screen', roots: [EX + 'it'], policy: pol }, (e) => errors.push(e.message))
+      expect(projection.index).toBeInstanceOf(HtmlIndex)
+      const html = toHTML(projection.index, EX + 'it')
+      expect(html).toContain('<x-ok data-ok="1"></x-ok>')
+      expect(html).not.toMatch(/a b|c>d|c&gt;d/)
+      expect(errors.join('\n')).toContain('"c>d" is not an input name')
+      runtime.dispose()
+    }
   })
 })
 

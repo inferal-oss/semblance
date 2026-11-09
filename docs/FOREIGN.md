@@ -288,6 +288,11 @@ reaction that rewrites the value.
 
 - **Trusted code mounts in place.** That is the spike. Shadow DOM is encapsulation, not a security
   boundary.
+- **Authored graphs** ([SAFETY.md](SAFETY.md)) mount only the islands the policy lists (custom
+  elements, widgets, modules, adapters; none by default), with the inputs it allows (attributes as
+  the attribute check allows them, properties from `safe:property`). The index hands out an island's
+  tag and inputs only through these checks (`islandTag`, `islandInputs`), and the islands effect,
+  the server's slot markup, custom element props and the React adapter read only those.
 - **Untrusted code** goes into a `<iframe sandbox="allow-scripts">` without `allow-same-origin`, under a
   CSP. An `ext:Sandboxed` adapter would carry the same input and output protocol over `postMessage`
   (validated, with structured-clone values). The inputs are already plain values and the outputs

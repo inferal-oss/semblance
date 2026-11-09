@@ -44,6 +44,18 @@ and `readPolicy` take the store you trust.
 - Have a component drawn by a host component library ([HOSTED.md](HOSTED.md)) only by a host
   component (`safe:hostComponent`) or custom element (`safe:customElement`) the policy lists, none by
   default; any other renders as its projected element.
+- Mount a foreign component ([FOREIGN.md](FOREIGN.md), `ext:Island`) only by what the policy lists,
+  none by default: its custom element (`safe:customElement`), widget (`safe:widget`), module
+  (`safe:module`) and, beyond the built-in custom element and widget adapters, its adapter
+  (`safe:adapter`). Any other is not mounted: its slot stays its projected element, empty, and it is
+  reported. This holds in the DOM (`mount` gives the islands effect its policy, and the effect reads
+  the index's by default), in the HTML a server writes and on take-over.
+- Give an island or a custom element inputs (`ext:input`): an attribute input (`ext:Attribute`)
+  passes the attribute check, as any authored attribute does; a property input (`ext:Property`, the
+  default) only names a property in `safe:property`, none by default. A property that takes markup
+  (`innerHTML`, `outerHTML`, `srcdoc`, `dangerouslySetInnerHTML`), an event handler (`on…`), React's
+  own props (`ref`, `key`, `children`) and prototype names are never set, listed or not. An input
+  name that is not an attribute name is never written, trusted or not.
 
 ## What it may not do
 
@@ -100,8 +112,8 @@ without `unsafe-inline` is #157.
 
 - Where an `http(s)` link goes or an image comes from: use a CSP.
 - DOM clobbering by `id` or `name` (a host script that reads `window.someId`).
-- Foreign components (`ext:island`): an authored graph mounts only what the host registered; a live
-  example's sandbox registers none.
+- What a foreign component the policy lists does with its inputs once mounted: it is the host's
+  code. A live example's sandbox attaches no islands effect.
 - Host effects you attach yourself: navigation, persistence and network capture act on graph state
   as the host configured them. A live example's sandbox attaches none of them (its full screen is
   shown over the page).

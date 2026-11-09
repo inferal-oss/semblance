@@ -15,7 +15,8 @@ import type { EventBus, Handled } from './behaviour/events.ts'
 import type { Quad_Graph } from '@rdfjs/types'
 import { EXT, NS, RDFS_SUBCLASS, RDF_TYPE } from './ns.ts'
 import type { DomRenderer } from './render/dom.ts'
-import type { IslandInput } from './render/html-index.ts'
+import { isCustomElementName, type IslandInput } from './render/html-index.ts'
+import { islandProblem, type SafetyPolicy } from './safety.ts'
 
 const XSD = NS.xsd
 const RDF_JSON = NS.rdf + 'JSON'
@@ -81,6 +82,12 @@ export interface IslandsOptions {
   /** After each output a reaction handled (to patch the DOM). */
   onHandled?: (h: Handled) => void
   onError?: (e: Error, island: string) => void
+  /**
+   * Authored content (src/safety.ts): mount only the islands the policy allows (their custom element,
+   * widget, module and adapter); any other stays its projected element and is reported. By default
+   * the policy of the renderer's index, so the effect cannot mount around it.
+   */
+  policy?: SafetyPolicy
 }
 
 /** An output binding (ext:output): which event a DOM event or callback becomes. */
@@ -151,7 +158,7 @@ export function applyInputs(el: Element, inputs: Iterable<Input>): void {
 
 /** ext:CustomElement: the element named by ext:tag; inputs are its properties or attributes, outputs its DOM events. */
 export const customElementAdapter: IslandAdapter = (slot, ctx) => {
-  if (!ctx.tag || !ctx.tag.includes('-')) throw new Error(`<${ctx.island}> names no custom element tag (ext:tag)`)
+  if (!ctx.tag || !isCustomElementName(ctx.tag)) throw new Error(`<${ctx.island}> names no custom element tag (ext:tag)`)
   const el = slot.ownerDocument.createElement(ctx.tag)
   applyInputs(el, ctx.inputs.values())
   const listeners = ctx.outputs.map((name) => [name, (e: Event) => ctx.emit(name, e)] as const)
@@ -279,25 +286,35 @@ export class Islands {
       }
       return undefined
     }
+    const index = this.renderer.index
+    const policy = this.opts.policy ?? index.policy
+    // The slot's tag as the index allows it; one the island states only in the store, checked the same way.
+    const tag = index.nodes.get(key)?.tag !== undefined ? index.islandTag(key) : said(EXT.tag)
+    if (index.nodes.get(key)?.tag !== undefined && tag === undefined) return
+    const adapterIri = said(EXT.adapter) ?? (tag ? EXT.CustomElement : EXT.Widget)
+    const widget = said(EXT.widget)
+    const module = said(EXT.module)
+    if (policy) {
+      const why = islandProblem(policy, { adapter: adapterIri, tag, widget, module })
+      if (why) return index.refuse(key, 'element', `island <${island}>: ${why}; rendered as its element`)
+    }
     const outputs = outputsOf(this.bus, island, classes)
-    const adapterIri = said(EXT.adapter) ?? (said(EXT.tag) ? EXT.CustomElement : EXT.Widget)
     const adapter = this.opts.adapters?.[adapterIri] ?? (adapterIri === EXT.CustomElement ? customElementAdapter : adapterIri === EXT.Widget ? widgetAdapter : undefined)
     const m: Mounted = { key, island, el, pushed: new Map(), outputs, applying: false, gone: false }
     this.mounted.set(key, m)
     if (!adapter) return this.fail(new Error(`No adapter for <${adapterIri}>`), island)
-    const current = this.renderer.index.islandInputs(key)
+    const current = index.islandInputs(key)
     for (const [name, i] of current) m.pushed.set(name, { key: termKey(i.value), as: i.as })
     const ctx: IslandContext = {
       island,
-      tag: this.renderer.index.nodes.get(key)?.tag ?? said(EXT.tag),
-      widget: said(EXT.widget),
+      tag,
+      widget,
       inputs: new Map([...current].map(([n, i]) => [n, resolved(i)])),
       outputs: [...new Set(outputs.map((o) => o.on))],
       emit: (name, payload) => this.output(m, name, payload),
       widgets: this.opts.widgets ?? {},
     }
     this.counts.mounts++
-    const module = said(EXT.module)
     if (module !== undefined) {
       const loader = this.opts.modules?.[module]
       if (!loader) return this.fail(new Error(`No module registered as "${module}"`), island)
