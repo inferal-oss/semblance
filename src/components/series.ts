@@ -122,13 +122,13 @@ const plan: FnRule = (ctx, focus) => {
 
 type Point = { node: NamedNode; si: number; ci: number; v: number; base: number; x?: number; z?: number }
 
-/** Whether the chart's class (or a class it is a subclass of) says `p false`: a kind's defaults, as c:fromZero. */
-export function kindSaysFalse(ctx: RuleContext, chart: Term, p: string): boolean {
+/** Whether the chart's class (or a class it is a subclass of) says `p value`: a kind's defaults, as c:fromZero false or c:polar true. */
+export function kindSays(ctx: RuleContext, chart: Term, p: string, value: string): boolean {
   const seen = new Set<string>()
   const up = (t: Term): boolean => {
     if (seen.has(t.value)) return false
     seen.add(t.value)
-    return ctx.objects(t, p).some((v) => v.value === 'false') || ctx.objects(t, NS.rdfs + 'subClassOf').some(up)
+    return ctx.objects(t, p).some((v) => v.value === value) || ctx.objects(t, NS.rdfs + 'subClassOf').some(up)
   }
   return ctx.objects(chart, RDF_TYPE).some(up)
 }
@@ -178,7 +178,7 @@ const layout: FnRule = (ctx, focus) => {
   }
   o.t(first.node, c('first'), ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
   // The value scale spans every point's ends, and zero unless the kind says otherwise (c:fromZero false).
-  const zero = kindSaysFalse(ctx, focus, c('fromZero')) ? [] : [0]
+  const zero = kindSays(ctx, focus, c('fromZero'), 'false') ? [] : [0]
   const writeScale = (local: string, link: string, lo: number, hi: number) => {
     const s = niceScale(lo, hi)
     const scale = o.node(local)
@@ -197,6 +197,16 @@ const layout: FnRule = (ctx, focus) => {
   if (xs.length) writeScale('xscale', 'xScale', Math.min(...zero, ...xs), Math.max(...zero, ...xs))
   const zs = points.filter((p) => p.z !== undefined).map((p) => p.z!)
   if (zs.length) o.t(focus, c('sizeMax'), dbl(Math.max(...zs)))
+  // A polar kind (a pie): each point's share of the positive total, and where it starts (the shares before it).
+  if (kindSays(ctx, focus, c('polar'), 'true')) {
+    const positive = (p: Point) => (p.v > 0 ? p.v : 0)
+    const total = points.reduce((a, p) => a + positive(p), 0)
+    o.t(focus, c('total'), dbl(total))
+    const order = (p: Point) => p.si * 1000000 + p.ci
+    if (total > 0) for (const p of points) {
+      o.t(p.node, c('from'), dbl(points.filter((q) => order(q) < order(p)).reduce((a, q) => a + positive(q), 0) / total)).t(p.node, c('share'), dbl(positive(p) / total))
+    }
+  }
   return o.quads
 }
 
@@ -272,24 +282,27 @@ export function pointWords(ctx: RuleContext, point: NamedNode, chart: Term): str
   const series = ctx.object(point, c('series'))
   const many = !!ctx.object(chart, C.seriesVariable) || !!ctx.object(chart, C.legend)
   const head = [str(ctx.object(point, c('category'))) ?? '', many && series ? str(ctx.object(series, C.label)) ?? '' : ''].filter((x) => x !== '').join(' · ')
-  return `${head}: ${measures(ctx, chart, Number(str(ctx.object(point, c('value')))), numberOf(ctx.object(point, c('x'))), numberOf(ctx.object(point, c('size'))))}`
+  const share = numberOf(ctx.object(point, c('share')))
+  const percent = share === undefined ? '' : ` (${formatNumber(share, formatLocale(ctx.languages), 'style=percent;maximumFractionDigits=1')})`
+  return `${head}: ${measures(ctx, chart, Number(str(ctx.object(point, c('value')))), numberOf(ctx.object(point, c('x'))), numberOf(ctx.object(point, c('size'))))}${percent}`
 }
 
-/** The custom properties every point writes: its category, value, base, next point, and color. */
-export function pointStyle(ctx: RuleContext, point: NamedNode): string {
+/** The custom properties every point writes: its category, value, base, next point, x, size, share, and color (by its series, or its category in a pie). */
+export function pointStyle(ctx: RuleContext, point: NamedNode, colorBy: 'seriesIndex' | 'categoryIndex' = 'seriesIndex'): string {
   const n = (p: string) => str(ctx.object(point, c(p)))
   const parts = [`--i: ${n('categoryIndex')}`, `--s: ${n('seriesIndex')}`, `--r: ${n('rank') ?? 0}`, `--v: ${cssNumber(Number(n('value')))}`, `--b: ${cssNumber(Number(n('base') ?? 0))}`]
   if (n('nextValue') !== undefined) parts.push(`--nv: ${cssNumber(Number(n('nextValue')))}`, `--nb: ${cssNumber(Number(n('nextBase') ?? 0))}`)
   if (n('x') !== undefined) parts.push(`--x: ${cssNumber(Number(n('x')))}`)
   if (n('size') !== undefined) parts.push(`--z: ${cssNumber(Number(n('size')))}`)
-  parts.push(`--color: ${seriesColor(Number(n('seriesIndex')))}`)
+  if (n('share') !== undefined) parts.push(`--from: ${cssNumber(Number(n('from')))}`, `--share: ${cssNumber(Number(n('share')))}`)
+  parts.push(`--color: ${seriesColor(Number(n(colorBy)))}`)
   return parts.join('; ')
 }
 
 /** A point: a list item (a tab stop when it is the first) holding its marks, its words hidden on screen, and its tooltip. */
-export function pointItem(ctx: RuleContext, o: Out, point: NamedNode, chart: Term, cls: string, marks: NamedNode[]) {
+export function pointItem(ctx: RuleContext, o: Out, point: NamedNode, chart: Term, cls: string, marks: NamedNode[], colorBy: 'seriesIndex' | 'categoryIndex' = 'seriesIndex') {
   const words = pointWords(ctx, point, chart)
-  const li = o.el('root', 'Li', { class: `sem-point ${cls}`, style: pointStyle(ctx, point), tabindex: ctx.object(point, c('first')) ? '0' : '-1' }, [
+  const li = o.el('root', 'Li', { class: `sem-point ${cls}`, style: pointStyle(ctx, point, colorBy), tabindex: ctx.object(point, c('first')) ? '0' : '-1' }, [
     ...marks,
     o.el('words', 'Span', { class: 'sem-visually-hidden' }, [o.text('words-text', words)]),
   ])
@@ -329,6 +342,38 @@ const scatterPoint: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** A pie's slice: a wedge from where the shares before it end, as wide as its share, in its category's color. */
+const slicePoint: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const chart = ctx.object(focus, c('inChart'))
+  if (!chart) return o.quads
+  pointItem(ctx, o, focus, chart, 'sem-slice-point', [o.el('slice', 'Span', { class: 'sem-slice', 'aria-hidden': 'true' })], 'categoryIndex')
+  return o.quads
+}
+
+/** A pie's frame: the pie (its slices, a donut's total in the hole), and a key of its categories in their colors. */
+const pieFrame: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const msg = seriesMessage(ctx, focus)
+  if (msg !== undefined) return message(ctx, focus, msg)
+  const categories = ctx
+    .match(null, c('inChart'), focus)
+    .map((q) => q.subject as NamedNode)
+    .filter((n) => ctx.match(n, RDF_TYPE, c('ChartCategory')).length)
+    .map((n) => ({ i: Number(str(ctx.object(n, c('index')))), label: str(ctx.object(n, C.label)) ?? '' }))
+    .sort((a, b) => a.i - b.i)
+  const total = numberOf(ctx.object(focus, c('total')))
+  const hole = kindSays(ctx, focus, c('hole'), 'true') && total !== undefined
+    ? [o.el('total', 'Span', { class: 'sem-pie-total', 'aria-hidden': 'true' }, [o.text('total-text', valueText(ctx, focus, total))])]
+    : []
+  const pie = o.el('pie', 'Div', { class: 'sem-pie' }, [o.el('marks', 'Ol', { class: 'sem-chart-marks', 'aria-label': labelOf(ctx, focus) }), ...hole])
+  const keys = o.el('keys', 'Ul', { class: 'sem-legend' }, categories.map(({ i, label }) =>
+    o.el(`key-${i}`, 'Li', {}, [o.el(`key-${i}-swatch`, 'I', { style: `background: ${seriesColor(i)}`, 'aria-hidden': 'true' }), o.text(`key-${i}-text`, label)]),
+  ))
+  o.renders(o.el('root', 'Figure', {}, [pie, keys]))
+  return o.quads
+}
+
 export const seriesFunctions: Record<string, FnRule> = {
   'series:plan': plan,
   'series:layout': layout,
@@ -337,4 +382,6 @@ export const seriesFunctions: Record<string, FnRule> = {
   'series:area-point': areaPoint,
   'series:column-point': columnPoint,
   'series:scatter-point': scatterPoint,
+  'series:slice-point': slicePoint,
+  'series:pie-frame': pieFrame,
 }

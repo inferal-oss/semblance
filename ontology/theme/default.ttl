@@ -1619,6 +1619,55 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "border-width" ; sty:raw "1.5px" ] ,
                  [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--color) 72%, transparent)" ] .
 
+# A pie: a square of slices beside its key. A slice is a conic wedge from --from, --share of the turn, in its
+# category's color, masked to the circle (no theme's corners reach it) and clipped to its wedge (so hovering
+# finds the slice under the pointer); right to left the slices run counter-clockwise. A donut's hole holds the total.
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:raw "12px 24px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ; sty:part ".sem-pie" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "inline-size" ; sty:raw "min(100%, 200px)" ] ,
+                 [ sty:property "aspect-ratio" ; sty:raw "1" ] ,
+                 [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "place-items" ; sty:raw "center" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ; sty:part ".sem-chart-marks" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ; sty:part ".sem-pie-total" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "font-size" ; sty:raw "15px" ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SlicePoint ; sty:part ".sem-slice" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "mask" ; sty:raw "radial-gradient(closest-side, #000 calc(100% - 0.5px), transparent 100%)" ] ,
+                 [ sty:property "background" ; sty:raw "conic-gradient(from calc(var(--from) * 1turn), var(--color) 0 calc(var(--share) * 1turn), transparent 0)" ] ,
+                 [ sty:property "clip-path" ; sty:raw "polygon(50% 50%, calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.125) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.125) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.25) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.25) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.375) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.375) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.5) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.5) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.625) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.625) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.75) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.75) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.875) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.875) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 1) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 1) * 1turn))))" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "auto" ] ,
+                 [ sty:property "transition" ; sty:raw "scale 120ms" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SlicePoint ; sty:part ".sem-slice:dir(rtl)" ;
+    sty:declares [ sty:property "scale" ; sty:raw "-1 1" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SlicePoint ; sty:part ".sem-slice" ; sty:state ":is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "scale" ; sty:raw "1.05" ] ,
+                 [ sty:property "filter" ; sty:raw "drop-shadow(0 0 2px var(--sem-text))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SlicePoint ; sty:part ".sem-slice:dir(rtl)" ; sty:state ":is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "scale" ; sty:raw "-1.05 1.05" ] .
+[] a sty:StyleRule ; sty:appliesTo c:DonutChart ; sty:part ".sem-slice" ;
+    sty:declares [ sty:property "mask" ; sty:raw "radial-gradient(closest-side, transparent 58%, #000 calc(58% + 0.5px) calc(100% - 0.5px), transparent 100%)" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" ] ,

@@ -1523,10 +1523,10 @@ WHERE {
 # Numbers in custom properties are written plainly to four decimals, so no engine's float noise shows.
 
 c:SeriesChart a owl:Class ; rdfs:subClassOf c:RowChart ;
-    rdfs:comment "A row chart drawn from minted series, categories and points (c:SeriesPlan, c:SeriesLayout); its kinds say how a point is drawn (c:pointClass)."@en .
-c:AxisChart a owl:Class ; rdfs:subClassOf c:SeriesChart ;
-    rdfs:comment "A series chart on a value axis (gridlines and ticks) over its categories, with a legend."@en ;
+    rdfs:comment "A row chart drawn from minted series, categories and points (c:SeriesPlan, c:SeriesLayout); its kinds say how a point is drawn (c:pointClass)."@en ;
     key:navigation c:ChartNavigation .
+c:AxisChart a owl:Class ; rdfs:subClassOf c:SeriesChart ;
+    rdfs:comment "A series chart on a value axis (gridlines and ticks) over its categories, with a legend."@en .
 c:ChartNavigation a key:Navigation ; key:items ".sem-point" ; key:orientation key:Horizontal .
 c:ChartSeries a owl:Class ; rdfs:subClassOf sem:Component ;
     rdfs:comment "Internal: a series of a series chart (c:inChart), minted by c:SeriesPlan: its legend item."@en ;
@@ -1755,8 +1755,8 @@ c:SeriesLayout-fn a sem:Rule ; sem:implements c:SeriesLayout ; sem:function "ser
 c:SeriesLayout-sparql a sem:Rule ; sem:implements c:SeriesLayout ; sem:needsExtension sx:Math , sx:Locale ; sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?p c:base ?base ; c:rank ?rank ; c:nextValue ?nv ; c:nextBase ?nb ; c:first ?first .
-  ?chart ?scaleLink ?scale ; c:sizeMax ?zmax . ?scale a c:ValueScale ; c:min ?min ; c:max ?max ; c:tick ?tick . ?tick c:at ?at ; c:index ?k .
+  ?p c:base ?base ; c:rank ?rank ; c:nextValue ?nv ; c:nextBase ?nb ; c:first ?first ; c:from ?from ; c:share ?share .
+  ?chart ?scaleLink ?scale ; c:sizeMax ?zmax ; c:total ?total . ?scale a c:ValueScale ; c:min ?min ; c:max ?max ; c:tick ?tick . ?tick c:at ?at ; c:index ?k .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:SeriesChart .
@@ -1822,6 +1822,25 @@ WHERE {
     { SELECT (MAX(?pz) AS ?zmax) WHERE { ?pzn a c:ChartPoint ; c:inChart $this ; c:size ?pz } }
     FILTER(BOUND(?zmax))
     BIND($this AS ?chart)
+  } UNION {
+    # A polar kind (c:polar true, a pie): the positive total, each point's share of it, and where it starts (the shares before it).
+    FILTER EXISTS { $this a/rdfs:subClassOf* ?polarKind . ?polarKind c:polar true }
+    FILTER EXISTS { ?anyPoint a c:ChartPoint ; c:inChart $this }
+    { SELECT (SUM(IF(?tv > 0, ?tv, 0e0)) AS ?total0) WHERE { ?tp a c:ChartPoint ; c:inChart $this ; c:value ?tv } }
+    LATERAL {
+      { BIND($this AS ?chart) BIND(?total0 AS ?total) }
+      UNION {
+        FILTER(?total0 > 0)
+        { SELECT ?p ?pv (SUM(COALESCE(?bv, 0e0)) AS ?cum) WHERE {
+          ?p a c:ChartPoint ; c:inChart $this ; c:seriesIndex ?psi ; c:categoryIndex ?pci ; c:value ?pv .
+          OPTIONAL {
+            ?q a c:ChartPoint ; c:inChart $this ; c:seriesIndex ?qsi ; c:categoryIndex ?qci ; c:value ?qv
+            FILTER(?qsi * 1000000 + ?qci < ?psi * 1000000 + ?pci) BIND(IF(?qv > 0, ?qv, 0e0) AS ?bv)
+          }
+        } GROUP BY ?p ?pv }
+        BIND(?cum / ?total0 AS ?from) BIND(IF(?pv > 0, ?pv, 0e0) / ?total0 AS ?share)
+      }
+    }
   }
   }
 }""" .
@@ -1971,7 +1990,7 @@ WHERE {
   $this a c:AreaPoint ; c:inChart ?chart ; c:value ?v ; c:seriesIndex ?si ; c:categoryIndex ?ci ; c:category ?cat0 ; c:series ?series .
   ?series c:label ?seriesLabel .
   OPTIONAL { $this c:base ?b0 } OPTIONAL { $this c:rank ?rank0 } OPTIONAL { $this c:nextValue ?nv } OPTIONAL { $this c:nextBase ?nb0 }
-  OPTIONAL { $this c:x ?px } OPTIONAL { $this c:size ?pz }
+  OPTIONAL { $this c:x ?px } OPTIONAL { $this c:size ?pz } OPTIONAL { $this c:from ?pfrom ; c:share ?pshare }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
   OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
@@ -1988,10 +2007,12 @@ WHERE {
   BIND(IF(BOUND(?px), CONCAT(COALESCE(STR(?xLabel0), STR(?xLabel1), STR(?xLabel2), ""), " ", sx:formatNumber(?px, ?locale, "maximumFractionDigits=2"), ", "), "") AS ?xPart)
   BIND(IF(BOUND(?pz), CONCAT(", ", COALESCE(STR(?zLabel0), STR(?zLabel1), STR(?zLabel2), ""), " ", sx:formatNumber(?pz, ?locale, "maximumFractionDigits=2")), "") AS ?zPart)
   BIND(CONCAT(?xPart, sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)), ?zPart) AS ?measures)
-  BIND(CONCAT(?head, ": ", ?measures) AS ?words)
+  BIND(IF(BOUND(?pshare), CONCAT(" (", sx:formatNumber(?pshare, ?locale, "style=percent;maximumFractionDigits=1"), ")"), "") AS ?percent)
+  BIND(CONCAT(?head, ": ", ?measures, ?percent) AS ?words)
   BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
     IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     IF(BOUND(?px), CONCAT("; --x: ", sx:formatNumber(?px + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""), IF(BOUND(?pz), CONCAT("; --z: ", sx:formatNumber(?pz + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
+    IF(BOUND(?pshare), CONCAT("; --from: ", sx:formatNumber(?pfrom + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --share: ", sx:formatNumber(?pshare + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     "; --color: var(--sem-series-", STR(xsd:integer(?si - FLOOR(?si / 6) * 6 + 1)), ")") AS ?pointStyle)
   BIND(STR($this) AS ?me)
   VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("area" rdfhtml:Span "sem-area" 0) ("line" rdfhtml:Span "sem-segment" 1) ("dot" rdfhtml:Span "sem-dot" 2) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
@@ -2038,7 +2059,7 @@ WHERE {
   $this a c:ColumnPoint ; c:inChart ?chart ; c:value ?v ; c:seriesIndex ?si ; c:categoryIndex ?ci ; c:category ?cat0 ; c:series ?series .
   ?series c:label ?seriesLabel .
   OPTIONAL { $this c:base ?b0 } OPTIONAL { $this c:rank ?rank0 } OPTIONAL { $this c:nextValue ?nv } OPTIONAL { $this c:nextBase ?nb0 }
-  OPTIONAL { $this c:x ?px } OPTIONAL { $this c:size ?pz }
+  OPTIONAL { $this c:x ?px } OPTIONAL { $this c:size ?pz } OPTIONAL { $this c:from ?pfrom ; c:share ?pshare }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
   OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
@@ -2055,10 +2076,12 @@ WHERE {
   BIND(IF(BOUND(?px), CONCAT(COALESCE(STR(?xLabel0), STR(?xLabel1), STR(?xLabel2), ""), " ", sx:formatNumber(?px, ?locale, "maximumFractionDigits=2"), ", "), "") AS ?xPart)
   BIND(IF(BOUND(?pz), CONCAT(", ", COALESCE(STR(?zLabel0), STR(?zLabel1), STR(?zLabel2), ""), " ", sx:formatNumber(?pz, ?locale, "maximumFractionDigits=2")), "") AS ?zPart)
   BIND(CONCAT(?xPart, sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)), ?zPart) AS ?measures)
-  BIND(CONCAT(?head, ": ", ?measures) AS ?words)
+  BIND(IF(BOUND(?pshare), CONCAT(" (", sx:formatNumber(?pshare, ?locale, "style=percent;maximumFractionDigits=1"), ")"), "") AS ?percent)
+  BIND(CONCAT(?head, ": ", ?measures, ?percent) AS ?words)
   BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
     IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     IF(BOUND(?px), CONCAT("; --x: ", sx:formatNumber(?px + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""), IF(BOUND(?pz), CONCAT("; --z: ", sx:formatNumber(?pz + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
+    IF(BOUND(?pshare), CONCAT("; --from: ", sx:formatNumber(?pfrom + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --share: ", sx:formatNumber(?pshare + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     "; --color: var(--sem-series-", STR(xsd:integer(?si - FLOOR(?si / 6) * 6 + 1)), ")") AS ?pointStyle)
   BIND(STR($this) AS ?me)
   VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("bar" rdfhtml:Span "sem-bar" 0) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
@@ -2114,7 +2137,7 @@ WHERE {
   $this a c:ScatterPoint ; c:inChart ?chart ; c:value ?v ; c:seriesIndex ?si ; c:categoryIndex ?ci ; c:category ?cat0 ; c:series ?series .
   ?series c:label ?seriesLabel .
   OPTIONAL { $this c:base ?b0 } OPTIONAL { $this c:rank ?rank0 } OPTIONAL { $this c:nextValue ?nv } OPTIONAL { $this c:nextBase ?nb0 }
-  OPTIONAL { $this c:x ?px } OPTIONAL { $this c:size ?pz }
+  OPTIONAL { $this c:x ?px } OPTIONAL { $this c:size ?pz } OPTIONAL { $this c:from ?pfrom ; c:share ?pshare }
   ?viewer l10n:formatLocale ?locale .
   OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
   OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
@@ -2131,10 +2154,12 @@ WHERE {
   BIND(IF(BOUND(?px), CONCAT(COALESCE(STR(?xLabel0), STR(?xLabel1), STR(?xLabel2), ""), " ", sx:formatNumber(?px, ?locale, "maximumFractionDigits=2"), ", "), "") AS ?xPart)
   BIND(IF(BOUND(?pz), CONCAT(", ", COALESCE(STR(?zLabel0), STR(?zLabel1), STR(?zLabel2), ""), " ", sx:formatNumber(?pz, ?locale, "maximumFractionDigits=2")), "") AS ?zPart)
   BIND(CONCAT(?xPart, sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)), ?zPart) AS ?measures)
-  BIND(CONCAT(?head, ": ", ?measures) AS ?words)
+  BIND(IF(BOUND(?pshare), CONCAT(" (", sx:formatNumber(?pshare, ?locale, "style=percent;maximumFractionDigits=1"), ")"), "") AS ?percent)
+  BIND(CONCAT(?head, ": ", ?measures, ?percent) AS ?words)
   BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
     IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     IF(BOUND(?px), CONCAT("; --x: ", sx:formatNumber(?px + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""), IF(BOUND(?pz), CONCAT("; --z: ", sx:formatNumber(?pz + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
+    IF(BOUND(?pshare), CONCAT("; --from: ", sx:formatNumber(?pfrom + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --share: ", sx:formatNumber(?pshare + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
     "; --color: var(--sem-series-", STR(xsd:integer(?si - FLOOR(?si / 6) * 6 + 1)), ")") AS ?pointStyle)
   BIND(STR($this) AS ?me)
   VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("dot" rdfhtml:Span "sem-dot" 0) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
@@ -2152,6 +2177,171 @@ WHERE {
   BIND(IF(?local = "words", ?words, ?unset) AS ?data)
 }""" .
 
+
+# --- Pie and donut charts ----------------------------------------------------------------------------------
+# A polar kind (c:polar true): c:SeriesLayout gives each point its share of the positive total (c:share) and
+# where it starts (c:from, the shares of the points before it), and the chart its total. A slice is a conic
+# wedge in its category's color (clipped to the wedge, so hovering finds it); the frame is the pie and a key
+# of the categories. A donut (c:hole true) shows the total in its hole. Slices run clockwise from the top,
+# counter-clockwise right to left. A slice says its share.
+c:PieChart a owl:Class ; rdfs:subClassOf c:SeriesChart ;
+    rdfs:label "Pie chart"@en , "Кругова діаграма"@uk , "Kreisdiagramm"@de , "مخطط دائري"@ar ;
+    rdfs:comment "Each category's share of the whole, as a slice in its color, with a key of the categories."@en ;
+    c:pointClass c:SlicePoint ; c:polar true ;
+    sem:slug "pie-chart" .
+c:DonutChart a owl:Class ; rdfs:subClassOf c:PieChart ;
+    rdfs:label "Donut chart"@en , "Кільцева діаграма"@uk , "Ringdiagramm"@de , "مخطط حلقي"@ar ;
+    rdfs:comment "A pie with a hole, the total in it."@en ;
+    c:pointClass c:SlicePoint ; c:hole true ;
+    sem:slug "donut-chart" .
+c:SlicePoint a owl:Class ; rdfs:subClassOf c:ChartPoint ;
+    rdfs:comment "Internal: a slice of a pie: a wedge from c:from, c:share of the whole."@en ;
+    sem:slug "slice-point" .
+c:polar a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:boolean ; rdfs:comment "On a chart kind: its points are shares of a whole (c:from, c:share, the chart's c:total)."@en .
+c:hole a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:boolean ; rdfs:comment "On a polar kind: it has a hole, with the total in it."@en .
+c:from a owl:DatatypeProperty ; rdfs:comment "Derived: where a point's share starts, a fraction of the whole."@en .
+c:share a owl:DatatypeProperty ; rdfs:comment "Derived: a point's share of the whole, a fraction."@en .
+c:total a owl:DatatypeProperty ; rdfs:comment "Derived: the sum of a polar chart's positive values."@en .
+c:SlicePointRendering-fn a sem:Rule ; sem:implements c:SlicePointRendering ; sem:function "series:slice-point" .
+
+c:SlicePointRendering a sem:Rendering ; sem:targets c:SlicePoint ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:inChart .
+c:SlicePointRendering-sparql a sem:Rule ; sem:implements c:SlicePointRendering ; sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a c:SlicePoint ; c:inChart ?chart ; c:value ?v ; c:seriesIndex ?si ; c:categoryIndex ?ci ; c:category ?cat0 ; c:series ?series .
+  ?series c:label ?seriesLabel .
+  OPTIONAL { $this c:base ?b0 } OPTIONAL { $this c:rank ?rank0 } OPTIONAL { $this c:nextValue ?nv } OPTIONAL { $this c:nextBase ?nb0 }
+  OPTIONAL { $this c:x ?px } OPTIONAL { $this c:size ?pz } OPTIONAL { $this c:from ?pfrom ; c:share ?pshare }
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?unitAt l10n:of ?chart ; l10n:unit ?u0 }
+  OPTIONAL { FILTER(!BOUND(?u0)) ?chart c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+  # What it says: "category · series: value unit", the series when the chart has more than one.
+  BIND(EXISTS { ?chart c:seriesVariable ?anySv } || EXISTS { ?chart c:legend ?anyLegend } AS ?many)
+  BIND(STR(?cat0) AS ?cat) BIND(IF(?many, STR(?seriesLabel), "") AS ?ser)
+  BIND(CONCAT(?cat, IF(?cat != "" && ?ser != "", " · ", ""), ?ser) AS ?head)
+  OPTIONAL { ?xLabelAt l10n:of ?chart ; l10n:xLabel ?xLabel0 }
+  OPTIONAL { FILTER(!BOUND(?xLabel0)) ?chart c:xLabel ?xLabel1 FILTER(isLiteral(?xLabel1)) }
+  OPTIONAL { ?chart c:xVariable ?xLabel2 }
+  OPTIONAL { ?zLabelAt l10n:of ?chart ; l10n:sizeLabel ?zLabel0 }
+  OPTIONAL { FILTER(!BOUND(?zLabel0)) ?chart c:sizeLabel ?zLabel1 FILTER(isLiteral(?zLabel1)) }
+  OPTIONAL { ?chart c:sizeVariable ?zLabel2 }
+  BIND(IF(BOUND(?px), CONCAT(COALESCE(STR(?xLabel0), STR(?xLabel1), STR(?xLabel2), ""), " ", sx:formatNumber(?px, ?locale, "maximumFractionDigits=2"), ", "), "") AS ?xPart)
+  BIND(IF(BOUND(?pz), CONCAT(", ", COALESCE(STR(?zLabel0), STR(?zLabel1), STR(?zLabel2), ""), " ", sx:formatNumber(?pz, ?locale, "maximumFractionDigits=2")), "") AS ?zPart)
+  BIND(CONCAT(?xPart, sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)), ?zPart) AS ?measures)
+  BIND(IF(BOUND(?pshare), CONCAT(" (", sx:formatNumber(?pshare, ?locale, "style=percent;maximumFractionDigits=1"), ")"), "") AS ?percent)
+  BIND(CONCAT(?head, ": ", ?measures, ?percent) AS ?words)
+  BIND(CONCAT("--i: ", STR(?ci), "; --s: ", STR(?si), "; --r: ", STR(COALESCE(?rank0, 0)), "; --v: ", sx:formatNumber(?v + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --b: ", sx:formatNumber(COALESCE(?b0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"),
+    IF(BOUND(?nv), CONCAT("; --nv: ", sx:formatNumber(?nv + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --nb: ", sx:formatNumber(COALESCE(?nb0, 0e0) + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
+    IF(BOUND(?px), CONCAT("; --x: ", sx:formatNumber(?px + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""), IF(BOUND(?pz), CONCAT("; --z: ", sx:formatNumber(?pz + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
+    IF(BOUND(?pshare), CONCAT("; --from: ", sx:formatNumber(?pfrom + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4"), "; --share: ", sx:formatNumber(?pshare + 0e0, "en-US", "useGrouping=false;maximumFractionDigits=4")), ""),
+    "; --color: var(--sem-series-", STR(xsd:integer(?ci - FLOOR(?ci / 6) * 6 + 1)), ")") AS ?pointStyle)
+  BIND(STR($this) AS ?me)
+  VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Li UNDEF UNDEF) ("slice" rdfhtml:Span "sem-slice" 0) ("words" rdfhtml:Span "sem-visually-hidden" 9) }
+  FILTER(true)
+  BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
+  BIND(IF(?local = "root", CONCAT("sem-point ", "sem-slice-point"), ?cls0) AS ?cls)
+  BIND(IF(?local = "root", ?el, ?unset) AS ?shownRoot)
+  BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~root"))) AS ?parent)
+  BIND(IF(?local = "root", ?pointStyle, ?unset) AS ?style)
+  BIND(IF(?local = "root", ?words, ?unset) AS ?tip)
+  BIND(IF(?local = "root", IF(EXISTS { $this c:first true }, "0", "-1"), ?unset) AS ?tabindex)
+  BIND(IF(?local = "root" || ?local = "words", ?unset, IRI(CONCAT(?me, "/~", ?local, "-aria-hidden"))) AS ?attr)
+  BIND(IF(BOUND(?attr), "aria-hidden", ?unset) AS ?an) BIND(IF(BOUND(?attr), "true", ?unset) AS ?av)
+  BIND(IF(?local = "words", IRI(CONCAT(?me, "/~words-text")), ?unset) AS ?textNode)
+  BIND(IF(?local = "words", ?words, ?unset) AS ?data)
+}""" .
+
+
+c:PieChartRendering a sem:Rendering ; sem:targets c:PieChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset , c:view ; sem:readsMinted true .
+c:PieChartRendering-fn a sem:Rule ; sem:implements c:PieChartRendering ; sem:function "series:pie-frame" .
+c:PieChartRendering-sparql a sem:Rule ; sem:implements c:PieChartRendering ; sem:needsExtension sx:Locale ; sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:PieChart .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this c:view ?v . ?v sem:select ?anySelect }
+  BIND(COALESCE(?v, c:none) AS ?vNode)
+  LATERAL { OPTIONAL {
+    FILTER(NOT EXISTS { ?vNode a rs:ResultSet })
+    OPTIONAL { ?viewLabelAt0 l10n:of ?vNode ; l10n:label ?viewLabel0 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel0)) ?vNode c:label ?viewLabel1 FILTER(isLiteral(?viewLabel1)) }
+    OPTIONAL { ?viewLabelAt2 l10n:of ?vNode ; l10n:name ?viewLabel2 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel2)) ?vNode rdfs:label ?viewLabel3 FILTER(isLiteral(?viewLabel3)) }
+    BIND(STR(COALESCE(?viewLabel0, ?viewLabel1, ?viewLabel2, ?viewLabel3, REPLACE(STR(?vNode), "^.*[#/]", ""))) AS ?viewLabel)
+  } }
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+  OPTIONAL { FILTER(!BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+  BIND(IF(!BOUND(?v), "No view.",
+       IF(BOUND(?viewLabel), CONCAT(?viewLabel, " is not a maintained view (iv:View, iv:materialize iv:Graph)."),
+       IF(NOT EXISTS { ?v rs:solution ?anyRow }, STR(COALESCE(?e0, ?e1)), ?unset))) AS ?message)
+  LATERAL {
+  {
+    FILTER(BOUND(?message))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(?message AS ?data)
+  } UNION {
+    # The figure: the pie (its slices, a donut's total), and the key.
+    FILTER(!BOUND(?message))
+    OPTIONAL { ?labelAt0 l10n:of $this ; l10n:label ?label0 }
+    OPTIONAL { FILTER(!BOUND(?label0)) $this c:label ?label1 FILTER(isLiteral(?label1)) }
+    OPTIONAL { ?labelAt2 l10n:of $this ; l10n:name ?label2 }
+    OPTIONAL { FILTER(!BOUND(?label2)) $this rdfs:label ?label3 FILTER(isLiteral(?label3)) }
+    BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
+    OPTIONAL { $this c:total ?total }
+    BIND(EXISTS { $this a/rdfs:subClassOf* ?holeKind . ?holeKind c:hole true } AS ?hole)
+    VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
+      ("root" rdfhtml:Figure UNDEF UNDEF UNDEF) ("pie" rdfhtml:Div "sem-pie" "root" 0) ("marks" rdfhtml:Ol "sem-chart-marks" "pie" 0)
+      ("total" rdfhtml:Span "sem-pie-total" "pie" 1) ("keys" rdfhtml:Ul "sem-legend" "root" 1) }
+    FILTER(?local != "total" || (?hole && BOUND(?total)))
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+    BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
+    BIND(IF(BOUND(?parentLocal), IRI(CONCAT(?me, "/~", ?parentLocal)), ?unset) AS ?parent)
+    LATERAL { OPTIONAL {
+      VALUES (?forLocal ?an ?av0) { ("marks" "aria-label" UNDEF) ("total" "aria-hidden" "true") }
+      FILTER(?forLocal = ?local)
+      BIND(IRI(CONCAT(?me, "/~", ?local, "-", ?an)) AS ?attr) BIND(COALESCE(?av0, ?label) AS ?av)
+    } }
+    LATERAL { OPTIONAL {
+      FILTER(?local = "total")
+      ?viewer l10n:formatLocale ?locale .
+      OPTIONAL { ?unitAt l10n:of $this ; l10n:unit ?u0 }
+      OPTIONAL { FILTER(!BOUND(?u0)) $this c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+      BIND(IRI(CONCAT(?me, "/~total-text")) AS ?textNode)
+      BIND(CONCAT(sx:formatNumber(?total, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit))) AS ?data)
+    } }
+  } UNION {
+    # A key per category: its swatch and its name.
+    FILTER(!BOUND(?message))
+    ?cn a c:ChartCategory ; c:inChart $this ; c:index ?i ; c:label ?cl .
+    BIND(CONCAT(?me, "/~key-", STR(?i)) AS ?keyId)
+    VALUES ?part { "item" "swatch" }
+    BIND(IRI(IF(?part = "item", ?keyId, CONCAT(?keyId, "-swatch"))) AS ?el)
+    BIND(IF(?part = "item", rdfhtml:Li, rdfhtml:I) AS ?tag)
+    BIND(IF(?part = "item", IRI(CONCAT(?me, "/~keys")), IRI(?keyId)) AS ?parent)
+    BIND(IF(?part = "item", ?i, 0) AS ?key)
+    BIND(IF(?part = "swatch", CONCAT("background: var(--sem-series-", STR(xsd:integer(?i - FLOOR(?i / 6) * 6 + 1)), ")"), ?unset) AS ?style)
+    BIND(IF(?part = "swatch", IRI(CONCAT(?keyId, "-swatch-aria-hidden")), ?unset) AS ?attr)
+    BIND(IF(?part = "swatch", "aria-hidden", ?unset) AS ?an) BIND(IF(?part = "swatch", "true", ?unset) AS ?av)
+    BIND(IF(?part = "item", IRI(CONCAT(?keyId, "-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "item", STR(?cl), ?unset) AS ?data) BIND(IF(?part = "item", 1, ?unset) AS ?textKey)
+  }
+  }
+}""" .
 # --- Gantt ---------------------------------------------------------------------------------------
 # Dated tasks from a maintained SELECT view (as the bar chart reads it): one row per task, or a row
 # per predecessor of a task. c:GanttPlan reads the rows once and mints the chart's tasks
