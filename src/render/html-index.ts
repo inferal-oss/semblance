@@ -277,6 +277,31 @@ export class HtmlIndex {
   /** The keys an isShown walk has visited (one walk at a time; reused). */
   private seen = new Set<string>()
 
+  /**
+   * Whether a focus would be shown were these components shown (what a choice would show:
+   * sem:OnIntent, sem:anticipates): under one of them, and nothing hidden between, as an inner
+   * switch's other cases are.
+   */
+  shownUnder(focus: string, contents: ReadonlySet<string>): boolean {
+    this.seen.clear()
+    return this.underFrom(focus, contents)
+  }
+
+  private underFrom(key: string, contents: ReadonlySet<string>): boolean {
+    if (contents.has(key)) return true
+    if (this.seen.has(key)) return false
+    this.seen.add(key)
+    // A content's own root is hidden while its case is not chosen: reaching it is enough.
+    const placedAs = this.focusByRoot.get(key)
+    if (placedAs !== undefined && contents.has(placedAs)) return true
+    const n = this.nodes.get(key)
+    if (n?.props.has('hidden')) return false
+    if (placedAs !== undefined && this.underFrom(placedAs, contents)) return true
+    if (n) for (const p of n.parents) if (this.underFrom(p, contents)) return true
+    const chained = this.chainParent.get(key)
+    return chained !== undefined && this.underFrom(chained, contents)
+  }
+
   private shownFrom(key: string, roots: ReadonlySet<string>): boolean {
     if (roots.has(key)) return true
     if (this.seen.has(key)) return false

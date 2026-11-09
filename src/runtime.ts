@@ -456,8 +456,12 @@ export class Runtime {
    * the person shows intent to see (see sem:OnIntent) - where their warmth allows it
    * (on intent or eager). Returns whether work remains.
    */
-  preload(contents: ReadonlySet<string>, budgetMs: number): boolean {
-    this.intent = contents
+  preload(contents: ReadonlySet<string>, budgetMs: number, opts: { anticipated?: boolean } = {}): boolean {
+    // What idle time anticipates (sem:anticipates) is kept, so its views stay maintained; what the
+    // person points at replaces what they pointed at before.
+    if (opts.anticipated) for (const c of contents) this.anticipated.add(c)
+    else this.intent = contents
+    this.intentShown.clear()
     let more = false
     for (const p of this.projections) {
       const warmth = this.warmth.get(p.engine)
@@ -476,11 +480,24 @@ export class Runtime {
 
   /** The contents of the last preload: what the person last showed intent to see. */
   private intent?: ReadonlySet<string>
+  /** The contents idle time prepared ahead of any intent (sem:anticipates). */
+  private readonly anticipated = new Set<string>()
+  /** intended() per projection and focus, until the projection's structure or the contents change. */
+  private readonly intentShown = new Map<Projection, { epoch: number; shown: Map<string, boolean> }>()
 
-  /** Whether a focus is under what the person last showed intent to see, in a projection. */
+  /**
+   * Whether a focus would be shown were what the person last showed intent to see shown, or what
+   * idle time anticipated: under those contents, and not hidden below them (an inner switch's
+   * other cases are not what a click would show).
+   */
   private intended(p: Projection, focus: string): boolean {
-    const contents = this.intent
-    return !!contents && p.index.nearest(focus, (key) => (contents.has(key) ? true : undefined)) === true
+    const intent = this.intent
+    if (!intent?.size && !this.anticipated.size) return false
+    let memo = this.intentShown.get(p)
+    if (!memo || memo.epoch !== p.index.visibility) this.intentShown.set(p, (memo = { epoch: p.index.visibility, shown: new Map() }))
+    let v = memo.shown.get(focus)
+    if (v === undefined) memo.shown.set(focus, (v = (!!intent?.size && p.index.shownUnder(focus, intent)) || (this.anticipated.size > 0 && p.index.shownUnder(focus, this.anticipated))))
+    return v
   }
 
   // --- stalls (src/engine/watchdog.ts) ---------------------------------------------------------------

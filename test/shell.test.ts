@@ -213,3 +213,27 @@ describe('intent preloading (sem:OnIntent)', () => {
     expect(screen.engine.stats.ruleRuns - before).toBeLessThan(40)
   })
 })
+
+describe('anticipation (sem:anticipates)', () => {
+  it('prepares what each section would show in idle time, and only that, so a first click costs a switch', async () => {
+    const { anticipate } = await import('../src/intent.ts')
+    const button = (doc: Document, name: string) => [...doc.querySelectorAll('[data-sem-c=app-bar] button')].find((b) => b.textContent!.trim() === name)!
+    const headings = (doc: Document) => [...doc.querySelectorAll('h1, h2')].map((h) => h.textContent!.trim())
+    // Without it, the first click evaluates the page.
+    const cold = mountShell()
+    let before = cold.screen.engine.stats.ruleRuns
+    cold.fire(button(cold.document, 'Docs'), 'click')
+    const coldRuns = cold.screen.engine.stats.ruleRuns - before
+    // With it, the page is there (built, hidden) before the click.
+    const h = mountShell()
+    anticipate(h.runtime, { idle: (run) => run(1_000), flush: () => h.shell.flush() })
+    expect(headings(h.document)).toContain('Overview')
+    // What the click would show, not every page under the section: the other docs pages stay parked.
+    expect(headings(h.document)).not.toContain('Rules and the engine')
+    before = h.screen.engine.stats.ruleRuns
+    h.fire(button(h.document, 'Docs'), 'click')
+    expect(h.screen.engine.stats.ruleRuns - before).toBeLessThan(coldRuns / 5)
+    const overview = [...h.document.querySelectorAll('h1')].find((x) => x.textContent!.trim() === 'Overview')!
+    expect(overview.closest('[hidden]')).toBeNull()
+  })
+})
