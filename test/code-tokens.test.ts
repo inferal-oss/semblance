@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { engineStore } from '../rdf-engine/host/store.ts'
 import { loadStore } from '../src/node/load.ts'
-import { KEYWORDS, QUOTED_PATTERN, TOKEN_PATTERN, matchTokens, tokenizeCode, tokenizeSparql } from '../src/sparql-tokens.ts'
+import { KEYWORDS, LEXICONS, QUOTED_PATTERN, TOKEN_PATTERN, matchLexicon, matchTokens, tokenizeCode, tokenizeSparql } from '../src/sparql-tokens.ts'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { mountShell, mountShellPrepared, mountSite } from './harness.ts'
@@ -97,6 +97,121 @@ describe('the SPARQL and Turtle lexicon', () => {
   })
 })
 
+// The other languages' lexicons (#429): TypeScript and JavaScript, shell, JSON, HTML, HTTP headers.
+const SAMPLES: Record<string, string[]> = {
+  TypeScriptLexicon: [
+    "import { mount } from '@x/web'\nconst n = 0x1F + 1.5e3 + 10n // a comment\n/* two\nlines */ export default class A extends B { type = `t ${x}\n` ; r = x.type ; s = \"q\\\"\" }",
+    'await mount(element, { root, graphs: [appTtl], onRefused: (e) => report(e.message) })\nruntime.project({ …, policy: authoredPolicy(trusted) })',
+    "a / b /* never closed\n'unterminated\n`also",
+  ],
+  ShellLexicon: [
+    'npm install @inferal-oss/semblance\nnpm install --save-dev vite\n  # indented comment\nif [ -n "$HOME" ]; then echo ${PATH} $1 \'s q\' "a\\"b"; fi',
+    'curl -sS https://x.org/a#b?c=d | jq .x && FOO=1 node -e "1" # done',
+  ],
+  JsonLexicon: ['{ "name": "x", "n": -1.5e3, "ok": true, "none": null, "list": [1, "two", false], "esc": "a\\"b" }', '"unterminated\n{}'],
+  HtmlLexicon: ['<!doctype html>\n<!-- a\ncomment -->\n<a href="/x" data-y="1">Don&apos;t &amp; go</a><br/>\n<input disabled>', '< not a tag > a=b "q'],
+  HttpLexicon: ["Content-Security-Policy:\n  default-src 'self';\n  img-src 'self' data: https://img.example.org/x;\nX-Frame-Options: DENY", 'GET /x HTTP/1.1\nHost: "y'],
+}
+
+describe('the other languages’ lexicons', () => {
+  it('in the graph (c:LanguageLexicon) are the tokenizer’s, each language named once', () => {
+    const store = loadStore('n3')
+    const f = store.factory
+    const values = (s: string, p: string) => store.match(f.namedNode(C + s), f.namedNode(C + p), null).map((q) => q.object.value)
+    const graphLexicons = store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(C + 'LanguageLexicon')).map((q) => q.subject.value.slice(C.length))
+    expect(graphLexicons.sort()).toEqual(LEXICONS.map((l) => l.name).sort())
+    for (const l of LEXICONS) {
+      expect(values(l.name, 'tokenPattern'), l.name).toEqual([l.pattern])
+      expect(values(l.name, 'groupKinds'), l.name).toEqual([l.groups.join(' ')])
+      expect(values(l.name, 'keyword').sort(), l.name).toEqual([...l.keywords].sort())
+      expect(values(l.name, 'language').sort(), l.name).toEqual([...l.languages].sort())
+      // As many groups as kinds, and no more than sx:matches gives a rule (nine).
+      expect(new RegExp(l.pattern + '|').exec('')!.length - 1, l.name).toBe(l.groups.length)
+      expect(l.groups.length).toBeLessThanOrEqual(9)
+    }
+    const names = store.match(null, f.namedNode(C + 'tokenPattern'), null).flatMap((q) => values(q.subject.value.slice(C.length), 'language'))
+    expect(names.length).toBe(new Set(names).size)
+  })
+
+  it('cover every character, in order', () => {
+    for (const l of LEXICONS) for (const text of [...SAMPLES[l.name]!, ...TRICKY]) expect(matchLexicon(text, l).map((t) => t.text).join(''), l.name).toBe(text)
+  })
+
+  it('color what each language has', () => {
+    const show = (s: string, language: string) => tokenizeCode(s, language)!.filter((t) => t.kind !== 'text').map((t) => `${t.kind}:${t.text}`)
+    expect(show("import { a } from 'x' // c\nconst n = 1.5 + x.type + `t\n`", 'ts')).toEqual([
+      'keyword:import', 'keyword:from', "string:'x'", 'comment:// c', 'keyword:const', 'number:1.5', 'string:`t\n`',
+    ])
+    expect(show('npm install --save-dev vite # c\n  echo "$X" $Y', 'shell')).toEqual(['keyword:npm', 'pname:--save-dev', 'comment:# c', 'keyword:\n  echo', 'string:"$X"', 'var:$Y'])
+    expect(show('{ "a": [1, "b", true, null] }', 'json')).toEqual(['pname:"a":', 'number:1', 'string:"b"', 'keyword:true', 'keyword:null'])
+    expect(show('<!-- c --><a href="/x">Hi &amp; bye</a>', 'html')).toEqual(['comment:<!-- c -->', 'keyword:<a', 'pname:href=', 'string:"/x"', 'keyword:>', 'var:&amp;', 'keyword:</a', 'keyword:>'])
+    expect(show("Content-Security-Policy:\n  img-src 'self' https://x.org;", 'http')).toEqual(['pname:Content-Security-Policy:', "string:'self'", 'iri:https://x.org'])
+    expect(tokenizeCode('x', 'text')).toBeUndefined()
+  })
+
+  const built = (['wat', 'rust'] as const).filter((k) => existsSync(join(ROOT, `rdf-engine/build/${k}.wasm`)))
+  it.each(built)('split text in the %s engine as JavaScript does (sx:matches)', (kind) => {
+    const s = engineStore(new WebAssembly.Module(readFileSync(join(ROOT, `rdf-engine/build/${kind}.wasm`))), kind, { timeZone: 'UTC' })
+    const lit = (x: string) => '"' + x.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"'
+    for (const l of LEXICONS) {
+      for (const text of [...SAMPLES[l.name]!, ...TRICKY]) {
+        const rows = s.select(
+          `PREFIX sx: <https://semblance.dev/ns/sparql#> SELECT ?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9 { BIND(${lit(text)} AS ?t) BIND(${lit(l.pattern)} AS ?p) (?t ?p) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) } ORDER BY ?at`,
+          [s.factory.defaultGraph()],
+        )
+        const got = rows.map((r) => `${r.get('at')!.value} ${[1, 2, 3, 4, 5, 6, 7, 8, 9].findIndex((i) => r.get('g' + i))} ${r.get('m')!.value}`)
+        const want: string[] = []
+        let at = 1
+        let last = 0
+        for (const m of text.matchAll(new RegExp(l.pattern, 'g'))) {
+          for (const _ of text.slice(last, m.index)) at++
+          last = m.index!
+          want.push(`${at} ${m.slice(1).findIndex((x) => x !== undefined)} ${m[0]}`)
+        }
+        expect(got, `${l.name}: ${JSON.stringify(text.slice(0, 40))}`).toEqual(want)
+      }
+    }
+  })
+})
+
+// Every code block of the site (docs, component pages, examples' intros, the home page) says a
+// language that is colored; a block that is no language at all (a diagram) is listed here.
+describe('the site’s code blocks', () => {
+  const PLAIN = new Set([UI + 'doc-ov-pipeline'])
+  const demo = () => {
+    const gallery = readdirSync(join(ROOT, 'demo/gallery')).filter((f) => f.endsWith('.ttl')).map((f) => readFileSync(join(ROOT, 'demo/gallery', f), 'utf8'))
+    return loadStore('oxigraph', readFileSync(join(ROOT, 'demo/app.ttl'), 'utf8'), ...gallery)
+  }
+  it('each have a colored language', () => {
+    const store = demo()
+    const rows = store.select(`PREFIX c: <${C}> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      SELECT ?code ?language WHERE { ?code a/rdfs:subClassOf* c:Code ; c:block ?block FILTER(STR(?block) = "true") OPTIONAL { ?code c:language ?language } }`)
+    expect(rows.length).toBeGreaterThan(20)
+    const plain = rows.filter((r) => !PLAIN.has(r.get('code')!.value) && !tokenizeCode('', r.get('language')?.value.toLowerCase())).map((r) => r.get('code')!.value)
+    expect(plain).toEqual([])
+    for (const id of PLAIN) expect(rows.some((r) => r.get('code')!.value === id), id).toBe(true)
+  })
+
+  it('render the same by SPARQL and function rules, on every docs page (wat)', () => {
+    const hs = (['sparql', 'function'] as const).map((prefer) => mountSite('wat', prefer))
+    const f = hs[0]!.store.factory
+    const sections = hs[0]!.store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(UI + 'DocSection')).map((q) => q.subject.value)
+    expect(sections.length).toBeGreaterThan(5)
+    let seen = 0
+    for (const section of sections) {
+      for (const h of hs) {
+        const app = f.namedNode(UI + 'app')
+        h.runtime.apply({ remove: h.store.match(app, f.namedNode(UI + 'docSection'), null), add: [f.quad(app, f.namedNode(UI + 'docSection'), f.namedNode(section))] })
+        h.showPage('Docs')
+      }
+      const [a, b] = hs.map((h) => [...h.document.querySelectorAll('pre[data-sem-c=code]')].map((e) => e.outerHTML))
+      expect(a, section).toEqual(b)
+      seen += a!.filter((x) => x.includes('tok-')).length
+    }
+    expect(seen).toBeGreaterThan(15)
+  })
+})
+
 // On wat (Oxigraph has no sx: relations, so it runs the twins either way).
 describe('colored code, SPARQL and function rules alike (wat)', () => {
   const sites = (group: string) =>
@@ -141,6 +256,15 @@ describe('colored code, SPARQL and function rules alike (wat)', () => {
       }
       set(hs, id, C + 'language', 'Turtle')
       same(hs, id, `${id} as Turtle`)
+      for (const l of LEXICONS) {
+        for (const language of l.languages) {
+          set(hs, id, C + 'language', language)
+          for (const text of SAMPLES[l.name]!) {
+            set(hs, id, C + 'label', text)
+            same(hs, id, `${id} as ${language}: ${JSON.stringify(text.slice(0, 30))}`)
+          }
+        }
+      }
       set(hs, id, C + 'language', 'text')
       same(hs, id, `${id} as plain text`)
       set(hs, id, C + 'language', 'sparql')

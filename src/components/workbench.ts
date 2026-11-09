@@ -4,7 +4,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { mint } from '../rdf.ts'
-import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
+import { tokenizeSparql } from '../sparql-tokens.ts'
 import { queryForm } from '../sparql-forms.ts'
 import { emitTokens, section, topNode } from './turtle.ts'
 import { maintainedRows } from '../view/rows.ts'
@@ -365,7 +365,7 @@ export function suggest(ctx: RuleContext, value: string, caret: number, language
   // Only SPARQL has variables; each language has its own words (c:CodeWord).
   const sparql = language === 'sparql'
   // Plain text (a language the editor does not know) gets no suggestions.
-  if (!tokenizeCode('', language)) return undefined
+  if (language !== 'sparql' && language !== 'turtle') return undefined
   const before = value.slice(0, caret)
   if (inLiteral(before)) return undefined
   const m = /(?:[?$][A-Za-z0-9_]*|[A-Za-z_][\w-]*:[\w-]*|:[\w-]*|[A-Za-z_][\w-]*)$/.exec(before)

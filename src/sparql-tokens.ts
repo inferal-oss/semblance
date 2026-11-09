@@ -119,10 +119,133 @@ export function tokenizeSparql(q: string): SparqlToken[] {
 }
 
 /**
- * Tokens of a code sample in a language that is colored (SPARQL, or Turtle, which is lexically
- * close to it: its directives are keywords too); undefined for any other language.
+ * A language's lexicon, other than SPARQL's and Turtle's (c:LanguageLexicon): a pattern whose matches
+ * are the tokens (an XPath regular expression as much as a JavaScript one, as TOKEN_PATTERN), the kind
+ * of each of its groups in order ("word" is a keyword when it is one of `keywords`, as written, and
+ * text otherwise), and the names of the language it colors (c:language). What no group holds is text.
+ */
+export interface Lexicon {
+  /** Its node in the graph, under c: (c:TypeScriptLexicon). */
+  name: string
+  languages: readonly string[]
+  pattern: string
+  groups: readonly (Exclude<SparqlToken['kind'], 'text'> | 'word')[]
+  keywords: readonly string[]
+}
+
+/** A double-quoted string on one line, with escapes. */
+const STRING2 = '"(?:[^"\\\\\\n]|\\\\.)*"'
+
+/** The languages colored beside SPARQL and Turtle; ontology/components/editor.ttl states the same (a test checks it). */
+export const LEXICONS: readonly Lexicon[] = [
+  {
+    name: 'TypeScriptLexicon',
+    languages: ['typescript', 'ts', 'javascript', 'js'],
+    // Comments, strings (template literals over lines), numbers, words; a member name after a dot
+    // is text (never a keyword), and so is any other run.
+    pattern:
+      '(//[^\\n]*|/\\*[\\s\\S]*?\\*/)' +
+      `|(${STRING2}|'(?:[^'\\\\\\n]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\[\\s\\S])*\`)` +
+      '|(0[xXbBoO][0-9A-Fa-f_]+n?|[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?(?:[eE][+-]?[0-9]+)?n?)' +
+      '|([A-Za-z_$][A-Za-z0-9_$]*)' +
+      '|\\.[A-Za-z_$][A-Za-z0-9_$]*|[^/"\'\`0-9A-Za-z_$.\\n]+|[\\s\\S]',
+    groups: ['comment', 'string', 'number', 'word'],
+    keywords: [
+      'abstract', 'as', 'async', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'declare', 'default', 'delete',
+      'do', 'else', 'enum', 'export', 'extends', 'false', 'finally', 'for', 'from', 'function', 'if', 'implements', 'import', 'in',
+      'instanceof', 'interface', 'keyof', 'let', 'namespace', 'new', 'null', 'of', 'private', 'protected', 'public', 'readonly',
+      'return', 'satisfies', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'type', 'typeof', 'undefined', 'var',
+      'void', 'while', 'yield',
+    ],
+  },
+  {
+    name: 'ShellLexicon',
+    languages: ['shell', 'sh', 'bash'],
+    // Comments, strings, variables, the command a line starts with (a keyword), options, words.
+    pattern:
+      '(#[^\\n]*)|("(?:[^"\\\\]|\\\\[\\s\\S])*"|\'[^\']*\')|(\\$(?:\\{[^}\\n]*\\}|[A-Za-z_][A-Za-z0-9_]*|[0-9@#?$!*-]))' +
+      '|((?:^|\\n)[ \\t]*[A-Za-z_][A-Za-z0-9_.-]*)|(--?[A-Za-z0-9][A-Za-z0-9_-]*)' +
+      '|([A-Za-z0-9_./~:@%+=,][A-Za-z0-9_./~:@%+=,#-]*)|[^#"\'$A-Za-z0-9_./~:@%+=,\\n-]+|[\\s\\S]',
+    groups: ['comment', 'string', 'var', 'keyword', 'pname', 'word'],
+    keywords: ['case', 'do', 'done', 'elif', 'else', 'esac', 'export', 'fi', 'for', 'function', 'if', 'in', 'local', 'return', 'then', 'until', 'while'],
+  },
+  {
+    name: 'JsonLexicon',
+    languages: ['json'],
+    // A member's name (with its colon), strings, numbers, words (true, false, null).
+    pattern:
+      `(${STRING2}[ \\t]*:)|(${STRING2})|(-?[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)|([A-Za-z_][A-Za-z0-9_]*)` +
+      '|[^"0-9A-Za-z_\\n-]+|[\\s\\S]',
+    groups: ['pname', 'string', 'number', 'word'],
+    keywords: ['false', 'null', 'true'],
+  },
+  {
+    name: 'HtmlLexicon',
+    languages: ['html', 'xml'],
+    // Comments, tags (a keyword: from < to the name, and the closing > or />), attribute names (with
+    // their =), double-quoted values, character references; other words and runs are text.
+    pattern:
+      '(<!--[\\s\\S]*?-->)|(</?[A-Za-z][A-Za-z0-9:-]*|<![A-Za-z]+|/?>)|([A-Za-z_:@][A-Za-z0-9_:.-]*=)|("[^"]*")|(&[#A-Za-z0-9]+;)' +
+      '|[A-Za-z_:@][A-Za-z0-9_:.-]*|[^<>"&A-Za-z_:@/\\n]+|[\\s\\S]',
+    groups: ['comment', 'keyword', 'pname', 'string', 'var'],
+    keywords: [],
+  },
+  {
+    name: 'HttpLexicon',
+    languages: ['http'],
+    // A header's name (with its colon) where a line starts, quoted values, URLs; the rest is text.
+    pattern:
+      '((?:^|\\n)[A-Za-z][A-Za-z0-9-]*:)|(\'[^\'\\n]*\'|"[^"\\n]*")|([a-z][a-z0-9+.-]*://[^\\s;,\'"]+)' +
+      '|[A-Za-z][A-Za-z0-9_-]*|[^\'"A-Za-z\\n]+|[\\s\\S]',
+    groups: ['pname', 'string', 'iri'],
+    keywords: [],
+  },
+]
+
+/** The lexicon of a language (by any of its names, in lower case), if it is one of LEXICONS. */
+export function lexiconOf(language: string | undefined): Lexicon | undefined {
+  return language === undefined ? undefined : LEXICONS.find((l) => l.languages.includes(language))
+}
+
+const LEXICON_RE = new Map<Lexicon, { re: RegExp; keywords: Set<string> }>()
+
+/** Every match of a lexicon's pattern, in order, classified: what a SPARQL rule gets from sx:matches. */
+export function matchLexicon(source: string, lexicon: Lexicon): MatchedToken[] {
+  let compiled = LEXICON_RE.get(lexicon)
+  if (!compiled) LEXICON_RE.set(lexicon, (compiled = { re: new RegExp(lexicon.pattern, 'g'), keywords: new Set(lexicon.keywords) }))
+  const out: MatchedToken[] = []
+  let at = 1
+  let last = 0
+  for (const m of source.matchAll(compiled.re)) {
+    for (const _ of source.slice(last, m.index)) at++
+    last = m.index!
+    const group = lexicon.groups[m.slice(1).findIndex((x) => x !== undefined)]
+    const kind = group === undefined ? 'text' : group === 'word' ? (compiled.keywords.has(m[0]) ? 'keyword' : 'text') : group
+    out.push({ kind, text: m[0], start: at })
+  }
+  return out
+}
+
+/** Whether a language is colored: SPARQL, Turtle, or one of LEXICONS. */
+export function isColored(language: string | undefined): boolean {
+  return language === 'sparql' || language === 'turtle' || lexiconOf(language) !== undefined
+}
+
+/**
+ * Every match of the colored language's pattern, in order and classified, keyed by where it starts
+ * (as the SPARQL rule keys them); undefined for a language that is not colored.
+ */
+export function matchCode(source: string, language: string | undefined): MatchedToken[] | undefined {
+  if (language === 'sparql' || language === 'turtle') return matchTokens(source, language === 'turtle')
+  const lexicon = lexiconOf(language)
+  return lexicon && matchLexicon(source, lexicon)
+}
+
+/**
+ * Tokens of a code sample in a language that is colored (SPARQL; Turtle, which is lexically close to
+ * it: its directives are keywords too; or one of LEXICONS); undefined for any other language.
  */
 export function tokenizeCode(source: string, language: string | undefined): SparqlToken[] | undefined {
-  if (language !== 'sparql' && language !== 'turtle') return undefined
-  return merged(matchTokens(source, language === 'turtle'))
+  const tokens = matchCode(source, language)
+  return tokens && merged(tokens)
 }
