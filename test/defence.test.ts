@@ -127,17 +127,17 @@ describe('a mount isolated in a shadow root', () => {
     const box = shadow.firstElementChild as HTMLElement
     expect(box.getAttribute('data-sem-sandbox')).toMatch(/^authored-\d+$/)
     expect(box.textContent).toContain('0 cups')
-    // Its ids are the shadow root's: the page's document does not have them.
+    // Nothing of it is in the page's document: its elements, ids and names are the shadow root's.
     const button = box.querySelector('button')!
-    expect(button.id).not.toBe('')
-    expect(document.getElementById(button.id)).toBeNull()
+    expect(document.querySelector('[data-sem-c]')).toBeNull()
+    expect(document.contains(button)).toBe(false)
     // The whole sheet is the shadow root's, every selector started at the box.
     expect(document.adoptedStyleSheets).toHaveLength(0)
     const [sheet] = shadow.adoptedStyleSheets as unknown as { text: string }[]
     const scope = `[data-sem-sandbox="${box.getAttribute('data-sem-sandbox')}"]`
     expect(sheet!.text).toContain(`${scope} [data-sem-c="ex-tally"]`)
     expect(sheet!.text).not.toMatch(/^\s*:root\b/m)
-    button.dispatchEvent(new window.MouseEvent('click', { bubbles: true, composed: true }))
+    button.dispatchEvent(new window.Event('click', { bubbles: true, composed: true }))
     expect(box.textContent).toContain('1 cups')
     app.unmount()
     expect(shadow.adoptedStyleSheets).toHaveLength(0)
