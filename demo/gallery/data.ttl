@@ -306,7 +306,7 @@ ui:dt-columns-stacked a c:ColumnChart ; c:label "Sales, stacked" ; c:view ui:dt-
     c:stacked true ; c:legend ( ui:dt-sales-web ui:dt-sales-store ui:dt-sales-partner ) .
 ui:dt-columns a c:Flippable ; c:front ui:dt-columns-spec .
 ui:dt-columns-spec a c:Specimen ; c:demonstrates c:ColumnChart ; c:label "Column chart" , "Стовпчикова діаграма"@uk , "Säulendiagramm"@de , "مخطط أعمدة"@ar ;
-    c:help "A bar per series and category of a maintained view: grouped side by side, or with c:stacked true one bar per category with the series on each other. It shares the area chart's parts - the value axis, the legend, the points as list items you move between with the arrow keys - and draws its points as bars." ;
+    c:help "A bar per series and category of a maintained view: grouped side by side, or with c:stacked true one bar per category with the series on each other. It shares the area chart's parts - the value axis, the legend, the points as list items you move between with the arrow keys - and draws its points as bars. A legend item is a toggle: click it to hide its series, again to show it." ;
     c:children ( ui:dt-columns-grouped ui:dt-columns-stacked ) .
 
 ui:dt-city-0 ui:cityName "Kyiv" ; ui:cityRegion "Center" ; ui:cityArea 839 ; ui:cityPeople 2.95 ; ui:cityAge 1482 .

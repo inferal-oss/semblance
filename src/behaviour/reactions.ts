@@ -8,6 +8,7 @@ import { reactions as actionsReactions } from '../components/actions.ts'
 import { reactions as inputsReactions } from '../components/inputs.ts'
 import { reactions as feedbackReactions } from '../components/feedback.ts'
 import { reactions as dataReactions } from '../components/data.ts'
+import { seriesReactions } from '../components/series.ts'
 import { reactions as navigationReactions } from '../components/navigation.ts'
 import { reactions as overlaysReactions } from '../components/overlays.ts'
 import { reactions as workbenchReactions } from '../components/workbench.ts'
@@ -150,6 +151,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...inputsReactions,
   ...feedbackReactions,
   ...dataReactions,
+  ...seriesReactions,
   ...navigationReactions,
   ...overlaysReactions,
   ...galleryReactions,

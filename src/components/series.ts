@@ -6,6 +6,7 @@
 // values, so the theme places the marks: a new scale re-renders the frame, a changed row its point.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
+import type { ReactionFn } from '../behaviour/events.ts'
 import { formatLocale } from '../engine/context.ts'
 import { C, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { compareKeys, tupleKey } from '../render/order-key.ts'
@@ -84,7 +85,7 @@ function mintSeries(ctx: RuleContext, o: Out, focus: NamedNode, rows: Row[]) {
   series.forEach((s, i) => {
     const n = o.node(`series-${md5Key(s.key)}`)
     o.t(n, RDF_TYPE, ctx.nn(c('ChartSeries'))).t(n, c('inChart'), focus).t(n, C.key, s.key).t(n, C.label, s.label).t(n, c('index'), int(ctx, i)).t(n, SEM.orderKey, tupleKey([i]))
-    if (hidden.has(s.key)) o.t(n, c('hidden'), ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
+    if (hidden.has(s.key)) o.t(n, c('seriesHidden'), ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     if (s.secondary) o.t(n, c('secondary'), ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     o.t(o.node('legend'), NS.rdfhtml + 'hasChild', n)
   })
@@ -399,14 +400,28 @@ const frame: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** A legend item: the series' swatch and name. */
+/** A legend item: a toggle button with the series' swatch and name, pressed while the series is shown (c:SeriesToggle hides it). */
 const seriesItem: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   if (!ctx.object(focus, c('inChart'))) return o.quads
   const i = Number(str(ctx.object(focus, c('index'))))
-  o.renders(o.el('root', 'Li', { class: ctx.object(focus, c('secondary')) ? 'sem-secondary' : undefined }, [o.el('swatch', 'I', { style: `background: ${seriesColor(i)}`, 'aria-hidden': 'true' }), o.text('label', str(ctx.object(focus, C.label)) ?? '')]))
+  const toggle = o.el('toggle', 'Button', { type: 'button', 'aria-pressed': ctx.object(focus, c('seriesHidden')) ? 'false' : 'true' }, [
+    o.el('swatch', 'I', { style: `background: ${seriesColor(i)}`, 'aria-hidden': 'true' }),
+    o.text('label', str(ctx.object(focus, C.label)) ?? ''),
+  ])
+  o.renders(o.el('root', 'Li', { class: ctx.object(focus, c('secondary')) ? 'sem-secondary' : undefined }, [toggle]))
   return o.quads
 }
+
+/** c:SeriesToggle: a click on a legend item hides its series in its chart (c:hiddenSeries, by key), or shows it again. */
+const toggleSeries: ReactionFn = (ctx) => {
+  const chart = ctx.object(ctx.target, c('inChart')), key = ctx.object(ctx.target, C.key)
+  if (!chart || !key) return { add: [], remove: [] }
+  const hidden = ctx.match(chart, c('hiddenSeries'), null).filter((q) => q.object.value === key.value)
+  const f = ctx.runtime.store.factory
+  return hidden.length ? { remove: hidden, add: [] } : { remove: [], add: [f.quad(chart as NamedNode, f.namedNode(c('hiddenSeries')), f.literal(key.value))] }
+}
+export const seriesReactions: Record<string, ReactionFn> = { 'series:toggle': toggleSeries }
 
 /** A point's x and size in words, around its value: "xLabel x, value unit, sizeLabel size" (the labels default to the variables' names). */
 export function measures(ctx: RuleContext, chart: Term, y: number, x: number | undefined, z: number | undefined, secondary = false): string {

@@ -1,5 +1,6 @@
 // Mounting series charts in both worlds (SPARQL rules preferred, or their function twins), on screen and as text.
 import { parseHTML } from 'linkedom'
+import { EventBus } from '../src/behaviour/events.ts'
 import { expect } from 'vitest'
 import { loadStore } from '../src/node/load.ts'
 import { MOD, SEM, STY } from '../src/ns.ts'
@@ -37,7 +38,7 @@ export function mount(turtle: string, kind: 'oxigraph' | 'wat', prefer: 'sparql'
   const store = loadStore(kind, turtle)
   const runtime = new Runtime(store)
   const shown = roots.map((root) => {
-    const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+    const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
     const screen = runtime.project({ modality: MOD.Screen, layers: [STY.Layer, SEM.TooltipLayer], prefer, languages, name: root, roots: [EX + root] }, (e) => {
       throw e
     })
@@ -45,7 +46,11 @@ export function mount(turtle: string, kind: 'oxigraph' | 'wat', prefer: 'sparql'
       throw e
     })
     const renderer = new DomRenderer(screen.index, document.getElementById('app')!, EX + root)
-    return { renderer, app: document.getElementById('app')!, screen, text, root }
+    renderer.flush()
+    const bus = new EventBus(runtime, screen, { prefer })
+    bus.attach(renderer, () => renderer.flush())
+    const click = (el: Element) => el.dispatchEvent(new window.Event('click', { bubbles: true }))
+    return { renderer, app: document.getElementById('app')!, screen, text, root, click }
   })
   const f = store.factory
   const lit = (o: string | number) => (typeof o === 'number' ? f.literal(String(o), f.namedNode('http://www.w3.org/2001/XMLSchema#decimal')) : f.literal(o))

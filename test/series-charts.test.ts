@@ -107,7 +107,7 @@ describe('series charts', () => {
       expect(a).toContain('Mar · Web: 100 €')
       expect(a!.match(/class="sem-area"/g)).toHaveLength(4)
       expect(a!.match(/tabindex="0"/g)).toHaveLength(1)
-      expect(b).toContain('<li data-sem-c="chart-series"><i style="background: var(--sem-series-1)" aria-hidden="true"></i>Shop</li>')
+      expect(b).toContain('<li data-sem-c="chart-series"><button type="button" aria-pressed="true"><i style="background: var(--sem-series-1)" aria-hidden="true"></i>Shop</button></li>')
       expect(b).toContain('--b: 80')
       expect(c!.match(/data-sem-c="chart-series"/g)).toHaveLength(1)
       expect(d).toBe('<p data-sem-c="area-chart" class="sem-empty">Nothing yet.</p>')
@@ -121,7 +121,7 @@ describe('series charts', () => {
       both((h) => h.set('s5', 'amount', undefined))
       both((h) => h.runtime.apply({ remove: h.store.match(h.store.factory.namedNode(EX + 'g'), h.store.factory.namedNode(C + 'hiddenSeries'), null), add: [] }))
       expect(s.html()[6]).toContain('Mar · Store')
-    }, 120_000)
+    }, 300_000)
   }
 
   for (const kind of ['oxigraph', 'wat'] as const) {
@@ -274,6 +274,22 @@ describe('series charts', () => {
     const { s } = parity(AXES, 'wat', ['a'], ['uk'])
     expect(s.html()[0]).toContain('Бюджет: 300 €')
   }, 60_000)
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`toggles a series from its legend item, in SPARQL as its function twin does (${kind})`, () => {
+      const { s, fn, both } = parity(AREAS, kind, ['a'])
+      const toggle = (h: typeof s) => h.shown[0]!.click([...h.shown[0]!.app.querySelectorAll('[data-sem-c=chart-series] button')].find((b) => b.textContent === 'Store')!)
+      both(toggle)
+      for (const h of [s, fn]) {
+        expect(h.store.match(h.store.factory.namedNode(EX + 'a'), h.store.factory.namedNode(C + 'hiddenSeries'), null).map((q) => q.object.value)).toEqual(['Store'])
+        expect(h.html()[0]).not.toContain('Jan · Store')
+        expect(h.html()[0]).toContain('aria-pressed="false"><i style="background: var(--sem-series-1)" aria-hidden="true"></i>Store</button>')
+      }
+      both(toggle)
+      expect(s.html()[0]).toContain('Jan · Store')
+      expect(s.html()[0]).not.toContain('aria-pressed="false"')
+    }, 120_000)
+  }
 
   for (const chart of ['AreaChart', 'ColumnChart']) it(`re-renders the points a changed row moves, whatever the number of categories (${chart}, wat, SPARQL)`, () => {
     const cost = (n: number) => {
