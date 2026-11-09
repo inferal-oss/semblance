@@ -56,7 +56,7 @@ export function compileStyles(store: GraphStore, opts: CompileOptions = {}): str
       : cssProblem(policy, text, as)
     if (!why) return true
     const message = `Refused a style${at.termType === 'NamedNode' ? ` of <${at.value}>` : ''}: ${why}.`
-    if (!reported.has(message)) reported.add(message), (opts.onRefused ?? ((e) => console.warn(e.message)))(new Refused(at.value, 'style', message))
+    if (!reported.has(at.value + message)) reported.add(at.value + message), (opts.onRefused ?? ((e) => console.warn(e.message)))(new Refused(at.value, 'style', message))
     return false
   }
   const slug = (t: Term) => {
