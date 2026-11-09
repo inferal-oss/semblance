@@ -186,7 +186,7 @@ npx tsc --noEmit       # typecheck
 | `src/view/` | maintained views (IVM, `docs/IVM.md`) |
 | `src/components/`, `src/layers/` | function twins and reaction functions |
 | `src/web/`, `src/node/` | store loading per platform; `mount`; taking over server-rendered HTML (`src/web/takeover.ts`) |
-| `src/server/`, `semblance.config.ts` | server-side rendering (`docs/SSR.md`): `renderToString`, documents, sites, a warm runtime per request (`warm.ts`); the static build and the request handler are in `src/node/site.ts`, the Vite plugin in `src/node/vite.ts`, the CLI in `bin/` |
+| `src/server/`, `semblance.config.ts` | server-side rendering (`docs/SSR.md`): `renderToString`, documents, sites, a warm runtime per request (`warm.ts`); the static build and the request handler are in `src/node/site.ts`, the Vite plugin in `src/node/vite.ts`, the CLI in `bin/`; Cloudflare Workers in `docs/WORKERS.md`, `examples/workers/` |
 | `src/subset.ts` | the part of the ontology an app uses, shipped in place of the whole (`docs/SUBSET.md`) |
 | `src/sandbox.ts` | live examples: each in a sandbox of its own (host effect) |
 | `src/safety.ts`, `ontology/layers/safety.ttl` | safe authoring: what an authored graph may render (`docs/SAFETY.md`) |

@@ -30,7 +30,8 @@
     "./ontology/*": "./ontology/*",
     "./package.json": "./package.json",
     "./server": "./src/server/index.ts",
-    "./virtual": { "types": "./src/virtual.d.ts" }
+    "./virtual": { "types": "./src/virtual.d.ts" },
+    "./wasm/*": "./rdf-engine/build/*"
   },
   "files": [
     "src",

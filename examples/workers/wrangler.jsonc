@@ -1,0 +1,15 @@
+// examples/hello as a Cloudflare Worker (docs/WORKERS.md).
+{
+  "name": "semblance-hello",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  // N3 (the Turtle parser) uses Node's stream and buffer.
+  "compatibility_flags": ["nodejs_compat"],
+  // The client build of examples/hello (npx vite build --config examples/hello/vite.config.ts). The Worker answers first and hands the
+  // files to the assets binding, so every page is rendered per request.
+  "assets": { "directory": "../hello/dist", "binding": "ASSETS", "run_worker_first": true },
+  // The app's graphs and its subset of the ontology are bundled as text.
+  "rules": [{ "type": "Text", "globs": ["**/*.ttl"], "fallthrough": true }],
+  // In this repository the package is its own source.
+  "alias": { "@inferal-oss/semblance/server": "../../src/server/index.ts" }
+}
