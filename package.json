@@ -74,7 +74,8 @@
     "pretest:full": "npm run engine:build && npm run layout:build",
     "prebuild:single": "npm run engine:build && npm run layout:build",
     "prepack": "npm run engine:build && npm run layout:build",
-    "serve": "node bin/semblance.mjs serve"
+    "serve": "node bin/semblance.mjs serve",
+    "perf:interactions": "tsx scripts/interactions.ts"
   },
   "dependencies": {
     "n3": "^2.13.12",
@@ -90,6 +91,7 @@
     "@types/react-dom": "^19.3.0",
     "binaryen": "^132.0.0",
     "linkedom": "^0.18.14",
+    "playwright-core": "1.57.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
