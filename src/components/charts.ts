@@ -6,6 +6,8 @@ import { labelOf, rdfList, str, text } from './util.ts'
 import { maintainedRows } from '../view/rows.ts'
 import { md5Key } from './data.ts'
 import { compareKeys, tupleKey } from '../render/order-key.ts'
+import { formatLocale } from '../engine/context.ts'
+import { formatNumber } from '../../rdf-engine/host/intl.ts'
 
 const NUMERIC = new Set(['integer', 'decimal', 'double', 'float', 'int', 'long', 'short', 'byte', 'nonNegativeInteger', 'positiveInteger', 'negativeInteger', 'nonPositiveInteger', 'unsignedInt', 'unsignedLong', 'unsignedShort', 'unsignedByte'].map((t) => NS.xsd + t))
 
@@ -237,6 +239,47 @@ const linechart: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+// --- a chart of rows, as text ------------------------------------------------------------------
+
+/**
+ * c:RowChartText: a bar chart, heatmap or line chart as text - its name, then a line per row of its view in
+ * the view's order, "facet · category · series: value unit", the value in the viewer's locale.
+ */
+const rowsText: FnRule = (ctx, focus) => {
+  const view = ctx.object(focus, C.view)
+  if (!view || !ctx.object(view, SEM.select)) return message(ctx, focus, 'No view.')
+  if (!ctx.match(view, RDF_TYPE, NS.rs + 'ResultSet').length) return message(ctx, focus, `${labelOf(ctx, view)} is not a maintained view (iv:View, iv:materialize iv:Graph).`)
+  const solutions = ctx.objects(view, NS.rs + 'solution')
+  const empty = solutions.length ? undefined : text(ctx, focus, C.emptyText)
+  if (empty !== undefined) return message(ctx, focus, empty)
+  const e = encoding(ctx, focus)
+  const legend = rdfList(ctx, ctx.object(focus, C.legend))
+  const seriesLabel = (key: string) => {
+    const s = legend.find((n) => (str(ctx.object(n, C.key)) ?? n.value) === key)
+    return s ? labelOf(ctx, s) : key
+  }
+  ctx.readsLanguage()
+  const locale = formatLocale(ctx.languages)
+  const o = ctx.out(focus)
+  const lines = solutions
+    .map((r) => ({ r, key: tupleKey([ctx.object(r, NS.rs + 'index') ? Number(ctx.object(r, NS.rs + 'index')!.value) : r.value]) }))
+    .sort((a, b) => compareKeys(a.key, b.key))
+    .map(({ r }) => {
+      // A row's value of a variable is the node <row>-<variable> (view.ttl), read by its IRI.
+      const value = (variable: string | undefined) => (variable === undefined ? undefined : str(ctx.object(ctx.nn(`${r.value}-${variable}`), NS.rs + 'value')))
+      const facet = value(e.facet)
+      const series = value(e.series)
+      const head = [facet === undefined ? '' : e.facetLabel.replace('{value}', facet), value(e.category) ?? '', series === undefined ? '' : seriesLabel(series)].filter((x) => x !== '').join(' · ')
+      const raw = value(e.value)
+      const v = raw === undefined || raw.trim() === '' ? NaN : Number(raw)
+      const shown = Number.isNaN(v) ? '…' : `${formatNumber(v, locale, 'maximumFractionDigits=2')}${e.unit ? ' ' + e.unit : ''}`
+      const id = `row-${md5Key(r.value)}`
+      return o.el(id, 'P', {}, [o.text(`${id}-text`, `${head}: ${shown}`)])
+    })
+  o.renders(o.el('root', 'Div', {}, [o.el('title', 'P', {}, [o.text('title-text', labelOf(ctx, focus))]), ...lines]))
+  return o.quads
+}
+
 // --- findings ----------------------------------------------------------------------------------
 
 const PERF = 'https://semblance.dev/ns/perf#'
@@ -288,4 +331,4 @@ const findings: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const chartFunctions: Record<string, FnRule> = { barchart, heatmap, linechart, findings }
+export const chartFunctions: Record<string, FnRule> = { barchart, heatmap, linechart, findings, 'chart:rows-text': rowsText }

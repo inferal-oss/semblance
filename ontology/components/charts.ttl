@@ -38,9 +38,11 @@ c:logScale a owl:DatatypeProperty ; rdfs:range xsd:boolean .
 c:referenceLine a owl:DatatypeProperty ; rdfs:comment "Name of a reference to draw (\"linear\" = proportional growth)."@en .
 
 c:Chart a owl:Class ; rdfs:subClassOf sem:Component .
+c:RowChart a owl:Class ; rdfs:subClassOf c:Chart ;
+    rdfs:comment "A chart of a view's rows in long form: a value (c:valueVariable) of a series (c:seriesVariable) for a category (c:categoryVariable), faceted by c:facetVariable. Its Text modality is a line per row."@en .
 
 c:BarChart a owl:Class ;
-    rdfs:subClassOf c:Chart ;
+    rdfs:subClassOf c:RowChart ;
     rdfs:comment "Horizontal stacked bars: one bar per category, one segment per series, totals at the end. With no rows, its c:emptyText (when it has one)."@en ;
     sem:slug "bar-chart" .
 # A bar chart reads its view's rows where the views runtime keeps them (a maintained SELECT: the view
@@ -458,7 +460,7 @@ WHERE {
 }""" .
 
 c:Heatmap a owl:Class ;
-    rdfs:subClassOf c:Chart ;
+    rdfs:subClassOf c:RowChart ;
     rdfs:comment "A table of values: series down, categories across, cells colored on a log ramp; flagged cells are outlined."@en ;
     sem:slug "heatmap" .
 # Its rows are the maintained view's (as a bar chart's); facets, columns (categories) and rows (series) in
@@ -680,7 +682,7 @@ WHERE {
 }""" .
 
 c:LineChart a owl:Class ;
-    rdfs:subClassOf c:Chart ;
+    rdfs:subClassOf c:RowChart ;
     rdfs:comment "Lines of value against a numeric category (log–log when c:logScale), one per series."@en ;
     sem:slug "line-chart" .
 # Its rows are the maintained view's (as a bar chart's): points with a numeric category (x) and a value
@@ -1384,6 +1386,110 @@ WHERE {
   VALUES ?an { "x1" "x2" "y1" "y2" "x" "y" "d" "cx" "cy" "r" "class" "style" "text-anchor" "dominant-baseline" "viewBox" "role" "aria-label" }
   BIND(IF(?an = "x1", ?a_x1, IF(?an = "x2", ?a_x2, IF(?an = "y1", ?a_y1, IF(?an = "y2", ?a_y2, IF(?an = "x", ?a_x, IF(?an = "y", ?a_y, IF(?an = "d", ?a_d, IF(?an = "cx", ?a_cx, IF(?an = "cy", ?a_cy, IF(?an = "r", ?a_r, IF(?an = "class", ?a_class, IF(?an = "style", ?a_style, IF(?an = "text-anchor", ?a_text_anchor, IF(?an = "dominant-baseline", ?a_dominant_baseline, IF(?an = "viewBox", ?a_viewBox, IF(?an = "role", ?a_role, IF(?an = "aria-label", ?a_aria_label, ?unset))))))))))))))))) AS ?av)
   BIND(IF(BOUND(?av), IRI(CONCAT(STR(?el), "-a-", ?an)), ?unset) AS ?attr)
+}""" .
+
+# --- a chart of rows, as text -----------------------------------------------------------------------
+# The Text modality of a bar chart, heatmap or line chart: its name, then a line per row of its view in
+# the view's order (rs:index, else the rows' IRIs): "facet · category · series: value unit", the facet
+# by its c:facetLabel, the series by its c:legend label, the value in the viewer's l10n:formatLocale
+# (sx:formatNumber), "…" while it is not measured. What it shows instead of a chart is as on screen.
+c:RowChartText a sem:Rendering ; sem:targets c:RowChart ; sem:modality mod:Text ; sem:stratum 0 ;
+    sem:follows c:dataset , ( c:view rs:solution rs:binding ) , ( c:legend [ sem:zeroOrMore rdf:rest ] rdf:first ) .
+c:RowChartText-fn a sem:Rule ; sem:implements c:RowChartText ; sem:function "chart:rows-text" .
+c:RowChartText-sparql a sem:Rule ;
+    sem:implements c:RowChartText ;
+    sem:needsExtension sx:Locale ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; sem:orderKey ?key ; rdfhtml:hasChild ?textNode .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:RowChart .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this c:view ?v . ?v sem:select ?anySelect }
+  BIND(COALESCE(?v, c:none) AS ?vNode)
+  LATERAL { OPTIONAL {
+    FILTER(NOT EXISTS { ?vNode a rs:ResultSet })
+    OPTIONAL { ?viewLabelAt0 l10n:of ?vNode ; l10n:label ?viewLabel0 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel0)) ?vNode c:label ?viewLabel1 FILTER(isLiteral(?viewLabel1)) }
+    OPTIONAL { ?viewLabelAt2 l10n:of ?vNode ; l10n:name ?viewLabel2 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel2)) ?vNode rdfs:label ?viewLabel3 FILTER(isLiteral(?viewLabel3)) }
+    BIND(STR(COALESCE(?viewLabel0, ?viewLabel1, ?viewLabel2, ?viewLabel3, REPLACE(STR(?vNode), "^.*[#/]", ""))) AS ?viewLabel)
+  } }
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+  OPTIONAL { FILTER(!BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+  BIND(IF(!BOUND(?v), "No view.",
+       IF(BOUND(?viewLabel), CONCAT(?viewLabel, " is not a maintained view (iv:View, iv:materialize iv:Graph)."),
+       IF(NOT EXISTS { ?v rs:solution ?anyRow }, STR(COALESCE(?e0, ?e1)), ?unset))) AS ?message)
+  LATERAL {
+  {
+    FILTER(BOUND(?message))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(?message AS ?data)
+  } UNION {
+    # Its name.
+    FILTER(!BOUND(?message))
+    OPTIONAL { $this l10n:label ?label0 }
+    OPTIONAL { FILTER(!BOUND(?label0)) $this c:label ?label1 FILTER(isLiteral(?label1)) }
+    OPTIONAL { ?label2At l10n:of $this ; l10n:name ?label2 }
+    OPTIONAL { FILTER(!BOUND(?label2)) $this rdfs:label ?label3 FILTER(isLiteral(?label3)) }
+    BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
+    VALUES ?local { "root" "title" }
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el)
+    BIND(IF(?local = "root", rdfhtml:Div, rdfhtml:P) AS ?tag)
+    BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
+    BIND(IF(?local = "root", ?unset, ?root) AS ?parent)
+    BIND(IF(?local = "root", ?unset, "\\u0001n0") AS ?key)
+    BIND(IF(?local = "root", ?unset, IRI(CONCAT(?me, "/~title-text"))) AS ?textNode)
+    BIND(IF(?local = "root", ?unset, ?label) AS ?data)
+  } UNION {
+    # A line per row.
+    FILTER(!BOUND(?message))
+    ?viewer l10n:formatLocale ?locale .
+    $this c:view ?view . ?view rs:solution ?r .
+    OPTIONAL { ?r rs:index ?idx }
+    OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+    OPTIONAL { ?unitAt l10n:of $this ; l10n:unit ?u0 }
+    OPTIONAL { FILTER(!BOUND(?u0)) $this c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
+    BIND(STR(?r) AS ?rs)
+    BIND(COALESCE(?idx, ?rs) AS ?pos)
+    # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+    BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+    BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+    BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+    BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+    LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+    LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+    # The series by its label in a declared legend (c:legend, by c:key, else the node), else its value.
+    LATERAL { OPTIONAL {
+      FILTER(BOUND(?s0))
+      $this c:legend ?list . ?list rdf:rest*/rdf:first ?sn .
+      OPTIONAL { ?sn c:key ?k0 } FILTER(COALESCE(STR(?k0), STR(?sn)) = STR(?s0))
+      OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
+      OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+      OPTIONAL { ?slabelAt2 l10n:of ?sn ; l10n:name ?slabel2 }
+      OPTIONAL { FILTER(!BOUND(?slabel2)) ?sn rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+      BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR(?sn), "^.*[#/]", ""))) AS ?slabel)
+    } }
+    OPTIONAL { $this c:facetLabel ?fl0 } BIND(COALESCE(STR(?fl0), "{value}") AS ?fl)
+    BIND(IF(!BOUND(?f0), "", IF(CONTAINS(?fl, "{value}"), CONCAT(STRBEFORE(?fl, "{value}"), STR(?f0), STRAFTER(?fl, "{value}")), ?fl)) AS ?facPart)
+    BIND(COALESCE(STR(?c0), "") AS ?cat)
+    BIND(COALESCE(?slabel, STR(?s0), "") AS ?serPart)
+    BIND(CONCAT(?facPart, IF(?facPart != "" && ?cat != "", " · ", ""), ?cat) AS ?head0)
+    BIND(CONCAT(?head0, IF(?head0 != "" && ?serPart != "", " · ", ""), ?serPart) AS ?head)
+    BIND(xsd:double(?v0) AS ?x)
+    BIND(IF(!BOUND(?x), "…", IF(?unit = "", sx:formatNumber(?x, ?locale, "maximumFractionDigits=2"), CONCAT(sx:formatNumber(?x, ?locale, "maximumFractionDigits=2"), " ", ?unit))) AS ?shown)
+    BIND(CONCAT(?me, "/~row-", SUBSTR(MD5(?rs), 1, 8)) AS ?rowId)
+    BIND(IRI(?rowId) AS ?el) BIND(rdfhtml:P AS ?tag) BIND(?root AS ?parent)
+    BIND(CONCAT("\\u0001n1\\u0001", IF(isNumeric(?pos), "n", "s"), STR(?pos)) AS ?key)
+    BIND(IRI(CONCAT(?rowId, "-text")) AS ?textNode) BIND(CONCAT(?head, ": ", ?shown) AS ?data)
+  }
+  }
 }""" .
 
 # --- Gantt ---------------------------------------------------------------------------------------
