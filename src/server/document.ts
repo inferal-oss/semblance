@@ -5,8 +5,9 @@
 // the one that marks the viewer's platform (src/web/platform.ts: the key hints' spelling) and the one
 // that measures the app bar for what sticks below it (src/web/sticky-top.ts), all before the first
 // paint, and the one that keeps what the visitor does until the client is ready
-// (src/web/takeover.ts). Platform-neutral string work: used by the static build, the request handler
-// and anyone's own server.
+// (src/web/takeover.ts); and, when asked, the Content-Security-Policy that allows those scripts and
+// no others (src/server/csp.ts). Platform-neutral string work: used by the static build, the request
+// handler and anyone's own server.
 import { BOX_ATTRIBUTE } from '../style/scope.ts'
 import { CAPTURE_SCRIPT, SSR_ATTRIBUTE, STYLES_ATTRIBUTE } from '../web/takeover.ts'
 import { PLATFORM_SCRIPT } from '../web/platform.ts'
@@ -14,6 +15,7 @@ import { STICKY_TOP_SCRIPT } from '../web/sticky-top.ts'
 import { COLOR_SCHEME_META, rememberedScript } from '../web/remembered.ts'
 import { documentScheme, firstPaintPlan } from './remembered.ts'
 import type { Rendered } from './render.ts'
+import { type CspOptions, withCsp } from './csp.ts'
 
 export interface DocumentOptions {
   /** The mount element's id in the template (default "app"). */
@@ -26,6 +28,11 @@ export interface DocumentOptions {
   head?: string
   /** Keep events until the client takes over (default true). */
   capture?: boolean
+  /**
+   * Put the recommended Content-Security-Policy (src/server/csp.ts) first in <head>, with the hashes
+   * of the document's inline scripts: true, or the origins and policies the page adds.
+   */
+  csp?: CspOptions | true
 }
 
 const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
@@ -61,7 +68,7 @@ function rememberedHead(doc: string, remembered: Rendered['remembered'], mount: 
  * The document around the root's HTML: everything before it (up to the mount element's opening
  * tag) and after it. The head can go out before the projection is done (renderToStream).
  */
-export function documentParts(template: string, rendered: Pick<Rendered, 'css' | 'lang' | 'dir'> & Partial<Pick<Rendered, 'remembered' | 'box'>>, opts: DocumentOptions = {}): [string, string] {
+export function documentParts(template: string, rendered: Pick<Rendered, 'css' | 'lang' | 'dir'> & Partial<Pick<Rendered, 'remembered' | 'box' | 'html'>>, opts: DocumentOptions = {}): [string, string] {
   const mount = opts.mount ?? 'app'
   let doc = htmlAttributes(template, { lang: rendered.lang, dir: rendered.dir, ...opts.attributes })
   const sheet = opts.stylesheet ?? 'inline'
@@ -79,7 +86,9 @@ export function documentParts(template: string, rendered: Pick<Rendered, 'css' |
   const capture = opts.capture === false ? '' : `<script>${CAPTURE_SCRIPT}</script>`
   // Authored content: the mount element is the box its stylesheet is scoped to (src/style/scope.ts).
   const box = rendered.box ? ` ${BOX_ATTRIBUTE}="${escapeAttr(rendered.box)}"` : ''
-  return [doc.slice(0, m.index) + `${capture}<div id="${mount}"${m[1]} ${SSR_ATTRIBUTE}${box}>`, '</div>' + doc.slice(m.index + m[0].length)]
+  const parts: [string, string] = [doc.slice(0, m.index) + `${capture}<div id="${mount}"${m[1]} ${SSR_ATTRIBUTE}${box}>`, '</div>' + doc.slice(m.index + m[0].length)]
+  // The policy hashes the root's HTML too when it is known (a stream's is not: docs/SAFETY.md).
+  return opts.csp ? withCsp(parts, opts.csp === true ? {} : opts.csp, rendered.html) : parts
 }
 
 /** The document: `template` with `rendered` in its mount element. */

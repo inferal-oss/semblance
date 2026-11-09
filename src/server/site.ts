@@ -6,6 +6,7 @@ import type { FnRule } from '../engine/context.ts'
 import type { HostRenderer } from '../render/hosts.ts'
 import type { GraphStore } from '../store/types.ts'
 import type { SubsetOptions } from '../subset.ts'
+import type { CspOptions } from './csp.ts'
 
 export interface Site {
   /** The component the client mounts: the root of the projection. */
@@ -52,6 +53,11 @@ export interface Site {
   store?: 'wat' | 'rust' | 'oxigraph' | 'hybrid'
   /** The mount element's id in the page (default "app"). */
   mount?: string
+  /**
+   * Give every page the recommended Content-Security-Policy (src/server/csp.ts, docs/SAFETY.md), in
+   * a <meta>: true, or the origins and Trusted Types policies the client adds.
+   */
+  csp?: CspOptions | true
 }
 
 /** Type a site description (semblance.config.ts: export default defineSite({...})). */

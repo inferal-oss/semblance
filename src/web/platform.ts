@@ -21,9 +21,9 @@ export function isApple(nav: NavigatorLike | undefined): boolean {
   return APPLE.test(nav?.userAgentData?.platform || nav?.platform || '')
 }
 
-/** Set the platform switch on `doc`'s root (only Apple platforms are marked). */
-export function markPlatform(doc: Document, nav: NavigatorLike | undefined = globalThis.navigator): void {
-  if (isApple(nav)) doc.documentElement.setAttribute(PLATFORM_ATTRIBUTE, 'apple')
+/** Set the platform switch on `doc`'s root, or on an element `:root` stands for (a shadow root's box); only Apple platforms are marked. */
+export function markPlatform(doc: Document | Element, nav: NavigatorLike | undefined = globalThis.navigator): void {
+  if (isApple(nav)) ('documentElement' in doc ? doc.documentElement : doc).setAttribute(PLATFORM_ATTRIBUTE, 'apple')
 }
 
 /** The inline script a server-rendered page's head carries: markPlatform before the first paint, dependency-free. */

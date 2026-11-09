@@ -8,6 +8,7 @@ import { TUPLE } from '../render/order-key.ts'
 import { H, KEY, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { isTrue, labelOf, str } from '../components/util.ts'
 import { mint } from '../rdf.ts'
+import { deepActive, originOf } from '../web/builtins.ts'
 
 const MODIFIERS = ['mod', 'ctrl', 'alt', 'shift', 'meta']
 
@@ -66,7 +67,7 @@ export function trapTab(e: KeyboardEvent, host: Element): boolean {
   const modal = [...host.querySelectorAll('[aria-modal=true]')].filter((m) => !m.closest('[hidden], [inert]')).at(-1)
   if (!modal) return false
   const parts = ([...modal.querySelectorAll(FOCUSABLE)] as HTMLElement[]).filter((el) => !el.closest('[hidden], [inert]') && (el.getClientRects?.().length ?? 1) > 0)
-  const active = modal.ownerDocument.activeElement
+  const active = deepActive(modal.ownerDocument)
   const first = parts[0] ?? (modal as HTMLElement)
   const last = parts.at(-1) ?? (modal as HTMLElement)
   const to = !modal.contains(active) ? first : e.shiftKey && (active === first || active === modal) ? last : !e.shiftKey && active === last ? first : undefined
@@ -255,7 +256,7 @@ function focusPart(root: Element, part: HTMLElement | undefined) {
  */
 export function navigate(e: KeyboardEvent): boolean {
   if (!NAV_KEYS.has(e.key) || e.altKey || e.ctrlKey || e.metaKey) return false
-  const target = e.target as HTMLElement | null
+  const target = originOf(e) as HTMLElement | null
   const root = target?.closest?.('[data-sem-nav-items]')
   if (!root || target!.closest('input, textarea, select')) return false
   // A menu button: Down / Up open the menu at its first / last item (the click runs its reaction).

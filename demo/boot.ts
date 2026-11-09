@@ -2,6 +2,8 @@ performance.mark('sem:boot')
 // Entry point. The same document boots either the app or, inside a hidden
 // srcdoc iframe owned by the Performance view, a single benchmark cell - so
 // cells run in a fresh realm even when the whole demo is one HTML file.
+// Trusted Types first: the site's policies exist before anything writes to a sink.
+import './trusted-types.ts'
 import { CELL_PREFIX } from './cell-protocol.ts'
 import { hasEngine, startEngine } from '../src/web/engine.ts'
 

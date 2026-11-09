@@ -8,6 +8,7 @@ import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { followDelta, inPlaceKey, readLocations, routesOf, setBase } from '../navigation.ts'
 import { renderDocument, type DocumentOptions } from '../server/document.ts'
+import { withCsp } from '../server/csp.ts'
 import { type Rendered, renderToString, serializeRoot } from '../server/render.ts'
 import type { Site } from '../server/site.ts'
 import { warmRenderer, type WarmRenderer } from '../server/warm.ts'
@@ -202,7 +203,11 @@ export async function buildSite(opts: BuildOptions): Promise<{ pages: number; ms
   const site = await loadSite(opts.config)
   const groups = await siteRouteGroups(site, opts)
   const routes = groups.flat()
-  if (!opts.single) writeFileSync(join(opts.outDir, '404.html'), template.replace(/<\/head>/i, `${opts.head ?? ''}</head>`))
+  if (!opts.single) {
+    // Any address the build did not render: the client renders it (under the same policy).
+    const notFound = template.replace(/<\/head>/i, () => `${opts.head ?? ''}</head>`)
+    writeFileSync(join(opts.outDir, '404.html'), site.csp ? withCsp([notFound, ''], site.csp === true ? {} : site.csp)[0] : notFound)
+  }
   const want = opts.workers ?? (Number(process.env.SEMBLANCE_BUILD_WORKERS) || Math.max(1, Math.min(4, availableParallelism() - 1)))
   const workers = Math.max(1, Math.min(want, Math.ceil(routes.length / 8)))
   log(`semblance: rendering ${routes.length} page${routes.length === 1 ? '' : 's'} with ${workers} worker${workers === 1 ? '' : 's'}`)
@@ -248,7 +253,8 @@ export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?:
   const stylesheet: DocumentOptions['stylesheet'] = job.single ? 'inline' : { href: job.base + 'semblance.css' }
   const write = (route: string, html: string, rendered: Awaited<ReturnType<typeof renderSite>>, graphs?: string[]) => {
     const head = graphs ? job.head + pageGraphsMeta(graphs) + graphs.map((g) => job.graphChunks?.[g]).filter(Boolean).map((f) => `<link rel="modulepreload" crossorigin href="${job.base}${f}">`).join('') : job.head
-    const page = renderDocument(job.template, { ...rendered, html, css: job.single ? rendered.css : undefined }, { mount: site.mount, stylesheet, attributes: rendered.attributes, head })
+    // One self-contained file (its scripts, styles and engine inline, opened from anywhere) carries no policy.
+    const page = renderDocument(job.template, { ...rendered, html, css: job.single ? rendered.css : undefined }, { mount: site.mount, stylesheet, attributes: rendered.attributes, head, csp: job.single ? undefined : site.csp })
     const file = job.single ? join(job.outDir, 'index.html') : pageFile(job.outDir, job.base, route)
     mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, page)
@@ -337,7 +343,7 @@ export function createHandler(opts: HandlerOptions): (request: Request) => Promi
     }
     const address = url.pathname + url.search
     const rendered = warm ? await warm.render(address) : await renderSite(opts.site, address, { ...opts, styles: !!opts.embed }).then((r) => (r.runtime.dispose(), r))
-    const page = renderDocument(template, rendered, { mount: opts.site.mount, stylesheet: opts.embed ? 'inline' : { href: base + 'semblance.css' }, attributes: rendered.attributes })
+    const page = renderDocument(template, rendered, { mount: opts.site.mount, stylesheet: opts.embed ? 'inline' : { href: base + 'semblance.css' }, attributes: rendered.attributes, csp: opts.site.csp })
     return new Response(page, { status: rendered.status, headers: { 'content-type': 'text/html; charset=utf-8' } })
   }
 }

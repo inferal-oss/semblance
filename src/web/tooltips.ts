@@ -10,6 +10,7 @@
 // The surface (anchored-surface.ts) follows the source's text.
 
 import { openSurface, type AnchoredSurface } from './anchored-surface.ts'
+import { deepActive } from './builtins.ts'
 
 /** Rendered with data-sem-tooltip; the effect marks its host so the theme's ::after stands down. */
 const SOURCE = '[data-sem-tooltip]'
@@ -161,7 +162,7 @@ export function attachTooltips(host: Element, owns: (element: Element) => boolea
   // Taking over under a resting pointer or focus: what the ::after was showing goes on showing.
   const under = hoveredSource(host)
   if (under) ask('hovered', sourceOf(under))
-  const active = document.activeElement as HTMLElement | null
+  const active = deepActive(document) as HTMLElement | null
   if (active?.matches?.(SOURCE) && focusVisible(active)) ask('focused', sourceOf(active))
 
   return () => {

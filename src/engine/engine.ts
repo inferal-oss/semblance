@@ -268,6 +268,16 @@ export class Engine {
    * are held instead of evaluated, until the runtime continues or stops them.
    */
   watchdog?: Watchdog
+  /**
+   * How many derived triples this engine may hold (Infinity by default; an authored projection's
+   * policy sets it, safe:maxDerived). Over it, a watched run stops at its next check, as over the
+   * turn's budget.
+   */
+  maxDerived = Infinity
+  /** Whether the output is over maxDerived (blamed on the turn when it binds). */
+  private overOutput(wd: Watchdog): boolean {
+    return this.stats.derivedAdded - this.stats.derivedRemoved > this.maxDerived && wd.bounded && wd.over('output')
+  }
   /** Pairs set aside by a suspended run, by stratum: still to evaluate. */
   private held = new Map<number, Map<Rule, Set<string>>>()
   private heldPairs = 0
@@ -1337,7 +1347,7 @@ export class Engine {
               if (foci.size) this.hold(rule, foci)
               continue
             }
-            if (wd.due()) {
+            if (wd.due() || this.overOutput(wd)) {
               stop = rule
               if (foci.size) this.hold(rule, foci)
               continue
@@ -1582,7 +1592,7 @@ export class Engine {
         continue
       }
       this.commit(rule, focus, quads)
-      if (wd.check()) left = { foci: new Set(), interrupted: false }
+      if (wd.check() || this.overOutput(wd)) left = { foci: new Set(), interrupted: false }
     }
     return left?.foci.size ? left : undefined
   }

@@ -4,6 +4,7 @@
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # Safety: what a rendering from an untrusted author (a person, a page, a model) may contain, so a
 # graph can describe an interface without running code or reaching outside what it renders.
@@ -81,6 +82,22 @@ safe:fetchingFunction a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
 safe:refusedProperty a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
     rdfs:comment "A CSS property that binds behaviour or code, refused whatever its value."@en .
 
+# Work budgets: an authored graph brings its own rules, so what it may cost is bounded too. A turn
+# (src/engine/watchdog.ts: everything one input causes) of a runtime that projects authored content
+# stops at the first of its time budget, its evaluation budget, or a projection holding more derived
+# triples than its output budget; its held work is then dropped, as the watchdog's sem:Stop drops it
+# (every derived triple still comes from a complete evaluation, and what is left is counted out of
+# date), and the host reports it (a Refused of kind "budget"). A string the policy checks (an
+# attribute, an input, a piece of CSS) longer than safe:maxLength is refused without being read.
+safe:budget a owl:DatatypeProperty ; rdfs:domain safe:Policy ; rdfs:range xsd:duration ;
+    rdfs:comment "How long a turn of authored content may run (the watchdog's budget, src/engine/watchdog.ts)."@en .
+safe:maxEvaluations a owl:DatatypeProperty ; rdfs:domain safe:Policy ; rdfs:range xsd:integer ;
+    rdfs:comment "How many rule evaluations (a rule for a focus) a turn of authored content may make: deterministic, unlike the time budget, so a server renders the same at any load."@en .
+safe:maxDerived a owl:DatatypeProperty ; rdfs:domain safe:Policy ; rdfs:range xsd:integer ;
+    rdfs:comment "How many derived triples an authored projection may hold (its output size): over it, each turn stops at its first check."@en .
+safe:maxLength a owl:DatatypeProperty ; rdfs:domain safe:Policy ; rdfs:range xsd:integer ;
+    rdfs:comment "The longest string the policy checks: an attribute value, an input, a piece of CSS. A longer one is refused unread."@en .
+
 # The policy of authored content: what the framework itself emits, and nothing that runs code,
 # loads another document, or names where the page is or what it may run.
 #
@@ -91,6 +108,10 @@ safe:refusedProperty a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
 # except an image's.
 safe:Authored a safe:Policy ;
     rdfs:label "authored"@en ;
+    safe:budget "PT1.5S"^^xsd:duration ;
+    safe:maxEvaluations 200000 ;
+    safe:maxDerived 1000000 ;
+    safe:maxLength 262144 ;
     safe:element
         rdfhtml:A , rdfhtml:Abbr , rdfhtml:Address , rdfhtml:Area , rdfhtml:Article , rdfhtml:Aside ,
         rdfhtml:Audio , rdfhtml:B , rdfhtml:Bdi , rdfhtml:Bdo , rdfhtml:Blockquote , rdfhtml:Br ,
