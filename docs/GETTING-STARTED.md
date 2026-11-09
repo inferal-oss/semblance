@@ -269,6 +269,20 @@ import ontology from 'virtual:semblance/ontology'
 await mount(element, { root: 'https://example.org/hello#page', graphs: [tally, app], ontology })
 ```
 
+## Graphs you do not trust
+
+A graph written by a visitor or a model renders under a policy: pass it as `authored`, and it may
+use the framework's components and your own, but not run script, embed another document or load
+styles and images from elsewhere on its own. What is refused is left out and reported.
+
+```ts
+await mount(element, { root, graphs: [app], authored: [fromTheModel], onRefused: (e) => console.warn(e.message) })
+```
+
+[SAFETY.md](SAFETY.md) (and [Safe authoring](https://semblance.dev/docs/safety/) on the site, with a live
+example) has what is allowed, how the check works, how to extend the policy, and a
+Content Security Policy for the page.
+
 ## Stores
 
 `mount` uses Semblance's own WebAssembly engine (`wat`, about 30 KB) when the build has it, else
@@ -280,5 +294,6 @@ Rust) are there too; `n3` has no SPARQL and runs only function rules. Choose wit
 - [Building components](COMPONENTS.md): rules, reactions, layers, integrating with your app.
 - [PERSISTENCE.md](../PERSISTENCE.md): remembering state (`per:Policy`).
 - [IVM.md](IVM.md): maintained views over streams.
+- [SAFETY.md](SAFETY.md): rendering graphs you do not trust, and a Content Security Policy.
 - The site, <https://semblance.dev>, is itself a Semblance app (`demo/app.ttl`); its Tools
   (⌘.) show the graph, the rules behind any element, the change log and a SPARQL workbench.

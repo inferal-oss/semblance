@@ -60,6 +60,14 @@ describe('the site', () => {
     expect([...document.querySelectorAll('[data-sem-c=bar-chart]')].some((c) => !c.closest('[hidden]'))).toBe(true)
   })
 
+  it('has a Safe authoring section', () => {
+    const { document, value, button, navItem, click } = site()
+    click(button('Docs'))
+    click(navItem('Safe authoring'))
+    expect(value(UI + 'docSection')).toBe(UI + 'DocSafety')
+    expect(document.querySelector('[data-sem-c=heading]:not([hidden] *)')!.textContent).toBe('Safe authoring')
+  })
+
   it('runs the sign-in example: too short, wrong, then right', () => {
     const { document, button, navItem, click, fire, visible, store } = site()
     click(button('Examples'))

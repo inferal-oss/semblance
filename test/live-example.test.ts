@@ -334,7 +334,9 @@ describe('the live examples of the site', () => {
   for (const ex of examples) {
     it(`${ex.iri.replace(UI, 'ui:')} parses and renders, with no problems, on Semblance WASM with SPARQL`, () => {
       const b = buildSandbox(ex.sources, ex.root, { load: (...t) => loadStore('wat', ...t), prefer: 'sparql', withText: ex.withText, languages: ['en'] })
-      expect(b.problems).toEqual([])
+      // The Safe authoring docs' example is there to be refused (test/safety.test.ts checks what): warnings only.
+      if (ex.iri === UI + 'sa-live') expect(b.problems.filter((p) => p.severity !== 'warning')).toEqual([])
+      else expect(b.problems).toEqual([])
       expect(b.sandbox!.screen.index.resolve(ex.root)).toBeDefined()
       for (const s of ex.sources) expect(() => new Parser().parse(completeSource(s.text))).not.toThrow()
     })

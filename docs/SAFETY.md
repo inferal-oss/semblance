@@ -5,6 +5,12 @@ typing in a live example, a page, a model. **Authored content** is rendered unde
 Turtle and SPARQL describe an interface without running code or reaching outside what it renders. The policy is vocabulary (`ontology/layers/safety.ttl`), applied in one place every
 output reads from.
 
+This guide covers who decides what is authored, what an authored graph may and may not do, how the
+check works, how to extend or narrow the policy, what it does not cover and what to put around it.
+The worked examples at the end are each backed by a test. The site's docs have the same guide, with
+a live example to edit: [Safe authoring](https://semblance.dev/docs/safety/)
+(`demo/gallery/_docs.ttl`, `ui:DocSafety`).
+
 ## Trusted and authored
 
 Trust is the host's decision, never the graph's: no triple makes a graph trusted.
@@ -25,6 +31,15 @@ The policy is read from a **trusted** store: one with the ontology and your own 
 author's, which could add to its lists. `mount` reads it from a store of `graphs` alone, kept apart
 from the one `authored` is loaded into; the live examples read it from the ontology alone;
 `authoredPolicy` and `readPolicy` take the store you trust.
+
+Authored is a property of a **projection**, not of triples. A projection with a policy checks
+everything it renders, your own components included: in `mount({ authored })` your app's graphs and
+the author's are one store and one projection, and the policy applies to both. Being in one store
+also means the author's triples can describe your resources (add a child to your page, change a
+label) and its reactions can change any state of the store. What the host's effects do is not part
+of that: they read their configuration from the trusted store alone ([below](#what-it-may-not-do)).
+When the rest matters, give the author a store of its own, as the live examples do
+([Sandboxes](#live-examples-run-in-sandboxes)).
 
 ## What an authored graph may do
 
@@ -95,10 +110,11 @@ from the one `authored` is loaded into; the live examples read it from the ontol
 - **CSS is read as the browser tokenizes it** (css-syntax-3), in one pass, linear in its length:
   strings end where the browser ends them; an unquoted `url(` is one url token up to its `)`; a name
   after a number or a `#` calls no function. What the check could read otherwise than the browser is
-  refused: a comment (inside one a quote starts no string), a string a newline ends, and a bad url
-  (an unquoted `url(` holding a quote, `(`, `\`, a control character or a space before its end).
+  refused: a comment, a string a newline ends, and a bad url (an unquoted `url(` holding a quote,
+  `(`, `\`, a control character or a space before its end).
 - **No reaching outside the authored box:** a part, state or media condition may not name `&` or
-  `:scope`. Authored styles stay in the element the content renders in (below).
+  `:scope`. Authored styles stay in the element the content renders in
+  ([The authored box](#the-authored-box)).
 - **No upload elsewhere:** `file:uploadTo` posts only to the page's own origin, or to an origin the
   host lists (`files: { uploadOrigins: ['https://uploads.example.com'] }`); this holds whether or
   not the graph is authored, since the graph says where and the host says where may be.
@@ -140,50 +156,355 @@ page `renderToString({ policy })` rendered. One scoping applies in all three
 the page's; without it the whole stylesheet is scoped to the box. `Rendered.box` names the box, and
 `renderDocument` marks the mount element with it, so `mount` takes it over in the same box.
 
-## What happens to what is refused
+## How it works
+
+### The policy is a graph, read once
+
+`safe:Authored` is a `safe:Policy` in `ontology/layers/safety.ttl`: lists of element classes
+(`safe:element`), attribute names and prefixes (`safe:attribute`, `safe:attributePrefix`), which
+attributes hold URLs (`safe:urlAttribute`, `safe:urlListAttribute` for `srcset`) and which of those
+load a resource (`safe:resourceAttribute`), URL schemes (`safe:scheme`, and `safe:resourceScheme`
+for resources only), which attributes hold CSS (`safe:styleAttribute`, `safe:cssValueAttribute` for
+SVG paints), the CSS functions that fetch (`safe:fetchingFunction`) and the properties that bind
+code (`safe:refusedProperty`), and the host components and custom elements an author may name.
+
+`readPolicy(store, iri = safe:Authored)` (`src/safety.ts`) reads those triples from a store into a
+`SafetyPolicy` of plain sets; it throws when the IRI is not a `safe:Policy` there.
+`authoredPolicy(store)` does the same for `safe:Authored`, once per store. From then on the policy is
+data in the host, and nothing the author adds to a store changes it.
+
+### One check, in the HTML index
+
+Every projection writes its RDF/HTML into an `HtmlIndex` (`src/render/html-index.ts`), and every
+output reads the index, never the triples. A projection with a policy (`runtime.project({ policy })`)
+gets an index with that policy, and the index answers each question under it:
+
+| the index's answer | under a policy |
+|---|---|
+| `tagName(node)` | `sem-refused` for an element class the policy does not list; a custom element (`ext:tag`) only if it lists it |
+| `attributes(node)` | each attribute checked by name (and a `rel` by its link types), then its URL, `srcset` or CSS; an id reference only if the projection mints that id; a refused element has only `data-sem-refused` |
+| `childrenOf(node)` | nothing under a refused element |
+| `hostComponent(node)` | the host component (`ext:component`) only if the policy lists it |
+| `isSvg`, `isVoid` | false for a refused element (it is created as an empty `sem-refused`) |
+
+What reads it gets the same answer: the DOM patcher (`DomRenderer`: creating, patching, and taking
+over server-rendered HTML, which compares the page against the index), `toHTML`, `toIndentedHTML` and
+`toText` (`src/render/serialize.ts`), server rendering (`renderToString`, `renderToStream`), the live
+examples' prerendered HTML, and a host component adapter (`hostedBy`, `src/render/hosts.ts`, asks the
+index which component draws a node). A site (`defineSite`, the static build and the request handler)
+renders its own graphs, which are trusted, and its live examples under the policy. A SPARQL rule and its function
+twin produce the same triples, which are checked after, so parity is unchanged.
+
+The index checks as a delta arrives, not when a node is first shown: an element whose class or
+attributes changed is checked in `apply`, so a refusal in a part of the page that is hidden is
+reported too. An id reference is held until the id it names is minted in the same projection, and
+dropped again when that element goes. A relative URL is checked as written, then resolved against the site's base
+(`nav:base`).
+
+One check holds for trusted projections as well: an attribute node whose name is no attribute name
+(a space, a quote, `<`, `>`, `/`, `=`) is left out and reported, since it would break the markup it is
+written in.
+
+### Styles, in the style compiler
+
+Styles do not go through the index: `compileStyles(store, { policy, onRefused })`
+(`src/style/compile.ts`) writes the stylesheet from `sty:` rules, tokens and keyframes, and under a
+policy checks every string it takes from the graph before writing it: a property against
+`safe:refusedProperty`, a value, selector part, state or media condition with the CSS scan
+(`cssProblem`), a slug or keyframe name and step against their grammar. A declaration that fails is
+left out of its rule; a rule whose selector or condition fails is left out whole. `style` attributes
+are checked by the index, as declarations (`declarationsProblem`). Where authored content has a box,
+the host then scopes what the authored graphs added to the stylesheet to it (`scopedCss`).
+
+The CSS scan (`scan` in `src/safety.ts`) reads the text as the css-syntax-3 tokenizer does, in one
+pass, far enough to know it stays a value: strings close where the browser closes them, brackets
+balance, no comment, no `{`, `}`, `@` or `<` anywhere and no `;` outside a declaration list, no
+backslash outside a string, no bad url, and a function from `safe:fetchingFunction` only as `url()`
+of a fragment or of a `safe:resourceScheme`. In a selector part, state or media condition, also no
+`&` or `:scope`.
+
+### Uploads, host components, islands, remote sources
+
+- **Uploads** are checked by the files effect, not the policy, for every graph: `uploadRefused`
+  (`src/files.ts`) allows an `http(s)` address on the page's own origin or one in `uploadOrigins`
+  (`"*"` allows any, for a host that trusts its graph). A refused upload is not sent; its file gets a
+  `file:Failure` event with the reason ("Files are not uploaded to https://evil.example: this page
+  does not allow it."), and its reaction sets the file's `file:state` to `file:Failed` with that
+  `file:reason`, and announces it.
+- **Host components and custom elements** ([HOSTED.md](HOSTED.md)) are asked of the index, so an
+  authored projection draws one only if `safe:hostComponent` or `safe:customElement` lists it, and a
+  host adapter must also have it. The attributes it is given are the index's, already checked.
+- **Islands** (`ext:Island`, [FOREIGN.md](FOREIGN.md)) are checked by the islands effect against the
+  policy (`islandProblem`, `src/foreign.ts`), and their inputs by the index (`inputProblem`); the
+  server and take-over ask the same. A refused island stays its projected element, empty, and is reported. Even a listed one
+  mounts only what the host registered by name: the graph names one, it cannot bring one.
+- **Remote sources** ([REMOTE.md](REMOTE.md)) have no endpoint in the graph.
+
+### What happens to what is refused
 
 Nothing is dropped silently.
 
-| refused | DOM and HTML | text | report |
+| refused | DOM and HTML | text | report (`Refused.kind`) |
 |---|---|---|---|
-| an element | an empty `<sem-refused data-sem-refused="script">`, without its attributes or children | nothing | once, as it arrives |
-| an attribute or a URL | left out; the element stays | - | once |
-| a style declaration | left out of the `style` attribute or the sheet | - | once |
-| a style rule's selector or condition | the rule is left out | - | once |
+| an element | an empty `<sem-refused data-sem-refused="script">`, without its attributes or children | nothing | `element`, once, as it arrives |
+| a host component or custom element | the projected element, drawn by Semblance | as usual | `element`, once |
+| an island, or an input to it | the island's slot, empty; the input is not set | as usual | `element` or `attribute`, once |
+| an id reference to an id the projection does not mint | the attribute is left out | - | `attribute`, once |
+| an attribute | left out; the element stays | - | `attribute`, once |
+| a URL | its attribute is left out; the element stays | - | `url`, once |
+| a CSS value in a `style` attribute | the attribute is left out | - | `style`, once |
+| a style declaration | left out of the sheet | - | `style`, once |
+| a style rule's selector or condition | the rule is left out | - | `style`, once |
+| an upload elsewhere | not sent; the file is `file:Failed` with the reason | - | the file's state |
 
-Reports go through the projection's error channel as `Refused` errors (`src/safety.ts`): a live
-example lists them as warnings under its editor, on the server and in the browser; `mount` passes
-them to `onRefused` (by default `console.warn`); `HtmlIndex.refusals` keeps them by node.
+A refused element keeps its place among its siblings, empty, so the gap shows in the inspector and in
+tests. The drag-and-drop layer uses `data-sem-refused` for a refused drop as well, and its theme
+animates both (#405).
 
-The check sits in `HtmlIndex`, which every output reads: the DOM patcher (creating, patching,
-taking over server-rendered HTML), `toHTML`, `toIndentedHTML`, `toText` and server rendering all
-get the same answer. A SPARQL rule and its function twin produce the same triples, which are checked
-after, so parity is unchanged. An authored projection costs one set lookup per attribute more (and a
-scheme test for a URL); a trusted one checks only that an attribute node's name is an attribute name.
+Reports are `Refused` errors (`src/safety.ts`), with `at` (the node's IRI, or the style rule's),
+`kind` and a message such as `Refused on <https://example.org/evil#it/~x>: authored content may not
+have a script element.` Where they go:
 
-## Content Security Policy
+- **`mount`**: to `onRefused`, by default `console.warn('[semblance]', message)`, from both the
+  projection and the stylesheet.
+- **`runtime.project(opts, onError)`**: to `onError`, like the projection's other errors; without one,
+  to `console.error`.
+- **`compileStyles`**: to its `onRefused`, by default `console.warn`.
+- **`renderToString`**: to `console.error` (the projection) and `console.warn` (the stylesheet);
+  `rendered.projection.index.refusals` has the projection's afterwards. Passing `onRefused` there is
+  #404.
+- **`renderToStream`**: the projection's to `console.error`. It compiles no stylesheet: compile the one
+  it links with `compileStyles(store, { policy, onRefused })`.
+- **A live example**: as warnings under its editor, the same on the server and in the browser.
+- **`HtmlIndex.refusals`**: every reason by node, kept while the node exists. Each reason is
+  reported once per node.
 
-Nothing in the mode needs inline script or inline style: a refused node adds none, and a live
-example's own style rules go through an adopted stylesheet (CSSOM) in the browser. A strict CSP is
-the other half of the policy: the policy limits the **schemes** of rendered URLs, a CSP their
-**origins** (`img-src`, `media-src`, `form-action`, `connect-src`). Applying `style` attributes
-without `unsafe-inline` is #157.
+### What it costs
 
-## Not covered
+An authored projection costs one set lookup per attribute more (and a scheme test for a URL, a scan
+for CSS); a trusted one checks only that an attribute node's name is an attribute name. The style
+compiler's checks run once per compile.
 
-- Where an `http(s)` link goes or an image comes from: use a CSP.
-- An id the rendering has that the host's page has too: the browser takes the first in the document.
-- DOM clobbering by `id` or `name` (a host script that reads `window.someId`).
-- What a foreign component the policy lists does with its inputs once mounted: it is the host's
-  code. A live example's sandbox attaches no islands effect.
-- Host effects you attach yourself: navigation, persistence and network capture act on graph state
-  as the host configured them; give them `trusted` (above) when the store holds authored graphs. A
-  live example's sandbox attaches none of them (its full screen is shown over the page).
-
-## Remembered state
+### Remembered state
 
 Restoring brings back only what a persistence policy covers: its subject's listed properties
 (`per:subject`, `per:properties`), or what its query's template can produce (`per:construct`), into
 its graph (`per:graph`); a stored switch only for a policy there is. Whatever else storage holds
 stays there. The live examples' policy is read from the ontology alone, never from the site's store,
 which holds what was restored.
+
+## Extending or narrowing the policy
+
+The policy is triples, so extending it is Turtle in a **trusted** graph, and narrowing it is a
+policy of your own.
+
+**More of what is there.** Add to `safe:Authored` in your app's own Turtle (`mount`'s `graphs`, or
+the store you pass to `authoredPolicy`):
+
+```turtle
+@prefix safe: <https://semblance.dev/ns/safety#> .
+
+safe:Authored
+    safe:scheme "sms:" ;                 # links to sms: addresses
+    safe:hostComponent "Chart" ;         # your library's Chart may draw an authored chart
+    safe:customElement "ds-badge" ;      # and ds-badge may be created for an authored badge
+    safe:property "value" .              # an island's or custom element's value property may be set
+```
+
+An element is an RDF/HTML class (`rdfhtml:Dialog`) or one of the SVG extension's (`svg:Path`):
+those are the elements the index can create, so "your own element" is a custom element
+(`ext:tag`, listed in `safe:customElement`) or a host component, not a new class. A component you
+write needs nothing from the policy as long as it renders listed elements and attributes; prefix your
+own attributes with `data-` (not `data-sem-`) and they are allowed already.
+
+When the framework itself starts to emit an element or attribute the policy does not list, add it to
+`safe:Authored` in `ontology/layers/safety.ttl`: `test/safety.test.ts` renders every live example
+of the site under the policy and fails on any refusal.
+
+**Less.** A stricter policy is a `SafetyPolicy` of your own. The quickest is the framework's, with
+some sets replaced:
+
+```ts
+const strict: SafetyPolicy = { ...authoredPolicy(trusted), schemes: new Set(['https:']), resourceSchemes: [] }
+await mount(element, { root, graphs: [appTtl], authored: [fromTheModel], policy: strict })
+```
+
+or a `safe:Policy` of its own in your Turtle, read with `readPolicy(trusted, ex + 'Plain')`. Such a
+policy lists everything it allows; nothing is inherited from `safe:Authored`.
+
+```turtle
+ex:Plain a safe:Policy ;
+    safe:element rdfhtml:Div , rdfhtml:Span , rdfhtml:P ;
+    safe:attribute "class" , "lang" , "dir" ;
+    safe:attributePrefix "data-" , "aria-" .
+```
+
+**Why it must come from a trusted store.** The policy is the only thing between the author and the
+page, and it is triples. Read from a store that holds the authored graph, the author could write
+`safe:Authored safe:element rdfhtml:Script` and allow itself anything. So the policy is read before
+the authored graph is loaded (`mount`, from a store of `graphs` alone), or from the ontology alone
+(the live examples), and handed to the projection as data.
+
+## Defence in depth
+
+The policy decides what an authored graph renders. Around it:
+
+### Content Security Policy
+
+This is the CSP the current code needs; a stricter setup, with Trusted Types and authored content in a
+shadow root, is #414.
+
+The policy limits the **schemes** of what is rendered, a CSP their **origins**. An authored graph
+may link to and load images from any `https:` address; a CSP says which ones the browser will
+fetch, and where forms may submit. For a page that mounts in the browser:
+
+```
+Content-Security-Policy:
+  default-src 'self';
+  script-src 'self' 'wasm-unsafe-eval';
+  style-src 'self';
+  style-src-attr 'unsafe-inline';
+  img-src 'self' data: blob:;
+  media-src 'self' blob:;
+  connect-src 'self';
+  worker-src 'self';
+  form-action 'self';
+  object-src 'none';
+  base-uri 'none';
+  frame-ancestors 'self'
+```
+
+- `'wasm-unsafe-eval'`: the stores are WebAssembly modules (Semblance's engines, Oxigraph) compiled
+  in the page; without it `WebAssembly.compile` is refused and nothing loads. It allows WebAssembly,
+  not `eval`.
+- `style-src 'self'`: the compiled stylesheet, and each live example's, are constructed stylesheets
+  (`adoptedStyleSheets`), which `style-src 'self'` allows.
+- `style-src-attr 'unsafe-inline'`: the DOM patcher writes `style` attributes (`rdfhtml:style`, sizes
+  and positions) with `setAttribute`, which a CSP counts as inline style. Under the policy every one
+  has passed the CSS check first. Writing them through the CSSOM, so this line can go, is #157.
+- `img-src` and `media-src`: `data:` and `blob:` are the resource schemes the policy allows; `blob:`
+  is also what picked and dropped files are previewed from. Add the origins your images come from,
+  rather than `https:`, if authored graphs should not load from anywhere.
+- `connect-src`: the engines' `.wasm` files, and add the endpoints of the remote sources the host
+  binds and the `uploadOrigins` it allows (an upload is an `XMLHttpRequest`).
+- `form-action 'self'`: an authored form may name an `https:` action; the CSP keeps it on your
+  origin.
+
+**A server-rendered page** ([SSR.md](SSR.md)) carries inline scripts: the platform mark, the event
+capture before take-over (`capture: false` leaves it out), and, when the page remembers something,
+the first-paint script, which differs per page. Until documents can carry a nonce (#403), such a page
+needs `'unsafe-inline'` in `script-src`, or the hashes of the scripts it carries. Link the stylesheet
+(`stylesheet: { href }`, which the static build does) rather than inlining it, or allow its hash.
+
+**With the live editors**, a visitor writes the graph, so the CSP is what limits where it can reach:
+keep `img-src`, `media-src` and `form-action` to the origins you mean. A server that prerenders the
+examples writes each one's styles as an inline `<style>` (`prerenderSandboxes`), which needs
+`style-src-elem 'unsafe-inline'` (or #403); in the browser they are constructed stylesheets and need
+nothing. Without the editors, and with no authored content at all, the same CSP still applies; only
+`style-src-attr` and `'wasm-unsafe-eval'` are needed by Semblance itself.
+
+A link's destination is outside any CSP: an authored `https:` link goes where it says when followed.
+
+### Live examples run in sandboxes
+
+Each live example (`src/sandbox.ts`) runs in a sandbox of its own: its own store (the ontology and
+its sources, never the site's graph), its own runtime and projections under the policy, its own event
+bus, and a turn budget (`budgetMs`, 1500 ms by default) past which it stops itself and reports, so the
+site never waits on it. A source that does not parse, a rule that throws or a reaction that fails
+stays in the sandbox; what happened is written back to the site's graph as data the example shows.
+Besides its event bus, a sandbox attaches only its full screen (shown over the page): no
+navigation, persistence, network capture or files effect, and no islands. It is not a separate browsing context: it shares the page's
+document and origin, which the policy and the CSP protect.
+
+For authored content in your own app, the same holds by construction when you give it its own
+store and runtime (`buildSandbox`, or a second `mount` of only the authored graph).
+
+### Remote sources
+
+A remote source ([REMOTE.md](REMOTE.md)) names no endpoint and no credentials in the graph: the host
+maps a source's IRI to its URL, and an unmapped one stays `src:Unbound`. What a remote store sends is
+data in the page's store like any other, and is rendered under the projection's policy if it has
+one. Whether a server accepts a write is the server's decision (`src:WriteRefused`).
+
+### Graphs from a model or a form
+
+Treat a model's or a form's output as authored: pass it as `authored`, or render it in a sandbox.
+Beyond the policy:
+
+- **Shapes describe, they do not guard.** A shape (`c:Link`'s requires an `http(s)`, `mailto:` or
+  relative `c:href`) marks a component invalid and says why; it does not stop a trusted projection
+  from rendering what it flags. The policy does.
+- **Cost.** The policy says nothing about how much a graph asks for. A sandbox has a turn budget; in
+  your own app, a `sem:Watchdog` with a budget suspends a turn that runs over it.
+- **Parse failures.** Turtle that does not parse fails to load; a sandbox reports it as a problem of
+  the example.
+
+## Worked examples
+
+Each row is an authored graph trying one thing, what renders instead, and the test that checks it.
+`test/safety.test.ts` renders each vector in a live example's sandbox, in the DOM and as a server
+writes it; `test/safety-guide.test.ts` holds the examples of this guide that go through `mount` and
+`renderToString`. The site's live example (`ui:sa-live`: a `javascript:` link, a component whose
+rendering asks for a script, and a style that loads an image from elsewhere) is checked to be refused
+exactly those three things ("renders every live example of the site", `test/safety.test.ts`).
+
+A component of the author's own, whose SPARQL rendering emits a script:
+
+```turtle
+ex:Evil a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "ex-evil" .
+ex:EvilRendering a sem:Rendering ; sem:targets ex:Evil ; sem:stratum 0 .
+ex:EvilRendering-sparql a sem:Rule ; sem:implements ex:EvilRendering ; sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?x .
+            ?x a rdfhtml:Script ; rdfhtml:hasChild ?t . ?t a rdfhtml:Text ; rdfhtml:data "window.pwned = 1" }
+WHERE { $this a ex:Evil .
+        BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) BIND(IRI(CONCAT(STR($this), "/~x")) AS ?x)
+        BIND(IRI(CONCAT(STR($this), "/~t")) AS ?t) }""" .
+ex:it a ex:Evil .
+```
+
+The `div` renders, and in it `<sem-refused data-sem-refused="script"></sem-refused>`; the text has
+nothing of it, and the example warns `Refused on <…#it/~x>: authored content may not have a script
+element.` The others, in `test/safety.test.ts` unless named:
+
+| the authored graph tries | what renders | test |
+|---|---|---|
+| a `script` | `<sem-refused data-sem-refused="script"></sem-refused>` | render a script element |
+| `iframe`, `object`, `embed`, `base`, `link`, `meta`, `style`, `noscript`, `template` | `sem-refused`, without its `src` or `href` | render an iframe, object, embed, … |
+| what a refused element holds (an `img` in a `noscript`) | nothing | use a refused element to smuggle what it holds |
+| `onclick` on a button, as an attribute node | `<button title="kept"></button>` | set an event handler attribute |
+| `href="javascript:alert(1)"`, also as ` JaVaScRiPt:`, `java\tscript:`, `vbscript:`, `data:text/html` | `<a>link</a>` | link to a javascript: URL, however it is spelled |
+| a form's `action` and a button's `formaction` of `javascript:` | the form and button, without them | submit a form to a javascript: URL |
+| `srcdoc`, and an image `src` of `data:text/html` | `<img alt="a">` | give srcdoc, or an image a data: URL that is not an image |
+| an SVG path with `onload` and `fill: url(https://…)` | `<svg><path></path></svg>` | load a script through SVG |
+| `url()`, `image-set()`, `} @import …`, an escaped `u\72l(`, a selector part with `}`, `-moz-binding`, a token of `url(…)` | each left out of the sheet; `color: rebeccapurple` and a `data:image/svg+xml` background stay | load a resource from its styles |
+| a host component and a custom element the policy does not list | `<div data-sem-c="ex-evil">`, not drawn by the host | have a component drawn by a host component … |
+| `safe:Authored safe:element rdfhtml:Script` in its own graph | still `sem-refused` | is read from a trusted store |
+| `file:uploadTo "https://evil.example/upload"` | not sent; the reason | lets uploads go to the page's own origin … |
+| `https:`, `mailto:`, `tel:`, relative and fragment links, a `data:image/png` image, `data-ex-thing`, `style="color: red"` | all of it, nothing refused | link to http(s), mailto: and tel: addresses … |
+
+Through `mount` (`test/safety-guide.test.ts`), with your page linking to `javascript:void 0` and the
+author's link (`ui:theirs a c:Link ; c:label "Theirs" ; c:href "javascript:alert(1)"`):
+
+| | what renders | test |
+|---|---|---|
+| `mount({ graphs: [app], authored: [theirs], onRefused })` | both links without `href`; `onRefused` gets two `Refused` of kind `url`, yours and theirs | mount({ authored, onRefused }) |
+| `mount({ graphs: [app, theirs] })` | both as written | without authored, the same graphs render as written |
+| `safe:Authored safe:scheme "sms:"` in `graphs`, an `sms:` link authored | the link, with its `href` | a trusted graph extends safe:Authored |
+| the same triple in the authored graph instead | the link without `href`, reported | (the same test) |
+| `policy: { ...authoredPolicy(trusted), schemes: new Set(['https:']) }` | an `https:` link; a `mailto:` one without `href` | a stricter policy |
+| `ex:Plain a safe:Policy` in Turtle, `readPolicy(trusted, ex:Plain)` | a policy of three elements and no schemes | a policy of its own, in Turtle |
+| `renderToString({ store, root, policy })` | the same HTML as the browser's; `rendered.projection.index.refusals` lists both links | renderToString({ policy }) |
+
+## Not covered
+
+- Where an `http(s)` link goes or an image comes from: use a CSP.
+- An id the rendering has that the host's page has too: the browser takes the first in the document.
+- What the author's triples say about your resources, and what its reactions change, when it shares
+  your store (`mount({ authored })`): give it a store of its own to keep it out.
+- DOM clobbering by `id` or `name` (a host script that reads `window.someId`).
+- What a foreign component the policy lists does with its inputs once mounted: it is the host's
+  code. A live example's sandbox attaches no islands effect.
+- Host effects you attach yourself: navigation, persistence and network capture act on graph state
+  as the host configured them; give them `trusted` (above) when the store holds authored graphs. A
+  live example's sandbox attaches none of them (its full screen is shown over the page).
+- How long a graph takes to render: budgets and the stall watchdog, not the policy.

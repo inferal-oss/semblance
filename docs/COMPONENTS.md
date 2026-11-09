@@ -384,6 +384,10 @@ Two kinds of SHACL, both data:
   derives `c:error` (which fields render) and disables buttons whose `val:requires` fields are
   invalid. Messages are `sh:message`, language-tagged.
 
+A shape describes; it does not guard. A trusted projection still renders what a shape flags (a
+`c:Link` whose `c:href` is `javascript:`); keeping that out of a graph you do not trust is the
+safety policy's job ([SAFETY.md](SAFETY.md)).
+
 ## Styling
 
 `sty:StyleRule`s compile into cascade layers (tokens, hooks, components, variants, intents).
@@ -507,6 +511,11 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
 - **Things due later, the clipboard.** Attach a `Scheduler` (`beh:dueAt` becomes a `beh:Due`
   event) and a `Clipboard` (a `clip:Request` is written with `navigator.clipboard`, or a stand-in
   you pass, e.g. in tests); both report back as events on the bus.
+- **Graphs you do not trust.** A graph from a person, a page or a model goes in `mount`'s
+  `authored`, not `graphs`: the projection and the stylesheet then render under the `safe:Authored`
+  policy, read from your own graphs, and what it refuses is reported to `onRefused`. Wiring by hand,
+  pass `policy: authoredPolicy(trustedStore)` to `runtime.project` and `compileStyles`. How it works,
+  extending the policy and a Content Security Policy to go with it: [SAFETY.md](SAFETY.md).
 - **Files.** A `c:FileDrop` asks for the system picker (a `file:Pick`) and receives files dropped on
   its zone; `Files` (`src/files.ts`) performs both and reports each file as events, offered to the
   drop so its shape decides (`file:Added`, `file:Refusal`). It uploads each accepted file at once when

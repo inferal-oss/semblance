@@ -619,6 +619,13 @@ describe('what the framework itself emits', () => {
       refused.push(...b.problems.filter((p) => p.message.startsWith('Refused')).map((p) => `${ex.value}: ${p.message}`))
     }
     expect(built).toBeGreaterThan(10)
-    expect([...new Set(refused)]).toEqual([])
+    // The Safe authoring docs show the policy at work: their example is refused what it tries, and only that.
+    const shown = 'https://semblance.dev/demo#sa-live: '
+    const safety = [...new Set(refused)].filter((r) => r.startsWith(shown)).map((r) => r.slice(shown.length).replace(/^Refused (on <[^>]+>|a style)/, (m) => m.replace(/<https:\/\/example\.org\/safe#/, '<')))
+    expect(safety.some((r) => r.includes('<script/~root>: href: authored content may not have a javascript: URL here'))).toBe(true)
+    expect(safety.some((r) => r.includes('<sneaky/~s>: authored content may not have a script element'))).toBe(true)
+    expect(safety.some((r) => r.includes('may not load a resource (url())'))).toBe(true)
+    expect(safety.every((r) => /javascript: URL|script element|url\(\)/.test(r)), safety.join('\n')).toBe(true)
+    expect([...new Set(refused)].filter((r) => !r.startsWith(shown))).toEqual([])
   })
 })
