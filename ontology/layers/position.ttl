@@ -321,7 +321,7 @@ one component in it: what follows a sticky component in the same column scrolls 
 pos:Sticky a owl:Class .
 pos:StickToTop a pos:Sticky ; sem:slug "top" ;
     rdfs:label "to the top"@en , "до верху"@uk , "oben"@de , "إلى الأعلى"@ar ;
-    rdfs:comment "Sticks below the app bar (as far from the top as the page measures the bar, --sem-sticky-top, else 116px: enough for a bar of two rows), and below a taskbar docked there too. No taller than the viewport below that and above what sticks to the bottom (a taskbar, a status bar: --sem-sticky-bottom), it scrolls inside itself when its content is taller. On a compact screen, where a side column goes above or below the main one, it does not stick."@en ;
+    rdfs:comment "Sticks below the app bar (as far from the top as the page measures the bar, --sem-sticky-top, before the first paint: src/web/sticky-top.ts; without scripts, 116px: enough for a bar of two rows), and below a taskbar docked there too. No taller than the viewport below that and above what sticks to the bottom (a taskbar, a status bar: --sem-sticky-bottom), it scrolls inside itself when its content is taller. On a compact screen, where a side column goes above or below the main one, it does not stick."@en ;
     sty:declares [ sty:property "position" ; sty:raw "sticky" ] ,
                  [ sty:property "top" ; sty:raw "calc(var(--sem-dock-top, 0px) + var(--sem-sticky-top, 116px))" ] ,
                  [ sty:property "max-block-size" ; sty:raw "calc(100dvh - var(--sem-dock-top, 0px) - var(--sem-sticky-top, 116px) - var(--sem-dock-bottom, 0px) - var(--sem-sticky-bottom, 0px) - 16px)" ] ,

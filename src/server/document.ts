@@ -2,13 +2,15 @@
 // (renderToString): the root's HTML in the mount element, marked for the client to take over, the
 // document's language, direction and attributes on <html>, the stylesheet (a file the client does
 // not compile again, or inline), the script that puts back what the visitor chose (src/web/remembered.ts)
-// and the one that marks the viewer's platform (src/web/platform.ts: the key hints' spelling), both
-// before the first paint, and the one that keeps what the visitor does until the client is ready
+// the one that marks the viewer's platform (src/web/platform.ts: the key hints' spelling) and the one
+// that measures the app bar for what sticks below it (src/web/sticky-top.ts), all before the first
+// paint, and the one that keeps what the visitor does until the client is ready
 // (src/web/takeover.ts). Platform-neutral string work: used by the static build, the request handler
 // and anyone's own server.
 import { BOX_ATTRIBUTE } from '../style/scope.ts'
 import { CAPTURE_SCRIPT, SSR_ATTRIBUTE, STYLES_ATTRIBUTE } from '../web/takeover.ts'
 import { PLATFORM_SCRIPT } from '../web/platform.ts'
+import { STICKY_TOP_SCRIPT } from '../web/sticky-top.ts'
 import { COLOR_SCHEME_META, rememberedScript } from '../web/remembered.ts'
 import { documentScheme, firstPaintPlan } from './remembered.ts'
 import type { Rendered } from './render.ts'
@@ -66,8 +68,9 @@ export function documentParts(template: string, rendered: Pick<Rendered, 'css' |
   const styles =
     sheet === 'none' ? '' : sheet === 'inline' ? (rendered.css ? `<style ${STYLES_ATTRIBUTE}>${rendered.css.replace(/<\/style/gi, '<\\/style')}</style>` : '') : `<link rel="stylesheet" href="${escapeAttr(sheet.href)}" ${STYLES_ATTRIBUTE}>`
   // Functions, so `$` in what is inserted is not read as a replacement pattern. The platform is
-  // marked ahead of the styles that read it, so no key hint is painted in the other spelling first.
-  doc = doc.replace(/<\/head>/i, () => `<script>${PLATFORM_SCRIPT}</script>${styles}${opts.head ?? ''}</head>`)
+  // marked ahead of the styles that read it, so no key hint is painted in the other spelling first;
+  // the app bar is measured as the parser adds it, so no sticky column is painted at a guess first.
+  doc = doc.replace(/<\/head>/i, () => `<script>${PLATFORM_SCRIPT}</script><script>${STICKY_TOP_SCRIPT}</script>${styles}${opts.head ?? ''}</head>`)
   doc = rememberedHead(doc, rendered.remembered ?? [], mount, opts.attributes ?? {})
   const open = new RegExp(`<div id="${mount}"([^>]*)>\\s*</div>`, 'i')
   const m = open.exec(doc)

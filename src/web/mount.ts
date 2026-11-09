@@ -17,6 +17,7 @@ import { attachSnaps } from './snap.ts'
 import { attachLightboxes } from './lightbox.ts'
 import { attachAnchoredPopups } from './anchored-popups.ts'
 import { attachSizeHandles } from './size-handles.ts'
+import { attachStickyTop } from './sticky-top.ts'
 import { hasStore, initWeb, loadStore, loadStoreWithOntology, type StoreKind } from './load.ts'
 import { serverRendered, serverStyled, takeOver } from './takeover.ts'
 import { markPlatform } from './platform.ts'
@@ -264,6 +265,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const popups = attachAnchoredPopups(element, node => !renderer.inSlot(node))
   // Size handles say what their boxes come to, which only the page knows.
   const sizeHandles = attachSizeHandles(renderer)
+  // What sticks to the top sticks below the app bar, as tall as the page lays it out (--sem-sticky-top).
+  const stickyTop = attachStickyTop(element)
   // Foreign components are mounted in their islands' slots after each patch (nothing to do while there is none).
   const islands = new Islands(bus, renderer, {
     // Authored content mounts only the islands the policy allows (src/safety.ts).
@@ -327,6 +330,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       lightboxes.dispose()
       popups()
       sizeHandles()
+      stickyTop.dispose()
       detachRendered()
       detachNavigation?.()
       detachSources?.()

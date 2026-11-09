@@ -4,9 +4,9 @@
 // (data-sem-highlighted lines); this effect
 //   - reports the step that crosses the reading line while the page scrolls, as an unrecorded
 //     c:StepInView event (a "sem-step" DOM event on the rendered step: the bus records it),
-//   - brings the first highlighted line of a source view into view inside its scroll box,
-//   - says how much a sticky app bar covers (--sem-sticky-top), so the diagram sticks below it
-//     (and so does a side column that says pos:sticky pos:StickToTop).
+//   - brings the first highlighted line of a source view into view inside its scroll box.
+// The diagram sticks below the app bar by --sem-sticky-top, which the host measures for everything
+// that sticks to the top (src/web/sticky-top.ts).
 // The arrows from mentions to nodes are connectors (c:WalkthroughArrows), drawn by the connector
 // effect (src/web/connectors.ts) like any other. Motion follows mot:preference (data-sem-motion;
 // System and no preference follow the system's reduced-motion setting, src/layers/motion.ts).
@@ -39,18 +39,8 @@ export function attachWalkthroughs(host: HTMLElement): WalkthroughHost {
     schedule()
   }
 
-  /** How much a sticky bar covers at the top of the page: what stays in view sticks below it (--sem-sticky-top). */
-  let stickyTop = -1
-  function measureStickyTop() {
-    const bar = doc.querySelector('[data-sem-c=app-bar]')
-    const style = bar && win.getComputedStyle(bar)
-    const top = bar && (style!.position === 'sticky' || style!.position === 'fixed') ? Math.ceil(bar.getBoundingClientRect().height) + 12 : 16
-    if (top !== stickyTop) doc.documentElement.style.setProperty('--sem-sticky-top', `${(stickyTop = top)}px`)
-  }
-
   function run() {
     frame = 0
-    measureStickyTop()
     for (const root of host.querySelectorAll<HTMLElement>('[data-sem-c=walkthrough]')) {
       if (!shown(root)) continue
       if (scrolled) report(root)

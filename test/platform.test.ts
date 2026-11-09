@@ -65,7 +65,7 @@ describe('the viewer platform', () => {
     }
     // A streamed page's head carries it too.
     const [before] = documentParts(TEMPLATE, { lang: 'en', dir: 'ltr' }, { stylesheet: 'none' })
-    expect(before).toContain(script + '</head>')
+    expect(before).toContain(script)
   })
 })
 

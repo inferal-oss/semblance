@@ -34,6 +34,7 @@ import { attachSnaps } from '../src/web/snap.ts'
 import { attachLightboxes } from '../src/web/lightbox.ts'
 import { attachAnchoredPopups } from '../src/web/anchored-popups.ts'
 import { attachSizeHandles } from '../src/web/size-handles.ts'
+import { attachStickyTop } from '../src/web/sticky-top.ts'
 import { RenderedState } from '../src/rendered.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
@@ -342,6 +343,8 @@ const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer })
 attachIntent(runtime, shell, { flush: () => flush() })
 // Walkthroughs: the step in view is reported to the graph; arrows follow what it mentions.
 attachWalkthroughs(document.getElementById('app')!)
+// What sticks to the top (the side column, a walkthrough's diagram) sticks below the app bar as laid out.
+attachStickyTop(document.getElementById('app')!)
 // Connectors (a sheet's dependencies, a walkthrough's arrows, a canvas's): drawn where their ends are.
 const connectors = attachConnectors(document.getElementById('app')!)
 // Swiped tracks (a gallery's carousel, a lightbox): where they come to rest, and the current item in view.
