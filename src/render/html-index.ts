@@ -28,8 +28,10 @@ export interface HNode {
   others?: Record<string, string[]>
   /** ext:island: the foreign component mounted in this (slot) element. */
   island?: string
-  /** ext:tag: the custom element's tag, for the HTML serializer. */
+  /** ext:tag: on an island's slot, the custom element mounted in it; on any other node, the custom element it is. */
   tag?: string
+  /** ext:component: the host component that draws this node and everything under it (src/render/hosts.ts). */
+  component?: string
   /** ext:input: the input nodes stating the island's current inputs. */
   inputs?: Set<string>
 }
@@ -66,6 +68,11 @@ export interface Dirty {
   /** Slots whose island, tag or inputs changed (for the islands effect). */
   islands: Set<string>
 }
+
+/** A valid custom element name (with a hyphen, not one HTML reserves), so a graph cannot name `script` as a tag. */
+const CUSTOM_ELEMENT = /^[a-z][a-z0-9._]*-[a-z0-9._-]*$/
+const RESERVED_TAGS = new Set(['annotation-xml', 'color-profile', 'font-face', 'font-face-src', 'font-face-uri', 'font-face-format', 'font-face-name', 'missing-glyph'])
+export const isCustomElementName = (tag: string) => CUSTOM_ELEMENT.test(tag) && !RESERVED_TAGS.has(tag)
 
 /** Content attributes whose value is one URL. */
 const URL_ATTRIBUTES = new Set(['href', 'src', 'poster', 'action', 'formaction', 'cite'])
@@ -204,7 +211,7 @@ export class HtmlIndex {
   private collect(key: string) {
     const n = this.nodes.get(key)
     if (n && this.refusals.size && !n.cls) this.refusals.delete(key)
-    if (n && !n.cls && n.data === undefined && !n.props.size && !n.attrNodes.size && !n.children.size && !n.parents.size && n.slot === undefined && n.orderKey === undefined && n.island === undefined && n.tag === undefined && !n.inputs?.size) {
+    if (n && !n.cls && n.data === undefined && !n.props.size && !n.attrNodes.size && !n.children.size && !n.parents.size && n.slot === undefined && n.orderKey === undefined && n.island === undefined && n.tag === undefined && n.component === undefined && !n.inputs?.size) {
       this.nodes.delete(key)
       this.chainParent.delete(key)
     }
@@ -305,11 +312,30 @@ export class HtmlIndex {
   }
 
   tagName(key: string): string | undefined {
-    const cls = this.nodes.get(key)?.cls
+    const n = this.nodes.get(key)
+    const cls = n?.cls
     if (!cls || cls === 'Text') return undefined
     if (this.policy && this.isRefused(key)) return REFUSED_TAG
+    // A hosted component created as a custom element (ext:tag on a node that is not an island's slot).
+    if (n.tag !== undefined && n.island === undefined && this.allowsCustomElement(n.tag)) return n.tag
     return this.tagOf(cls)
   }
+
+  /**
+   * The host component that draws a node and everything under it (ext:component), if it is one a
+   * host may draw. Whether the host has it is the renderer's question (src/render/hosts.ts).
+   */
+  hostComponent(key: string): string | undefined {
+    const name = this.nodes.get(key)?.component
+    return name !== undefined && this.allowsHostComponent(name) ? name : undefined
+  }
+
+  /**
+   * Whether a projection may name this host component or custom element. Every name a host
+   * registered may be drawn in a trusted projection; an authored one's policy (#380) narrows it.
+   */
+  allowsHostComponent = (name: string): boolean => !this.policy || this.policy.hostComponents.has(name)
+  allowsCustomElement = (tag: string): boolean => isCustomElementName(tag) && (!this.policy || this.policy.customElements.has(tag))
 
   /** Whether a node is an element of the SVG extension (created in the SVG namespace). */
   isSvg(key: string): boolean {
@@ -520,6 +546,16 @@ export class HtmlIndex {
         const n = this.node(s)
         n.tag = sign > 0 ? o : n.tag === o ? undefined : n.tag
         this.mark('islands', s)
+        // Not an island's slot: the tag is the element's own, which is created anew.
+        if (n.island === undefined) this.mark('recreate', s), this.structureChanged(s)
+        return
+      }
+      case EXT.component: {
+        const n = this.node(s)
+        n.component = sign > 0 ? o : n.component === o ? undefined : n.component
+        // Drawn by a host library, or no longer: the node's element is made anew.
+        this.mark('recreate', s)
+        this.structureChanged(s)
         return
       }
       case EXT.input: {

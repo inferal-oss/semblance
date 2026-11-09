@@ -54,7 +54,7 @@ const sandboxesOf = (site: Site) => ({ load: (...turtle: string[]) => loadStore(
 /** Render one address of a site, as its client's first render of it. */
 export async function renderSite(site: Site, url: string, opts: RenderSiteOptions & { graphs?: ReadonlySet<string>; prefer?: 'sparql' | 'function' } = {}): Promise<Rendered & { attributes: Record<string, string> }> {
   const store = await siteStore(site, opts)
-  const rendered = await renderToString({ store, root: site.root, url, prepare: site.prepare, layers: site.layers?.(store), prefer: opts.prefer ?? site.prefer, functions: site.functions, styles: opts.styles, sandboxes: sandboxesOf(site) })
+  const rendered = await renderToString({ store, root: site.root, url, prepare: site.prepare, layers: site.layers?.(store), prefer: opts.prefer ?? site.prefer, functions: site.functions, styles: opts.styles, sandboxes: sandboxesOf(site), hosts: site.hosts })
   const attributes = site.documentAttributes?.(store) ?? {}
   return { ...rendered, attributes }
 }
@@ -237,7 +237,7 @@ export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?:
     const loc = readLocations(r).find((l) => l.root === site.root)
     for (const route of rest) {
       rendered.runtime.apply(followDelta(r, loc!, route))
-      write(route, serializeRoot(rendered.runtime, rendered.projection, site.root, { sandboxes: sandboxesOf(site), prefer: site.prefer, functions: site.functions }), rendered)
+      write(route, serializeRoot(rendered.runtime, rendered.projection, site.root, { sandboxes: sandboxesOf(site), prefer: site.prefer, functions: site.functions, hosts: site.hosts }), rendered)
     }
     rendered.runtime.dispose()
   }

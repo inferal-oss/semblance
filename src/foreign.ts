@@ -83,7 +83,8 @@ export interface IslandsOptions {
   onError?: (e: Error, island: string) => void
 }
 
-interface OutputBinding {
+/** An output binding (ext:output): which event a DOM event or callback becomes. */
+export interface OutputBinding {
   on: string
   emits: string
   path?: string
@@ -278,21 +279,7 @@ export class Islands {
       }
       return undefined
     }
-    const one = (s: Term, p: string) => store.match(s as never, f.namedNode(p), null, dg)[0]?.object.value
-    const outputs: OutputBinding[] = []
-    for (const s of [island, ...classes]) {
-      for (const q of store.match(f.namedNode(s), f.namedNode(EXT.output), null, dg)) {
-        const on = one(q.object, EXT.on)
-        const emits = one(q.object, EXT.emits)
-        if (!on || !emits) continue
-        const fields = store.match(q.object as never, f.namedNode(EXT.field), null, dg).flatMap((fq) => {
-          const path = one(fq.object, EXT.path)
-          const predicate = one(fq.object, EXT.predicate)
-          return path && predicate ? [{ path, predicate }] : []
-        })
-        outputs.push({ on, emits, path: one(q.object, EXT.path), fields })
-      }
-    }
+    const outputs = outputsOf(this.bus, island, classes)
     const adapterIri = said(EXT.adapter) ?? (said(EXT.tag) ? EXT.CustomElement : EXT.Widget)
     const adapter = this.opts.adapters?.[adapterIri] ?? (adapterIri === EXT.CustomElement ? customElementAdapter : adapterIri === EXT.Widget ? widgetAdapter : undefined)
     const m: Mounted = { key, island, el, pushed: new Map(), outputs, applying: false, gone: false }
@@ -389,20 +376,8 @@ export class Islands {
     if (m.gone) return
     // What the component says while it is being told something is its echo of it.
     if (m.applying) return void this.counts.echoes++
-    const store = this.bus.runtime.store
-    const f = store.factory
-    for (const b of m.outputs) {
-      if (b.on !== name) continue
-      const v = b.path !== undefined ? at(payload, b.path) : undefined
-      const about: [string, Term][] = []
-      for (const field of b.fields) {
-        const fv = at(payload, field.path)
-        if (fv === undefined || fv === null) continue
-        about.push([field.predicate, literal(f, fv)])
-      }
+    for (const handled of emitOutput(this.bus, m.island, m.outputs, name, payload)) {
       this.counts.outputs++
-      const value = v === undefined || v === null ? undefined : typeof v === 'object' ? JSON.stringify(v) : String(v)
-      const handled = this.bus.emit(b.emits, m.island, { value, about })
       if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) this.opts.onHandled?.(handled)
     }
   }
@@ -423,21 +398,73 @@ export class Islands {
     else console.error(`island <${island}>:`, e)
   }
 
-  /** The island's classes and their superclasses, most specific first (an island a rendering minted is typed in its derived graph). */
   private classesOf(island: string): string[] {
-    const store = this.bus.runtime.store
-    const f = store.factory
-    const out: string[] = []
-    const typed = (g: Quad_Graph) => store.match(f.namedNode(island), f.namedNode(RDF_TYPE), null, g).map((q) => q.object.value)
-    const todo = [...typed(f.defaultGraph()), ...typed(this.bus.projection.engine.graph)]
-    while (todo.length) {
-      const c = todo.shift()!
-      if (out.includes(c)) continue
-      out.push(c)
-      todo.push(...store.match(f.namedNode(c), f.namedNode(RDFS_SUBCLASS), null, f.defaultGraph()).map((q) => q.object.value))
-    }
-    return out
+    return classesOf(this.bus, island)
   }
+}
+
+/** Where an instance's classes and bindings are read: a runtime's store and a projection's derived graph (an EventBus is one). */
+export type BindingSource = Pick<EventBus, 'runtime' | 'projection'>
+
+/** An instance's classes and their superclasses, most specific first (an instance a rendering minted is typed in its derived graph). */
+export function classesOf(bus: BindingSource, focus: string): string[] {
+  const store = bus.runtime.store
+  const f = store.factory
+  const out: string[] = []
+  const typed = (g: Quad_Graph) => store.match(f.namedNode(focus), f.namedNode(RDF_TYPE), null, g).map((q) => q.object.value)
+  const todo = [...typed(f.defaultGraph()), ...typed(bus.projection.engine.graph)]
+  while (todo.length) {
+    const c = todo.shift()!
+    if (out.includes(c)) continue
+    out.push(c)
+    todo.push(...store.match(f.namedNode(c), f.namedNode(RDFS_SUBCLASS), null, f.defaultGraph()).map((q) => q.object.value))
+  }
+  return out
+}
+
+/** The output bindings (ext:output) an instance declares, or its classes do. */
+export function outputsOf(bus: BindingSource, focus: string, classes = classesOf(bus, focus)): OutputBinding[] {
+  const store = bus.runtime.store
+  const f = store.factory
+  const dg = f.defaultGraph()
+  const one = (s: Term, p: string) => store.match(s as never, f.namedNode(p), null, dg)[0]?.object.value
+  const outputs: OutputBinding[] = []
+  for (const s of [focus, ...classes]) {
+    for (const q of store.match(f.namedNode(s), f.namedNode(EXT.output), null, dg)) {
+      const on = one(q.object, EXT.on)
+      const emits = one(q.object, EXT.emits)
+      if (!on || !emits) continue
+      const fields = store.match(q.object as never, f.namedNode(EXT.field), null, dg).flatMap((fq) => {
+        const path = one(fq.object, EXT.path)
+        const predicate = one(fq.object, EXT.predicate)
+        return path && predicate ? [{ path, predicate }] : []
+      })
+      outputs.push({ on, emits, path: one(q.object, EXT.path), fields })
+    }
+  }
+  return outputs
+}
+
+/**
+ * Report output `name` of `focus`: each binding for it becomes an event addressed to `focus`, its
+ * beh:value read along ext:path from the payload and each ext:field typed (numbers, booleans, JSON).
+ */
+export function emitOutput(bus: EventBus, focus: string, outputs: readonly OutputBinding[], name: string, payload: unknown): Handled[] {
+  const f = bus.runtime.store.factory
+  const out: Handled[] = []
+  for (const b of outputs) {
+    if (b.on !== name) continue
+    const v = b.path !== undefined ? at(payload, b.path) : undefined
+    const about: [string, Term][] = []
+    for (const field of b.fields) {
+      const fv = at(payload, field.path)
+      if (fv === undefined || fv === null) continue
+      about.push([field.predicate, literal(f, fv)])
+    }
+    const value = v === undefined || v === null ? undefined : typeof v === 'object' ? JSON.stringify(v) : String(v)
+    out.push(bus.emit(b.emits, focus, { value, about }))
+  }
+  return out
 }
 
 function literal(f: EventBus['runtime']['store']['factory'], v: unknown): Term {

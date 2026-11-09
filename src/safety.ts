@@ -22,6 +22,8 @@ export const SAFETY = {
   cssValueAttribute: SAFE + 'cssValueAttribute',
   fetchingFunction: SAFE + 'fetchingFunction',
   refusedProperty: SAFE + 'refusedProperty',
+  hostComponent: SAFE + 'hostComponent',
+  customElement: SAFE + 'customElement',
 } as const
 
 /** A safe:Policy, read for use: element classes as the HTML index names them ("Div", "svg:Rect"). */
@@ -39,6 +41,9 @@ export interface SafetyPolicy {
   cssValueAttributes: ReadonlySet<string>
   fetchingFunctions: ReadonlySet<string>
   refusedProperties: ReadonlySet<string>
+  /** Host components (ext:component) and custom elements (ext:tag) an authored graph may name (docs/HOSTED.md). */
+  hostComponents: ReadonlySet<string>
+  customElements: ReadonlySet<string>
 }
 
 /**
@@ -70,6 +75,8 @@ export function readPolicy(store: GraphStore, iri: string = SAFETY.Authored): Sa
     cssValueAttributes: new Set(lower(SAFETY.cssValueAttribute)),
     fetchingFunctions: new Set(lower(SAFETY.fetchingFunction)),
     refusedProperties: new Set(lower(SAFETY.refusedProperty)),
+    hostComponents: new Set(values(SAFETY.hostComponent)),
+    customElements: new Set(lower(SAFETY.customElement)),
   }
 }
 

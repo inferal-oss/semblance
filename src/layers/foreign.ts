@@ -48,6 +48,34 @@ const island: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/**
+ * A hosted component: on its root, the host component that draws it, the custom element it is
+ * created as, and its props' current values (an IRI with a slug as its slug).
+ */
+const hosted: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const all = declarers(ctx, focus)
+  const root = o.node('root')
+  for (const d of all) for (const name of ctx.objects(d, EXT.component)) o.t(root, EXT.component, name)
+  for (const d of all) for (const tag of ctx.objects(d, EXT.tag)) o.t(root, EXT.tag, tag)
+  for (const d of all) {
+    for (const binding of ctx.objects(d, EXT.input)) {
+      const name = ctx.object(binding, EXT.name)
+      const from = ctx.object(binding, EXT.from)
+      if (!name || from?.termType !== 'NamedNode') continue
+      const link = ctx.object(binding, EXT.through)
+      const linked = link?.termType === 'NamedNode' ? ctx.object(focus, link) : undefined
+      const values = ctx.objects(linked ?? focus, from)
+      if (!values.length) continue
+      const prop = o.node('prop-' + encodeForUri(name.value))
+      const as = ctx.object(binding, EXT.as) ?? ctx.nn(EXT.Property)
+      o.t(root, EXT.input, prop).t(prop, EXT.name, name).t(prop, EXT.as, as)
+      for (const v of values) o.t(prop, EXT.value, (v.termType === 'NamedNode' && ctx.object(v, SEM.slug)) || v)
+    }
+  }
+  return o.quads
+}
+
 /** An island's ol:defaultLabel: the tag it creates or the widget it calls, its own or its class's. */
 const islandName: FnRule = (ctx, focus) => {
   const all = declarers(ctx, focus)
@@ -77,4 +105,5 @@ export const foreignFunctions: Record<string, FnRule> = {
   'foreign:island': island,
   'foreign:island-text': islandText,
   'foreign:island-name': islandName,
+  'foreign:hosted': hosted,
 }

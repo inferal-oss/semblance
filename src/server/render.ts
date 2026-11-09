@@ -7,6 +7,7 @@
 import type { FnRule } from '../engine/context.ts'
 import { Navigation, readAddress, readLocations, spellAddress } from '../navigation.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../ns.ts'
+import type { HostRenderer } from '../render/hosts.ts'
 import { toHTML } from '../render/serialize.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import { prerenderSandboxes, type SandboxOptions } from '../sandbox.ts'
@@ -44,6 +45,8 @@ export interface RenderOptions {
    * refuses are left out, and reported. Read it from a trusted store (authoredPolicy), not this one.
    */
   policy?: SafetyPolicy
+  /** A component library that draws hosted components (as mount's `hosts`): their server markup, which the client hydrates. */
+  hosts?: HostRenderer
 }
 
 export interface Rendered {
@@ -136,9 +139,14 @@ export function project(opts: RenderOptions, languages: string[]): Pick<Rendered
  * The root's HTML as the projection has it now, with the live examples it shows rendered in
  * their slots (with `sandboxes`): what a page rendered beforehand holds, at each address.
  */
-export function serializeRoot(runtime: Runtime, projection: Projection, root: string, opts: Pick<RenderOptions, 'sandboxes' | 'prefer' | 'functions'> & { siteCss?: () => string }): string {
+export function serializeRoot(runtime: Runtime, projection: Projection, root: string, opts: Pick<RenderOptions, 'sandboxes' | 'prefer' | 'functions' | 'hosts'> & { siteCss?: () => string }): string {
   const slots = opts.sandboxes ? prerenderSandboxes(runtime, projection, { ...opts.sandboxes, prefer: opts.prefer ?? 'sparql', functions: opts.functions, roots: [root], siteCss: opts.siteCss }) : undefined
-  return toHTML(projection.index, root, slots?.size ? { slots: (name) => slots.get(name) } : {})
+  const hosts = opts.hosts?.(projection.index, { runtime, projection })
+  try {
+    return toHTML(projection.index, root, { ...(slots?.size ? { slots: (name: string) => slots.get(name) } : {}), hosts })
+  } finally {
+    hosts?.dispose()
+  }
 }
 
 /** Project `root` at `url` and serialize it: what the client's first render of that address shows. */
