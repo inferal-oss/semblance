@@ -20,7 +20,7 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -263,6 +263,42 @@ ui:dt-gantt a c:Flippable ; c:front ui:dt-gantt-spec .
 ui:dt-gantt-spec a c:Specimen ; c:demonstrates c:GanttChart ; c:label "Gantt chart" , "Діаграма Ґанта"@uk , "Gantt-Diagramm"@de , "مخطط غانت"@ar ;
     c:help "Dated tasks from a maintained view (iv:View, iv:materialize iv:Graph): bars, a baseline (dashed), the latest end (a whisker), a milestone, and lead lines from predecessors, on a scale of months that scrolls. Each task says its dates in words, for a screen reader and the Text modality. In a right-to-left language, time runs right to left." ;
     c:children ( ui:dt-gantt-chart ) .
+
+# --- Series charts: an area chart and a stacked one, over a maintained view ---------------------------
+
+ui:dt-area-prefixes sh:declare [ sh:prefix "ui" ; sh:namespace "https://semblance.dev/demo#"^^xsd:anyURI ] .
+ui:dt-sale-jan-web ui:saleMonth "Jan" ; ui:saleAt 1 ; ui:saleChannel "Web" ; ui:saleAmount 42 .
+ui:dt-sale-jan-store ui:saleMonth "Jan" ; ui:saleAt 1 ; ui:saleChannel "Store" ; ui:saleAmount 30 .
+ui:dt-sale-jan-partner ui:saleMonth "Jan" ; ui:saleAt 1 ; ui:saleChannel "Partner" ; ui:saleAmount 8 .
+ui:dt-sale-feb-web ui:saleMonth "Feb" ; ui:saleAt 2 ; ui:saleChannel "Web" ; ui:saleAmount 48 .
+ui:dt-sale-feb-store ui:saleMonth "Feb" ; ui:saleAt 2 ; ui:saleChannel "Store" ; ui:saleAmount 28 .
+ui:dt-sale-feb-partner ui:saleMonth "Feb" ; ui:saleAt 2 ; ui:saleChannel "Partner" ; ui:saleAmount 12 .
+ui:dt-sale-mar-web ui:saleMonth "Mar" ; ui:saleAt 3 ; ui:saleChannel "Web" ; ui:saleAmount 61 .
+ui:dt-sale-mar-store ui:saleMonth "Mar" ; ui:saleAt 3 ; ui:saleChannel "Store" ; ui:saleAmount 33 .
+ui:dt-sale-mar-partner ui:saleMonth "Mar" ; ui:saleAt 3 ; ui:saleChannel "Partner" ; ui:saleAmount 10 .
+ui:dt-sale-apr-web ui:saleMonth "Apr" ; ui:saleAt 4 ; ui:saleChannel "Web" ; ui:saleAmount 58 .
+ui:dt-sale-apr-store ui:saleMonth "Apr" ; ui:saleAt 4 ; ui:saleChannel "Store" ; ui:saleAmount 35 .
+ui:dt-sale-apr-partner ui:saleMonth "Apr" ; ui:saleAt 4 ; ui:saleChannel "Partner" ; ui:saleAmount 15 .
+ui:dt-sale-may-web ui:saleMonth "May" ; ui:saleAt 5 ; ui:saleChannel "Web" ; ui:saleAmount 72 .
+ui:dt-sale-may-store ui:saleMonth "May" ; ui:saleAt 5 ; ui:saleChannel "Store" ; ui:saleAmount 31 .
+ui:dt-sale-may-partner ui:saleMonth "May" ; ui:saleAt 5 ; ui:saleChannel "Partner" ; ui:saleAmount 18 .
+ui:dt-sale-jun-web ui:saleMonth "Jun" ; ui:saleAt 6 ; ui:saleChannel "Web" ; ui:saleAmount 80 .
+ui:dt-sale-jun-store ui:saleMonth "Jun" ; ui:saleAt 6 ; ui:saleChannel "Store" ; ui:saleAmount 38 .
+ui:dt-sale-jun-partner ui:saleMonth "Jun" ; ui:saleAt 6 ; ui:saleChannel "Partner" ; ui:saleAmount 17 .
+ui:dt-sales-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Sales by month" ; sem:select """
+SELECT ?month ?channel ?amount WHERE { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel ?channel ; ui:saleAmount ?amount }
+ORDER BY ?at ?channel""" .
+ui:dt-sales-web a c:series ; c:key "Web" ; rdfs:label "Online" , "Онлайн"@uk , "Online"@de , "عبر الإنترنت"@ar .
+ui:dt-sales-store a c:series ; c:key "Store" ; rdfs:label "In store" , "У магазині"@uk , "Im Laden"@de , "في المتجر"@ar .
+ui:dt-sales-partner a c:series ; c:key "Partner" ; rdfs:label "Partners" , "Партнери"@uk , "Partner"@de , "الشركاء"@ar .
+ui:dt-area-chart a c:AreaChart ; c:label "Sales" ; c:view ui:dt-sales-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ;
+    c:legend ( ui:dt-sales-web ui:dt-sales-store ui:dt-sales-partner ) .
+ui:dt-area-stacked a c:AreaChart ; c:label "Sales, stacked" ; c:view ui:dt-sales-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ;
+    c:stacked true ; c:legend ( ui:dt-sales-web ui:dt-sales-store ui:dt-sales-partner ) .
+ui:dt-area a c:Flippable ; c:front ui:dt-area-spec .
+ui:dt-area-spec a c:Specimen ; c:demonstrates c:AreaChart ; c:label "Area chart" , "Діаграма з областями"@uk , "Flächendiagramm"@de , "مخطط مساحي"@ar ;
+    c:help "Values of each series across the categories of a maintained view (iv:View, iv:materialize iv:Graph): a line and the area under it; with c:stacked true each series starts where the earlier ones end. The value axis is on nice steps. Each point is a list item with its value in words: Tab reaches the chart, the arrow keys move between points and show each one's value. A changed row re-renders its points alone. In a right-to-left language the categories run right to left." ;
+    c:children ( ui:dt-area-chart ui:dt-area-stacked ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 

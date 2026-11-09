@@ -1446,9 +1446,129 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
                  [ sty:property "width" ; sty:raw "10px" ] ,
                  [ sty:property "height" ; sty:raw "10px" ] ,
-                 [ sty:property "margin-right" ; sty:raw "6px" ] ,
+                 [ sty:property "margin-inline-end" ; sty:raw "6px" ] ,
                  [ sty:property "border-radius" ; sty:raw "3px" ] ,
                  [ sty:property "vertical-align" ; sty:raw "-1px" ] .
+
+# Series charts on a value axis. The figure writes the scale (--lo, --hi) and the number of categories
+# (--n); a point writes its category (--i), value (--v), stack base (--b), the next point's (--nv,
+# --nb) and its color. A point is an anchor at its value (inset-inline-start, so categories run right
+# to left in a right-to-left page); its marks reach the next point in the marks' container units.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ;
+    sty:declares [ sty:property "--axis" ; sty:raw "2.75rem" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-plot" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "block-size" ; sty:raw "clamp(150px, 42vw, 240px)" ] ,
+                 [ sty:property "margin-block" ; sty:raw "8px 4px" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "var(--axis)" ] ,
+                 [ sty:property "container-type" ; sty:raw "size" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-ticks" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+# A tick: its value in the gutter at the inline start, a gridline across the plot (the zero line stronger).
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-tick" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline" ; sty:raw "calc(-1 * var(--axis)) 0" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc((var(--at) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "block-size" ; sty:raw "0" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--axis) - 6px)" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
+                 [ sty:property "font-size" ; sty:raw "11px" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-tick::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "''" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--axis))" ] ,
+                 [ sty:property "inline-size" ; sty:raw "100cqw" ] ,
+                 [ sty:property "border-block-start" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-tick[style='--at: 0']::after" ;
+    sty:declares [ sty:property "border-block-start-color" ; sty:raw "var(--sem-border-strong)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-marks" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "container-type" ; sty:raw "size" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-categories" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(var(--n, 1), minmax(0, 1fr))" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "var(--axis)" ] ,
+                 [ sty:property "font-size" ; sty:raw "11px" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-categories > span" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "1" ] ,
+                 [ sty:property "grid-column" ; sty:raw "calc(var(--i) + 1)" ] ,
+                 [ sty:property "padding-inline" ; sty:raw "2px" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] .
+# One series needs no legend.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-legend:not(:has(> :nth-child(2)))" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+
+# A point: an anchor at its value, in its category's middle (over the tooltip layer's position). Its y (and its
+# base's, its next point's) in percent of the plot.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "--y" ; sty:raw "calc((var(--v) + var(--b) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--yb" ; sty:raw "calc((var(--b) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--ny" ; sty:raw "calc((var(--nv, 0) + var(--nb, 0) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--nyb" ; sty:raw "calc((var(--nb, 0) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--i) + 0.5) / var(--n) * 100%)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc(var(--y) * 1%)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "0" ] ,
+                 [ sty:property "block-size" ; sty:raw "0" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ; sty:part ".sem-dot" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "-5px" ] ,
+                 [ sty:property "bottom" ; sty:raw "-5px" ] ,
+                 [ sty:property "inline-size" ; sty:raw "10px" ] ,
+                 [ sty:property "block-size" ; sty:raw "10px" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "border-radius" ; sty:raw "50%" ] ,
+                 [ sty:property "border" ; sty:raw "2px solid var(--sem-surface)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ; sty:part ":is(:hover, :focus-visible) > .sem-dot" ;
+    sty:declares [ sty:property "scale" ; sty:raw "1.4" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+# The line to the next point: as long as the hypotenuse, turned by its slope (mirrored right to left).
+[] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-segment" ;
+    sty:declares [ sty:property "--dx" ; sty:raw "calc(100cqw / var(--n))" ] ,
+                 [ sty:property "--dy" ; sty:raw "calc((var(--ny) - var(--y)) * 1cqh)" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "bottom" ; sty:raw "-1px" ] ,
+                 [ sty:property "block-size" ; sty:raw "2px" ] ,
+                 [ sty:property "inline-size" ; sty:raw "hypot(var(--dx), var(--dy))" ] ,
+                 [ sty:property "transform-origin" ; sty:raw "0 50%" ] ,
+                 [ sty:property "rotate" ; sty:raw "calc(-1 * atan2(var(--dy), var(--dx)))" ] ,
+                 [ sty:property "border-radius" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-segment:dir(rtl)" ;
+    sty:declares [ sty:property "transform-origin" ; sty:raw "100% 50%" ] ,
+                 [ sty:property "rotate" ; sty:raw "atan2(var(--dy), var(--dx))" ] .
+# The area under it, from its base to its value and the next point's (a stack's band).
+[] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-area" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc(-1 * var(--y) * 1cqh)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(100cqw / var(--n))" ] ,
+                 [ sty:property "block-size" ; sty:raw "100cqh" ] ,
+                 [ sty:property "clip-path" ; sty:raw "polygon(0 calc(100% - var(--y) * 1%), 100% calc(100% - var(--ny) * 1%), 100% calc(100% - var(--nyb) * 1%), 0 calc(100% - var(--yb) * 1%))" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--color) 28%, transparent)" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-area:dir(rtl)" ;
+    sty:declares [ sty:property "clip-path" ; sty:raw "polygon(100% calc(100% - var(--y) * 1%), 0 calc(100% - var(--ny) * 1%), 0 calc(100% - var(--nyb) * 1%), 100% calc(100% - var(--yb) * 1%))" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
