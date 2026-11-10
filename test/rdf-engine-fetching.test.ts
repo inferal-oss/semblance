@@ -3,9 +3,12 @@ import { parseHTML } from 'linkedom'
 import * as ox from 'oxigraph'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Engine, EngineError, Form, Format, Kind } from '../rdf-engine/host/engine.ts'
-import { documentFor, endpointFor, FetchRefused, sparqlTerm, withFetching, type FetchPolicy } from '../rdf-engine/host/fetching.ts'
+import { documentFor, endpointFor, FetchRefused, narrowPolicy, sparqlTerm, withFetching, type FetchPolicy } from '../rdf-engine/host/fetching.ts'
 import { mockFetch, type MockDocument, type MockEndpoint } from '../rdf-engine/host/mock-endpoint.ts'
 import { DataFactory } from 'n3'
+import type { Quad, Term } from '@rdfjs/types'
+import { createStore } from '../src/node/load.ts'
+import { hybridStore } from '../src/store/hybrid.ts'
 import { writeJelly } from '../src/jelly/encode.ts'
 import { engineStore } from '../rdf-engine/host/store.ts'
 import { NS } from '../src/ns.ts'
@@ -305,53 +308,157 @@ describe('the requests the host makes, and the responses it accepts', () => {
   })
 })
 
-describe('GraphStore.fetching', () => {
-  const store = (build: (typeof BUILDS)[number]) => engineStore(modules[build]!, build)
+describe('store.query: the policy is the store\'s', () => {
+  const ONE = 'https://one.example/sparql'
+  const json = (bindings: unknown[]) => new Response(JSON.stringify({ results: { bindings } }), { headers: { 'content-type': 'application/sparql-results+json' } })
+  const answering = () => vi.fn(async (_u: string | URL | Request, _i?: RequestInit) => json([{ o: { type: 'literal', value: '1' } }]))
+  const store = (build: (typeof BUILDS)[number], fetchPolicy?: FetchPolicy) => engineStore(modules[build]!, build, { fetchPolicy })
+  const ask = 'SELECT ?o { SERVICE <https://one.example/sparql> { <http://a> <http://p> ?o } }'
+  const values = (rows: Map<string, Term>[]) => rows.map((r) => r.get('o')?.value)
 
   for (const b of BUILDS) {
-    it(`${b}: a synchronous query refuses SERVICE and fetches nothing; fetching runs it`, async () => {
-      const s = store(b)
-      const f = vi.fn(async () => new Response(JSON.stringify({ results: { bindings: [{ o: { type: 'literal', value: '1' } }] } }), { headers: { 'content-type': 'application/sparql-results+json' } }))
-      const text = 'SELECT ?o { SERVICE <https://one.example/sparql> { <http://a> <http://p> ?o } }'
-      expect(() => s.select(text, [])).toThrow(/only store.fetching runs them/)
-      expect(() => s.construct('CONSTRUCT { <http://a> <http://p> ?o } WHERE { SERVICE SILENT <https://one.example/sparql> { <http://a> <http://p> ?o } }', [])).toThrow(/only store.fetching/)
+    it(`${b}: configured once, then asked through query; a synchronous query refuses SERVICE and fetches nothing`, async () => {
+      const f = answering()
+      const s = store(b, { endpoints: { [ONE]: {} }, fetch: f as unknown as typeof fetch })
+      expect(() => s.select(ask, [])).toThrow(/only store.query and store.update run them/)
+      expect(() => s.construct('CONSTRUCT { <http://a> <http://p> ?o } WHERE { SERVICE SILENT <https://one.example/sparql> { <http://a> <http://p> ?o } }', [])).toThrow(/only store.query/)
       expect(f).not.toHaveBeenCalled()
       expect(s.engine.fetchRequests()).toEqual([])
-      const rows = await s.fetching!.select(text, [], { endpoints: { 'https://one.example/sparql': {} }, fetch: f as unknown as typeof fetch })
-      expect(rows.map((r) => r.get('o')?.value)).toEqual(['1'])
+      expect(values(await s.query<Map<string, Term>[]>(ask))).toEqual(['1'])
+      expect(values(await s.query<Map<string, Term>[]>(ask))).toEqual(['1'])
+      expect(f).toHaveBeenCalledTimes(2)
       expect(s.engine.fetchRequests()).toEqual([])
     })
 
-    it(`${b}: LOAD through fetching.update, then seen by match`, async () => {
-      const s = store(b)
+    it(`${b}: query answers any query, fetching nothing when it has no SERVICE`, async () => {
+      const f = answering()
+      const s = store(b, { endpoints: { [ONE]: {} }, fetch: f as unknown as typeof fetch })
+      s.loadTurtle('<http://a> <http://p> 1 . <http://a> <http://q> "x" .')
+      expect(values(await s.query<Map<string, Term>[]>('SELECT ?o { <http://a> <http://p> ?o }'))).toEqual(['1'])
+      expect(await s.query('ASK { <http://a> <http://q> "x" }')).toBe(true)
+      expect((await s.query<Quad[]>('CONSTRUCT { ?s <http://r> ?o } WHERE { ?s <http://q> ?o }')).map((q) => q.predicate.value)).toEqual(['http://r'])
+      expect(f).not.toHaveBeenCalled()
+    })
+
+    it(`${b}: an endpoint the store does not list is refused, and nothing is fetched`, async () => {
+      const f = answering()
+      const s = store(b, { endpoints: { 'https://two.example/sparql': {} }, fetch: f as unknown as typeof fetch })
+      await expect(s.query(ask)).rejects.toThrow(/SERVICE <https:\/\/one.example\/sparql>: not an endpoint this page may query/)
+      expect(await s.query('SELECT ?o { SERVICE SILENT <https://one.example/sparql> { <http://a> <http://p> ?o } }')).toEqual([new Map()])
+      // No policy at all: nothing may be fetched.
+      await expect(store(b).query(ask)).rejects.toThrow(/not an endpoint this page may query/)
+      expect(f).not.toHaveBeenCalled()
+    })
+
+    it(`${b}: a call's policy narrows the store's, and can never widen it`, async () => {
+      const f = answering()
+      const s = store(b, { endpoints: { [ONE]: { headers: { authorization: 'Bearer t' } } }, fetch: f as unknown as typeof fetch })
+      // Narrowed to another endpoint: this one is no longer listed for the call.
+      await expect(s.query(ask, { policy: { endpoints: { 'https://two.example/sparql': {} } } })).rejects.toThrow(/not an endpoint this page may query/)
+      await expect(s.query(ask, { policy: {} })).rejects.toThrow(/not an endpoint this page may query/)
+      // A deadline already past: nothing is fetched.
+      await expect(s.query(ask, { policy: { endpoints: { [ONE]: {} }, deadline: Date.now() - 1 } })).rejects.toThrow()
+      expect(f).not.toHaveBeenCalled()
+      // Listed by both: fetched as the store says, with its headers.
+      expect(values(await s.query<Map<string, Term>[]>(ask, { policy: { endpoints: { [ONE]: {} } } }))).toEqual(['1'])
+      expect((f.mock.calls[0]![1]!.headers as Record<string, string>).authorization).toBe('Bearer t')
+      // Where and how to fetch is the store's alone.
+      for (const policy of [{ endpoints: { [ONE]: { url: 'https://evil.example/sparql' } } }, { endpoints: { [ONE]: { headers: { cookie: 'x' } } } }, { fetch: f as unknown as typeof fetch }])
+        await expect(s.query(ask, { policy })).rejects.toThrow(/only narrows the store's/)
+      expect(f).toHaveBeenCalledTimes(1)
+    })
+
+    it(`${b}: the host replaces the policy; the object it gave is read once`, async () => {
+      const f = answering()
+      const given: FetchPolicy = { endpoints: {}, fetch: f as unknown as typeof fetch }
+      const s = store(b, given)
+      given.endpoints![ONE] = {}
+      await expect(s.query(ask)).rejects.toThrow(/not an endpoint/)
+      s.setFetchPolicy({ endpoints: { [ONE]: {} }, fetch: f as unknown as typeof fetch })
+      expect(values(await s.query<Map<string, Term>[]>(ask))).toEqual(['1'])
+      s.setFetchPolicy(undefined)
+      await expect(s.query(ask)).rejects.toThrow(/not an endpoint/)
+      expect(f).toHaveBeenCalledTimes(1)
+    })
+
+    it(`${b}: LOAD through update, then seen by match`, async () => {
       const { fetch } = mockFetch(modules[b]!, {}, DOCUMENTS)
+      const s = store(b, { documents: { 'https://data.example/dumps/*': {} }, fetch })
       const f = s.factory
       expect(s.match(f.namedNode('http://e'), null, null)).toEqual([])
-      await s.fetching!.update('LOAD <https://data.example/dumps/d.nt>', { documents: { 'https://data.example/dumps/*': {} }, fetch })
+      await expect(s.update('LOAD <https://data.example/dumps/d.nt>', { policy: { documents: { 'https://data.example/dumps/d.ttl': {} } } })).rejects.toThrow(/not a document this page may load/)
+      await s.update('LOAD <https://data.example/dumps/d.nt>')
       expect(s.match(f.namedNode('http://e'), null, null).map((q) => q.object.value)).toEqual(['z'])
     })
 
     it(`${b}: operations on one store run one at a time`, async () => {
-      const s = store(b)
       const order: string[] = []
-      const slow = (name: string, ms: number) => async () => {
+      let calls = 0
+      const slow = async () => {
+        const name = calls++ ? 'b' : 'a'
         order.push('start ' + name)
-        await new Promise((r) => setTimeout(r, ms))
+        await new Promise((r) => setTimeout(r, name === 'a' ? 30 : 1))
         order.push('end ' + name)
-        return new Response(JSON.stringify({ results: { bindings: [] } }), { headers: { 'content-type': 'application/sparql-results+json' } })
+        return json([])
       }
-      const one = { endpoints: { 'https://one.example/sparql': {} } }
-      await Promise.all([
-        s.fetching!.select('SELECT * { SERVICE <https://one.example/sparql> { ?s ?p ?o } }', [], { ...one, fetch: slow('a', 30) as unknown as typeof fetch }),
-        s.fetching!.select('SELECT * { SERVICE <https://one.example/sparql> { ?s ?p 1 } }', [], { ...one, fetch: slow('b', 1) as unknown as typeof fetch }),
-      ])
+      const s = store(b, { endpoints: { [ONE]: {} }, fetch: slow as unknown as typeof fetch })
+      await Promise.all([s.query('SELECT * { SERVICE <https://one.example/sparql> { ?s ?p ?o } }'), s.query('SELECT * { SERVICE <https://one.example/sparql> { ?s ?p 1 } }')])
       expect(order).toEqual(['start a', 'end a', 'start b', 'end b'])
     })
   }
 
-  it('Oxigraph and N3 do not fetch, and say so', () => {
-    expect(oxigraphStore(ox).fetching).toBeUndefined()
-    expect(n3Store().fetching).toBeUndefined()
+  it('createStore takes the policy; Oxigraph, Hybrid and N3 refuse one', async () => {
+    const f = answering()
+    const s = createStore('wat', { fetchPolicy: { endpoints: { [ONE]: {} }, fetch: f as unknown as typeof fetch } })
+    expect(values(await s.query<Map<string, Term>[]>(ask))).toEqual(['1'])
+    for (const kind of ['oxigraph', 'hybrid', 'n3'] as const) expect(() => createStore(kind, { fetchPolicy: { endpoints: { [ONE]: {} } } })).toThrow(/does not fetch/)
+  })
+
+  it('Oxigraph answers through query, and refuses SERVICE and LOAD plainly; N3 has no SPARQL', async () => {
+    for (const s of [oxigraphStore(ox), hybridStore(ox)]) {
+      s.loadTurtle('<http://a> <http://p> 1 .')
+      expect(values(await s.query<Map<string, Term>[]>('SELECT ?o { <http://a> <http://p> ?o }'))).toEqual(['1'])
+      expect(await s.query('ASK { <http://a> <http://p> 1 }')).toBe(true)
+      await expect(s.query(ask)).rejects.toThrow(/does not fetch: SERVICE and LOAD need one of Semblance's engines/)
+      expect(s.setFetchPolicy).toBeUndefined()
+      s.dispose?.()
+    }
+    const o = oxigraphStore(ox)
+    await expect(o.update!('LOAD <https://data.example/dumps/d.nt>')).rejects.toThrow(/does not fetch/)
+    await o.update!('INSERT DATA { <http://a> <http://p> 2 }')
+    expect(o.match(null, null, null).length).toBe(1)
+    o.dispose?.()
+    await expect(n3Store().query('ASK {}')).rejects.toThrow(/no SPARQL engine/)
+  })
+})
+
+describe('narrowPolicy', () => {
+  const store: FetchPolicy = {
+    endpoints: { 'urn:ex:catalog': { url: 'https://cat.example/sparql', bindings: false, timeoutMs: 5000 } },
+    documents: { 'https://data.example/dumps/*': { maxBytes: 1000 }, 'https://data.example/one.ttl': {}, 'urn:ex:doc': { url: 'https://docs.example/d.ttl' } },
+    maxRequests: 10,
+  }
+
+  it('keeps what both list, at the store\'s address, within the smaller limits', () => {
+    const n = narrowPolicy(store, { endpoints: { 'urn:ex:catalog': { timeoutMs: 100, bindings: true }, 'https://evil.example/sparql': {} }, maxRequests: 50, maxRows: 5, deadline: 7 })
+    expect(n.endpoints).toEqual({ 'urn:ex:catalog': { url: 'https://cat.example/sparql', bindings: false, timeoutMs: 100, maxBytes: undefined } })
+    expect(endpointFor(n, 'urn:ex:catalog').url.href).toBe('https://cat.example/sparql')
+    expect(() => endpointFor(n, 'https://evil.example/sparql')).toThrow(FetchRefused)
+    expect([n.maxRequests, n.maxRows, n.deadline]).toEqual([10, 5, 7])
+    expect(narrowPolicy(store, undefined)).toBe(store)
+  })
+
+  it('narrows documents: exact ones the store would load, prefixes to the narrower', () => {
+    const n = narrowPolicy(store, { documents: { 'https://data.example/dumps/2024/*': {}, 'https://data.example/dumps/a.ttl': {}, 'urn:ex:doc': {}, 'https://elsewhere.example/*': {}, 'https://data.example/*': { maxBytes: 10 } } })
+    expect(documentFor(n, 'https://data.example/dumps/2024/x.ttl').url.href).toBe('https://data.example/dumps/2024/x.ttl')
+    expect(documentFor(n, 'https://data.example/dumps/a.ttl').url.href).toBe('https://data.example/dumps/a.ttl')
+    expect(documentFor(n, 'urn:ex:doc').url.href).toBe('https://docs.example/d.ttl')
+    // The call's wider prefix: only what the store lists under it, within the call's limit.
+    expect(documentFor(n, 'https://data.example/dumps/b.ttl').remote.maxBytes).toBe(10)
+    expect(documentFor(n, 'https://data.example/one.ttl').remote.maxBytes).toBe(10)
+    expect(() => documentFor(n, 'https://data.example/two.ttl')).toThrow(FetchRefused)
+    expect(() => documentFor(n, 'https://elsewhere.example/x.ttl')).toThrow(FetchRefused)
+    expect(() => documentFor(narrowPolicy(store, { documents: { 'https://evil.example/x.ttl': {} } }), 'https://evil.example/x.ttl')).toThrow(FetchRefused)
   })
 })
 
@@ -365,7 +472,8 @@ describe('authored content never reaches the network', () => {
     vi.unstubAllGlobals()
   })
 
-  it('an authored SPARQL rule with SERVICE fails like any failing rule, and nothing is fetched', async () => {
+  /** A page to mount in; every request it makes is recorded (the engine's wasm is served, an endpoint answers no solutions). */
+  function page() {
     const { document, window } = parseHTML('<!doctype html><html><body><main id="app"></main></body></html>')
     document.adoptedStyleSheets = []
     Object.defineProperty(window, 'CSSStyleSheet', { value: class { replaceSync() {} }, configurable: true })
@@ -376,8 +484,30 @@ describe('authored content never reaches the network', () => {
     const fetched: string[] = []
     vi.stubGlobal('fetch', async (url: string) => {
       fetched.push(String(url))
+      if (!String(url).endsWith('.wasm')) return new Response(JSON.stringify({ results: { bindings: [] } }), { headers: { 'content-type': 'application/sparql-results+json' } })
       return new Response(wasm, { headers: { 'Content-Type': 'application/wasm' } })
     })
+    return { document, fetched }
+  }
+  const navigation = () => ({ location: { pathname: '/', search: '', hash: '' }, history: { state: null, pushState() {}, replaceState() {} }, events: new EventTarget(), links: new EventTarget() })
+
+  it('authored content cannot configure fetching: the policy is the host\'s, read from no graph', async () => {
+    const { document, fetched } = page()
+    // Whatever an author writes, about endpoints or policies, is data: the host gave no policy.
+    const authored = `${PFX}
+ex:page a c:Stack ; c:children ( ex:hi ) .
+ex:hi a c:Text ; c:label "hi" .
+ex:policy ex:endpoints <https://evil.example/sparql> ; ex:fetchPolicy "{\\"endpoints\\":{\\"https://evil.example/sparql\\":{}}}" .`
+    const app = await mount(document.getElementById('app')!, { root: EX + 'page', authored: [authored], store: 'wat', files: false, fullscreen: false, onRefused: () => {}, navigation: navigation() })
+    apps.push(app)
+    await expect(app.store.query('SELECT * { SERVICE <https://evil.example/sparql> { ?s ?p ?o } }')).rejects.toThrow(/not an endpoint this page may query/)
+    expect(fetched.filter((u) => !u.endsWith('.wasm'))).toEqual([])
+    // A store that does not fetch refuses a policy outright.
+    await expect(mount(document.getElementById('app')!, { root: EX + 'page', graphs: [authored], store: 'oxigraph', fetchPolicy: { endpoints: {} } })).rejects.toThrow(/does not fetch/)
+  })
+
+  it('an authored SPARQL rule with SERVICE fails like any failing rule, and nothing is fetched, though the host lists the endpoint', async () => {
+    const { document, fetched } = page()
     const authored = `${PFX}
 ex:Leak a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "ex-leak" .
 ex:LeakRendering a sem:Rendering ; sem:targets ex:Leak ; sem:stratum 0 .
@@ -396,7 +526,6 @@ ex:secret a ex:Leak ; c:label "the page's secret" .`
     const report = (...args: unknown[]) => void errors.push(args.map((a) => String((a as Error)?.message ?? a)).join(' '))
     vi.spyOn(console, 'error').mockImplementation(report)
     vi.spyOn(console, 'warn').mockImplementation(report)
-    const history = { state: null, pushState() {}, replaceState() {} }
     // A rule's failure is reported, or ends the mount: either way, nothing is fetched.
     let app: MountedApp | undefined
     try {
@@ -405,17 +534,23 @@ ex:secret a ex:Leak ; c:label "the page's secret" .`
       graphs: [`${PFX}ex:page a c:Stack ; c:children ( ex:secret ) .`],
       authored: [authored],
       store: 'wat',
+      // Listed by the host: still, no rule reaches it.
+      fetchPolicy: { endpoints: { 'https://evil.example/sparql': {} } },
       files: false,
       fullscreen: false,
       onRefused: () => {},
-      navigation: { location: { pathname: '/', search: '', hash: '' }, history, events: new EventTarget(), links: new EventTarget() },
+      navigation: navigation(),
       })
       apps.push(app)
     } catch (err) {
       errors.push((err as Error).message)
     }
     expect(fetched.filter((u) => !u.endsWith('.wasm'))).toEqual([])
-    expect(errors.join('\n')).toMatch(/only store.fetching runs them/)
-    if (app) expect(app.store.fetching).toBeDefined()
+    expect(errors.join('\n')).toMatch(/only store.query and store.update run them/)
+    // The host's own query does reach it.
+    if (app) {
+      await app.store.query('SELECT * { SERVICE <https://evil.example/sparql> { ?s ?p ?o } }')
+      expect(fetched.filter((u) => !u.endsWith('.wasm'))).toEqual(['https://evil.example/sparql'])
+    }
   })
 })

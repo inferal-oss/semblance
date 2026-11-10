@@ -2,7 +2,7 @@ import type { Quad } from '@rdfjs/types'
 import type * as Ox from 'oxigraph'
 import { Parser } from 'n3'
 import { n3Store } from './n3.ts'
-import { plainResult } from './oxigraph.ts'
+import { answerLocally, plainResult } from './oxigraph.ts'
 import { jellyReaderInto, readJellyInto } from '../jelly/store.ts'
 import type { GraphStore } from './types.ts'
 
@@ -49,6 +49,8 @@ export function hybridStore(ox: typeof Ox): GraphStore {
     match: (s, p, o, g) => mirror.match(s, p, o, g),
     select: (query, graphs) => plainResult(sparql.query(query, { default_graph: graphs as Ox.NamedNode[] })),
     construct: (query, graphs) => plainResult(sparql.query(query, { default_graph: graphs as Ox.NamedNode[] })),
+    // No update: it would change Oxigraph's copy and not the mirror.
+    query: (query, opts = {}) => answerLocally('hybrid', () => plainResult(sparql.query(query, opts.graphs ? { default_graph: opts.graphs as Ox.NamedNode[] } : {}))),
     // Parsed once: two parsers would label a blank node two ways, and what a query answers (Oxigraph's
     // label) would name nothing `match` can find (the mirror's).
     loadTurtle(text) {

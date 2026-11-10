@@ -20,6 +20,7 @@ export function n3Store(): GraphStore {
     construct() {
       throw new Error('The N3.js store has no SPARQL engine; use function rules (prefer: "function")')
     },
+    query: () => Promise.reject(new Error('The N3.js store has no SPARQL engine')),
     loadTurtle: (text) => store.addQuads(new Parser().parse(text)),
     loadJelly: (bytes, graph) => readJellyInto((q) => void store.addQuad(q as never), bytes, graph),
     dumpJelly: (graph, options) => dumpJellyOf(store.getQuads(null, null, null, (graph ?? null) as never) as unknown as Quad[], options),

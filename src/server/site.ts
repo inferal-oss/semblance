@@ -4,7 +4,7 @@
 // all use it.
 import type { FnRule } from '../engine/context.ts'
 import type { HostRenderer } from '../render/hosts.ts'
-import type { GraphStore } from '../store/types.ts'
+import type { FetchPolicy, GraphStore } from '../store/types.ts'
 import type { SubsetOptions } from '../subset.ts'
 import type { CspOptions } from './csp.ts'
 
@@ -51,6 +51,12 @@ export interface Site {
   subset?: boolean | SubsetOptions
   /** The store kind (Semblance's WASM engine by default). */
   store?: 'wat' | 'rust' | 'oxigraph' | 'hybrid'
+  /**
+   * What the server's stores may fetch for SPARQL SERVICE and LOAD, through `store.query` and
+   * `store.update` (docs/FETCHING.md; default: nothing). Rendering never fetches: rules are
+   * synchronous. The client sets its own policy where it mounts (mount's `fetchPolicy`).
+   */
+  fetchPolicy?: FetchPolicy
   /** The mount element's id in the page (default "app"). */
   mount?: string
   /**

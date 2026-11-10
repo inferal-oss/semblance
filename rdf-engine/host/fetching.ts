@@ -1,6 +1,7 @@
 // SERVICE and LOAD with the host fetching (../ABI.md, "Optional: fetching"): a run that needs
 // something from elsewhere returns -3 and names its requests; this answers them under the host's
-// policy and runs it again. Everyone involved may be hostile (the graph's author, the data a query
+// policy and runs it again. The policy is the store's configuration (store.ts: `fetchPolicy`,
+// `setFetchPolicy`), which a call's own policy may only narrow (narrowPolicy). Everyone involved may be hostile (the graph's author, the data a query
 // joins, the endpoint, the document server), so nothing is fetched that the policy does not list,
 // every response is bounded and checked, and a failure is a failed request, never a trap.
 
@@ -23,7 +24,10 @@ export interface Remote {
   maxBytes?: number
 }
 
-/** What a fetching operation may reach and how much it may take. Nothing is listed by default. */
+/**
+ * What a fetching operation may reach and how much it may take. Nothing is listed by default. A
+ * store holds one, set by the host; a policy given with one call narrows it (narrowPolicy).
+ */
 export interface FetchPolicy {
   /** SERVICE endpoints, by the IRI the query names, exactly. */
   endpoints?: Record<string, Remote>
@@ -88,14 +92,87 @@ export function documentFor(policy: FetchPolicy, iri: string): { remote: Remote;
   if (exact) return { remote: exact, url: fetchable(exact.url ?? iri) }
   let url: URL | undefined
   for (const [key, remote] of Object.entries(policy.documents ?? {})) {
-    if (!key.endsWith('*')) continue
-    const prefix = fetchable(key.slice(0, -1))
-    if (!prefix.pathname.endsWith('/') || prefix.search || prefix.hash || key.slice(0, -1) !== prefix.href) continue
+    const prefix = prefixOf(key)
+    if (!prefix) continue
     url ??= fetchable(iri)
     // Compared after the URL parser has normalized both (case, dot segments, %2e, default ports).
     if (url.origin === prefix.origin && url.pathname.startsWith(prefix.pathname)) return { remote, url }
   }
   throw new FetchRefused('not a document this page may load')
+}
+
+/** A document prefix entry (`https://host/path/*`, the path ending in `/`) as its URL, or undefined when the key is not one. */
+function prefixOf(key: string): URL | undefined {
+  if (!key.endsWith('*')) return undefined
+  let u: URL
+  try {
+    u = fetchable(key.slice(0, -1))
+  } catch {
+    return undefined
+  }
+  return u.pathname.endsWith('/') && !u.search && !u.hash && key.slice(0, -1) === u.href ? u : undefined
+}
+
+const within = (inner: URL, outer: URL) => inner.origin === outer.origin && inner.pathname.startsWith(outer.pathname)
+
+const smaller = (a: number | undefined, b: number | undefined) => (a === undefined ? b : b === undefined ? a : Math.min(a, b))
+
+/** The store's remote, within the call's limits. */
+const narrowRemote = (store: Remote, call: Remote): Remote => ({
+  ...store,
+  ...(store.bindings === false || call.bindings === false ? { bindings: false } : {}),
+  timeoutMs: smaller(store.timeoutMs, call.timeoutMs),
+  maxBytes: smaller(store.maxBytes, call.maxBytes),
+})
+
+/**
+ * `store` narrowed by `call`: the endpoints and documents both list (a document prefix within
+ * another is the narrower of the two), within the smaller of each limit and the earlier deadline.
+ * Where and how a remote is fetched is the store's: a call that names a url, headers, credentials
+ * or a fetch of its own is refused, so a call can never reach what the store does not list.
+ */
+export function narrowPolicy(store: FetchPolicy, call: FetchPolicy | undefined): FetchPolicy {
+  if (!call) return store
+  const remotes = [...Object.values(call.endpoints ?? {}), ...Object.values(call.documents ?? {})]
+  if (call.fetch || remotes.some((r) => r.url !== undefined || r.headers !== undefined || r.credentials !== undefined))
+    throw new Error("a call's fetch policy only narrows the store's: url, headers, credentials and fetch are the store's to set")
+  const endpoints: Record<string, Remote> = {}
+  for (const [iri, remote] of Object.entries(call.endpoints ?? {})) {
+    const listed = own(store.endpoints, iri)
+    if (listed) endpoints[iri] = narrowRemote(listed, remote)
+  }
+  const documents: Record<string, Remote> = {}
+  for (const [key, remote] of Object.entries(call.documents ?? {})) {
+    const prefix = prefixOf(key)
+    if (!prefix) {
+      // One document: as the store would fetch it.
+      try {
+        const { remote: listed, url } = documentFor(store, key)
+        documents[key] = { ...narrowRemote(listed, remote), url: url.href }
+      } catch {
+        // not the store's to load
+      }
+      continue
+    }
+    for (const [storeKey, listed] of Object.entries(store.documents ?? {})) {
+      const storePrefix = prefixOf(storeKey)
+      if (storePrefix && within(prefix, storePrefix)) documents[key] = narrowRemote(listed, remote)
+      else if (storePrefix && within(storePrefix, prefix)) documents[storeKey] = narrowRemote(listed, remote)
+      else if (!storePrefix) {
+        // A document the store lists exactly, under the call's prefix.
+        let url: URL
+        try {
+          url = fetchable(listed.url ?? storeKey)
+        } catch {
+          continue
+        }
+        if (within(url, prefix)) documents[storeKey] = narrowRemote(listed, remote)
+      }
+    }
+  }
+  const narrowed: FetchPolicy = { ...store, endpoints, documents, deadline: smaller(store.deadline, call.deadline) }
+  for (const k of Object.keys(FETCH_LIMITS) as (keyof Limits)[]) narrowed[k] = smaller(store[k], call[k]) ?? FETCH_LIMITS[k]
+  return narrowed
 }
 
 // --- writing bindings ---------------------------------------------------------------

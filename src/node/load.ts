@@ -8,7 +8,7 @@ import { ontologySubset, type Subset, type SubsetOptions } from '../subset.ts'
 import { hybridStore } from '../store/hybrid.ts'
 import { n3Store } from '../store/n3.ts'
 import { oxigraphStore } from '../store/oxigraph.ts'
-import type { GraphStore } from '../store/types.ts'
+import { configureFetching, type FetchPolicy, type GraphStore } from '../store/types.ts'
 
 /** `rust` and `wat` are the rdf-engine builds (`npm run engine:build`), Node only for now. */
 export type StoreKind = 'oxigraph' | 'n3' | 'hybrid' | 'rust' | 'wat'
@@ -26,6 +26,11 @@ export interface StoreOptions {
   compiled?: boolean | 'idle'
   /** Semblance's engines: the time zone sx:formatDateTime uses when its options name none (default: the host's). */
   timeZone?: string
+  /**
+   * Semblance's engines: what `store.query` and `store.update` may fetch for SERVICE and LOAD
+   * (docs/FETCHING.md; default: nothing). The other stores do not fetch, and refuse one.
+   */
+  fetchPolicy?: FetchPolicy
 }
 
 /** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
@@ -41,7 +46,7 @@ function engine(kind: 'rust' | 'wat', options: StoreOptions): GraphStore {
   // SEMBLANCE_ENGINE_COMPILE=n: compile each prepared query on its n-th run; =idle: in idle time
   // (rdf-engine/results/compiled.md).
   const env = process.env.SEMBLANCE_ENGINE_COMPILE === 'idle' ? 'idle' : Number(process.env.SEMBLANCE_ENGINE_COMPILE ?? 0) || 0
-  return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : env, timeZone: options.timeZone })
+  return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : env, timeZone: options.timeZone, fetchPolicy: options.fetchPolicy })
 }
 
 /**
@@ -73,7 +78,7 @@ export function watchStores(listener: ((store: GraphStore) => void) | undefined)
 }
 
 export function createStore(kind: StoreKind, options: StoreOptions = {}): GraphStore {
-  const store = kind === 'rust' || kind === 'wat' ? engine(kind, options) : kind === 'oxigraph' ? oxigraphStore(ox) : kind === 'hybrid' ? hybridStore(ox) : n3Store()
+  const store = kind === 'rust' || kind === 'wat' ? engine(kind, options) : configureFetching(kind === 'oxigraph' ? oxigraphStore(ox) : kind === 'hybrid' ? hybridStore(ox) : n3Store(), options.fetchPolicy)
   created?.(store)
   return store
 }

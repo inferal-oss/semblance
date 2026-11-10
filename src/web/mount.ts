@@ -6,7 +6,7 @@ import { DomRenderer } from '../render/dom.ts'
 import type { HostContext, HostRenderer } from '../render/hosts.ts'
 import { RenderedState } from '../rendered.ts'
 import { type Projection, Runtime } from '../runtime.ts'
-import type { GraphStore } from '../store/types.ts'
+import { configureFetching, doesNotFetch, type FetchPolicy, type GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
 import { BOX_ATTRIBUTE, boxSelector, scopedCss } from '../style/scope.ts'
 import { readPolicy, Refused, type SafetyPolicy } from '../safety.ts'
@@ -63,6 +63,13 @@ export interface MountOptions {
   ontology?: string
   /** The store; Semblance's own WASM engine when this build has it, else Hybrid. */
   store?: StoreKind
+  /**
+   * What `app.store.query` and `app.store.update` may fetch for SPARQL SERVICE and LOAD
+   * (docs/FETCHING.md; default: nothing): the host's alone, as `sources` is. Rules, views and
+   * reactions never fetch, and no graph, authored or not, can add to it. Needs one of Semblance's
+   * engines ('wat' or 'rust'); `app.store.setFetchPolicy` replaces it.
+   */
+  fetchPolicy?: FetchPolicy
   /** Which implementation of a rendering to use when it has both: SPARQL (the default) or a function. */
   prefer?: 'sparql' | 'function'
   /** Function rules, by the name a sem:Rule's sem:function gives. */
@@ -150,6 +157,7 @@ let authoredBoxes = 0
  */
 export async function mount(element: HTMLElement, opts: MountOptions): Promise<MountedApp> {
   const kind = opts.store ?? (hasStore('wat') ? 'wat' : 'hybrid')
+  if (opts.fetchPolicy && kind !== 'wat' && kind !== 'rust') throw doesNotFetch(kind)
   // A store without SPARQL (N3) can only run function rules.
   const prefer = kind === 'n3' ? 'function' : (opts.prefer ?? 'sparql')
   await initWeb(kind, { ontology: opts.ontology === undefined })
@@ -162,7 +170,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const policy = opts.policy ?? (trusted && readPolicy(trusted))
   const isolated = opts.isolate === 'shadow'
   const trustedCss = trusted && !isolated && !serverStyled(element.ownerDocument) ? compileStyles(trusted) : ''
-  const store = load(...(opts.graphs ?? []), ...(opts.authored ?? []))
+  // The fetch policy is the host's, set on the store itself: no graph is read for it.
+  const store = configureFetching(load(...(opts.graphs ?? []), ...(opts.authored ?? [])), opts.fetchPolicy)
   const config = trusted ?? store
   const onRefused = opts.onRefused ?? ((e: Error) => console.warn('[semblance]', e.message))
   // Where we are, before the first projection: the address (a server rendered the same one).

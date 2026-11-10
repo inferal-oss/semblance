@@ -4,22 +4,18 @@ import type { FetchPolicy } from '../../rdf-engine/host/fetching.ts'
 
 export type { FetchPolicy, Remote } from '../../rdf-engine/host/fetching.ts'
 
-/**
- * Queries and updates that may reach the network: SPARQL `SERVICE` and `LOAD` (docs/FETCHING.md).
- * Only these fetch, asynchronously, and only what `policy` lists; the synchronous `select` and
- * `construct` (which rules, views and reactions use) refuse them, so no graph reaches the network
- * on its own. Operations on one store run one at a time.
- */
-export interface FetchingQueries {
-  /** A SELECT (or ASK: true or false) whose SERVICE patterns are answered under `policy`. */
-  select(query: string, graphs: Quad_Graph[], policy: FetchPolicy): Promise<Map<string, Term>[]>
-  /** A CONSTRUCT whose SERVICE patterns are answered under `policy`. */
-  construct(query: string, graphs: Quad_Graph[], policy: FetchPolicy): Promise<Quad[]>
+/** What `query` answers: a SELECT's solutions, an ASK's boolean, or a CONSTRUCT's (or DESCRIBE's) triples. */
+export type QueryAnswer = Map<string, Term>[] | boolean | Quad[]
+
+export interface QueryOptions {
+  /** The default graph is the union of these (absent: the store's default graph). */
+  graphs?: Quad_Graph[]
   /**
-   * A SPARQL Update with LOAD and SERVICE, applied to the store directly: for a store no runtime
-   * drives. A mounted app takes remote data in with `construct` and `runtime.apply` instead.
+   * A policy for this call only, which can only narrow the store's (docs/FETCHING.md): what both
+   * list, within the smaller of each limit (a deadline, fewer requests). Where and how a remote is
+   * fetched (url, headers, credentials, fetch) is the store's alone.
    */
-  update(update: string, policy: FetchPolicy): Promise<void>
+  policy?: FetchPolicy
 }
 
 export interface Factory {
@@ -101,10 +97,39 @@ export interface GraphStore {
    */
   setDeadline?(at: number | undefined): void
   /**
-   * SERVICE and LOAD, under the host's policy. Optional: the Semblance engines (WASM and Rust)
-   * have it; Oxigraph's JavaScript build has no HTTP client and N3 no SPARQL, so they omit it.
+   * Answer any SPARQL query, asynchronously: the one entry point for host code. Only here do
+   * `SERVICE` patterns reach the network, and only what the store's fetch policy lists
+   * (docs/FETCHING.md); the synchronous `select` and `construct` (which rules, views and reactions
+   * use) refuse them. The engines (wat, rust) run one such call at a time per store. Oxigraph and
+   * N3 answer what they can and refuse SERVICE.
    */
-  readonly fetching?: FetchingQueries
+  query<T extends QueryAnswer = QueryAnswer>(query: string, options?: QueryOptions): Promise<T>
+  /**
+   * A SPARQL Update, with `LOAD` and `SERVICE` under the store's fetch policy, applied to the store
+   * directly: for a store no runtime drives (a mounted app takes remote data in with `query` and
+   * `runtime.apply` instead). Optional: the engines and Oxigraph have it (Oxigraph refuses LOAD
+   * and SERVICE); N3 and the hybrid store omit it.
+   */
+  update?(update: string, options?: Pick<QueryOptions, 'policy'>): Promise<void>
+  /**
+   * Replace the store's fetch policy (undefined: nothing may be fetched). The host sets it where it
+   * creates the store (`createStore`, `mount`, a site's config, all `fetchPolicy`); no graph can
+   * add to it. Optional: only the engines fetch, and the stores that do not omit it.
+   */
+  setFetchPolicy?(policy: FetchPolicy | undefined): void
+}
+
+/** What a store that does not fetch says to SERVICE, LOAD or a fetch policy. */
+export const doesNotFetch = (kind: string) => new Error(`The ${kind} store does not fetch: SERVICE and LOAD need one of Semblance's engines, 'wat' or 'rust' (docs/FETCHING.md)`)
+
+/**
+ * Give `store` the host's fetch policy (undefined: nothing may be fetched), as createStore, mount and
+ * a site's config do. A store that does not fetch refuses a policy, rather than ignore it.
+ */
+export function configureFetching<S extends GraphStore>(store: S, policy: FetchPolicy | undefined): S {
+  if (store.setFetchPolicy) store.setFetchPolicy(policy)
+  else if (policy) throw doesNotFetch(store.kind)
+  return store
 }
 
 /** Thrown by a query a store's deadline (setDeadline) cut off. Nothing was changed. */

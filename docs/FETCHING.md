@@ -22,49 +22,68 @@ them in step with where they came from. When the page should follow the data, bi
 
 ## Asking
 
-`GraphStore.fetching` is the asynchronous side of a store. The wasm engine stores (`wat`, `rust`)
-have it; Oxigraph and N3 do not (it is `undefined`). The types (`FetchingQueries`, `FetchPolicy`,
-`Remote`) are exported from `src/store/types.ts`.
+The host configures fetching once, on the store, and then asks through the store's regular
+asynchronous query call. The policy is the store's configuration: `createStore`, `mount` and a
+site's config (`semblance.config.ts`) take it as `fetchPolicy`, and `store.setFetchPolicy(policy)`
+replaces it later. The types (`FetchPolicy`, `Remote`, `QueryAnswer`, `QueryOptions`) are
+exported from `src/store/types.ts`.
 
 ```ts
-const policy: FetchPolicy = {
-  endpoints: { 'urn:ex:catalog': { url: 'https://data.example.org/sparql', headers: { authorization } } },
-  documents: { 'https://w3id.org/vocab/*': {} },
-  deadline: Date.now() + 5000,
-}
+const store = createStore('wat', {
+  fetchPolicy: {
+    endpoints: { 'urn:ex:catalog': { url: 'https://data.example.org/sparql', headers: { authorization } } },
+    documents: { 'https://w3id.org/vocab/*': {} },
+  },
+})
 
-const rows = await store.fetching!.select(`
+const rows = await store.query<Map<string, Term>[]>(`
   SELECT ?item ?price WHERE {
     ?item a ex:Item ; ex:sku ?sku .
     SERVICE <urn:ex:catalog> { ?product ex:sku ?sku ; ex:price ?price }
-  }`, graphs, policy)
+  }`)
 
-await store.fetching!.update(`LOAD <https://w3id.org/vocab/terms.ttl> INTO GRAPH <urn:ex:vocab>`, policy)
+await store.update!(`LOAD <https://w3id.org/vocab/terms.ttl> INTO GRAPH <urn:ex:vocab>`)
 ```
 
-- `select` answers a `SELECT` with rows, an `ASK` with a boolean; `construct` answers a
-  `CONSTRUCT` with quads. Each resolves once every request the query needs has been fetched.
-- Operations on one store run one at a time.
-- `update` changes the store directly. It is for a store no runtime drives: a server, a build
-  step, a tool, or a store seeded before `mount`. A mounted app takes remote data in through the
-  runtime, so rules see it as an input change:
+- `store.query(query, { graphs?, policy? })` answers any query: a `SELECT` with rows, an `ASK`
+  with a boolean, a `CONSTRUCT` or `DESCRIBE` with quads. It fetches only when the query uses
+  `SERVICE`, and resolves once every request the query needs has been fetched. `graphs` makes the
+  default graph their union (absent: the store's default graph).
+- `store.update(update, { policy? })` runs a SPARQL Update, with `LOAD` and `SERVICE`, and changes
+  the store directly. It is for a store no runtime drives: a server, a build step, a tool, or a
+  store seeded before `mount`.
+- **A call's `policy` can only narrow the store's.** It keeps the endpoints and documents both list
+  (of two document prefixes, one within the other, the narrower), within the smaller of each limit
+  and the earlier deadline. Where and how a remote is fetched is the store's: a call that gives a
+  `url`, `headers`, `credentials` or a `fetch` of its own is refused. The usual use is a deadline:
+  `store.query(q, { policy: { ...store's lists, deadline: Date.now() + 5000 } })`, or a list
+  narrowed to the one endpoint a call should reach.
+- Calls on one store run one at a time. The policy is read when a call is made: replacing it does
+  not change a call already made.
+- The synchronous `select` and `construct` stay what the rule engine uses, and never fetch.
+
+A mounted app takes the policy as `mount`'s `fetchPolicy`, and takes remote data in through the
+runtime, so rules see it as an input change:
 
 ```ts
-const quads = await app.store.fetching!.construct(query, graphs, policy)
+const app = await mount(element, { root, graphs, fetchPolicy: { endpoints: { 'urn:ex:catalog': { url } } } })
+
+const quads = await app.store.query<Quad[]>(query)
 app.runtime.apply({ add: quads, remove: [] })
 ```
 
 ## The policy
 
-Nothing is fetched unless the host lists it. The policy is code, passed with each call; no graph
-can add to it, and nothing in the graph configures fetching.
+Nothing is fetched unless the host lists it: a store with no policy fetches nothing. The policy is
+code, set by the host on the store; no graph can add to it, and nothing in the graph configures
+fetching (authored content included: [SAFETY.md](SAFETY.md)).
 
 ```ts
 interface FetchPolicy {
   endpoints?: Record<string, Remote>  // SERVICE: by the IRI the query names, exactly
   documents?: Record<string, Remote>  // LOAD: by IRI exactly, or a prefix `https://host/path/*`
   fetch?: typeof fetch                // default globalThis.fetch
-  deadline?: number                   // Date.now() ms: the whole operation ends by then
+  deadline?: number                   // Date.now() ms: the whole operation ends by then (usually per call)
   timeoutMs?: number                  // per request, default 10 000
   maxBytes?: number                   // per response, default 16 MiB
   maxRows?: number                    // solutions or triples per response, default 100 000
@@ -172,18 +191,20 @@ solutions, triples or requests than the limit, or past the deadline.
 
 ## Authored content never reaches the network
 
-- **Only the host's own asynchronous calls fetch.** Rules, views and reactions run the
-  synchronous `select` and `construct`. There, a query that needs a fetch fails with "SERVICE and
-  LOAD reach the network: only store.fetching runs them (docs/FETCHING.md); rules, views and
-  reactions cannot". An authored SPARQL rule with `SERVICE` fails like any failing rule, and
-  nothing is fetched.
+- **Only the host's own asynchronous calls fetch** (`store.query`, `store.update`). Rules, views
+  and reactions run the synchronous `select` and `construct`. There, a query that needs a fetch
+  fails with "SERVICE and LOAD reach the network: only store.query and store.update run them
+  (docs/FETCHING.md); rules, views and reactions cannot". An authored SPARQL rule with `SERVICE`
+  fails like any failing rule, and nothing is fetched, even from an endpoint the host lists.
 - **Rules and views may not use SERVICE or LOAD.** Their results come from elsewhere, on no
   schedule the runtime sees, and are not incremental, so a rule over them could neither be
   maintained nor kept within a turn. Run a one-off query and apply what it returns, or bind a
   remote source.
-- **The list is the host's, in code**, and checked for every request, whatever produced the IRI:
-  a `SERVICE ?endpoint` bound by triples someone else wrote is refused unless listed.
-- **`LOAD` exists only in update text the host passes** to `fetching.update`: an author cannot
+- **The list is the host's, in code**, set on the store where the host creates it, and checked
+  for every request, whatever produced the IRI: a `SERVICE ?endpoint` bound by triples someone
+  else wrote is refused unless listed. No graph is read for it, so an author cannot add to it, and
+  a call can only narrow it.
+- **`LOAD` exists only in update text the host passes** to `store.update`: an author cannot
   issue one, or choose the graph it loads into.
 
 `test/rdf-engine-fetching.test.ts` checks each of these on both engines, and the W3C federated
@@ -192,8 +213,8 @@ query tests run against an in-process endpoint (`rdf-engine/host/mock-endpoint.t
 
 ## Stores
 
-| store | `fetching` | `SERVICE` / `LOAD` in a synchronous query |
+| store | `query` | `SERVICE` / `LOAD` in a synchronous query |
 |---|---|---|
-| `wat`, `rust` | yes | an error ("SERVICE and LOAD reach the network: …") |
-| Oxigraph | no: its JS build has no HTTP client | `SERVICE` fails, `SERVICE SILENT` is the empty solution; `LOAD` fails, `LOAD SILENT` does nothing |
-| N3 | no | no SPARQL |
+| `wat`, `rust` | any query; `SERVICE` and `LOAD` (`update`) under the store's policy | an error ("SERVICE and LOAD reach the network: …") |
+| Oxigraph, Hybrid | any query without `SERVICE`; `SERVICE` fails ("does not fetch"), `SERVICE SILENT` is the empty solution; Oxigraph's `update` fails a `LOAD`. A fetch policy is refused (its JS build has no HTTP client) | as in `query` |
+| N3 | refuses: no SPARQL; a fetch policy is refused | no SPARQL |

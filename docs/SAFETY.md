@@ -121,10 +121,12 @@ When the rest matters, give the author a store of its own, as the live examples 
 - **No store elsewhere:** a remote source (`src:Source`, [REMOTE.md](REMOTE.md)) names no endpoint
   in the graph at all: the host maps each source's IRI to its URL and credentials, and a source it
   does not map stays `src:Unbound`. An authored graph cannot point a source anywhere.
-- **No fetching:** SPARQL `SERVICE` and `LOAD` run only in the host's own `store.fetching`
-  calls, under the host's list of endpoints and documents ([FETCHING.md](FETCHING.md)). A rule,
-  view or reaction that uses them fails and fetches nothing, and a `SERVICE ?endpoint` whose
-  endpoint an author wrote is checked against that list like any other.
+- **No fetching:** SPARQL `SERVICE` and `LOAD` run only in the host's own `store.query` and
+  `store.update` calls, under the fetch policy the host set on the store (`mount`'s `fetchPolicy`;
+  [FETCHING.md](FETCHING.md)). No graph is read for that policy, so authored content cannot add
+  to it. A rule, view or reaction that uses them fails and fetches nothing, even from a listed
+  endpoint, and a `SERVICE ?endpoint` whose endpoint an author wrote is checked against that list
+  like any other.
 - **No reconfiguring the host's effects:** under `mount({ authored })` the effects read their
   configuration from the trusted graphs alone (`app.trusted`, a store of the ontology and `graphs`):
   remote sources (`src:`), the location and whether there is one (`nav:`), where and by what a drop

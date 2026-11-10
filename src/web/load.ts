@@ -6,7 +6,7 @@ import { ONTOLOGY_FILES } from '../ontology.ts'
 import { hybridStore } from '../store/hybrid.ts'
 import { n3Store } from '../store/n3.ts'
 import { oxigraphStore } from '../store/oxigraph.ts'
-import type { GraphStore } from '../store/types.ts'
+import { configureFetching, type FetchPolicy, type GraphStore } from '../store/types.ts'
 
 /** `wat` and `rust` are Semblance's own engines (rdf-engine/): "Semblance WASM" and "Semblance Rust". */
 export type StoreKind = 'wat' | 'rust' | 'oxigraph' | 'n3' | 'hybrid'
@@ -108,6 +108,11 @@ export interface StoreOptions {
   compiled?: boolean | 'idle'
   /** Semblance's engines: the time zone sx:formatDateTime uses when its options name none (default: the host's). */
   timeZone?: string
+  /**
+   * Semblance's engines: what `store.query` and `store.update` may fetch for SERVICE and LOAD
+   * (docs/FETCHING.md; default: nothing). The other stores do not fetch, and refuse one.
+   */
+  fetchPolicy?: FetchPolicy
 }
 
 /** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
@@ -117,11 +122,11 @@ export function createStore(kind: StoreKind, options: StoreOptions = {}): GraphS
   if (kind === 'rust' || kind === 'wat') {
     const module = engines[kind]
     if (!module) throw new Error(`initWeb('${kind}') must be awaited first`)
-    return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : 0, timeZone: options.timeZone })
+    return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : 0, timeZone: options.timeZone, fetchPolicy: options.fetchPolicy })
   }
-  if (kind === 'n3') return n3Store()
+  if (kind === 'n3') return configureFetching(n3Store(), options.fetchPolicy)
   if (!ox) throw new Error(`initWeb('${kind}') must be awaited first`)
-  return kind === 'oxigraph' ? oxigraphStore(ox) : hybridStore(ox)
+  return configureFetching(kind === 'oxigraph' ? oxigraphStore(ox) : hybridStore(ox), options.fetchPolicy)
 }
 
 export function ontologySources(): string[] {
