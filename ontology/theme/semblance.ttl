@@ -127,8 +127,8 @@
                  [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px var(--sem-border)" ] .
 
-# A nav list is rows on the canvas, not a plate beside the plates; the current row is a quiet
-# filled row in the text colour, as a menu's chosen item is.
+# A nav list is rows on the canvas, not a plate beside the plates; the current row is a plate
+# of its own (the surface and a hairline), as a menu's chosen item stands out of the menu.
 [] a sty:StyleRule ; sty:when sty:Semblance ;
     sty:part "[data-sem-c=nav-list]:not([data-sem-compact-as=picker] .sem-picker):not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
@@ -146,8 +146,8 @@
 [] a sty:StyleRule ; sty:when sty:Semblance ;
     sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
-                 [ sty:property "background" ; sty:raw "var(--sem-gray-4)" ] ,
-                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px var(--sem-border-strong)" ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] .
 
 # Figures that are data are set in mono, tabular: a stat, a count, the status bar.
@@ -200,17 +200,17 @@
     sty:declares [ sty:property "border-radius" ; sty:raw "var(--sem-radius-sm)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 
-# On a phone the bar has two rows, one job each: the brand, Search and More; then the pages as a
+# On a phone or a tablet the bar has two rows, one job each: the brand, Search and More; then the pages as a
 # strip of keys that scrolls sideways, the current one in ink (a strip shows where one is, a picker
 # hides it).
-[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:part "[data-sem-c=app-bar]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "row-gap" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:part "[data-sem-c=app-bar] > .sem-actions:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "display" ; sty:raw "contents" ] .
-[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:part "[data-sem-c=app-bar] > .sem-actions > [data-sem-c=segmented]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "order" ; sty:raw "10" ] ,
                  [ sty:property "flex" ; sty:raw "1 0 100%" ] ,
@@ -223,10 +223,10 @@
                  [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--sem-radius-control)" ] .
-[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:part "[data-sem-c=app-bar] > .sem-actions > [data-sem-c=segmented] > .sem-picker:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:part "[data-sem-c=app-bar] > .sem-actions > [data-sem-c=segmented] > :not(.sem-picker):not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "flex" ; sty:raw "1 0 auto" ] ,
@@ -234,20 +234,20 @@
                  [ sty:property "min-height" ; sty:raw "34px" ] ,
                  [ sty:property "padding-inline" ; sty:raw "7px" ] ,
                  [ sty:property "font-size" ; sty:raw "13px" ] .
-[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:part "[data-sem-c=app-bar] > .sem-actions > [data-sem-c=button]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
-[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:part "[data-sem-c=app-bar] .sem-more:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "margin-inline-start" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:part "[data-sem-c=app-bar] .sem-more-toggle:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "width" ; sty:raw "36px" ] ,
                  [ sty:property "height" ; sty:raw "36px" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--sem-radius-control)" ] ,
                  [ sty:property "font-size" ; sty:raw "18px" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:part "[data-sem-c=app-bar] .sem-more-toggle[aria-expanded=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "var(--sem-gray-1)" ] ,
                  [ sty:property "background" ; sty:raw "var(--sem-gray-12)" ] .
