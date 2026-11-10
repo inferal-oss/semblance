@@ -115,6 +115,7 @@ export const ONTOLOGY_FILES = [
   'theme/variants.ttl',
   'theme/themes.ttl',
   'theme/themes-structural.ttl',
+  'theme/semblance.ttl',
   'theme/windows.ttl',
   'theme/layers.ttl',
   'theme/dragdrop.ttl',

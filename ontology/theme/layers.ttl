@@ -60,6 +60,10 @@
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-key-hint-apple) '\\A' attr(data-sem-key-hint) / ''" ] .
 [] a sty:StyleRule ; sty:part "[data-sem-key-hint]:not(button, a, [role=button], [role=switch]):focus-within::after" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
+# On a compact screen (a phone held upright) there is rarely a keyboard to press them with: the key
+# caps give their room to the labels. The element's aria-keyshortcuts still says the keys.
+[] a sty:StyleRule ; sty:atWidth sty:CompactWidth ; sty:part ":is([data-sem-shortcut], [data-sem-key-hint]):is(button, a, [role=button], [role=switch])::after" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
 # --- shortcut list ---
 [] a sty:StyleRule ; sty:appliesTo c:ShortcutList ;
