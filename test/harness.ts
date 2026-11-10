@@ -20,9 +20,9 @@ import { Runtime } from '../src/runtime.ts'
 import { FakeLayout } from './rendered-layout.ts'
 
 const UI = 'https://semblance.dev/demo#'
-const appGraph = readFileSync(new URL('../demo/app.ttl', import.meta.url), 'utf8')
+export const appGraph = readFileSync(new URL('../demo/app.ttl', import.meta.url), 'utf8')
 const galleryDir = new URL('../demo/gallery/', import.meta.url)
-const galleryFiles = Object.fromEntries(readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort().map((f) => ['demo/gallery/' + f, readFileSync(new URL(f, galleryDir), 'utf8')]))
+export const galleryFiles = Object.fromEntries(readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort().map((f) => ['demo/gallery/' + f, readFileSync(new URL(f, galleryDir), 'utf8')]))
 const gallery = Object.values(galleryFiles)
 /** As the host does: the examples' own files (and the todo app's graph) as c:SourceText. */
 const sources = (store: GraphStore) => {
