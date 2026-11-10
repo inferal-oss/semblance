@@ -13,6 +13,20 @@ exports[`LOAD > INTO GRAPH 1`] = `
 }
 `;
 
+exports[`LOAD > Jelly: its default graph only 1`] = `
+{
+  "quads": [
+    "http://a http://alias http://a b> } # ",
+    "http://a http://r https://two.example/sparql ",
+    "http://b http://alias http://a ",
+    "http://b http://r "not an IRI" ",
+    "http://c http://r _ ",
+    "http://j http://p "jelly"@en http://g",
+    "http://j http://p _ http://g",
+  ],
+}
+`;
+
 exports[`LOAD > a failed LOAD undoes the update 1`] = `
 {
   "error": "LOAD <https://data.example/dumps/missing.ttl>: could not be reached",

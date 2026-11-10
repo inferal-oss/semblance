@@ -4,6 +4,9 @@
 // joins, the endpoint, the document server), so nothing is fetched that the policy does not list,
 // every response is bounded and checked, and a failure is a failed request, never a trap.
 
+import type { Term } from '@rdfjs/types'
+import { DataFactory } from 'n3'
+import { readJelly } from '../../src/jelly/decode.ts'
 import { Engine, EngineError, FetchKind, FetchState, Format, Kind, type FetchRequest } from './engine.ts'
 
 /** Where and how to reach one endpoint or document, as the host lists it. */
@@ -164,11 +167,11 @@ export function serviceQuery(e: Engine, r: FetchRequest, remote: Remote, limits:
 
 // --- reading responses ---------------------------------------------------------------
 
-/** The body as text, read no further than `max` bytes. */
-async function body(res: Response, max: number): Promise<string> {
+/** The body, read no further than `max` bytes. */
+async function body(res: Response, max: number): Promise<Uint8Array> {
   const length = Number(res.headers.get('content-length'))
   if (length > max) throw new FetchRefused(`response larger than ${max} bytes`)
-  if (!res.body) return ''
+  if (!res.body) return new Uint8Array()
   const reader = res.body.getReader()
   const parts: Uint8Array[] = []
   let total = 0
@@ -188,8 +191,10 @@ async function body(res: Response, max: number): Promise<string> {
     all.set(p, at)
     at += p.byteLength
   }
-  return new TextDecoder().decode(all)
+  return all
 }
+
+const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
 const mediaType = (res: Response) => (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase()
 
@@ -265,6 +270,44 @@ const RDF_FORMATS: Record<string, Format> = {
   'application/n-triples': Format.NTriples,
 }
 
+/** An RDF/JS term as an engine id; blank nodes fresh per document. */
+function engineTerm(e: Engine, t: Term, bnodes: Map<string, number>): number {
+  switch (t.termType) {
+    case 'NamedNode':
+      return e.iri(t.value)
+    case 'BlankNode': {
+      let id = bnodes.get(t.value)
+      if (id === undefined) bnodes.set(t.value, (id = e.bnode()))
+      return id
+    }
+    case 'Literal': {
+      const dir = (t as { direction?: string }).direction
+      if (t.language) return e.langLiteral(t.value, t.language.toLowerCase(), dir === 'ltr' ? 1 : dir === 'rtl' ? 2 : 0)
+      return t.datatype.value === XSD_STRING ? e.literal(t.value) : e.literal(t.value, e.iri(t.datatype.value))
+    }
+    case 'Quad':
+      return e.triple(engineTerm(e, t.subject, bnodes), engineTerm(e, t.predicate, bnodes), engineTerm(e, t.object, bnodes))
+    default:
+      return bad('a term')
+  }
+}
+
+/** A Jelly stream's triples (#433): the statements of its default graph, read without touching the store. */
+export function jellyTriples(e: Engine, bytes: Uint8Array, maxRows: number): { ids: number[]; count: number } {
+  let quads
+  try {
+    quads = readJelly(bytes, DataFactory)
+  } catch (err) {
+    throw new FetchRefused(`bad document: ${(err as Error).message.slice(0, 120)}`)
+  }
+  const triples = quads.filter((q) => q.graph.termType === 'DefaultGraph')
+  if (triples.length > maxRows) throw new FetchRefused(`more than ${maxRows} triples`)
+  const bnodes = new Map<string, number>()
+  const ids: number[] = []
+  for (const q of triples) ids.push(engineTerm(e, q.subject, bnodes), engineTerm(e, q.predicate, bnodes), engineTerm(e, q.object, bnodes))
+  return { ids, count: triples.length }
+}
+
 /** A document's triples, parsed by the engine itself into a graph of its own, then taken out. */
 export function documentTriples(e: Engine, format: Format, text: string, base: string, maxRows: number): { ids: number[]; count: number } {
   const g = e.iri(`urn:semblance:fetching:load:${Math.random().toString(36).slice(2)}`)
@@ -286,7 +329,7 @@ export function documentTriples(e: Engine, format: Format, text: string, base: s
 // --- the operation -------------------------------------------------------------------------
 
 /** One request to a remote, bounded by its timeout, the operation's deadline and its size. */
-async function get(policy: FetchPolicy, limits: Limits, remote: Remote, url: URL, init: RequestInit): Promise<{ res: Response; text: string }> {
+async function get(policy: FetchPolicy, limits: Limits, remote: Remote, url: URL, init: RequestInit): Promise<{ res: Response; bytes: Uint8Array }> {
   const fetchFn = policy.fetch ?? globalThis.fetch
   const left = policy.deadline === undefined ? Infinity : policy.deadline - Date.now()
   const ms = Math.min(remote.timeoutMs ?? limits.timeoutMs, left)
@@ -296,7 +339,7 @@ async function get(policy: FetchPolicy, limits: Limits, remote: Remote, url: URL
   try {
     const res = await fetchFn(url.href, { ...init, headers: { ...init.headers, ...remote.headers }, credentials: remote.credentials ?? 'omit', redirect: 'error', signal: abort.signal })
     if (!res.ok) throw new FetchRefused(`HTTP ${res.status}`)
-    return { res, text: await body(res, remote.maxBytes ?? limits.maxBytes) }
+    return { res, bytes: await body(res, remote.maxBytes ?? limits.maxBytes) }
   } catch (err) {
     if (abort.signal.aborted) throw new FetchRefused('timed out')
     if (err instanceof FetchRefused) throw err
@@ -309,23 +352,24 @@ async function get(policy: FetchPolicy, limits: Limits, remote: Remote, url: URL
 async function service(e: Engine, r: FetchRequest, policy: FetchPolicy, limits: Limits): Promise<{ ids: number[]; count: number }> {
   const { remote, url } = endpointFor(policy, e.value(r.target))
   const query = serviceQuery(e, r, remote, limits)
-  const { res, text } = await get(policy, limits, remote, url, {
+  const { res, bytes } = await get(policy, limits, remote, url, {
     method: 'POST',
     headers: { 'content-type': 'application/sparql-query', accept: 'application/sparql-results+json' },
     body: query,
   })
   const type = mediaType(res)
   if (type !== 'application/sparql-results+json' && type !== 'application/json') throw new FetchRefused(`unexpected content type ${type.slice(0, 60) || 'none'}`)
-  return answerRows(e, r.vars, text, limits.maxRows)
+  return answerRows(e, r.vars, text(bytes), limits.maxRows)
 }
 
 async function load(e: Engine, r: FetchRequest, policy: FetchPolicy, limits: Limits): Promise<{ ids: number[]; count: number }> {
   const iri = e.value(r.target)
   const { remote, url } = documentFor(policy, iri)
-  const { res, text } = await get(policy, limits, remote, url, { method: 'GET', headers: { accept: 'text/turtle, application/n-triples;q=0.9' } })
+  const { res, bytes } = await get(policy, limits, remote, url, { method: 'GET', headers: { accept: 'text/turtle, application/n-triples;q=0.9, application/x-jelly-rdf;q=0.9' } })
+  if (mediaType(res) === 'application/x-jelly-rdf') return jellyTriples(e, bytes, limits.maxRows)
   const format = RDF_FORMATS[mediaType(res)]
   if (!format) throw new FetchRefused(`unexpected content type ${mediaType(res).slice(0, 60) || 'none'}`)
-  return documentTriples(e, format, text, iri, limits.maxRows)
+  return documentTriples(e, format, text(bytes), iri, limits.maxRows)
 }
 
 /** At most `n` at once. */

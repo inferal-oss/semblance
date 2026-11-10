@@ -330,7 +330,7 @@ time between rounds, the fetch itself, is the host's to bound
 and a size limit per request, a cap on rounds).
 
 These exports are optional, as `compile` is: the host checks for
-`fetch_count`, and the ABI version stays 2. A host that does not fetch sees -3
+`fetch_count`, and the ABI version does not change for them. A host that does not fetch sees -3
 as an error ("waiting: …"), which is what a rule or view running such a query
 should see: **only the host's own asynchronous calls fetch** (`GraphStore.fetching`),
 never a synchronous `run` or `update`, so nothing a graph says can reach the

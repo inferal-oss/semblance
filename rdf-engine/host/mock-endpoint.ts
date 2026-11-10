@@ -12,7 +12,7 @@ export interface MockEndpoint {
 
 export interface MockDocument {
   type: string
-  text: string
+  text: string | Uint8Array
 }
 
 export interface Mock {
@@ -57,7 +57,7 @@ export function mockFetch(module: WebAssembly.Module, endpoints: Record<string, 
     log.push({ method, url, body, headers: { ...(init.headers as Record<string, string>) } })
     if (method === 'GET' && Object.hasOwn(documents, url)) {
       const d = documents[url]!
-      return new Response(d.text, { headers: { 'content-type': d.type } })
+      return new Response(d.text as BodyInit, { headers: { 'content-type': d.type } })
     }
     if (method === 'POST' && Object.hasOwn(endpoints, url)) {
       let e = engines.get(url)

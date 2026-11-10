@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Engine, EngineError, Form, Format, Kind } from '../rdf-engine/host/engine.ts'
 import { documentFor, endpointFor, FetchRefused, sparqlTerm, withFetching, type FetchPolicy } from '../rdf-engine/host/fetching.ts'
 import { mockFetch, type MockDocument, type MockEndpoint } from '../rdf-engine/host/mock-endpoint.ts'
+import { DataFactory } from 'n3'
+import { writeJelly } from '../src/jelly/encode.ts'
 import { engineStore } from '../rdf-engine/host/store.ts'
 import { NS } from '../src/ns.ts'
 import { n3Store } from '../src/store/n3.ts'
@@ -27,6 +29,17 @@ const DOCUMENTS: Record<string, MockDocument> = {
   'https://data.example/dumps/d.ttl': { type: 'text/turtle; charset=utf-8', text: '<http://d> <http://p> _:x . _:x <http://p> "y"@en .' },
   'https://data.example/dumps/d.nt': { type: 'application/n-triples', text: '<http://e> <http://p> "z" .\n' },
   'https://data.example/dumps/d.json': { type: 'application/ld+json', text: '{}' },
+  'https://data.example/dumps/d.jelly': {
+    type: 'application/x-jelly-rdf',
+    text: writeJelly(
+      [
+        DataFactory.quad(DataFactory.namedNode('http://j'), DataFactory.namedNode('http://p'), DataFactory.literal('jelly', 'en')),
+        DataFactory.quad(DataFactory.namedNode('http://j'), DataFactory.namedNode('http://p'), DataFactory.blankNode('x')),
+        DataFactory.quad(DataFactory.namedNode('http://j'), DataFactory.namedNode('http://p'), DataFactory.literal('elsewhere'), DataFactory.namedNode('http://other')),
+      ],
+      { physical: 2 },
+    ),
+  },
 }
 const LOCAL = `
 <http://a> <http://r> <https://two.example/sparql> .
@@ -127,6 +140,7 @@ describe('LOAD', () => {
   for (const [name, text] of [
     ['into the default graph', 'LOAD <https://data.example/dumps/d.ttl>'],
     ['INTO GRAPH', 'LOAD <https://data.example/dumps/d.nt> INTO GRAPH <http://g>'],
+    ['Jelly: its default graph only', 'LOAD <https://data.example/dumps/d.jelly> INTO GRAPH <http://g>'],
     ['in order with the other operations', 'LOAD <https://data.example/dumps/d.nt> ; INSERT { ?s <http://seen> true } WHERE { ?s <http://p> "z" }'],
     ['unlisted', 'LOAD <https://evil.example/x.ttl>'],
     ['unlisted, SILENT: nothing', 'LOAD SILENT <https://evil.example/x.ttl> ; INSERT DATA { <http://k> <http://k> <http://k> }'],
