@@ -1579,7 +1579,7 @@ WHERE {
   $this a/rdfs:subClassOf* c:SeriesChart ; c:view ?theView .
   ?theView a rs:ResultSet .
   # A kind with a plan of its own (c:ownPlan: a histogram's bins, a box plot's boxes) is left to it.
-  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?ownKind . ?ownKind c:ownPlan true }
+  FILTER NOT EXISTS { $this (a|a/rdfs:subClassOf+) ?ownKind . ?ownKind c:ownPlan true }
   BIND(STR($this) AS ?me)
   LATERAL {
   {
@@ -1637,7 +1637,7 @@ WHERE {
     BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?skey), 1, 8))) AS ?node)
     BIND(c:ChartSeries AS ?type) BIND(?skey AS ?key) BIND(?slabel AS ?label) BIND(?si AS ?index)
     BIND(IF(EXISTS { $this c:hiddenSeries ?h FILTER(STR(?h) = ?skey) }, true, ?unset) AS ?hidden)
-    BIND(IF(EXISTS { $this c:legend/rdf:rest*/rdf:first ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
+    BIND(IF(EXISTS { $this (c:legend/rdf:first|c:legend/rdf:rest+/rdf:first) ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
     BIND(CONCAT("\\u0001n", STR(?si)) AS ?okey)
     BIND(IRI(CONCAT(?me, "/~legend")) AS ?container)
   } UNION {
@@ -1770,7 +1770,7 @@ WHERE {
     OPTIONAL { $this a ?kind . ?kind c:pointClass ?type2 }
     BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?ser), 1, 8))) AS ?seriesNode)
     BIND(?cat AS ?category) BIND(?sum AS ?value) BIND(?si AS ?seriesIndex) BIND(?ci AS ?categoryIndex)
-    BIND(IF(EXISTS { $this c:legend/rdf:rest*/rdf:first ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
+    BIND(IF(EXISTS { $this (c:legend/rdf:first|c:legend/rdf:rest+/rdf:first) ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
 
     BIND(CONCAT("\\u0001n", STR(?si), "\\u0001n", STR(?ci)) AS ?okey)
     BIND(IRI(CONCAT(?me, "/~marks")) AS ?container)
@@ -1858,7 +1858,7 @@ WHERE {
     FILTER(BOUND(?lo0))
     BIND($this AS ?chart)
     # With zero, unless the kind says otherwise (c:fromZero false).
-    BIND(NOT EXISTS { $this a/rdfs:subClassOf* ?zeroKind . ?zeroKind c:fromZero false } AS ?fromZero)
+    BIND(NOT EXISTS { $this (a|a/rdfs:subClassOf+) ?zeroKind . ?zeroKind c:fromZero false } AS ?fromZero)
     BIND(IF(?fromZero && ?lo0 > 0, 0e0, ?lo0) AS ?lo) BIND(IF(?fromZero && ?hi0 < 0, 0e0, ?hi0) AS ?hi)
     BIND(IF(?hi - ?lo > 0, ?hi - ?lo, 1e0) / 5 AS ?raw)
     BIND(sx:pow(10, FLOOR(sx:log10(?raw))) AS ?mag)
@@ -1880,7 +1880,7 @@ WHERE {
     BIND($this AS ?chart)
   } UNION {
     # A polar kind (c:polar true, a pie): the positive total, each point's share of it, and where it starts (the shares before it).
-    FILTER EXISTS { $this a/rdfs:subClassOf* ?polarKind . ?polarKind c:polar true }
+    FILTER EXISTS { $this (a|a/rdfs:subClassOf+) ?polarKind . ?polarKind c:polar true }
     FILTER EXISTS { ?anyPoint a c:ChartPoint ; c:inChart $this }
     { SELECT (SUM(IF(?tv > 0, ?tv, 0e0)) AS ?total0) WHERE { ?tp a c:ChartPoint ; c:inChart $this ; c:value ?tv } }
     LATERAL {
@@ -2494,7 +2494,7 @@ WHERE {
     OPTIONAL { FILTER(!BOUND(?label2)) $this rdfs:label ?label3 FILTER(isLiteral(?label3)) }
     BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
     OPTIONAL { $this c:total ?total }
-    BIND(EXISTS { $this a/rdfs:subClassOf* ?holeKind . ?holeKind c:hole true } AS ?hole)
+    BIND(EXISTS { $this (a|a/rdfs:subClassOf+) ?holeKind . ?holeKind c:hole true } AS ?hole)
     VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
       ("root" rdfhtml:Figure UNDEF UNDEF UNDEF) ("pie" rdfhtml:Div "sem-pie" "root" 0) ("marks" rdfhtml:Ol "sem-chart-marks" "pie" 0)
       ("total" rdfhtml:Span "sem-pie-total" "pie" 1) ("keys" rdfhtml:Ul "sem-legend" "root" 1) }
@@ -2646,7 +2646,7 @@ WHERE {
     BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?skey), 1, 8))) AS ?node)
     BIND(c:ChartSeries AS ?type) BIND(?skey AS ?key) BIND(?slabel AS ?label) BIND(?si AS ?index)
     BIND(IF(EXISTS { $this c:hiddenSeries ?h FILTER(STR(?h) = ?skey) }, true, ?unset) AS ?hidden)
-    BIND(IF(EXISTS { $this c:legend/rdf:rest*/rdf:first ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
+    BIND(IF(EXISTS { $this (c:legend/rdf:first|c:legend/rdf:rest+/rdf:first) ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
     BIND(CONCAT("\\u0001n", STR(?si)) AS ?okey)
     BIND(IRI(CONCAT(?me, "/~legend")) AS ?container)
   } UNION {
@@ -3111,7 +3111,7 @@ WHERE {
     BIND(IRI(CONCAT(?me, "/~series-", SUBSTR(MD5(?skey), 1, 8))) AS ?node)
     BIND(c:ChartSeries AS ?type) BIND(?skey AS ?key) BIND(?slabel AS ?label) BIND(?si AS ?index)
     BIND(IF(EXISTS { $this c:hiddenSeries ?h FILTER(STR(?h) = ?skey) }, true, ?unset) AS ?hidden)
-    BIND(IF(EXISTS { $this c:legend/rdf:rest*/rdf:first ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
+    BIND(IF(EXISTS { $this (c:legend/rdf:first|c:legend/rdf:rest+/rdf:first) ?axisSeries . ?axisSeries c:axis c:SecondaryAxis . OPTIONAL { ?axisSeries c:key ?axisKey } FILTER(COALESCE(STR(?axisKey), STR(?axisSeries)) = ?skey) }, true, ?unset) AS ?secondary)
     BIND(CONCAT("\\u0001n", STR(?si)) AS ?okey)
     BIND(IRI(CONCAT(?me, "/~legend")) AS ?container)
   } UNION {
