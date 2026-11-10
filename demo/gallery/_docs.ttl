@@ -1273,7 +1273,7 @@ ui:doc-fe-svc-items ui:fe-s-values "The solutions joined before the SERVICE, res
 ui:fe-s-values rdfs:label "Bindings go along" . ui:fe-s-var rdfs:label "A variable endpoint" . ui:fe-s-leave rdfs:label "Rows leave the page" . ui:fe-s-join rdfs:label "The same result" . ui:fe-s-silent rdfs:label "SILENT" . ui:fe-s-compile rdfs:label "Compiling" .
 
 ui:doc-fe-load-h a c:Heading ; c:level 2 ; c:label "LOAD" .
-ui:doc-fe-load-1 a c:Text ; c:label "LOAD [SILENT] <iri> [INTO GRAPH <g>] fetches the document with a GET and adds its triples to g (the default graph without INTO), in order with the update's other operations; the update applies all or nothing. Documents are read as Turtle (text/turtle) or N-Triples (application/n-triples); blank nodes are fresh per document. A failed LOAD fails the update; LOAD SILENT does nothing." .
+ui:doc-fe-load-1 a c:Text ; c:label "LOAD [SILENT] <iri> [INTO GRAPH <g>] fetches the document with a GET and adds its triples to g (the default graph without INTO), in order with the update's other operations; the update applies all or nothing. Documents are read as Turtle (text/turtle), N-Triples (application/n-triples) or Jelly (application/x-jelly-rdf, its default graph); blank nodes are fresh per document. A failed LOAD fails the update; LOAD SILENT does nothing." .
 
 ui:doc-fe-safe-h a c:Heading ; c:level 2 ; c:label "Authored content never reaches the network" .
 ui:doc-fe-safe a c:DescriptionList ; c:of ui:doc-fe-safe-items ; c:fields ( ui:fe-a-host ui:fe-a-rules ui:fe-a-list ui:fe-a-load ui:fe-a-response ui:fe-a-csp ) .

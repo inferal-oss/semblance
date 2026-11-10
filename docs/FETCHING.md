@@ -89,7 +89,8 @@ credentials, as remote sources map a source's IRI to its endpoint: a query can n
 
 - **Endpoints match by exact IRI**, never by prefix.
 - **A document entry may be a prefix** (`https://data.example/dumps/*`): an `http(s)` URL whose
-  path ends in `/`. A candidate must normalize (case, dot segments, `%2e`, ports) to the same
+  path ends in `/`, with no query or fragment; a document under it is fetched at its own address
+  (its `url` is for exact entries). A candidate must normalize (case, dot segments, `%2e`, ports) to the same
   origin under that path, so `https://allowed.example@evil.example`,
   `https://allowed.example.evil.example` and `…/../` do not pass.
 - A user name in a URL, a scheme other than `http(s)`, and keys such as `__proto__` are refused.
@@ -152,8 +153,8 @@ Protocol `POST` (`application/sparql-query`), and reads the answer as SPARQL res
 `LOAD [SILENT] <iri> [INTO GRAPH <g>]` fetches the document with a `GET` and adds its triples to
 `g` (the default graph without `INTO`), in order with the update's other operations. The update
 applies all or nothing: while a document is missing it changes nothing. Documents are read as
-Turtle (`text/turtle`) or N-Triples (`application/n-triples`); blank nodes are fresh per
-document. A failed `LOAD` fails the update; `LOAD SILENT` does nothing.
+Turtle (`text/turtle`), N-Triples (`application/n-triples`) or Jelly (`application/x-jelly-rdf`,
+its default graph, through `src/jelly/decode.ts`); blank nodes are fresh per document. A failed `LOAD` fails the update; `LOAD SILENT` does nothing.
 
 ## What a response may do
 
