@@ -325,6 +325,13 @@ export class Runtime {
   project(opts: ProjectOptions, onError?: (e: Error) => void): Projection {
     // Views start with the first projection (whose rule preference they share), before it reads the store.
     if (!this.views.isStarted) this.views.start(opts.prefer)
+    // Authored content brings its own rules: its policy's work budgets bind every turn of this
+    // runtime (the tightest of them, when several projections have one).
+    const p = opts.policy
+    if (p) {
+      if (p.budgetMs !== undefined) this.watchdog.budgetMs = Math.min(this.watchdog.budgetMs, p.budgetMs)
+      if (p.maxEvaluations !== undefined) this.watchdog.maxEvaluations = Math.min(this.watchdog.maxEvaluations, p.maxEvaluations)
+    }
     return this.watchdog.turn(() => this.projectWatched(opts, onError))
   }
 
@@ -339,6 +346,7 @@ export class Runtime {
     })
     const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase(), opts.policy)
     engine.watchdog = this.watchdog
+    if (opts.policy?.maxDerived !== undefined) engine.maxDerived = opts.policy.maxDerived
     engine.arriving = this.isArriving
     engine.onChange((d) => index.apply(d))
     // A view that reads what rules derive (iv:reads <rendering>) reads the first projection's.

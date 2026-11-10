@@ -96,15 +96,21 @@ ui:Plain a safe:Policy ; safe:element rdfhtml:Div , rdfhtml:Span , rdfhtml:P ; s
     const trusted = loadStore('wat', app)
     const policy = authoredPolicy(trusted)
     const store = loadStore('wat', app, link('javascript:alert(1)'))
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnings = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const r = await renderToString({ store, root: UI + 'page', policy, styles: false })
       expect(r.html).not.toContain('href="javascript')
       expect(r.html).toContain('>Theirs<')
       expect([...r.projection.index.refusals.keys()].sort()).toEqual([UI + 'own/~root', UI + 'theirs/~root'])
-      // Without an error handler of its own, the projection reports on the console.
-      expect(errors.mock.calls.some(([e]) => e instanceof Refused)).toBe(true)
+      // Without onRefused, as mount: on the console, as warnings.
+      expect(warnings.mock.calls.some(([tag, message]) => tag === '[semblance]' && /javascript: URL/.test(String(message)))).toBe(true)
       r.runtime.dispose()
+      // With it, each refusal is a Refused.
+      const refused: Error[] = []
+      const again = await renderToString({ store: loadStore('wat', app, link('javascript:alert(1)')), root: UI + 'page', policy, styles: false, onRefused: (e) => refused.push(e) })
+      expect(refused.length).toBeGreaterThan(0)
+      expect(refused.every((e) => e instanceof Refused && e.kind === 'url')).toBe(true)
+      again.runtime.dispose()
     } finally {
       store.dispose?.()
       trusted.dispose?.()

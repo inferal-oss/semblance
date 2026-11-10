@@ -14,6 +14,7 @@
 // Every movement is timed by the motion tokens on the element (--sem-duration-move for the long
 // ones, --sem-duration-slow for a slide): reduced motion turns the long movements into a short fade,
 // none turns them off. It never writes the graph.
+import { elementById } from './builtins.ts'
 
 export interface LightboxHost {
   dispose(): void
@@ -80,7 +81,7 @@ export function attachLightboxes(host: HTMLElement): LightboxHost {
 
   /** The viewer opened: its image grows from where it is in the gallery (it waits, hidden, meanwhile). */
   function grow(img: HTMLImageElement) {
-    const origin = doc.getElementById(img.getAttribute('data-sem-origin') ?? '')
+    const origin = elementById(img, img.getAttribute('data-sem-origin') ?? '')
     const t = timing(img)
     const start = origin?.getBoundingClientRect()
     const end = img.getBoundingClientRect()
@@ -92,7 +93,7 @@ export function attachLightboxes(host: HTMLElement): LightboxHost {
 
   /** The viewer closed: a copy of its image flies back to where it is in the gallery. */
   function giveBack(last: Shown) {
-    const origin = doc.getElementById(last.origin)
+    const origin = elementById(host, last.origin)
     const end = origin?.getBoundingClientRect()
     const t = timing(origin ?? host)
     if (!t.move || !end || !visible(end) || !last.rect.width) return

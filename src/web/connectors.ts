@@ -19,6 +19,7 @@
 //     go out to a side (c:Arc) go to the inline end, mirrored right to left.
 
 import { motionCalmedAt } from '../layers/motion.ts'
+import { elementById } from './builtins.ts'
 
 const LAYOUT_PROPERTIES = /^(transform|translate|scale|rotate|top|left|right|bottom|inset|width|height|max-|min-|margin|padding|flex|grid|font|line-height|letter-spacing|border-width|all)/
 
@@ -155,7 +156,7 @@ export function attachConnectors(host: HTMLElement, opts: ConnectorOptions = {})
     const had = byId.get(attr)
     if (had && had.isConnected && had.id === id) return had
     const scope = svg.closest('[data-sem-sandbox]')
-    let el = doc.getElementById(id)
+    let el = elementById(svg, id)
     if (el && el.closest('[data-sem-sandbox]') !== scope) el = (scope ?? host).querySelector(`[id="${id.replace(/["\\]/g, '\\$&')}"]`)
     byId.set(attr, el)
     return el

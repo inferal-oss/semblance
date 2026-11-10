@@ -1,7 +1,7 @@
 import type { Term } from '@rdfjs/types'
 import { NS, RDFS_RANGE, RDFS_SUBCLASS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY } from '../ns.ts'
 import type { GraphStore } from '../store/types.ts'
-import { cssProblem, propertyProblem, Refused, type SafetyPolicy } from '../safety.ts'
+import { cssProblem, lengthProblem, propertyProblem, Refused, type SafetyPolicy } from '../safety.ts'
 import { splitSelectors } from './scope.ts'
 
 /**
@@ -51,10 +51,11 @@ export function compileStyles(store: GraphStore, opts: CompileOptions = {}): str
   const allowed = (text: string, as: Parameters<typeof cssProblem>[2] | 'property' | 'slug' | 'attribute', at: Term): boolean => {
     if (!policy) return true
     const why =
-      as === 'property' ? propertyProblem(policy, text)
+      lengthProblem(policy, text) ??
+      (as === 'property' ? propertyProblem(policy, text)
       : as === 'slug' ? (/^[A-Za-z0-9_-]+$/.test(text) ? undefined : `"${text}" is not a slug`)
       : as === 'attribute' ? (/^[a-z][a-z0-9-]*$/.test(text) ? undefined : `"${text}" is not an attribute name`)
-      : cssProblem(policy, text, as)
+      : cssProblem(policy, text, as))
     if (!why) return true
     const message = `Refused a style${at.termType === 'NamedNode' ? ` of <${at.value}>` : ''}: ${why}.`
     if (!reported.has(at.value + message)) reported.add(at.value + message), (opts.onRefused ?? ((e) => console.warn(e.message)))(new Refused(at.value, 'style', message))

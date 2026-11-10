@@ -12,6 +12,7 @@ import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
 import { type Clock, systemClock } from './clock.ts'
 import { before, componentsWithin, holderOf, holderText, placeSelection, rangeOf, regionOf, selectionIn, type TextPoint } from './text.ts'
+import { deepActive, elementById, originOf } from '../web/builtins.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 /** Distinguishes event IRIs across page loads sharing a store snapshot. */
@@ -658,7 +659,7 @@ export class EventBus {
     // any other key handling - on the host for keys inside it, on the document for the rest.
     const drags = new DragHost(this, renderer, onHandled)
     const dragKeys = (e: Event) => {
-      if ((e.currentTarget === doc) === renderer.host.contains(e.target as Node)) return
+      if ((e.currentTarget === doc) === renderer.host.contains(originOf(e) as Node)) return
       if (drags.key(e as KeyboardEvent, apple)) e.preventDefault(), e.stopImmediatePropagation()
     }
     const native = (e: Event) => (e.target as Element).closest?.('[data-sem-gesture=drag]') && e.preventDefault()
@@ -687,7 +688,7 @@ export class EventBus {
     let entering: Element | null | undefined
     const pressedInto = (e: Event) => {
       const field = (e.target as Element).closest?.('[data-sem-select-on-focus]')
-      entering = field !== doc.activeElement ? field : undefined
+      entering = field !== deepActive(doc) ? field : undefined
     }
     const selectEntered = (e: Event) => {
       const field = entering as HTMLInputElement | null | undefined
@@ -709,11 +710,12 @@ export class EventBus {
       // An open modal dialog keeps the focus: Tab goes round inside it.
       if (trapTab(k, renderer.host)) return k.preventDefault()
       // Keys in slot content are the mounted projection's own (its bus navigates it).
-      if (renderer.host.contains(k.target as Node) && !renderer.inSlot(k.target as Node) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
+      const origin = originOf(k) as Element | null
+      if (origin && renderer.host.contains(origin) && !renderer.inSlot(origin) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
       // Tab stays inside an open modal overlay.
       if (modals.tab(k)) return k.preventDefault()
       const combo = comboOf(k, apple)
-      const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
+      const typing = origin?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
       // An Escape nothing used in a field a shortcut focused: back to where the focus was.
       const back = typing && combo === 'escape' ? cameFrom.get(typing) : undefined
@@ -753,7 +755,7 @@ export class EventBus {
       k.preventDefault()
       const field = el.matches('input, textarea, select') ? el : (el.querySelector('input:not([type=checkbox]):not([type=radio]), textarea, select') as HTMLElement | null)
       if (field) {
-        const from = doc.activeElement as HTMLElement | null
+        const from = deepActive(doc) as HTMLElement | null
         field.focus()
         ;(field as HTMLInputElement).select?.()
         if (from !== field) {
@@ -769,11 +771,11 @@ export class EventBus {
     // A press outside an open disclosure that asks for it (data-sem-dismiss-outside on its toggle)
     // closes it: the toggle is clicked, so its own reactions do it, as Escape does above.
     const outside = (e: Event) => {
-      const target = e.target as Node
+      const target = originOf(e) as Node
       for (const toggle of renderer.host.querySelectorAll<HTMLElement>('[data-sem-dismiss-outside]')) {
         if (toggle.closest('[hidden]')) continue
         const region = toggle.getAttribute('aria-controls')
-        const panel = region ? doc.getElementById(region) : null
+        const panel = region ? elementById(renderer.host, region) : null
         if (toggle.contains(target) || panel?.contains(target)) continue
         toggle.click()
       }
@@ -795,7 +797,7 @@ export class EventBus {
       const region = sel?.anchorNode ? regionOf(sel.anchorNode) : null
       if (!region || !renderer.host.contains(region) || renderer.inSlot(region)) return
       // Only while the region has the focus: a toolbar's field or button taking it leaves the selection where it was.
-      const active = doc.activeElement
+      const active = deepActive(doc)
       if ((active !== region && !region.contains(active)) || active?.matches?.('input, textarea')) return
       const types = this.eventClasses('selectionchange')
       for (let el: Node | null = region; el && el !== renderer.host; el = el.parentNode) {
@@ -989,7 +991,7 @@ export class EventBus {
     const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
     const region = root?.matches?.('[data-sem-text-root]') ? root : root?.querySelector?.('[data-sem-text-root]')
     if (!region || owningFocus(renderer.keyOf(region) ?? '') !== focus) return
-    const active = region.ownerDocument.activeElement
+    const active = deepActive(region.ownerDocument)
     if (active !== region && !region.contains(active)) return
     // A field inside the region (a block's address) keeps its own caret.
     if (active?.matches?.('input, textarea')) return
@@ -1014,14 +1016,14 @@ export class EventBus {
       | undefined
     const at = Number(field?.getAttribute('data-sem-caret'))
     if (!field || !Number.isFinite(at) || typeof field.setSelectionRange !== 'function') return
-    if (field.ownerDocument.activeElement !== field) field.focus?.()
+    if (deepActive(field.ownerDocument) !== field) field.focus?.()
     if (field.selectionStart !== at || field.selectionEnd !== at) field.setSelectionRange(at, at)
   }
 
   /** Where the focus is as an event reaches a component: in it or not, and the elements around it. */
   private focusAt(renderer: DomRenderer, focus: string, target: Node) {
     const doc = target.ownerDocument
-    const active = doc?.activeElement ?? null
+    const active = deepActive(doc) ?? null
     const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
     const around: Element[] = []
     for (let el = active?.parentElement; el && el !== renderer.host; el = el.parentElement) around.push(el)
@@ -1047,7 +1049,7 @@ export class EventBus {
   private placeFocus(renderer: DomRenderer, focus: string, at: ReturnType<EventBus['focusAt']>) {
     const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
     for (const field of root?.querySelectorAll?.<HTMLElement>('[aria-activedescendant]') ?? []) {
-      field.ownerDocument.getElementById(field.getAttribute('aria-activedescendant')!)?.scrollIntoView?.({ block: 'nearest' })
+      elementById(field, field.getAttribute('aria-activedescendant')!)?.scrollIntoView?.({ block: 'nearest' })
     }
     const { active, inside, around, marks } = at
     if (!active || !inside) return
@@ -1055,7 +1057,7 @@ export class EventBus {
     const lost = !shown(active)
     // Gone, but already placed by something that knows better (a closed modal gave it back to its
     // opener): not lost. Only the page, or the renderer's guess at a nearby control, is.
-    const now = active.ownerDocument.activeElement
+    const now = deepActive(active.ownerDocument)
     if (lost && now && now !== now.ownerDocument.body && now !== renderer.refocused && shown(now)) return
     if (lost && around.some((el) => el.getAttribute('aria-modal') === 'true')) return
     if (!lost && active.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]:not([contenteditable=false])')) return
@@ -1068,7 +1070,7 @@ export class EventBus {
       }
     }
     const target = nearest(true) ?? (lost && now !== renderer.refocused ? nearest(false) : undefined)
-    if (target && target !== target.ownerDocument.activeElement) takeFocus(target, lost ? { preventScroll: true } : undefined)
+    if (target && target !== deepActive(target.ownerDocument)) takeFocus(target, lost ? { preventScroll: true } : undefined)
   }
 
   /**
@@ -1271,7 +1273,7 @@ class ModalFocus {
   /** The item a closed panel last showed, if it was opened from the collection that item is in (or from nothing). */
   private itemShown(back: Element | null, shows: string | null | undefined): HTMLElement | undefined {
     const doc = this.renderer.host.ownerDocument
-    const item = (shows && doc.getElementById(shows)?.closest<HTMLElement>(FOCUSABLE)) || undefined
+    const item = (shows && elementById(this.renderer.host, shows)?.closest<HTMLElement>(FOCUSABLE)) || undefined
     if (!item || !this.shown(item)) return undefined
     return back?.isConnected && back !== doc.body && back.closest('[data-sem-c]') !== item.closest('[data-sem-c]') ? undefined : item
   }
@@ -1289,7 +1291,7 @@ class ModalFocus {
         continue
       }
       this.open.splice(i, 1)
-      const active = doc.activeElement
+      const active = deepActive(doc)
       // The renderer's guess at a nearby control, when the panel went with the focus in it, is not a choice.
       const lost = !active || active === doc.body || !active.isConnected || panel.contains(active) || active === this.renderer.refocused
       if (!lost) continue
@@ -1301,10 +1303,10 @@ class ModalFocus {
     }
     for (const panel of now) {
       if (this.open.some((m) => m.panel === panel)) continue
-      const back = doc.activeElement
+      const back = deepActive(doc)
       this.open.push({ panel, back, place: back ? this.renderer.placeOf(back) : [], seen: !!back && back !== doc.body && this.inView(back), address: this.address(), shows: this.showing(panel) })
       const first = [...panel.querySelectorAll<HTMLElement>('[autofocus]')].filter(this.shown).map((el) => controlIn(el, this.shown)).find((el) => el) ?? panel
-      if (!panel.contains(doc.activeElement)) takeFocus(first, { preventScroll: true })
+      if (!panel.contains(deepActive(doc))) takeFocus(first, { preventScroll: true })
     }
   }
 
@@ -1313,7 +1315,7 @@ class ModalFocus {
     const top = this.open.at(-1)?.panel
     if (k.key !== 'Tab' || !top || k.altKey || k.ctrlKey || k.metaKey || !this.shown(top)) return false
     const parts = [...top.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(this.shown)
-    const active = top.ownerDocument.activeElement
+    const active = deepActive(top.ownerDocument)
     if (!parts.length) return top.focus?.(), true
     const at = parts.indexOf(active as HTMLElement)
     if (at < 0) return takeFocus(parts[0]!), true
@@ -1350,7 +1352,7 @@ const OPPOSITE: Record<string, string> = { top: 'bottom', bottom: 'top', start: 
  * key was used.
  */
 export function moveByKey(k: KeyboardEvent, renderer: DomRenderer): boolean {
-  const handle = (k.target as Element | null)?.closest?.('[data-sem-gesture="move"]') as HTMLElement | null
+  const handle = (originOf(k) as Element | null)?.closest?.('[data-sem-gesture="move"]') as HTMLElement | null
   const heading = ARROW_EDGES[k.key]
   if (!handle || !heading || !handle.hasAttribute('tabindex') || !renderer.host.contains(handle) || k.altKey || k.ctrlKey || k.metaKey) return false
   const box = boxOf(handle, renderer)
@@ -1458,7 +1460,7 @@ function setSize(el: HTMLElement, axis: 'x' | 'y', size: number) {
  * Returns whether the key was used.
  */
 export function sizeByKey(k: KeyboardEvent, renderer: DomRenderer): boolean {
-  const handle = (k.target as Element | null)?.closest?.('[data-sem-gesture="size"]') as HTMLElement | null
+  const handle = (originOf(k) as Element | null)?.closest?.('[data-sem-gesture="size"]') as HTMLElement | null
   if (!handle || !renderer.host.contains(handle) || k.altKey || k.ctrlKey || k.metaKey) return false
   const { axis, sign, min, max: said, step } = sizing(handle)
   const forward = axis === 'x' ? 'ArrowRight' : 'ArrowDown'

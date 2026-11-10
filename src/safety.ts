@@ -4,6 +4,7 @@
 // every string it writes from the graph (src/style/compile.ts). What is refused is reported, never
 // dropped silently.
 import { EXT, H, NS, RDF_TYPE } from './ns.ts'
+import { parseDuration } from './rdf.ts'
 import type { GraphStore } from './store/types.ts'
 
 const SAFE = NS.safe
@@ -33,6 +34,10 @@ export const SAFETY = {
   module: SAFE + 'module',
   adapter: SAFE + 'adapter',
   property: SAFE + 'property',
+  budget: SAFE + 'budget',
+  maxEvaluations: SAFE + 'maxEvaluations',
+  maxDerived: SAFE + 'maxDerived',
+  maxLength: SAFE + 'maxLength',
 } as const
 
 /** A safe:Policy, read for use: element classes as the HTML index names them ("Div", "svg:Rect"). */
@@ -67,6 +72,12 @@ export interface SafetyPolicy {
   adapters: ReadonlySet<string>
   /** Properties an authored input (ext:Property) may set on an island or a custom element. */
   properties: ReadonlySet<string>
+  /** Work budgets (unbounded when absent): a turn's time in ms, its rule evaluations, the derived triples a projection holds. */
+  budgetMs?: number
+  maxEvaluations?: number
+  maxDerived?: number
+  /** The longest string the policy checks; a longer one is refused unread. */
+  maxLength?: number
 }
 
 /**
@@ -84,8 +95,18 @@ export function readPolicy(store: GraphStore, iri: string = SAFETY.Authored): Sa
     if (e.startsWith(H.ns)) elements.add(e.slice(H.ns.length))
     else if (e.startsWith(NS.svg)) elements.add('svg:' + e.slice(NS.svg.length))
   }
+  const number = (p: string) => {
+    const v = values(p)[0]
+    const n = v === undefined ? NaN : Number(v)
+    return Number.isFinite(n) && n >= 0 ? n : undefined
+  }
+  const budget = values(SAFETY.budget)[0]
   return {
     iri,
+    budgetMs: budget === undefined ? undefined : parseDuration(budget),
+    maxEvaluations: number(SAFETY.maxEvaluations),
+    maxDerived: number(SAFETY.maxDerived),
+    maxLength: number(SAFETY.maxLength),
     elements,
     attributes: new Set(values(SAFETY.attribute)),
     prefixes: lower(SAFETY.attributePrefix),
@@ -125,8 +146,8 @@ export class Refused extends Error {
   constructor(
     /** The node it was refused on (an element's key), or the style rule. */
     readonly at: string,
-    /** What it was: an element, an attribute, a URL, a style. */
-    readonly kind: 'element' | 'attribute' | 'url' | 'style',
+    /** What it was: an element, an attribute, a URL, a style, or work over a budget (the root it was rendering). */
+    readonly kind: 'element' | 'attribute' | 'url' | 'style' | 'budget',
     message: string,
   ) {
     super(message)
@@ -152,6 +173,8 @@ const NEVER_PROPERTY = new Set(['innerhtml', 'outerhtml', 'srcdoc', 'dangerously
 
 /** Why an authored input (ext:input) is refused, or undefined: an attribute passes attributeProblem; a property must be listed. */
 export function inputProblem(policy: SafetyPolicy, name: string, value: string, asAttribute: boolean): { kind: Refused['kind']; reason: string } | undefined {
+  const long = lengthProblem(policy, value)
+  if (long) return { kind: 'attribute', reason: long }
   if (asAttribute) return attributeProblem(policy, name, value)
   const lower = name.toLowerCase()
   if (NEVER_PROPERTY.has(lower) || lower.startsWith('on') || !policy.properties.has(name)) return { kind: 'attribute', reason: `authored content may not set the property ${name}` }
@@ -185,6 +208,8 @@ export function islandProblem(policy: SafetyPolicy, island: IslandRoute): string
  * passes its check. Where an id reference points is checked by the HTML index (idReferences).
  */
 export function attributeProblem(policy: SafetyPolicy, name: string, value: string): { kind: Refused['kind']; reason: string } | undefined {
+  const long = lengthProblem(policy, value)
+  if (long) return { kind: 'attribute', reason: long }
   const lower = name.toLowerCase()
   const named =
     policy.attributes.has(name) ||
@@ -254,8 +279,15 @@ export function urlProblem(policy: SafetyPolicy, url: string, resource = false):
   return `authored content may not have a ${scheme.toLowerCase()}: URL here`
 }
 
+/** Why a string is too long for the policy to check (safe:maxLength), or undefined. */
+export function lengthProblem(policy: SafetyPolicy, text: string): string | undefined {
+  return policy.maxLength !== undefined && text.length > policy.maxLength ? `authored content may not have a value longer than ${policy.maxLength} characters` : undefined
+}
+
 /** Why a list of CSS declarations ("a: b; c: d", a style attribute) is refused, or undefined. */
 export function declarationsProblem(policy: SafetyPolicy, text: string): string | undefined {
+  const long = lengthProblem(policy, text)
+  if (long) return long
   const scanned = scan(policy, text, 'declarations')
   if (typeof scanned === 'string') return scanned
   for (const decl of scanned) {
@@ -280,6 +312,8 @@ export function propertyProblem(policy: SafetyPolicy, property: string): string 
  * token's), a selector (sty:part, sty:state), a media condition, or a name (keyframes).
  */
 export function cssProblem(policy: SafetyPolicy, text: string, as: 'value' | 'selector' | 'media' | 'name' | 'step'): string | undefined {
+  const long = lengthProblem(policy, text)
+  if (long) return long
   if (as === 'name') return /^-?[A-Za-z_][A-Za-z0-9_-]*$/.test(text) ? undefined : `"${text}" is not a CSS name`
   if (as === 'step') return /^\s*(?:from|to|\d+(?:\.\d+)?%)(?:\s*,\s*(?:from|to|\d+(?:\.\d+)?%))*\s*$/.test(text) ? undefined : `"${text}" is not a keyframe step`
   const scanned = scan(policy, text, as)

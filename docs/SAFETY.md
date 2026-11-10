@@ -160,6 +160,30 @@ page `renderToString({ policy })` rendered. One scoping applies in all three
 the page's; without it the whole stylesheet is scoped to the box. `Rendered.box` names the box, and
 `renderDocument` marks the mount element with it, so `mount` takes it over in the same box.
 
+### In a shadow root
+
+`mount(element, { authored, isolate: 'shadow' })` renders into a box in a shadow root of `element`,
+and the browser keeps the boundary: the author's ids, `form`, `popovertarget` and `commandfor`
+references, named elements and style rules stop at it, and nothing outside reaches in by selector.
+The whole stylesheet (the trusted one with the author's additions) is adopted by the shadow root,
+scoped to the box, so `:root` is the box there too; the page's own sheet is not touched. Custom
+properties still inherit from the page through the host element.
+
+Events, focus and keys work as in the light DOM: the event bus reads an event's own target inside
+the shadow root (`composedPath`), and the element that has the focus inside it. HTML a server
+rendered into `element` is not taken over (it is rendered anew in the shadow root). It works for a
+trusted graph as well (`graphs` with `isolate`), for an app that should not share the page's
+document.
+
+### The framework's globals
+
+A document shows some elements by `name` as its own properties, ahead of its methods, and a window
+every element by `id`: `<img name="adoptedStyleSheets">` is `document.adoptedStyleSheets`.
+Semblance reads what it needs of the document and the global object from their prototypes, or as
+properties a script set (`src/web/builtins.ts`): adopted style sheets, `getElementById`, the events
+the capture script keeps before take-over. So an authored name cannot break a mount or the next
+live example. The host's own scripts are another matter (Not covered, below).
+
 ## How it works
 
 ### The policy is a graph, read once
@@ -260,6 +284,7 @@ Nothing is dropped silently.
 | a style declaration | left out of the sheet | - | `style`, once |
 | a style rule's selector or condition | the rule is left out | - | `style`, once |
 | an upload elsewhere | not sent; the file is `file:Failed` with the reason | - | the file's state |
+| a turn over a work budget | what was complete; the rest keeps its last rendering | as usual | `budget`, once per turn |
 
 A refused element keeps its place among its siblings, empty, so the gap shows in the inspector and in
 tests. The drag-and-drop layer uses `data-sem-refused` for a refused drop as well, and its theme
@@ -274,9 +299,9 @@ have a script element.` Where they go:
 - **`runtime.project(opts, onError)`**: to `onError`, like the projection's other errors; without one,
   to `console.error`.
 - **`compileStyles`**: to its `onRefused`, by default `console.warn`.
-- **`renderToString`**: to `console.error` (the projection) and `console.warn` (the stylesheet);
-  `rendered.projection.index.refusals` has the projection's afterwards. Passing `onRefused` there is
-  #404.
+- **`renderToString`**: to its `onRefused`, by default `console.warn`, from both the projection and
+  the stylesheet (and a turn over a work budget); `rendered.projection.index.refusals` has the
+  projection's afterwards.
 - **`renderToStream`**: the projection's to `console.error`. It compiles no stylesheet: compile the one
   it links with `compileStyles(store, { policy, onRefused })`.
 - **A live example**: as warnings under its editor, the same on the server and in the browser.
@@ -288,6 +313,37 @@ have a script element.` Where they go:
 An authored projection costs one set lookup per attribute more (and a scheme test for a URL, a scan
 for CSS); a trusted one checks only that an attribute node's name is an attribute name. The style
 compiler's checks run once per compile.
+
+### Work budgets
+
+An authored graph brings its own rules, and a rule can ask for more work than any page can do: one
+that mints two nodes for every node it renders never ends. The policy bounds it
+(`ontology/layers/safety.ttl`):
+
+| | default | what it bounds |
+|---|---|---|
+| `safe:budget` | `PT1.5S` | how long a turn may run (the watchdog's budget, `src/engine/watchdog.ts`) |
+| `safe:maxEvaluations` | 200 000 | rule evaluations (a rule for a focus) in a turn: deterministic, so a server renders the same at any load |
+| `safe:maxDerived` | 1 000 000 | derived triples a projection holds: its output |
+| `safe:maxLength` | 262 144 | the longest string the policy checks (an attribute value, an input, a piece of CSS); a longer one is refused unread |
+
+A runtime that projects authored content takes the budgets of its policy (`Runtime.project({ policy
+})`; the tightest, if several projections have one). The watchdog counts evaluations per turn as
+well as time, and the engine its derived triples; a turn over any of them is suspended at the
+watchdog's next check, at a consistent point (strata below are complete, every derived triple comes
+from a complete evaluation). Then:
+
+- **`mount`** stops it: the held work is dropped, as the watchdog's `sem:Stop` drops it, and what is
+  left is counted out of date; the page shows what was complete, and `onRefused` gets a `Refused` of
+  kind `budget` ("Stopped: authored content took more than 200000 rule evaluations, and 37
+  renderings were left undone."). A later turn over budget, an event's, is stopped the same way.
+- **`renderToString`**, **`renderToStream`**: the same, before serializing: the HTML is what was
+  complete, `onRefused` gets the report, and `Rendered.exceeded` says why.
+- **A live example** stops itself and shows the reason inline, as it does over its time budget.
+
+The live examples of this site stay under 100 evaluations and 3 000 derived triples a turn. A
+stricter policy narrows them (`{ ...authoredPolicy(trusted), maxEvaluations: 10_000 }`), or a
+`safe:Policy` of your own states them in Turtle.
 
 ### Remembered state
 
@@ -355,59 +411,92 @@ The policy decides what an authored graph renders. Around it:
 
 ### Content Security Policy
 
-This is the CSP the current code needs; a stricter setup, with Trusted Types and authored content in a
-shadow root, is #414.
+The policy limits the **schemes** of what is rendered, a CSP their **origins**, and what may run at
+all. With the recommended policy, markup that slipped past the check still could not run a script,
+load from an origin you did not list, or post a form elsewhere.
 
-The policy limits the **schemes** of what is rendered, a CSP their **origins**. An authored graph
-may link to and load images from any `https:` address; a CSP says which ones the browser will
-fetch, and where forms may submit. For a page that mounts in the browser:
+**From the document helper.** `renderDocument(template, rendered, { csp })` (and `renderToStream`,
+and a site's `csp`, which the static build and the request handler pass on) puts the policy in a
+`<meta>` right after the charset, with the hash of every inline script and style element the
+finished document has: the platform mark, the app bar's measure for what sticks below it, the event
+capture, the first-paint script of what the visitor chose, an inline stylesheet, the template's own. `csp: true` gives the recommended policy;
+an object adds the origins your page uses (`src/server/csp.ts`, `CspOptions`):
 
-```
-Content-Security-Policy:
-  default-src 'self';
-  script-src 'self' 'wasm-unsafe-eval';
-  style-src 'self';
-  style-src-attr 'unsafe-inline';
-  img-src 'self' data: blob:;
-  media-src 'self' blob:;
-  connect-src 'self';
-  worker-src 'self';
-  form-action 'self';
-  object-src 'none';
-  base-uri 'none';
-  frame-ancestors 'self'
+```ts
+renderDocument(template, rendered, {
+  csp: { img: ['https://images.example'], connect: ['https://api.example'], trustedTypes: ['my-app'] },
+})
 ```
 
-- `'wasm-unsafe-eval'`: the stores are WebAssembly modules (Semblance's engines, Oxigraph) compiled
-  in the page; without it `WebAssembly.compile` is refused and nothing loads. It allows WebAssembly,
-  not `eval`.
-- `style-src 'self'`: the compiled stylesheet, and each live example's, are constructed stylesheets
-  (`adoptedStyleSheets`), which `style-src 'self'` allows.
-- `style-src-attr 'unsafe-inline'`: the DOM patcher writes `style` attributes (`rdfhtml:style`, sizes
-  and positions) with `setAttribute`, which a CSP counts as inline style. Under the policy every one
-  has passed the CSS check first. Writing them through the CSSOM, so this line can go, is #157.
-- `img-src` and `media-src`: `data:` and `blob:` are the resource schemes the policy allows; `blob:`
-  is also what picked and dropped files are previewed from. Add the origins your images come from,
+```
+default-src 'self';
+script-src 'self' 'sha256-…' 'sha256-…' 'wasm-unsafe-eval';
+style-src 'self';
+style-src-attr 'unsafe-inline';
+img-src 'self' https://images.example data: blob:;
+media-src 'self' data: blob:;
+font-src 'self';
+connect-src 'self' https://api.example;
+frame-src 'self';
+worker-src 'self';
+object-src 'none';
+base-uri 'none';
+form-action 'self';
+require-trusted-types-for 'script';
+trusted-types semblance my-app
+```
+
+`contentSecurityPolicy(opts)` gives the same as a header value, with `frame-ancestors 'self'` (and
+`report-uri` from `report`), which a `<meta>` cannot carry; `inlineScriptHashes(html)` and
+`inlineStyleHashes(html)` give the hashes for a document you assemble yourself. `directives`
+replaces any directive outright. The hashes are SHA-256, computed synchronously in plain
+TypeScript, so the same code runs in Node, Deno and workers.
+
+- `script-src`: the page's own scripts, and the inline ones by hash: no `'unsafe-inline'`, no
+  `'unsafe-eval'`. `'wasm-unsafe-eval'` lets the stores, WebAssembly modules (Semblance's engines,
+  Oxigraph), compile; it allows WebAssembly, not `eval`.
+- `style-src 'self'`: the compiled stylesheet and each live example's are constructed stylesheets
+  (`adoptedStyleSheets`), which it allows; a stylesheet inline in the document, and the styles a
+  server writes into a prerendered live example, by hash. `style-src-attr 'unsafe-inline'`: the DOM
+  patcher writes `style` attributes with `setAttribute`, each of which, under the policy, passed the
+  CSS check first. Writing them through the CSSOM, so this line can go, is #157.
+- `img-src`, `media-src`: `data:` and `blob:` are the resource schemes the policy allows (`blob:` is
+  also what picked and dropped files are previewed from). List the origins images may come from,
   rather than `https:`, if authored graphs should not load from anywhere.
-- `connect-src`: the engines' `.wasm` files, and add the endpoints of the remote sources the host
-  binds and the `uploadOrigins` it allows (an upload is an `XMLHttpRequest`).
-- `form-action 'self'`: an authored form may name an `https:` action; the CSP keeps it on your
-  origin.
+- `connect-src`: the engines' `.wasm` files; add the endpoints of the remote sources the host binds
+  and the `uploadOrigins` it allows.
+- `form-action 'self'`: an authored form may name an `https:` action, or a button a `formaction`;
+  the CSP keeps them on your origin. `base-uri 'none'` and `object-src 'none'` close the rest.
+- A link's destination is outside any CSP: an authored `https:` link goes where it says when
+  followed.
 
-**A server-rendered page** ([SSR.md](SSR.md)) carries inline scripts: the platform mark, the app bar's
-measure for what sticks below it, the event capture before take-over (`capture: false` leaves it out), and, when the page remembers something,
-the first-paint script, which differs per page. Until documents can carry a nonce (#403), such a page
-needs `'unsafe-inline'` in `script-src`, or the hashes of the scripts it carries. Link the stylesheet
-(`stylesheet: { href }`, which the static build does) rather than inlining it, or allow its hash.
+A streamed document (`renderToStream`) sends its head before the root's HTML exists, so the styles
+of a live example the server prerenders into it are not among the hashes: add
+`directives: { 'style-src-elem': "'self' 'unsafe-inline'" }` there, or render with
+`renderToString`. One self-contained file (`--single`) carries no policy.
+
+**Trusted Types.** `require-trusted-types-for 'script'` makes every script sink (`innerHTML`,
+`srcdoc`, a script's `src`, `new Worker`, `eval`) take only values a named policy made. Semblance
+writes no HTML and no script from a string: the renderer creates elements and sets attributes and
+text, so it runs under Trusted Types as it is, and an authored input that reached `innerHTML` would
+throw instead of parsing (a test scans `src/` for such sinks). Its one policy, `semblance`, makes
+script URLs of the page's own origin, for what the host loads itself:
+
+```ts
+import { scriptURL } from '@inferal-oss/semblance/web'
+import thumbnails from './thumbnails.worker.ts?worker&url' // Vite: the worker's URL
+new Worker(scriptURL(thumbnails), { type: 'module' })
+```
+
+Libraries that write HTML from strings themselves need a policy of their own, and those that are
+not aware of Trusted Types the `default` one. The site runs under this policy: its fonts and its
+foreign-component examples' CDN are listed, and `demo/trusted-types.ts` adds `semblance-site` (the
+page's own HTML as the document the Performance view's benchmark cells run in) and a `default`
+policy for Leaflet, flatpickr, Temml and Shoelace's icons, which parses what they write inertly and
+strips what runs code or loads a document. Lit's `lit-html` policy is listed for Shoelace.
 
 **With the live editors**, a visitor writes the graph, so the CSP is what limits where it can reach:
-keep `img-src`, `media-src` and `form-action` to the origins you mean. A server that prerenders the
-examples writes each one's styles as an inline `<style>` (`prerenderSandboxes`), which needs
-`style-src-elem 'unsafe-inline'` (or #403); in the browser they are constructed stylesheets and need
-nothing. Without the editors, and with no authored content at all, the same CSP still applies; only
-`style-src-attr` and `'wasm-unsafe-eval'` are needed by Semblance itself.
-
-A link's destination is outside any CSP: an authored `https:` link goes where it says when followed.
+keep `img-src`, `media-src` and `form-action` to the origins you mean.
 
 ### Live examples run in sandboxes
 
@@ -438,8 +527,8 @@ Beyond the policy:
 - **Shapes describe, they do not guard.** A shape (`c:Link`'s requires an `http(s)`, `mailto:` or
   relative `c:href`) marks a component invalid and says why; it does not stop a trusted projection
   from rendering what it flags. The policy does.
-- **Cost.** The policy says nothing about how much a graph asks for. A sandbox has a turn budget; in
-  your own app, a `sem:Watchdog` with a budget suspends a turn that runs over it.
+- **Cost.** An authored graph brings its own rules, so its work is bounded too: see
+  [Work budgets](#work-budgets).
 - **Parse failures.** Turtle that does not parse fails to load; a sandbox reports it as a problem of
   the example.
 
@@ -502,13 +591,15 @@ author's link (`ui:theirs a c:Link ; c:label "Theirs" ; c:href "javascript:alert
 ## Not covered
 
 - Where an `http(s)` link goes or an image comes from: use a CSP.
-- An id the rendering has that the host's page has too: the browser takes the first in the document.
+- An id the rendering has that the host's page has too: the browser takes the first in the document
+  (in a shadow root, each has its own).
 - What the author's triples say about your resources, and what its reactions change, when it shares
   your store (`mount({ authored })`): give it a store of its own to keep it out.
-- DOM clobbering by `id` or `name` (a host script that reads `window.someId`).
+- DOM clobbering by `id` or `name` of the host's own scripts (one that reads `window.someId`):
+  render authored content in a shadow root (`isolate: 'shadow'`), where its names do not reach the
+  document. Semblance's own reads go past named elements.
 - What a foreign component the policy lists does with its inputs once mounted: it is the host's
   code. A live example's sandbox attaches no islands effect.
 - Host effects you attach yourself: navigation, persistence and network capture act on graph state
   as the host configured them; give them `trusted` (above) when the store holds authored graphs. A
   live example's sandbox attaches none of them (its full screen is shown over the page).
-- How long a graph takes to render: budgets and the stall watchdog, not the policy.

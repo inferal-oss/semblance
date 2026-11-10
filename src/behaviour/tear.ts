@@ -4,6 +4,7 @@
 // RDF event on release: a beh:TearOff with where the window goes, or a beh:Move onto the list.
 // Whether that detaches or docks anything is the reactions' business.
 import { C } from '../ns.ts'
+import { markRoot } from '../web/builtins.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { GraphStore } from '../store/types.ts'
 
@@ -73,7 +74,7 @@ export function tearGesture(e: PointerEvent, tab: HTMLElement): void {
     ghost = g
     attach()
     tab.setAttribute('data-sem-tearing', '')
-    doc.documentElement.setAttribute('data-sem-dragging', '')
+    markRoot(tab, 'data-sem-dragging', '')
     doc.getSelection?.()?.removeAllRanges()
   }
   // In the tabs' own subtree (it takes their theme), raised into the top layer where it can be.
@@ -154,7 +155,7 @@ export function tearGesture(e: PointerEvent, tab: HTMLElement): void {
     ghost = undefined
     tab.removeAttribute('data-sem-tearing')
     list.removeAttribute('data-sem-gathering')
-    doc.documentElement.removeAttribute('data-sem-dragging')
+    markRoot(tab, 'data-sem-dragging', null)
   }
   doc.addEventListener('pointermove', move)
   doc.addEventListener('pointerup', up)

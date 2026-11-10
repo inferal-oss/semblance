@@ -657,11 +657,12 @@ ui:doc-safety a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
                  ui:doc-sa-trust-h ui:doc-sa-trust-1 ui:doc-sa-trust-code ui:doc-sa-trust-2 ui:doc-sa-trust-3
                  ui:doc-sa-try-h ui:doc-sa-try-1 ui:sa-live ui:doc-sa-try-2
                  ui:doc-sa-may-h ui:doc-sa-may ui:doc-sa-not-h ui:doc-sa-not ui:doc-sa-not-2
-                 ui:doc-sa-box-h ui:doc-sa-box-1 ui:doc-sa-box ui:doc-sa-box-2
+                 ui:doc-sa-box-h ui:doc-sa-box-1 ui:doc-sa-box ui:doc-sa-box-2 ui:doc-sa-shadow ui:doc-sa-shadow-code ui:doc-sa-shadow-2
                  ui:doc-sa-how-h ui:doc-sa-how-1 ui:doc-sa-how-code ui:doc-sa-how-2 ui:doc-sa-how-list ui:doc-sa-how-3
+                 ui:doc-sa-budget-h ui:doc-sa-budget-1 ui:doc-sa-budget ui:doc-sa-budget-2
                  ui:doc-sa-ref-h ui:doc-sa-ref ui:doc-sa-rep-1 ui:doc-sa-rep
                  ui:doc-sa-ext-h ui:doc-sa-ext-1 ui:doc-sa-ext-code ui:doc-sa-ext-2 ui:doc-sa-ext-ts ui:doc-sa-ext-3 ui:doc-sa-ext-own ui:doc-sa-ext-4
-                 ui:doc-sa-csp-h ui:doc-sa-csp-1 ui:doc-sa-csp-code ui:doc-sa-csp-list ui:doc-sa-csp-2 ui:doc-sa-csp-3
+                 ui:doc-sa-csp-h ui:doc-sa-csp-1 ui:doc-sa-csp-ts ui:doc-sa-csp-code ui:doc-sa-csp-list ui:doc-sa-csp-2 ui:doc-sa-tt-1 ui:doc-sa-tt-code ui:doc-sa-tt-2 ui:doc-sa-csp-3
                  ui:doc-sa-depth-h ui:doc-sa-depth
                  ui:doc-sa-not-cov-h ui:doc-sa-not-cov
                  ui:doc-sa-ex-h ui:doc-sa-ex-1 ui:doc-sa-ex ui:doc-sa-more ) .
@@ -753,6 +754,9 @@ ui:doc-sa-box-items ui:sa-b-rules "The trusted stylesheet (the ontology and your
     ui:sa-b-contain "The box has contain: layout paint (a rule of ontology/layers/safety.ttl): fixed and absolute positions resolve to it rather than to the page, and what is drawn outside it is clipped, beyond a margin of --sem-space-3 so a focus ring at its edge shows. The top layer (a modal dialog, a popover) is not contained by it." .
 ui:sa-b-rules rdfs:label "Style rules" . ui:sa-b-keyframes rdfs:label "Keyframes" . ui:sa-b-contain rdfs:label "Containment" .
 ui:doc-sa-box-2 a c:Text ; c:label "renderToString({ policy, trusted }) takes the store the policy was read from, whose stylesheet is the page's; without it the whole stylesheet is scoped to the box. Rendered.box names the box, and renderDocument marks the mount element with it, so mount takes it over in the same box." .
+ui:doc-sa-shadow a c:Text ; c:label "Or let the browser keep the boundary: with isolate: 'shadow', mount renders into a box in a shadow root of the element. The author's ids, form, popovertarget and commandfor references, named elements and style rules stop at it; the whole stylesheet is the shadow root's, scoped to the box, and the page's own is not touched." .
+ui:doc-sa-shadow-code a c:Code ; c:block true ; c:language "ts" ; c:label "await mount(element, { root, graphs: [app], authored: [theirs], isolate: 'shadow', onRefused })" .
+ui:doc-sa-shadow-2 a c:Text ; c:label "Events, focus and keys work as in the light DOM: the event bus reads an event's own target inside the shadow root, and the element that has the focus there. Semblance's own reads of the document (adopted style sheets, getElementById, the events kept before take-over) go past elements an author names adoptedStyleSheets or __semblanceKept, in a shadow root or not." .
 
 ui:doc-sa-how-h a c:Heading ; c:level 2 ; c:label "How it works" .
 ui:doc-sa-how-1 a c:Text ; c:label "safe:Authored is triples: the element classes, attribute names and prefixes, which attributes hold URLs and which of those load a resource, the URL schemes, which attributes hold CSS, the CSS functions that fetch and the properties that bind code, and the host components and custom elements an author may name." .
@@ -780,10 +784,19 @@ ui:doc-sa-how-items ui:sa-index "Every projection writes its RDF/HTML into an Ht
     ui:sa-restore "Restoring brings back only what a persistence policy covers: its subject's listed properties, or what its query's template can produce, into its graph; a stored switch only for a policy there is. Whatever else storage holds stays there." .
 ui:sa-index rdfs:label "The HTML index" . ui:sa-outputs rdfs:label "Every output" . ui:sa-compiler rdfs:label "The style compiler" .
 ui:sa-files rdfs:label "Uploads" . ui:sa-hosts rdfs:label "Host components" . ui:sa-islands rdfs:label "Islands" . ui:sa-restore rdfs:label "Remembered state" .
+ui:doc-sa-budget-h a c:Heading ; c:level 2 ; c:label "Work budgets" .
+ui:doc-sa-budget-1 a c:Text ; c:label "An authored graph brings its own rules, and a rule can ask for more than any page can do: one that mints two nodes for every node it renders never ends. The policy bounds it, and a runtime that projects authored content takes its budgets:" .
+ui:doc-sa-budget a c:DescriptionList ; c:of ui:doc-sa-budget-items ; c:fields ( ui:sa-w-time ui:sa-w-evals ui:sa-w-output ui:sa-w-length ) .
+ui:doc-sa-budget-items ui:sa-w-time "PT1.5S by default: how long a turn may run (the watchdog's budget)." ;
+    ui:sa-w-evals "200 000 by default: rule evaluations in a turn. Deterministic, so a server renders the same at any load." ;
+    ui:sa-w-output "1 000 000 by default: the derived triples a projection holds." ;
+    ui:sa-w-length "262 144 by default: the longest string the policy checks (an attribute value, an input, a piece of CSS); a longer one is refused unread." .
+ui:sa-w-time rdfs:label "safe:budget" . ui:sa-w-evals rdfs:label "safe:maxEvaluations" . ui:sa-w-output rdfs:label "safe:maxDerived" . ui:sa-w-length rdfs:label "safe:maxLength" .
+ui:doc-sa-budget-2 a c:Text ; c:label "A turn over any of them is suspended at a consistent point, then stopped: the page shows what was complete, the rest keeps its last rendering and is counted out of date, and onRefused gets a Refused of kind budget. On the server the HTML is what was complete and Rendered.exceeded says why; a live example shows the reason inline. This site's examples stay under 100 evaluations and 3 000 derived triples a turn." .
 ui:doc-sa-how-3 a c:Text ; c:label "One check holds for trusted projections as well: an attribute node whose name is no attribute name (a space, a quote, <, >, /, =) is left out and reported, since it would break the markup it is written in. An authored projection costs one set lookup per attribute more, a scheme test for a URL and a scan for CSS." .
 
 ui:doc-sa-ref-h a c:Heading ; c:level 2 ; c:label "What happens to what is refused" .
-ui:doc-sa-ref a c:DescriptionList ; c:of ui:doc-sa-ref-items ; c:fields ( ui:sa-r-element ui:sa-r-hosted ui:sa-r-island ui:sa-r-idref ui:sa-r-attribute ui:sa-r-url ui:sa-r-style ui:sa-r-rule ui:sa-r-upload ) .
+ui:doc-sa-ref a c:DescriptionList ; c:of ui:doc-sa-ref-items ; c:fields ( ui:sa-r-element ui:sa-r-hosted ui:sa-r-island ui:sa-r-idref ui:sa-r-attribute ui:sa-r-url ui:sa-r-style ui:sa-r-rule ui:sa-r-upload ui:sa-r-budget ) .
 ui:doc-sa-ref-items ui:sa-r-element "An empty <sem-refused data-sem-refused=\"script\">, without its attributes or children, in the DOM and in HTML; nothing in text. Reported as kind element." ;
     ui:sa-r-hosted "The projected element, drawn by Semblance. Reported as kind element." ;
     ui:sa-r-island "The island's slot, its projected element, empty; an input that fails is not set. Reported as kind element, or attribute for an input." ;
@@ -792,9 +805,10 @@ ui:doc-sa-ref-items ui:sa-r-element "An empty <sem-refused data-sem-refused=\"sc
     ui:sa-r-url "Its attribute is left out; the element stays. Reported as kind url." ;
     ui:sa-r-style "A style attribute that fails is left out; a declaration in a style rule that fails is left out of the sheet. Reported as kind style." ;
     ui:sa-r-rule "A style rule whose selector or condition fails is left out whole. Reported as kind style." ;
-    ui:sa-r-upload "Not sent; the file is file:Failed with the reason." .
+    ui:sa-r-upload "Not sent; the file is file:Failed with the reason." ;
+    ui:sa-r-budget "What was complete is shown; the rest keeps its last rendering, counted out of date. Reported as kind budget, once per turn." .
 ui:sa-r-element rdfs:label "An element" . ui:sa-r-hosted rdfs:label "A host component" . ui:sa-r-attribute rdfs:label "An attribute" .
-ui:sa-r-url rdfs:label "A URL" . ui:sa-r-style rdfs:label "A CSS value" . ui:sa-r-rule rdfs:label "A style rule" . ui:sa-r-upload rdfs:label "An upload" .
+ui:sa-r-url rdfs:label "A URL" . ui:sa-r-style rdfs:label "A CSS value" . ui:sa-r-rule rdfs:label "A style rule" . ui:sa-r-upload rdfs:label "An upload" . ui:sa-r-budget rdfs:label "A turn over budget" .
 ui:sa-r-island rdfs:label "An island" . ui:sa-r-idref rdfs:label "An id reference" .
 ui:doc-sa-rep-1 a c:Text ; c:label "Each is a Refused error (src/safety.ts) with at (the node's IRI, or the style rule's), kind and a message such as \"Refused on <…#it/~x>: authored content may not have a script element.\" It is reported once per node and reason. Where it goes:" .
 ui:doc-sa-rep a c:DescriptionList ; c:of ui:doc-sa-rep-items ; c:fields ( ui:sa-p-mount ui:sa-p-project ui:sa-p-compile ui:sa-p-string ui:sa-p-stream ui:sa-p-live ui:sa-p-index ) .
@@ -826,31 +840,38 @@ ui:doc-sa-ext-own a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:
 ui:doc-sa-ext-4 a c:Text ; c:label "Why it must come from a trusted store: the policy is the only thing between the author and the page, and it is triples. Read from a store that holds the authored graph, the author could write safe:Authored safe:element rdfhtml:Script and allow itself anything. So it is read from a store without the authored graph (mount's store of graphs alone), or from the ontology alone (the live examples), and handed to the projection as data. When the framework starts to emit an element or attribute the policy does not list, it is added to safe:Authored: a test renders every live example of this site under the policy and fails on any refusal." .
 
 ui:doc-sa-csp-h a c:Heading ; c:level 2 ; c:label "A Content Security Policy" .
-ui:doc-sa-csp-1 a c:Text ; c:label "The policy limits the schemes of what is rendered, a CSP their origins: an authored graph may link to and load images from any https: address, and a CSP says which ones the browser fetches and where forms may submit. This is what the current code needs; a stricter setup, with Trusted Types and authored content in a shadow root, is #414. For a page that mounts in the browser:" .
-ui:doc-sa-csp-code a c:Code ; c:block true ; c:language "http" ; c:label """Content-Security-Policy:
-  default-src 'self';
-  script-src 'self' 'wasm-unsafe-eval';
-  style-src 'self';
-  style-src-attr 'unsafe-inline';
-  img-src 'self' data: blob:;
-  media-src 'self' blob:;
-  connect-src 'self';
-  worker-src 'self';
-  form-action 'self';
-  object-src 'none';
-  base-uri 'none';
-  frame-ancestors 'self'""" .
-ui:doc-sa-csp-list a c:DescriptionList ; c:of ui:doc-sa-csp-items ; c:fields ( ui:sa-c-wasm ui:sa-c-style ui:sa-c-attr ui:sa-c-img ui:sa-c-connect ui:sa-c-form ) .
-ui:doc-sa-csp-items ui:sa-c-wasm "The stores are WebAssembly modules (Semblance's engines, Oxigraph) compiled in the page; without it nothing loads. It allows WebAssembly, not eval." ;
-    ui:sa-c-style "The compiled stylesheet, and each live example's, are constructed stylesheets (adoptedStyleSheets), which style-src 'self' allows." ;
+ui:doc-sa-csp-1 a c:Text ; c:label "The policy limits the schemes of what is rendered, a CSP their origins and what may run at all: with it, markup that slipped past the check still could not run a script, load from an origin you did not list, or post a form elsewhere. renderDocument puts the recommended one first in the document's head, with the hash of every inline script and style element the finished document has (a site's csp does it for every page):" .
+ui:doc-sa-csp-ts a c:Code ; c:block true ; c:language "ts" ; c:label "renderDocument(template, rendered, { csp: { img: ['https://images.example'], connect: ['https://api.example'] } })" .
+ui:doc-sa-csp-code a c:Code ; c:block true ; c:language "http" ; c:label """default-src 'self';
+script-src 'self' 'sha256-…' 'wasm-unsafe-eval';
+style-src 'self';
+style-src-attr 'unsafe-inline';
+img-src 'self' https://images.example data: blob:;
+media-src 'self' data: blob:;
+connect-src 'self' https://api.example;
+worker-src 'self';
+object-src 'none';
+base-uri 'none';
+form-action 'self';
+require-trusted-types-for 'script';
+trusted-types semblance""" .
+ui:doc-sa-csp-list a c:DescriptionList ; c:of ui:doc-sa-csp-items ; c:fields ( ui:sa-c-script ui:sa-c-wasm ui:sa-c-style ui:sa-c-attr ui:sa-c-img ui:sa-c-connect ui:sa-c-form ) .
+ui:doc-sa-csp-items ui:sa-c-script "The page's own scripts, and its inline ones by hash: no 'unsafe-inline', no 'unsafe-eval'. The hashes are SHA-256 computed in plain TypeScript, so the same code runs in Node, Deno and workers." ;
+    ui:sa-c-wasm "The stores are WebAssembly modules (Semblance's engines, Oxigraph) compiled in the page; without it nothing loads. It allows WebAssembly, not eval." ;
+    ui:sa-c-style "The compiled stylesheet, and each live example's, are constructed stylesheets (adoptedStyleSheets), which style-src 'self' allows; a stylesheet inline in the document, and the styles a server writes into a prerendered live example, by hash." ;
     ui:sa-c-attr "The DOM patcher writes style attributes with setAttribute, which a CSP counts as inline style; under the policy each has passed the CSS check first. Writing them through the CSSOM, so this line can go, is #157." ;
     ui:sa-c-img "data: and blob: are the resource schemes the policy allows; blob: is also what picked and dropped files are previewed from. List the origins your images come from, rather than https:, if authored graphs should not load from anywhere." ;
     ui:sa-c-connect "The engines' .wasm files; add the endpoints of the remote sources the host binds and the uploadOrigins it allows." ;
-    ui:sa-c-form "An authored form may name an https: action; the CSP keeps it on your origin." .
-ui:sa-c-wasm rdfs:label "'wasm-unsafe-eval'" . ui:sa-c-style rdfs:label "style-src 'self'" . ui:sa-c-attr rdfs:label "style-src-attr" .
+    ui:sa-c-form "An authored form may name an https: action, a button a formaction; the CSP keeps them on your origin." .
+ui:sa-c-script rdfs:label "script-src" . ui:sa-c-wasm rdfs:label "'wasm-unsafe-eval'" . ui:sa-c-style rdfs:label "style-src 'self'" . ui:sa-c-attr rdfs:label "style-src-attr" .
 ui:sa-c-img rdfs:label "img-src, media-src" . ui:sa-c-connect rdfs:label "connect-src" . ui:sa-c-form rdfs:label "form-action" .
-ui:doc-sa-csp-2 a c:Text ; c:label "A server-rendered page carries inline scripts: the platform mark, the app bar's measure for what sticks below it, the event capture before take-over (capture: false leaves it out) and, when the page remembers something, the first-paint script, which differs per page. Until documents can carry a nonce (#403), such a page needs 'unsafe-inline' in script-src, or the hashes of the scripts it carries. Link the stylesheet (stylesheet: { href }, as the static build does) rather than inlining it." .
-ui:doc-sa-csp-3 a c:Text ; c:label "With the live editors, a visitor writes the graph, so the CSP is what limits where it can reach: keep img-src, media-src and form-action to the origins you mean. A server that prerenders the examples writes each one's styles as an inline <style>, which needs style-src-elem 'unsafe-inline' (or #403); in the browser they are constructed stylesheets. A link's destination is outside any CSP: an authored https: link goes where it says when followed." .
+ui:doc-sa-csp-2 a c:Text ; c:label "contentSecurityPolicy(opts) gives the same as a header value, with frame-ancestors 'self', which a meta cannot carry. A streamed document sends its head before the root's HTML exists, so the styles of a live example prerendered into it are not among the hashes: allow them with directives, or render with renderToString." .
+ui:doc-sa-tt-1 a c:Text ; c:label "Trusted Types: require-trusted-types-for 'script' makes every script sink (innerHTML, srcdoc, a script's src, new Worker) take only values a named policy made. Semblance writes no HTML and no script from a string - the renderer creates elements and sets attributes and text - so it runs under Trusted Types as it is, and an authored input that reached innerHTML would throw rather than parse. Its one policy, semblance, makes script URLs of the page's own origin, for what the host loads itself:" .
+ui:doc-sa-tt-code a c:Code ; c:block true ; c:language "ts" ; c:label """import { scriptURL } from '@inferal-oss/semblance/web'
+import thumbnails from './thumbnails.worker.ts?worker&url'
+new Worker(scriptURL(thumbnails), { type: 'module' })""" .
+ui:doc-sa-tt-2 a c:Text ; c:label "This site runs under the recommended policy. Its fonts and its foreign-component examples' CDN are listed; demo/trusted-types.ts adds a policy for the page's own HTML (the Performance view's benchmark cells run in it) and a default policy for Leaflet, flatpickr, Temml and Shoelace's icons, which write HTML themselves: what they write is parsed inertly and stripped of what runs code or loads a document." .
+ui:doc-sa-csp-3 a c:Text ; c:label "With the live editors, a visitor writes the graph, so the CSP is what limits where it can reach: keep img-src, media-src and form-action to the origins you mean. A link's destination is outside any CSP: an authored https: link goes where it says when followed." .
 
 ui:doc-sa-depth-h a c:Heading ; c:level 2 ; c:label "Defence in depth" .
 ui:doc-sa-depth a c:DescriptionList ; c:of ui:doc-sa-depth-items ; c:fields ( ui:sa-d-sandbox ui:sa-d-remote ui:sa-d-model ui:sa-d-shapes ui:sa-d-cost ) .
@@ -858,21 +879,20 @@ ui:doc-sa-depth-items ui:sa-d-sandbox "Each live example runs in a sandbox of it
     ui:sa-d-remote "A remote source names no endpoint and no credentials in the graph. What a remote store sends is data in the page's store like any other, rendered under the projection's policy if it has one; whether a server accepts a write is the server's decision (src:WriteRefused)." ;
     ui:sa-d-model "Treat a model's or a form's output as authored: pass it as authored, or render it in a sandbox. Turtle that does not parse fails to load." ;
     ui:sa-d-shapes "A shape marks a component invalid and says why; it does not stop a trusted projection from rendering what it flags. The policy does." ;
-    ui:sa-d-cost "The policy says nothing about how much a graph asks for. A sandbox has a turn budget; in your own app, a sem:Watchdog with a budget suspends a turn that runs over it." .
+    ui:sa-d-cost "An authored graph's work is bounded by the policy's budgets (time, rule evaluations, output, string length), in mount, on the server and in a live example: see Work budgets above." .
 ui:sa-d-sandbox rdfs:label "Sandboxes" . ui:sa-d-remote rdfs:label "Remote sources" . ui:sa-d-model rdfs:label "From a model or a form" .
 ui:sa-d-shapes rdfs:label "Shapes describe" . ui:sa-d-cost rdfs:label "Cost" .
 
 ui:doc-sa-not-cov-h a c:Heading ; c:level 2 ; c:label "Not covered" .
-ui:doc-sa-not-cov a c:DescriptionList ; c:of ui:doc-sa-not-cov-items ; c:fields ( ui:sa-n-origins ui:sa-n-dup ui:sa-n-store ui:sa-n-clobber ui:sa-n-island ui:sa-n-effects ui:sa-n-time ) .
+ui:doc-sa-not-cov a c:DescriptionList ; c:of ui:doc-sa-not-cov-items ; c:fields ( ui:sa-n-origins ui:sa-n-dup ui:sa-n-store ui:sa-n-clobber ui:sa-n-island ui:sa-n-effects ) .
 ui:doc-sa-not-cov-items ui:sa-n-origins "Where an http(s) link goes or an image comes from: use a CSP." ;
-    ui:sa-n-dup "An id the rendering has that the host's page has too: the browser takes the first in the document." ;
+    ui:sa-n-dup "An id the rendering has that the host's page has too: the browser takes the first in the document (in a shadow root, each has its own)." ;
     ui:sa-n-island "What a foreign component the policy lists does with its inputs once mounted: it is the host's code. A live example's sandbox attaches no islands effect." ;
     ui:sa-n-store "What the author's triples say about your resources, and what its reactions change, when it shares your store: give it a store of its own to keep it out." ;
-    ui:sa-n-clobber "DOM clobbering by id or name (a host script that reads window.someId)." ;
-    ui:sa-n-effects "Host effects you attach yourself (navigation, persistence, network capture) act on graph state as the host configured them; give them trusted when the store holds authored graphs." ;
-    ui:sa-n-time "How long a graph takes to render: budgets and the stall watchdog, not the policy." .
+    ui:sa-n-clobber "DOM clobbering by id or name of the host's own scripts (one that reads window.someId): render authored content in a shadow root, where its names do not reach the document. Semblance's own reads go past named elements." ;
+    ui:sa-n-effects "Host effects you attach yourself (navigation, persistence, network capture) act on graph state as the host configured them; give them trusted when the store holds authored graphs." .
 ui:sa-n-origins rdfs:label "Origins" . ui:sa-n-store rdfs:label "A shared store" . ui:sa-n-clobber rdfs:label "Clobbering" .
-ui:sa-n-effects rdfs:label "Host effects" . ui:sa-n-dup rdfs:label "Duplicate ids" . ui:sa-n-island rdfs:label "Listed islands" . ui:sa-n-time rdfs:label "Time" .
+ui:sa-n-effects rdfs:label "Host effects" . ui:sa-n-dup rdfs:label "Duplicate ids" . ui:sa-n-island rdfs:label "Listed islands" .
 
 ui:doc-sa-ex-h a c:Heading ; c:level 2 ; c:label "Worked examples" .
 ui:doc-sa-ex-1 a c:Text ; c:label "Each is backed by a test: test/safety.test.ts renders every vector in a live example's sandbox, in the DOM and as a server writes it; test/safety-guide.test.ts runs the examples that go through mount and renderToString." .

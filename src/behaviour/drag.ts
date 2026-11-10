@@ -8,6 +8,7 @@ import { DND, NS } from '../ns.ts'
 import { mint } from '../rdf.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import { comboOf } from '../layers/keyboard.ts'
+import { markRoot } from '../web/builtins.ts'
 import { receptionOf, zoneTarget } from '../layers/dragdrop.ts'
 import type { EventBus, EventDetail, Handled } from './events.ts'
 
@@ -258,12 +259,12 @@ export class DragHost {
       lifted = this.lift(handle, 'pointer', alt, () => {
         if (original === null) handle.removeAttribute('style')
         else handle.setAttribute('style', original)
-        doc.documentElement.removeAttribute('data-sem-dragging')
+        markRoot(handle, 'data-sem-dragging', null)
         if (frame) view?.cancelAnimationFrame?.(frame)
       })
       if (!lifted) return stop()
       handle.style.setProperty('pointer-events', 'none')
-      doc.documentElement.setAttribute('data-sem-dragging', '')
+      markRoot(handle, 'data-sem-dragging', '')
       doc.getSelection?.()?.removeAllRanges()
       follow()
       this.over(this.placeAt(last.x, last.y))
