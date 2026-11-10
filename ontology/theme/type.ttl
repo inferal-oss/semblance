@@ -235,7 +235,7 @@ sty:Mono sty:declares
 # The language, on a line of its own above the code (over the first line, it would hide a long one).
 [] a sty:StyleRule ; sty:appliesTo c:Code ; sty:state ":is(pre)" ; sty:part "> .sem-language" ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] ,
-                 [ sty:property "text-align" ; sty:raw "right" ] ,
+                 [ sty:property "text-align" ; sty:raw "end" ] ,
                  [ sty:property "margin" ; sty:raw "-0.5em 0 0.4em" ] ,
                  [ sty:property "font" ; sty:raw "650 10px/1 var(--sem-font)" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0.08em" ] ,
