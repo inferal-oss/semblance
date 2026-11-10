@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { parseHTML } from 'linkedom'
 import { DataFactory, Parser } from 'n3'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
 import { loadStore } from '../src/node/load.ts'
 import { SourceServer } from '../src/node/source-server.ts'
@@ -129,6 +129,37 @@ describe('remote sources', () => {
     expect(g.document.querySelector('[data-sem-c=list]')!.getAttribute('aria-busy')).toBe(null)
     expect(g.badge()).toBe('Live')
     expect(g.members('Snapshot')).toHaveLength(1)
+  })
+
+  it('keeps following when a reaction to its events fails', async () => {
+    const server = store()
+    const t = local(server)
+    t.down = true
+    const h = mount(t)
+    // A reaction to src:WentLive whose query does not parse: the page's problem, not the connection's.
+    const f = h.store.factory
+    const bad = h.nn(EX + 'Bad')
+    h.runtime.apply({
+      add: [
+        f.quad(bad, h.nn(NS.rdf + 'type'), h.nn(NS.beh + 'Reaction')),
+        f.quad(bad, h.nn(NS.beh + 'when'), h.nn(SRC + 'WentLive')),
+        f.quad(bad, h.nn(NS.beh + 'source'), h.nn(EX + 'store')),
+        f.quad(bad, h.nn(NS.beh + 'inserts'), f.literal('CONSTRUCT { ?s ?p ?o } WHERE { nope:x ?p ?o }')),
+      ],
+      remove: [],
+    })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      t.down = false
+      await until(() => h.state() === SRC + 'Live')
+      expect(error).toHaveBeenCalled()
+      server.change({ add: ttl(`ex:t2 rdfs:label "Sketch the theme"`), remove: ttl(`ex:t2 rdfs:label "Sketch the style layer"`) })
+      expect(h.labels()).toContain('Sketch the theme')
+      expect(h.state()).toBe(SRC + 'Live')
+    } finally {
+      error.mockRestore()
+      h.sources.stop()
+    }
   })
 
   it('leaves a source the host gave no endpoint unbound', () => {

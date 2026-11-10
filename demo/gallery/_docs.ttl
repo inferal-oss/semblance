@@ -882,7 +882,7 @@ ui:doc-sa-csp-3 a c:Text ; c:label "With the live editors, a visitor writes the 
 
 ui:doc-sa-depth-h a c:Heading ; c:level 2 ; c:label "Defence in depth" .
 ui:doc-sa-depth a c:DescriptionList ; c:of ui:doc-sa-depth-items ; c:fields ( ui:sa-d-sandbox ui:sa-d-remote ui:sa-d-model ui:sa-d-shapes ui:sa-d-cost ) .
-ui:doc-sa-depth-items ui:sa-d-sandbox "Each live example runs in a sandbox of its own (src/sandbox.ts): its own store, with the ontology and its sources and never the site's graph, its own runtime and projections under the policy, its own event bus, and a turn budget (budgetMs, 1500 ms by default) past which it stops itself and reports. A source that does not parse, a rule that throws or a reaction that fails stays inside. Besides its event bus it attaches only its full screen: no navigation, persistence, network capture or files effect, and no islands. It is not a separate browsing context: it shares the page's document and origin, which the policy and the CSP protect. buildSandbox, or a second mount of only the authored graph, does the same for your own app." ;
+ui:doc-sa-depth-items ui:sa-d-sandbox "Each live example runs in a sandbox of its own (src/sandbox.ts): its own store, with the ontology and its sources and never the site's graph, its own runtime and projections under the policy, its own event bus, and a turn budget (budgetMs, 1500 ms by default) past which it stops itself and reports. A source that does not parse, a rule that throws or a reaction that fails stays inside. Besides its event bus it attaches only its full screen and, for an example with a simulated store (c:storeSource), the remote-sources effect bound to that store in-process, with no network: no navigation, persistence, network capture or files effect, and no islands. It is not a separate browsing context: it shares the page's document and origin, which the policy and the CSP protect. buildSandbox, or a second mount of only the authored graph, does the same for your own app." ;
     ui:sa-d-remote "A remote source names no endpoint and no credentials in the graph. What a remote store sends is data in the page's store like any other, rendered under the projection's policy if it has one; whether a server accepts a write is the server's decision (src:WriteRefused)." ;
     ui:sa-d-model "Treat a model's or a form's output as authored: pass it as authored, or render it in a sandbox. Turtle that does not parse fails to load." ;
     ui:sa-d-shapes "A shape marks a component invalid and says why; it does not stop a trusted projection from rendering what it flags. The policy does." ;
@@ -1070,7 +1070,7 @@ ui:doc-pe-to-remote a c:Link , c:Setter ; c:label "Remote data" ; c:href "/docs/
 
 # --- Remote data --- (docs/REMOTE.md says the same, at more length)
 ui:doc-remote a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-re-h ui:doc-re-1 ui:doc-re-2
+    c:children ( ui:doc-re-h ui:doc-re-1 ui:doc-re-2 ui:doc-re-live-1 ui:re-live ui:doc-re-live-2
                  ui:doc-re-not-h ui:doc-re-not-1 ui:doc-re-not ui:doc-re-not-2
                  ui:doc-re-decl-h ui:doc-re-decl-1 ui:doc-re-decl-ttl ui:doc-re-decl-2 ui:doc-re-decl-ts ui:doc-re-decl ui:doc-re-decl-3
                  ui:doc-re-pat-h ui:doc-re-pat-1 ui:doc-re-pat-ts ui:doc-re-pat-2
@@ -1084,6 +1084,93 @@ ui:doc-remote a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
 ui:doc-re-h a c:Heading ; c:level 1 ; c:label "Remote data" .
 ui:doc-re-1 a c:Text ; c:label "An app's data does not have to live in the page. A team with a triple store behind a server can keep its graph there and bind a page to the part of it the page needs. The page loads that part, then receives the store's changes to it as they happen; its own changes go back as writes. The store stays the authority." .
 ui:doc-re-2 a c:Text ; c:children ( "The graph says what lives elsewhere, with a " ui:doc-re-m-Source " (ontology/layers/source.ttl, prefix src:); the host says where. The remote-sources effect (src/remote.ts) does the rest. What arrives from the store is an ordinary input change, applied with runtime.apply: rules and views take it in as they take in a click, so a change from the store costs what it changes, however large the store is." ) .
+# A page following a store (c:storeSource): the store is simulated in the page, from store.ttl, and
+# the example's source binds to it in its sandbox; no URL is named anywhere.
+ui:doc-re-live-1 a c:Text ; c:label "Here a page follows a store. The store is simulated, in this page: store.ttl is its Turtle, and the host binds the example's source to it, with no network. The todos are in the store, not in app.ttl." .
+ui:re-live a c:LiveExample ; c:label "A page following a store" ; c:exampleRoot <https://example.org/shared#page> ;
+    c:sources ( ui:re-live-app ui:re-live-store ) ; c:storeSource ui:re-live-store .
+ui:re-live-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/shared#> .
+
+# What lives in the store: every todo, and the list's links to them.
+# The page's changes to them go back. Where the store is, the host says.
+ex:store a src:Source ;
+    src:pattern [ src:class ex:Todo ] , [ src:subject ex:todos ; src:predicate c:item ] ;
+    src:writable true .
+ex:todos src:awaits ex:store .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:status ex:entry ex:todos ex:clear ) .
+ex:status a c:Badge ; c:label "Connecting" .
+ex:entry a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; pos:align pos:End ;
+    c:children ( ex:newTodo ex:add ) .
+ex:newTodo a c:TextField ; c:label "New todo" ; c:placeholder "What needs doing?" .
+ex:add a c:Button ; c:label "Add" ; sty:intent sty:Primary .
+ex:todos a c:List ; c:label "Todos" ; c:sortBy ex:created ;
+    c:itemLabel rdfs:label ; c:itemChecked ex:done .
+ex:clear a c:Button ; c:label "Clear done" .
+
+# Add: a todo from the field, named by the moment of the click.
+ex:AddTodo a beh:Reaction ; beh:when beh:Click ; beh:source ex:add ;
+    beh:deletes """PREFIX ex: <https://example.org/shared#>
+CONSTRUCT { ex:newTodo c:value ?v . ex:status c:label ?l ; sty:tone ?t }
+WHERE { ex:newTodo c:value ?v FILTER(REGEX(STR(?v), "[^ ]"))
+        ex:status c:label ?l OPTIONAL { ex:status sty:tone ?t } }""" ;
+    beh:inserts """PREFIX ex: <https://example.org/shared#>
+CONSTRUCT { ?item a ex:Todo ; rdfs:label ?v ; ex:done false ; ex:created ?at .
+            ex:todos c:item ?item . ex:status c:label "Live" ; sty:tone sty:Success }
+WHERE {
+  ex:newTodo c:value ?v FILTER(REGEX(STR(?v), "[^ ]"))
+  $event beh:at ?at
+  BIND(IRI(CONCAT(STR(ex:), "t-", REPLACE(STR(?at), "[^0-9]", ""))) AS ?item)
+}""" .
+
+# Clear done: every done todo goes, with its place in the list.
+ex:ClearDone a beh:Reaction ; beh:when beh:Click ; beh:source ex:clear ;
+    beh:deletes """PREFIX ex: <https://example.org/shared#>
+CONSTRUCT { ?t ?p ?o . ex:todos c:item ?t }
+WHERE { ex:todos c:item ?t . ?t ex:done true ; ?p ?o }""" .
+
+# The store's events, said by the badge.
+ex:ShowLive a beh:Reaction ; beh:when src:WentLive ; beh:source ex:store ;
+    beh:deletes """PREFIX ex: <https://example.org/shared#>
+CONSTRUCT { ex:status c:label ?l ; sty:tone ?t }
+WHERE { ex:status c:label ?l OPTIONAL { ex:status sty:tone ?t } }""" ;
+    beh:inserts """PREFIX ex: <https://example.org/shared#>
+CONSTRUCT { ex:status c:label "Live" ; sty:tone sty:Success } WHERE {}""" .
+ex:ShowRefused a beh:Reaction ; beh:when src:WriteRefused ; beh:source ex:store ;
+    beh:deletes """PREFIX ex: <https://example.org/shared#>
+CONSTRUCT { ex:status c:label ?l ; sty:tone ?t }
+WHERE { ex:status c:label ?l OPTIONAL { ex:status sty:tone ?t } }""" ;
+    beh:inserts """PREFIX ex: <https://example.org/shared#>
+CONSTRUCT { ex:status c:label ?reason ; sty:tone sty:Danger }
+WHERE { $event src:reason ?reason }""" .''' .
+ui:re-live-store a c:CodeEditor ; c:language "turtle" ; c:label "store.ttl" ; c:original '''@prefix ex: <https://example.org/shared#> .
+
+ex:TodoShape a sh:NodeShape ;
+    sh:property [
+        sh:maxLength 24 ;
+        sh:message "A todo is at most 24 characters." ;
+        sh:path rdfs:label
+    ] ;
+    sh:targetClass ex:Todo .
+ex:t1 a ex:Todo ;
+    ex:created "2026-11-01T09:00:00Z"^^xsd:dateTime ;
+    ex:done true ;
+    rdfs:label "Write the ontology" .
+ex:t2 a ex:Todo ;
+    ex:created "2026-11-02T09:00:00Z"^^xsd:dateTime ;
+    ex:done false ;
+    rdfs:label "Sketch the styles" .
+ex:t3 a ex:Todo ;
+    ex:created "2026-11-03T09:00:00Z"^^xsd:dateTime ;
+    ex:done false ;
+    rdfs:label "Wire up behaviour" .
+ex:todos c:item
+        ex:t1,
+        ex:t2,
+        ex:t3 .
+''' .
+ui:doc-re-live-2 a c:Text ; c:label "Edit store.ttl, as another client would: the store takes the edit as one change, and only that change reaches the page; the example is not built again. Tick, add or clear a todo: the page writes it to the store, and store.ttl shows what the store holds now. The store's shape refuses a todo longer than 24 characters: add one, and the page puts back what the store holds while the badge says why." .
 ui:doc-re-m-Source a c:Mention ; c:label "src:Source" ; c:mentions src:Source ; c:to src:Source .
 
 ui:doc-re-not-h a c:Heading ; c:level 2 ; c:label "A source, SERVICE or LOAD" .
@@ -1199,7 +1286,7 @@ ui:doc-re-to-safety a c:Link , c:Setter ; c:label "Safe authoring" ; c:href "/do
 ui:doc-re-try-h a c:Heading ; c:level 2 ; c:label "Try it" .
 ui:doc-re-try-1 a c:Text ; c:label "examples/remote is a shared todo list, served beside its store:" .
 ui:doc-re-try-sh a c:Code ; c:block true ; c:language "shell" ; c:label """npx vite --config examples/remote/vite.config.ts""" .
-ui:doc-re-try-2 a c:Text ; c:label "Open it in two windows: what one changes, the other shows. A label longer than 40 characters is refused by the store, and the page puts back what the store holds. A live example on this page, with a simulated store, is #442." .
+ui:doc-re-try-2 a c:Text ; c:label "Open it in two windows: what one changes, the other shows. A label longer than 40 characters is refused by the store, and the page puts back what the store holds. The example above is the same page over a store simulated in the page itself." .
 ui:doc-re-more a c:Text ; c:label "docs/REMOTE.md in the repository says the same, at more length." .
 
 # --- SERVICE and LOAD --- (docs/FETCHING.md says the same, at more length)

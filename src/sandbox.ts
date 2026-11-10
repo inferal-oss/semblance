@@ -11,7 +11,11 @@
 // sandbox's own change log. How many triples of the data the last interaction added and removed is
 // written back (c:triplesAdded/Removed) for the caption. A server renders the examples it shows the
 // same way (prerenderSandboxes, docs/SSR.md), and the client's first sandbox of such a slot takes the
-// server's elements over.
+// server's elements over. With c:storeSource, one of the example's editors is a simulated store
+// instead of a source of the sandbox (src/simulated-store.ts): the sandbox binds every src:Source of
+// its graph to that store, in-process, through the remote-sources effect; an edit of the store's
+// Turtle is one change to the store, which reaches the page as a delta, and the page's writes come
+// back to the store's text. The store lives as long as the example is mounted, across rebuilds.
 import { Parser } from 'n3'
 import type { Quad, Term } from '@rdfjs/types'
 import { EventBus } from './behaviour/events.ts'
@@ -32,6 +36,9 @@ import { attachAnchoredPopups } from './web/anchored-popups.ts'
 import { attachSizeHandles } from './web/size-handles.ts'
 import { replayKept, SSR_ATTRIBUTE } from './web/takeover.ts'
 import { adoptSheet, dropSheet } from './web/builtins.ts'
+import type { SourceServer } from './node/source-server.ts'
+import { RemoteSources, type SourceTransport } from './remote.ts'
+import { localTransport, parseStore, simulatedStore, storeDelta, storeTurtle } from './simulated-store.ts'
 
 const c = NS.c
 /** The diff viewer of a live example's data, in its sandbox (each sandbox has a store of its own). */
@@ -39,6 +46,7 @@ const DATA_VIEWER = 'urn:semblance:live:data'
 export const LIVE = {
   LiveExample: c + 'LiveExample',
   sources: c + 'sources',
+  storeSource: c + 'storeSource',
   exampleRoot: c + 'exampleRoot',
   textPreview: c + 'textPreview',
   dataPreview: c + 'dataPreview',
@@ -148,6 +156,11 @@ export interface Sandbox {
   styled: boolean
   /** Its store's stylesheet, compiled under the policy, when it is styled (scopedCss takes what it adds to the site's). */
   css?: string
+  /** With a simulated store: its event bus (made before its first rendering, so the store's events reach its reactions), and the effect that follows the store. */
+  bus?: EventBus
+  remote?: RemoteSources
+  /** What the effect calls once the store changed the graph (the host's flush, once mounted). */
+  hooks: { changed?: () => void }
 }
 
 export interface Build {
@@ -173,7 +186,11 @@ const STYLE_CLASSES = new Set([STY.StyleRule, NS.sty + 'Token', NS.sty + 'Keyfra
  * its line), load them over Semblance's ontology, project `root` on screen (and in the Text
  * modality with `withText`), and check that it rendered. Shape violations are warnings.
  */
-export function buildSandbox(sources: SandboxSource[], root: string, opts: SandboxOptions & { languages?: string[]; withText?: boolean }): Build {
+export function buildSandbox(
+  sources: SandboxSource[],
+  root: string,
+  opts: SandboxOptions & { languages?: string[]; withText?: boolean; store?: SourceServer; written?: () => void },
+): Build {
   const t0 = now()
   const problems: SandboxProblem[] = []
   const done = (sandbox?: Sandbox): Build => ({ sandbox, problems, ms: Math.max(0, Math.round(now() - t0)) })
@@ -217,12 +234,30 @@ export function buildSandbox(sources: SandboxSource[], root: string, opts: Sandb
       runtime.stopStall()
       return failed()
     }
+    // A simulated store: every src:Source of the sandbox follows it, its snapshot applied before the
+    // build returns (the first rendering, on a server too, shows what the store holds).
+    const hooks: Sandbox['hooks'] = {}
+    let bus: EventBus | undefined
+    let remote: RemoteSources | undefined
+    if (opts.store) {
+      bus = new EventBus(runtime, screen, { prefer: opts.prefer })
+      const transport = localTransport(opts.store, opts.written)
+      const endpoints: Record<string, SourceTransport> = {}
+      for (const q of store.match(null, f.namedNode(RDF_TYPE), f.namedNode(NS.src + 'Source'), f.defaultGraph())) endpoints[q.subject.value] = transport
+      remote = new RemoteSources(runtime, { endpoints, bus, onChange: () => hooks.changed?.() })
+      remote.attach()
+      if (runtime.held) {
+        problems.push(stallProblem(runtime, sources, budgetMs))
+        runtime.stopStall()
+        return failed()
+      }
+    }
     if (!screen.index.resolve(root)) problems.push({ message: `${short(root, sources)} renders nothing: is it an instance of a component class with a rendering?`, severity: 'error' })
     const css = styled ? compileStyles(store, { policy, onRefused: (e) => warnings.push(e.message) }) : undefined
     for (const w of new Set(warnings)) problems.push({ message: w, severity: 'warning' })
     problems.push(...violations(store, sources))
     if (problems.some((p) => p.severity === 'error')) return failed()
-    return done({ root, store, runtime, screen, text, styled, css })
+    return done({ root, store, runtime, screen, text, styled, css, bus, remote, hooks })
   } catch (e) {
     problems.push({ message: (e as Error).message, severity: 'error' })
     return failed()
@@ -275,6 +310,8 @@ export interface ExampleSpec {
   withText: boolean
   /** c:dataPreview: the CONSTRUCT of its data. */
   dataQuery?: string
+  /** c:storeSource: the source that is the simulated store's Turtle (one of `sources`, not loaded into the sandbox). */
+  store?: SandboxSource
 }
 
 /** A live example as the site's graph describes it now. */
@@ -290,18 +327,29 @@ export function exampleSpec(store: GraphStore, example: string): ExampleSpec {
     const text = one(editor, LIVE.value)?.value ?? one(editor, LIVE.original)?.value ?? ''
     sources.push({ editor: editor.value, name: one(editor, LIVE.label)?.value ?? editor.value.replace(/^.*[#/]/, ''), text })
   }
+  const storeEditor = one(ex, LIVE.storeSource)?.value
   return {
     sources,
+    store: storeEditor === undefined ? undefined : sources.find((s) => s.editor === storeEditor),
     root: one(ex, LIVE.exampleRoot)?.value,
     withText: store.match(ex, f.namedNode(LIVE.textPreview), null, dg).some((q) => q.object.value === 'true'),
     dataQuery: one(ex, LIVE.dataPreview)?.value,
   }
 }
 
-/** Build the sandbox of an example as the site's graph describes it (a build with no root is a problem). */
-function buildExample(spec: ExampleSpec, opts: SandboxOptions & { languages?: string[] }): Build {
+/** The store of an example's c:storeSource, from its Turtle: the store, or the problem with the text (the store is then empty). */
+export function exampleStore(source: SandboxSource): { server: SourceServer; problem?: SandboxProblem } {
+  try {
+    return { server: simulatedStore(parseStore(source.text, PREAMBLE)) }
+  } catch (e) {
+    return { server: simulatedStore([]), problem: parseError(e as Error, source) }
+  }
+}
+
+/** Build the sandbox of an example as the site's graph describes it (a build with no root is a problem); its store's source is not one of the sandbox's. */
+function buildExample(spec: ExampleSpec, opts: SandboxOptions & { languages?: string[]; store?: SourceServer; written?: () => void }): Build {
   return spec.root
-    ? buildSandbox(spec.sources, spec.root, { ...opts, withText: spec.withText })
+    ? buildSandbox(spec.store ? spec.sources.filter((s) => s !== spec.store) : spec.sources, spec.root, { ...opts, withText: spec.withText })
     : { problems: [{ message: 'The example names nothing to show (c:exampleRoot).', severity: 'error' as const }], ms: 0 }
 }
 
@@ -462,7 +510,9 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
       for (const [slot, html] of cached) out.set(slot, html)
       continue
     }
-    const built = buildExample(spec, { ...opts, urlBase: opts.urlBase ?? screen.index.urlBase, languages })
+    const simulated = spec.store && exampleStore(spec.store)
+    const built = buildExample(spec, { ...opts, urlBase: opts.urlBase ?? screen.index.urlBase, languages, store: simulated?.server })
+    if (simulated?.problem) built.problems.push(simulated.problem)
     const sandbox = built.sandbox
     if (!sandbox) {
       // What the browser's host writes of a build that failed (and nothing was ever shown).
@@ -554,6 +604,13 @@ interface Mounted {
   shownAt: number
   /** The data the example shows (c:dataPreview) as last found: its triples by key. */
   data?: Map<string, Quad>
+  /** Its simulated store (c:storeSource): the store, its editor, and the text the store holds now. */
+  store?: { server: SourceServer; editor: string; text: string }
+  /** An edit of the store's text waiting for typing to pause. */
+  storeTimer?: ReturnType<typeof setTimeout>
+  /** What the last build met, and what is wrong with the store's text (shown together). */
+  buildProblems?: SandboxProblem[]
+  storeProblem?: SandboxProblem
 }
 
 let sandboxes = 0
@@ -584,6 +641,8 @@ export class Sandboxes {
   private disposed = false
   /** While the host writes what happened to the site's graph (its own removals ask for nothing). */
   private writing = false
+  /** While the host writes a store's text back to its editor (it holds that already). */
+  private writingStore = false
   /** Builds done, for tests and cost checks. */
   builds = 0
   /** What taking over server-rendered slots found (tests, performance marks): nodes paired, and those patched. */
@@ -694,7 +753,7 @@ export class Sandboxes {
 
   private changed(delta: Delta) {
     for (const q of delta.remove) {
-      this.touched(q)
+      this.touched(q, q.predicate.value === LIVE.value ? 0 : undefined)
       // Reset withdrew c:interacted: build the example again as written (at once, not after typing pauses).
       if (q.predicate.value === LIVE.interacted && !this.writing) this.rebuild(q.subject.value, 0)
     }
@@ -704,11 +763,79 @@ export class Sandboxes {
     }
   }
 
-  private touched(q: Quad) {
+  /** An editor's text changed: its example is built again, or, for its store's text, the store changes (after `ms`, by default once typing pauses). */
+  private touched(q: Quad, ms?: number) {
     const p = q.predicate.value
     if (p !== LIVE.value && p !== LIVE.original) return
     const example = this.editorOf.get(q.subject.value)
-    if (example) this.rebuild(example, this.opts.delayMs ?? 300)
+    if (!example) return
+    const m = this.mounted.get(example)
+    if (m?.store?.editor !== q.subject.value) return this.rebuild(example, this.opts.delayMs ?? 300)
+    if (this.writingStore) return
+    if (m.storeTimer !== undefined) clearTimeout(m.storeTimer)
+    m.storeTimer = setTimeout(() => {
+      m.storeTimer = undefined
+      if (!this.disposed && this.mounted.get(m.iri) === m) this.storeEdited(m)
+    }, ms ?? this.opts.delayMs ?? 300)
+  }
+
+  /**
+   * The store's text was edited: the store becomes what it says, as one change, which reaches the
+   * page as a delta (the sandbox is not built again). Text that does not parse leaves the store as it is.
+   */
+  private storeEdited(m: Mounted) {
+    const store = m.store
+    const source = this.spec(m.iri).store
+    if (!store || !source || source.text === store.text) return
+    let quads: Quad[]
+    try {
+      quads = parseStore(source.text, PREAMBLE)
+    } catch (e) {
+      m.storeProblem = parseError(e as Error, source)
+      this.write(m.iri, { problems: this.problemsOf(m), edited: this.edited(this.sources(m.iri)) })
+      return
+    }
+    store.text = source.text
+    m.storeProblem = undefined
+    store.server.change(storeDelta(store.server, quads))
+    this.write(m.iri, { problems: this.problemsOf(m), edited: this.edited(this.sources(m.iri)) })
+  }
+
+  /** The store took a write of the page: its editor shows what it holds now. */
+  private storeWritten(m: Mounted, server: SourceServer) {
+    const store = m.store
+    if (this.disposed || store?.server !== server || m.storeProblem) return
+    const text = storeTurtle(server, store.text, { ...NS, ...declared(store.text) })
+    if (text === store.text) return
+    store.text = text
+    const site = this.runtime.store
+    const sf = site.factory
+    const editor = sf.namedNode(store.editor)
+    const value = sf.namedNode(LIVE.value)
+    this.writingStore = true
+    try {
+      this.runtime.apply({ remove: site.match(editor, value, null, sf.defaultGraph()), add: [sf.quad(editor, value, sf.literal(text))] })
+    } finally {
+      this.writingStore = false
+    }
+    this.write(m.iri, { edited: true })
+    this.opts.flush()
+  }
+
+  private problemsOf(m: Mounted): SandboxProblem[] {
+    return [...(m.buildProblems ?? []), ...(m.storeProblem ? [m.storeProblem] : [])]
+  }
+
+  /** Whether a source differs from its c:original. */
+  private edited(sources: SandboxSource[]): boolean {
+    const store = this.runtime.store
+    const f = store.factory
+    return sources.some((s) => {
+      const editor = f.namedNode(s.editor!)
+      const original = store.match(editor, f.namedNode(LIVE.original), null)[0]?.object.value
+      const value = store.match(editor, f.namedNode(LIVE.value), null)[0]?.object.value
+      return value !== undefined && value !== original
+    })
   }
 
   /** Build an example again after `ms` (a later request replaces a waiting one); with 0, even if its sources are the same. */
@@ -736,17 +863,17 @@ export class Sandboxes {
   }
 
   private build(m: Mounted, pace?: (mount: () => void) => void) {
-    const store = this.runtime.store
-    const f = store.factory
     const spec = this.spec(m.iri)
     const sources = spec.sources
-    const key = JSON.stringify(sources.map((s) => s.text))
-    const edited = sources.some((s) => {
-      const editor = f.namedNode(s.editor!)
-      const original = store.match(editor, f.namedNode(LIVE.original), null)[0]?.object.value
-      const value = store.match(editor, f.namedNode(LIVE.value), null)[0]?.object.value
-      return value !== undefined && value !== original
-    })
+    // The store's text is not the sandbox's: editing it changes the store, not the build.
+    const key = JSON.stringify(sources.filter((s) => s !== spec.store).map((s) => s.text))
+    const edited = this.edited(sources)
+    // The store is made once, from its text, and kept across builds (the page's writes are in it).
+    if (spec.store && m.store?.editor !== spec.store.editor) {
+      const made = exampleStore(spec.store)
+      m.store = { server: made.server, editor: spec.store.editor!, text: spec.store.text }
+      m.storeProblem = made.problem
+    } else if (!spec.store) (m.store = undefined), (m.storeProblem = undefined)
     if (key === m.key && m.sandbox) {
       // Typed and typed back: the sandbox shows these sources already.
       this.write(m.iri, { edited })
@@ -759,7 +886,9 @@ export class Sandboxes {
     // A build is a turn of the site's watchdog (no budget of its own there): a hang it causes is blamed on the example.
     const wd = this.runtime.watchdog
     const built = wd.turn(() => {
-      const b = buildExample(spec, { ...this.opts, urlBase: this.opts.urlBase ?? this.screen.index.urlBase, languages: this.opts.languages?.() })
+      const server = m.store?.server
+      const written = server && (() => this.storeWritten(m, server))
+      const b = buildExample(spec, { ...this.opts, urlBase: this.opts.urlBase ?? this.screen.index.urlBase, languages: this.opts.languages?.(), store: server, written })
       wd.note('rule', LIVE.LiveExample, m.iri, 1, now() - t0)
       return b
     })
@@ -774,7 +903,8 @@ export class Sandboxes {
         if (this.disposed || this.mounted.get(m.iri) !== m) return sandbox.runtime.dispose()
         const t1 = now()
         this.mount(m, sandbox)
-        this.write(m.iri, { state: LIVE.Live, problems: built.problems, ms: Math.max(0, Math.round(buildMs + now() - t1)), edited, interacted: false })
+        m.buildProblems = built.problems
+        this.write(m.iri, { state: LIVE.Live, problems: this.problemsOf(m), ms: Math.max(0, Math.round(buildMs + now() - t1)), edited, interacted: false })
         this.opts.flush()
       })
       return
@@ -788,7 +918,8 @@ export class Sandboxes {
     }
     const ms = Math.max(0, Math.round(now() - t0))
     const state = built.sandbox ? LIVE.Live : m.sandbox ? LIVE.Stale : LIVE.Broken
-    this.write(m.iri, { state, problems: built.problems, ms: built.sandbox ? ms : undefined, edited, interacted: built.sandbox ? false : undefined })
+    m.buildProblems = built.problems
+    this.write(m.iri, { state, problems: this.problemsOf(m), ms: built.sandbox ? ms : undefined, edited, interacted: built.sandbox ? false : undefined })
   }
 
   /**
@@ -840,7 +971,9 @@ export class Sandboxes {
         this.adopted.mismatches += a.mismatches
       }
     }
-    const bus = new EventBus(sandbox.runtime, sandbox.screen, { prefer: this.opts.prefer })
+    const bus = sandbox.bus ?? new EventBus(sandbox.runtime, sandbox.screen, { prefer: this.opts.prefer })
+    // What the store changes shows at once.
+    sandbox.hooks.changed = flush
     const failed = (e: Error) => this.write(m.iri, { problems: [{ message: e.message, severity: 'error' }] })
     const detachBus = bus.attach(
       renderer,
@@ -935,6 +1068,7 @@ export class Sandboxes {
 
   private unmount(m: Mounted) {
     if (m.timer !== undefined) clearTimeout(m.timer)
+    if (m.storeTimer !== undefined) clearTimeout(m.storeTimer)
     m.pending?.runtime.dispose()
     m.pending = undefined
     this.unmountSandbox(m)
