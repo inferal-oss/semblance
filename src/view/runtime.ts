@@ -13,7 +13,7 @@ import { type Delta, mint, owningFocus, parseDuration, quadKey, termKey } from '
 import type { GraphStore } from '../store/types.ts'
 import { accSize, accumulate, compareTerms, type Group, newGroup, result } from './aggregate.ts'
 import { compiler, keyString, prefixMap, sparqlTerm, TREE_MEMBER } from './compile.ts'
-import { Dependencies, type Lookup, type Pos } from './deps.ts'
+import { Dependencies, type Lookup, type Pat, type Pos } from './deps.ts'
 import { indexRemoved, probeLookup } from './lookup.ts'
 import { parseQuery } from './sparql.ts'
 import { OrderedMultiset } from './ordered.ts'
@@ -152,6 +152,36 @@ export interface ViewOptions {
 }
 
 const warn = (msg: string) => console.warn(`[semblance] ${msg}`)
+
+/** The predicates a view's query reads, and whether some pattern reads any predicate. */
+function readPredicates(plan: ViewPlan): { iris: Set<string>; any: boolean } {
+  const iris = new Set<string>()
+  let any = false
+  const add = (d: { iris: string[]; any: boolean } | undefined) => {
+    if (!d) return void (any = true)
+    any ||= d.any
+    for (const i of d.iris) iris.add(i)
+  }
+  const visit = (part: Part) => {
+    add(part.deps?.predicates())
+    for (const x of part.derived ?? []) visit(x.part)
+  }
+  if (plan.kind === 'maintained') plan.parts.forEach(visit)
+  else add(plan.deps?.predicates())
+  return { iris, any }
+}
+
+/** The triple patterns a view's query reads (those its dependencies know). */
+function readPatterns(plan: ViewPlan): Pat[] {
+  const out: Pat[] = []
+  const visit = (part: Part) => {
+    out.push(...(part.deps?.patterns ?? []))
+    for (const x of part.derived ?? []) visit(x.part)
+  }
+  if (plan.kind === 'maintained') plan.parts.forEach(visit)
+  else out.push(...(plan.deps?.patterns ?? []))
+  return out
+}
 const localName = (iri: string) => iri.replace(/^.*[#/]/, '')
 
 /** A view's definition as read from the graph (a template of iv:targets is defined per instance). */
@@ -434,24 +464,12 @@ export class ViewRuntime {
     const iris = new Set<string>()
     let any = false
     let some = false
-    const visit = (part: import('./plan.ts').Part) => {
-      const d = part.deps?.predicates()
-      if (!d) any = true
-      else {
-        any ||= d.any
-        for (const i of d.iris) iris.add(i)
-      }
-      for (const x of part.derived ?? []) visit(x.part)
-    }
     for (const v of this.views.values()) {
       if (!v.readsDerived) continue
       some = true
-      if (v.plan.kind === 'maintained') v.plan.parts.forEach(visit)
-      else if (v.plan.deps) {
-        const d = v.plan.deps.predicates()
-        any ||= d.any
-        for (const i of d.iris) iris.add(i)
-      } else any = true
+      const d = readPredicates(v.plan)
+      any ||= d.any
+      for (const i of d.iris) iris.add(i)
     }
     for (const t of this.templates.values()) {
       if (!t.derived) continue
@@ -1212,6 +1230,43 @@ export class ViewRuntime {
     }
     for (const v of this.views.values()) visit(v, 0)
     this.order = order
+    this.unread()
+  }
+
+  /** Pairs already warned about (unread). */
+  private readonly warnedUnread = new Set<string>()
+
+  /**
+   * A view that reads what another view writes (a pattern of its query that a triple of the other's
+   * template fits, on a named subject or object), but does not say iv:reads, reads the input graphs
+   * alone: it never sees that output, and has no rows, silently. Say so, once per pair.
+   */
+  private unread() {
+    const written: { view: string; s?: string; p: string; o?: string }[] = []
+    const named = (n: Node) => (n.k === 'iri' ? n.v : undefined)
+    for (const w of this.views.values()) {
+      if (w.ephemeral || w.plan.kind !== 'maintained' || w.plan.form !== 'construct') continue
+      for (const t of w.plan.template ?? []) if ('iri' in t.p) written.push({ view: w.def.node, s: named(t.s), p: t.p.iri, o: named(t.o) })
+    }
+    if (!written.length) return
+    const term = (x: Pos) => ('t' in x && x.t.termType === 'NamedNode' ? x.t.value : undefined)
+    for (const v of this.views.values()) {
+      if (v.readsViews || v.readsDerived) continue
+      for (const pat of readPatterns(v.plan)) {
+        const p = 'path' in pat.p ? undefined : term(pat.p)
+        const s = term(pat.s)
+        const o = term(pat.o)
+        if (!p || (!s && !o)) continue
+        for (const w of written) {
+          // The same predicate, and a named subject or object both name (any other position may fit).
+          if (w.p !== p || w.view === v.def.node || !((s && s === w.s && (!o || !w.o || o === w.o)) || (o && o === w.o && (!s || !w.s || s === w.s)))) continue
+          const key = `${v.def.node} ${w.view}`
+          if (this.warnedUnread.has(key)) continue
+          this.warnedUnread.add(key)
+          warn(`<${v.def.node}> reads <${p}>, which the view <${w.view}> writes: it sees that only with iv:reads <${w.view}>`)
+        }
+      }
+    }
   }
 
   /** A function view's plan: the function's evaluators, the SPARQL view's oracle if it has one. */

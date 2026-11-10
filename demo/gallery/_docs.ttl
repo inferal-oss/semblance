@@ -1105,10 +1105,10 @@ ui:doc-iv-decl-code a c:Code ; c:block true ; c:language "turtle" ; c:label """v
 CONSTRUCT { vx:log vx:events ?n }
 WHERE { { SELECT (COUNT(?m) AS ?n) WHERE { beh:ChangeLog tree:member ?m } } }\"\"\" .
 
-# Any component shows it: here a stat reads the view's output with a query of its own.
-vx:qEvents a sem:View ; sem:select \"\"\"SELECT ?value WHERE { vx:log vx:events ?value }\"\"\" .
+# Any component shows it: here a stat's figure, a view of its own over vx:Whole's output (iv:reads).
+vx:qEvents a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads vx:Whole ; sem:select \"\"\"SELECT ?value WHERE { vx:log vx:events ?value }\"\"\" .
 ui:events a c:Stat ; c:label "In the log" ; c:unit "events" ; c:valueQuery vx:qEvents .""" .
-ui:doc-iv-decl-live-1 a c:Text ; c:label "Here is one running, in a sandbox with a change log of its own: each like is an event, a member of the log, and the view adds it to what it holds - it never counts the log again. A component that reads a view's output says which node it reads (c:dataset), so it is re-run when that changes." .
+ui:doc-iv-decl-live-1 a c:Text ; c:label "Here is one running, in a sandbox with a change log of its own: each like is an event, a member of the log, and the view adds it to what it holds - it never counts the log again. Each figure is a view of its own over that view's output (a Stat's c:valueQuery, with iv:reads), so it steps right after it." .
 ui:iv-live a c:LiveExample ; c:label "A maintained view" ; c:exampleRoot <https://example.org/views#page> ; c:sources ( ui:iv-live-app ) .
 ui:iv-live-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/views#> .
 ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/views#"^^xsd:anyURI ] .
@@ -1128,8 +1128,11 @@ WHERE { { SELECT (COUNT(?m) AS ?n) (SUM(?a + ?r) AS ?changed)
           WHERE { beh:ChangeLog tree:member ?m . ?m beh:added ?a ; beh:removed ?r } } }""" .
 
 ex:stats a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ex:events ex:changed ) .
-ex:qEvents a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:events ?value }""" .
-ex:qChanged a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:changed ?value }""" .
+# A Stat's figure is a view too (c:valueQuery), over what ex:Totals holds (iv:reads).
+ex:qEvents a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ex:Totals ;
+    sem:select """SELECT ?value WHERE { ex:log ex:events ?value }""" .
+ex:qChanged a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ex:Totals ;
+    sem:select """SELECT ?value WHERE { ex:log ex:changed ?value }""" .
 ex:events a c:Stat ; c:label "In the log" ; c:unit "events" ; c:valueQuery ex:qEvents ; c:dataset ex:log .
 ex:changed a c:Stat ; c:label "Triples changed" ; c:valueQuery ex:qChanged ; c:dataset ex:log .''' .
 ui:doc-iv-decl-2 a c:Text ; c:label "COUNT, SUM, AVG, MIN, MAX, DISTINCT, HAVING and arithmetic over aggregates are maintained, and so are joins, OPTIONAL, EXISTS, NOT EXISTS, MINUS, UNION, VALUES and ORDER BY with LIMIT (below). An aggregate subquery - the busiest per kind, then the largest of those; the best time per size, joined to the run that made it - is a view inside the view: maintained group by group, its rows joined to the rest of the query, so a change reaches only the rows its group's new value touches. So are LATERAL and correlated subqueries, property paths (closures and zero-length ones included), GRAPH over the view's graphs, GROUP_CONCAT, SAMPLE and GROUP BY an expression: the W3C test suites' queries, 484 of them, are kept equal to a from-scratch run as their data arrives triple by triple. A query of another shape (NOW(), RAND(), RDF 1.2 triple terms) still works: it is recomputed, and the view says why (iv:fallback). iv:strategy iv:Incremental makes that an error instead, which is how the tests run." .
