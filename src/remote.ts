@@ -432,7 +432,12 @@ export class RemoteSources {
   /** An event targeted at the source, for the page's reactions. */
   private emit(type: string, s: Bound, about: [string, Term][] = []) {
     if (!this.opts.bus || this.stopped) return
-    this.opts.bus.emit(type, s.iri, { about })
+    // A reaction that fails is the page's problem, not the connection's: the stream goes on.
+    try {
+      this.opts.bus.emit(type, s.iri, { about })
+    } catch (e) {
+      console.error(`[semblance] a reaction to <${type}> of <${s.iri}> failed`, e)
+    }
     this.opts.onChange?.()
   }
 }

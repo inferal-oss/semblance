@@ -24,6 +24,9 @@ npx vite --config examples/remote/vite.config.ts
 Open it in two windows. What one window changes, the other shows. A todo label longer than 40
 characters is refused by the store, and the page puts back what the store holds.
 
+The Remote data page on the site has the same page live, over a store simulated in the page
+itself ([below](#a-store-simulated-in-a-live-example)).
+
 ## A source, SERVICE or LOAD
 
 SPARQL has two ways to reach data elsewhere: `SERVICE`, which sends part of a query to an
@@ -244,3 +247,36 @@ and of 63 todos.
   with the answer.
 - Writes made while the store is unreachable stay applied in the page, wait in order, and meet
   the same check when they are sent.
+
+## A store simulated in a live example
+
+A live example (`c:LiveExample`, `ontology/components/live.ttl`) can hold a store of its own: one of
+its sources, named by `c:storeSource`, is the store's Turtle rather than part of the example's
+graph. The site's Remote data page shows the todo list above that way:
+
+```turtle
+ui:re-live a c:LiveExample ; c:exampleRoot <https://example.org/shared#page> ;
+    c:sources ( ui:re-live-app ui:re-live-store ) ; c:storeSource ui:re-live-store .
+```
+
+The host (`src/sandbox.ts`, with `src/simulated-store.ts`) loads that text into a `SourceServer`,
+in the page's own process, and binds every `src:Source` of the example's sandbox to it through a
+`SourceTransport` that calls the server directly. Nothing reaches the network, and nothing in the
+example's graph names where the store is: the source declares only what it covers, as anywhere else.
+
+- The snapshot is applied while the sandbox is built, so the first rendering - in the browser or
+  on the server (`prerenderSandboxes`) - shows what the store holds, and the badge's `src:WentLive`
+  reaction has run.
+- Editing the store's text is another client writing to the store: once typing pauses, the
+  difference between the store and the text is applied as one change, and only that change
+  reaches the example, as a delta. The example is not built again. Text that does not parse
+  leaves the store as it is and is reported on its line.
+- The example's writes go to the store, and the store's text is printed again from what it holds
+  (`src/turtle.ts`), so it shows them. Reset brings back the store as written with the example.
+- The store refuses what its own shapes reject: a `sh:NodeShape` with `sh:targetClass`, whose
+  `sh:property` shapes give `sh:maxLength`, `sh:minLength`, `sh:minInclusive` or `sh:maxInclusive`
+  of a predicate (`sh:path`), refuses a write that adds a value breaking one, for its `sh:message`.
+  The example's patterns do not cover the shapes, so the page never sees them; it sees
+  `src:WriteRefused` and the repair.
+
+The store lives as long as the example is mounted, across rebuilds of its other sources.

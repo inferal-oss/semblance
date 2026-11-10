@@ -505,8 +505,10 @@ its sources, never the site's graph), its own runtime and projections under the 
 bus, and a turn budget (`budgetMs`, 1500 ms by default) past which it stops itself and reports, so the
 site never waits on it. A source that does not parse, a rule that throws or a reaction that fails
 stays in the sandbox; what happened is written back to the site's graph as data the example shows.
-Besides its event bus, a sandbox attaches only its full screen (shown over the page): no
-navigation, persistence, network capture or files effect, and no islands. It is not a separate browsing context: it shares the page's
+Besides its event bus, a sandbox attaches only its full screen (shown over the page) and, for an
+example with a simulated store (`c:storeSource`, [Remote data](REMOTE.md#a-store-simulated-in-a-live-example)),
+the remote-sources effect bound to that store in-process: no network, and no endpoint named by
+the graph. No navigation, persistence, network capture or files effect, and no islands. It is not a separate browsing context: it shares the page's
 document and origin, which the policy and the CSP protect.
 
 For authored content in your own app, the same holds by construction when you give it its own
