@@ -14,7 +14,7 @@ import { BEH, NS, RDF_TYPE, SOURCES_GRAPH, XSD_INTEGER } from './ns.ts'
 import { type Delta, quadKey } from './rdf.ts'
 import type { Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
-import { concerns, type DeltaMessage, fromNTriples, type Pattern, serverSentEvents, type Snapshot, toNTriples, type WriteRequest, type WriteResult } from './source-protocol.ts'
+import { concerns, type DeltaMessage, fromNTriples, JELLY_MEDIA_TYPE, jellySourceEvents, type Pattern, serverSentEvents, type Snapshot, statementsOf, toNTriples, type WriteRequest, type WriteResult } from './source-protocol.ts'
 
 const SRC = NS.src
 const PROV = NS.prov
@@ -29,6 +29,8 @@ export interface Endpoint {
   /** Sent with every request (credentials). */
   headers?: Record<string, string>
   fetch?: typeof fetch
+  /** Ask for the stream as Jelly (docs/JELLY.md), taking server-sent events from a server that answers with those. Default true. */
+  jelly?: boolean
 }
 
 /** How the effect talks to a store: the protocol over HTTP (httpTransport), or anything that behaves the same. */
@@ -39,16 +41,18 @@ export interface SourceTransport {
   write(req: WriteRequest, signal: AbortSignal): Promise<WriteResult>
 }
 
-/** The protocol of docs/REMOTE.md over HTTP: server-sent events read with fetch (so headers go too), JSON writes. */
+/** The protocol of docs/REMOTE.md over HTTP: a Jelly stream or server-sent events, read with fetch (so headers go too); JSON writes. */
 export function httpTransport(endpoint: Endpoint): SourceTransport {
   const base = endpoint.url.endsWith('/') ? endpoint.url : endpoint.url + '/'
   const go = (url: string, init: RequestInit) => (endpoint.fetch ?? globalThis.fetch)(url, init)
   return {
     async follow(patterns, after, on, signal) {
       const url = `${base}changes?patterns=${encodeURIComponent(JSON.stringify(patterns))}${after === undefined ? '' : `&after=${after}`}`
-      const res = await go(url, { headers: { accept: 'text/event-stream', ...endpoint.headers }, signal })
+      const accept = endpoint.jelly === false ? 'text/event-stream' : `${JELLY_MEDIA_TYPE}, text/event-stream;q=0.9`
+      const res = await go(url, { headers: { accept, ...endpoint.headers }, signal })
       if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`)
-      for await (const { event, data } of serverSentEvents(res.body)) on(event, JSON.parse(data))
+      if (res.headers.get('content-type')?.startsWith(JELLY_MEDIA_TYPE)) for await (const { event, data } of jellySourceEvents(res.body)) on(event, data)
+      else for await (const { event, data } of serverSentEvents(res.body)) on(event, JSON.parse(data))
     },
     async write(req, signal) {
       const res = await go(`${base}writes`, { method: 'POST', headers: { 'content-type': 'application/json', ...endpoint.headers }, body: JSON.stringify(req), signal })
@@ -244,7 +248,7 @@ export class RemoteSources {
     const f = this.f
     if (event === 'snapshot') {
       const snap = data as Snapshot
-      const add = fromNTriples(snap.add, f)
+      const add = statementsOf(snap.add, f)
       // The store is the authority: what the page held of it and the store no longer has goes.
       const keep = new Set(add.map(quadKey))
       const remove = this.held(s).filter((q) => !keep.has(quadKey(q)))
@@ -252,7 +256,7 @@ export class RemoteSources {
       this.record(SRC + 'Snapshot', s, { added: add.length, removed: remove.length, cursor: snap.cursor, ...(snap.reset && { reset: true }) })
     } else if (event === 'delta') {
       const d = data as DeltaMessage
-      const applied = this.fromStore(s, { add: fromNTriples(d.add, f), remove: fromNTriples(d.remove, f) })
+      const applied = this.fromStore(s, { add: statementsOf(d.add, f), remove: statementsOf(d.remove, f) })
       this.record(SRC + 'Received', s, { added: applied.add.length, removed: applied.remove.length, cursor: d.cursor })
     }
     const cursor = (data as { cursor?: number }).cursor

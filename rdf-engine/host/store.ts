@@ -395,6 +395,49 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       unknown.clear()
       e.load(Format.Turtle, text)
     },
+    loadJelly(bytes, graph) {
+      unknown.clear()
+      return e.loadBytes(Format.Jelly, bytes, graph ? idOf(graph, true) : DEFAULT_GRAPH)
+    },
+    jellyReader(graph) {
+      const r = e.jellyReader(graph ? idOf(graph, true) : DEFAULT_GRAPH)
+      return {
+        frame(bytes) {
+          unknown.clear()
+          return r.add(bytes)
+        },
+        end: () => (r.finish(), r.release()),
+      }
+    },
+    *jellyFrames(graph, options = {}) {
+      const g = graph ? idOf(graph, false) : 0
+      // The ids are read at once (the store holds them anyway); the frames are written a batch at a time.
+      const ids = graph && !g ? new Uint32Array(0) : e.match(0, 0, 0, g)
+      const w = e.jellyWriter({ ...options, physical: 2 })
+      const step = 4 * (options.frameRows ?? 4096)
+      try {
+        for (let i = 0; i < ids.length; i += step) {
+          const out = w.write(ids.subarray(i, i + step))
+          if (out.length) yield out
+        }
+        yield w.flush()
+      } finally {
+        w.release()
+      }
+    },
+    dumpJelly(graph, options = {}) {
+      const g = graph ? idOf(graph, false) : 0
+      const w = e.jellyWriter({ ...options, physical: 2 })
+      try {
+        const parts = [graph && !g ? new Uint8Array(0) : w.write(e.match(0, 0, 0, g)), w.flush()]
+        const out = new Uint8Array(parts[0]!.length + parts[1]!.length)
+        out.set(parts[0]!)
+        out.set(parts[1]!, parts[0]!.length)
+        return out
+      } finally {
+        w.release()
+      }
+    },
     termCount: () => e.termCount(),
     size: () => e.quadCount(),
     dispose() {

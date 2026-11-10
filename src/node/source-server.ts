@@ -10,7 +10,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Quad, Term } from '@rdfjs/types'
 import { DataFactory, Parser, Store } from 'n3'
-import { concerns, type DeltaMessage, fromNTriples, type Pattern, RDF_TYPE, type Snapshot, toNTriples, type WriteRequest, type WriteResult } from '../source-protocol.ts'
+import { concerns, fromNTriples, JELLY_MEDIA_TYPE, JellyEventWriter, type Pattern, RDF_TYPE, type SourceEvent, toNTriples, wireMessage, type WriteRequest, type WriteResult } from '../source-protocol.ts'
 
 const f = DataFactory
 const TYPE = f.namedNode(RDF_TYPE)
@@ -41,7 +41,7 @@ interface Step {
 
 interface Subscription {
   patterns: Pattern[]
-  send(event: string, data: unknown): void
+  send(event: string, data: SourceEvent): void
   end(): void
 }
 
@@ -132,20 +132,25 @@ export class SourceServer {
   /**
    * Follow the store from `after` (a cursor the subscriber holds; undefined: from now, with a
    * snapshot first). A cursor the log no longer reaches back to gets a snapshot with reset.
+   * Messages are sent as they travel in server-sent events (statements as N-Triples).
    * Returns a function that ends the subscription.
    */
   subscribe(patterns: Pattern[], after: number | undefined, send: (event: string, data: unknown) => void, end: () => void = () => {}): () => void {
+    return this.follow(patterns, after, (event, e) => send(event, wireMessage(event, e)), end)
+  }
+
+  /** As subscribe, with each message's statements as statements (for a Jelly stream). */
+  follow(patterns: Pattern[], after: number | undefined, send: (event: string, data: SourceEvent) => void, end: () => void = () => {}): () => void {
     const start = this.log.length ? this.log[0]!.cursor - 1 : this.cursor
     if (after === undefined || after > this.cursor || after < start) {
-      const snapshot: Snapshot = { cursor: this.cursor, add: toNTriples(this.snapshot(patterns)), ...(after !== undefined && { reset: true }) }
-      send('snapshot', snapshot)
+      send('snapshot', { cursor: this.cursor, add: this.snapshot(patterns), remove: [], ...(after !== undefined && { reset: true }) })
     } else {
       for (const step of this.log) {
         if (step.cursor <= after) continue
         const d = this.deltaFor(step, patterns)
         if (d) send('delta', d)
       }
-      send('cursor', { cursor: this.cursor })
+      send('cursor', { cursor: this.cursor, add: [], remove: [] })
     }
     const sub: Subscription = { patterns, send, end }
     this.subscriptions.add(sub)
@@ -158,7 +163,7 @@ export class SourceServer {
   }
 
   /** What of a step concerns the patterns, or undefined when nothing does. */
-  private deltaFor(step: Step, patterns: Pattern[]): DeltaMessage | undefined {
+  private deltaFor(step: Step, patterns: Pattern[]): SourceEvent | undefined {
     const types = (m: Map<string, Set<string>>) => (t: Term) => m.get(t.termType + ':' + t.value) ?? NONE
     const check = (q: Quad, m: Map<string, Set<string>>) => (this.work.checks++, concerns(q, patterns, types(m)))
     const add = new Map<string, Quad>()
@@ -172,7 +177,7 @@ export class SourceServer {
     // A statement that is in both (described, and changed in the same step) is where it ends up.
     for (const k of add.keys()) remove.delete(k)
     if (!add.size && !remove.size) return undefined
-    return { cursor: step.cursor, add: toNTriples(add.values()), remove: toNTriples(remove.values()), ...(step.write && { write: step.write }) }
+    return { cursor: step.cursor, add: [...add.values()], remove: [...remove.values()], ...(step.write && { write: step.write }) }
   }
 
   /**
@@ -195,11 +200,15 @@ export class SourceServer {
           return true
         }
         const afterParam = url.searchParams.get('after')
-        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
+        // A page that takes Jelly gets a Jelly stream (a frame per message); others, server-sent events.
+        const jelly = (req.headers.accept ?? '').includes(JELLY_MEDIA_TYPE)
+        res.writeHead(200, { 'content-type': jelly ? JELLY_MEDIA_TYPE : 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
         res.flushHeaders()
-        const send = (event: string, data: unknown) => void res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-        const stop = this.subscribe(patterns, afterParam === null ? undefined : Number(afterParam), send, () => res.end())
-        const beat = setInterval(() => send('cursor', { cursor: this.cursor }), this.opts.heartbeatMs ?? 15000)
+        const frames = jelly ? new JellyEventWriter() : undefined
+        const send = (event: string, data: SourceEvent) =>
+          void res.write(frames ? frames.frame(event, data) : `event: ${event}\ndata: ${JSON.stringify(wireMessage(event, data))}\n\n`)
+        const stop = this.follow(patterns, afterParam === null ? undefined : Number(afterParam), send, () => res.end())
+        const beat = setInterval(() => send('cursor', { cursor: this.cursor, add: [], remove: [] }), this.opts.heartbeatMs ?? 15000)
         res.on('close', () => (clearInterval(beat), stop()))
         return true
       }

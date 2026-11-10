@@ -105,8 +105,8 @@ IRI: a blank node has no identity across the wire, so a source leaves it out.
 
 ## The protocol
 
-The protocol is plain HTTP and JSON, with statements as N-Triples. The types are in
-`src/source-protocol.ts`, exported from the package.
+The protocol is plain HTTP and JSON, with statements as N-Triples, or a Jelly stream where both
+ends speak it (below). The types are in `src/source-protocol.ts`, exported from the package.
 
 **Reading.** `GET {base}changes?patterns={json}&after={cursor}` answers with a
 `text/event-stream`:
@@ -120,6 +120,16 @@ The protocol is plain HTTP and JSON, with statements as N-Triples. The types are
 The server's cursor is a sequence number. Every change to the store, from any client, is one
 step. The client reads the stream with `fetch` rather than `EventSource`, so it can send the
 headers its server needs (credentials). `serverSentEvents(body)` parses the stream.
+
+**As Jelly.** A page asks with `Accept: application/x-jelly-rdf, text/event-stream;q=0.9`
+(`httpTransport`; `jelly: false` asks for events only). A server that offers it answers with a
+Jelly stream (docs/JELLY.md): one stream of triples as RDF Messages, a frame per message (a large
+snapshot spans several). A delta's removals come first. The metadata of the message's last frame
+says what it is: `event`, `cursor`, `remove` (how many of its statements are removals), `write`,
+`reset`. One writer per subscription keeps its lookups across messages, so an IRI the stream has
+named before costs a few bytes. `SourceServer` offers it; `JellyEventWriter` and
+`jellySourceEvents` are the two ends. On a todo list's stream a delta is 85 bytes instead of 275,
+and gzipped with a flush per event the stream is a fifth smaller (`scripts/jelly-remote-measure.ts`).
 
 **Writing.** `POST {base}writes` with `{ id, add, remove }` answers `200 { ok: true, cursor }`, or
 `409 { ok: false, reason, repair }`. The server applies a write atomically, and refuses it in
