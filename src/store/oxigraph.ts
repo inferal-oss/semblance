@@ -2,7 +2,7 @@ import type { Quad, Quad_Graph, Quad_Object, Quad_Predicate, Quad_Subject, Term 
 import type * as Ox from 'oxigraph'
 import { DataFactory } from 'n3'
 import { dumpJellyOf, jellyFramesOf, jellyReaderInto, readJellyInto } from '../jelly/store.ts'
-import type { Factory, GraphStore } from './types.ts'
+import { doesNotFetch, type Factory, type GraphStore } from './types.ts'
 
 const COMPACT_MIN = 5_000
 
@@ -56,6 +56,22 @@ export function plainResult<T>(result: unknown): T {
 }
 
 /**
+ * `query` for a store that runs SPARQL synchronously and fetches nothing (Oxigraph's JavaScript
+ * build has no HTTP client): its own errors for SERVICE and LOAD, said plainly. A SERVICE SILENT
+ * answers as an unreachable endpoint does, with no solutions there.
+ */
+export async function answerLocally<T>(kind: string, run: () => T): Promise<T> {
+  try {
+    return run()
+  } catch (err) {
+    const message = (err as Error).message ?? ''
+    if (/^The service .* is not supported|HTTP client is not available/.test(message))
+      throw doesNotFetch(kind)
+    throw err
+  }
+}
+
+/**
  * Oxigraph adapter. The module is injected because Node (`oxigraph/node.js`)
  * and browsers (`oxigraph/web.js`, needs `init()`) load it differently.
  */
@@ -100,6 +116,8 @@ export function oxigraphStore(ox: typeof Ox): GraphStore {
     construct(query: string, graphs: Quad_Graph[]): Quad[] {
       return plainResult(store.query(query, { default_graph: graphs as Ox.NamedNode[] }))
     },
+    query: (query, opts = {}) => answerLocally('oxigraph', () => plainResult(store.query(query, opts.graphs ? { default_graph: opts.graphs as Ox.NamedNode[] } : {}))),
+    update: (update) => answerLocally('oxigraph', () => store.update(update)),
     loadTurtle: (text) => store.load(text, { format: 'text/turtle' }),
     loadJelly: (bytes, graph) => readJellyInto((q) => store.add(q as Ox.Quad), bytes, graph),
     dumpJelly: (graph, options) => dumpJellyOf(store.match(null, null, null, (graph ?? null) as Ox.Term).map(plainQuad), options),

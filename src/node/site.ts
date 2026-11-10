@@ -12,7 +12,7 @@ import { withCsp } from '../server/csp.ts'
 import { type Rendered, renderToString, serializeRoot } from '../server/render.ts'
 import type { Site } from '../server/site.ts'
 import { warmRenderer, type WarmRenderer } from '../server/warm.ts'
-import type { GraphStore } from '../store/types.ts'
+import { configureFetching, type GraphStore } from '../store/types.ts'
 import { appOntology, loadStore, loadStoreOf, loadStoreWithOntology, ontologyFiles } from './load.ts'
 import type { Subset } from '../subset.ts'
 import { graphIndex, neededGraphs, pageGraphsMeta, type GraphIndex } from '../server/page-graphs.ts'
@@ -55,7 +55,7 @@ export async function siteStore(site: Site, opts: RenderSiteOptions & { graphs?:
   const only = opts.graphs
   const kind = site.store ?? 'wat'
   const data = Object.entries(named).filter(([n]) => !only || only.has(n)).map(([, t]) => t)
-  const store = subset ? loadStoreWithOntology(kind, subset.turtle, ...data) : only ? loadStoreOf(kind, only, ...data) : loadStore(kind, ...data)
+  const store = configureFetching(subset ? loadStoreWithOntology(kind, subset.turtle, ...data) : only ? loadStoreOf(kind, only, ...data) : loadStore(kind, ...data), site.fetchPolicy)
   site.setup?.(store, { single: !!opts.single, ...(only && { graphs: only }) })
   // Where its paths start, and where relative URLs in its data resolve, on every page (one file: as given).
   if (!opts.single) setBase(store, opts.base ?? '/')

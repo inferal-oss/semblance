@@ -4,9 +4,9 @@
 // factories are looked up by value. In idle time (`maintain`) the engine frees
 // terms nothing uses any more; the adapter then forgets their ids.
 import type { DefaultGraph, Literal, NamedNode, Quad, Term } from '@rdfjs/types'
-import type { Factory, FetchingQueries, GraphStore } from '../../src/store/types.ts'
+import type { Factory, GraphStore, QueryAnswer } from '../../src/store/types.ts'
 import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } from './engine.ts'
-import { withFetching, type FetchPolicy } from './fetching.ts'
+import { narrowPolicy, withFetching, type FetchPolicy } from './fetching.ts'
 
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
 
@@ -84,6 +84,8 @@ export type EngineStore = GraphStore & {
   setDeadline(at: number | undefined): void
   /** A step budget for each query, as setDeadline (undefined: unlimited). */
   setFuel(steps: number | undefined): void
+  update: NonNullable<GraphStore['update']>
+  setFetchPolicy: NonNullable<GraphStore['setFetchPolicy']>
   /** The engine itself and term ids, for measurements that bypass the adapter. */
   engine: Engine
   idOf(t: Term): number
@@ -99,7 +101,12 @@ export interface EngineStoreOptions {
   compile?: number | 'idle'
   /** The time zone `sx:formatDateTime` uses when its options name none (default: the host's own). */
   timeZone?: string
+  /** What `query` and `update` may fetch for SERVICE and LOAD (docs/FETCHING.md; default: nothing). setFetchPolicy replaces it. */
+  fetchPolicy?: FetchPolicy
 }
+
+/** The host's policy as it is now: later changes to the object it gave do not reach the store. */
+const snapshot = (p: FetchPolicy | undefined): FetchPolicy => (p ? { ...p, endpoints: { ...p.endpoints }, documents: { ...p.documents } } : {})
 
 /** Called with every engine store made (benchmarks use it to watch queries). */
 export const engineStoreHooks: { created?: (store: EngineStore) => void } = {}
@@ -328,11 +335,10 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     } catch (err) {
       if (!(err instanceof EngineError && err.waiting)) throw err
       if (!fetchingOps) e.fetchClear()
-      throw new Error('SERVICE and LOAD reach the network: only store.fetching runs them (docs/FETCHING.md); rules, views and reactions cannot')
+      throw new Error('SERVICE and LOAD reach the network: only store.query and store.update run them (docs/FETCHING.md); rules, views and reactions cannot')
     }
   }
-  function selectRows(query: string, graphs: Term[]) {
-    const r = prepare(query).run(graphIds(graphs))
+  function selectRows(query: string, graphs: Term[], r = prepare(query).run(graphIds(graphs))) {
     // An ASK answers true or false, as Oxigraph's query does.
     if (r.form === Form.Ask) return r.value as never
     if (r.form !== Form.Select) throw new Error('not a SELECT query')
@@ -346,21 +352,34 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     }
     return out
   }
-  /** `attempt` with every SERVICE and LOAD answered under `policy`, after the operations before it. */
-  function fetchingOp<T>(policy: FetchPolicy, attempt: () => T): Promise<T> {
+  /** The host's fetch policy: what `query` and `update` may reach. */
+  let fetchPolicy = snapshot(options.fetchPolicy)
+  /**
+   * `attempt` with every SERVICE and LOAD answered under the store's policy (narrowed by the call's,
+   * as it is now: a replacement after the call does not change it), after the operations before it.
+   */
+  function fetchingOp<T>(call: FetchPolicy | undefined, attempt: () => T): Promise<T> {
     if (!sparql) return Promise.reject(new Error(`The ${kind} store has no SPARQL engine yet`))
+    let policy: FetchPolicy
+    try {
+      policy = narrowPolicy(fetchPolicy, call)
+    } catch (err) {
+      return Promise.reject(err)
+    }
     const op = queue.then(async () => {
       fetchingOps++
+      const round = () => {
+        // Each round within the operation's deadline, then the store's own again.
+        e.setDeadline(policy.deadline ?? deadline)
+        try {
+          return attempt()
+        } finally {
+          e.setDeadline(deadline)
+        }
+      }
       try {
-        return await withFetching(e, policy, () => {
-          // Each round within the operation's deadline, then the store's own again.
-          e.setDeadline(policy.deadline ?? deadline)
-          try {
-            return attempt()
-          } finally {
-            e.setDeadline(deadline)
-          }
-        })
+        // A build without fetching answers what needs nothing fetched, and refuses the rest.
+        return e.fetches ? await withFetching(e, policy, round) : sync(round)
       } finally {
         fetchingOps--
       }
@@ -368,18 +387,12 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     queue = op.catch(() => {})
     return op
   }
-  const fetching: FetchingQueries | undefined = e.fetches
-    ? {
-        select: (query, graphs, policy) => fetchingOp(policy, () => selectRows(query, graphs as Term[])),
-        construct: (query, graphs, policy) => fetchingOp(policy, () => triplesOf(prepare(query).run(graphIds(graphs as Term[])))),
-        update: (text, policy) =>
-          fetchingOp(policy, () => {
-            e.update(text)
-            // IRIs it added may be ones looked up as unknown before.
-            unknown.clear()
-          }),
-      }
-    : undefined
+  /** A query's answer, by its form. */
+  function answer(query: string, graphs: Term[]): QueryAnswer {
+    const r = prepare(query).run(graphIds(graphs))
+    if (r.form === Form.Construct || r.form === Form.Describe) return triplesOf(r)
+    return selectRows(query, graphs, r)
+  }
 
   const factory: Factory = {
     namedNode,
@@ -447,7 +460,19 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet; use function rules (prefer: "function")`)
       return sync(() => triplesOf(prepare(query).run(graphIds(graphs as Term[]))))
     },
-    fetching,
+    query(query, opts = {}) {
+      return fetchingOp(opts.policy, () => answer(query, (opts.graphs ?? []) as Term[])) as never
+    },
+    update(text, opts = {}) {
+      return fetchingOp(opts.policy, () => {
+        e.update(text)
+        // IRIs it added may be ones looked up as unknown before.
+        unknown.clear()
+      })
+    },
+    setFetchPolicy(policy) {
+      fetchPolicy = snapshot(policy)
+    },
     loadTurtle(text) {
       unknown.clear()
       e.load(Format.Turtle, text)
