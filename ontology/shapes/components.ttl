@@ -4,6 +4,7 @@
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix rnd: <https://semblance.dev/ns/rendered#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
@@ -37,7 +38,14 @@ sem:ComponentShape a sh:NodeShape ; sh:targetClass sem:Component ;
                   sh:message "rnd:observes takes aspects of the rendered state (rnd:Geometry, rnd:Visibility, rnd:Overlap, rnd:Focus, rnd:Hover, rnd:Press, rnd:Scroll, rnd:Open, rnd:Animation)."@en ,
                       "rnd:observes приймає аспекти стану відображення (rnd:Geometry, rnd:Visibility, rnd:Overlap, rnd:Focus, rnd:Hover, rnd:Press, rnd:Scroll, rnd:Open, rnd:Animation)."@uk ,
                       "rnd:observes nimmt Aspekte des Darstellungszustands (rnd:Geometry, rnd:Visibility, rnd:Overlap, rnd:Focus, rnd:Hover, rnd:Press, rnd:Scroll, rnd:Open, rnd:Animation)."@de ,
-                      "تأخذ rnd:observes جوانب من حالة العرض (rnd:Geometry وrnd:Visibility وrnd:Overlap وrnd:Focus وrnd:Hover وrnd:Press وrnd:Scroll وrnd:Open وrnd:Animation)."@ar ] .
+                      "تأخذ rnd:observes جوانب من حالة العرض (rnd:Geometry وrnd:Visibility وrnd:Overlap وrnd:Focus وrnd:Hover وrnd:Press وrnd:Scroll وrnd:Open وrnd:Animation)."@ar ] ,
+                # A formula reads a maintained view's rows (ontology/components/formula.ttl): a query
+                # that is not one gives the component no value, and nothing else says why.
+                [ sh:path c:valueQuery ; sh:class iv:View ;
+                  sh:message "c:valueQuery names a maintained view: an iv:View with iv:materialize iv:Graph."@en ,
+                      "c:valueQuery називає підтримуване подання: iv:View з iv:materialize iv:Graph."@uk ,
+                      "c:valueQuery nennt eine gepflegte Sicht: eine iv:View mit iv:materialize iv:Graph."@de ,
+                      "تسمّي c:valueQuery عرضًا مُصانًا: iv:View مع iv:materialize iv:Graph."@ar ] .
 
 # An accessible name, for a control a c:Field can wrap (one with a c:labelPart): its own c:label, or
 # the label of the c:Field whose c:content it is (that label points at the control's labelPart). Only

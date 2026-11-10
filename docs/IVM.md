@@ -1495,7 +1495,11 @@ What exists (`src/view/`):
   graph (`iv:property` of `iv:from`, or the `?value` of `iv:select`; `iv:default`), re-resolved
   when a triple its own patterns read changes; when only LIMIT / OFFSET change, the top-k moves its
   window without evaluating a partition. **Views over views** (`iv:reads`): step after the views
-  they read, see what those wrote this tick, read the views graph.
+  they read, see what those wrote this tick, read the views graph. A view without it reads the input
+  graphs alone: one whose pattern another view's template fits on a named subject or object (a
+  Stat's figure over a CONSTRUCT view's `ex:log ex:events ?n`) never sees that output, so the
+  runtime warns once per pair (`ViewRuntime.unread`); a `c:valueQuery` that is no `iv:View` at all
+  breaks `sem:ComponentShape` (#427).
 - **Order keys** (`src/render/order-key.ts`): tuple keys (§6.6), U+0001-separated components, `n`
   number or `s` string, `-` for descending; `compareKeys` compares them component by component.
 - **Tests**: `test/view-laws.test.ts` (the operator-law generator: a stream whose members point
