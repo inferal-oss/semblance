@@ -126,8 +126,8 @@
                  [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px var(--sem-border)" ] .
 
-# A nav list is rows on the canvas, not a plate beside the plates; the current row carries the node,
-# the theme's ◇: a small accent diamond at its start.
+# A nav list is rows on the canvas, not a plate beside the plates; the current row is a quiet
+# filled row in the text colour, as a menu's chosen item is.
 [] a sty:StyleRule ; sty:when sty:Semblance ;
     sty:part "[data-sem-c=nav-list]:not([data-sem-compact-as=picker] .sem-picker):not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
@@ -136,32 +136,18 @@
                  [ sty:property "padding" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Semblance ;
     sty:part "[data-sem-c=nav-list] button:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
-    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
-                 [ sty:property "padding-inline-start" ; sty:raw "22px" ] ,
-                 [ sty:property "font-weight" ; sty:raw "500" ] ,
+    sty:declares [ sty:property "font-weight" ; sty:raw "500" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-muted)" ] .
 [] a sty:StyleRule ; sty:when sty:Semblance ;
     sty:part "[data-sem-c=nav-list] button:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
-                 [ sty:property "background" ; sty:raw "var(--sem-gray-4)" ] .
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-3)" ] .
 [] a sty:StyleRule ; sty:when sty:Semblance ;
     sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
-                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-4)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] .
-[] a sty:StyleRule ; sty:when sty:Semblance ;
-    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))::before" ;
-    sty:declares [ sty:property "content" ; sty:raw "''" ] ,
-                 [ sty:property "position" ; sty:raw "absolute" ] ,
-                 [ sty:property "inset-inline-start" ; sty:raw "9px" ] ,
-                 [ sty:property "top" ; sty:raw "50%" ] ,
-                 [ sty:property "width" ; sty:raw "6px" ] ,
-                 [ sty:property "height" ; sty:raw "6px" ] ,
-                 [ sty:property "margin-top" ; sty:raw "-3px" ] ,
-                 [ sty:property "border-radius" ; sty:raw "1px" ] ,
-                 [ sty:property "background" ; sty:raw "var(--sem-accent)" ] ,
-                 [ sty:property "transform" ; sty:raw "rotate(45deg)" ] .
 
 # The node under a heading: the mark tokens make it a 6px square; turned, it is the ◇.
 [] a sty:StyleRule ; sty:when sty:Semblance ;
