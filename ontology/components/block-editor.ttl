@@ -663,8 +663,8 @@ WHERE {
   OPTIONAL { ?sc blk:within ?within0 }
   BIND(COALESCE(?within0, ?makes) AS ?target)
   ?conv a blk:Conversion .
-  FILTER EXISTS { ?conv blk:to ?target ; beh:sourceClass ?convFrom . ?a a/rdfs:subClassOf* ?convFrom .
-    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?target ; beh:sourceClass ?convOf . ?a a/rdfs:subClassOf* ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }
+  FILTER EXISTS { ?conv blk:to ?target ; beh:sourceClass ?convFrom . ?a (a|a/rdfs:subClassOf+) ?convFrom .
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?target ; beh:sourceClass ?convOf . ?a (a|a/rdfs:subClassOf+) ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }
   OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
   OPTIONAL { $this c:pendingMark ?xpm }
   BIND(IF(BOUND(?mk) && ?me0 <= ?s, ?mk, ?none) AS ?gone)
@@ -683,8 +683,8 @@ WHERE {
   OPTIONAL { ?sc blk:within ?within0 }
   BIND(COALESCE(?within0, ?makes) AS ?target)
   ?conv a blk:Conversion .
-  FILTER EXISTS { ?conv blk:to ?target ; beh:sourceClass ?convFrom . ?a a/rdfs:subClassOf* ?convFrom .
-    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?target ; beh:sourceClass ?convOf . ?a a/rdfs:subClassOf* ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }
+  FILTER EXISTS { ?conv blk:to ?target ; beh:sourceClass ?convFrom . ?a (a|a/rdfs:subClassOf+) ?convFrom .
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?target ; beh:sourceClass ?convOf . ?a (a|a/rdfs:subClassOf+) ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }
   BIND(SUBSTR(?old, ?s + 1) AS ?rest)
   BIND(IF(BOUND(?mk) && ?me0 > ?s, ?mk, ?none) AS ?kept)
   BIND(IF(?ms0 > ?s, ?ms0, ?s) - ?s AS ?ns) BIND(?me0 - ?s AS ?ne)
@@ -1115,7 +1115,7 @@ WHERE {
     # On a block with text: what it can turn into (the most specific conversion to each type), first.
     $this c:menuBlank false ; c:menuBlock ?mblock .
     ?cls a blk:Conversion ; blk:to ?type ; beh:sourceClass ?from . ?mblock a/rdfs:subClassOf* ?from .
-    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?type ; beh:sourceClass ?of . ?mblock a/rdfs:subClassOf* ?of . ?of rdfs:subClassOf+ ?from }
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?type ; beh:sourceClass ?of . ?mblock (a|a/rdfs:subClassOf+) ?of . ?of rdfs:subClassOf+ ?from }
     ?type blk:menuOrder ?typeOrder .
     BIND(?typeOrder - 100 AS ?order)
     BIND("/" AS ?for)
@@ -1282,10 +1282,10 @@ WHERE {
   BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
   BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
   BIND(EXISTS { ?cls a blk:Conversion } AS ?isConv)
-  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a a/rdfs:subClassOf* ?cvFrom } AS ?convertible)
+  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a (a|a/rdfs:subClassOf+) ?cvFrom } AS ?convertible)
   ?conv a blk:Conversion .
-  FILTER(?conv = ?cls || (?empty && EXISTS { ?conv blk:to ?cls ; beh:sourceClass ?convFrom . ?a a/rdfs:subClassOf* ?convFrom .
-    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?convOf . ?a a/rdfs:subClassOf* ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }))
+  FILTER(?conv = ?cls || (?empty && EXISTS { ?conv blk:to ?cls ; beh:sourceClass ?convFrom . ?a (a|a/rdfs:subClassOf+) ?convFrom .
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?convOf . ?a (a|a/rdfs:subClassOf+) ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }))
   OPTIONAL { $this c:activeOption ?ma }
   OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
   OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
@@ -1318,10 +1318,10 @@ WHERE {
   BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
   BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
   BIND(EXISTS { ?cls a blk:Conversion } AS ?isConv)
-  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a a/rdfs:subClassOf* ?cvFrom } AS ?convertible)
+  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a (a|a/rdfs:subClassOf+) ?cvFrom } AS ?convertible)
   ?conv a blk:Conversion .
-  FILTER(?conv = ?cls || (?empty && EXISTS { ?conv blk:to ?cls ; beh:sourceClass ?convFrom . ?a a/rdfs:subClassOf* ?convFrom .
-    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?convOf . ?a a/rdfs:subClassOf* ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }))
+  FILTER(?conv = ?cls || (?empty && EXISTS { ?conv blk:to ?cls ; beh:sourceClass ?convFrom . ?a (a|a/rdfs:subClassOf+) ?convFrom .
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?convOf . ?a (a|a/rdfs:subClassOf+) ?convOf . ?convOf rdfs:subClassOf+ ?convFrom } }))
 }""" .
 
 c:BlockMenuInsert a beh:Reaction ;
@@ -1360,7 +1360,7 @@ WHERE {
   BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
   BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
   BIND(EXISTS { ?cls a blk:Conversion } AS ?isConv)
-  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a a/rdfs:subClassOf* ?cvFrom } AS ?convertible)
+  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a (a|a/rdfs:subClassOf+) ?cvFrom } AS ?convertible)
   FILTER(!?isConv && (!?empty || !?convertible))
   OPTIONAL { $this c:activeOption ?ma }
   OPTIONAL { ?a blk:mark ?mk . ?mk ?gp0 ?go0 } BIND(IF(BOUND(?gone), ?gp0, ?none) AS ?gp) BIND(IF(BOUND(?gone), ?go0, ?none) AS ?go)
@@ -1404,7 +1404,7 @@ WHERE {
   BIND(IF(BOUND(?mk) && ?ns >= ?ne, ?mk, ?none) AS ?gone)
   BIND(IF(BOUND(?mk) && ?ns < ?ne && (?ns != ?ms0 || ?ne != ?me0), ?mk, ?none) AS ?moved)
   BIND(EXISTS { ?cls a blk:Conversion } AS ?isConv)
-  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a a/rdfs:subClassOf* ?cvFrom } AS ?convertible)
+  BIND(EXISTS { ?cv a blk:Conversion ; blk:to ?cls ; beh:sourceClass ?cvFrom . ?a (a|a/rdfs:subClassOf+) ?cvFrom } AS ?convertible)
   FILTER(!?isConv && (!?empty || !?convertible))
   OPTIONAL { ?parent po:contains ?a }
   BIND(IRI(CONCAT(STR(?doc), "/~b-", ?ev)) AS ?n)
@@ -1579,9 +1579,9 @@ WHERE {
   BIND(COALESCE(?lastItem, ?p) AS ?target)
   ?target a/rdfs:subClassOf* blk:Container .
   FILTER NOT EXISTS {
-    ?shape sh:targetClass ?tc ; sh:property ?ps . ?target a/rdfs:subClassOf* ?tc .
+    ?shape sh:targetClass ?tc ; sh:property ?ps . ?target (a|a/rdfs:subClassOf+) ?tc .
     ?ps sh:path po:contains ; sh:class ?required .
-    FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?required }
+    FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?required }
   }
 }""" ;
     beh:inserts """CONSTRUCT { ?p co:nextItem ?n . ?target po:contains ?b . ?last co:nextItem ?b . }
@@ -1596,9 +1596,9 @@ WHERE {
   BIND(COALESCE(?lastItem, ?p) AS ?target)
   ?target a/rdfs:subClassOf* blk:Container .
   FILTER NOT EXISTS {
-    ?shape sh:targetClass ?tc ; sh:property ?ps . ?target a/rdfs:subClassOf* ?tc .
+    ?shape sh:targetClass ?tc ; sh:property ?ps . ?target (a|a/rdfs:subClassOf+) ?tc .
     ?ps sh:path po:contains ; sh:class ?required .
-    FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?required }
+    FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?required }
   }
   OPTIONAL { ?target po:contains ?last FILTER NOT EXISTS { ?last co:nextItem ?anyAfter } }
 }""" .
@@ -2494,7 +2494,7 @@ WHERE {
   { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
   UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
   $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
-  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
   FILTER(?action = "duplicate")
   OPTIONAL { ?b co:nextItem ?next }
   OPTIONAL { $this c:handleMenuBlock ?open } OPTIONAL { $this c:handleMenuReturn ?ret }
@@ -2504,13 +2504,13 @@ WHERE {
   { { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
   UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
   $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
-  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
   FILTER(?action = "duplicate")
     ?b po:contains* ?n . ?n ?p ?o . FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
   UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
   UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
   $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
-  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
   FILTER(?action = "duplicate")
     ?b po:contains* ?holder . ?holder blk:mark ?n . ?n ?p ?o . FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
     BIND(STRAFTER(STR($event), "event:") AS ?ev)
@@ -2520,7 +2520,7 @@ WHERE {
   UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
   UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
   $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
-  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
   FILTER(?action = "duplicate")
     BIND(STRAFTER(STR($event), "event:") AS ?ev2)
     ?parent po:contains ?b . OPTIONAL { ?b co:nextItem ?next }
@@ -2542,24 +2542,24 @@ WHERE {
   { { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
   UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
   $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
-  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
   FILTER(?action = "delete")
     ?b po:contains* ?n . ?n ?p ?o . FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) }
   UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
   UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
   $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
-  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
   FILTER(?action = "delete")
     ?b po:contains* ?holder . ?holder blk:mark ?n . ?n ?p ?o . FILTER(!STRSTARTS(STR(?p), STR(dnd:)) && !STRSTARTS(STR(?p), STR(ord:)) && !STRSTARTS(STR(?p), STR(rdfhtml:)) && !STRSTARTS(STR(?p), STR(sem:)) && ?p != blk:linePrefix) } }
   UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
   UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
   $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
-  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
   FILTER(?action = "delete") ?parent po:contains ?b . OPTIONAL { ?prev co:nextItem ?b } OPTIONAL { $this c:handleMenuBlock ?open } OPTIONAL { $this c:handleMenuReturn ?ret } }
   UNION { { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
   UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
   $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
-  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
   FILTER(?action = "delete") $this c:focusBlock ?inside . ?b po:contains* ?inside . OPTIONAL { $this c:anchorBlock ?xab } OPTIONAL { $this c:anchorOffset ?xao } OPTIONAL { $this c:focusBlock ?xfb } OPTIONAL { $this c:focusOffset ?xfo }
   OPTIONAL { $this c:pendingMark ?xpm } }
 }""" ;
@@ -2568,7 +2568,7 @@ WHERE {
   { $event a beh:Click ; beh:node ?hit . ?btn rdfhtml:hasChild* ?hit . ?btn blk:handleAction ?action . $this c:handleMenuBlock ?b }
   UNION { $event a c:BlockDuplicateKey . $this c:focusBlock ?b . BIND("duplicate" AS ?action) FILTER NOT EXISTS { $this c:menuOpen true } }
   $this c:editable true ; c:of ?doc . ?doc po:contains+ ?b .
-  FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
+  FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?fixed . VALUES ?fixed { blk:Row blk:Cell blk:Column } }
   FILTER(?action = "delete")
   ?parent po:contains ?b .
   OPTIONAL { ?prev co:nextItem ?b } OPTIONAL { ?b co:nextItem ?next }

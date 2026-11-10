@@ -349,7 +349,7 @@ CONSTRUCT {
 WHERE {
   $this a c:Walkthrough .
   BIND(IRI(CONCAT(STR($this), "/~arrows")) AS ?arrows)
-  OPTIONAL { $this c:current ?chosen FILTER EXISTS { $this c:steps/rdf:rest*/rdf:first ?chosen } }
+  OPTIONAL { $this c:current ?chosen FILTER EXISTS { $this (c:steps/rdf:first|c:steps/rdf:rest+/rdf:first) ?chosen } }
   OPTIONAL { $this c:steps/rdf:first ?first }
   BIND(COALESCE(?chosen, ?first) AS ?current)
   {

@@ -598,7 +598,7 @@ WHERE {
   BIND(REPLACE(REPLACE(?sizePhrase, "[{]n[}]", sx:formatNumber(?nodeCount, ?locale)), "[{]m[}]", sx:formatNumber(?linkCount, ?locale)) AS ?size)
   BIND(?nodeCount - ?keptCount AS ?hidden)
   BIND(IF(?hidden > 0, REPLACE(?morePhrase, "[{]n[}]", sx:formatNumber(?hidden, ?locale)), ?unset) AS ?more)
-  BIND(?state = "draw" && EXISTS { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
+  BIND(?state = "draw" && EXISTS { $this (c:actions/rdf:first|c:actions/rdf:rest+/rdf:first) ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
   # Edge labels: at most 24, spent on the rarest labels first (a label's links all or none); the rest
   # are counted in a legend. A label is shown when the counts up to it (rarest first, by label) fit.
   { SELECT (MAX(?cum0) AS ?mostCum) WHERE {

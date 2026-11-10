@@ -1797,7 +1797,7 @@ WHERE {
     FILTER(?constraint IN (sh:datatype, sh:class, sh:nodeKind, sh:in, sh:maxCount, sh:pattern, sh:minLength, sh:maxLength))
     LATERAL { OPTIONAL { SELECT ?ts ?np (COUNT(?held) AS ?count) WHERE { ?ts ?np ?held } GROUP BY ?ts ?np } }
     FILTER(IF(?constraint = sh:datatype, !(isLiteral(?o) && sameTerm(DATATYPE(?o), ?param)),
-           IF(?constraint = sh:class, NOT EXISTS { ?o a/rdfs:subClassOf* ?param },
+           IF(?constraint = sh:class, NOT EXISTS { ?o (a|a/rdfs:subClassOf+) ?param },
            IF(?constraint = sh:nodeKind, (sameTerm(?param, sh:IRI) && !isIRI(?o)) || (sameTerm(?param, sh:Literal) && !isLiteral(?o)),
            IF(?constraint = sh:in, NOT EXISTS { ?param rdf:rest*/rdf:first ?o },
            IF(?constraint = sh:maxCount, NOT EXISTS { ?ts ?np ?o } && COALESCE(?count, 0) + 1 > xsd:integer(STR(?param)),
@@ -2062,7 +2062,7 @@ c:RdfTrackCursor a beh:Reaction ;
     beh:deletes """CONSTRUCT { $this ?state ?old }
 WHERE {
   $this ?state ?old . VALUES ?state { c:cursor c:cursorMode }
-  FILTER EXISTS { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits|c:adds|c:rowOf ?row . ?row c:inEditor $this }
+  FILTER EXISTS { $event (beh:node|beh:node/^rdfhtml:hasChild+) ?n . ?n c:commits|c:adds|c:rowOf ?row . ?row c:inEditor $this }
 }""" ;
     beh:inserts """CONSTRUCT { $this c:cursor ?row ; c:cursorMode ?mode }
 WHERE {

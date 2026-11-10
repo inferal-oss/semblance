@@ -315,7 +315,7 @@ c:TabsReceive a beh:Reaction ;
     beh:deletes """CONSTRUCT { $this c:tabs ?empty . ?last rdf:rest rdf:nil . $this c:selected ?old }
 WHERE {
   $event dnd:into $this ; dnd:carrying ?tab . ?tab a c:Tab .
-  FILTER EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?tab FILTER(?src != $this) }
+  FILTER EXISTS { ?src (c:tabs/rdf:first|c:tabs/rdf:rest+/rdf:first) ?tab FILTER(?src != $this) }
   BIND(IF(EXISTS { $this c:tabs rdf:nil }, rdf:nil, ?none) AS ?empty)
   OPTIONAL { $this c:tabs/rdf:rest* ?last . ?last rdf:rest rdf:nil }
   OPTIONAL { $this c:selected ?old }
@@ -323,7 +323,7 @@ WHERE {
     beh:inserts """CONSTRUCT { $this c:tabs ?head . ?last rdf:rest ?cell . ?cell rdf:first ?tab ; rdf:rest rdf:nil . $this c:selected ?tab }
 WHERE {
   $event dnd:into $this ; dnd:carrying ?tab . ?tab a c:Tab .
-  FILTER EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?tab FILTER(?src != $this) }
+  FILTER EXISTS { ?src (c:tabs/rdf:first|c:tabs/rdf:rest+/rdf:first) ?tab FILTER(?src != $this) }
   BIND(IRI(CONCAT(STR($this), "/~cell-", MD5(STR(?tab)))) AS ?cell)
   BIND(IF(EXISTS { $this c:tabs rdf:nil }, ?cell, ?none) AS ?head)
   OPTIONAL { $this c:tabs/rdf:rest* ?last . ?last rdf:rest rdf:nil }
@@ -341,7 +341,7 @@ WHERE {
   $event dnd:carrying ?tab ; dnd:into ?into . ?tab a c:Tab .
   ?src c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?next .
   BIND(EXISTS { ?into c:splitsAt ?edge } AS ?beside)
-  BIND(NOT EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?other FILTER(?other != ?tab) } AS ?only)
+  BIND(NOT EXISTS { ?src (c:tabs/rdf:first|c:tabs/rdf:rest+/rdf:first) ?other FILTER(?other != ?tab) } AS ?only)
   FILTER(IF(?beside, ?src != $this || !?only, ?into = $this && ?src != $this))
   BIND(IF(EXISTS { ?src c:tabs ?cell }, ?cell, ?none) AS ?head)
   BIND(IF(EXISTS { ?src c:selected ?tab }, ?tab, ?none) AS ?selected)
@@ -352,7 +352,7 @@ WHERE {
   $event dnd:carrying ?tab ; dnd:into ?into . ?tab a c:Tab .
   ?src c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?next .
   BIND(EXISTS { ?into c:splitsAt ?edge } AS ?beside)
-  BIND(NOT EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?other FILTER(?other != ?tab) } AS ?only)
+  BIND(NOT EXISTS { ?src (c:tabs/rdf:first|c:tabs/rdf:rest+/rdf:first) ?other FILTER(?other != ?tab) } AS ?only)
   FILTER(IF(?beside, ?src != $this || !?only, ?into = $this && ?src != $this))
   BIND(IF(EXISTS { ?src c:tabs ?cell }, ?next, ?none) AS ?head)
   BIND(IF(?only, c:CloseTile, ?none) AS ?close)

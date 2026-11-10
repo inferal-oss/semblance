@@ -106,7 +106,7 @@ WHERE {
             FILTER NOT EXISTS { $this c:diagramExcludes ?term } FILTER NOT EXISTS { $this c:diagramExcludes ?before }
             FILTER NOT EXISTS { { SELECT ?before (MIN(?k) AS ?bf) WHERE {
         { SELECT ?step (COUNT(?smid) AS ?si) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step } GROUP BY ?step }
-        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this c:steps/rdf:rest*/rdf:first ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
+        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this (c:steps/rdf:first|c:steps/rdf:rest+/rdf:first) ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
         ?ccell rdf:first ?part . ?part a c:Mention ; c:mentions ?before FILTER(isIRI(?before))
         FILTER NOT EXISTS { $this c:diagramExcludes ?before }
         BIND((?si - 1) * 100000 + ?ci - 1 AS ?k)
@@ -115,7 +115,7 @@ WHERE {
         } GROUP BY ?term }
       FILTER NOT EXISTS { { SELECT ?term (MIN(?k) AS ?tf) WHERE {
         { SELECT ?step (COUNT(?smid) AS ?si) WHERE { $this c:steps ?sl . ?sl rdf:rest* ?smid . ?smid rdf:rest* ?scell . ?scell rdf:first ?step } GROUP BY ?step }
-        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this c:steps/rdf:rest*/rdf:first ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
+        { SELECT ?step ?ccell (COUNT(?cmid) AS ?ci) WHERE { $this (c:steps/rdf:first|c:steps/rdf:rest+/rdf:first) ?step . ?step c:children ?cl . ?cl rdf:rest* ?cmid . ?cmid rdf:rest* ?ccell } GROUP BY ?step ?ccell }
         ?ccell rdf:first ?part . ?part a c:Mention ; c:mentions ?term FILTER(isIRI(?term))
         FILTER NOT EXISTS { $this c:diagramExcludes ?term }
         BIND((?si - 1) * 100000 + ?ci - 1 AS ?k)

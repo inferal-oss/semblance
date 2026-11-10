@@ -133,7 +133,7 @@ WHERE {
     { SELECT ?cell (COUNT(?before) AS ?pos) WHERE { $this c:items/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
     BIND(NOT EXISTS { ?cell rdf:rest+ ?later . ?later rdf:first ?laterCrumb FILTER(isIRI(?laterCrumb)) } AS ?last)
   } UNION {
-    FILTER NOT EXISTS { $this c:items/rdf:rest*/rdf:first ?anyItem FILTER(isIRI(?anyItem)) }
+    FILTER NOT EXISTS { $this (c:items/rdf:first|c:items/rdf:rest+/rdf:first) ?anyItem FILTER(isIRI(?anyItem)) }
     $this c:parentProperty ?prop . FILTER(isIRI(?prop))
     OPTIONAL { $this c:of ?of }
     OPTIONAL { $this c:controls ?target ; c:property ?property . FILTER(isIRI(?target) && isIRI(?property)) ?target ?property ?selectedEnd }
@@ -210,7 +210,7 @@ WHERE {
     { SELECT ?cell (COUNT(?before) AS ?pos) WHERE { $this c:items/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
     BIND(NOT EXISTS { ?cell rdf:rest+ ?later . ?later rdf:first ?laterCrumb FILTER(isIRI(?laterCrumb)) } AS ?last)
   } UNION {
-    FILTER NOT EXISTS { $this c:items/rdf:rest*/rdf:first ?anyItem FILTER(isIRI(?anyItem)) }
+    FILTER NOT EXISTS { $this (c:items/rdf:first|c:items/rdf:rest+/rdf:first) ?anyItem FILTER(isIRI(?anyItem)) }
     $this c:parentProperty ?prop . FILTER(isIRI(?prop))
     OPTIONAL { $this c:of ?of }
     OPTIONAL { $this c:controls ?target ; c:property ?property . FILTER(isIRI(?target) && isIRI(?property)) ?target ?property ?selectedEnd }
