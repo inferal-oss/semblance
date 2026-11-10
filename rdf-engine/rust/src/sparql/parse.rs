@@ -50,7 +50,8 @@ struct P<'a, 'd> {
     /// Variables standing for reifiers the query leaves unnamed (`{| |}`, `<< >>`, `~`).
     anon_reifiers: Vec<Var>,
     /// The top-level SELECT was `SELECT *`.
-    top_star: bool,
+    /// Whether the SELECT parsed last was SELECT * (its trailing VALUES are in scope).
+    last_star: bool,
     /// The BASE and PREFIX declarations so far, as written, one a line: a SERVICE's text starts with them.
     decls: Vec<u8>,
     /// A SERVICE pattern was parsed.
@@ -90,7 +91,7 @@ fn new_parser<'a, 'd>(text: &'a [u8], base: &[u8], dict: &'d mut Dict) -> P<'a, 
         template_bnodes: IdMap::new(),
         in_template: false,
         anon_reifiers: Vec::new(),
-        top_star: false,
+        last_star: false,
         decls: if base.is_empty() { Vec::new() } else { [&b"BASE <"[..], base, &b">\n"[..]].concat() },
         service: false,
     }
@@ -498,13 +499,8 @@ impl P<'_, '_> {
         if self.kw(b"VALUES") {
             let values = self.data_block()?;
             pattern_vars(&values, &mut values_vars);
-            if self.top_star {
-                q.select.project = self.visible_in(&q.select.pattern);
-                for v in &values_vars {
-                    if !q.select.project.contains(v) {
-                        q.select.project.push(*v);
-                    }
-                }
+            if q.form == Form::Select && self.last_star {
+                pattern_vars(&values, &mut q.select.project);
             }
             q.select.values = Some(Box::new(values));
         }
@@ -611,9 +607,7 @@ impl P<'_, '_> {
         s.aggregates = core::mem::take(&mut self.aggs);
         s.aggregates.extend(body.aggregates);
         let _ = first_var;
-        if top {
-            self.top_star = star;
-        }
+        self.last_star = star;
         if star {
             if s.group.is_some() || !s.aggregates.is_empty() {
                 return self.c.err("SELECT * with GROUP BY");
@@ -822,7 +816,11 @@ impl P<'_, '_> {
             };
             let mut s = self.select(false, &mut dummy)?;
             if self.kw(b"VALUES") {
-                s.values = Some(Box::new(self.data_block()?));
+                let values = self.data_block()?;
+                if self.last_star {
+                    pattern_vars(&values, &mut s.project);
+                }
+                s.values = Some(Box::new(values));
             }
             self.expect(b"}", "expected }")?;
             return Ok((Pattern::Sub(Box::new(s)), None));

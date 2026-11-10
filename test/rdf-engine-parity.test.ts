@@ -247,6 +247,45 @@ describe.skipIf(!built)('Semblance queries on both builds', () => {
   }, 300_000)
 })
 
+describe.skipIf(!built)('SELECT * on both builds (#449)', () => {
+  // SELECT * projects the in-scope variables (SPARQL 1.1, 18.2.1), in order of appearance: not a
+  // FILTER's, an EXISTS's, a MINUS's, an ORDER BY's or a SERVICE endpoint's. Their columns are
+  // always unbound, so comparing rows alone never sees an extra one.
+  const cases: [string, string][] = [
+    ['SELECT * { ?s ?p ?o FILTER(BOUND(?z)) }', 's p o'],
+    ['SELECT * { SERVICE ?ep { ?s ?p ?o } }', 's p o'],
+    ['SELECT * { SERVICE ?ep { ?s ?p ?o } ?ep :q ?w }', 's p o ep w'],
+    ['SELECT * { SERVICE <http://x/> { FILTER(?b) ?a :p ?b FILTER(?k) } }', 'a b'],
+    ['SELECT * { FILTER(?b) ?a ?b ?c }', 'a b c'],
+    ['SELECT * { ?s ?p ?o BIND(?q AS ?y) ?q ?r ?t }', 's p o y q r t'],
+    ['SELECT * { ?a :p ?x MINUS { ?b :q ?c } ?b :r ?d }', 'a x b d'],
+    ['SELECT * { ?a :p ?x FILTER NOT EXISTS { ?e :q ?f } }', 'a x'],
+    ['SELECT * { ?a :p ?x FILTER EXISTS { ?a :q ?f } }', 'a x'],
+    ['SELECT * { ?a :p ?x OPTIONAL { ?x :q ?y FILTER(?w) } }', 'a x y'],
+    ['SELECT * { ?a :p ?b } ORDER BY ?c', 'a b'],
+    ['SELECT * { ?a :p ?b } VALUES ?v { 1 }', 'a b v'],
+    ['SELECT * { ?s ?p ?o BIND(?q AS ?y) { ?q ?r ?t } UNION { ?u ?v ?w } GRAPH ?g { ?x :z ?y } }', 's p o y q r t u v w g x'],
+    ['SELECT * { ?r :p <<( ?s ?q ?o )>> }', 'r s q o'],
+    ['SELECT * { ?a :p ?b . [] :q ?a }', 'a b'],
+    ['SELECT * { { SELECT * { ?a :p ?h FILTER(?zz) } } ?a :q ?b }', 'a h b'],
+    ['SELECT * { { SELECT * { ?a :p ?b } VALUES ?v { 1 } } }', 'a b v'],
+    ['SELECT * { { SELECT * { ?a :p ?b { SELECT * { ?c :q ?a FILTER(?nn) } } } } ?zz :r ?a }', 'a b c zz'],
+    ['SELECT * { ?a :p ?b { SELECT * {} } }', 'a b'],
+  ]
+  const engines = KINDS.map((k) => [k, new Engine(new WebAssembly.Module(readFileSync(wasm(k))))] as const)
+
+  it.each(cases)('%s projects %s', (text, vars) => {
+    for (const [k, e] of engines) {
+      const q = e.prepare(`PREFIX : <http://example.org/> ${text}`)
+      try {
+        expect(q.vars.join(' '), k).toBe(vars)
+      } finally {
+        q.release()
+      }
+    }
+  })
+})
+
 describe.skipIf(!built)('Jelly on both builds (#433)', () => {
   // The same statements, in the same order, into each build: N3.js parses, each engine interns.
   const texts = ['ontology/core.ttl', 'ontology/layers/style.ttl', 'demo/app.ttl'].map((f) => readFileSync(new URL('../' + f, import.meta.url), 'utf8'))
