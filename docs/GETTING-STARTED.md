@@ -47,15 +47,13 @@ The whole interface is data. Put it in a Turtle file:
 ```turtle
 # app.ttl
 @prefix c: <https://semblance.dev/ns/component#> .
-@prefix sty: <https://semblance.dev/ns/style#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix ex: <https://example.org/hello#> .
 
 ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ;
-    c:children ( ex:title ex:drink ) .
+    c:children ( ex:title ) .
 ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
-ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .
 ```
 
 and mount it:
@@ -143,7 +141,7 @@ Use it like any other component, and load its file before the app:
 
 ```turtle
 ex:cups a ex:Tally ; c:label "Coffee today" ; c:value 0 ; ex:unit "cups" .
-ex:page c:children ( ex:title ex:cups ex:drink ) .
+ex:page c:children ( ex:title ex:cups ) .
 ```
 
 ```ts
@@ -171,13 +169,19 @@ reactions, layers, performance and testing, and when (rarely) to write a rule as
 ## State and reactions
 
 The tally's value is a triple, and so is every component's state: a text field's `c:value`, a checkbox's `c:checked`, a page
-switch's property of your app node. Events change it through reactions: a click on the button should add a cup. A reaction names the
+switch's property of your app node. Events change it through reactions: a click on a button should add a cup. The button comes
+with what it does, so add both: the button on the page, and a reaction for its click. A reaction names the
 event class and its source, and says what to delete and what to insert, as `CONSTRUCT`s over
 `$this` (the component) and `$event` (the event, with `beh:value`, `beh:checked`, `beh:node`):
 
 ```turtle
+@prefix sty: <https://semblance.dev/ns/style#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 
+ex:page c:children ( ex:title ex:cups ex:drink ) .
+ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .
+
+# What a click on the button means: one more cup. Delete the old value, insert the new one.
 ex:Drink a beh:Reaction ;
     beh:when beh:Click ; beh:source ex:drink ;
     beh:deletes """PREFIX ex: <https://example.org/hello#>

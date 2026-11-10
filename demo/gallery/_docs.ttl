@@ -203,7 +203,7 @@ import tally from './tally.ttl?raw'
 await mount(document.getElementById('app')!, { root: 'https://example.org/hello#page', graphs: [tally, app] })""" .
 ui:doc-gs-5 a c:Text ; c:label "A component of your own is an OWL class under sem:Component, a rendering slot that targets it, and a SPARQL rule that builds RDF/HTML for each instance ($this), minting every node from it. Here ex:Tally (tally.ttl) is used by the page (app.ttl): change the rule or the style rules and the page renders with them." .
 ui:doc-gs-5b a c:Text ; c:label "Its shape says what an instance must say: take the label off ex:cups and the shapes layer outlines it and says why. Building components goes further: containers, lists, text output, layers, and when (rarely) to write a rule as a function." .
-ui:doc-gs-6 a c:Text ; c:label "State is triples too, and events change it through reactions: a reaction names the event and its source and says what to delete and what to insert, as CONSTRUCTs over $this and $event. Click Have another: the reaction runs in the example's graph, and only what depends on the change is rendered again." .
+ui:doc-gs-6 a c:Text ; c:label "State is triples too, and events change it through reactions: a reaction names the event and its source and says what to delete and what to insert, as CONSTRUCTs over $this and $event. A button comes with what it does: Have another arrives here, with the reaction that adds a cup. Click it: the reaction runs in the example's graph, and only what depends on the change is rendered again." .
 ui:doc-gs-7 a c:Text ; c:children ( "The complete example is examples/hello in the repository, and docs/GETTING-STARTED.md walks through it, including rendering on the server. " ui:doc-gs-recipes " has more small examples, each live." ) .
 ui:doc-gs-recipes a c:Link , c:Setter ; c:label "Recipes" ; c:href "/docs/recipes/" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocRecipes .
 
@@ -211,9 +211,8 @@ ui:gs-page a c:LiveExample ; c:label "A page" ; c:exampleRoot <https://example.o
 ui:gs-page-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/hello#> .
 
 ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ;
-    c:children ( ex:title ex:drink ) .
-ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
-ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .''' .
+    c:children ( ex:title ) .
+ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .''' .
 
 ui:gs-tally a c:LiveExample ; c:label "A component of your own" ; c:exampleRoot <https://example.org/hello#page> ;
     c:sources ( ui:gs-tally-def ui:gs-tally-app ) ; c:selectedSource ui:gs-tally-def .
@@ -266,10 +265,9 @@ ex:TallyShape a sh:NodeShape ; sh:targetClass ex:Tally ;
 ui:gs-tally-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/hello#> .
 
 ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ;
-    c:children ( ex:title ex:cups ex:drink ) .
+    c:children ( ex:title ex:cups ) .
 ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
-ex:cups a ex:Tally ; c:label "Coffee today" ; c:value 0 ; ex:unit "cups" .
-ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .''' .
+ex:cups a ex:Tally ; c:label "Coffee today" ; c:value 0 ; ex:unit "cups" .''' .
 
 ui:gs-react a c:LiveExample ; c:label "State and reactions" ; c:exampleRoot <https://example.org/hello#page> ;
     c:sources ( ui:gs-react-def ui:gs-react-app ) ; c:selectedSource ui:gs-react-app .

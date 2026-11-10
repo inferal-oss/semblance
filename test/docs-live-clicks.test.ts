@@ -68,6 +68,7 @@ describe("each docs page's live example, clicked through", () => {
       try {
         expect(h.preview.closest('[data-sem-c=live-example]')!.getAttribute('data-sem-state')).toBe('live')
         const handled: { label: string; shown: boolean }[] = []
+        const dead: string[] = []
         for (const button of [...h.preview.querySelectorAll('button')]) {
           if (!button.isConnected || button.disabled) continue
           const before = h.preview.innerHTML
@@ -75,7 +76,11 @@ describe("each docs page's live example, clicked through", () => {
           h.click(button)
           // Handled: a reaction ran, a member of its change log.
           if (h.events() > n) handled.push({ label: button.textContent ?? '', shown: h.preview.innerHTML !== before })
+          else if (h.preview.innerHTML === before) dead.push(button.textContent ?? '')
         }
+        // Getting started builds one app step by step: a step shows a button only with what it does
+        // (elsewhere a button may be a specimen of a style or a language, or wait for input).
+        if (example.startsWith(UI + 'gs-')) expect(dead, `${dead.join(', ')}: clicked, nothing handles it`).toEqual([])
         // A click may change what is out of sight (a third drink's votes below a top two), but an
         // example whose handled clicks change nothing it shows does nothing for whoever tries it.
         if (handled.length) expect(handled.filter((c) => c.shown), `${handled.map((c) => c.label).join(', ')}: nothing changed on screen`).not.toEqual([])
