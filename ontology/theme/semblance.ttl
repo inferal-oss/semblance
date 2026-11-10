@@ -3,7 +3,8 @@
 
 # The Semblance theme's own rules: what its tokens (themes.ttl) cannot say. Ink on paper by day,
 # paper on ink by night; hairlines rather than shadows, one radius, what is chosen in ink, the
-# violet kept for the primary action, the link and the node (◇), figures that are data in mono.
+# violet kept for the primary action, the link and the short line under a heading, figures that
+# are data in mono.
 #
 # Written as the structural themes' rules are (themes-structural.ttl): no sty:appliesTo, a part that
 # begins with the component, narrowed by sty:when to the theme, and every part ends with a guard on
@@ -148,12 +149,6 @@
                  [ sty:property "background" ; sty:raw "var(--sem-gray-4)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] .
-
-# The node under a heading: the mark tokens make it a 6px square; turned, it is the ◇.
-[] a sty:StyleRule ; sty:when sty:Semblance ;
-    sty:part "[data-sem-c=heading]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))::after" ;
-    sty:declares [ sty:property "transform" ; sty:raw "rotate(45deg)" ] ,
-                 [ sty:property "margin-inline-start" ; sty:raw "1px" ] .
 
 # Figures that are data are set in mono, tabular: a stat, a count, the status bar.
 [] a sty:StyleRule ; sty:when sty:Semblance ;
