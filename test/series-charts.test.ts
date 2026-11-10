@@ -2,7 +2,6 @@
 // categories and points from its maintained view's rows; the frame, the legend's items and each kind's
 // points render the same HTML in SPARQL as their function twins on Oxigraph and on Semblance's own
 // engine, after each change the rows go through; a changed row re-renders its points, not the chart.
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { niceScale, quantile } from '../src/components/series.ts'
 import { EX, mount, parity, PREFIXES, SALES } from './series-harness.ts'
@@ -92,23 +91,7 @@ ex:b a c:AreaChart ; rdfs:label "Notes" ; c:view ex:Totals ; c:categoryVariable 
 `
 
 /** The EXISTS groups of a Turtle file's rules whose property path has a `*` step and ends in a variable (#446). */
-function starPathsInExists(ttl: string): string[] {
-  const found: string[] = []
-  for (const m of ttl.matchAll(/EXISTS\s*\{/g)) {
-    let depth = 1, j = m.index! + m[0].length
-    while (depth && j < ttl.length) depth += ttl[j] === '{' ? 1 : ttl[j] === '}' ? -1 : 0, j++
-    const body = ttl.slice(m.index! + m[0].length, j - 1)
-    for (const t of body.matchAll(/(\S*\*\S*)\s+(\?\w+)/g)) if (/[\w>)]\*/.test(t[1]!)) found.push(`${t[1]} ${t[2]}`)
-  }
-  return found
-}
-
 describe('series charts', () => {
-  it('has no `*` path to an unbound variable inside EXISTS (Oxigraph scans the store for its zero-length step, #446)', () => {
-    expect(starPathsInExists(readFileSync(new URL('../ontology/components/charts.ttl', import.meta.url), 'utf8'))).toEqual([])
-    expect(starPathsInExists('FILTER EXISTS { $this a/rdfs:subClassOf* ?k . ?k c:polar true }')).toEqual(['a/rdfs:subClassOf* ?k'])
-  })
-
   it('scales on steps of 1, 2 or 5 × 10ⁿ', () => {
     expect(niceScale(0, 201)).toMatchObject({ min: 0, max: 250, step: 50 })
     expect(niceScale(-20, 260.5)).toMatchObject({ min: -100, max: 300, step: 100 })

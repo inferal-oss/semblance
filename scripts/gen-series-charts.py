@@ -5,7 +5,7 @@
 # then run it from the repository's root: python3 scripts/gen-series-charts.py
 #
 # Inside EXISTS, write a path from $this to an unbound variable without `*` (`p/q*` as `(p|p/q+)`): Oxigraph
-# evaluates the zero-length step of such a path by scanning every term of the store (#446).
+# evaluates the zero-length step of such a path by scanning every term of the store (#446; test/exists-paths.test.ts checks).
 TTL = 'ontology/components/charts.ttl'
 _ttl = open(TTL).read()
 # The series of a chart, as the bar chart's rule picks them: a declared legend, else first seen, else the chart's.
