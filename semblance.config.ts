@@ -30,4 +30,16 @@ export default defineSite({
   // is about 100 KB, and all four languages would make the site 650 MB. A term in another language
   // is rendered by the client (404.html), as any address the build did not render.
   routes: (found) => found.filter((r) => !/^\/(uk|de|ar)\/reference\/[^/]+\/$/.test(r)),
+  // The recommended Content-Security-Policy (docs/SAFETY.md), with what the site loads from elsewhere:
+  // its fonts, and the libraries its foreign-component examples load from a CDN (demo/foreign.ts) with
+  // the map's tiles. Trusted Types: the site's own policies (demo/trusted-types.ts) and Lit's (Shoelace).
+  csp: {
+    script: ['https://cdn.jsdelivr.net'],
+    style: ['https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
+    font: ['https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+    img: ['https://tile.openstreetmap.org', 'https://cdn.jsdelivr.net'],
+    // Shoelace's icons are data: URLs it fetches.
+    connect: ['https://cdn.jsdelivr.net', 'data:'],
+    trustedTypes: ['semblance-site', 'default', 'lit-html'],
+  },
 })

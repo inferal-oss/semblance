@@ -6,6 +6,7 @@
 // A region inside the page that the client takes over later (a live example's sandbox) carries
 // data-sem-ssr too: what is done there is kept until that region's own takeover replays it.
 import type { DomRenderer } from '../render/dom.ts'
+import { globalOwn, querySelectorIn } from './builtins.ts'
 
 /** The attribute a server-rendered mount element carries. */
 export const SSR_ATTRIBUTE = 'data-sem-ssr'
@@ -68,9 +69,9 @@ export function takeOver(renderer: DomRenderer): { nodes: number; mismatches: nu
  * over, the capture script stops keeping.
  */
 export function replayKept(host: Element, opts: { discard?: boolean } = {}): number {
-  const g = globalThis as { __semblanceKept?: Kept }
-  const kept = g.__semblanceKept
-  if (!kept) return 0
+  // Set by the capture script; never an element of that id (src/web/builtins.ts).
+  const kept = globalOwn<Kept>('__semblanceKept')
+  if (!kept || !Array.isArray(kept.events) || typeof kept.stop !== 'function') return 0
   const pending = (target: Element) => {
     const region = target.closest(`[${SSR_ATTRIBUTE}]`)
     return !!region && host.contains(region)
@@ -84,9 +85,9 @@ export function replayKept(host: Element, opts: { discard?: boolean } = {}): num
     else rest.push(e)
   }
   kept.events.push(...rest)
-  if (!host.ownerDocument.querySelector(`[${SSR_ATTRIBUTE}]`)) {
+  if (!querySelectorIn(host, `[${SSR_ATTRIBUTE}]`)) {
     kept.stop()
-    g.__semblanceKept = undefined
+    ;(globalThis as { __semblanceKept?: Kept }).__semblanceKept = undefined
   }
   if (opts.discard) return 0
   for (const e of mine) {

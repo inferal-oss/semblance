@@ -40,6 +40,10 @@ import { RenderedState } from '../src/rendered.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
 import { chartJs, flatpickr, leaflet, modules, tex } from './foreign.ts'
+import { scriptURL } from '../src/web/trusted-types.ts'
+// The workers' URLs, for Semblance's Trusted Types policy (a worker is a script sink).
+import heartbeatWorker from '../src/behaviour/heartbeat.worker.ts?worker&url'
+import thumbnailWorker from '../src/thumbnail.worker.ts?worker&url'
 
 // The host: a mount point, the effects of graph state (theme on <html>,
 // engine layers, store choice, URL, benchmark runs) and nothing else. The
@@ -387,7 +391,7 @@ stalls = new StallMonitor(runtime, {
     syncSettings()
     flush()
   },
-  worker: () => new Worker(new URL('../src/behaviour/heartbeat.worker.ts', import.meta.url), { type: 'module' }),
+  worker: () => new Worker(scriptURL(heartbeatWorker), { type: 'module' }),
 })
 stalls.attach()
 stalls.observe()
@@ -484,7 +488,7 @@ const demoUpload: Uploader = (file, ctx) =>
 // made in a worker, so decoding a large photo never holds up the page.
 new Files(bus, {
   handlers: { demo: demoUpload },
-  thumbnail: workerThumbnails(() => new Worker(new URL('../src/thumbnail.worker.ts', import.meta.url), { type: 'module' })),
+  thumbnail: workerThumbnails(() => new Worker(scriptURL(thumbnailWorker), { type: 'module' })),
   onHandled: () => {
     syncSettings()
     flush()

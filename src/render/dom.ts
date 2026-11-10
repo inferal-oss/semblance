@@ -3,6 +3,7 @@ import { SVG_NS } from '../ns.ts'
 import { sameDecimal } from '../rdf.ts'
 import type { HtmlIndex } from './html-index.ts'
 import { HOST_ELEMENT, hostedBy, type HostAdapter, type HostMount } from './hosts.ts'
+import { deepActive } from '../web/builtins.ts'
 
 /**
  * Give an element the focus on the framework's own account, nobody having pressed on it. The browser
@@ -13,7 +14,7 @@ import { HOST_ELEMENT, hostedBy, type HostAdapter, type HostMount } from './host
 export function takeFocus(el: HTMLElement, options?: FocusOptions) {
   el.focus?.(options)
   const field = el as HTMLInputElement
-  if (field.ownerDocument.activeElement !== field || !field.value || field.selectionStart !== 0 || field.selectionEnd !== 0) return
+  if (deepActive(field.ownerDocument) !== field || !field.value || field.selectionStart !== 0 || field.selectionEnd !== 0) return
   if (field.hasAttribute('data-sem-select-on-focus')) field.select()
   else field.setSelectionRange(field.value.length, field.value.length)
 }
@@ -218,11 +219,11 @@ export class DomRenderer {
     this.refocused = null
     // A focused node that moves to another parent (a card to another lane) is detached on the
     // way, which blurs it: it gets its focus back once it is in place.
-    const focused = this.doc.activeElement as HTMLElement | null
+    const focused = deepActive(this.doc) as HTMLElement | null
     // Where it was, in case the patch removes it (a list item's remove button).
     const ancestors = focused ? this.placeOf(focused) : []
     this.patch()
-    if (focused && focused !== this.doc.activeElement && focused.isConnected && this.host.contains(focused)) focused.focus?.({ preventScroll: true })
+    if (focused && focused !== deepActive(this.doc) && focused.isConnected && this.host.contains(focused)) focused.focus?.({ preventScroll: true })
     else if (focused && !focused.isConnected && ancestors.length) this.refocus(ancestors)
     for (const l of this.patched) l()
   }
@@ -239,7 +240,7 @@ export class DomRenderer {
 
   /** The focused element was removed (with what it belonged to), and nothing else has the focus: see `focusNear`. */
   private refocus(ancestors: ElementPlace) {
-    const active = this.doc.activeElement
+    const active = deepActive(this.doc)
     if (active && active !== this.doc.body && active !== this.doc.documentElement) return
     this.focusNear(ancestors)
   }
@@ -404,7 +405,7 @@ export class DomRenderer {
     else if (name === 'value' && input.value !== (value ?? '')) {
       // The field being typed in keeps "1.0" while the graph's text is "1" (the next key makes it 1.05);
       // it shows the graph's text when it is left.
-      if (value !== undefined && input.ownerDocument.activeElement === input && sameDecimal(input.value, value)) {
+      if (value !== undefined && deepActive(input.ownerDocument) === input && sameDecimal(input.value, value)) {
         input.addEventListener('blur', () => { input.value = input.getAttribute('value') ?? '' }, { once: true })
         return
       }

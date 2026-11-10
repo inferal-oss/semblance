@@ -10,6 +10,7 @@ import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
 import { BOX_ATTRIBUTE, boxSelector, scopedCss } from '../style/scope.ts'
 import { readPolicy, Refused, type SafetyPolicy } from '../safety.ts'
+import { stopOverBudget } from '../budget.ts'
 import { Files, type FilesOptions } from '../files.ts'
 import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
 import { type IdleDeadline, whenIdle } from '../idle.ts'
@@ -25,6 +26,7 @@ import { markPlatform } from './platform.ts'
 import { graphLanguages } from '../server/render.ts'
 import { Navigation, type NavigationOptions, rendererReveal, windowScroll } from '../navigation.ts'
 import { RemoteSources, type RemoteSourcesOptions } from '../remote.ts'
+import { adoptSheet, dropSheet } from './builtins.ts'
 
 export { DEFAULT_LAYERS }
 
@@ -37,10 +39,19 @@ export interface MountOptions {
    * Turtle from an untrusted author (a person, a page, a model), loaded after `graphs`: the root is
    * then rendered as authored content (src/safety.ts, docs/SAFETY.md). What the policy refuses
    * (script, event handler attributes, javascript: URLs, CSS that loads a resource, …) is left out and
-   * reported through `onRefused`. The policy, and the host effects' configuration (sources, locations,
+   * reported through `onRefused`, as is a turn over the policy's work budgets (time, rule
+   * evaluations, output), which is stopped. The policy, and the host effects' configuration (sources, locations,
    * uploads, modules), are read from the ontology and `graphs` alone (`trusted`).
    */
   authored?: string[]
+  /**
+   * Render into a shadow root of `element`, in a box of its own: ids, form association, popover and
+   * command targets, named elements and style rules then stop at its boundary, which the browser
+   * enforces, and the whole stylesheet is the shadow root's, scoped to the box. HTML a server
+   * rendered into `element` is not taken over: it is rendered anew. For authored content
+   * (docs/SAFETY.md), or any graph that should not share the page's document.
+   */
+  isolate?: 'shadow'
   /** The policy of authored content, instead of the framework's safe:Authored (read from a trusted store). */
   policy?: SafetyPolicy
   /** Hear about what the policy refused (by default console.warn). */
@@ -149,7 +160,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   // stylesheet is the page's; what the author's graphs add is scoped to the element (src/style/scope.ts).
   const trusted = opts.authored ? load(...(opts.graphs ?? [])) : undefined
   const policy = opts.policy ?? (trusted && readPolicy(trusted))
-  const trustedCss = trusted && !serverStyled(element.ownerDocument) ? compileStyles(trusted) : ''
+  const isolated = opts.isolate === 'shadow'
+  const trustedCss = trusted && !isolated && !serverStyled(element.ownerDocument) ? compileStyles(trusted) : ''
   const store = load(...(opts.graphs ?? []), ...(opts.authored ?? []))
   const config = trusted ?? store
   const onRefused = opts.onRefused ?? ((e: Error) => console.warn('[semblance]', e.message))
@@ -159,7 +171,13 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const navigation = opts.navigation === false || !declared || !located ? undefined : new Navigation(store, { ...opts.navigation, root: opts.root, trusted })
   await navigation?.restore()
   opts.prepare?.(store)
-  const ssr = serverRendered(element)
+  const doc = element.ownerDocument
+  // Isolated: what is rendered is a box in a shadow root of the element (the rest goes on as usual,
+  // in the box; `host` is the element events, effects and the renderer work in).
+  const shadow = isolated ? (element.shadowRoot ?? element.attachShadow({ mode: 'open' })) : undefined
+  const host: HTMLElement = shadow ? doc.createElement('div') : element
+  if (shadow) shadow.replaceChildren(host)
+  const ssr = !shadow && serverRendered(element)
   const runtime = new Runtime(store)
   const projection = runtime.project({
     modality: MOD.Screen,
@@ -173,23 +191,32 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     roots: [opts.root],
     policy,
   }, policy ? (e) => (e instanceof Refused ? onRefused(e) : console.error(e)) : undefined)
+  // Over a work budget (authored content): the turn is stopped, and reported.
+  const overBudget = () => {
+    const refused = policy && stopOverBudget(runtime, opts.root)
+    if (refused) onRefused(refused)
+    return !!refused
+  }
+  overBudget()
 
-  const doc = element.ownerDocument
-  // The key hints' spelling (a server-rendered page's head has marked it already).
+  // The key hints' spelling (a server-rendered page's head has marked it already; a shadow root's box reads its own).
   markPlatform(doc)
+  if (shadow) markPlatform(host)
   // A server-rendered page links the stylesheet the server compiled: the same, so it is not compiled again.
-  const sheet = serverStyled(doc) ? undefined : new (doc.defaultView ?? globalThis).CSSStyleSheet()
-  // Authored content stays in its box: the element (as the server marked it, or a box of its own).
-  if (policy && !element.hasAttribute(BOX_ATTRIBUTE)) element.setAttribute(BOX_ATTRIBUTE, `authored-${++authoredBoxes}`)
+  const sheet = !shadow && serverStyled(doc) ? undefined : new (doc.defaultView ?? globalThis).CSSStyleSheet()
+  // Authored content stays in its box: the element (as the server marked it, or a box of its own). In
+  // a shadow root, everything is in its box.
+  if ((policy || shadow) && !host.hasAttribute(BOX_ATTRIBUTE)) host.setAttribute(BOX_ATTRIBUTE, `${policy ? 'authored' : 'isolated'}-${++authoredBoxes}`)
   if (sheet) {
     const css = compileStyles(store, { policy, onRefused })
-    sheet.replaceSync(policy ? [trustedCss, scopedCss(css, trustedCss, boxSelector(element.getAttribute(BOX_ATTRIBUTE)!))].filter(Boolean).join('\n\n') : css)
-    doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet]
+    const box = host.getAttribute(BOX_ATTRIBUTE)
+    sheet.replaceSync(box ? [trustedCss, scopedCss(css, trustedCss, boxSelector(box))].filter(Boolean).join('\n\n') : css)
+    adoptSheet(shadow ?? doc, sheet)
   }
 
   const hostContext: HostContext = { runtime, projection }
   const hosts = opts.hosts?.(projection.index, hostContext)
-  const renderer = new DomRenderer(projection.index, element, opts.root, hosts)
+  const renderer = new DomRenderer(projection.index, host, opts.root, hosts)
   // The server's DOM is taken over as it is: no node is created for what it already shows.
   const adopted = ssr ? takeOver(renderer) : undefined
   const flush = () => renderer.flush()
@@ -224,7 +251,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   flush()
   scheduleWarmup()
   // Connectors are drawn where their ends are (nothing to do while there is none).
-  const connectors = attachConnectors(element)
+  const connectors = attachConnectors(host)
   // Files: a file:Pick opens the system picker, files dropped on a file drop's zone arrive, and
   // accepted files are uploaded as their drop says; each reports back as events on the bus.
   const files =
@@ -259,10 +286,10 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
           },
         }).attach()
   // Swiped tracks (a carousel, a lightbox) report where they came to rest and follow the graph.
-  const snaps = attachSnaps(element)
+  const snaps = attachSnaps(host)
   // Lightboxes grow from their image and give it back, slide between images, zoom and pan.
-  const lightboxes = attachLightboxes(element)
-  const popups = attachAnchoredPopups(element, node => !renderer.inSlot(node))
+  const lightboxes = attachLightboxes(host)
+  const popups = attachAnchoredPopups(host, node => !renderer.inSlot(node))
   // Size handles say what their boxes come to, which only the page knows.
   const sizeHandles = attachSizeHandles(renderer)
   // What sticks to the top sticks below the app bar, as tall as the page lays it out (--sem-sticky-top).
@@ -282,6 +309,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     },
   })
   const detachIslands = islands.attach()
+  // A later turn over budget (an event's): stopped once the turn has ended, and the page patched.
+  const detachStall = policy ? runtime.watchdog.onStall(() => queueMicrotask(() => !stopped && overBudget() && flush())) : undefined
   // Where the components that ask for it are, and in what state (nothing is measured while none asks).
   // The page is patched only when a rule that reads the state derived something from it.
   const derived = () => projection.engine.stats.derivedAdded + projection.engine.stats.derivedRemoved
@@ -294,9 +323,9 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   })
   const detachRendered = rendered.attach()
   // The window's scroll follows the location only where the location is the window's own address.
-  const win = element.ownerDocument.defaultView
+  const win = doc.defaultView
   const scroll = win && !(opts.navigation && opts.navigation.location) ? windowScroll(win) : undefined
-  const detachNavigation = navigation?.attach(runtime, { bus, links: element, onNavigate: flush, reveal: rendererReveal(renderer), scroll })
+  const detachNavigation = navigation?.attach(runtime, { bus, links: host, onNavigate: flush, reveal: rendererReveal(renderer), scroll })
   // Remote sources: their part of the graph is loaded, follows the stores, and is written back.
   const sources = opts.sources && new RemoteSources(runtime, { ...opts.sources, trusted, bus, onChange: () => (flush(), scheduleWarmup()) })
   const detachSources = sources?.attach()
@@ -324,6 +353,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachFiles?.()
       detachFullscreen?.()
       detachIslands()
+      detachStall?.()
       hosts?.dispose()
       connectors.dispose()
       snaps.dispose()
@@ -334,7 +364,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachRendered()
       detachNavigation?.()
       detachSources?.()
-      if (sheet) doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
+      if (sheet) dropSheet(shadow ?? doc, sheet)
       runtime.dispose()
       trusted?.dispose?.()
     },

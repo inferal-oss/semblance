@@ -167,10 +167,16 @@ A graph you do not trust renders on the server under the same policy as in the b
 without the author's graph. The HTML is the browser's, refused nodes included, so the take-over
 matches. A site's own graphs are trusted; its live examples are rendered authored (below).
 
+Its rules are bounded as in the browser: a projection over the policy's work budgets (time, rule
+evaluations, output) is stopped and rendered as far as it got, reported through `onRefused`, and
+`Rendered.exceeded` says why ([SAFETY.md](SAFETY.md#work-budgets)).
+
 A rendered document carries inline scripts (the platform mark, the event capture, and the
-first-paint script of what the visitor chose) and, by default, an inline stylesheet. A Content
-Security Policy for it, and what it needs until documents carry a nonce (#403), is in
-[SAFETY.md](SAFETY.md#content-security-policy).
+first-paint script of what the visitor chose) and, by default, an inline stylesheet.
+`renderDocument(template, rendered, { csp: true })`, or a site's `csp` (which the static build and
+`semblance serve` pass on), puts the recommended Content Security Policy first in its `<head>`, with
+the hashes of exactly those scripts and styles, and Trusted Types required:
+[SAFETY.md](SAFETY.md#content-security-policy). `contentSecurityPolicy(opts)` gives it as a header.
 
 ## What the visitor's settings do before scripts run
 

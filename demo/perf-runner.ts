@@ -1,6 +1,7 @@
 import type { Quad } from '@rdfjs/types'
 import { Parser } from 'n3'
 import { observationsTurtle } from '../bench/observations.ts'
+import { pageHTML } from './trusted-types.ts'
 import { CONFIGS, type Row } from '../bench/scenarios.ts'
 import { C, PERF_GRAPH, XSD_BOOLEAN } from '../src/ns.ts'
 import { quadKey } from '../src/rdf.ts'
@@ -114,7 +115,7 @@ function runCell(config: string, size: number): Promise<Row[]> {
   frame.setAttribute('aria-hidden', 'true')
   frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:600px;border:0;visibility:hidden'
   frame.name = CELL_PREFIX + JSON.stringify({ id, config, size })
-  frame.srcdoc = (window as unknown as { semblancePristine: string }).semblancePristine
+  frame.srcdoc = pageHTML((window as unknown as { semblancePristine: string }).semblancePristine)
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error('cell timed out')), 300_000)
     function finish(result: Row[] | Error) {

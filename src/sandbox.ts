@@ -27,9 +27,11 @@ import type { GraphStore } from './store/types.ts'
 import { compileStyles } from './style/compile.ts'
 import { BOX_ATTRIBUTE, boxSelector, scopedCss } from './style/scope.ts'
 import { readPolicy, type SafetyPolicy } from './safety.ts'
+import { overBudget } from './budget.ts'
 import { attachAnchoredPopups } from './web/anchored-popups.ts'
 import { attachSizeHandles } from './web/size-handles.ts'
 import { replayKept, SSR_ATTRIBUTE } from './web/takeover.ts'
+import { adoptSheet, dropSheet } from './web/builtins.ts'
 
 const c = NS.c
 /** The diff viewer of a live example's data, in its sandbox (each sandbox has a store of its own). */
@@ -129,7 +131,8 @@ function stallProblem(runtime: Runtime, sources: SandboxSource[], budgetMs: numb
   const s = runtime.watchdog.stall
   const w = s?.culprit
   const what = w ? ` The slowest work was ${short(w.iri, sources)}${w.focus ? ` for ${short(w.focus.split(' ')[0]!, sources)}` : ''} (${Math.round(w.ms)} ms).` : ''
-  return { message: `Stopped: rendering took longer than ${budgetMs} ms, and ${s?.pending ?? runtime.held} renderings were left undone.${what}`, severity: 'error' }
+  const over = s?.limit && s.limit !== 'time' ? overBudget(runtime) : `took longer than ${budgetMs} ms`
+  return { message: `Stopped: rendering ${over}, and ${s?.pending ?? runtime.held} renderings were left undone.${what}`, severity: 'error' }
 }
 
 /** A built sandbox: the example's own store, runtime and projections. */
@@ -918,7 +921,7 @@ export class Sandboxes {
     if (!css) return undefined
     const sheet = new Sheet()
     sheet.replaceSync(css)
-    doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet]
+    adoptSheet(doc, sheet)
     return sheet
   }
 
@@ -926,7 +929,7 @@ export class Sandboxes {
     m.detach?.()
     // The sandbox's runtime and store are its own: release them (Oxigraph's share one WebAssembly memory).
     m.sandbox?.runtime.dispose()
-    if (m.sheet) m.slot.ownerDocument.adoptedStyleSheets = m.slot.ownerDocument.adoptedStyleSheets.filter((s) => s !== m.sheet)
+    if (m.sheet) dropSheet(m.slot.ownerDocument, m.sheet)
     m.detach = m.sheet = m.sandbox = m.renderer = m.textRenderer = m.dataRenderer = undefined
   }
 
