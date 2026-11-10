@@ -5,10 +5,13 @@ can keep its graph there and bind a page to the part of it the page needs. The p
 part, then receives the store's changes to it as they happen. Its own changes go back as
 writes. The store stays the authority.
 
-Nothing in the engines changes for this: they still leave out `SERVICE` and HTTP `LOAD`
-(`rdf-engine/README.md`). What arrives from the store is an ordinary input change, applied
-with `runtime.apply`. Rules and views take it in as they take in a click, so a change from the
-store costs what it changes, however large the store is.
+This is not SPARQL `SERVICE` or `LOAD` ([below](#a-source-service-or-load)). What arrives from the
+store is an ordinary input change, applied with `runtime.apply`. Rules and views take it in as
+they take in a click, so a change from the store costs what it changes, however large the store
+is.
+
+The site's docs have the same guide, shorter: [Remote data](https://semblance.dev/docs/remote/)
+(`demo/gallery/_docs.ttl`, `ui:doc-remote`).
 
 This guide covers how a page declares a source, the effect that binds it, the protocol, the
 reference server in the repository, and what the effect does (for a host that wants to do it
@@ -20,6 +23,35 @@ npx vite --config examples/remote/vite.config.ts
 
 Open it in two windows. What one window changes, the other shows. A todo label longer than 40
 characters is refused by the store, and the page puts back what the store holds.
+
+## A source, SERVICE or LOAD
+
+SPARQL has two ways to reach data elsewhere: `SERVICE`, which sends part of a query to an
+endpoint while the query runs, and `LOAD`, which fetches a document into the store. The engines
+run both when the host asks ([FETCHING.md](FETCHING.md)), for a one-off question or import. A
+source is for something else:
+
+- **The store is the authority.** A `SERVICE` answer and a `LOAD`ed document are copies as of
+  when they were fetched, and drift from where they came from. A source binds the page's part of
+  the store for as long as the page is open: the page holds what the store holds, and a write the
+  store refuses is put back to what it holds.
+- **Only deltas reach the page.** After one snapshot, the store sends what changed, as it changes,
+  and nothing else. Rules and views see each change incrementally; they may not use `SERVICE` or
+  `LOAD`, whose results are not.
+- **Nothing in the graph decides where the page connects.** A source names only what it covers;
+  the host maps its IRI to a URL and credentials, and a source it does not map stays
+  `src:Unbound`. `SERVICE` and `LOAD` name an IRI in the query, but only the host's own
+  asynchronous calls fetch, from the IRIs its policy lists, mapped the same way. An authored graph
+  cannot point a page at a server either way.
+- **A change costs the change.** The server tells which pages a changed statement concerns by its
+  predicate, its subject or its subject's type, one indexed lookup; the page applies it as one
+  input change. Neither side re-reads the store or the page's part of it.
+
+| | use it for |
+|---|---|
+| a remote source | part of a server's store the page binds to and keeps current |
+| `SERVICE` | a one-off question to a SPARQL endpoint the page does not hold |
+| `LOAD` | a one-off import of a document into a graph of the store |
 
 ## Declaring a source
 
