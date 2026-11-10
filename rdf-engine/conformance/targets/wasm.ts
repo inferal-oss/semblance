@@ -4,9 +4,11 @@ import { DEFAULT_GRAPH, Engine, Form, Format, Kind } from '../../host/engine.ts'
 import * as ox from 'oxigraph'
 import { frames } from '../../../src/jelly/decode.ts'
 import { concat, type JellyRead, type JellyTarget } from '../jelly.ts'
-import type { Dataset, RdfFile, Target } from '../target.ts'
+import type { Dataset, QueryResult, RdfFile, Target } from '../target.ts'
 import { iri, lit, type Row, type T } from '../terms.ts'
 import { MIME } from './oxigraph.ts'
+import { withFetching, type FetchPolicy } from '../../host/fetching.ts'
+import { mockFetch } from '../../host/mock-endpoint.ts'
 
 const FORMAT: Partial<Record<RdfFile['format'], Format>> = {
   ntriples: Format.NTriples,
@@ -131,9 +133,41 @@ export function wasmTarget(name: string): Target {
     for (const { name, file } of ds.named) load(e, file, e.iri(name))
     return e
   }
+  /** The dataset's services as mock endpoints, every one listed; nothing else answers. */
+  const policyFor = (ds: Dataset): FetchPolicy => {
+    const endpoints = Object.fromEntries((ds.services ?? []).map((s) => [s.endpoint, { load: (e: Engine) => s.data.forEach((f) => load(e, f, DEFAULT_GRAPH)) }]))
+    const policy: FetchPolicy = {
+      endpoints: Object.fromEntries(Object.keys(endpoints).map((k) => [k, {}])),
+      fetch: mockFetch(module, endpoints, {}, () => policy).fetch,
+    }
+    return policy
+  }
+  const result = (e: Engine, r: ReturnType<ReturnType<Engine['prepare']>['run']>): QueryResult => {
+    if (r.form === Form.Ask) return { kind: 'boolean', value: r.value }
+    if (r.form === Form.Select) {
+      return {
+        kind: 'bindings',
+        vars: r.vars,
+        rows: r.vars.length
+          ? rows(e, r.rows, r.vars.length).map((row) => new Map(row.flatMap((t, i) => (t ? [[r.vars[i]!, t] as [string, T]] : []))))
+          : Array.from({ length: r.count }, () => new Map<string, T>()),
+      }
+    }
+    return { kind: 'graph', quads: rows(e, r.triples, 3) }
+  }
   return {
     name,
     jelly: jellyTarget(module),
+    async queryFetching(ds, text, base) {
+      const e = loaded(ds)
+      const q = e.prepare(text, base)
+      return result(e, await withFetching(e, policyFor(ds), () => q.run()))
+    },
+    async updateFetching(ds, text, base) {
+      const e = loaded(ds)
+      await withFetching(e, policyFor(ds), () => e.update(text, base))
+      return rows(e, e.match(), 4)
+    },
     parse(file) {
       const e = new Engine(module)
       load(e, file, DEFAULT_GRAPH)
@@ -165,17 +199,7 @@ export function wasmTarget(name: string): Target {
           r = c
         }
       }
-      if (r.form === Form.Ask) return { kind: 'boolean', value: r.value }
-      if (r.form === Form.Select) {
-        return {
-          kind: 'bindings',
-          vars: r.vars,
-          rows: r.vars.length
-            ? rows(e, r.rows, r.vars.length).map((row) => new Map(row.flatMap((t, i) => (t ? [[r.vars[i]!, t] as [string, T]] : []))))
-            : Array.from({ length: r.count }, () => new Map<string, T>()),
-        }
-      }
-      return { kind: 'graph', quads: rows(e, r.triples, 3) }
+      return result(e, r)
     },
     update(ds, text, base) {
       const e = loaded(ds)

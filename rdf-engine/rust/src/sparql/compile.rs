@@ -210,6 +210,9 @@ mod ctyped;
 /// where the module's expressions, paths and patterns start in the engine's tables.
 pub fn compile(q: &Query, dict: &Dict, bound: &[Var], h: u32, shape: u32, frame: u32, base: [u32; 4]) -> Res<(Vec<u8>, Tables)> {
     let s = &q.select;
+    if q.service {
+        return Err("not compilable: SERVICE");
+    }
     if q.form == Form::Describe {
         return Err("not compilable: DESCRIBE");
     }

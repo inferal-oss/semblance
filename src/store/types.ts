@@ -1,5 +1,26 @@
 import type { DefaultGraph, Literal, NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import type { JellyDumpOptions, JellyStoreReader } from '../jelly/store.ts'
+import type { FetchPolicy } from '../../rdf-engine/host/fetching.ts'
+
+export type { FetchPolicy, Remote } from '../../rdf-engine/host/fetching.ts'
+
+/**
+ * Queries and updates that may reach the network: SPARQL `SERVICE` and `LOAD` (docs/FETCHING.md).
+ * Only these fetch, asynchronously, and only what `policy` lists; the synchronous `select` and
+ * `construct` (which rules, views and reactions use) refuse them, so no graph reaches the network
+ * on its own. Operations on one store run one at a time.
+ */
+export interface FetchingQueries {
+  /** A SELECT (or ASK: true or false) whose SERVICE patterns are answered under `policy`. */
+  select(query: string, graphs: Quad_Graph[], policy: FetchPolicy): Promise<Map<string, Term>[]>
+  /** A CONSTRUCT whose SERVICE patterns are answered under `policy`. */
+  construct(query: string, graphs: Quad_Graph[], policy: FetchPolicy): Promise<Quad[]>
+  /**
+   * A SPARQL Update with LOAD and SERVICE, applied to the store directly: for a store no runtime
+   * drives. A mounted app takes remote data in with `construct` and `runtime.apply` instead.
+   */
+  update(update: string, policy: FetchPolicy): Promise<void>
+}
 
 export interface Factory {
   namedNode(value: string): NamedNode
@@ -79,6 +100,11 @@ export interface GraphStore {
    * to the end of the turn's budget (src/engine/watchdog.ts) and treats an interruption as a stall.
    */
   setDeadline?(at: number | undefined): void
+  /**
+   * SERVICE and LOAD, under the host's policy. Optional: the Semblance engines (WASM and Rust)
+   * have it; Oxigraph's JavaScript build has no HTTP client and N3 no SPARQL, so they omit it.
+   */
+  readonly fetching?: FetchingQueries
 }
 
 /** Thrown by a query a store's deadline (setDeadline) cut off. Nothing was changed. */

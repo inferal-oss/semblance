@@ -1,0 +1,460 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`LOAD > INTO GRAPH 1`] = `
+{
+  "quads": [
+    "http://a http://alias http://a b> } # ",
+    "http://a http://r https://two.example/sparql ",
+    "http://b http://alias http://a ",
+    "http://b http://r "not an IRI" ",
+    "http://c http://r _ ",
+    "http://e http://p "z" http://g",
+  ],
+}
+`;
+
+exports[`LOAD > a failed LOAD undoes the update 1`] = `
+{
+  "error": "LOAD <https://data.example/dumps/missing.ttl>: could not be reached",
+}
+`;
+
+exports[`LOAD > a type it does not read 1`] = `
+{
+  "error": "LOAD <https://data.example/dumps/d.json>: unexpected content type application/ld+json",
+}
+`;
+
+exports[`LOAD > in order with the other operations 1`] = `
+{
+  "quads": [
+    "http://a http://alias http://a b> } # ",
+    "http://a http://r https://two.example/sparql ",
+    "http://b http://alias http://a ",
+    "http://b http://r "not an IRI" ",
+    "http://c http://r _ ",
+    "http://e http://p "z" ",
+    "http://e http://seen "true" ",
+  ],
+}
+`;
+
+exports[`LOAD > into the default graph 1`] = `
+{
+  "quads": [
+    "_ http://p "y"@en ",
+    "http://a http://alias http://a b> } # ",
+    "http://a http://r https://two.example/sparql ",
+    "http://b http://alias http://a ",
+    "http://b http://r "not an IRI" ",
+    "http://c http://r _ ",
+    "http://d http://p _ ",
+  ],
+}
+`;
+
+exports[`LOAD > unlisted 1`] = `
+{
+  "error": "LOAD <https://evil.example/x.ttl>: not a document this page may load",
+}
+`;
+
+exports[`LOAD > unlisted, SILENT: nothing 1`] = `
+{
+  "quads": [
+    "http://a http://alias http://a b> } # ",
+    "http://a http://r https://two.example/sparql ",
+    "http://b http://alias http://a ",
+    "http://b http://r "not an IRI" ",
+    "http://c http://r _ ",
+    "http://k http://k http://k ",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > MINUS and UNION around SERVICE 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://b",
+      "http://b",
+      "http://c",
+    ],
+  },
+  "rust": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> 2 }",
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> "two" }",
+  ],
+  "wat": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> 2 }",
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> "two" }",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > OPTIONAL SERVICE 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a https://two.example/sparql "two"",
+      "http://b "not an IRI" -",
+      "http://c _ -",
+    ],
+  },
+  "rust": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }
+VALUES (?s) {
+  (<http://a>)
+  (<http://b>)
+  (<http://c>)
+}",
+  ],
+  "wat": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > a blank node is not sent 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [],
+  },
+  "rust": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?b <http://q> ?x }
+VALUES (?b) {
+  (<https://two.example/sparql>)
+  ("not an IRI")
+}",
+    "POST https://two.example/sparql
+SELECT * WHERE { ?b <http://q> ?x }",
+  ],
+  "wat": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?b <http://q> ?x }",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > a compiled build declines it 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a "1"",
+    ],
+  },
+  "rust": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }",
+  ],
+  "wat": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > a hostile literal is escaped 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      ""x\\"y"@en",
+    ],
+  },
+  "rust": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }
+VALUES (?o) {
+  ("x\\"y"@en)
+  ("a\\") } ; DROP ALL #")
+}",
+  ],
+  "wat": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }
+VALUES (?o) {
+  ("x\\"y"@en)
+  ("a\\") } ; DROP ALL #")
+}",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > an IRI that cannot be written goes without VALUES 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a "1"",
+      "http://a "x\\"y"@en",
+    ],
+  },
+  "rust": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }",
+  ],
+  "wat": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > bindings sent as VALUES 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a "1"",
+      "http://a "x\\"y"@en",
+      "http://b "2"",
+    ],
+  },
+  "rust": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }
+VALUES (?s) {
+  (<http://a>)
+  (<http://b>)
+  (<http://c>)
+}",
+  ],
+  "wat": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }
+VALUES (?s) {
+  (<http://a>)
+  (<http://b>)
+  (<http://c>)
+}",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > bindings: false 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a "1"",
+      "http://a "x\\"y"@en",
+      "http://b "2"",
+    ],
+  },
+  "rust": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }",
+  ],
+  "wat": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > endpoint from a parameter 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "_ "blank"",
+      "http://a "two"",
+    ],
+  },
+  "rust": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }",
+  ],
+  "wat": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > nested SERVICE 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a "1" "two"",
+      "http://a "x\\"y"@en "two"",
+    ],
+  },
+  "rust": [
+    "POST https://one.example/sparql
+PREFIX e: <http://>
+SELECT * WHERE { ?s e:p ?o SERVICE <https://two.example/sparql> { ?s e:q ?z } }",
+    "POST https://two.example/sparql
+PREFIX e: <http://>
+SELECT * WHERE { ?s e:q ?z }
+VALUES (?s) {
+  (<http://a>)
+  (<http://b>)
+}",
+  ],
+  "wat": [
+    "POST https://one.example/sparql
+PREFIX e: <http://>
+SELECT * WHERE { ?s e:p ?o SERVICE <https://two.example/sparql> { ?s e:q ?z } }",
+    "POST https://two.example/sparql
+PREFIX e: <http://>
+SELECT * WHERE { ?s e:q ?z }
+VALUES (?s) {
+  (<http://a>)
+  (<http://b>)
+}",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > no bindings 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a "1"",
+      "http://a "x\\"y"@en",
+      "http://b "2"",
+    ],
+  },
+  "rust": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }",
+  ],
+  "wat": [
+    "POST https://one.example/sparql
+SELECT * WHERE { ?s <http://p> ?o }",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > unlisted endpoint 1`] = `
+{
+  "results": {
+    "error": "SERVICE <https://evil.example/sparql>: not an endpoint this page may query",
+    "requests": undefined,
+  },
+  "rust": [],
+  "wat": [],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > unlisted endpoint, SILENT 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a https://two.example/sparql - -",
+      "http://b "not an IRI" - -",
+      "http://c _ - -",
+    ],
+  },
+  "rust": [],
+  "wat": [],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > variable endpoint in scope 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a "two"",
+    ],
+  },
+  "rust": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }
+VALUES (?s) {
+  (<http://a>)
+}",
+  ],
+  "wat": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }
+VALUES (?s) {
+  (<http://a>)
+}",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > variable endpoint not an IRI, SILENT 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a "two"",
+      "http://b -",
+      "http://c -",
+    ],
+  },
+  "rust": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }
+VALUES (?s) {
+  (<http://a>)
+}",
+  ],
+  "wat": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }
+VALUES (?s) {
+  (<http://a>)
+}",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > variable endpoint not an IRI: no solutions there 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a "two"",
+    ],
+  },
+  "rust": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }
+VALUES (?s) {
+  (<http://a>)
+}",
+  ],
+  "wat": [
+    "POST https://two.example/sparql
+SELECT * WHERE { ?s <http://q> ?x }
+VALUES (?s) {
+  (<http://a>)
+}",
+  ],
+}
+`;
+
+exports[`SERVICE: WAT and Rust give the same results and send the same requests > variable endpoint out of scope 1`] = `
+{
+  "results": {
+    "requests": undefined,
+    "rows": [
+      "http://a https://two.example/sparql -",
+      "http://b "not an IRI" -",
+      "http://c _ -",
+    ],
+  },
+  "rust": [],
+  "wat": [],
+}
+`;

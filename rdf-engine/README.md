@@ -24,6 +24,7 @@ npx tsx rdf-engine/host/compiled-bench.ts rust  # compiled vs interpreted querie
 npm run engine:sizes                          # where each build's bytes go, side by side ([file.wasm] [top])
 npm run engine:speed                          # WAT at least as fast as Rust (--rounds 3 --margin 0.15)
 npx tsx rdf-engine/host/jelly-bench.ts wat     # Jelly: the ontology written and read back, and loaded from Turtle (ms)
+npm run conformance -- --target wat --suite sparql11fed  # SERVICE against mock endpoints (host/mock-endpoint.ts)
 SEMBLANCE_ENGINE_COMPILE=idle npx tsx rdf-engine/host/compiled-pages.ts wat pages  # whole pages: 0, 2 or idle; pages, warehouse or grid
 ```
 
@@ -89,8 +90,9 @@ The engines move in lockstep; each phase ends with both passing the same tests.
    spliced in as text), so the ABI gains binding a variable to a set of terms.
    Done when Semblance's test suite and `npm run bench` run on the engine.
 4. **All of SPARQL 1.2.** Query, then Update. Done when the sparql10/11/12
-   suites pass, apart from tests that need what the ABI leaves out (`SERVICE`,
-   HTTP `LOAD`).
+   suites pass. `SERVICE` and `LOAD` have the host fetch (ABI.md, "Optional:
+   fetching"; [docs/FETCHING.md](../docs/FETCHING.md)): the W3C federated query
+   suite (`sparql11fed`) runs against in-process mock endpoints.
 5. **Housekeeping and speed.** `collect`, and whatever the benchmarks point at.
 
 ### Where they are
@@ -100,7 +102,7 @@ The engines move in lockstep; each phase ends with both passing the same tests.
 | 1. Terms and store | done | done |
 | 2. Turtle and TriG | done: rdf12 1,055/1,055 | done: rdf12 1,055/1,055 |
 | 3. Semblance's SPARQL | done: every Semblance page renders as on Oxigraph, with SPARQL and function rules | done: the same |
-| 4. SPARQL 1.2 query and update | done: no W3C failures; 2,309 of 2,317 pass and 8 differ only in number spelling (Oxigraph: 2,227 pass, 20 spelling, 70 fail) | done: the same as Rust, test for test |
+| 4. SPARQL 1.2 query and update | done: no W3C failures; 2,319 of 2,327 pass and 8 differ only in number spelling, `SERVICE` (sparql11fed 10/10) and `LOAD` included (Oxigraph: 2,229 pass, 20 spelling, 71 fail, 7 skipped: it cannot fetch) | done: the same as Rust, test for test |
 | 5. Housekeeping and speed | `collect`; size pass (344 to 262 KiB); sessions flat at 17–24 ms/event | `collect`; the fastest store on Semblance's pages |
 | Jelly (ABI 3, #433) | Jelly-RDF 1.2 and 1.0/1.1 read, 1.2 written: 339/339; the ontology written in 25 ms, read in 17 | the same, byte for byte: written in 14 ms, read in 13 (Turtle: 28) |
 

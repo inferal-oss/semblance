@@ -114,6 +114,45 @@ interface Exports {
   jelly_message(h: number): number
   jelly_flush(h: number): number
   jelly_release(h: number): void
+  /** Optional (fetching): requests for SERVICE results and LOADed documents, and their answers. */
+  fetch_count?(): number
+  fetch_request?(i: number): number
+  fetch_text_ptr?(i: number): number
+  fetch_text_len?(i: number): number
+  fetch_var_ptr?(i: number, j: number): number
+  fetch_var_len?(i: number, j: number): number
+  fetch_answer?(i: number, n: number): number
+  fetch_fail?(i: number, len: number): number
+  fetch_clear?(): number
+}
+
+/** A request a run made for something from elsewhere (ABI.md, "Optional: fetching"). */
+export interface FetchRequest {
+  index: number
+  state: FetchState
+  kind: FetchKind
+  /** The endpoint's or the document's IRI id. */
+  target: number
+  /** The last run or update waited on it. */
+  asked: boolean
+  /** SERVICE: the query to send (VALUES not yet added). */
+  text: string
+  /** SERVICE: the pattern's in-scope variables, the columns of rows and answers. */
+  vars: string[]
+  /** `count` binding rows of `vars.length` ids each (0: not sent); they bind the same positions. */
+  rows: Uint32Array
+  count: number
+}
+
+export enum FetchState {
+  Waiting = 0,
+  Answered = 1,
+  Failed = 2,
+}
+
+export enum FetchKind {
+  Service = 1,
+  Load = 2,
 }
 
 /** A compiled query module's instance (see ABI.md, "Optional: compiled queries"). */
@@ -189,9 +228,12 @@ export async function compile(bytes: BufferSource): Promise<WebAssembly.Module> 
 export class EngineError extends Error {
   /** A query stopped by its budget (setDeadline, setFuel): code -2. */
   readonly interrupted: boolean
-  constructor(message: string, interrupted = false) {
+  /** A run or update waiting for SERVICE results or LOADed documents (ABI.md, "Optional: fetching"): code -3. */
+  readonly waiting: boolean
+  constructor(message: string, interrupted = false, waiting = false) {
     super(message)
     this.interrupted = interrupted
+    this.waiting = waiting
     if (interrupted) this.name = 'QueryInterrupted'
   }
 }
@@ -279,7 +321,7 @@ export class Engine {
   }
 
   private check(r: number): number {
-    if (r < 0) throw new EngineError(this.str(this.x.error_ptr(), this.x.error_len()) || `engine error ${r}`, r === -2)
+    if (r < 0) throw new EngineError(this.str(this.x.error_ptr(), this.x.error_len()) || `engine error ${r}`, r === -2, r === -3)
     return r
   }
 
@@ -304,6 +346,44 @@ export class Engine {
   /** Queries taking more than `steps` evaluation steps stop with an interrupted error; undefined: unlimited. */
   setFuel(steps?: number): void {
     this.x.set_fuel?.((steps ?? 0) >>> 0)
+  }
+
+  // --- fetching (ABI.md, "Optional: fetching") --------------------------------
+
+  /** Whether this build runs SERVICE and LOAD with the host fetching. */
+  get fetches(): boolean {
+    return !!this.x.fetch_count
+  }
+
+  /** Every request since fetchClear, answered or not. */
+  fetchRequests(): FetchRequest[] {
+    const x = this.x
+    const out: FetchRequest[] = []
+    const n = x.fetch_count?.() ?? 0
+    for (let i = 0; i < n; i++) {
+      const count = this.check(x.fetch_request!(i))
+      const head = new Uint32Array(x.memory.buffer, x.result_ptr(), 5)
+      const [state, kind, target, width, asked] = [head[0]!, head[1]!, head[2]!, head[3]!, head[4]!]
+      const rows = new Uint32Array(x.memory.buffer, x.result_ptr() + 20, count * width).slice()
+      const vars = Array.from({ length: width }, (_, j) => this.str(x.fetch_var_ptr!(i, j), x.fetch_var_len!(i, j)))
+      out.push({ index: i, state, kind, target, asked: asked === 1, text: this.str(x.fetch_text_ptr!(i), x.fetch_text_len!(i)), vars, rows, count })
+    }
+    return out
+  }
+
+  /** Answer request `i`: `count` rows of its variables' ids (SERVICE), or `count` triples (LOAD). */
+  fetchAnswer(i: number, ids: ArrayLike<number>, count: number): void {
+    this.putIds(ids)
+    this.check(this.x.fetch_answer!(i, count))
+  }
+
+  fetchFail(i: number, why: string): void {
+    const [n] = this.put(why)
+    this.check(this.x.fetch_fail!(i, n!))
+  }
+
+  fetchClear(): void {
+    this.x.fetch_clear?.()
   }
 
   // --- terms ----------------------------------------------------------------

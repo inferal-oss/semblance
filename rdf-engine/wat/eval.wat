@@ -861,6 +861,9 @@
       (br $done)))
     (if (i32.eq (local.get $k) (i32.const P_MAGIC)) (then
       (call $eval_magic (local.get $el) (local.get $t) (local.get $out))
+      (br $done)))
+    (if (i32.eq (local.get $k) (i32.const P_SERVICE)) (then
+      (call $service_elem (local.get $el) (local.get $t) (local.get $out))
       (br $done))))
   (local.get $out))
 
