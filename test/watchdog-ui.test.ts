@@ -267,7 +267,8 @@ ${items}`
     }
     let disposed = 0
     const b = buildSandbox([{ name: 'list.ttl', text: source }], 'https://example.org/s#list', {
-      load: (...t) => Object.assign(loadStore('wat', ...t), { dispose: () => void disposed++ }),
+      // The sandbox's own store (with the sources), not the ontology's the policy is read from.
+      load: (...t) => Object.assign(loadStore('wat', ...t), t.length ? { dispose: () => void disposed++ } : {}),
       prefer: 'function',
       functions: { 'listitem:screen': burn },
       budgetMs: 100,
