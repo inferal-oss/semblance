@@ -1243,12 +1243,13 @@ app.runtime.apply({ add: quads, remove: [] })""" .
 
 ui:doc-fe-pol-h a c:Heading ; c:level 2 ; c:label "The policy" .
 ui:doc-fe-pol-1 a c:Text ; c:label "Nothing is fetched unless the host lists it. The policy is code, passed with each call: no graph can add to it, and nothing in the graph configures fetching." .
-ui:doc-fe-pol a c:DescriptionList ; c:of ui:doc-fe-pol-items ; c:fields ( ui:fe-p-endpoints ui:fe-p-documents ui:fe-p-limits ui:fe-p-deadline ) .
-ui:doc-fe-pol-items ui:fe-p-endpoints "SERVICE: the endpoint IRI as the query names it, to how to reach it (url, headers, credentials). None listed: every SERVICE fails." ;
-    ui:fe-p-documents "LOAD: a document IRI, or a prefix ending in *, to how to reach it. None listed: every LOAD fails." ;
-    ui:fe-p-limits "timeoutMs (10 s by default) and maxBytes (16 MiB) per request, for all or per endpoint." ;
+ui:doc-fe-pol a c:DescriptionList ; c:of ui:doc-fe-pol-items ; c:fields ( ui:fe-p-endpoints ui:fe-p-documents ui:fe-p-redirects ui:fe-p-limits ui:fe-p-deadline ) .
+ui:doc-fe-pol-items ui:fe-p-endpoints "SERVICE: the endpoint IRI as the query names it, to how to reach it (url, headers, credentials, bindings). Matched by exact IRI, never by prefix. None listed: every SERVICE fails." ;
+    ui:fe-p-documents "LOAD: a document IRI, or a prefix ending in /* (an http(s) URL whose path ends in /), to how to reach it. A candidate must parse to the same origin and start with that path once normalized, so userinfo (allowed.example@evil.example), a longer host, ../ and percent-encoding do not get through. None listed: every LOAD fails." ;
+    ui:fe-p-redirects "A redirect fails the request, so headers never follow it to another origin; credentials are omitted unless an entry says otherwise. An IRI with userinfo, a scheme other than http(s) or no host is refused before matching." ;
+    ui:fe-p-limits "timeoutMs (10 s by default), maxBytes (16 MiB) and maxRows per response; maxRequests (32) per operation, concurrency (4) at once. Over a cap the request fails, and with SILENT gives the empty solution." ;
     ui:fe-p-deadline "deadline bounds the whole operation, every round and every fetch; maxRounds (8) the rounds." .
-ui:fe-p-endpoints rdfs:label "endpoints" . ui:fe-p-documents rdfs:label "documents" . ui:fe-p-limits rdfs:label "timeoutMs, maxBytes" . ui:fe-p-deadline rdfs:label "deadline, maxRounds" .
+ui:fe-p-endpoints rdfs:label "endpoints" . ui:fe-p-redirects rdfs:label "Redirects, credentials" . ui:fe-p-documents rdfs:label "documents" . ui:fe-p-limits rdfs:label "timeoutMs, maxBytes" . ui:fe-p-deadline rdfs:label "deadline, maxRounds" .
 ui:doc-fe-pol-2 a c:Text ; c:label "The keys are the IRIs the query names; url maps one to where it really is, as remote sources map a source's IRI to its endpoint. A query can name <urn:ex:catalog> and never see a URL or a token. The list is checked for every request, including a SERVICE ?endpoint whose endpoint comes from data." .
 
 ui:doc-fe-wait-h a c:Heading ; c:level 2 ; c:label "How a query waits" .
@@ -1262,23 +1263,26 @@ ui:doc-fe-wait-2 a c:Text ; c:label "Each round re-evaluates the local part of t
 
 ui:doc-fe-svc-h a c:Heading ; c:level 2 ; c:label "SERVICE" .
 ui:doc-fe-svc-1 a c:Text ; c:label "SERVICE [SILENT] (<iri> | ?var) { P } sends the endpoint SELECT * WHERE { P } over the SPARQL Protocol (POST, application/sparql-query; the answer is read as SPARQL results JSON, or XML)." .
-ui:doc-fe-svc a c:DescriptionList ; c:of ui:doc-fe-svc-items ; c:fields ( ui:fe-s-values ui:fe-s-join ui:fe-s-silent ui:fe-s-compile ) .
+ui:doc-fe-svc a c:DescriptionList ; c:of ui:doc-fe-svc-items ; c:fields ( ui:fe-s-values ui:fe-s-leave ui:fe-s-join ui:fe-s-silent ui:fe-s-compile ) .
 ui:doc-fe-svc-items ui:fe-s-values "The solutions joined before the SERVICE, restricted to P's variables, are sent as VALUES after the pattern, so the endpoint answers only for the rows the page has. Blank nodes and triple terms cannot be sent and are left out. The endpoint joins them after evaluating P, so a FILTER inside P does not see them, as SPARQL scopes it." ;
+    ui:fe-s-leave "Binding rows are the page's data, sent only to a listed endpoint. An entry with bindings: false sends none, and the engine keeps the answer rows compatible with its own; so does a request over maxBindings rows (1000), or with a term that cannot be written exactly. Sent terms are escaped by one serializer and language tags are checked, so a literal cannot change the query." ;
     ui:fe-s-join "An answer row belongs to the binding row it agrees with, so the result equals SERVICE evaluated alone and joined, whatever order the evaluator takes." ;
     ui:fe-s-silent "A failed request - not listed, unreachable, a bad response, an unbound endpoint - gives the one empty solution, and the row passes as it is. Without SILENT the query fails with the reason." ;
     ui:fe-s-compile "A query with SERVICE is not compiled; it runs in the interpreter." .
-ui:fe-s-values rdfs:label "Bindings go along" . ui:fe-s-join rdfs:label "The same result" . ui:fe-s-silent rdfs:label "SILENT" . ui:fe-s-compile rdfs:label "Compiling" .
+ui:fe-s-values rdfs:label "Bindings go along" . ui:fe-s-leave rdfs:label "Rows leave the page" . ui:fe-s-join rdfs:label "The same result" . ui:fe-s-silent rdfs:label "SILENT" . ui:fe-s-compile rdfs:label "Compiling" .
 
 ui:doc-fe-load-h a c:Heading ; c:level 2 ; c:label "LOAD" .
 ui:doc-fe-load-1 a c:Text ; c:label "LOAD [SILENT] <iri> [INTO GRAPH <g>] fetches the document and adds its triples to g (the default graph without INTO), in the order of the update's operations; the update is all or nothing, as before. The host parses the document by its content type: Turtle and N-Triples by the engine's own parser, TriG and N-Quads their default graph, anything else by a parse the host gives. Blank nodes are fresh per document. A failed LOAD fails the update; LOAD SILENT does nothing." .
 
 ui:doc-fe-safe-h a c:Heading ; c:level 2 ; c:label "Authored content never reaches the network" .
-ui:doc-fe-safe a c:DescriptionList ; c:of ui:doc-fe-safe-items ; c:fields ( ui:fe-a-host ui:fe-a-rules ui:fe-a-list ui:fe-a-csp ) .
+ui:doc-fe-safe a c:DescriptionList ; c:of ui:doc-fe-safe-items ; c:fields ( ui:fe-a-host ui:fe-a-rules ui:fe-a-list ui:fe-a-load ui:fe-a-response ui:fe-a-csp ) .
 ui:doc-fe-safe-items ui:fe-a-host "Only the host's own asynchronous calls fetch. Rules, views and reactions run the synchronous select and construct, where a waiting run is an error: an authored SPARQL rule with SERVICE fails like any failing rule, and nothing is fetched." ;
     ui:fe-a-rules "Rules and views may not use SERVICE or LOAD: their results come from elsewhere, on no schedule the runtime sees, and are not incremental, so a rule over them could neither be maintained nor kept within a turn." ;
-    ui:fe-a-list "The allow-list is the host's, in code, and checked for every request." ;
+    ui:fe-a-list "The allow-list is the host's, in code, and checked for every request, whatever produced the IRI: a SERVICE ?endpoint bound by triples someone else wrote is refused unless listed." ;
+    ui:fe-a-load "LOAD exists only in update text the host passes to fetching.update: an author cannot issue one, or choose the graph it loads into." ;
+    ui:fe-a-response "A response is read up to maxBytes and parsed by its content type only; columns not asked for are dropped, terms are checked, blank nodes are fresh, and the engine checks every id it is given. A failure names the endpoint and the status or kind of problem, never the response body." ;
     ui:fe-a-csp "A Content Security Policy's connect-src lists the URLs the policy maps to." .
-ui:fe-a-host rdfs:label "The host fetches" . ui:fe-a-rules rdfs:label "Not in rules" . ui:fe-a-list rdfs:label "The allow-list" . ui:fe-a-csp rdfs:label "connect-src" .
+ui:fe-a-host rdfs:label "The host fetches" . ui:fe-a-rules rdfs:label "Not in rules" . ui:fe-a-list rdfs:label "The allow-list" . ui:fe-a-load rdfs:label "LOAD" . ui:fe-a-response rdfs:label "Responses" . ui:fe-a-csp rdfs:label "connect-src" .
 
 ui:doc-fe-stores-h a c:Heading ; c:level 2 ; c:label "Stores" .
 ui:doc-fe-stores a c:DescriptionList ; c:of ui:doc-fe-stores-items ; c:fields ( ui:fe-t-wasm ui:fe-t-oxigraph ui:fe-t-n3 ) .

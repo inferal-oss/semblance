@@ -68,14 +68,36 @@ interface FetchPolicy {
   maxBytes?: number                   // per response, default 16 MiB
   deadline?: number                   // Date.now() ms for the whole operation
   maxRounds?: number                  // default 8
+  maxRequests?: number                // per operation, default 32
+  maxBindings?: number                // rows per SERVICE request, default 1000 (over it: sent without VALUES)
+  maxRows?: number                    // per response
+  concurrency?: number                // fetches at once, default 4
 }
-interface Remote { url?: string; headers?: Record<string, string>; credentials?: RequestCredentials; timeoutMs?: number; maxBytes?: number }
+interface Remote {
+  url?: string                        // where it really is (default: the key)
+  headers?: Record<string, string>    // sent only to this entry's url
+  credentials?: RequestCredentials    // default 'omit'
+  bindings?: boolean                  // SERVICE: send the page's rows as VALUES (default true)
+  timeoutMs?: number
+  maxBytes?: number
+}
 ```
 
 The keys are the IRIs the query names. `url` maps one to where it really is, with headers and
 credentials, as remote sources map a source's IRI to its endpoint: a query can name
 `<urn:ex:catalog>` and never see a URL or a token. The list is checked for every request,
 including a `SERVICE ?endpoint` whose endpoint comes from data.
+
+- **Endpoints match by exact IRI**, as the query resolved it, never by prefix.
+- **A document entry may be a prefix** (`https://data.example/dumps/*`): an `http(s)` URL whose
+  path ends in `/`. A candidate matches when it parses to the same origin and its normalized path
+  starts with that path. So `https://allowed.example@evil.example`, `https://allowed.example.evil.example`,
+  `…/../` and percent-encoded spellings do not pass.
+- An IRI with userinfo, a scheme other than `http(s)`, or no host is refused before matching.
+- **Redirects fail the request** (`redirect: 'error'`), so headers never follow a redirect to
+  another origin. Credentials are omitted unless an entry says otherwise.
+- **Over a cap** (`maxRequests`, `maxRounds`, `maxRows`, `maxBytes`, the timeout or the
+  deadline) the request fails; with `SILENT`, it is the empty solution.
 
 ## How a query waits
 
@@ -103,6 +125,12 @@ Protocol (`POST`, `application/sparql-query`; the answer is read as SPARQL resul
   variables, are sent as `VALUES` after the pattern, so the endpoint answers only for the rows the
   page has. Blank nodes and triple terms cannot be sent and are left out. The endpoint joins the
   rows after evaluating `P`, so a `FILTER` inside `P` does not see them, as SPARQL scopes it.
+- **Binding rows leave the page.** They go only to a listed endpoint, but they are the page's data.
+  An entry with `bindings: false` sends none: the endpoint gets the bare pattern, and the engine
+  keeps the answer rows compatible with its own. A request over `maxBindings` rows, or with a term
+  that cannot be written exactly (an IRI with a space, `<`, `>` or `"`), also goes without
+  `VALUES`. Terms that are sent are written by one serializer with full escaping, and language
+  tags are checked, so a literal cannot change the query.
 - **The result is the same either way.** An answer row belongs to the binding row it agrees with,
   so the result equals `SERVICE` evaluated alone and joined, whatever order the evaluator takes.
 - **`SILENT`**: a failed request (not listed, unreachable, a bad response, an unbound endpoint)
@@ -126,6 +154,14 @@ Each round is an ordinary run under the engine's deadline and fuel. The waiting 
 `deadline` bounds the whole operation (each round's engine deadline and each fetch's abort
 signal), `timeoutMs` and `maxBytes` each request, and `maxRounds` the rounds.
 
+## What a response may do
+
+The body is read as a stream up to `maxBytes`, then aborted; rows are capped at `maxRows`. A
+response is parsed by its content type only (SPARQL results JSON or XML; an RDF type for `LOAD`),
+and anything else fails the request. Columns that were not asked for are dropped, terms are
+checked, and blank nodes are fresh per response. The engine checks every id it is given. A
+failure names the endpoint and the HTTP status or kind of problem, never the response body.
+
 ## Authored content never reaches the network
 
 - **Only the host's own asynchronous calls fetch.** Rules, views and reactions run the
@@ -135,7 +171,10 @@ signal), `timeoutMs` and `maxBytes` each request, and `maxRounds` the rounds.
   schedule the runtime sees, and are not incremental, so a rule over them could neither be
   maintained nor kept within a turn. A one-off query or update the host runs is where they belong;
   to keep remote data live, use a remote source.
-- **The allow-list is the host's, in code**, and checked for every request.
+- **The allow-list is the host's, in code**, and checked for every request, whatever produced the
+  IRI: a `SERVICE ?endpoint` bound by triples someone else wrote is refused unless listed.
+- **`LOAD` exists only in update text the host passes** to `fetching.update`: an author cannot
+  issue one, or choose the graph it loads into.
 - A Content Security Policy's `connect-src` should list the URLs the policy maps to
   ([SAFETY.md](SAFETY.md)).
 
