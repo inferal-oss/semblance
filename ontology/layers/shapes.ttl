@@ -101,7 +101,7 @@ WHERE {
                 !(COALESCE(DATATYPE(?value), sh:none) = ?param
                   || (?param IN (xsd:integer, xsd:decimal, xsd:double, xsd:float) && DATATYPE(?value) IN (xsd:integer, xsd:decimal, xsd:double, xsd:float)
                       && (?param != xsd:integer || COALESCE(xsd:double(STR(?value)) = FLOOR(xsd:double(STR(?value))), false)))),
-             IF(?constraint = sh:class, NOT EXISTS { ?value a/rdfs:subClassOf* ?param },
+             IF(?constraint = sh:class, NOT EXISTS { ?value (a|a/rdfs:subClassOf+) ?param },
              IF(?constraint = sh:nodeKind, (?param = sh:IRI && !isIRI(?value)) || (?param = sh:Literal && !isLiteral(?value)),
              IF(?constraint = sh:in, NOT EXISTS { ?param rdf:rest*/rdf:first ?value },
              isLiteral(?value) && IF(?constraint = sh:minInclusive, !COALESCE(xsd:double(STR(?value)) >= xsd:double(STR(?param)), false),
@@ -136,7 +136,7 @@ WHERE {
         { ?member sh:path ?memberPath FILTER(isIRI(?memberPath)) ?focus ?memberPath ?held }
         UNION { ?member sh:path/sh:inversePath ?inverse FILTER(isIRI(?inverse)) ?held ?inverse ?focus }
         OPTIONAL { ?member sh:qualifiedValueShape/sh:class ?qualifiedClass }
-        FILTER(!BOUND(?qualifiedClass) || EXISTS { ?held a/rdfs:subClassOf* ?qualifiedClass })
+        FILTER(!BOUND(?qualifiedClass) || EXISTS { ?held (a|a/rdfs:subClassOf+) ?qualifiedClass })
       } GROUP BY ?param ?focus } }
       FILTER(COALESCE(?holding, 0) = 0)
       BIND(?focus AS ?value)

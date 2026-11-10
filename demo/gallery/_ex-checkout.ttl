@@ -550,14 +550,14 @@ ck:ToReview a beh:Reaction ; beh:when beh:Click ; beh:source ui:co-to-review ;
 CONSTRUCT { ui:co-steps c:current ui:co-step-shipping . ui:ex-checkout ?p ?old ; ck:place ?oldPlace ; ck:phone ?oldPhone }
 WHERE {
   ui:co-steps c:current ui:co-step-shipping .
-  FILTER NOT EXISTS { ui:co-to-review val:requires/rdf:rest*/rdf:first ?bad . ?bad val:invalid true }
+  FILTER NOT EXISTS { ui:co-to-review (val:requires/rdf:first|val:requires/rdf:rest+/rdf:first) ?bad . ?bad val:invalid true }
   {} UNION { ?field ck:fills ?p . ui:ex-checkout ?p ?old } UNION { ui:ex-checkout ck:place ?oldPlace } UNION { ui:ex-checkout ck:phone ?oldPhone }
 }""" ;
     beh:inserts """
 CONSTRUCT { ui:co-steps c:current ui:co-step-review . ui:ex-checkout ?p ?v ; ck:place ?place ; ck:phone ?phone }
 WHERE {
   ui:co-steps c:current ui:co-step-shipping .
-  FILTER NOT EXISTS { ui:co-to-review val:requires/rdf:rest*/rdf:first ?bad . ?bad val:invalid true }
+  FILTER NOT EXISTS { ui:co-to-review (val:requires/rdf:first|val:requires/rdf:rest+/rdf:first) ?bad . ?bad val:invalid true }
   OPTIONAL { ?field ck:fills ?p ; c:value ?v }
   OPTIONAL {
     ui:co-city c:value ?city . ui:co-postal c:value ?code .

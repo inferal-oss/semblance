@@ -342,10 +342,10 @@ WHERE {
     { $this dnd:accepts ?shape } UNION { ?r dnd:accepts ?shape }
     UNION { $this val:validates ?field . ?field sh:node ?shape .
             { $this dnd:members ?fm . ?field sh:path ?fm } UNION { $this dnd:memberOf ?fm . ?field sh:path/sh:inversePath ?fm } }
-    { ?shape sh:class ?class FILTER NOT EXISTS { ?x a/rdfs:subClassOf* ?class } BIND(?shape AS ?violated) }
+    { ?shape sh:class ?class FILTER NOT EXISTS { ?x (a|a/rdfs:subClassOf+) ?class } BIND(?shape AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:hasValue ?wanted FILTER(isIRI(?p)) FILTER NOT EXISTS { ?x ?p ?wanted } BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:in ?allowed FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?allowed rdf:rest*/rdf:first ?v } BIND(?ps AS ?violated) }
-    UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:class ?valueClass FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?v a/rdfs:subClassOf* ?valueClass } BIND(?ps AS ?violated) }
+    UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:class ?valueClass FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?v (a|a/rdfs:subClassOf+) ?valueClass } BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:pattern ?pattern FILTER(isIRI(?p)) ?x ?p ?v
             OPTIONAL { ?ps sh:flags ?flags }
             FILTER(!REGEX(STR(?v), STR(?pattern), COALESCE(STR(?flags), "")))

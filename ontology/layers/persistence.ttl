@@ -109,7 +109,7 @@ CONSTRUCT {
 WHERE {
   $this c:controls ?subject ; c:property ?property .
   ?property sty:hookAttribute ?hook .
-  FILTER EXISTS { ?policy a per:Policy ; per:subject ?subject ; per:properties/rdf:rest*/rdf:first ?property }
+  FILTER EXISTS { ?policy a per:Policy ; per:subject ?subject ; (per:properties/rdf:first|per:properties/rdf:rest+/rdf:first) ?property }
   BIND(CONCAT(STR(?subject), " ", STR(?property)) AS ?value)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-remembered")) AS ?a)

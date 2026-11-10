@@ -111,7 +111,7 @@ WHERE {
             COALESCE(?messagep, IF(?datatypep = xsd:integer, "A whole number.", "A number.")),
          IF(BOUND(?minp) && !COALESCE(?xp >= xsd:double(?minp), false), COALESCE(?messagep, CONCAT("At least ", STR(?minp), ".")),
          IF(BOUND(?maxp) && !COALESCE(?xp <= xsd:double(?maxp), false), COALESCE(?messagep, CONCAT("At most ", STR(?maxp), ".")),
-         IF(EXISTS { ?shape sh:in ?listp } && NOT EXISTS { ?shape sh:in/rdf:rest*/rdf:first ?allowedp FILTER(STR(?allowedp) = ?value) },
+         IF(EXISTS { ?shape sh:in ?listp } && NOT EXISTS { ?shape (sh:in/rdf:first|sh:in/rdf:rest+/rdf:first) ?allowedp FILTER(STR(?allowedp) = ?value) },
             COALESCE(?messagep, "Not one of the allowed values."), ?none)))))))) AS ?plainProblem)
     FILTER(BOUND(?plainProblem))
   } ORDER BY STR(?shape) LIMIT 1 }
@@ -173,7 +173,7 @@ WHERE {
             COALESCE(?messagee, IF(?datatypee = xsd:integer, "A whole number.", "A number.")),
          IF(BOUND(?mine) && !COALESCE(?xe >= xsd:double(?mine), false), COALESCE(?messagee, CONCAT("At least ", STR(?mine), ".")),
          IF(BOUND(?maxe) && !COALESCE(?xe <= xsd:double(?maxe), false), COALESCE(?messagee, CONCAT("At most ", STR(?maxe), ".")),
-         IF(EXISTS { ?shape sh:in ?liste } && NOT EXISTS { ?shape sh:in/rdf:rest*/rdf:first ?allowede FILTER(STR(?allowede) = ?typed) },
+         IF(EXISTS { ?shape sh:in ?liste } && NOT EXISTS { ?shape (sh:in/rdf:first|sh:in/rdf:rest+/rdf:first) ?allowede FILTER(STR(?allowede) = ?typed) },
             COALESCE(?messagee, "Not one of the allowed values."), ?none)))))))) AS ?entryProblem)
     FILTER(BOUND(?entryProblem))
   } ORDER BY STR(?shape) LIMIT 1 }
@@ -286,5 +286,5 @@ WHERE {
   BIND(?atCapacity AS ?full)
   BIND(COALESCE(?entryProblem, IF(?unreadable, ?datedProblem, ?none)) AS ?entry)
   # A button: disabled while a field it requires is invalid.
-  BIND(IF(EXISTS { $this val:requires/rdf:rest*/rdf:first ?field . ?field val:invalid ?flag FILTER(STR(?flag) = "true") }, true, ?none) AS ?disabled)
+  BIND(IF(EXISTS { $this (val:requires/rdf:first|val:requires/rdf:rest+/rdf:first) ?field . ?field val:invalid ?flag FILTER(STR(?flag) = "true") }, true, ?none) AS ?disabled)
 }""" .

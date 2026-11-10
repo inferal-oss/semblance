@@ -345,11 +345,11 @@ CONSTRUCT { ?arrival ?p ?o . $this dnd:offered ?arrival . ?gone ?q ?v }
 WHERE {
   BIND(IRI(CONCAT(STR($this), "/~arrival")) AS ?arrival)
   { ?arrival ?p ?o } UNION { $this dnd:offered ?arrival }
-  UNION { $event file:file ?gone FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?kind . ?kind file:keepsRefusals true } ?gone ?q ?v }
+  UNION { $event file:file ?gone FILTER NOT EXISTS { $this (a|a/rdfs:subClassOf+) ?kind . ?kind file:keepsRefusals true } ?gone ?q ?v }
 }""" ;
     beh:inserts """
 CONSTRUCT { $this file:file ?file . ?file file:state file:Refused ; file:reason ?reason }
-WHERE { $event file:file ?file FILTER EXISTS { $this a/rdfs:subClassOf* ?kind . ?kind file:keepsRefusals true } OPTIONAL { $event file:reason ?reason } }""" ;
+WHERE { $event file:file ?file FILTER EXISTS { $this (a|a/rdfs:subClassOf+) ?kind . ?kind file:keepsRefusals true } OPTIONAL { $event file:reason ?reason } }""" ;
     sem:function "files:refuse" .
 
 # --- reactions: uploads ---------------------------------------------------------------------------------
@@ -423,7 +423,7 @@ file:KeepFailed a beh:Reaction ;
 CONSTRUCT { ?holder ?p ?file . ?file ?q ?v }
 WHERE {
   $event file:file ?file . $this file:file ?file .
-  BIND(EXISTS { $this a/rdfs:subClassOf* ?kind . ?kind file:keepsRefusals true } AS ?lists)
+  BIND(EXISTS { $this (a|a/rdfs:subClassOf+) ?kind . ?kind file:keepsRefusals true } AS ?lists)
   { ?holder ?p ?file FILTER(!?lists || ?p != file:file) }
   UNION { ?file ?q ?v FILTER(!?lists || ?q IN (file:state, file:keptIn, file:loaded)) }
 }""" ;
@@ -431,7 +431,7 @@ WHERE {
 CONSTRUCT { ?file file:state file:Refused ; file:reason ?reason }
 WHERE {
   $event file:file ?file . $this file:file ?file .
-  FILTER EXISTS { $this a/rdfs:subClassOf* ?kind . ?kind file:keepsRefusals true }
+  FILTER EXISTS { $this (a|a/rdfs:subClassOf+) ?kind . ?kind file:keepsRefusals true }
   OPTIONAL { $event file:reason ?reason }
 }""" ;
     sem:function "files:keep-failed" .

@@ -217,7 +217,7 @@ WHERE {
   { $this pos:layout pos:AlignedColumns ; c:children/rdf:rest*/rdf:first ?column FILTER(isIRI(?column)) }
   UNION
   { $this pos:layout pos:FieldRow ; c:children/rdf:rest*/rdf:first ?column FILTER(isIRI(?column))
-    FILTER EXISTS { ?column a/rdfs:subClassOf* ?class . ?class pos:rowParts ?parts } }
+    FILTER EXISTS { ?column (a|a/rdfs:subClassOf+) ?class . ?class pos:rowParts ?parts } }
 }""" .
 
 pos:RowSpans a sem:Rendering ;

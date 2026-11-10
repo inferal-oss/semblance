@@ -327,7 +327,7 @@ WHERE {
       OPTIONAL { FILTER(!BOUND(?ve)) ?d nav:implicit ?implicit .
         FILTER NOT EXISTS { ?d a nav:TargetDimension } FILTER EXISTS { ?d nav:carriedBy ?ic FILTER(?ic IN (nav:Path, nav:Fragment)) }
         FILTER NOT EXISTS { ?d nav:parent* ?ix . ?ix nav:parent ?iy .
-          FILTER NOT EXISTS { $this nav:dimensions/rdf:rest*/rdf:first ?iy . ?ix nav:when ?iw .
+          FILTER NOT EXISTS { $this (nav:dimensions/rdf:first|nav:dimensions/rdf:rest+/rdf:first) ?iy . ?ix nav:when ?iw .
             FILTER(EXISTS { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?im ?is ?iyd ?iye) FILTER(?iyd = STR(?iy) && ?iye = IF(isIRI(?iw), CONCAT("I", STR(?iw)), CONCAT("L", STR(DATATYPE(?iw)), " ", ENCODE_FOR_URI(STR(?iw))))) }
                 || (NOT EXISTS { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?im2 ?is2 ?iyd2 ?iye2) FILTER(?iyd2 = STR(?iy)) } && EXISTS { ?iy nav:implicit ?iw })) } } }
       # In the query.
@@ -344,7 +344,7 @@ WHERE {
   LATERAL { OPTIONAL { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm ?ns ?nd ?next0) FILTER(?nd = STR(?d))
     # It applies under what was read and where we are for the rest: each parent's value (read, else now) is one its child applies under.
     FILTER(?isTarget || NOT EXISTS { ?d nav:parent* ?x . ?x nav:parent ?y .
-      FILTER NOT EXISTS { $this nav:dimensions/rdf:rest*/rdf:first ?y . ?x nav:when ?w .
+      FILTER NOT EXISTS { $this (nav:dimensions/rdf:first|nav:dimensions/rdf:rest+/rdf:first) ?y . ?x nav:when ?w .
         FILTER(EXISTS { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm2 ?ns2 ?yd ?ye) FILTER(?yd = STR(?y) && ?ye = IF(isIRI(?w), CONCAT("I", STR(?w)), CONCAT("L", STR(DATATYPE(?w)), " ", ENCODE_FOR_URI(STR(?w))))) }
             || (NOT EXISTS { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm3 ?ns3 ?yd3 ?ye3) FILTER(?yd3 = STR(?y)) } && EXISTS { ?y nav:subject ?ys ; nav:property ?yp . ?ys ?yp ?w })) } })
   } }
@@ -523,7 +523,7 @@ WHERE {
       OPTIONAL { FILTER(!BOUND(?ve)) ?d nav:implicit ?implicit .
         FILTER NOT EXISTS { ?d a nav:TargetDimension } FILTER EXISTS { ?d nav:carriedBy ?ic FILTER(?ic IN (nav:Path, nav:Fragment)) }
         FILTER NOT EXISTS { ?d nav:parent* ?ix . ?ix nav:parent ?iy .
-          FILTER NOT EXISTS { $this nav:dimensions/rdf:rest*/rdf:first ?iy . ?ix nav:when ?iw .
+          FILTER NOT EXISTS { $this (nav:dimensions/rdf:first|nav:dimensions/rdf:rest+/rdf:first) ?iy . ?ix nav:when ?iw .
             FILTER(EXISTS { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?im ?is ?iyd ?iye) FILTER(?iyd = STR(?iy) && ?iye = IF(isIRI(?iw), CONCAT("I", STR(?iw)), CONCAT("L", STR(DATATYPE(?iw)), " ", ENCODE_FOR_URI(STR(?iw))))) }
                 || (NOT EXISTS { (?read "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?im2 ?is2 ?iyd2 ?iye2) FILTER(?iyd2 = STR(?iy)) } && EXISTS { ?iy nav:implicit ?iw })) } } }
       # In the query.
@@ -540,7 +540,7 @@ WHERE {
   LATERAL { OPTIONAL { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm ?ns ?nd ?next0) FILTER(?nd = STR(?d))
     # It applies under what was read and where we are for the rest: each parent's value (read, else now) is one its child applies under.
     FILTER(?isTarget || NOT EXISTS { ?d nav:parent* ?x . ?x nav:parent ?y .
-      FILTER NOT EXISTS { $this nav:dimensions/rdf:rest*/rdf:first ?y . ?x nav:when ?w .
+      FILTER NOT EXISTS { $this (nav:dimensions/rdf:first|nav:dimensions/rdf:rest+/rdf:first) ?y . ?x nav:when ?w .
         FILTER(EXISTS { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm2 ?ns2 ?yd ?ye) FILTER(?yd = STR(?y) && ?ye = IF(isIRI(?w), CONCAT("I", STR(?w)), CONCAT("L", STR(DATATYPE(?w)), " ", ENCODE_FOR_URI(STR(?w))))) }
             || (NOT EXISTS { (?N "([^\\\\t\\\\n]*)\\\\t([^\\\\t\\\\n]*)\\\\n") sx:matches (?nm3 ?ns3 ?yd3 ?ye3) FILTER(?yd3 = STR(?y)) } && EXISTS { ?y nav:subject ?ys ; nav:property ?yp . ?ys ?yp ?w })) } })
   } }
