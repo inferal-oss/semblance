@@ -32,8 +32,9 @@ jobs:
       - run: rustup target add wasm32-unknown-unknown
       - run: npm run engine:build
       - run: npm run engine:check
-      # The same results on Semblance's queries, the same W3C failures, the same temporal values.
-      - run: npx vitest run test/rdf-engine-parity.test.ts test/rdf-engine-temporal.test.ts test/rdf-engine.test.ts
+      # The same results on Semblance's queries, the same W3C failures, the same temporal values,
+      # the same SERVICE and LOAD results and requests (against mock endpoints).
+      - run: npx vitest run test/rdf-engine-parity.test.ts test/rdf-engine-temporal.test.ts test/rdf-engine.test.ts test/rdf-engine-fetching.test.ts
       # W3C conformance on both builds: the results must be the ones recorded in the repository.
       - run: sh rdf-engine/conformance/fetch.sh
       - run: npm run conformance -- --target wat

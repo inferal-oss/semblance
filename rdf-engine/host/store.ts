@@ -4,8 +4,9 @@
 // factories are looked up by value. In idle time (`maintain`) the engine frees
 // terms nothing uses any more; the adapter then forgets their ids.
 import type { DefaultGraph, Literal, NamedNode, Quad, Term } from '@rdfjs/types'
-import type { Factory, GraphStore } from '../../src/store/types.ts'
+import type { Factory, FetchingQueries, GraphStore } from '../../src/store/types.ts'
 import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } from './engine.ts'
+import { withFetching, type FetchPolicy } from './fetching.ts'
 
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
 
@@ -313,6 +314,73 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     liveAfterCollect = e.termCount()
   }
 
+  // --- SERVICE and LOAD (ABI.md, "Optional: fetching") ---------------------------------
+
+  /** Fetching operations in flight: the engine's request table is theirs, and nothing is collected. */
+  let fetchingOps = 0
+  let deadline: number | undefined
+  /** Fetching operations run one at a time: they share the engine's request table. */
+  let queue: Promise<unknown> = Promise.resolve()
+  /** A synchronous call (a rule's, a view's) that would fetch is refused, and fetches nothing. */
+  function sync<T>(f: () => T): T {
+    try {
+      return f()
+    } catch (err) {
+      if (!(err instanceof EngineError && err.waiting)) throw err
+      if (!fetchingOps) e.fetchClear()
+      throw new Error('SERVICE and LOAD reach the network: only store.fetching runs them (docs/FETCHING.md); rules, views and reactions cannot')
+    }
+  }
+  function selectRows(query: string, graphs: Term[]) {
+    const r = prepare(query).run(graphIds(graphs))
+    // An ASK answers true or false, as Oxigraph's query does.
+    if (r.form === Form.Ask) return r.value as never
+    if (r.form !== Form.Select) throw new Error('not a SELECT query')
+    const out: Map<string, Term>[] = []
+    const width = r.vars.length
+    if (!width) return Array.from({ length: r.count }, () => new Map<string, Term>())
+    for (let i = 0; i < r.rows.length; i += width) {
+      const m = new Map<string, Term>()
+      for (let k = 0; k < width; k++) if (r.rows[i + k]) m.set(r.vars[k]!, termOf(r.rows[i + k]!))
+      out.push(m)
+    }
+    return out
+  }
+  /** `attempt` with every SERVICE and LOAD answered under `policy`, after the operations before it. */
+  function fetchingOp<T>(policy: FetchPolicy, attempt: () => T): Promise<T> {
+    if (!sparql) return Promise.reject(new Error(`The ${kind} store has no SPARQL engine yet`))
+    const op = queue.then(async () => {
+      fetchingOps++
+      try {
+        return await withFetching(e, policy, () => {
+          // Each round within the operation's deadline, then the store's own again.
+          e.setDeadline(policy.deadline ?? deadline)
+          try {
+            return attempt()
+          } finally {
+            e.setDeadline(deadline)
+          }
+        })
+      } finally {
+        fetchingOps--
+      }
+    })
+    queue = op.catch(() => {})
+    return op
+  }
+  const fetching: FetchingQueries | undefined = e.fetches
+    ? {
+        select: (query, graphs, policy) => fetchingOp(policy, () => selectRows(query, graphs as Term[])),
+        construct: (query, graphs, policy) => fetchingOp(policy, () => triplesOf(prepare(query).run(graphIds(graphs as Term[])))),
+        update: (text, policy) =>
+          fetchingOp(policy, () => {
+            e.update(text)
+            // IRIs it added may be ones looked up as unknown before.
+            unknown.clear()
+          }),
+      }
+    : undefined
+
   const factory: Factory = {
     namedNode,
     literal: literal as Factory['literal'],
@@ -358,19 +426,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     },
     select(query, graphs) {
       if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet`)
-      const r = prepare(query).run(graphIds(graphs as Term[]))
-      // An ASK answers true or false, as Oxigraph's query does.
-      if (r.form === Form.Ask) return r.value as never
-      if (r.form !== Form.Select) throw new Error('not a SELECT query')
-      const out: Map<string, Term>[] = []
-      const width = r.vars.length
-      if (!width) return Array.from({ length: r.count }, () => new Map<string, Term>())
-      for (let i = 0; i < r.rows.length; i += width) {
-        const m = new Map<string, Term>()
-        for (let k = 0; k < width; k++) if (r.rows[i + k]) m.set(r.vars[k]!, termOf(r.rows[i + k]!))
-        out.push(m)
-      }
-      return out
+      return sync(() => selectRows(query, graphs as Term[]))
     },
     constructFor(query, variable, values, graphs) {
       const q = prepare(query)
@@ -382,15 +438,16 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       if (!ids.length) return []
       q.bindValues(variable, ids)
       try {
-        return triplesOf(q.run(graphIds(graphs as Term[])))
+        return sync(() => triplesOf(q.run(graphIds(graphs as Term[]))))
       } finally {
         q.bindValues(variable, [])
       }
     },
     construct(query, graphs) {
       if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet; use function rules (prefer: "function")`)
-      return triplesOf(prepare(query).run(graphIds(graphs as Term[])))
+      return sync(() => triplesOf(prepare(query).run(graphIds(graphs as Term[]))))
     },
+    fetching,
     loadTurtle(text) {
       unknown.clear()
       e.load(Format.Turtle, text)
@@ -450,14 +507,15 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       unknown.clear()
       e.dispose()
     },
-    setDeadline: (at) => e.setDeadline(at),
+    setDeadline: (at) => e.setDeadline((deadline = at)),
     setFuel: (steps) => e.setFuel(steps),
     engine: e,
     idOf: (t) => idOf(t, false),
     maintain(budgetMs) {
       const t0 = performance.now()
       // Collect once the dictionary has grown by half since the last collection.
-      if (e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
+      // Not while a fetch is in flight: its answers' terms are in the engine's request table.
+      if (!fetchingOps && e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
       // What time is left compiles the queries that have run most (compiled: 'idle').
       return e.compileIdle(budgetMs - (performance.now() - t0))
     },

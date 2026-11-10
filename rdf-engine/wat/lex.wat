@@ -680,9 +680,14 @@
   (i32.const 0))
 
 ;; Read the next token into $tok.
+(global $prev_end (mut i32) (i32.const 0))   ;; where the previous token ended
+(global $tok_at (mut i32) (i32.const 0))     ;; where this token starts
+
 (func $lex
   (local $c i32) (local $c1 i32)
+  (global.set $prev_end (global.get $p))
   (call $skip)
+  (global.set $tok_at (global.get $p))
   (local.set $c (call $peek))
   (local.set $c1 (call $peek_at (i32.const 1)))
   (if (i32.lt_s (local.get $c) (i32.const 0)) (then (global.set $tok (i32.const T_EOF)) (return)))

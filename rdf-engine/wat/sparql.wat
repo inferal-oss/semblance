@@ -24,6 +24,7 @@
 (@define P_FILTER 12)   ;; a expression
 (@define P_TT 13)       ;; triple term pattern: a s, b p, c o (refs)
 (@define P_MAGIC 14)    ;; magic relation (EXTENSIONS.md): a relation (MR_*), b inputs, c outputs (+0 count, then refs)
+(@define P_SERVICE 15)  ;; SERVICE (ABI.md, fetching): a endpoint ref, b flags (SV_*), c text, d its length, e slots, f their count
 ;; property paths
 (@define X_LINK 20)     ;; a IRI
 (@define X_INV 21)      ;; a path
@@ -682,7 +683,14 @@
           (if (i32.eqz (local.tee $n (call $ggp))) (then (return (i32.const 0))))
           (call $add_elem (local.get $g) (call $node2 (i32.const P_GRAPH) (local.get $s) (local.get $n)))
           (br $next)))
-        (if (call $is_kw (@str "SERVICE")) (then (return (call $syntax (@str "SERVICE is not supported")))))
+        (if (call $is_kw (@str "SERVICE")) (then
+          (call $lex)
+          (local.set $s (call $is_kw (@str "SILENT")))
+          (if (local.get $s) (then (call $lex)))
+          (if (i32.eqz (local.tee $e (call $var_or_iri))) (then (return (i32.const 0))))
+          (if (i32.eqz (local.tee $n (call $service (local.get $g) (local.get $e) (local.get $s)))) (then (return (i32.const 0))))
+          (call $add_elem (local.get $g) (local.get $n))
+          (br $next)))
         (if (call $is_kw (@str "FILTER")) (then
           (call $lex)
           (if (i32.eqz (local.tee $e (call $constraint))) (then (return (i32.const 0))))
@@ -730,6 +738,87 @@
     (if (i32.eq (global.get $tok) (i32.const '.')) (then (call $lex)))
     (br $elements))
   (unreachable))
+
+;; --- SERVICE (ABI.md, "Optional: fetching") ---------------------------------------
+
+(@define SV_SILENT 1)   ;; SERVICE SILENT
+(@define SV_LOCAL 2)    ;; a variable endpoint in scope before it in its group (else only a parameter binds it)
+
+(global $decls (mut i32) (i32.const 0))    ;; BASE and PREFIX declarations so far: (start, length) pairs in the input
+(global $base0_p (mut i32) (i32.const 0))  ;; the base the text came with
+(global $base0_n (mut i32) (i32.const 0))
+(global $q_service (mut i32) (i32.const 0)) ;; a SERVICE was parsed
+
+;; Before parsing a query or an update: no declarations yet, the base as given.
+(func $decls_start
+  (if (i32.eqz (global.get $decls)) (then (global.set $decls (call $v_new))))
+  (i32.store offset=4 (global.get $decls) (i32.const 0))
+  (global.set $base0_p (global.get $base_p))
+  (global.set $base0_n (global.get $base_n))
+  (global.set $q_service (i32.const 0)))
+
+;; Append n bytes from p at *at; the new end.
+(func $sv_put (param $at i32) (param $p i32) (param $n i32) (result i32)
+  (memory.copy (local.get $at) (local.get $p) (local.get $n))
+  (i32.add (local.get $at) (local.get $n)))
+
+;; SERVICE (after the endpoint, on '{') in group g: a P_SERVICE node, or 0. Its text is the
+;; declarations so far, one a line (after BASE <base> when one was given), then
+;; SELECT * WHERE and the group as written; its slots are the group's in-scope variables.
+(func $service (param $g i32) (param $ref i32) (param $silent i32) (result i32)
+  (local $n i32) (local $start i32) (local $inner i32) (local $len i32) (local $text i32) (local $at i32)
+  (local $i i32) (local $e i32) (local $count i32) (local $slots i32) (local $flags i32)
+  (local.set $flags (local.get $silent))
+  (if (i32.or (i32.gt_s (local.get $ref) (i32.const 0))
+              (call $elems_bind (i32.load offset=4 (local.get $g)) (i32.sub (i32.const -1) (local.get $ref))))
+    (then (local.set $flags (i32.or (local.get $flags) (i32.const SV_LOCAL)))))
+  (if (i32.ne (global.get $tok) (i32.const '{')) (then (return (call $expected (@str "expected '{'")))))
+  (local.set $start (global.get $tok_at))
+  (if (i32.eqz (local.tee $inner (call $ggp))) (then (return (i32.const 0))))
+  ;; the text
+  (local.set $len (i32.add (i32.const 15) (i32.sub (global.get $prev_end) (local.get $start))))
+  (if (global.get $base0_n) (then (local.set $len (i32.add (local.get $len) (i32.add (global.get $base0_n) (i32.const 8))))))
+  (loop $sizes (if (i32.lt_u (local.get $i) (i32.load offset=4 (global.get $decls))) (then
+    (local.set $len (i32.add (local.get $len) (i32.add (call $v_at (global.get $decls) (i32.add (local.get $i) (i32.const 1))) (i32.const 1))))
+    (local.set $i (i32.add (local.get $i) (i32.const 2))) (br $sizes))))
+  (local.set $at (local.tee $text (call $anew (local.get $len))))
+  (if (global.get $base0_n) (then
+    (local.set $at (call $sv_put (local.get $at) (@str "BASE <")))
+    (local.set $at (call $sv_put (local.get $at) (global.get $base0_p) (global.get $base0_n)))
+    (local.set $at (call $sv_put (local.get $at) (@str ">\n")))))
+  (local.set $i (i32.const 0))
+  (loop $each (if (i32.lt_u (local.get $i) (i32.load offset=4 (global.get $decls))) (then
+    (local.set $at (call $sv_put (local.get $at) (call $v_at (global.get $decls) (local.get $i)) (call $v_at (global.get $decls) (i32.add (local.get $i) (i32.const 1)))))
+    (local.set $at (call $sv_put (local.get $at) (@str "\n")))
+    (local.set $i (i32.add (local.get $i) (i32.const 2))) (br $each))))
+  (local.set $at (call $sv_put (local.get $at) (@str "SELECT * WHERE ")))
+  (drop (call $sv_put (local.get $at) (local.get $start) (i32.sub (global.get $prev_end) (local.get $start))))
+  ;; the in-scope variables, by slot (the list is newest first)
+  (local.set $e (global.get $vars))
+  (loop $vars (if (local.get $e) (then
+    (if (call $service_var (local.get $e) (local.get $inner)) (then (local.set $count (i32.add (local.get $count) (i32.const 1)))))
+    (local.set $e (i32.load offset=16 (local.get $e))) (br $vars))))
+  (local.set $slots (call $anew (i32.shl (local.get $count) (i32.const 2))))
+  (local.set $i (local.get $count))
+  (local.set $e (global.get $vars))
+  (loop $vars (if (local.get $e) (then
+    (if (call $service_var (local.get $e) (local.get $inner)) (then
+      (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+      (i32.store (i32.add (local.get $slots) (i32.shl (local.get $i) (i32.const 2))) (i32.load offset=8 (local.get $e)))))
+    (local.set $e (i32.load offset=16 (local.get $e))) (br $vars))))
+  (local.set $n (call $node3 (i32.const P_SERVICE) (local.get $ref) (local.get $flags) (local.get $text)))
+  (i32.store offset=16 (local.get $n) (local.get $len))
+  (i32.store offset=20 (local.get $n) (local.get $slots))
+  (i32.store offset=24 (local.get $n) (local.get $count))
+  (global.set $q_service (i32.const 1))
+  (local.get $n))
+
+;; Whether variable entry e is one SERVICE group g returns: of this scope, not hidden, in scope in g.
+(func $service_var (param $e i32) (param $g i32) (result i32)
+  (if (result i32) (i32.or (i32.ne (i32.load offset=12 (local.get $e)) (global.get $vscope))
+                           (i32.and (i32.load offset=20 (local.get $e)) (i32.const V_HIDDEN)))
+    (then (i32.const 0))
+    (else (call $group_binds (local.get $g) (i32.load offset=8 (local.get $e))))))
 
 ;; FILTER's argument: a bracketted expression, a built-in or a function call.
 (func $constraint (result i32)
@@ -1176,16 +1265,20 @@
   (i32.store offset=28 (local.get $q) (i32.const -1))
   (local.get $q))
 
-;; Prologue: BASE, PREFIX, VERSION.
+;; Prologue: BASE, PREFIX, VERSION. BASE and PREFIX are kept as written, for SERVICE.
 (func $prologue (result i32)
+  (local $at i32)
   (loop $decls
+    (local.set $at (global.get $tok_at))
     (if (call $is_kw (@str "BASE")) (then
       (call $lex)
       (if (i32.eqz (call $base_decl)) (then (return (i32.const 0))))
+      (call $v_push2 (global.get $decls) (local.get $at) (i32.sub (global.get $prev_end) (local.get $at)))
       (br $decls)))
     (if (call $is_kw (@str "PREFIX")) (then
       (call $lex)
       (if (i32.eqz (call $prefix_decl)) (then (return (i32.const 0))))
+      (call $v_push2 (global.get $decls) (local.get $at) (i32.sub (global.get $prev_end) (local.get $at)))
       (br $decls)))
     (if (call $is_kw (@str "VERSION")) (then
       (call $lex)
@@ -1373,6 +1466,11 @@
   (if (i32.eq (local.get $k) (i32.const P_VALUES)) (then
     (loop $vars (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $el))) (then
       (if (i32.eq (i32.load (i32.add (i32.load offset=8 (local.get $el)) (i32.shl (local.get $i) (i32.const 2)))) (local.get $slot)) (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $vars))))
+    (return (i32.const 0))))
+  (if (i32.eq (local.get $k) (i32.const P_SERVICE)) (then
+    (loop $vars (if (i32.lt_u (local.get $i) (i32.load offset=24 (local.get $el))) (then
+      (if (i32.eq (i32.load (i32.add (i32.load offset=20 (local.get $el)) (i32.shl (local.get $i) (i32.const 2)))) (local.get $slot)) (then (return (i32.const 1))))
       (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $vars))))
     (return (i32.const 0))))
   (if (i32.eq (local.get $k) (i32.const P_SUB)) (then
@@ -1615,6 +1713,7 @@
   (global.set $in_agg (i32.const 0))
   (global.set $aggs_ok (i32.const 0))
   (global.set $cq (local.tee $q (call $q_new)))
+  (call $decls_start)
   (if (i32.eqz (call $prologue)) (then (return (i32.const 0))))
   (block $form
     (if (call $is_kw (@str "SELECT")) (then
@@ -1687,4 +1786,6 @@
   (if (i32.ne (global.get $tok) (i32.const T_EOF)) (then (return (call $expected (@str "unexpected token after the query")))))
   (if (i32.eq (i32.load (local.get $q)) (i32.const 1)) (then
     (if (i32.eqz (call $check_projection (local.get $q))) (then (return (i32.const 0))))))
+  ;; +252: it has a SERVICE (which compile declines)
+  (i32.store offset=252 (local.get $q) (global.get $q_service))
   (local.get $q))

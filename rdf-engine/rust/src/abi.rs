@@ -450,14 +450,32 @@ pub extern "C" fn set_fuel(steps: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn run(h: u32, graphs: u32) -> i32 {
     crate::budget::start();
+    crate::fetch::start();
     let n = run_query(h, graphs);
     if crate::budget::finish() {
         st().result.clear();
         fail(b"interrupted");
         return -2;
     }
+    fetched(n)
+}
+
+/// A run's or update's value once its fetches are accounted for (ABI.md, "Optional: fetching").
+fn fetched(n: i32) -> i32 {
+    let f = crate::fetch::f();
+    if let Some(why) = f.error.take() {
+        st().result.clear();
+        return fail(&why);
+    }
+    if f.waiting {
+        st().result.clear();
+        fail(WAITING);
+        return -3;
+    }
     n
 }
+
+const WAITING: &[u8] = b"waiting: SERVICE or LOAD needs the host to fetch (rdf-engine/ABI.md, fetching)";
 
 fn run_query(h: u32, graphs: u32) -> i32 {
     let s = st();
@@ -524,10 +542,97 @@ pub extern "C" fn update(text_len: u32, base_len: u32) -> i32 {
         Ok(u) => u,
         Err(e) => return fail_at(e),
     };
+    crate::fetch::start();
     match sparql::update::execute(&u, &mut s.dict, &mut s.store) {
-        Ok(()) => 0,
-        Err(msg) => fail(msg.as_bytes()),
+        Ok(()) => fetched(0),
+        Err(msg) => {
+            let r = fetched(0);
+            if r < 0 { r } else { fail(msg.as_bytes()) }
+        }
     }
+}
+
+// --- fetching (ABI.md, "Optional: fetching") ---------------------------------------
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_count() -> u32 {
+    crate::fetch::f().reqs.len() as u32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_request(i: u32) -> i32 {
+    let Some(r) = crate::fetch::f().reqs.get(i as usize) else { return fail(b"no such request") };
+    let s = st();
+    s.result.clear();
+    s.result.extend_from_slice(&[r.state, r.kind, r.target, r.names.len() as u32, r.asked as u32]);
+    s.result.extend_from_slice(&r.rows);
+    r.nrows as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_text_ptr(i: u32) -> *const u8 {
+    crate::fetch::f().reqs.get(i as usize).map_or(core::ptr::null(), |r| r.text.as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_text_len(i: u32) -> u32 {
+    crate::fetch::f().reqs.get(i as usize).map_or(0, |r| r.text.len() as u32)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_var_ptr(i: u32, j: u32) -> *const u8 {
+    crate::fetch::f().reqs.get(i as usize).and_then(|r| r.names.get(j as usize)).map_or(core::ptr::null(), |n| n.as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_var_len(i: u32, j: u32) -> u32 {
+    crate::fetch::f().reqs.get(i as usize).and_then(|r| r.names.get(j as usize)).map_or(0, |n| n.len() as u32)
+}
+
+/// Every id an answer gives must be a live term, and a LOAD triple a valid one:
+/// an answer is the host's, but its terms come from elsewhere.
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_answer(i: u32, n: u32) -> i32 {
+    let s = st();
+    let Some(r) = crate::fetch::f().reqs.get_mut(i as usize) else { return fail(b"no such request") };
+    let w = crate::fetch::answer_width(r);
+    let Some(len) = (n as usize).checked_mul(w * 4).filter(|&l| l <= s.input.len()) else { return fail(b"answer larger than the input buffer") };
+    let ids: Vec<u32> = s.input[..len].chunks_exact(4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+    let kind = |id: u32| s.dict.term(id).map_or(dict::FREE, |t| t.kind);
+    if r.kind == crate::fetch::LOAD {
+        for t in ids.chunks_exact(3) {
+            let (sk, pk, ok) = (kind(t[0]), kind(t[1]), kind(t[2]));
+            if !(sk == dict::IRI || sk == dict::BNODE || sk == dict::TRIPLE) || pk != dict::IRI || !(ok == dict::IRI || ok == dict::BNODE || ok == dict::LITERAL || ok == dict::TRIPLE) {
+                return fail(b"an answer triple is not a valid triple");
+            }
+        }
+    } else if ids.iter().any(|&id| id != 0 && (kind(id) == dict::FREE || id == dict::DEFAULT_GRAPH_ID)) {
+        return fail(b"an answer holds an id that is not a term");
+    }
+    r.answer = ids;
+    r.nanswer = n;
+    r.state = crate::fetch::ANSWERED;
+    0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_fail(i: u32, len: u32) -> i32 {
+    let s = st();
+    let Some(r) = crate::fetch::f().reqs.get_mut(i as usize) else { return fail(b"no such request") };
+    if len as usize > s.input.len() {
+        return fail(b"message larger than the input buffer");
+    }
+    r.why = s.input[..len as usize].to_vec();
+    r.answer.clear();
+    r.nanswer = 0;
+    r.state = crate::fetch::FAILED;
+    0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_clear() -> i32 {
+    crate::fetch::clear();
+    0
 }
 
 /// Every combination of bound values.

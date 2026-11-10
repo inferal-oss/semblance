@@ -294,6 +294,10 @@
     (call $refs_bits (local.get $b) (i32.load offset=8 (local.get $n)))
     (call $refs_bits (local.get $b) (i32.load offset=12 (local.get $n)))
     (return)))
+  (if (i32.eq (local.get $k) (i32.const P_SERVICE)) (then
+    (call $an_ref (local.get $b) (i32.load offset=4 (local.get $n)))
+    (call $service_bits (local.get $b) (local.get $n))
+    (return)))
   (if (i32.eq (local.get $k) (i32.const P_VALUES)) (then
     (loop $vars (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $n))) (then
       (call $setbit (local.get $b) (i32.load (i32.add (i32.load offset=8 (local.get $n)) (i32.shl (local.get $i) (i32.const 2)))))
@@ -1454,6 +1458,7 @@
 (func (export "compile") (param $q i32) (result i32)
   (local $tp i32) (local $c i32) (local $shape i32) (local $save_head i32) (local $save_p i32) (local $save_end i32)
   (local $run i32) (local $steps i32) (local $last i32) (local $item i32) (local $st i32) (local $s i32) (local $out i32) (local $n i32)
+  (if (i32.load offset=252 (local.get $q)) (then (return (call $fail (@str "not compilable: SERVICE")))))
   (if (i32.eq (i32.load (local.get $q)) (i32.const 4)) (then (return (call $fail (@str "not compilable: DESCRIBE")))))
   (if (i32.or (i32.or (i32.and (i32.load offset=4 (local.get $q)) (i32.const Q_GROUPED)) (i32.load offset=16 (local.get $q)))
               (i32.or (i32.load offset=20 (local.get $q)) (i32.load offset=68 (local.get $q))))

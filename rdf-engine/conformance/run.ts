@@ -11,6 +11,8 @@ import { JELLY_MANIFESTS, loadJellyManifest, runJellyTest, tsJelly } from './jel
 export const SUITES: Record<string, string[]> = {
   sparql12: ['sparql/sparql12/manifest.ttl'],
   sparql11: ['sparql/sparql11/manifest-sparql11-query.ttl', 'sparql/sparql11/manifest-sparql11-update.ttl'],
+  /** Federated query (SERVICE), against in-process mock endpoints (rdf-engine/host/mock-endpoint.ts). */
+  sparql11fed: ['sparql/sparql11/manifest-sparql11-fed.ttl'],
   sparql10: ['sparql/sparql10/manifest-evaluation.ttl', 'sparql/sparql10/manifest-syntax.ttl'],
   rdf12: ['rdf/rdf12/rdf-turtle/manifest.ttl', 'rdf/rdf12/rdf-n-triples/manifest.ttl', 'rdf/rdf12/rdf-n-quads/manifest.ttl', 'rdf/rdf12/rdf-trig/manifest.ttl'],
   /** jelly-protobuf's Jelly-RDF suite (jelly/, JELLY_MANIFESTS), for targets that read and write Jelly. */
@@ -45,6 +47,7 @@ function dataset(t: Test, query?: string): Dataset {
   const ds: Dataset = {
     default: t.data.map((d) => rdfFile(d)),
     named: t.graphData.map((g) => ({ name: g.name, file: rdfFile(g.file) })),
+    services: t.serviceData.map((s) => ({ endpoint: s.endpoint, data: s.data.map((d) => rdfFile(d)) })),
   }
   // FROM / FROM NAMED name files of the suite: provide them as named graphs.
   if (query) {
@@ -131,7 +134,10 @@ function expectError(run: () => unknown): Outcome {
   return { status: 'fail', reason: 'accepted invalid input' }
 }
 
-export function runTest(target: Target, t: Test): Outcome {
+/** SERVICE and LOAD need a target that fetches; without one the test is a skip. */
+const FETCHES = /\b(SERVICE|LOAD)\b/i
+
+export async function runTest(target: Target, t: Test): Promise<Outcome> {
   if (t.approval && SKIPPED_APPROVALS.has(t.approval)) return { status: 'skip', reason: `approval: ${t.approval}` }
   try {
     switch (t.type) {
@@ -153,14 +159,19 @@ export function runTest(target: Target, t: Test): Outcome {
         const query = readText(t.query!)
         if (typeof t.result !== 'string') return { status: 'skip', reason: 'no expected result' }
         if (/\.(csv|tsv)$/.test(t.result)) return { status: 'skip', reason: 'CSV/TSV results' }
-        const actual = target.query(dataset(t, query), query, t.query!)
+        const fetches = FETCHES.test(query)
+        if (fetches && !target.queryFetching) return { status: 'skip', reason: NOT_IMPLEMENTED }
+        const actual = fetches ? await target.queryFetching!(dataset(t, query), query, t.query!) : target.query(dataset(t, query), query, t.query!)
         const want = expected(t.result)
         const o = compare(actual, want, /ORDER\s+BY/i.test(query))
         if (show && o.status === 'fail') console.log(`${t.id}\n${query}\nACTUAL\n${render(actual)}\nEXPECTED\n${render(want)}\n`)
         return o
       }
       case 'UpdateEvaluationTest': {
-        const after = target.update(dataset(t), readText(t.request!), t.request!)
+        const request = readText(t.request!)
+        const fetches = FETCHES.test(request)
+        if (fetches && !target.updateFetching) return { status: 'skip', reason: NOT_IMPLEMENTED }
+        const after = fetches ? await target.updateFetching!(dataset(t), request, t.request!) : target.update(dataset(t), request, t.request!)
         const r = t.result as { data: string[]; graphData: { name: string; file: string }[] }
         const want: Row[] = [
           ...r.data.flatMap((d) => oxParse(rdfFile(d))),
@@ -229,7 +240,7 @@ async function main() {
     const seen = new Set<string>()
     for (const t of SUITES[suite]!.flatMap((m) => loadManifest(m, seen))) {
       if (only && !t.id.includes(only)) continue
-      const o = runTest(target, t)
+      const o = await runTest(target, t)
       s[o.status]++
       if (o.status === 'spelling') spelling.push(t.id.startsWith(ROOT) ? t.id.slice(ROOT.length) : t.id)
       if (o.status === 'fail') {

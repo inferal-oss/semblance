@@ -14,6 +14,8 @@ export interface RdfFile {
 export interface Dataset {
   default: RdfFile[]
   named: { name: string; file: RdfFile }[]
+  /** SERVICE endpoints the test provides (`qt:serviceData`): what each holds. */
+  services?: { endpoint: string; data: RdfFile[] }[]
 }
 
 export type QueryResult =
@@ -38,4 +40,10 @@ export interface Target {
   update(dataset: Dataset, text: string, base: string): Row[]
   /** Jelly (the `jelly` suite), when the target reads and writes it. */
   jelly?: JellyTarget
+  /**
+   * Optional: `query` and `update` with SERVICE and LOAD, the dataset's services answering
+   * (and nothing else: any other endpoint or document is unreachable).
+   */
+  queryFetching?(dataset: Dataset, text: string, base: string): Promise<QueryResult>
+  updateFetching?(dataset: Dataset, text: string, base: string): Promise<Row[]>
 }

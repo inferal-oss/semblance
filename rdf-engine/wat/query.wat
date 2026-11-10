@@ -97,6 +97,10 @@
     (call $mention_elem (i32.load offset=4 (local.get $el)) (local.get $m))
     (call $mention_elem (i32.load offset=8 (local.get $el)) (local.get $m))
     (return)))
+  (if (i32.eq (local.get $k) (i32.const P_SERVICE)) (then
+    (call $an_ref (local.get $m) (i32.load offset=4 (local.get $el)))
+    (call $service_bits (local.get $m) (local.get $el))
+    (return)))
   (if (i32.or (i32.or (i32.eq (local.get $k) (i32.const P_OPTIONAL)) (i32.eq (local.get $k) (i32.const P_MINUS)))
               (i32.eq (local.get $k) (i32.const P_LATERAL)))
     (then (call $mention_group (i32.load offset=4 (local.get $el)) (local.get $m)) (return)))
@@ -132,6 +136,13 @@
         (local.set $l (i32.load offset=28 (local.get $l)))
         (br $proj))))
     (return))))
+
+;; Set in bitset m the variables SERVICE el returns.
+(func $service_bits (param $m i32) (param $el i32)
+  (local $i i32)
+  (loop $vars (if (i32.lt_u (local.get $i) (i32.load offset=24 (local.get $el))) (then
+    (call $an_ref (local.get $m) (call $vref (i32.load (i32.add (i32.load offset=20 (local.get $el)) (i32.shl (local.get $i) (i32.const 2))))))
+    (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $vars)))))
 
 ;; A group's elements and filters.
 (func $mention_group (param $g i32) (param $m i32)
@@ -266,7 +277,9 @@
       (br $each)))))
 
 (func $an_query (param $q i32)
-  (drop (call $an_group (i32.load offset=12 (local.get $q))))
+  ;; an update operation without WHERE (LOAD, CLEAR, INSERT DATA) has no group: analysing
+  ;; group 0 would write its bitsets over the allocator's free-list heads at 12 and 24
+  (if (i32.load offset=12 (local.get $q)) (then (drop (call $an_group (i32.load offset=12 (local.get $q))))))
   (call $an_items (i32.load offset=8 (local.get $q)) (i32.const 8))
   (call $an_items (i32.load offset=16 (local.get $q)) (i32.const 4))
   (call $an_filters (i32.load offset=20 (local.get $q)))
@@ -1055,12 +1068,13 @@
 (func (export "run") (param $q i32) (param $graphs i32) (result i32)
   (local $n i32)
   (call $bu_start)
+  (call $fx_start)
   (local.set $n (call $run (local.get $q) (local.get $graphs)))
   (global.set $bu_active (i32.const 0))
   (if (global.get $bu_stop) (then
     (drop (call $fail (@str "interrupted")))
     (return (i32.const -2))))
-  (local.get $n))
+  (call $fx_end (local.get $n)))
 
 (global $queries (mut i32) (i32.const 0))   ;; live prepared queries (+240 next, +248 previous)
 

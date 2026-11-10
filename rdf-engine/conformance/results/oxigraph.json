@@ -14,6 +14,12 @@
       "skip": 0,
       "spelling": 12
     },
+    "sparql11fed": {
+      "pass": 2,
+      "fail": 1,
+      "skip": 7,
+      "spelling": 0
+    },
     "sparql10": {
       "pass": 446,
       "fail": 27,
@@ -78,6 +84,7 @@
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/property-path/manifest#zero_or_one_set_start": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/subquery/manifest#subquery15": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/subquery/manifest#subquery16": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/syntax-fed/manifest#test_1": "error: The service <https://w3c.github.io/rdf-tests/sparql/sparql11/syntax-fed/g> is not supported",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/syntax-query/manifest#test_4": "error: The custom function <http://example/function> is not supported",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/syntax-update-1/manifest#test_1": "error: HTTP client is not available. Enable the feature 'http-client'",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/syntax-update-1/manifest#test_18": "error: The graph <https://w3c.github.io/rdf-tests/sparql/sparql11/syntax-update-1/graph> does not exist",

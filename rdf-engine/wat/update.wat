@@ -132,12 +132,16 @@
       (local.set $op (i32.const U_LOAD))
       (if (call $is_kw (@str "SILENT")) (then (call $lex) (i32.store offset=208 (local.get $q) (i32.const 1))))
       (if (i32.eqz (call $is_iri_tok)) (then (return (call $expected (@str "expected an IRI")))))
-      (if (i32.eqz (call $iri_tok)) (then (return (i32.const 0))))
+      (if (i32.eqz (local.tee $t (call $iri_tok))) (then (return (i32.const 0))))
       (call $lex)
+      ;; a (+212): the document, b (+216): the graph (the default graph without INTO)
+      (i32.store offset=212 (local.get $q) (local.get $t))
+      (i32.store offset=216 (local.get $q) (i32.const 1))
       (if (call $is_kw (@str "INTO")) (then
         (call $lex)
         (if (i32.eqz (call $is_kw (@str "GRAPH"))) (then (return (call $expected (@str "expected GRAPH")))))
-        (if (i32.eqz (call $graph_ref (i32.const 0))) (then (return (i32.const 0))))))
+        (if (i32.eqz (local.tee $t (call $graph_ref (i32.const 0)))) (then (return (i32.const 0))))
+        (i32.store offset=216 (local.get $q) (local.get $t))))
       (br $done)))
     (if (i32.or (call $is_kw (@str "CLEAR")) (call $is_kw (@str "DROP"))) (then
       (local.set $op (select (i32.const U_CLEAR) (i32.const U_DROP) (call $is_kw (@str "CLEAR"))))
@@ -263,6 +267,7 @@
   (global.set $bflags (i32.const V_HIDDEN))
   (global.set $in_agg (i32.const 0))
   (global.set $aggs_ok (i32.const 0))
+  (call $decls_start)
   (loop $ops
     (if (i32.eqz (call $prologue)) (then (return (i32.const 0))))
     (if (i32.ne (global.get $tok) (i32.const T_EOF)) (then
@@ -477,9 +482,7 @@
   (local.set $op (i32.load offset=204 (local.get $q)))
   (local.set $a (i32.load offset=212 (local.get $q)))
   (local.set $b (i32.load offset=216 (local.get $q)))
-  (if (i32.eq (local.get $op) (i32.const U_LOAD)) (then
-    (if (i32.load offset=208 (local.get $q)) (then (return (i32.const 0))))
-    (return (call $fail (@str "LOAD is not supported")))))
+  (if (i32.eq (local.get $op) (i32.const U_LOAD)) (then (return (call $load_op (local.get $q)))))
   (if (i32.or (i32.eq (local.get $op) (i32.const U_CLEAR)) (i32.eq (local.get $op) (i32.const U_DROP))) (then
     (if (i32.eq (local.get $a) (i32.const G_DEFAULT)) (then (call $clear_graph (i32.const 1)) (return (i32.const 0))))
     (if (i32.lt_s (local.get $a) (i32.const 0)) (then
@@ -574,14 +577,20 @@
   (global.set $dg (i32.const 0))
   (global.set $ng (i32.const 0))
   (global.set $ulog (call $v_new))
+  (call $fx_start)
   (local.set $op (local.get $q))
   (block $failed
     (loop $ops (if (local.get $op) (then
       (if (i32.lt_s (call $run_op (local.get $op) (local.get $q)) (i32.const 0)) (then (local.set $r (i32.const -1)) (br $failed)))
+      ;; a SERVICE in a WHERE that failed (not SILENT) fails the update
+      (if (global.get $fx_err_n) (then (local.set $r (i32.const -1)) (br $failed)))
       ;; named graphs change with each operation
       (if (global.get $ng) (then (call $free (global.get $ng) (global.get $ng_bytes)) (global.set $ng (i32.const 0))))
       (local.set $op (i32.load offset=232 (local.get $op)))
       (br $ops)))))
+  ;; waiting for the host: undone; it runs the update again with the answers
+  (if (i32.eqz (local.get $r)) (then (local.set $r (call $fx_end (i32.const 0)))))
+  (if (i32.eq (local.get $r) (i32.const -1)) (then (local.set $r (call $fx_end (i32.const -1)))))
   (if (local.get $r) (then (call $undo)))
   (call $v_free (global.get $ulog))
   (if (global.get $dg) (then (call $free (global.get $dg) (global.get $dg_bytes))))
