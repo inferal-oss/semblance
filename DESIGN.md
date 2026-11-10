@@ -17,10 +17,36 @@ Every value is a `sty:Token` on a named scale, emitted as `--sem-<slug>`.
 | **On a fill** | `on-accent`, `accent-contrast`, `on-status`, `on-warning` | Text and marks on a solid; never `white`, which a theme's fill may be too light for. `on-accent` goes on `accent`, `accent-contrast` on `accent-9`, `on-status` on `info-9`, `success-9`, `danger-9`, `on-warning` on `warning-9`. `test/themes.test.ts` holds these pairs and the roles above at their contrast, in every theme, in both schemes. |
 | **Type** | `text-xs` 11 · `text-sm` 13 · `text-md` 15 · `text-lg` 17 · `text-xl` 20 · `text-2xl` 24 · `text-3xl` 30 | Plus `font`, `font-mono`, `leading-tight/normal`. |
 | **Space** | `space-1` … `space-8` (4 → 48px) | Densities re-value these per subtree. |
-| **Radius** | `radius-sm` 6 · `radius-md` 10 · `radius-lg` 14 · `radius-xl` 20 · `radius-full` | |
-| **Size** | `control-sm` 28 · `control-md` 36 · `control-lg` 44 · `control-height` 38 (32 compact) | Height of every control at each size; `control-height` where no size is set. A single-line control (text, date, number, select) is one box: that block size, inline padding only, the line centred. A select draws the theme's `chevron` (text colour, mirrored right to left), not the engine's menulist. |
-| **Elevation** | `shadow-1` … `shadow-4` | Flat, raised, overlay, floating. |
+| **Radius** | `radius-sm` 4 · `radius-md` 6 · `radius-lg` 6 · `radius-xl` 8 · `radius-full` | Small and consistent: most things share 6px. A control inside a control (a segmented option, a tab) takes the outer radius less the inset, so the corners stay concentric. |
+| **Size** | `control-sm` 26 · `control-md` 32 · `control-lg` 40 · `control-height` 32 (28 compact) | Height of every control at each size; `control-height` where no size is set. A single-line control (text, date, number, select) is one box: that block size, inline padding only, the line centred. A select draws the theme's `chevron` (text colour, mirrored right to left), not the engine's menulist. |
+| **Elevation** | `shadow-1` … `shadow-4` | Flat (none), raised (a trace), overlay, floating. A plate is told apart by its hairline, not a shadow; only what floats (a menu, a popover, a dialog) casts one, ringed by the `border` hairline. |
 | **Motion** | `duration-fast` 120ms · `duration` 180ms · `duration-slow` 320ms · `ease` / `ease-out` / `spring`; `duration-move` 700ms · `ease-move` for long movements (a 3D turn), `move-fade` for what replaces them; `duration-loop` 320ms, the beat of repeating animations | Every transition and animation is timed by these (a test checks no literal time is left). The motion layer re-values them: Reduced shortens, makes long movements instant with a fade instead, and slows loops; None makes all of it instant. |
+
+### The default theme: Semblance (`ontology/theme/themes.ttl`, `semblance.ttl`)
+
+Ink on paper by day, paper on ink by night. Tight, quiet and precise:
+
+- **Colour.** Violet-tinted greys on a flat canvas (no gradient backdrop). The accent (violet) is
+  kept for the primary action, the link and the short line under a heading; what is *chosen* (a
+  segmented option, an on chip, the hovered option of a menu, the current page on a phone) is set
+  in ink, `gray-12` on `gray-1`, not a violet tint. Soft fills are 9% of the accent, not 13%.
+- **Edges.** Hairlines rather than shadows: cards are plates with a `border` hairline and the one
+  6px radius; buttons are keys with a hairline edge that darken when pressed and move nothing; the
+  app bar is the canvas and one hairline, not glass. Elevation is for what floats.
+- **Type.** Inter at 14px body, 26px titles, display weight 600 with −0.022em tracking; figures
+  that are data (a stat, a count, the status bar, a card header's tag) in JetBrains Mono, tabular.
+  The mark under a heading is a short accent line, 24 × 3px.
+- **Focus.** A crisp offset ring, `0 0 0 2px surface, 0 0 0 4px accent`; a field's focus is its
+  own border in the accent.
+- **Navigation.** A nav list is rows on the canvas; the current row is a plate of its own (the
+  surface and a hairline). On a phone or tablet the app bar has two rows: the brand, Search and
+  More, then the pages as a strip of keys that scrolls sideways, the current one in ink.
+- **Specimens.** A specimen's stage is a recessed well of fine graph paper.
+
+Its rules that tokens cannot say are in `ontology/theme/semblance.ttl`, written as the structural
+themes' are (narrowed by `sty:when` to the theme, each part guarded so it never reaches a subtree
+themed otherwise). The shared changes (body 14px, controls 32px, titles 26px, a flat solid primary
+button, concentric radii) apply to every theme that does not redeclare them.
 
 ## 2. Variation axes (style layer)
 

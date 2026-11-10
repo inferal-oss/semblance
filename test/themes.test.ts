@@ -187,10 +187,10 @@ describe('themes are values of a hookable axis', () => {
     // A tone's text on its solid is the nearest theme's token too.
     expect(block('[data-sem-tone="accent"]').get('--tone-on-solid')).toBe('var(--sem-accent-contrast)')
     expect(block('[data-sem-tone="warning"]').get('--tone-on-solid')).toBe('var(--sem-on-warning)')
-    // per-theme descendant rules exist only for the structural themes, and each is guarded
-    // against leaking into a differently themed subtree below it (see the next block)
+    // per-theme descendant rules exist only for the structural themes and the default's own
+    // (semblance.ttl), and each is guarded against leaking into a differently themed subtree below it
     const descendant = [...css.matchAll(/^ {2}\[data-sem-theme="([a-z]+)"\] [^{\s][^{\n]*\{/gm)].map((m) => m[1])
-    expect(new Set(descendant)).toEqual(new Set(STRUCTURAL))
+    expect(new Set(descendant)).toEqual(new Set([...STRUCTURAL, 'semblance']))
   })
 })
 
@@ -280,6 +280,13 @@ describe('structural themes', () => {
       }
       // the theme's own custom properties sit on the themed element, after its token block
       expect(rules.filter(([, sel]) => sel === `[data-sem-theme="${slug}"]`).map(([layer]) => layer)).toEqual(['sem.hooks', 'sem.variants'])
+    }
+    // the default theme's own rules (semblance.ttl) are written the same way
+    const own = inside('semblance')
+    expect(own.length).toBeGreaterThan(20)
+    for (const [layer, sel] of own) {
+      expect(layer, sel).toBe('sem.variants')
+      for (const s of sel.split(/, (?=\[data-sem-theme="semblance"\])/)) expect(s, s).toContain(guard('semblance'))
     }
     // rules that must beat an intent rule scope themselves with a state, in the intents layer
     for (const slug of STRUCTURAL) {

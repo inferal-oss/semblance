@@ -47,10 +47,10 @@ tok:font-display a sty:Token ; sty:scale sty:Font ; sem:slug "font-display" ;
     sty:value "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" .
 tok:display-weight a sty:Token ; sty:scale sty:Font ; sem:slug "display-weight" ;
     rdfs:comment "Weight of c:Heading."@en ;
-    sty:value "700" .
+    sty:value "600" .
 tok:display-tracking a sty:Token ; sty:scale sty:Font ; sem:slug "display-tracking" ;
     rdfs:comment "Letter spacing of c:Heading."@en ;
-    sty:value "-0.025em" .
+    sty:value "-0.022em" .
 tok:display-case a sty:Token ; sty:scale sty:Font ; sem:slug "display-case" ;
     rdfs:comment "text-transform of headings (none, uppercase)."@en ;
     sty:value "none" .
@@ -65,19 +65,19 @@ tok:on-warning a sty:Token ; sty:scale sty:Color ; sem:slug "on-warning" ;
     sty:value "#2b1a00" .
 tok:mark a sty:Token ; sem:slug "mark" ;
     rdfs:comment "Background of the mark under a c:Heading."@en ;
-    sty:value "linear-gradient(90deg, var(--sem-accent), color-mix(in oklab, var(--sem-accent) 30%, #ff7ac6))" .
+    sty:value "var(--sem-accent)" .
 tok:mark-width a sty:Token ; sem:slug "mark-width" ;
     rdfs:comment "Width of the heading mark."@en ;
-    sty:value "28px" .
+    sty:value "24px" .
 tok:mark-height a sty:Token ; sem:slug "mark-height" ;
     rdfs:comment "Height of the heading mark."@en ;
     sty:value "3px" .
 tok:mark-radius a sty:Token ; sem:slug "mark-radius" ;
     rdfs:comment "Corner radius of the heading mark."@en ;
-    sty:value "3px" .
+    sty:value "2px" .
 tok:gradient a sty:Token ; sem:slug "gradient" ;
     rdfs:comment "Fill of progress bars."@en ;
-    sty:value "linear-gradient(90deg, var(--sem-accent), #ff7ac6)" .
+    sty:value "var(--sem-accent)" .
 tok:gradient-from a sty:Token ; sem:slug "gradient-from" ;
     rdfs:comment "First stop of the logo gradient."@en ;
     sty:value "#8f86ff" .
@@ -89,7 +89,7 @@ tok:check a sty:Token ; sem:slug "check" ;
     sty:value "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4l2.9 2.9 6.1-6.6' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")" .
 tok:backdrop a sty:Token ; sem:slug "backdrop" ;
     rdfs:comment "What a themed element paints behind its content (canvas, glow, grid, scan lines)."@en ;
-    sty:value "radial-gradient(1200px 500px at 15% -10%, light-dark(#ebe8ff, #1c1840) 0%, transparent 60%), radial-gradient(900px 400px at 100% 0%, light-dark(#ffe9f5, #2a1326) 0%, transparent 55%), light-dark(#f5f5f9, #0c0c11)" .
+    sty:value "light-dark(#f3f3f7, #0e0e12)" .
 
 # --- the themes ------------------------------------------------------------------------
 # Generated from OKLCH ramps (12 steps per hue, light and dark lightness curves) and checked
@@ -98,34 +98,34 @@ tok:backdrop a sty:Token ; sem:slug "backdrop" ;
 
 sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇" ;
     rdfs:label "Semblance"@en ;
-    rdfs:comment "The default: cool violet on near-white or ink, Inter, soft rounded corners, gentle layered shadows and a violet-to-pink mark."@en ;
+    rdfs:comment "The default, ink on paper by day and paper on ink by night: violet-tinted greys, hairlines rather than shadows, one 6px radius, what is chosen set in ink, and the violet kept for the primary action, the link and the short line under a heading. Figures that are data in JetBrains Mono."@en ;
     sty:declares
         # neutral ramp
-        [ sty:property "--sem-gray-1" ; sty:raw "light-dark(#fcfcfd, #111116)" ] ,
-        [ sty:property "--sem-gray-2" ; sty:raw "light-dark(#f8f8fb, #17171d)" ] ,
-        [ sty:property "--sem-gray-3" ; sty:raw "light-dark(#f0f0f5, #1f1f27)" ] ,
-        [ sty:property "--sem-gray-4" ; sty:raw "light-dark(#e8e8ef, #26262f)" ] ,
-        [ sty:property "--sem-gray-5" ; sty:raw "light-dark(#e0e0e9, #2d2d37)" ] ,
-        [ sty:property "--sem-gray-6" ; sty:raw "light-dark(#d6d6e1, #353541)" ] ,
-        [ sty:property "--sem-gray-7" ; sty:raw "light-dark(#c8c8d5, #43434f)" ] ,
-        [ sty:property "--sem-gray-8" ; sty:raw "light-dark(#aeaec0, #5a5a69)" ] ,
-        [ sty:property "--sem-gray-9" ; sty:raw "light-dark(#8a8a9e, #6b6b7c)" ] ,
-        [ sty:property "--sem-gray-10" ; sty:raw "light-dark(#7d7d91, #7a7a8b)" ] ,
-        [ sty:property "--sem-gray-11" ; sty:raw "light-dark(#5f5f72, #a8a8b8)" ] ,
-        [ sty:property "--sem-gray-12" ; sty:raw "light-dark(#1b1b26, #ededf3)" ] ,
+        [ sty:property "--sem-gray-1" ; sty:raw "light-dark(#fcfcfd, #0b0b0f)" ] ,
+        [ sty:property "--sem-gray-2" ; sty:raw "light-dark(#f3f3f7, #0e0e12)" ] ,
+        [ sty:property "--sem-gray-3" ; sty:raw "light-dark(#f1f1f5, #18181f)" ] ,
+        [ sty:property "--sem-gray-4" ; sty:raw "light-dark(#e9e9ef, #1f1f27)" ] ,
+        [ sty:property "--sem-gray-5" ; sty:raw "light-dark(#e1e1e8, #26262f)" ] ,
+        [ sty:property "--sem-gray-6" ; sty:raw "light-dark(#d7d7e0, #2f2f3a)" ] ,
+        [ sty:property "--sem-gray-7" ; sty:raw "light-dark(#c6c6d2, #3c3c49)" ] ,
+        [ sty:property "--sem-gray-8" ; sty:raw "light-dark(#ababbc, #525264)" ] ,
+        [ sty:property "--sem-gray-9" ; sty:raw "light-dark(#8a8a9c, #6a6a7c)" ] ,
+        [ sty:property "--sem-gray-10" ; sty:raw "light-dark(#7c7c8f, #78788a)" ] ,
+        [ sty:property "--sem-gray-11" ; sty:raw "light-dark(#5c5c6e, #a6a6b6)" ] ,
+        [ sty:property "--sem-gray-12" ; sty:raw "light-dark(#141419, #ededf2)" ] ,
         # accent ramp
-        [ sty:property "--sem-accent-1" ; sty:raw "light-dark(#fdfcff, #14121f)" ] ,
-        [ sty:property "--sem-accent-2" ; sty:raw "light-dark(#f8f6ff, #1a1729)" ] ,
-        [ sty:property "--sem-accent-3" ; sty:raw "light-dark(#f0edff, #251f45)" ] ,
-        [ sty:property "--sem-accent-4" ; sty:raw "light-dark(#e5e0ff, #2c235a)" ] ,
-        [ sty:property "--sem-accent-5" ; sty:raw "light-dark(#d9d2ff, #342a69)" ] ,
-        [ sty:property "--sem-accent-6" ; sty:raw "light-dark(#c9bfff, #3e3379)" ] ,
-        [ sty:property "--sem-accent-7" ; sty:raw "light-dark(#b3a6fb, #4b3f92)" ] ,
-        [ sty:property "--sem-accent-8" ; sty:raw "light-dark(#9787f5, #5d4fb5)" ] ,
-        [ sty:property "--sem-accent-9" ; sty:raw "light-dark(#5b4cf0, #6f5ef2)" ] ,
-        [ sty:property "--sem-accent-10" ; sty:raw "light-dark(#4f40e0, #7c6cf6)" ] ,
-        [ sty:property "--sem-accent-11" ; sty:raw "light-dark(#4b3cc9, #b2a8ff)" ] ,
-        [ sty:property "--sem-accent-12" ; sty:raw "light-dark(#231a63, #e2ddff)" ] ,
+        [ sty:property "--sem-accent-1" ; sty:raw "light-dark(#fdfcff, #131120)" ] ,
+        [ sty:property "--sem-accent-2" ; sty:raw "light-dark(#f8f6ff, #19162a)" ] ,
+        [ sty:property "--sem-accent-3" ; sty:raw "light-dark(#efecff, #241e45)" ] ,
+        [ sty:property "--sem-accent-4" ; sty:raw "light-dark(#e4dfff, #2c245c)" ] ,
+        [ sty:property "--sem-accent-5" ; sty:raw "light-dark(#d7d0ff, #352b6c)" ] ,
+        [ sty:property "--sem-accent-6" ; sty:raw "light-dark(#c6bcff, #40347e)" ] ,
+        [ sty:property "--sem-accent-7" ; sty:raw "light-dark(#afa2fb, #4e4198)" ] ,
+        [ sty:property "--sem-accent-8" ; sty:raw "light-dark(#9283f4, #6253bd)" ] ,
+        [ sty:property "--sem-accent-9" ; sty:raw "light-dark(#5a4ed9, #6a5de6)" ] ,
+        [ sty:property "--sem-accent-10" ; sty:raw "light-dark(#4f43c6, #786cec)" ] ,
+        [ sty:property "--sem-accent-11" ; sty:raw "light-dark(#4a3cc4, #b3a9ff)" ] ,
+        [ sty:property "--sem-accent-12" ; sty:raw "light-dark(#221a5e, #e3dfff)" ] ,
         # status
         [ sty:property "--sem-info-3" ; sty:raw "light-dark(#e6f1ff, #10233d)" ] ,
         [ sty:property "--sem-info-4" ; sty:raw "light-dark(#d6e8ff, #142c4d)" ] ,
@@ -153,67 +153,67 @@ sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇
         [ sty:property "--sem-danger-11" ; sty:raw "light-dark(#c0263a, #ffa3ae)" ] ,
         # roles
         [ sty:property "--sem-canvas" ; sty:raw "var(--sem-gray-2)" ] ,
-        [ sty:property "--sem-surface" ; sty:raw "light-dark(#ffffff, #17171c)" ] ,
-        [ sty:property "--sem-surface-sunken" ; sty:raw "light-dark(#f6f6fa, #111116)" ] ,
-        [ sty:property "--sem-surface-hover" ; sty:raw "light-dark(#f4f4fb, #1f1f27)" ] ,
-        [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#ffffff, #1c1c23)" ] ,
-        [ sty:property "--sem-text" ; sty:raw "light-dark(#16161d, #f2f2f7)" ] ,
-        [ sty:property "--sem-muted" ; sty:raw "light-dark(#646475, #9898a8)" ] ,
-        [ sty:property "--sem-faint" ; sty:raw "light-dark(#8b8b98, #6a6a78)" ] ,
-        [ sty:property "--sem-border" ; sty:raw "light-dark(#e8e8f0, #26262f)" ] ,
-        [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#d4d4e0, #3a3a46)" ] ,
-        [ sty:property "--sem-accent" ; sty:raw "light-dark(#5b4cf0, #8f86ff)" ] ,
-        [ sty:property "--sem-accent-strong" ; sty:raw "light-dark(#4535d6, #a49dff)" ] ,
-        [ sty:property "--sem-accent-soft" ; sty:raw "color-mix(in oklab, var(--sem-accent) 13%, transparent)" ] ,
-        [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #0e0b26)" ] ,
+        [ sty:property "--sem-surface" ; sty:raw "light-dark(#ffffff, #16161c)" ] ,
+        [ sty:property "--sem-surface-sunken" ; sty:raw "light-dark(#f6f6f9, #111116)" ] ,
+        [ sty:property "--sem-surface-hover" ; sty:raw "light-dark(#f2f2f7, #1d1d25)" ] ,
+        [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#ffffff, #1c1c24)" ] ,
+        [ sty:property "--sem-text" ; sty:raw "light-dark(#141419, #ededf2)" ] ,
+        [ sty:property "--sem-muted" ; sty:raw "light-dark(#5c5c6e, #a0a0b0)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#80808f, #737385)" ] ,
+        [ sty:property "--sem-border" ; sty:raw "light-dark(#e3e3ea, #2a2a34)" ] ,
+        [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#cbcbd6, #3b3b48)" ] ,
+        [ sty:property "--sem-accent" ; sty:raw "light-dark(#5447d2, #9d94ff)" ] ,
+        [ sty:property "--sem-accent-strong" ; sty:raw "light-dark(#4336b8, #b3abff)" ] ,
+        [ sty:property "--sem-accent-soft" ; sty:raw "color-mix(in oklab, var(--sem-accent) 9%, transparent)" ] ,
+        [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #0f0c2a)" ] ,
         [ sty:property "--sem-accent-contrast" ; sty:raw "#ffffff" ] ,
         [ sty:property "--sem-on-status" ; sty:raw "#ffffff" ] ,
         [ sty:property "--sem-on-warning" ; sty:raw "#2b1a00" ] ,
-        [ sty:property "--sem-danger" ; sty:raw "light-dark(#d9304a, #ff7a8a)" ] ,
+        [ sty:property "--sem-danger" ; sty:raw "light-dark(#d12c45, #ff7a8a)" ] ,
         [ sty:property "--sem-success" ; sty:raw "light-dark(#0b8763, #4fd8a8)" ] ,
-        [ sty:property "--sem-ring" ; sty:raw "0 0 0 4px color-mix(in oklab, var(--sem-accent) 22%, transparent)" ] ,
-        [ sty:property "--sem-scrim" ; sty:raw "light-dark(rgb(20 18 40 / 0.32), rgb(0 0 0 / 0.6))" ] ,
-        [ sty:property "--sem-tooltip-bg" ; sty:raw "light-dark(#1c1b2e, #f2f2f7)" ] ,
-        [ sty:property "--sem-tooltip-fg" ; sty:raw "light-dark(#f2f2f7, #16161d)" ] ,
-        [ sty:property "--sem-code-bg" ; sty:raw "light-dark(#f7f7fb, #0f0f15)" ] ,
+        [ sty:property "--sem-ring" ; sty:raw "0 0 0 2px var(--sem-surface), 0 0 0 4px var(--sem-accent)" ] ,
+        [ sty:property "--sem-scrim" ; sty:raw "light-dark(rgb(20 20 25 / 0.40), rgb(0 0 0 / 0.64))" ] ,
+        [ sty:property "--sem-tooltip-bg" ; sty:raw "light-dark(#141419, #ededf2)" ] ,
+        [ sty:property "--sem-tooltip-fg" ; sty:raw "light-dark(#f7f7fa, #141419)" ] ,
+        [ sty:property "--sem-code-bg" ; sty:raw "light-dark(#f6f6f9, #0f0f14)" ] ,
         # type
         [ sty:property "--sem-font" ; sty:raw "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" ] ,
         [ sty:property "--sem-font-display" ; sty:raw "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" ] ,
         [ sty:property "--sem-font-mono" ; sty:raw "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" ] ,
         [ sty:property "--sem-mono" ; sty:raw "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" ] ,
-        [ sty:property "--sem-font-features" ; sty:raw "'cv11', 'ss01', 'ss03'" ] ,
-        [ sty:property "--sem-display-weight" ; sty:raw "700" ] ,
-        [ sty:property "--sem-display-tracking" ; sty:raw "-0.025em" ] ,
+        [ sty:property "--sem-font-features" ; sty:raw "'cv11', 'ss03', 'calt'" ] ,
+        [ sty:property "--sem-display-weight" ; sty:raw "600" ] ,
+        [ sty:property "--sem-display-tracking" ; sty:raw "-0.022em" ] ,
         [ sty:property "--sem-display-case" ; sty:raw "none" ] ,
         # shape and depth
-        [ sty:property "--sem-radius-sm" ; sty:raw "6px" ] ,
-        [ sty:property "--sem-radius-md" ; sty:raw "10px" ] ,
-        [ sty:property "--sem-radius-lg" ; sty:raw "14px" ] ,
-        [ sty:property "--sem-radius-xl" ; sty:raw "20px" ] ,
+        [ sty:property "--sem-radius-sm" ; sty:raw "4px" ] ,
+        [ sty:property "--sem-radius-md" ; sty:raw "6px" ] ,
+        [ sty:property "--sem-radius-lg" ; sty:raw "6px" ] ,
+        [ sty:property "--sem-radius-xl" ; sty:raw "8px" ] ,
         [ sty:property "--sem-radius-full" ; sty:raw "999px" ] ,
-        [ sty:property "--sem-radius" ; sty:raw "12px" ] ,
-        [ sty:property "--sem-radius-card" ; sty:raw "18px" ] ,
-        [ sty:property "--sem-radius-control" ; sty:raw "10px" ] ,
-        [ sty:property "--sem-shadow" ; sty:raw "0 1px 2px light-dark(rgb(17 17 34 / 0.06), rgb(0 0 0 / 0.5))" ] ,
-        [ sty:property "--sem-shadow-raised" ; sty:raw "0 1px 1px light-dark(rgb(17 17 34 / 0.04), rgb(0 0 0 / 0.4)), 0 12px 32px -12px light-dark(rgb(30 27 75 / 0.18), rgb(0 0 0 / 0.65))" ] ,
-        [ sty:property "--sem-shadow-1" ; sty:raw "0 1px 2px light-dark(rgb(17 17 34 / 0.06), rgb(0 0 0 / 0.5))" ] ,
-        [ sty:property "--sem-shadow-2" ; sty:raw "0 1px 1px light-dark(rgb(17 17 34 / 0.04), rgb(0 0 0 / 0.4)), 0 12px 32px -12px light-dark(rgb(30 27 75 / 0.18), rgb(0 0 0 / 0.65))" ] ,
-        [ sty:property "--sem-shadow-3" ; sty:raw "0 0 0 1px light-dark(rgb(17 17 34 / 0.06), rgb(255 255 255 / 0.06)), 0 18px 48px -12px light-dark(rgb(30 27 75 / 0.28), rgb(0 0 0 / 0.75))" ] ,
-        [ sty:property "--sem-shadow-4" ; sty:raw "0 0 0 1px light-dark(rgb(17 17 34 / 0.08), rgb(255 255 255 / 0.08)), 0 32px 80px -16px light-dark(rgb(30 27 75 / 0.38), rgb(0 0 0 / 0.85))" ] ,
+        [ sty:property "--sem-radius" ; sty:raw "6px" ] ,
+        [ sty:property "--sem-radius-card" ; sty:raw "6px" ] ,
+        [ sty:property "--sem-radius-control" ; sty:raw "6px" ] ,
+        [ sty:property "--sem-shadow" ; sty:raw "none" ] ,
+        [ sty:property "--sem-shadow-raised" ; sty:raw "none" ] ,
+        [ sty:property "--sem-shadow-1" ; sty:raw "none" ] ,
+        [ sty:property "--sem-shadow-2" ; sty:raw "0 1px 2px light-dark(rgb(20 20 25 / 0.04), rgb(0 0 0 / 0.24))" ] ,
+        [ sty:property "--sem-shadow-3" ; sty:raw "0 0 0 1px var(--sem-border), 0 8px 24px -8px light-dark(rgb(20 20 25 / 0.18), rgb(0 0 0 / 0.6))" ] ,
+        [ sty:property "--sem-shadow-4" ; sty:raw "0 0 0 1px var(--sem-border), 0 20px 56px -16px light-dark(rgb(20 20 25 / 0.28), rgb(0 0 0 / 0.75))" ] ,
         # motion
         [ sty:property "--sem-ease" ; sty:raw "cubic-bezier(0.2, 0, 0, 1)" ] ,
         [ sty:property "--sem-spring" ; sty:raw "cubic-bezier(0.34, 1.4, 0.64, 1)" ] ,
         [ sty:property "--sem-motion" ; sty:raw "var(--sem-duration) var(--sem-ease)" ] ,
         # marks and backdrop
-        [ sty:property "--sem-mark" ; sty:raw "linear-gradient(90deg, var(--sem-accent), color-mix(in oklab, var(--sem-accent) 30%, #ff7ac6))" ] ,
-        [ sty:property "--sem-mark-width" ; sty:raw "28px" ] ,
+        [ sty:property "--sem-mark" ; sty:raw "var(--sem-accent)" ] ,
+        [ sty:property "--sem-mark-width" ; sty:raw "24px" ] ,
         [ sty:property "--sem-mark-height" ; sty:raw "3px" ] ,
-        [ sty:property "--sem-mark-radius" ; sty:raw "3px" ] ,
-        [ sty:property "--sem-gradient" ; sty:raw "linear-gradient(90deg, var(--sem-accent), #ff7ac6)" ] ,
+        [ sty:property "--sem-mark-radius" ; sty:raw "2px" ] ,
+        [ sty:property "--sem-gradient" ; sty:raw "var(--sem-accent)" ] ,
         [ sty:property "--sem-gradient-from" ; sty:raw "#8f86ff" ] ,
         [ sty:property "--sem-gradient-to" ; sty:raw "#ff7ac6" ] ,
         [ sty:property "--sem-check" ; sty:raw "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4l2.9 2.9 6.1-6.6' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")" ] ,
-        [ sty:property "--sem-backdrop" ; sty:raw "radial-gradient(1200px 500px at 15% -10%, light-dark(#ebe8ff, #1c1840) 0%, transparent 60%), radial-gradient(900px 400px at 100% 0%, light-dark(#ffe9f5, #2a1326) 0%, transparent 55%), light-dark(#f5f5f9, #0c0c11)" ] ,
+        [ sty:property "--sem-backdrop" ; sty:raw "light-dark(#f3f3f7, #0e0e12)" ] ,
         # the themed element itself paints the theme
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
