@@ -456,7 +456,7 @@ WHERE {
   {
     $this c:handleMenuBlock ?cb .
     ?conv a blk:Conversion ; blk:to ?type ; beh:sourceClass ?convFrom . ?cb a/rdfs:subClassOf* ?convFrom .
-    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?type ; beh:sourceClass ?convOf . ?cb a/rdfs:subClassOf* ?convOf . ?convOf rdfs:subClassOf+ ?convFrom }
+    FILTER NOT EXISTS { ?better a blk:Conversion ; blk:to ?type ; beh:sourceClass ?convOf . ?cb (a|a/rdfs:subClassOf+) ?convOf . ?convOf rdfs:subClassOf+ ?convFrom }
     ?type blk:menuOrder ?typeOrder .
     OPTIONAL { ?leadAt l10n:of c:TurnIntoPhrase ; l10n:name ?leadPicked } OPTIONAL { c:TurnIntoPhrase rdfs:label ?leadEn FILTER(LANGMATCHES(LANG(?leadEn), "en")) }
     OPTIONAL { ?typeAt l10n:of ?type ; l10n:name ?typePicked }
@@ -534,7 +534,7 @@ WHERE {
       UNION
       { $this dnd:offered ?drag . ?drag dnd:carrying ?b .
         ?shape sh:targetClass ?tc ; sh:property ?ps . $this a/rdfs:subClassOf* ?tc . ?ps sh:path po:contains ; sh:class ?required .
-        FILTER NOT EXISTS { ?b a/rdfs:subClassOf* ?required }
+        FILTER NOT EXISTS { ?b (a|a/rdfs:subClassOf+) ?required }
         OPTIONAL { ?ps sh:message ?said FILTER(LANG(?said) = "" || LANGMATCHES(LANG(?said), "en")) }
         OPTIONAL { ?unfitAt l10n:of dnd:UnfitPhrase ; l10n:name ?unfitPicked }
         OPTIONAL { dnd:UnfitPhrase rdfs:label ?unfitEn FILTER(LANGMATCHES(LANG(?unfitEn), "en")) }
@@ -705,7 +705,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* ?cls . ?cls blk:element ?element .
-  FILTER NOT EXISTS { ?more blk:element ?other ; rdfs:subClassOf+ ?cls FILTER EXISTS { $this a/rdfs:subClassOf* ?more } }
+  FILTER NOT EXISTS { ?more blk:element ?other ; rdfs:subClassOf+ ?cls FILTER EXISTS { $this (a|a/rdfs:subClassOf+) ?more } }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(STR(?root) AS ?rootId)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
@@ -727,7 +727,7 @@ WHERE {
   $this a/rdfs:subClassOf* blk:TextBlock .
   { SELECT (COUNT(?outer) AS ?depth) WHERE { ?outer po:contains+ $this . ?outer a/rdfs:subClassOf* blk:List } }
   OPTIONAL { $this a/rdfs:subClassOf* ?pc . ?pc blk:prefix ?own
-    FILTER NOT EXISTS { ?pmore blk:prefix ?pother ; rdfs:subClassOf+ ?pc FILTER EXISTS { $this a/rdfs:subClassOf* ?pmore } } }
+    FILTER NOT EXISTS { ?pmore blk:prefix ?pother ; rdfs:subClassOf+ ?pc FILTER EXISTS { $this (a|a/rdfs:subClassOf+) ?pmore } } }
   OPTIONAL { $this c:icon ?iconValue }
   BIND(IF(EXISTS { ?list po:contains $this . ?list a/rdfs:subClassOf* blk:NumberedList }, "1. ",
        IF(EXISTS { $this a/rdfs:subClassOf* blk:TodoItem }, IF(EXISTS { $this blk:checked true }, "- [x] ", "- [ ] "), "- ")) AS ?marker)
@@ -769,7 +769,7 @@ blk:ContainerRendering-sparql a sem:Rule ; sem:implements blk:ContainerRendering
 CONSTRUCT { ?root a ?element ; sem:renders $this ; rdfhtml:id ?rootId . }
 WHERE {
   $this a/rdfs:subClassOf* ?cls . ?cls blk:element ?element .
-  FILTER NOT EXISTS { ?more blk:element ?other ; rdfs:subClassOf+ ?cls FILTER EXISTS { $this a/rdfs:subClassOf* ?more } }
+  FILTER NOT EXISTS { ?more blk:element ?other ; rdfs:subClassOf+ ?cls FILTER EXISTS { $this (a|a/rdfs:subClassOf+) ?more } }
   FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:TextBlock }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(STR(?root) AS ?rootId)
@@ -782,7 +782,7 @@ blk:ContainerAsText-sparql a sem:Rule ; sem:implements blk:ContainerAsText ;
 CONSTRUCT { ?root a ?element ; sem:renders $this . }
 WHERE {
   $this a/rdfs:subClassOf* ?cls . ?cls blk:element ?screen .
-  FILTER NOT EXISTS { ?more blk:element ?other ; rdfs:subClassOf+ ?cls FILTER EXISTS { $this a/rdfs:subClassOf* ?more } }
+  FILTER NOT EXISTS { ?more blk:element ?other ; rdfs:subClassOf+ ?cls FILTER EXISTS { $this (a|a/rdfs:subClassOf+) ?more } }
   FILTER NOT EXISTS { $this a/rdfs:subClassOf* blk:TextBlock }
   OPTIONAL { ?cls blk:textElement ?textElement }
   BIND(COALESCE(?textElement, rdfhtml:Div) AS ?element)

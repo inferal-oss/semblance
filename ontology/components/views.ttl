@@ -818,7 +818,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Metrics ; c:of ?of .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IF(EXISTS { $this c:fields/rdf:rest*/rdf:first ?anyField . ?of ?anyField ?anyValue FILTER(isIRI(?anyField)) }, ?none, "") AS ?hidden)
+  BIND(IF(EXISTS { $this (c:fields/rdf:first|c:fields/rdf:rest+/rdf:first) ?anyField . ?of ?anyField ?anyValue FILTER(isIRI(?anyField)) }, ?none, "") AS ?hidden)
   OPTIONAL {
     $this c:fields ?fields .
     ?fields rdf:rest* ?cell . ?cell rdf:first ?p . FILTER(isIRI(?p))

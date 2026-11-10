@@ -110,8 +110,8 @@ WHERE {
   OPTIONAL {
     $this c:sortColumn ?sortBy .
     FILTER EXISTS {
-      { $this c:tableColumns/rdf:rest*/rdf:first ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
-      UNION { FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+      { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+      UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
               $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
     }
   }
@@ -119,7 +119,7 @@ WHERE {
   { SELECT (COUNT(?anyRow) AS ?rowCount) WHERE { $this iv:run/rs:solution ?anyRow } }
   { SELECT (COUNT(?anyCol) AS ?columnCount) WHERE {
       { $this c:tableColumns/rdf:rest*/rdf:first ?anyCol FILTER(isIRI(?anyCol)) }
-      UNION { FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn1 FILTER(isIRI(?anyColumn1)) } $this iv:run/iv:column ?anyCol } } }
+      UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn1 FILTER(isIRI(?anyColumn1)) } $this iv:run/iv:column ?anyCol } } }
   LATERAL {
   {
     # A failed run: a line that says so.
@@ -170,7 +170,7 @@ WHERE {
       BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
       BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
     } UNION {
-      FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+      FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
       $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
       BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
       BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -227,7 +227,7 @@ WHERE {
           BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
           BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
         } UNION {
-          FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+          FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
           $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
           BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
           BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -290,7 +290,7 @@ WHERE {
       BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
       BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
     } UNION {
-      FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+      FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
       $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
       BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
       BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -390,8 +390,8 @@ WHERE {
   OPTIONAL {
     $this c:sortColumn ?sortBy .
     FILTER EXISTS {
-      { $this c:tableColumns/rdf:rest*/rdf:first ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
-      UNION { FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+      { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+      UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
               $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
     }
   }
@@ -399,7 +399,7 @@ WHERE {
   { SELECT (COUNT(?anyRow) AS ?rowCount) WHERE { $this iv:run/rs:solution ?anyRow } }
   { SELECT (COUNT(?anyCol) AS ?columnCount) WHERE {
       { $this c:tableColumns/rdf:rest*/rdf:first ?anyCol FILTER(isIRI(?anyCol)) }
-      UNION { FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn1 FILTER(isIRI(?anyColumn1)) } $this iv:run/iv:column ?anyCol } } }
+      UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn1 FILTER(isIRI(?anyColumn1)) } $this iv:run/iv:column ?anyCol } } }
   LATERAL {
   {
     # A failed run: a line that says so.
@@ -418,8 +418,8 @@ WHERE {
             OPTIONAL {
               $this c:sortColumn ?sortBy .
               FILTER EXISTS {
-                { $this c:tableColumns/rdf:rest*/rdf:first ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
-                UNION { FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
                         $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
               }
             }
@@ -449,7 +449,7 @@ WHERE {
               BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
               BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
             } UNION {
-              FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+              FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
               $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
               BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
               BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -464,8 +464,8 @@ WHERE {
               OPTIONAL {
                 $this c:sortColumn ?sortBy .
                 FILTER EXISTS {
-                  { $this c:tableColumns/rdf:rest*/rdf:first ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
-                  UNION { FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                  { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                  UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
                           $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
                 }
               }
@@ -498,7 +498,7 @@ WHERE {
                   BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
                   BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
                 } UNION {
-                  FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+                  FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
                   $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
                   BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
                   BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -556,7 +556,7 @@ WHERE {
               BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
               BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
             } UNION {
-              FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+              FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
               $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
               BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
               BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -609,8 +609,8 @@ WHERE {
             OPTIONAL {
               $this c:sortColumn ?sortBy .
               FILTER EXISTS {
-                { $this c:tableColumns/rdf:rest*/rdf:first ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
-                UNION { FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
                         $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
               }
             }
@@ -620,8 +620,8 @@ WHERE {
               OPTIONAL {
                 $this c:sortColumn ?sortBy .
                 FILTER EXISTS {
-                  { $this c:tableColumns/rdf:rest*/rdf:first ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
-                  UNION { FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                  { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                  UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
                           $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
                 }
               }
@@ -654,7 +654,7 @@ WHERE {
                   BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
                   BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
                 } UNION {
-                  FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+                  FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
                   $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
                   BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
                   BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -712,7 +712,7 @@ WHERE {
               BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
               BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
             } UNION {
-              FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+              FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
               $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
               BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
               BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -746,8 +746,8 @@ WHERE {
               OPTIONAL {
                 $this c:sortColumn ?sortBy .
                 FILTER EXISTS {
-                  { $this c:tableColumns/rdf:rest*/rdf:first ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
-                  UNION { FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                  { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                  UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
                           $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
                 }
               }
@@ -780,7 +780,7 @@ WHERE {
                   BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
                   BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
                 } UNION {
-                  FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+                  FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
                   $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
                   BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
                   BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -838,7 +838,7 @@ WHERE {
               BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
               BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
             } UNION {
-              FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+              FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
               $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
               BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
               BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -900,7 +900,7 @@ WHERE {
           BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
           BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
         } UNION {
-          FILTER NOT EXISTS { $this c:tableColumns/rdf:rest*/rdf:first ?anyColumn FILTER(isIRI(?anyColumn)) }
+          FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
           $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
           BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
           BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
@@ -1005,7 +1005,7 @@ WHERE {
   BIND(EXISTS { $this c:via ?anyVia FILTER(isIRI(?anyVia)) } AS ?hasVia)
   LATERAL { OPTIONAL { $this c:via ?via . FILTER(isIRI(?via)) ?subject ?via ?hop } }
   BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?of)
-  BIND(EXISTS { $this c:items/rdf:rest*/rdf:first ?anyItem FILTER(isIRI(?anyItem)) } AS ?hasItems)
+  BIND(EXISTS { $this (c:items/rdf:first|c:items/rdf:rest+/rdf:first) ?anyItem FILTER(isIRI(?anyItem)) } AS ?hasItems)
   BIND(EXISTS { $this c:entryProperty ?anyEntryProperty } AS ?hasEntries)
   LATERAL {
   {

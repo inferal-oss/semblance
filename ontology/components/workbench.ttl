@@ -146,7 +146,7 @@ WHERE {
     $this c:samples/rdf:rest* ?currentCell . ?currentCell rdf:first ?current .
     { ?current sem:select ?currentText } UNION { ?current sem:construct ?currentText }
     FILTER(STR(?currentText) = ?runText)
-    FILTER NOT EXISTS { $this c:samples/rdf:rest* ?earlierCell . ?earlierCell rdf:first ?earlier ; rdf:rest+ ?currentCell .
+    FILTER NOT EXISTS { $this (c:samples|c:samples/rdf:rest+) ?earlierCell . ?earlierCell rdf:first ?earlier ; rdf:rest+ ?currentCell .
       { ?earlier sem:select ?earlierText } UNION { ?earlier sem:construct ?earlierText } FILTER(STR(?earlierText) = ?runText) }
     OPTIONAL { { ?current l10n:label ?currentLabelL } UNION { ?currentLabelLAt l10n:of ?current ; l10n:label ?currentLabelL } }
     OPTIONAL { FILTER(!BOUND(?currentLabelL)) ?current c:label ?currentLabelLOnly FILTER(isLiteral(?currentLabelLOnly)) }
@@ -281,7 +281,7 @@ WHERE {
     $this c:samples/rdf:rest* ?currentCell . ?currentCell rdf:first ?current .
     { ?current sem:select ?currentText } UNION { ?current sem:construct ?currentText }
     FILTER(STR(?currentText) = ?runText)
-    FILTER NOT EXISTS { $this c:samples/rdf:rest* ?earlierCell . ?earlierCell rdf:first ?earlier ; rdf:rest+ ?currentCell .
+    FILTER NOT EXISTS { $this (c:samples|c:samples/rdf:rest+) ?earlierCell . ?earlierCell rdf:first ?earlier ; rdf:rest+ ?currentCell .
       { ?earlier sem:select ?earlierText } UNION { ?earlier sem:construct ?earlierText } FILTER(STR(?earlierText) = ?runText) }
     OPTIONAL { { ?current l10n:label ?currentLabelL } UNION { ?currentLabelLAt l10n:of ?current ; l10n:label ?currentLabelL } }
     OPTIONAL { FILTER(!BOUND(?currentLabelL)) ?current c:label ?currentLabelLOnly FILTER(isLiteral(?currentLabelLOnly)) }
@@ -678,7 +678,7 @@ WHERE {
   } UNION {
     # Rows: the count (beside the c:actions, when there are rows), the table, and how many more there are.
     FILTER(?state = "rows")
-    BIND(?total > 0 && EXISTS { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
+    BIND(?total > 0 && EXISTS { $this (c:actions/rdf:first|c:actions/rdf:rest+/rdf:first) ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
     OPTIONAL { ?noResultsAt l10n:of c:NoResultsPhrase ; l10n:name ?noResults0 } OPTIONAL { FILTER(!BOUND(?noResults0)) c:NoResultsPhrase rdfs:label ?noResults1 }
     VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
       ("summary-bar" rdfhtml:Div "sem-result-bar" "root" 0) ("summary" rdfhtml:P "sem-summary" UNDEF 0) ("actions" rdfhtml:Div "sem-actions" "summary-bar" 1)
@@ -1329,7 +1329,7 @@ WHERE {
   BIND(IF(?state = "answer", IF(CONTAINS(?answerPhrase, "{v}"), CONCAT(STRBEFORE(?answerPhrase, "{v}"), STR(?answer), STRAFTER(?answerPhrase, "{v}")), ?answerPhrase),
        IF(CONTAINS(?countPhrase, "{n}"), CONCAT(STRBEFORE(?countPhrase, "{n}"), ?totalText, STRAFTER(?countPhrase, "{n}")), ?countPhrase)) AS ?line)
   BIND(?state = "rows" && ?triples && ?total = 0 AS ?nothing)
-  BIND(EXISTS { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
+  BIND(EXISTS { $this (c:actions/rdf:first|c:actions/rdf:rest+/rdf:first) ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
   LATERAL {
   {
     BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
@@ -1417,7 +1417,7 @@ WHERE {
   BIND(IF(?state = "answer", IF(CONTAINS(?answerPhrase, "{v}"), CONCAT(STRBEFORE(?answerPhrase, "{v}"), STR(?answer), STRAFTER(?answerPhrase, "{v}")), ?answerPhrase),
        IF(CONTAINS(?countPhrase, "{n}"), CONCAT(STRBEFORE(?countPhrase, "{n}"), ?totalText, STRAFTER(?countPhrase, "{n}")), ?countPhrase)) AS ?line)
   BIND(?state = "rows" && ?triples && ?total = 0 AS ?nothing)
-  BIND(EXISTS { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
+  BIND(EXISTS { $this (c:actions/rdf:first|c:actions/rdf:rest+/rdf:first) ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
   LATERAL {
   {
     BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)

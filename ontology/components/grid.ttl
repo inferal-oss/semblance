@@ -427,7 +427,7 @@ SELECT ?m ?sn ?key ?hv ?isNum ?vn ?vs WHERE {
   $collection $via ?m . FILTER(isIRI(?m))
   ?m $sequence ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
   FILTER(?sn <= $pin)
-  FILTER($memberClass = c:none || EXISTS { ?m a/rdfs:subClassOf* $memberClass })
+  FILTER($memberClass = c:none || EXISTS { ?m (a|a/rdfs:subClassOf+) $memberClass })
   FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
                       FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
   FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
@@ -461,7 +461,7 @@ SELECT ?m ?sn ?key ?hv ?isNum ?vn ?vs WHERE {
   $collection $via ?m . FILTER(isIRI(?m))
   ?m $sequence ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
   FILTER(?sn > $pin)
-  FILTER($memberClass = c:none || EXISTS { ?m a/rdfs:subClassOf* $memberClass })
+  FILTER($memberClass = c:none || EXISTS { ?m (a|a/rdfs:subClassOf+) $memberClass })
   FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
                       FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
   FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
@@ -493,7 +493,7 @@ c:GridWindowCounts a iv:View ; iv:targets c:DataGrid ; iv:materialize iv:Graph ;
 SELECT (COUNT(*) AS ?total) (SUM(IF(?sn <= $pin, 1, 0)) AS ?upTo) WHERE {
   $collection $via ?m . FILTER(isIRI(?m))
   ?m $sequence ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
-  FILTER($memberClass = c:none || EXISTS { ?m a/rdfs:subClassOf* $memberClass })
+  FILTER($memberClass = c:none || EXISTS { ?m (a|a/rdfs:subClassOf+) $memberClass })
   FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
                       FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
   FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
@@ -712,7 +712,7 @@ WHERE {
       OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
       ?coll ?via ?m . FILTER(isIRI(?m))
       ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
-      FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+      FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m (a|a/rdfs:subClassOf+) ?mc })
       FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
                           FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
       FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
@@ -746,7 +746,7 @@ WHERE {
                 OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
                 ?coll ?via ?m . FILTER(isIRI(?m))
                 ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
-                FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+                FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m (a|a/rdfs:subClassOf+) ?mc })
                 FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
                                     FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
                 FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
@@ -772,7 +772,7 @@ WHERE {
                 OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
                 ?coll ?via ?m . FILTER(isIRI(?m))
                 ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
-                FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+                FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m (a|a/rdfs:subClassOf+) ?mc })
                 FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
                                     FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
                 FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
@@ -801,7 +801,7 @@ WHERE {
               OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
               ?coll ?via ?m . FILTER(isIRI(?m))
               ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
-              FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+              FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m (a|a/rdfs:subClassOf+) ?mc })
               FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
                                   FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
               FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
@@ -842,7 +842,7 @@ WHERE {
               OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
               ?coll ?via ?m . FILTER(isIRI(?m))
               ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
-              FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+              FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m (a|a/rdfs:subClassOf+) ?mc })
               FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
                                   FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
               FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
