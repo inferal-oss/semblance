@@ -1,0 +1,272 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+
+# The Semblance theme's own rules: what its tokens (themes.ttl) cannot say. Ink on paper by day,
+# paper on ink by night; hairlines rather than shadows, one radius, what is chosen in ink, the
+# violet kept for the primary action, the link and the node (◇), figures that are data in mono.
+#
+# Written as the structural themes' rules are (themes-structural.ttl): no sty:appliesTo, a part that
+# begins with the component, narrowed by sty:when to the theme, and every part ends with a guard on
+# its subject so it never reaches a differently themed subtree below (a Paper card on the shell).
+# They compile into the variants layer, after every component's own rules.
+
+
+# What is chosen is set in ink. A segmented control is a hairline well; its chosen option a key of
+# ink (gray-12 on gray-1), never a violet tint: the accent is kept for acting and for where one is.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]):not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "padding" ; sty:raw "2px" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-control)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "padding" ; sty:raw "4px 10px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-sm)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "500" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-muted)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-4)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button[aria-pressed=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-gray-1)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-12)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button[aria-pressed=true] .sem-count:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-gray-1)" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-gray-1) 18%, transparent)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=tabs] > [role=tablist]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "padding" ; sty:raw "2px" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-control)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=tabs] [role=tab]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "padding" ; sty:raw "5px 12px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-sm)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "500" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=tabs] [role=tab][aria-selected=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-gray-1)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-12)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] .
+
+# Filter chips: squared keys with a hairline, ink when on.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=chips] button:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "border-radius" ; sty:raw "var(--sem-radius-control)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "500" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=chips] button:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-hover)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=chips] button[aria-pressed=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-gray-1)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-12)" ] ,
+                 [ sty:property "border-color" ; sty:raw "var(--sem-gray-12)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=chips] button[aria-pressed=true] .sem-count:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "color-mix(in oklab, var(--sem-gray-1) 72%, transparent)" ] .
+
+# An option or a menu item under the pointer or the keys is in ink too.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=menu-item]:is(:hover, :focus-visible):not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [role=option][aria-selected=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-gray-1)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-12)" ] .
+
+# Buttons are keys, not tiles: a hairline edge, no shadow; pressing darkens one and moves nothing.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=button]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "font-weight" ; sty:raw "500" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=button]:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-gray-8)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=button]:active:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "transform" ; sty:raw "none" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-4)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=button][data-sem-tone=neutral][data-sem-emphasis=solid]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-gray-1)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-12)" ] ,
+                 [ sty:property "border-color" ; sty:raw "var(--sem-gray-12)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=button][data-sem-emphasis=ghost]:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-gray-4)" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] .
+
+# A field's focus is its own border in the accent and a faint halo, exactly on its edge.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=text-field] input:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-c=text-area] textarea:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-c=search-field] input:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-c=choice] select:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-c=shape-field] :is(input, select:hover, textarea):hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-gray-8)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=text-field] input:focus:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-c=text-area] textarea:focus:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-c=search-field] input:focus:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-c=choice] select:focus:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-c=shape-field] :is(input, select:focus, textarea):focus:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "border-color" ; sty:raw "var(--sem-accent)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "0 0 0 3px color-mix(in oklab, var(--sem-accent) 16%, transparent)" ] .
+
+# Cards are plates: a hairline, the theme's one radius, no shadow (the tokens). A header's badge is
+# a quiet mono tag.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=card] > header .sem-badge:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-muted)" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px var(--sem-border)" ] .
+
+# A nav list is rows on the canvas, not a plate beside the plates; the current row carries the node,
+# the theme's ◇: a small accent diamond at its start.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=nav-list]:not([data-sem-compact-as=picker] .sem-picker):not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=nav-list] button:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "22px" ] ,
+                 [ sty:property "font-weight" ; sty:raw "500" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-muted)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=nav-list] button:hover:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-4)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "''" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "9px" ] ,
+                 [ sty:property "top" ; sty:raw "50%" ] ,
+                 [ sty:property "width" ; sty:raw "6px" ] ,
+                 [ sty:property "height" ; sty:raw "6px" ] ,
+                 [ sty:property "margin-top" ; sty:raw "-3px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent)" ] ,
+                 [ sty:property "transform" ; sty:raw "rotate(45deg)" ] .
+
+# The node under a heading: the mark tokens make it a 6px square; turned, it is the ◇.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=heading]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))::after" ;
+    sty:declares [ sty:property "transform" ; sty:raw "rotate(45deg)" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "1px" ] .
+
+# Figures that are data are set in mono, tabular: a stat, a count, the status bar.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=stat] .sem-value:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "font-family" ; sty:raw "var(--sem-font-mono)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "500" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "-0.03em" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part ".sem-count > [aria-hidden]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "font-family" ; sty:raw "var(--sem-font-mono)" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=chips] > span:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "font-family" ; sty:raw "var(--sem-font-mono)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "500" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0.08em" ] .
+
+# The app bar is part of the page, not glass over it: the canvas and one hairline.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=app-bar]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-canvas)" ] ,
+                 [ sty:property "backdrop-filter" ; sty:raw "none" ] ,
+                 [ sty:property "-webkit-backdrop-filter" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=app-bar] [data-sem-c=graph-mark]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "filter" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=app-bar] .sem-brand strong:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "-0.015em" ] .
+
+# A specimen's stage is a recessed well of fine graph paper.
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=specimen] .sem-stage:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-backdrop=dots]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "radial-gradient(circle at 1px 1px, light-dark(rgb(20 20 25 / 0.09), rgb(255 255 255 / 0.07)) 1px, transparent 0) 0 0 / 12px 12px, var(--sem-surface-sunken)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=status-bar]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-canvas)" ] ,
+                 [ sty:property "backdrop-filter" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[data-sem-c=status-bar] .sem-metric:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ;
+    sty:part "[role=tooltip]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *)), [data-sem-c=tooltip]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "border-radius" ; sty:raw "var(--sem-radius-sm)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+
+# On a phone the bar has two rows, one job each: the brand, Search and More; then the pages as a
+# strip of keys that scrolls sideways, the current one in ink (a strip shows where one is, a picker
+# hides it).
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "row-gap" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar] > .sem-actions:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "display" ; sty:raw "contents" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar] > .sem-actions > [data-sem-c=segmented]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "order" ; sty:raw "10" ] ,
+                 [ sty:property "flex" ; sty:raw "1 0 100%" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
+                 [ sty:property "overflow-x" ; sty:raw "auto" ] ,
+                 [ sty:property "scrollbar-width" ; sty:raw "none" ] ,
+                 [ sty:property "margin-block" ; sty:raw "8px 0" ] ,
+                 [ sty:property "padding" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-control)" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar] > .sem-actions > [data-sem-c=segmented] > .sem-picker:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar] > .sem-actions > [data-sem-c=segmented] > :not(.sem-picker):not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "flex" ; sty:raw "1 0 auto" ] ,
+                 [ sty:property "justify-content" ; sty:raw "center" ] ,
+                 [ sty:property "min-height" ; sty:raw "34px" ] ,
+                 [ sty:property "padding-inline" ; sty:raw "7px" ] ,
+                 [ sty:property "font-size" ; sty:raw "13px" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar] > .sem-actions > [data-sem-c=button]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar] .sem-more:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar] .sem-more-toggle:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "width" ; sty:raw "36px" ] ,
+                 [ sty:property "height" ; sty:raw "36px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-control)" ] ,
+                 [ sty:property "font-size" ; sty:raw "18px" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Semblance ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar] .sem-more-toggle[aria-expanded=true]:not(:where([data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]), [data-sem-theme=semblance] [data-sem-theme]:not([data-sem-theme=semblance]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-gray-1)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-12)" ] .
