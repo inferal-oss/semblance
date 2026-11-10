@@ -10,7 +10,7 @@
 // - a frame holds at most `frameRows` statements;
 // - a simple literal has literal kind 0; language tags are listed in order of first use.
 import type { Quad, Term } from '@rdfjs/types'
-import { JellyError } from './decode.ts'
+import { DEFAULT_LIMITS, JellyError } from './decode.ts'
 import { LEN, ProtoWriter, varintSize } from './wire.ts'
 
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
@@ -117,6 +117,7 @@ export class JellyWriter {
     this.options = { streamType: 0, rdfVersion: 0, name: '', ...WRITER_DEFAULTS, ...options }
     const o = this.options
     if (o.maxNames < 128) throw new JellyError('a name lookup smaller than 128')
+    if (o.maxNames > DEFAULT_LIMITS.names || o.maxPrefixes > DEFAULT_LIMITS.prefixes || o.maxDatatypes > DEFAULT_LIMITS.datatypes) throw new JellyError('a lookup larger than readers take')
     if (o.frameRows < 1) throw new JellyError('frameRows must be positive')
     this.names = new Lookup(o.maxNames)
     this.prefixes = new Lookup(o.maxPrefixes)
@@ -151,9 +152,12 @@ export class JellyWriter {
     this.messageStart = this.rows.length
   }
 
-  /** The statements added since the last frame, as a frame (undefined when there are none and nothing else to say). */
-  flush(): Uint8Array | undefined {
-    if (!this.rows.length && this.started && !this.messageEnds.length) return undefined
+  /**
+   * The statements added since the last frame, as a frame (undefined when there are none and
+   * nothing else to say). `metadata` goes in the frame's `metadata` map (keys in sorted order).
+   */
+  flush(metadata?: Record<string, Uint8Array>): Uint8Array | undefined {
+    if (!this.rows.length && this.started && !this.messageEnds.length && !metadata) return undefined
     const w = new ProtoWriter()
     if (!this.started) {
       this.started = true
@@ -172,6 +176,13 @@ export class JellyWriter {
       )
     }
     if (this.rows.length || this.messageEnds.length) w.message(2, (b) => this.batch(b))
+    for (const k of Object.keys(metadata ?? {}).sort())
+      w.message(15, (e) => {
+        e.string(1, k)
+        e.tag(2, LEN)
+        e.varint(metadata![k]!.length)
+        e.bytes(metadata![k]!)
+      })
     this.rows = []
     this.messageEnds = []
     this.messageStart = 0

@@ -2,6 +2,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { DEFAULT_GRAPH, Engine, Form, Format, Kind } from '../../host/engine.ts'
 import * as ox from 'oxigraph'
+import { frames } from '../../../src/jelly/decode.ts'
+import { concat, type JellyRead, type JellyTarget } from '../jelly.ts'
 import type { Dataset, RdfFile, Target } from '../target.ts'
 import { iri, lit, type Row, type T } from '../terms.ts'
 import { MIME } from './oxigraph.ts'
@@ -74,6 +76,51 @@ function canonical(e: Engine, r: ReturnType<ReturnType<Engine['prepare']>['run']
   return (r.form === Form.Select ? `${r.count}:` : '') + (r.form === Form.Select ? out : [...new Set(out)]).join(' ')
 }
 
+/** A runner term into the engine; blank node labels are prefixed with `scope`. */
+function toId(e: Engine, x: T | undefined, scope: string): number {
+  switch (x?.t) {
+    case 'iri':
+      return e.iri(x.v)
+    case 'bnode':
+      return e.bnode(scope + x.v)
+    case 'lit':
+      return x.lang ? e.langLiteral(x.v, x.lang, x.dir === 'ltr' ? 1 : x.dir === 'rtl' ? 2 : 0) : e.literal(x.v, e.iri(x.dt))
+    case 'triple':
+      return e.triple(toId(e, x.s, scope), toId(e, x.p, scope), toId(e, x.o, scope))
+    default:
+      return DEFAULT_GRAPH
+  }
+}
+
+function jellyTarget(module: WebAssembly.Module): JellyTarget {
+  return {
+    read(bytes) {
+      const e = new Engine(module)
+      const r = e.jellyReader()
+      const out: JellyRead = { statements: [], frameEnds: [], messageEnds: [] }
+      for (const f of frames(bytes)) {
+        const at = out.statements.length
+        out.statements.push(...rows(e, r.read(f), 4))
+        for (const end of r.ends()) out.messageEnds.push(at + end)
+        out.frameEnds.push(out.statements.length)
+      }
+      if (r.finish()) out.messageEnds.push(out.statements.length)
+      return out
+    },
+    write(options, messages) {
+      const e = new Engine(module)
+      const w = e.jellyWriter({ physical: options.physical as 1 | 2, streamType: options.streamType as 0 | 1, rdfVersion: options.rdfVersion as 0, maxNames: options.maxNames, maxPrefixes: options.maxPrefixes, maxDatatypes: options.maxDatatypes })
+      const parts: Uint8Array[] = []
+      messages.forEach((m, i) => {
+        parts.push(w.write(m.flatMap((r) => r.map((x) => toId(e, x, `m${i}.`)))))
+        if (options.streamType === 1) w.message()
+      })
+      parts.push(w.flush())
+      return concat(parts)
+    },
+  }
+}
+
 export function wasmTarget(name: string): Target {
   const path = new URL(`../../build/${name}.wasm`, import.meta.url)
   if (!existsSync(path)) throw new Error(`no build at ${path.pathname}; run \`npm run engine:build\``)
@@ -86,6 +133,7 @@ export function wasmTarget(name: string): Target {
   }
   return {
     name,
+    jelly: jellyTarget(module),
     parse(file) {
       const e = new Engine(module)
       load(e, file, DEFAULT_GRAPH)

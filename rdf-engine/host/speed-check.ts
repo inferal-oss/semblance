@@ -1,7 +1,7 @@
 // WAT is at least as fast as Rust (#13): `npm run engine:speed [-- --rounds n] [--margin 0.15]`
 //
-// Runs compiled-bench.ts (Semblance's own calls replayed, per call) and compiled-pages.ts (the
-// shell's pages, best revisit), interpreted and compiled, on both builds, alternating them for
+// Runs compiled-bench.ts (Semblance's own calls replayed, per call), compiled-pages.ts (the
+// shell's pages, best revisit) and jelly-bench.ts (the ontology written and read as Jelly), interpreted and compiled, on both builds, alternating them for
 // `rounds` rounds so machine load falls on both alike. Compares the medians over the rounds: WAT
 // may be slower than Rust by at most `margin` (the noise between runs) on any of them. Prints a
 // table; exits 1 when WAT is behind.
@@ -38,6 +38,9 @@ for (let r = 0; r < rounds; r++) {
     add('calls, total compiled (ms)', kind, bench.totals.compiledMsCompiledCalls)
     add('pages, best revisit interpreted (ms)', kind, run('compiled-pages.ts', kind).totalBestMs)
     add('pages, best revisit compiled (ms)', kind, run('compiled-pages.ts', kind, { SEMBLANCE_ENGINE_COMPILE: '2' }).totalBestMs)
+    const jelly = run('jelly-bench.ts', kind)
+    add('Jelly, write the ontology (ms)', kind, jelly.writeMs)
+    add('Jelly, read the ontology frame by frame (ms)', kind, jelly.readMs)
     process.stderr.write(`round ${r + 1}/${rounds}: ${kind} done\n`)
   }
 }

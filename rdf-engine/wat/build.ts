@@ -16,7 +16,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 
 const FILES = [
-  'alloc.wat', 'terms.wat', 'store.wat', 'lex.wat', 'iri.wat', 'ntriples.wat', 'turtle.wat', 'load.wat',
+  'alloc.wat', 'terms.wat', 'store.wat', 'lex.wat', 'iri.wat', 'ntriples.wat', 'turtle.wat', 'load.wat', 'jelly.wat',
   'sparql.wat', 'eval.wat', 'query.wat', 'update.wat', 'expr.wat', 'num.wat', 'temporal.wat', 'budget.wat', 'regex.wat', 'ext.wat', 'digest.wat', 'collect.wat', 'compile.wat', 'cpath.wat', 'cscan.wat', 'ctyped.wat', 'exports.wat',
 ]
 // Static data starts after the allocator's free-list heads (see alloc.wat).

@@ -1,6 +1,7 @@
 //! The exports of `../ABI.md`. Wire types are i32; ids and counts are u32.
 
 use crate::dict::{self, Dict, Key, lowercase};
+use crate::jelly;
 use crate::lex;
 use crate::sparql;
 use crate::ntriples;
@@ -17,8 +18,14 @@ struct Prepared {
     cq: Option<alloc::boxed::Box<Cq>>,
 }
 
+enum Jelly {
+    Reader(jelly::Reader),
+    Writer(jelly::Writer),
+}
+
 struct State {
     queries: Vec<Option<Prepared>>,
+    jelly: Vec<Option<Jelly>>,
     dict: Dict,
     store: Store,
     input: Vec<u8>,
@@ -38,6 +45,7 @@ fn st() -> &'static mut State {
     unsafe {
         (*STATE.0.get()).get_or_insert_with(|| State {
             queries: Vec::new(),
+            jelly: Vec::new(),
             dict: Dict::new(),
             store: Store::default(),
             input: Vec::new(),
@@ -90,7 +98,7 @@ fn args<const N: usize>(input: &[u8], lens: [u32; N]) -> [&[u8]; N] {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn abi_version() -> i32 {
-    2
+    3
 }
 
 /// The SPARQL extension groups implemented (EXTENSIONS.md, "Capabilities").
@@ -312,6 +320,12 @@ pub extern "C" fn load(format: u32, text_len: u32, base_len: u32, graph: u32) ->
     let parsed = match format {
         1 | 2 => ntriples::parse(text, format == 2, graph, &mut s.dict, &mut quads),
         3 | 4 => turtle::parse(text, format == 4, base, graph, &mut s.dict, &mut quads),
+        5 => {
+            if let Err(e) = jelly_stream(text, graph, &mut s.dict, &mut quads) {
+                return fail(e.as_bytes());
+            }
+            Ok(())
+        }
         _ => return fail(b"unknown format"),
     };
     if let Err(e) = parsed {
@@ -329,6 +343,13 @@ pub extern "C" fn collect() -> i32 {
     let mut alive = alloc::vec![false; s.dict.capacity()];
     let dict = &s.dict;
     s.store.each(|q| q.iter().for_each(|&id| dict.mark(id, &mut alive)));
+    for j in s.jelly.iter_mut().flatten() {
+        let mut mark = |id| dict.mark(id, &mut alive);
+        match j {
+            Jelly::Reader(r) => r.held(&mut mark),
+            Jelly::Writer(w) => w.held(&mut mark),
+        }
+    }
     for p in s.queries.iter().flatten() {
         sparql::query_terms(&p.query, &mut |id| dict.mark(id, &mut alive));
         p.binds.iter().flat_map(|(_, v)| v).for_each(|&id| dict.mark(id, &mut alive));
@@ -998,4 +1019,161 @@ pub extern "C" fn cq_end() -> i32 {
         return (r.count > 0) as i32;
     }
     r.count as i32
+}
+
+// --- Jelly (ABI.md "Jelly", JELLY.md) ------------------------------------------
+
+/// A whole stream (delimited frames, or one bare frame) into `out`.
+fn jelly_stream(b: &[u8], graph: u32, dict: &mut Dict, out: &mut Vec<Quad>) -> jelly::R<()> {
+    let mut r = jelly::Reader::new(if graph == 0 { dict::DEFAULT_GRAPH_ID } else { graph });
+    // A bare frame starts with its options row: 0x0A, a length, 0x0A.
+    if b.len() >= 3 && b[0] == 0x0a && b[2] == 0x0a {
+        return r.frame(b, dict, out);
+    }
+    let mut i = 0;
+    while i < b.len() {
+        let (mut n, mut shift) = (0u64, 0);
+        loop {
+            if i >= b.len() || shift > 63 {
+                return Err("truncated frame length");
+            }
+            let c = b[i];
+            i += 1;
+            n |= ((c & 0x7f) as u64) << shift;
+            if c < 0x80 {
+                break;
+            }
+            shift += 7;
+        }
+        if n > (b.len() - i) as u64 {
+            return Err("truncated frame");
+        }
+        let end = i + n as usize;
+        r.frame(&b[i..end], dict, out)?;
+        i = end;
+    }
+    Ok(())
+}
+
+fn jelly_handle(j: Jelly) -> i32 {
+    let s = st();
+    match s.jelly.iter().position(Option::is_none) {
+        Some(i) => {
+            s.jelly[i] = Some(j);
+            i as i32 + 1
+        }
+        None => {
+            s.jelly.push(Some(j));
+            s.jelly.len() as i32
+        }
+    }
+}
+
+fn jelly_at(h: u32) -> Option<&'static mut Jelly> {
+    st().jelly.get_mut((h as usize).wrapping_sub(1))?.as_mut()
+}
+
+/// `n` bytes to the result buffer.
+fn result_bytes(b: &[u8]) -> i32 {
+    let r = &mut st().result;
+    r.clear();
+    r.resize(b.len().div_ceil(4), 0);
+    unsafe { core::ptr::copy_nonoverlapping(b.as_ptr(), r.as_mut_ptr() as *mut u8, b.len()) };
+    b.len() as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_reader(graph: u32) -> i32 {
+    jelly_handle(Jelly::Reader(jelly::Reader::new(if graph == 0 { dict::DEFAULT_GRAPH_ID } else { graph })))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_frame(h: u32, len: u32, mode: u32) -> i32 {
+    let s = st();
+    let Some(Jelly::Reader(r)) = jelly_at(h) else { return fail(b"not a Jelly reader") };
+    if r.failed {
+        return fail(b"the stream failed earlier");
+    }
+    let mut out = Vec::new();
+    if let Err(e) = r.frame(&s.input[..len as usize], &mut s.dict, &mut out) {
+        r.failed = true;
+        r.ends.clear();
+        return fail(e.as_bytes());
+    }
+    if mode & 1 != 0 {
+        for &q in &out {
+            s.store.add(q);
+        }
+    }
+    if mode & 2 != 0 {
+        s.result.clear();
+        s.result.extend(out.iter().flatten());
+    }
+    out.len() as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_ends(h: u32) -> i32 {
+    let s = st();
+    let Some(Jelly::Reader(r)) = jelly_at(h) else { return fail(b"not a Jelly reader") };
+    s.result.clear();
+    s.result.extend_from_slice(&r.ends);
+    r.ends.len() as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_finish(h: u32) -> i32 {
+    let Some(Jelly::Reader(r)) = jelly_at(h) else { return fail(b"not a Jelly reader") };
+    r.finish() as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_writer(physical: u32, stream_type: u32, rdf_version: u32, max_names: u32, max_prefixes: u32, max_datatypes: u32, frame_rows: u32) -> i32 {
+    match jelly::Writer::new(physical, stream_type, rdf_version, [max_names, max_prefixes, max_datatypes], frame_rows) {
+        Ok(w) => jelly_handle(Jelly::Writer(w)),
+        Err(e) => fail(e.as_bytes()),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_write(h: u32, count: u32) -> i32 {
+    let s = st();
+    let Some(Jelly::Writer(w)) = jelly_at(h) else { return fail(b"not a Jelly writer") };
+    if s.input.len() < count as usize * 16 {
+        return fail(b"input buffer too short");
+    }
+    w.out.clear();
+    for i in 0..count as usize {
+        let at = |k: usize| u32::from_le_bytes([s.input[k], s.input[k + 1], s.input[k + 2], s.input[k + 3]]);
+        let q = [at(i * 16), at(i * 16 + 4), at(i * 16 + 8), at(i * 16 + 12)];
+        if let Err(e) = w.add(q, &s.dict) {
+            return fail(e.as_bytes());
+        }
+    }
+    result_bytes(&w.out)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_message(h: u32) -> i32 {
+    let Some(Jelly::Writer(w)) = jelly_at(h) else { return fail(b"not a Jelly writer") };
+    match w.end_message() {
+        Ok(()) => 0,
+        Err(e) => fail(e.as_bytes()),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_flush(h: u32) -> i32 {
+    let s = st();
+    let Some(Jelly::Writer(w)) = jelly_at(h) else { return fail(b"not a Jelly writer") };
+    w.out.clear();
+    w.flush(&s.dict);
+    result_bytes(&w.out)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_release(h: u32) {
+    if let Some(j) = st().jelly.get_mut((h as usize).wrapping_sub(1)) {
+        *j = None;
+    }
 }

@@ -12,6 +12,7 @@ mod heap;
 mod host;
 mod idmap;
 mod iri;
+mod jelly;
 mod lex;
 mod ntriples;
 mod sparql;
