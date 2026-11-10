@@ -68,13 +68,13 @@ tok:mark a sty:Token ; sem:slug "mark" ;
     sty:value "var(--sem-accent)" .
 tok:mark-width a sty:Token ; sem:slug "mark-width" ;
     rdfs:comment "Width of the heading mark."@en ;
-    sty:value "6px" .
+    sty:value "24px" .
 tok:mark-height a sty:Token ; sem:slug "mark-height" ;
     rdfs:comment "Height of the heading mark."@en ;
-    sty:value "6px" .
+    sty:value "3px" .
 tok:mark-radius a sty:Token ; sem:slug "mark-radius" ;
     rdfs:comment "Corner radius of the heading mark."@en ;
-    sty:value "1px" .
+    sty:value "2px" .
 tok:gradient a sty:Token ; sem:slug "gradient" ;
     rdfs:comment "Fill of progress bars."@en ;
     sty:value "var(--sem-accent)" .
@@ -98,7 +98,7 @@ tok:backdrop a sty:Token ; sem:slug "backdrop" ;
 
 sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇" ;
     rdfs:label "Semblance"@en ;
-    rdfs:comment "The default, ink on paper by day and paper on ink by night: violet-tinted greys, hairlines rather than shadows, one 6px radius, what is chosen set in ink, and the violet kept for the primary action, the link and the node (the ◇ under a heading and beside the current page). Figures that are data in JetBrains Mono."@en ;
+    rdfs:comment "The default, ink on paper by day and paper on ink by night: violet-tinted greys, hairlines rather than shadows, one 6px radius, what is chosen set in ink, and the violet kept for the primary action, the link and the short line under a heading. Figures that are data in JetBrains Mono."@en ;
     sty:declares
         # neutral ramp
         [ sty:property "--sem-gray-1" ; sty:raw "light-dark(#fcfcfd, #0b0b0f)" ] ,
@@ -206,9 +206,9 @@ sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇
         [ sty:property "--sem-motion" ; sty:raw "var(--sem-duration) var(--sem-ease)" ] ,
         # marks and backdrop
         [ sty:property "--sem-mark" ; sty:raw "var(--sem-accent)" ] ,
-        [ sty:property "--sem-mark-width" ; sty:raw "6px" ] ,
-        [ sty:property "--sem-mark-height" ; sty:raw "6px" ] ,
-        [ sty:property "--sem-mark-radius" ; sty:raw "1px" ] ,
+        [ sty:property "--sem-mark-width" ; sty:raw "24px" ] ,
+        [ sty:property "--sem-mark-height" ; sty:raw "3px" ] ,
+        [ sty:property "--sem-mark-radius" ; sty:raw "2px" ] ,
         [ sty:property "--sem-gradient" ; sty:raw "var(--sem-accent)" ] ,
         [ sty:property "--sem-gradient-from" ; sty:raw "#8f86ff" ] ,
         [ sty:property "--sem-gradient-to" ; sty:raw "#ff7ac6" ] ,
