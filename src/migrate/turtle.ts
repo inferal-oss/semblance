@@ -112,13 +112,13 @@ export class TurtleSyntaxError extends Error {}
 export class UnsupportedTurtle extends TurtleSyntaxError {}
 
 /** Reads what a Turtle document states, with the place of every part. */
-export function parseTurtle(text: string, blankPrefix = 'b'): Doc {
+export function parseTurtle(text: string, blankPrefix = 'b', inherited?: ReadonlyMap<string, string>): Doc {
   const toks = lex(text).filter((t) => t.k !== 'ws' && t.k !== 'comment')
   for (let n = 0; n < toks.length - 1; n++) {
     const pair = toks[n]!.text + toks[n + 1]!.text
     if (toks[n]!.text === '~' || pair === '{|' || pair === '<<') throw new UnsupportedTurtle(`line ${text.slice(0, toks[n]!.at).split('\n').length}: RDF 1.2 syntax`)
   }
-  const prefixes = new Map<string, string>()
+  const prefixes = new Map<string, string>(inherited)
   const statements: Statement[] = []
   const triples: Triple[] = []
   let i = 0

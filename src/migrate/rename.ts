@@ -76,7 +76,7 @@ export function renameText(text: string, names: Names, inherited: Map<string, st
       const body = t.text.slice(quote, -quote)
       let next = body
       if (long && looksLikeQuery(body)) next = renameText(body, names, prefixes, seen, line(t))
-      else if (long && looksLikeTurtle(body)) next = renameText(body, names, new Map(), seen, line(t))
+      else if (long && looksLikeTurtle(body)) next = renameText(body, names, frameworkPrefixes, seen, line(t))
       else if (prose) for (const m of body.matchAll(prose)) seen({ term: shortNames.get(m[1]!)!, line: line(t), place: 'prose' })
       if (names.slugs.size) {
         const previousIri = previous?.k === 'pname' ? expandName(previous, prefixes) : previous?.k === 'iri' ? previous.text.slice(1, -1) : undefined
