@@ -1,0 +1,51 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+# Changes: what happened to the framework's components, and why, for the people and agents who
+# have to move with it. A change holds the migrations (ontology/layers/migration.ttl) that carry it
+# out, applied together or not at all; a change of meaning or behaviour alone holds none. The text
+# is for understanding and judgement; the tools decide whether a move is done. Each change is a
+# file of its own in ontology/changes/ (`npm run change -- new <slug>`), read by the tooling and not
+# loaded with the framework's ontology.
+
+<https://semblance.dev/ns/change> a owl:Ontology ;
+    rdfs:label "Semblance changes"@en .
+
+chg:Change a owl:Class ;
+    rdfs:comment "Something a consumer of a component would notice: a term that moved or went, a rendering's output or a term's meaning that changed."@en .
+
+chg:issue a owl:ObjectProperty ; rdfs:domain chg:Change ;
+    rdfs:comment "The issue or pull request the change belongs to."@en .
+chg:motivation a owl:DatatypeProperty ; rdfs:domain chg:Change ;
+    rdfs:comment "Why it changed."@en .
+chg:substance a owl:DatatypeProperty ; rdfs:domain chg:Change ;
+    rdfs:comment "What changed, in full, for a person or an agent who has only this."@en .
+chg:forwardGuide a owl:DatatypeProperty ; rdfs:domain chg:Change ;
+    rdfs:comment "How to move to the new form, and how to settle by hand what the tool reports."@en .
+chg:backwardGuide a owl:DatatypeProperty ; rdfs:domain chg:Change ;
+    rdfs:comment "How to move back, and what does not return."@en .
+chg:affects a owl:ObjectProperty ; rdfs:domain chg:Change ;
+    rdfs:comment "A component whose definition this change moves: its version step (sem:changedBy) names this change."@en .
+chg:retires a rdf:Property ; rdfs:domain chg:Change ;
+    rdfs:comment "A term this change removes (a mig:renames retires its old term without saying so). A retired term is never defined again."@en .
+chg:after a owl:ObjectProperty ; rdfs:domain chg:Change ; rdfs:range chg:Change ;
+    rdfs:comment "A change this one is applied after, when they touch the same terms."@en .
+chg:migrations a owl:ObjectProperty ; rdfs:domain chg:Change ;
+    rdfs:comment "The change's migrations, an RDF list in the order they apply (backward: the reverse order). Absent for a change of meaning or behaviour alone."@en .
+
+# What a change must say. Read by the tooling (src/migrate/versions.ts); a change that leaves one
+# out fails `npm run versions -- --check`.
+chg:ChangeShape a sh:NodeShape ;
+    sh:targetClass chg:Change ;
+    sh:property [ sh:path rdfs:label ; sh:minCount 1 ] ,
+                [ sh:path chg:motivation ; sh:minCount 1 ] ,
+                [ sh:path chg:substance ; sh:minCount 1 ] ,
+                [ sh:path chg:forwardGuide ; sh:minCount 1 ] ,
+                [ sh:path chg:backwardGuide ; sh:minCount 1 ] ,
+                [ sh:path chg:affects ; sh:minCount 1 ] .

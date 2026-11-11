@@ -1,0 +1,43 @@
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+# Migrations: one mechanical step of a chg:Change (ontology/layers/change.ttl), taking what was
+# written against one version of a component to the next. Reversible by default: a migration states
+# both directions, or says what does not come back.
+
+<https://semblance.dev/ns/migration> a owl:Ontology ;
+    rdfs:label "Semblance migrations"@en .
+
+mig:Migration a owl:Class ;
+    rdfs:comment "One mechanical step from a component's version to the next. Applied, with the others of its chg:Change, to everything written against the old version."@en .
+
+mig:of a owl:ObjectProperty ; rdfs:domain mig:Migration ;
+    rdfs:comment "The component this step moves."@en .
+mig:from a owl:DatatypeProperty ; rdfs:domain mig:Migration ; rdfs:range xsd:integer ;
+    rdfs:comment "The component's version (sem:version) before this step."@en .
+mig:to a owl:DatatypeProperty ; rdfs:domain mig:Migration ; rdfs:range xsd:integer ;
+    rdfs:comment "The component's version after this step."@en .
+
+mig:renames a owl:ObjectProperty ; rdfs:domain mig:Migration ;
+    rdfs:comment "A term or slug that takes another name, everywhere it occurs. One-to-one, so it is its own reverse."@en .
+mig:old a rdf:Property ; rdfs:comment "In mig:renames: the term (an IRI) or slug (a string) as it was."@en .
+mig:new a rdf:Property ; rdfs:comment "In mig:renames: the term or slug as it is."@en .
+
+mig:forward a owl:DatatypeProperty ; rdfs:domain mig:Migration ;
+    rdfs:comment "A SPARQL Update (DELETE/INSERT WHERE) from the old shape to the new one."@en .
+mig:backward a owl:DatatypeProperty ; rdfs:domain mig:Migration ;
+    rdfs:comment "A SPARQL Update from the new shape to the old one: going forward and back returns what was there."@en .
+mig:loses a owl:DatatypeProperty ; rdfs:domain mig:Migration ;
+    rdfs:comment "What does not come back going forward and back. A migration with no mig:backward must state this; one with a best-effort mig:backward may."@en .
+mig:discriminator a owl:ObjectProperty ; rdfs:domain mig:Migration ; rdfs:range rdf:Property ;
+    rdfs:comment "When several old terms converge on one: the property that keeps which one each instance was, so the convergence comes back."@en .
+
+mig:example a owl:ObjectProperty ; rdfs:domain mig:Migration ;
+    rdfs:comment "Turtle before and after this step: applied in both directions by a test."@en .
+mig:before a owl:DatatypeProperty ; rdfs:comment "An example's Turtle in the old shape."@en .
+mig:after a owl:DatatypeProperty ; rdfs:comment "An example's Turtle in the new shape."@en .

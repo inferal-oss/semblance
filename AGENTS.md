@@ -56,6 +56,61 @@ performs the effects of graph state (the address, storage, timers, network captu
     `ontology/components/groups.ttl` (the Reference page lists components by group, and
     `test/reference.test.ts` fails on any left out). A class that is a part, a key binding or a value
     rather than a component of its own is listed among that test's shared or part classes instead.
+12. **A component's change is recorded.** Every edit under `ontology/` that alters what the
+    ontology says about a component is a version step with a stated reason (below, "When a component
+    changes"). A consumer's move is written for them: going forward and back returns what was there.
+
+## When a component changes
+
+`ontology/versions.ttl` holds each component's version and a hash of what the ontology says about
+it (its description, its rules, reactions, styles and shapes); `ontology/terms.ttl` lists every
+name a consumer states or reads. Both are generated. After any edit under `ontology/`:
+
+```bash
+npm run versions -- --check
+```
+
+It fails on a hash that does not match, a term that went, a term that came, or a change left
+unfinished, and says what to do. `test/versions.test.ts` and the Versions workflow fail the same
+way, and the workflow also fails a pull request whose component changed without its version going up.
+Every changed component needs one of two decisions, and it is yours to make honestly:
+
+- **A consumer would notice** (a term moved or went, a shape now rejects what it accepted, a
+  rendering's output or a term's meaning changed, the cases `docs/RELEASING.md` calls breaking):
+  write a change.
+  ```bash
+  npm run change -- new <slug> --affects c:Button,c:Choice
+  ```
+  Fill in `ontology/changes/<slug>.ttl`, then `npm run versions -- --bump --change <slug>`.
+- **Nothing a consumer would notice** (a refactor, a comment or label, a style that looks the same):
+  `npm run versions -- --bump --internal "why"`. A removed or renamed term cannot go this way.
+
+Commit `ontology/versions.ttl`, `ontology/terms.ttl` and the change with the work. On a merge
+conflict in the two generated files, take the base branch's and bump again; never edit them by hand.
+They and `ontology/changes/` stay out of `ONTOLOGY_FILES`: they are read by the tooling, not loaded.
+
+**Writing a change.** A `chg:Change` (`ontology/layers/change.ttl`) is what happened, for someone who
+has only this to go on, a person or an agent:
+
+- `chg:motivation`: why. `chg:substance`: what changed, in full, including what the migrations do not
+  express. `chg:forwardGuide` and `chg:backwardGuide`: how to move each way and how to settle by hand
+  what the tool reports. `chg:affects`: every component it steps. `chg:retires`: every term it removes
+  that no `mig:renames` names.
+- `chg:migrations` lists its `mig:Migration`s in order, applied together or not at all. One change is
+  usually several migrations, one per component. A change of meaning or behaviour alone has none.
+- The text helps judgement. The tools decide: write the change so they can check the move.
+
+**Writing a migration** (`ontology/layers/migration.ttl`), `mig:of` a component `mig:from` a version
+`mig:to` the next. **Reversibility comes first:**
+
+- A rename is `mig:renames [ mig:old c:a ; mig:new c:b ]`: it reaches every occurrence and is its own reverse.
+- A change of shape is `mig:forward` and `mig:backward`, each a SPARQL Update (`DELETE`/`INSERT WHERE`),
+  with `mig:example` Turtle before and after. Mint IRIs as `<focus>/~<local>`, as rules do.
+- When several terms converge on one, keep which one each instance was: `mig:discriminator`, written by
+  `mig:forward` and read by `mig:backward`. Plain renames onto one term are not a migration.
+- Only when going back is impossible, say what is lost: `mig:loses`. It is the exception, and it is read
+  by whoever goes back. A `mig:forward` with neither `mig:backward` nor `mig:loses` fails the check.
+- A retired name is never reused.
 
 ## Skills
 

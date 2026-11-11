@@ -34,6 +34,8 @@ export const ONTOLOGY_FILES = [
   'layers/watchdog.ttl',
   'layers/outline.ttl',
   'layers/constraints.ttl',
+  'layers/migration.ttl',
+  'layers/change.ttl',
   'components/common.ttl',
   'components/stack.ttl',
   'components/heading.ttl',
