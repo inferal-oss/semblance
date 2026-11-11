@@ -13,8 +13,7 @@ import { compareKeys, tupleKey } from '../render/order-key.ts'
 import { formatNumber } from '../../rdf-engine/host/intl.ts'
 import { encoding, message } from './charts.ts'
 import { md5Key } from './data.ts'
-import { labelOf, rdfList, str, text } from './util.ts'
-import { phrase } from './gantt.ts'
+import { labelOf, RDFS_LABEL, rdfList, str, text } from './util.ts'
 
 const RS = NS.rs
 const c = (local: string) => NS.c + local
@@ -453,7 +452,9 @@ export function pointWords(ctx: RuleContext, point: NamedNode, chart: Term): str
     ctx.readsLanguage()
     const locale = formatLocale(ctx.languages)
     const f = (p: string) => formatNumber(Number(str(ctx.object(point, c(p)))), locale, 'maximumFractionDigits=2')
-    return `${head}: ${phrase(ctx, chart, 'BoxMedianPhrase')} ${valueText(ctx, chart, Number(str(ctx.object(point, c('value')))))}; ${phrase(ctx, chart, 'BoxQuartilesPhrase')} ${f('q1')} – ${f('q3')}; ${phrase(ctx, chart, 'BoxRangePhrase')} ${f('low')} – ${f('high')}`
+    // The phrases in the viewer's language, as their l10n:Terms twins pick them.
+    const words = (local: string) => text(ctx, ctx.nn(c(local)), RDFS_LABEL) ?? local
+    return `${head}: ${words('BoxMedianPhrase')} ${valueText(ctx, chart, Number(str(ctx.object(point, c('value')))))}; ${words('BoxQuartilesPhrase')} ${f('q1')} – ${f('q3')}; ${words('BoxRangePhrase')} ${f('low')} – ${f('high')}`
   }
   const share = numberOf(ctx.object(point, c('share')))
   const percent = share === undefined ? '' : ` (${formatNumber(share, formatLocale(ctx.languages), 'style=percent;maximumFractionDigits=1')})`

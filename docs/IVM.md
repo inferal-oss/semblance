@@ -1718,7 +1718,8 @@ Where this differs from the design:
   variables count as certainly bound.
 - **Correlated subqueries and LATERAL**: inside a LATERAL, a subquery with LIMIT that projects a variable
   its left side certainly binds is evaluated per binding: a change reaches the bindings it joins to, not
-  every partition (an uncorrelated LIMIT still is global). OPTIONAL, aggregates and paths under LATERAL
+  every partition (an uncorrelated LIMIT still is global). What the left side certainly binds counts its
+  BINDs that cannot fail, in its UNIONs too (`{ ?s sh:property ?ps } UNION { BIND(?s AS ?ps) }`). OPTIONAL, aggregates and paths under LATERAL
   are the store's evaluation of a partition, with their patterns' dependencies.
 - **When a partition is a join** (`substitutionChanges`, `compile.ts`): binding the key with VALUES and
   LATERAL substitutes it everywhere, which differs from SPARQL's bottom-up evaluation where a part reads
@@ -1737,7 +1738,9 @@ Where this differs from the design:
   while the pairs are few; closures and `?` of sequences step through the sequence; negated property sets
   keep forward and inverse members apart (`!^p`, `!(p|^q)`). `p*` and `p?` hold of every node of the
   graph with itself, so a triple bringing a node in is their input - unless another pattern of the
-  solution already holds that node (`?m v:kind/rdfs:subClassOf* ?c`).
+  solution already holds that node (`?m v:kind/rdfs:subClassOf* ?c`). An alternative of paths that are
+  not single steps (`(a|a/rdfs:subClassOf+)`, what an EXISTS writes for `a/rdfs:subClassOf*`, #451) is
+  the UNION of its paths, as SPARQL evaluates it: a change is a step of one branch, walked from there.
 - **Blank nodes**: a batch with a key VALUES cannot hold (a blank node) evaluates every partition; a
   derived subquery's rows with one leave the subquery to the store; expressions over rows with one bind
   it as an IRI of its own and map it back.

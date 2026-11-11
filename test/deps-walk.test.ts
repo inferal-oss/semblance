@@ -116,6 +116,27 @@ describe('exact dependencies: from a change to the focus', () => {
     })
   })
 
+  // (a|a/rdfs:subClassOf+), (p/rdf:first|p/rdf:rest+/rdf:first): what EXISTS write instead of a
+  // zero-length step (#451). Read as the UNION of its paths.
+  describe('an alternative of paths that are not single steps', () => {
+    const alt = '(ex:a|ex:a/ex:b+)'
+    const state = [t('F', 'a', 'x1'), t('x1', 'b', 'x2'), t('x2', 'b', 'C'), t('G', 'a', 'C')]
+
+    it('reaches the focus through the branch the change is a step of', () => {
+      expect(reach(`?this ${alt} ?c`, t('x1', 'b', 'x2'), state)).toEqual(['F'])
+      expect(reach(`?this ${alt} ?c`, t('G', 'a', 'C'), state)).toEqual(['G'])
+      expect(reach(`?this ex:k ?y FILTER EXISTS { ?this ${alt} ex:C }`, t('x2', 'b', 'C'), [...state, t('F', 'k', 'y')])).toEqual(['F'])
+    })
+
+    it('keeps out a node no focus reaches', () => {
+      expect(reach(`?this ${alt} ?c`, t('zzz', 'b', 'yyy'), state)).toEqual([])
+    })
+
+    it('is global when no branch is tied to the focus', () => {
+      expect(reach(`?this ex:k ?y . ?o ${alt} ?c`, t('x1', 'b', 'x2'), state)).toEqual('global')
+    })
+  })
+
   describe('LATERAL', () => {
     const state = [t('F', 'p', 'a')]
 
@@ -233,7 +254,7 @@ describe('exact dependencies: the rules of the app', () => {
   // Rules that answer `global` for some predicate they name, on a subject they do not reach. What is
   // left (docs/IVM.md §25): settings and listings that read any node, and nested groups and BINDs whose
   // unbound case can reach any row. A fix lowers this; a rule that raises it re-runs for every label.
-  const MOST_GLOBAL = 40
+  const MOST_GLOBAL = 32
 
   it('do not treat a change on an unrelated node as global', () => {
     const { store, screen } = setup('oxigraph', { prefer: 'sparql', exactDependencies: true }, 20)

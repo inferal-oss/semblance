@@ -2115,15 +2115,12 @@ WHERE {
   # A bin: its bounds with the chart's unit, then how many values fall in it.
   OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
   BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
-  # A box: its median, quartiles and range.
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxMedianPhrase")) AS ?medianWordNode)
-  OPTIONAL { ?medianWordNode l10n:label ?medianWord0 } OPTIONAL { c:BoxMedianPhrase rdfs:label ?medianWord1 FILTER(langMatches(lang(?medianWord1), "en")) }
+  # A box: its median, quartiles and range, in the viewer's language (the phrases' l10n:Terms twins).
+  OPTIONAL { ?medianWordAt l10n:of c:BoxMedianPhrase ; l10n:name ?medianWord0 } OPTIONAL { FILTER(!BOUND(?medianWord0)) c:BoxMedianPhrase rdfs:label ?medianWord1 }
   BIND(STR(COALESCE(?medianWord0, ?medianWord1)) AS ?medianWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxQuartilesPhrase")) AS ?quartilesWordNode)
-  OPTIONAL { ?quartilesWordNode l10n:label ?quartilesWord0 } OPTIONAL { c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 FILTER(langMatches(lang(?quartilesWord1), "en")) }
+  OPTIONAL { ?quartilesWordAt l10n:of c:BoxQuartilesPhrase ; l10n:name ?quartilesWord0 } OPTIONAL { FILTER(!BOUND(?quartilesWord0)) c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 }
   BIND(STR(COALESCE(?quartilesWord0, ?quartilesWord1)) AS ?quartilesWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxRangePhrase")) AS ?rangeWordNode)
-  OPTIONAL { ?rangeWordNode l10n:label ?rangeWord0 } OPTIONAL { c:BoxRangePhrase rdfs:label ?rangeWord1 FILTER(langMatches(lang(?rangeWord1), "en")) }
+  OPTIONAL { ?rangeWordAt l10n:of c:BoxRangePhrase ; l10n:name ?rangeWord0 } OPTIONAL { FILTER(!BOUND(?rangeWord0)) c:BoxRangePhrase rdfs:label ?rangeWord1 }
   BIND(STR(COALESCE(?rangeWord0, ?rangeWord1)) AS ?rangeWord)
   BIND(IF(BOUND(?pq1), CONCAT(?head, ": ", ?medianWord, " ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)),
     "; ", ?quartilesWord, " ", sx:formatNumber(?pq1, ?locale, "maximumFractionDigits=2"), " – ", sx:formatNumber(?pq3, ?locale, "maximumFractionDigits=2"),
@@ -2207,15 +2204,12 @@ WHERE {
   # A bin: its bounds with the chart's unit, then how many values fall in it.
   OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
   BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
-  # A box: its median, quartiles and range.
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxMedianPhrase")) AS ?medianWordNode)
-  OPTIONAL { ?medianWordNode l10n:label ?medianWord0 } OPTIONAL { c:BoxMedianPhrase rdfs:label ?medianWord1 FILTER(langMatches(lang(?medianWord1), "en")) }
+  # A box: its median, quartiles and range, in the viewer's language (the phrases' l10n:Terms twins).
+  OPTIONAL { ?medianWordAt l10n:of c:BoxMedianPhrase ; l10n:name ?medianWord0 } OPTIONAL { FILTER(!BOUND(?medianWord0)) c:BoxMedianPhrase rdfs:label ?medianWord1 }
   BIND(STR(COALESCE(?medianWord0, ?medianWord1)) AS ?medianWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxQuartilesPhrase")) AS ?quartilesWordNode)
-  OPTIONAL { ?quartilesWordNode l10n:label ?quartilesWord0 } OPTIONAL { c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 FILTER(langMatches(lang(?quartilesWord1), "en")) }
+  OPTIONAL { ?quartilesWordAt l10n:of c:BoxQuartilesPhrase ; l10n:name ?quartilesWord0 } OPTIONAL { FILTER(!BOUND(?quartilesWord0)) c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 }
   BIND(STR(COALESCE(?quartilesWord0, ?quartilesWord1)) AS ?quartilesWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxRangePhrase")) AS ?rangeWordNode)
-  OPTIONAL { ?rangeWordNode l10n:label ?rangeWord0 } OPTIONAL { c:BoxRangePhrase rdfs:label ?rangeWord1 FILTER(langMatches(lang(?rangeWord1), "en")) }
+  OPTIONAL { ?rangeWordAt l10n:of c:BoxRangePhrase ; l10n:name ?rangeWord0 } OPTIONAL { FILTER(!BOUND(?rangeWord0)) c:BoxRangePhrase rdfs:label ?rangeWord1 }
   BIND(STR(COALESCE(?rangeWord0, ?rangeWord1)) AS ?rangeWord)
   BIND(IF(BOUND(?pq1), CONCAT(?head, ": ", ?medianWord, " ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)),
     "; ", ?quartilesWord, " ", sx:formatNumber(?pq1, ?locale, "maximumFractionDigits=2"), " – ", sx:formatNumber(?pq3, ?locale, "maximumFractionDigits=2"),
@@ -2308,15 +2302,12 @@ WHERE {
   # A bin: its bounds with the chart's unit, then how many values fall in it.
   OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
   BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
-  # A box: its median, quartiles and range.
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxMedianPhrase")) AS ?medianWordNode)
-  OPTIONAL { ?medianWordNode l10n:label ?medianWord0 } OPTIONAL { c:BoxMedianPhrase rdfs:label ?medianWord1 FILTER(langMatches(lang(?medianWord1), "en")) }
+  # A box: its median, quartiles and range, in the viewer's language (the phrases' l10n:Terms twins).
+  OPTIONAL { ?medianWordAt l10n:of c:BoxMedianPhrase ; l10n:name ?medianWord0 } OPTIONAL { FILTER(!BOUND(?medianWord0)) c:BoxMedianPhrase rdfs:label ?medianWord1 }
   BIND(STR(COALESCE(?medianWord0, ?medianWord1)) AS ?medianWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxQuartilesPhrase")) AS ?quartilesWordNode)
-  OPTIONAL { ?quartilesWordNode l10n:label ?quartilesWord0 } OPTIONAL { c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 FILTER(langMatches(lang(?quartilesWord1), "en")) }
+  OPTIONAL { ?quartilesWordAt l10n:of c:BoxQuartilesPhrase ; l10n:name ?quartilesWord0 } OPTIONAL { FILTER(!BOUND(?quartilesWord0)) c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 }
   BIND(STR(COALESCE(?quartilesWord0, ?quartilesWord1)) AS ?quartilesWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxRangePhrase")) AS ?rangeWordNode)
-  OPTIONAL { ?rangeWordNode l10n:label ?rangeWord0 } OPTIONAL { c:BoxRangePhrase rdfs:label ?rangeWord1 FILTER(langMatches(lang(?rangeWord1), "en")) }
+  OPTIONAL { ?rangeWordAt l10n:of c:BoxRangePhrase ; l10n:name ?rangeWord0 } OPTIONAL { FILTER(!BOUND(?rangeWord0)) c:BoxRangePhrase rdfs:label ?rangeWord1 }
   BIND(STR(COALESCE(?rangeWord0, ?rangeWord1)) AS ?rangeWord)
   BIND(IF(BOUND(?pq1), CONCAT(?head, ": ", ?medianWord, " ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)),
     "; ", ?quartilesWord, " ", sx:formatNumber(?pq1, ?locale, "maximumFractionDigits=2"), " – ", sx:formatNumber(?pq3, ?locale, "maximumFractionDigits=2"),
@@ -2412,15 +2403,12 @@ WHERE {
   # A bin: its bounds with the chart's unit, then how many values fall in it.
   OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
   BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
-  # A box: its median, quartiles and range.
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxMedianPhrase")) AS ?medianWordNode)
-  OPTIONAL { ?medianWordNode l10n:label ?medianWord0 } OPTIONAL { c:BoxMedianPhrase rdfs:label ?medianWord1 FILTER(langMatches(lang(?medianWord1), "en")) }
+  # A box: its median, quartiles and range, in the viewer's language (the phrases' l10n:Terms twins).
+  OPTIONAL { ?medianWordAt l10n:of c:BoxMedianPhrase ; l10n:name ?medianWord0 } OPTIONAL { FILTER(!BOUND(?medianWord0)) c:BoxMedianPhrase rdfs:label ?medianWord1 }
   BIND(STR(COALESCE(?medianWord0, ?medianWord1)) AS ?medianWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxQuartilesPhrase")) AS ?quartilesWordNode)
-  OPTIONAL { ?quartilesWordNode l10n:label ?quartilesWord0 } OPTIONAL { c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 FILTER(langMatches(lang(?quartilesWord1), "en")) }
+  OPTIONAL { ?quartilesWordAt l10n:of c:BoxQuartilesPhrase ; l10n:name ?quartilesWord0 } OPTIONAL { FILTER(!BOUND(?quartilesWord0)) c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 }
   BIND(STR(COALESCE(?quartilesWord0, ?quartilesWord1)) AS ?quartilesWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxRangePhrase")) AS ?rangeWordNode)
-  OPTIONAL { ?rangeWordNode l10n:label ?rangeWord0 } OPTIONAL { c:BoxRangePhrase rdfs:label ?rangeWord1 FILTER(langMatches(lang(?rangeWord1), "en")) }
+  OPTIONAL { ?rangeWordAt l10n:of c:BoxRangePhrase ; l10n:name ?rangeWord0 } OPTIONAL { FILTER(!BOUND(?rangeWord0)) c:BoxRangePhrase rdfs:label ?rangeWord1 }
   BIND(STR(COALESCE(?rangeWord0, ?rangeWord1)) AS ?rangeWord)
   BIND(IF(BOUND(?pq1), CONCAT(?head, ": ", ?medianWord, " ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)),
     "; ", ?quartilesWord, " ", sx:formatNumber(?pq1, ?locale, "maximumFractionDigits=2"), " – ", sx:formatNumber(?pq3, ?locale, "maximumFractionDigits=2"),
@@ -2932,15 +2920,12 @@ WHERE {
   # A bin: its bounds with the chart's unit, then how many values fall in it.
   OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
   BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
-  # A box: its median, quartiles and range.
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxMedianPhrase")) AS ?medianWordNode)
-  OPTIONAL { ?medianWordNode l10n:label ?medianWord0 } OPTIONAL { c:BoxMedianPhrase rdfs:label ?medianWord1 FILTER(langMatches(lang(?medianWord1), "en")) }
+  # A box: its median, quartiles and range, in the viewer's language (the phrases' l10n:Terms twins).
+  OPTIONAL { ?medianWordAt l10n:of c:BoxMedianPhrase ; l10n:name ?medianWord0 } OPTIONAL { FILTER(!BOUND(?medianWord0)) c:BoxMedianPhrase rdfs:label ?medianWord1 }
   BIND(STR(COALESCE(?medianWord0, ?medianWord1)) AS ?medianWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxQuartilesPhrase")) AS ?quartilesWordNode)
-  OPTIONAL { ?quartilesWordNode l10n:label ?quartilesWord0 } OPTIONAL { c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 FILTER(langMatches(lang(?quartilesWord1), "en")) }
+  OPTIONAL { ?quartilesWordAt l10n:of c:BoxQuartilesPhrase ; l10n:name ?quartilesWord0 } OPTIONAL { FILTER(!BOUND(?quartilesWord0)) c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 }
   BIND(STR(COALESCE(?quartilesWord0, ?quartilesWord1)) AS ?quartilesWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxRangePhrase")) AS ?rangeWordNode)
-  OPTIONAL { ?rangeWordNode l10n:label ?rangeWord0 } OPTIONAL { c:BoxRangePhrase rdfs:label ?rangeWord1 FILTER(langMatches(lang(?rangeWord1), "en")) }
+  OPTIONAL { ?rangeWordAt l10n:of c:BoxRangePhrase ; l10n:name ?rangeWord0 } OPTIONAL { FILTER(!BOUND(?rangeWord0)) c:BoxRangePhrase rdfs:label ?rangeWord1 }
   BIND(STR(COALESCE(?rangeWord0, ?rangeWord1)) AS ?rangeWord)
   BIND(IF(BOUND(?pq1), CONCAT(?head, ": ", ?medianWord, " ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)),
     "; ", ?quartilesWord, " ", sx:formatNumber(?pq1, ?locale, "maximumFractionDigits=2"), " – ", sx:formatNumber(?pq3, ?locale, "maximumFractionDigits=2"),
@@ -3029,7 +3014,6 @@ c:BoxPlot a owl:Class ; rdfs:subClassOf c:AxisChart ;
     rdfs:label "Box plot"@en , "Коробкова діаграма"@uk , "Boxplot"@de , "مخطط صندوقي"@ar ;
     rdfs:comment "How each category's values spread: a box from the first to the third quartile, a line at the median, whiskers to the least and greatest value; a box per series."@en ;
     c:pointClass c:BoxPoint ; c:ownPlan true ; c:fromZero false ;
-    l10n:phrase c:BoxMedianPhrase , c:BoxQuartilesPhrase , c:BoxRangePhrase ;
     sem:slug "box-plot" .
 c:BoxPoint a owl:Class ; rdfs:subClassOf c:ChartPoint ;
     rdfs:comment "Internal: a box of a box plot: whisker, box and median."@en ;
@@ -3367,15 +3351,12 @@ WHERE {
   # A bin: its bounds with the chart's unit, then how many values fall in it.
   OPTIONAL { $this c:lower ?plo ; c:upper ?pup }
   BIND(IF(BOUND(?plo), CONCAT(sx:formatNumber(?plo + 0e0, ?locale, "maximumFractionDigits=4"), " – ", sx:formatNumber(?pup + 0e0, ?locale, "maximumFractionDigits=4"), IF(?unit = "", "", CONCAT(" ", ?unit))), ?unset) AS ?bounds)
-  # A box: its median, quartiles and range.
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxMedianPhrase")) AS ?medianWordNode)
-  OPTIONAL { ?medianWordNode l10n:label ?medianWord0 } OPTIONAL { c:BoxMedianPhrase rdfs:label ?medianWord1 FILTER(langMatches(lang(?medianWord1), "en")) }
+  # A box: its median, quartiles and range, in the viewer's language (the phrases' l10n:Terms twins).
+  OPTIONAL { ?medianWordAt l10n:of c:BoxMedianPhrase ; l10n:name ?medianWord0 } OPTIONAL { FILTER(!BOUND(?medianWord0)) c:BoxMedianPhrase rdfs:label ?medianWord1 }
   BIND(STR(COALESCE(?medianWord0, ?medianWord1)) AS ?medianWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxQuartilesPhrase")) AS ?quartilesWordNode)
-  OPTIONAL { ?quartilesWordNode l10n:label ?quartilesWord0 } OPTIONAL { c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 FILTER(langMatches(lang(?quartilesWord1), "en")) }
+  OPTIONAL { ?quartilesWordAt l10n:of c:BoxQuartilesPhrase ; l10n:name ?quartilesWord0 } OPTIONAL { FILTER(!BOUND(?quartilesWord0)) c:BoxQuartilesPhrase rdfs:label ?quartilesWord1 }
   BIND(STR(COALESCE(?quartilesWord0, ?quartilesWord1)) AS ?quartilesWord)
-  BIND(IRI(CONCAT(STR(?chart), "/~l10n-BoxRangePhrase")) AS ?rangeWordNode)
-  OPTIONAL { ?rangeWordNode l10n:label ?rangeWord0 } OPTIONAL { c:BoxRangePhrase rdfs:label ?rangeWord1 FILTER(langMatches(lang(?rangeWord1), "en")) }
+  OPTIONAL { ?rangeWordAt l10n:of c:BoxRangePhrase ; l10n:name ?rangeWord0 } OPTIONAL { FILTER(!BOUND(?rangeWord0)) c:BoxRangePhrase rdfs:label ?rangeWord1 }
   BIND(STR(COALESCE(?rangeWord0, ?rangeWord1)) AS ?rangeWord)
   BIND(IF(BOUND(?pq1), CONCAT(?head, ": ", ?medianWord, " ", sx:formatNumber(?v, ?locale, "maximumFractionDigits=2"), IF(?unit = "", "", CONCAT(" ", ?unit)),
     "; ", ?quartilesWord, " ", sx:formatNumber(?pq1, ?locale, "maximumFractionDigits=2"), " – ", sx:formatNumber(?pq3, ?locale, "maximumFractionDigits=2"),

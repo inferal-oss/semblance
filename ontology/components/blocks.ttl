@@ -1286,9 +1286,8 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* blk:DocumentLink .
-  OPTIONAL { $this blk:target ?doc }
-  OPTIONAL { ?doc schema:url ?docUrl }
-  OPTIONAL { ?doc schema:name ?docName }
+  # The document's address and name inside the target's OPTIONAL: without a target, no other node's.
+  OPTIONAL { $this blk:target ?doc . OPTIONAL { ?doc schema:url ?docUrl } OPTIONAL { ?doc schema:name ?docName } }
   OPTIONAL { $this schema:url ?ownUrl }
   OPTIONAL { $this schema:name ?ownName }
   BIND(COALESCE(STR(?docUrl), STR(?ownUrl)) AS ?url)

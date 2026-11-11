@@ -439,7 +439,7 @@ ui:dt-trend-partner a c:Sparkline ; c:label "Partner by month" ; c:view ui:dt-tr
 ui:dt-sales-partner ui:trend ui:dt-trend-partner .
 ui:dt-channels-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Channels" ; sem:select """
 SELECT ?channel (SUM(?amount) AS ?total) ?trend WHERE {
-  ?series c:key ?key ; ui:trend ?trend ; rdfs:label ?channel FILTER(LANG(?channel) = "")
+  ?channel c:key ?key ; ui:trend ?trend .
   ?s ui:saleChannel ?key ; ui:saleAmount ?amount
 } GROUP BY ?channel ?trend ORDER BY DESC(?total)""" .
 ui:dt-channels-table a c:Table ; c:label "Channels" ; c:query ui:dt-channels-view ; c:tableColumns ( ui:dt-channels-col-name ui:dt-channels-col-total ui:dt-channels-col-trend ) .
