@@ -26,7 +26,7 @@ export interface FollowOptions {
 export interface Followed {
   /** The store's cursor of the last message taken in (undefined before the snapshot). */
   readonly cursor: number | undefined
-  /** Whether the stream is open and has delivered its snapshot. */
+  /** Whether the stream is open: it has delivered its snapshot, or (resumed) a message since. */
   readonly live: boolean
   /** Resolves when the first snapshot has been taken in. */
   readonly ready: Promise<void>
@@ -53,6 +53,11 @@ export function followSource(views: Views, transport: SourceTransport, opts: Fol
 
   const received = (event: string, data: unknown) => {
     if (stopped) return
+    // Any message means the stream is open; a resumed one sends what was missed, then its cursor.
+    if (event !== 'snapshot' && cursor !== undefined) {
+      live = true
+      attempts = 0
+    }
     if (event === 'snapshot') {
       const snap = data as Snapshot
       const add = statementsOf(snap.add, f)

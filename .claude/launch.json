@@ -64,6 +64,19 @@
         "--strictPort"
       ],
       "port": 5184
+    },
+    {
+      "name": "views",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "examples/views/vite.config.ts",
+        "--port",
+        "5191",
+        "--strictPort"
+      ],
+      "port": 5191
     }
   ]
 }

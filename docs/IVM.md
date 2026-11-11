@@ -7,8 +7,8 @@ document is the design: what a maintained view is, how it is declared and inspec
 the rule engine, the operator set and each operator's incremental form, time and windows, correctness,
 cost, and the phased plan. The decisions taken are at the end; what was built, and where it differs
 from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of phase 2), §23 (phase 4),
-§24 (phase 5), §25 (phase 3), §26 (runs on request) and §27 (views over what rules and the runtime
-derive).
+§24 (phase 5), §25 (phase 3), §26 (runs on request), §27 (views over what rules and the runtime
+derive) and §28 (views on their own, without the framework: [VIEWS.md](VIEWS.md)).
 
 ## Status
 
@@ -35,6 +35,7 @@ derive).
 | **Phase 3, views and rules together** (§25): **exact dependencies for SPARQL rules** from their own patterns (the view compiler's dependencies, `$this` the partition key), replacing `sem:follows` / `sem:watches` / `sem:readsMinted` behind an engine option (`exactDependencies`); probes walk sibling groups and prune by partly bound patterns (views gain too); `ctx.rows(view)` for function rules; **persistence policies as views** (dirty from their view, a write stores the change: one change of a 2,000-triple policy writes three triples); **`iv:strategy iv:Incremental` for rules** (a hosted view per rule, partitioned by `$this`, feeding each focus's output). | `src/engine/exact.ts`, `engine.ts`, `context.ts`, `rules.ts`, `src/view/deps.ts`, `runtime.ts`, `src/persistence.ts`, `test/engine.test.ts`, `test/persistence-cost.test.ts`, `test/rules-incremental.test.ts` | |
 | **Views over what rules and the runtime derive** (§27): `iv:reads <rendering>` reads the first projection's derived graph, stepped in rounds after the projections until nothing more changes; figures written in idle time step the views that read the views graph. A sheet's formulas are views per cell, `c:QueryFormula` is gone, and the dashboard's progress, the warehouse's cost lines and the workbench's Plan summary are views over figures (#147). | `src/view/runtime.ts`, `src/runtime.ts`, `src/recalculation.ts`, `ontology/components/formula.ttl`, `sheet.ttl`, `test/ex-sheet.test.ts`, `test/view-derived.test.ts` | |
 | **The workbench on views**: Follow updates (the Live switch) types the query as an `iv:View` (`c:FollowAsView`; `iv:materialize iv:ResultSet`, `iv:strategy iv:Auto`, measured), the table reads its maintained rows (followed at the next frame), and a **Plan** tab shows its strategy or fallback, the last change's work against a re-run, the from-scratch check and its operators. Recomputed views re-run only for changes their patterns see. | `ontology/components/workbench.ttl`, `src/components/workbench.ts`, `demo/gallery/_workbench.ttl`, `test/follow-updates.test.ts` | |
+| **Views on their own** (§28, [VIEWS.md](VIEWS.md)): `@inferal-oss/semblance/views`, a store of a built-in kind and a `ViewRuntime` over it with no ontology and no projection; `apply` / `write` / `load` / `transaction` as ticks (sharing `applyEffective` and `Consolidation` with `Runtime`); `followSource` over the remote protocol; `ViewHandle.orderedRows`; `useView` / `useRows` in `semblance-react`. A change costs the same over 1 000 or 50 000 statements and over 50 or 2 000 todos; the views page fetches 487 KiB of JavaScript before it is live against `mount`'s 1 962 KiB. | `src/views/`, `src/view/input.ts`, `src/web/engine-store.ts`, `src/web/stores.ts`, `src/node/stores.ts`, `packages/react/src/views.ts`, `examples/views/`, `test/views-*.test.ts`, `test/react-views.test.ts` | |
 
 Related, outside the view runtime: the SPARQL workbench's **Follow updates** (5559be4) re-runs a
 query when a triple it reads changes, by tracing the query's patterns; it is recompute with exact
@@ -1934,6 +1935,28 @@ A maintained view reads the input graphs; with `iv:reads` it also reads (`src/vi
   progress (`dx:qWork`, `iv:reads dx:Cube`), the warehouse's cost lines (`wh:qCost`, a view per line
   reading its views' figures) and the workbench's Plan tab (`ui:qPlanSummary`, `iv:reads
   ui:currentQuery`) are views over figures.
+
+## 28. Views on their own, as built
+
+The views do not need the rest of the framework. `@inferal-oss/semblance/views` (`src/views/`) is a
+store of a built-in kind (`openStore`; `wat` by default) with no ontology loaded, and a started
+`ViewRuntime` over it (`createViews`, `openViews`), with no rule engine and no projection. Views are
+hosted from code (`host`, `select`, `construct`), as `Runtime.views.host` hosts them in a mounted
+app. Changes come in as ticks: `apply` (the default graph), `write` (a named graph the views read),
+`load`, `transaction` (one consolidated tick) and `advance` (a tick with no input). They are applied
+and consolidated by the same code as `Runtime`'s (`src/view/input.ts`). `followSource`
+(`src/views/remote.ts`) follows a store's stream (docs/REMOTE.md) into views, read-only. It replaces
+the patterns' part on a snapshot by the same function the remote-sources effect uses (`heldOf`).
+
+Two additions came with it. `ViewHandle.orderedRows()` gives a SELECT's rows in ORDER BY order.
+`rows()` keeps no order, and a reader outside the graph has no `rs:index` to sort by. The browser's
+stores are split so that a page needing only the engine (`src/web/engine-store.ts`) carries no
+other kind's code: the N3 store's stream polyfills alone were 100 KiB.
+
+`semblance-react`'s `useView` / `useRows` (`packages/react/src/views.ts`) read a view over
+`useSyncExternalStore`, with one source per view. Its snapshot changes only when that view does,
+and the server snapshot is the same. The guide, the measurements and the cost table are in
+[VIEWS.md](VIEWS.md).
 
 ## Decisions
 
