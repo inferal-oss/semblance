@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { frameworkChanges, LOCK_FILE, readLock, readSources, retiredTerms, writeLock } from './index.ts'
-import { compareVersions, type Finding, migrate, type MigrateResult, verify } from './migrate.ts'
+import { compareVersions, type Finding, migrate, type MigrateResult, updateScript, verify } from './migrate.ts'
 
 /** The framework's own version: its package.json is two levels up in the repository, three in the package (lib/src/migrate/). */
 function frameworkVersion(): string {
@@ -42,6 +42,7 @@ export async function run(command: string, args: string[]): Promise<number> {
       since: { type: 'string' },
       'accept-loss': { type: 'boolean', default: false },
       changes: { type: 'string' },
+      update: { type: 'boolean', default: false },
     },
   })
   const changes = frameworkChanges(values.changes && resolve(values.changes))
@@ -54,6 +55,10 @@ export async function run(command: string, args: string[]): Promise<number> {
   }
   const lockPath = resolve(LOCK_FILE)
   const lock = readLock(lockPath)
+  if (values.update) {
+    process.stdout.write(updateScript(changes, values.from ?? lock.writtenAgainst, lock.applied))
+    return 0
+  }
   const files = readSources(positionals.length ? positionals.map((p) => resolve(p)) : [resolve('.')])
   if (values.verify) {
     const findings = await verify({ files, changes, retired: [...retiredTerms(), ...changes.flatMap((c) => c.retires)], applied: changes.filter((c) => lock.applied.includes(c.iri) || c.release !== undefined).map((c) => c.iri) })

@@ -1,4 +1,5 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
+import { readRetired, type Retired, retiredIn } from '../retired.ts'
 import { H, L10N, NS, PROV, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { type Delta, mint, mintedUnder, owningFocus, quadKey, termKey } from '../rdf.ts'
 import { QueryInterrupted, storeFailure, type GraphStore } from '../store/types.ts'
@@ -278,6 +279,8 @@ export class Engine {
   private overOutput(wd: Watchdog): boolean {
     return this.stats.derivedAdded - this.stats.derivedRemoved > this.maxDerived && wd.bounded && wd.over('output')
   }
+  private retired?: Retired
+  private readonly retiredReported = new Set<string>()
   /** Pairs set aside by a suspended run, by stratum: still to evaluate. */
   private held = new Map<number, Map<Rule, Set<string>>>()
   private heldPairs = 0
@@ -1995,11 +1998,22 @@ export class Engine {
     return out
   }
 
+  /** A rule that produced a term which has gone: reported once a term, never repaired. A lookup per triple, and none while nothing has retired. */
+  private reportRetired(q: Quad) {
+    this.retired ??= readRetired(this.store)
+    if (!this.retired.terms.size) return
+    const term = retiredIn(q, this.retired)
+    if (!term || this.retiredReported.has(term)) return
+    this.retiredReported.add(term)
+    console.warn(`[semblance] A rule produced ${term}, which has gone${this.retired.renames.has(term) ? `: it is now ${this.retired.renames.get(term)}` : ''}. semblance migrate moves the source.`)
+  }
+
   private retain(key: string, q: Quad) {
     const ref = this.refs.get(key)
     if (ref) return void ref.n++
     const f = this.store.factory
     const stored = q.graph.equals(this.graph) ? q : f.quad(q.subject, q.predicate, q.object, this.graph)
+    this.reportRetired(q)
     this.store.add(stored)
     this.refs.set(key, { q: stored, n: 1 })
     this.stats.derivedAdded++

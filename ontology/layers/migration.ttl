@@ -28,6 +28,9 @@ mig:renames a owl:ObjectProperty ; rdfs:domain mig:Migration ;
 mig:old a rdf:Property ; rdfs:comment "In mig:renames: the term (an IRI) or slug (a string) as it was."@en .
 mig:new a rdf:Property ; rdfs:comment "In mig:renames: the term or slug as it is."@en .
 
+mig:renamedTo a rdf:Property ;
+    rdfs:comment "On a sem:RetiredTerm: its name now (ontology/layers/retired.ttl, generated)."@en .
+
 mig:forward a owl:DatatypeProperty ; rdfs:domain mig:Migration ;
     rdfs:comment "A SPARQL Update (DELETE/INSERT WHERE) from the old shape to the new one."@en .
 mig:backward a owl:DatatypeProperty ; rdfs:domain mig:Migration ;

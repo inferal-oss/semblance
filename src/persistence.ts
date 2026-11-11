@@ -12,6 +12,7 @@
 // view reads the input graphs only (views step before projections), so a policy
 // opts in when that is all it reads.
 import type { Quad, Term } from '@rdfjs/types'
+import { migrateQuads, readRetired } from './retired.ts'
 import { Parser, Writer } from 'n3'
 import type { ReactionFn } from './behaviour/events.ts'
 import type { FnRule } from './engine/context.ts'
@@ -347,13 +348,25 @@ export class Persistence {
       return undefined
     }
     const g = policy.graph ? f.namedNode(policy.graph) : f.defaultGraph()
-    const held = new Map(this.parse(blob.nt).map((q) => [quadKey(q), q]))
+    const retired = readRetired(this.store)
+    const remembered = migrateQuads(this.parse(blob.nt), retired, f)
+    // A remembered triple that names a term which went without a new name cannot be carried over.
+    if (!remembered) {
+      await this.removeStored(policy)
+      return undefined
+    }
+    const held = new Map(remembered.map((q) => [quadKey(q), q]))
     for (let i = 1; i <= (blob.chunks ?? 0); i++) {
       const raw = await this.backend(policy.scope).get(this.key(policy.iri) + '#' + i)
       if (!raw) break
       const chunk = JSON.parse(raw) as Chunk
-      for (const q of this.parse(chunk.remove)) held.delete(quadKey(q))
-      for (const q of this.parse(chunk.add)) held.set(quadKey(q), q)
+      const [removed, added] = [migrateQuads(this.parse(chunk.remove), retired, f), migrateQuads(this.parse(chunk.add), retired, f)]
+      if (!removed || !added) {
+        await this.removeStored(policy)
+        return undefined
+      }
+      for (const q of removed) held.delete(quadKey(q))
+      for (const q of added) held.set(quadKey(q), q)
     }
     // Only what the policy covers comes back: whatever else storage holds stays there.
     const add = [...held.values()].filter((q) => this.covers(policy, q)).map((q) => f.quad(q.subject, q.predicate, q.object, g))

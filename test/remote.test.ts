@@ -68,8 +68,8 @@ function local(server: SourceServer) {
   return t
 }
 
-function mount(endpoint: Endpoint | SourceTransport | undefined, kind: 'wat' | 'oxigraph' = 'wat') {
-  const s = loadStore(kind, app)
+function mount(endpoint: Endpoint | SourceTransport | undefined, kind: 'wat' | 'oxigraph' = 'wat', extra = '') {
+  const s = loadStore(kind, app, extra)
   const runtime = new Runtime(s)
   const screen = runtime.project({ modality: MOD.Screen, layers: DEFAULT_LAYERS, name: 'screen', roots: [EX + 'page'] }, (e) => {
     throw e
@@ -317,5 +317,16 @@ describe('remote sources', () => {
       http.closeAllConnections()
       await new Promise((r) => http.close(r))
     }
+  })
+})
+
+describe('a store written against an older framework', () => {
+  it('is refused and reported, and what it holds is not taken in', async () => {
+    const server = store()
+    const h = mount(local(server), 'wat', `<${EX}done> a <${NS.sem}RetiredTerm> .`)
+    await turn()
+    const error = h.store.match(h.nn(EX + 'store'), h.nn(SRC + 'lastError'), null, h.nn(SOURCES_GRAPH))[0]?.object.value
+    expect(error).toContain('semblance migrate --update')
+    expect(h.store.match(null, h.nn(EX + 'done'), null)).toHaveLength(0)
   })
 })
