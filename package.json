@@ -24,29 +24,34 @@
     "url": "https://github.com/inferal-oss/semblance/issues"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./web": "./src/web/index.ts",
-    "./node": "./src/node/index.ts",
-    "./ontology/*": "./ontology/*",
-    "./package.json": "./package.json",
-    "./server": "./src/server/index.ts",
-    "./virtual": { "types": "./src/virtual.d.ts" },
-    "./wasm/*": "./rdf-engine/build/*"
+    ".": {
+      "types": "./lib/src/index.d.ts",
+      "default": "./lib/src/index.js"
+    },
+    "./web": {
+      "types": "./lib/src/web/index.d.ts",
+      "default": "./lib/src/web/index.js"
+    },
+    "./node": {
+      "types": "./lib/src/node/index.d.ts",
+      "default": "./lib/src/node/index.js"
+    },
+    "./server": {
+      "types": "./lib/src/server/index.d.ts",
+      "default": "./lib/src/server/index.js"
+    },
+    "./virtual": {
+      "types": "./lib/src/virtual.d.ts"
+    },
+    "./ontology/*": "./lib/ontology/*",
+    "./wasm/*": "./lib/rdf-engine/build/*",
+    "./package.json": "./package.json"
   },
   "files": [
-    "src",
-    "ontology",
-    "rdf-engine/host",
-    "rdf-engine/build/*.wasm",
-    "layout-solver/build/*.wasm",
-    "docs",
-    "README.md",
-    "DESIGN.md",
-    "PERSISTENCE.md",
-    "LICENSE",
+    "lib",
+    "bin/semblance.mjs",
     "LICENSE-APACHE",
-    "LICENSE-MIT",
-    "bin"
+    "LICENSE-MIT"
   ],
   "publishConfig": {
     "access": "public"
@@ -73,19 +78,21 @@
     "pretest": "npm run engine:build && npm run layout:build",
     "pretest:full": "npm run engine:build && npm run layout:build",
     "prebuild:single": "npm run engine:build && npm run layout:build",
-    "prepack": "npm run engine:build && npm run layout:build",
+    "prepack": "npm run engine:build && npm run layout:build && npm run build:package",
     "serve": "node bin/semblance.mjs serve",
-    "perf:interactions": "tsx scripts/interactions.ts"
+    "perf:interactions": "tsx scripts/interactions.ts",
+    "build:package": "tsx scripts/build-package.ts",
+    "pack:check": "tsx scripts/pack-check.ts"
   },
   "dependencies": {
+    "@rdfjs/types": "^2.0.1",
+    "@types/n3": "^1.26.5",
     "n3": "^2.13.12",
     "oxigraph": "^0.5.13",
     "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@comunica/query-sparql-rdfjs": "^5.4.1",
-    "@rdfjs/types": "^2.0.1",
-    "@types/n3": "^1.26.5",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

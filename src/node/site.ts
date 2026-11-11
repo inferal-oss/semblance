@@ -281,7 +281,8 @@ export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?:
   return { bytes, css }
 }
 
-const workerPath = fileURLToPath(new URL('./site-worker.ts', import.meta.url))
+// The worker beside this module: its source in this repository, its build in the package (lib/).
+const workerPath = fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './site-worker.ts' : './site-worker.js', import.meta.url))
 
 function inWorker(job: PagesJob): Promise<{ bytes: number; css?: string }> {
   return new Promise((resolveJob, reject) => {
