@@ -40,6 +40,11 @@
       "types": "./lib/src/server/index.d.ts",
       "default": "./lib/src/server/index.js"
     },
+    "./views": {
+      "types": "./lib/src/views/web.d.ts",
+      "node": "./lib/src/views/node.js",
+      "default": "./lib/src/views/web.js"
+    },
     "./virtual": {
       "types": "./lib/src/virtual.d.ts"
     },

@@ -15,9 +15,11 @@
     "jsx": "react-jsx",
     "paths": {
       "@inferal-oss/semblance": ["./src/index.ts"],
+      "@inferal-oss/semblance/views": ["./src/views/web.ts"],
       "@inferal-oss/semblance/*": ["./src/*/index.ts"],
       "@inferal-oss/semblance-react": ["./packages/react/src/index.ts"],
-      "@inferal-oss/semblance-react/server": ["./packages/react/src/server.ts"]
+      "@inferal-oss/semblance-react/server": ["./packages/react/src/server.ts"],
+      "@inferal-oss/semblance-react/views": ["./packages/react/src/views.ts"]
     }
   },
   "include": ["src", "test", "bench", "demo", "scripts", "rdf-engine", "examples", "packages"]

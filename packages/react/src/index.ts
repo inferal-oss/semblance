@@ -27,6 +27,7 @@ import { createRoot, hydrateRoot, type Root } from 'react-dom/client'
 import { reactAttributes } from './attributes.ts'
 
 export { reactAttributes, styleObject, propName } from './attributes.ts'
+export { useRows, useView, values, type Values, type ViewState } from './views.ts'
 
 /** Props React reads itself: never taken from an authored graph. */
 const REACT_RESERVED = new Set(['dangerouslySetInnerHTML', 'ref', 'key', 'children', 'suppressHydrationWarning', 'suppressContentEditableWarning'])

@@ -7,7 +7,8 @@ import type { Quad, Term } from '@rdfjs/types'
 import { DataFactory, Parser, Writer } from 'n3'
 import { FrameSplitter, type JellyFactory, JellyReader } from './jelly/decode.ts'
 import { delimit, JellyWriter } from './jelly/encode.ts'
-import type { Factory } from './store/types.ts'
+import { quadKey } from './rdf.ts'
+import type { Factory, GraphStore } from './store/types.ts'
 
 /**
  * Part of a store a page needs: a triple pattern (any of subject, predicate, object; an omitted
@@ -61,6 +62,25 @@ export function concerns(q: Quad, patterns: readonly Pattern[], typesOf: (subjec
     return true
   }
   return false
+}
+
+/**
+ * What a store holds of the patterns in one graph: each pattern matched in its own index (a class's
+ * instances, then their statements), so it costs that part of the store, not the store. What a
+ * snapshot replaces (the remote-sources effect, and views following a source).
+ */
+export function heldOf(store: GraphStore, patterns: readonly Pattern[], graph: Term): Quad[] {
+  const f = store.factory
+  const type = f.namedNode(RDF_TYPE)
+  const typesOf = (subject: Term) => new Set(store.match(subject, type, null, graph).map((q) => q.object.value))
+  const term = (v: string | undefined) => (v === undefined ? null : f.namedNode(v))
+  const out = new Map<string, Quad>()
+  for (const p of patterns) {
+    const subjects = p.class !== undefined ? store.match(term(p.subject), type, f.namedNode(p.class), graph).map((q) => q.subject) : [term(p.subject)]
+    for (const subject of subjects)
+      for (const q of store.match(subject, term(p.predicate), term(p.object), graph)) if (concerns(q, [p], typesOf)) out.set(quadKey(q), q)
+  }
+  return [...out.values()]
 }
 
 /** Statements as N-Triples (graphs dropped: a source's statements land where the page says). */

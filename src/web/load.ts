@@ -1,15 +1,9 @@
-import type * as Ox from 'oxigraph'
-import { hasEngine, startEngine } from './engine.ts'
-import { engineStore } from '../../rdf-engine/host/store.ts'
 import { layoutKinds, provideLayoutModule, type LayoutKind } from '../layout/engine.ts'
 import { ONTOLOGY_FILES } from '../ontology.ts'
-import { hybridStore } from '../store/hybrid.ts'
-import { n3Store } from '../store/n3.ts'
-import { oxigraphStore } from '../store/oxigraph.ts'
-import { configureFetching, type FetchPolicy, type GraphStore } from '../store/types.ts'
+import type { GraphStore } from '../store/types.ts'
+import { createStore, initStore, type StoreKind, type StoreOptions } from './stores.ts'
 
-/** `wat` and `rust` are Semblance's own engines (rdf-engine/): "Semblance WASM" and "Semblance Rust". */
-export type StoreKind = 'wat' | 'rust' | 'oxigraph' | 'n3' | 'hybrid'
+export { COMPILE_ON_RUN, createStore, hasStore, initStore, type StoreKind, type StoreOptions } from './stores.ts'
 
 // The vendored RDF/HTML vocabulary is only read at build time (scripts/gen-rdfhtml-vocab.ts).
 // Each file is a chunk of its own, fetched when asked for (loadOntology): a page loads the files it
@@ -42,40 +36,15 @@ export function ontologyText(name: string): string | undefined {
   return sources['../../' + name]
 }
 
-
-let ox: typeof Ox | undefined
-const engines: Partial<Record<'rust' | 'wat', WebAssembly.Module>> = {}
-
-/** Whether this build includes the engine behind a store kind. */
-export function hasStore(kind: StoreKind): boolean {
-  return kind === 'rust' || kind === 'wat' ? hasEngine(kind) : true
-}
-
 /**
- * Load what a store kind needs, and nothing else: Oxigraph's WASM (about 4 MB) only
- * for the Oxigraph and Hybrid stores, an engine build only for its own store.
- * Must be awaited before creating that kind of store.
+ * Load what a store kind needs (initStore) and the framework's ontology. Must be awaited before
+ * creating that kind of store.
  */
 export async function initWeb(kind: StoreKind, opts: { ontology?: boolean } = {}): Promise<void> {
   // The whole ontology, unless the host loads what a page needs itself (ontology: false).
   const ontology = opts.ontology === false ? undefined : loadOntology()
   await initStore(kind)
   await ontology
-}
-
-async function initStore(kind: StoreKind): Promise<void> {
-  if (kind === 'oxigraph' || kind === 'hybrid') {
-    if (ox) return
-    // wasm-bindgen locates web_bg.wasm via new URL(..., import.meta.url), which Vite
-    // serves as its own file and inlines in the single-file build.
-    const web = await import('oxigraph/web.js')
-    await web.default()
-    ox = web as unknown as typeof Ox
-  } else if (kind === 'rust' || kind === 'wat') {
-    if (engines[kind]) return
-    // The engine builds are fetched only for the store in use (a host may have started it already).
-    engines[kind] = await startEngine(kind)
-  }
 }
 
 // The layout solver's WASM twins (layout-solver/build.ts), fetched only when initLayout is called.
@@ -97,36 +66,6 @@ export async function initLayout(): Promise<LayoutKind[]> {
     }
   }
   return layoutKinds()
-}
-
-/** Store options (benchmark configurations choose them; the defaults are the site's). */
-export interface StoreOptions {
-  /**
-   * Semblance's engines: run prepared SPARQL queries compiled to WebAssembly (rdf-engine/ABI.md):
-   * true compiles a query on its second run, 'idle' the most-run ones in idle time.
-   */
-  compiled?: boolean | 'idle'
-  /** Semblance's engines: the time zone sx:formatDateTime uses when its options name none (default: the host's). */
-  timeZone?: string
-  /**
-   * Semblance's engines: what `store.query` and `store.update` may fetch for SERVICE and LOAD
-   * (docs/FETCHING.md; default: nothing). The other stores do not fetch, and refuse one.
-   */
-  fetchPolicy?: FetchPolicy
-}
-
-/** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
-export const COMPILE_ON_RUN = 2
-
-export function createStore(kind: StoreKind, options: StoreOptions = {}): GraphStore {
-  if (kind === 'rust' || kind === 'wat') {
-    const module = engines[kind]
-    if (!module) throw new Error(`initWeb('${kind}') must be awaited first`)
-    return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : 0, timeZone: options.timeZone, fetchPolicy: options.fetchPolicy })
-  }
-  if (kind === 'n3') return configureFetching(n3Store(), options.fetchPolicy)
-  if (!ox) throw new Error(`initWeb('${kind}') must be awaited first`)
-  return configureFetching(kind === 'oxigraph' ? oxigraphStore(ox) : hybridStore(ox), options.fetchPolicy)
 }
 
 export function ontologySources(): string[] {

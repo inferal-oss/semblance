@@ -1,5 +1,4 @@
-import type { Quad, Term } from '@rdfjs/types'
-import { Parser } from 'n3'
+import type { Quad } from '@rdfjs/types'
 import { type Delta, mint, quadKey } from './rdf.ts'
 import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
@@ -16,6 +15,10 @@ import { exampleFunctions } from './examples/index.ts'
 import { functions as referenceFunctions } from './components/reference.ts'
 import { VIEW_GRAPH, ViewRuntime } from './view/runtime.ts'
 import { viewFunctions } from './view/functions.ts'
+import { applyEffective, Consolidation } from './view/input.ts'
+import { parseTurtle } from './parse-turtle.ts'
+
+export { parseTurtle }
 import { Watchdog } from './engine/watchdog.ts'
 
 /**
@@ -70,7 +73,7 @@ export class Runtime {
    */
   readonly watchdog = new Watchdog()
   /** The open transaction: every effective change since it began, by graph and quad (net weight). */
-  private tx?: Map<string, { graph: string | undefined; q: Quad; w: number }>
+  private tx?: Consolidation
 
   constructor(readonly store: GraphStore) {
     this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH], functions: viewFunctions })
@@ -105,7 +108,7 @@ export class Runtime {
    */
   transaction<T>(fn: () => T): T {
     if (this.tx) return fn()
-    this.tx = new Map()
+    this.tx = new Consolidation()
     try {
       return fn()
     } finally {
@@ -166,27 +169,13 @@ export class Runtime {
     if (!effective.add.length && !effective.remove.length) return
     // Outside a transaction a change is its own tick, exactly as applied.
     if (!this.tx) return this.tick(new Map([[graph, effective]]), effective)
-    for (const [w, qs] of [[-1, effective.remove], [1, effective.add]] as const) {
-      for (const q of qs) {
-        const k = (graph ?? '') + ' ' + quadKey(q)
-        const e = this.tx.get(k)
-        if (e) e.w += w
-        else this.tx.set(k, { graph, q, w })
-      }
-    }
+    this.tx.add(graph, effective)
   }
 
+
   /** A transaction's changes, consolidated: a triple added and removed again is no change. */
-  private flush(tx: Map<string, { graph: string | undefined; q: Quad; w: number }>) {
-    const all: Delta = { add: [], remove: [] }
-    const byGraph = new Map<string | undefined, Delta>()
-    for (const { graph, q, w } of tx.values()) {
-      if (!w) continue
-      let d = byGraph.get(graph)
-      if (!d) byGraph.set(graph, (d = { add: [], remove: [] }))
-      ;(w > 0 ? d.add : d.remove).push(q)
-      ;(w > 0 ? all.add : all.remove).push(q)
-    }
+  private flush(tx: Consolidation) {
+    const { byGraph, all } = tx.result()
     if (all.add.length || all.remove.length) this.tick(byGraph, all)
   }
 
@@ -407,20 +396,11 @@ export class Runtime {
    */
   write(graph: string, delta: Delta): Delta {
     if (this.disposed) return { add: [], remove: [] }
-    const f = this.store.factory
-    const g = f.namedNode(graph)
-    const effective: Delta = { add: [], remove: [] }
-    for (const q of delta.remove) {
-      const e = f.quad(q.subject, q.predicate, q.object, g)
-      if (this.store.has(e)) this.store.delete(e), effective.remove.push(e)
-    }
-    for (const q of delta.add) {
-      const e = f.quad(q.subject, q.predicate, q.object, g)
-      if (!this.store.has(e)) this.store.add(e), effective.add.push(e)
-    }
+    const effective = applyEffective(this.store, graph, delta)
     this.changed(graph, effective)
     return effective
   }
+
 
   /** Append to (or retire from) the change log. Callers write complete, immutable members. */
   log(delta: Delta): void {
@@ -603,21 +583,12 @@ export class Runtime {
 
   /** Apply a change to the input graph (default graph) and update every projection. */
   apply(delta: Delta): Delta {
-    const effective: Delta = { add: [], remove: [] }
-    if (this.disposed) return effective
-    const f = this.store.factory
-    const dg = f.defaultGraph()
-    for (const q of delta.remove) {
-      const g = f.quad(q.subject, q.predicate, q.object, dg)
-      if (this.store.has(g)) this.store.delete(g), effective.remove.push(g)
-    }
-    for (const q of delta.add) {
-      const g = f.quad(q.subject, q.predicate, q.object, dg)
-      if (!this.store.has(g)) this.store.add(g), effective.add.push(g)
-    }
+    if (this.disposed) return { add: [], remove: [] }
+    const effective = applyEffective(this.store, undefined, delta)
     this.changed(undefined, effective)
     return effective
   }
+
 }
 
 /**
@@ -638,13 +609,3 @@ function settle(p: Projection) {
 const MAX_ROUNDS = 64
 
 const declaresWarmth = (q: Quad) => q.predicate.value === SEM.warm
-
-/** Graphs parsed by parseTurtle: each one's blank nodes are its own. */
-let parsed = 0
-
-/** A Turtle document's triples, in the store's terms (blank nodes labelled apart from every other document's). */
-export function parseTurtle(turtle: string, f: GraphStore['factory']): Quad[] {
-  const term = (t: Term): Term =>
-    t.termType === 'NamedNode' ? f.namedNode(t.value) : t.termType === 'Literal' ? f.literal(t.value, t.language || f.namedNode(t.datatype.value)) : t
-  return new Parser({ format: 'text/turtle', blankNodePrefix: `g${++parsed}_` }).parse(turtle).map((q) => f.quad(term(q.subject as Term), term(q.predicate as Term), term(q.object as Term)))
-}
