@@ -1,3 +1,4 @@
+import type { Quad } from '@rdfjs/types'
 import { parseHTML } from 'linkedom'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { loadStore, loadStoreOf, ontologyFiles } from '../src/node/load.ts'
@@ -59,13 +60,12 @@ async function takenOver(site: Site, url: string) {
   return { ...c, renderer, host, only: only! }
 }
 
-/** The rest of the graphs, with the sources of the examples among them, as the client takes them in (demo/main.ts). */
+/** The rest of the graphs, with the sources of the examples among them, as the client takes them in (demo/main.ts), and each graph's triples. */
 async function restOf(site: Site, c: Awaited<ReturnType<typeof takenOver>>) {
   const named: Record<string, string> = { ...ontologyFiles(), ...(await namedGraphs(site)) }
   const rest = Object.keys(named).filter((n) => !c.only.includes(n))
-  const add = rest.flatMap((n) => parseTurtle(named[n]!, c.store.factory))
-  add.push(...sourceQuads(c.store.factory, siteSources(Object.fromEntries(rest.filter((n) => n.startsWith('demo/gallery/')).map((n) => [n, named[n]!])))))
-  return sliceAddition(add, 150)
+  const graphs = new Map(rest.map((n) => [n, [...parseTurtle(named[n]!, c.store.factory), ...sourceQuads(c.store.factory, siteSources(n.startsWith('demo/gallery/') ? { [n]: named[n]! } : {}))]]))
+  return { ...sliceAddition([...graphs.values()].flat(), 150), graphs }
 }
 
 /** All of the rest: what defines rules, then slices. */
@@ -278,33 +278,47 @@ describe('every page reached by a click is the page loaded directly', () => {
     expect(wrong).toEqual([])
   }, 900_000)
 
-  // A first visit (#378): the page is taken over with the graphs it names, the rest arrive in idle
-  // time as the site's client takes them in (arrive, demo/main.ts), and the visitor clicks into an
-  // example or a doc before the last has arrived. What is left is taken in at once, not an idle
-  // period at a time (seconds, in a browser with few of them), and the page is the page loaded directly.
+  // A first visit (#378, #420): the page is taken over with the graphs it names, the rest arrive in
+  // idle time as the site's client takes them in (arrive, demo/main.ts), and the visitor clicks into
+  // an example or a doc before the last has arrived. What that page names (Site.pageGraphs) is taken
+  // in at once, before another idle period, not an idle period at a time (seconds, in a browser with
+  // few of them), nor with all the rest (a task of a second): the page is the page loaded directly
+  // once those are in, and still at the end.
   it('a first visit: a click while the rest arrive', async () => {
     const wrong: string[] = []
     for (const url of routes.filter((r) => /^\/(docs|examples)\//.test(r))) {
+      const server = await renderSite(site, url)
+      const names = await pageGraphs(site, url, server.html, { base: '/' })
+      server.runtime.dispose()
       const c = await takenOver(site, FROM)
+      const rest = await restOf(site, c)
+      const needed = new Set((names ?? []).flatMap((n) => rest.graphs.get(n) ?? []))
+      const test = (q: Quad) => needed.has(q)
       await direct(url, async (to, want) => {
         let clicked = false
         let waits = 0
         let early = ''
-        await arrive(await restOf(site, c), {
+        let first: string | undefined
+        await arrive(rest, {
           runtime: c.runtime,
           // The click comes while the third idle period is awaited.
           idle: async () => {
-            if (clicked) early ||= 'an idle period awaited after the click'
+            if (clicked && first === undefined) early ||= 'an idle period awaited before what the page names'
             if (++waits === 3) follow(c, to), (clicked = true)
             return { timeRemaining: () => 0 }
           },
-          urgent: () => clicked,
-          flush: () => c.renderer.flush(),
+          urgent: () => clicked && (names ? test : true),
+          flush: () => {
+            c.renderer.flush()
+            if (!clicked || first !== undefined) return
+            idle(c)
+            first = difference(shown(c.host), want)
+          },
         })
         idle(c)
         // (A text in every language may say so in passing, before the graph that picks one: not what is left at the end.)
         const diff = difference(shown(c.host), want)
-        if (early || diff) wrong.push(`${url}: ${early} ${diff}`)
+        if (early || diff || first) wrong.push(`${url}: ${early} ${first ? 'once what it names is in: ' + first : ''} ${diff}`)
       })
       c.runtime.dispose()
     }

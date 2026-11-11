@@ -80,31 +80,73 @@ export interface Arrival {
   runtime: { apply(delta: { add: Quad[]; remove: Quad[] }): unknown; arriving(on: boolean): void }
   /** The next idle period. */
   idle(): Promise<{ timeRemaining(): number }>
-  /** Whether what is left is needed now (the visitor moved to another page): then it is taken in at once. */
-  urgent(): boolean
+  /**
+   * What of what is left is needed now, the visitor having moved to another page: nothing (false);
+   * the triples a test picks (those of the graphs that page needs, Site.pageGraphs); or all of it
+   * (true: what that page needs is not known). The same test is taken in once.
+   */
+  urgent(): boolean | ((q: Quad) => boolean)
+  /**
+   * The next task once the browser has had its turn, with the time to spend in it: what is left
+   * when all of it is needed goes a few slices per task. Without it, all of it goes in at once.
+   */
+  task?(): Promise<{ timeRemaining(): number }>
   /** Patch the DOM after a change. */
   flush(): void
 }
 
 /**
  * Take sliced additions in through the runtime: what defines rules at once, then as many slices
- * per idle period as fit in it. Once `urgent()`, what is left goes in as one change: a page reached
- * meanwhile may show what is among it (an example reached from another page, #378), and would
- * otherwise stay empty until the last slice, seconds later where idle periods are few or short.
+ * per idle period as fit in it. Once the visitor moves to another page, what it needs of what is
+ * left (`urgent`) goes in at once, as one change, and as if it were all (what is due over the
+ * whole graph is evaluated, what was evaluated before is again); the rest follows as before. That
+ * page may show what is among it (an example reached from another page, #378), and would otherwise
+ * stay empty until the last slice, seconds later where idle periods are few or short; all of the
+ * rest at once was a task of a second (#420). When what it needs is not known, the rest goes a few
+ * slices per task.
  */
 export async function arrive({ rules, rest }: Slices, a: Arrival): Promise<void> {
   a.runtime.arriving(true)
   a.runtime.apply({ add: rules, remove: [] })
   a.flush()
-  for (let i = 0; i < rest.length; ) {
-    if (a.urgent()) {
-      a.runtime.apply({ add: rest.slice(i).flat(), remove: [] })
+  let left = rest
+  let i = 0
+  const taken = new Set<(q: Quad) => boolean>()
+  // What the page shown needs, not yet taken in (all of the rest: true).
+  const pending = (): false | true | ((q: Quad) => boolean) => {
+    const u = a.urgent()
+    return u === true || (typeof u === 'function' && !taken.has(u) && u)
+  }
+  // What the page shown needs goes in at once, as one change and a task of its own (true if it did).
+  const take = (): boolean => {
+    const u = pending()
+    if (typeof u !== 'function') return false
+    taken.add(u)
+    const now: Quad[] = []
+    left = left.slice(i).map((s) => s.filter((q) => !u(q) || (now.push(q), false))).filter((s) => s.length)
+    i = 0
+    if (!now.length) return false
+    // What the page needs has arrived: what is due over the whole graph is evaluated, and what was
+    // evaluated before is again (the page is the page loaded directly); the rest is a new arrival.
+    a.runtime.apply({ add: now, remove: [] })
+    a.runtime.arriving(false)
+    a.runtime.arriving(true)
+    a.flush()
+    return true
+  }
+  while (i < left.length) {
+    if (pending() === true && !a.task) {
+      a.runtime.apply({ add: left.slice(i).flat(), remove: [] })
       a.flush()
       break
     }
-    const deadline = await a.idle()
-    do a.runtime.apply({ add: rest[i++]!, remove: [] })
-    while (i < rest.length && !a.urgent() && deadline.timeRemaining() > 8)
+    const deadline = await (pending() && a.task ? a.task() : a.idle())
+    // (The visitor may have moved meanwhile.)
+    if (take() || (pending() === true && !a.task)) continue
+    while (i < left.length) {
+      a.runtime.apply({ add: left[i++]!, remove: [] })
+      if (deadline.timeRemaining() <= 8 || typeof pending() === 'function') break
+    }
     a.flush()
   }
   a.runtime.arriving(false)

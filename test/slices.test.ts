@@ -3,7 +3,9 @@ import { loadRules, namedPredicates } from '../src/engine/rules.ts'
 import { loadStore } from '../src/node/load.ts'
 import { prefixesFor } from '../src/prefixes.ts'
 import { parseTurtle } from '../src/runtime.ts'
-import { sliceAddition } from '../src/slices.ts'
+import { encodePageGraphs } from '../src/server/page-graphs.ts'
+import { arrive, sliceAddition } from '../src/slices.ts'
+import { indexedPageGraphs } from '../src/web/takeover.ts'
 
 // The rest of a page's graphs taken in as several changes (#263, #254): whole descriptions per
 // slice, what defines rules first; and each query read once for every engine that has it.
@@ -68,6 +70,58 @@ ex:data ex:p 1 .`, store.factory), 1)
     expect(withX.filter((q) => q.subject.termType === 'BlankNode').length).toBe(2)
     expect(withX.length).toBe(4)
     for (const slice of rest) expect(slice.length === withX.length || slice.length <= 2).toBe(true)
+  })
+})
+
+// Once the visitor moves to another page (#420): what it needs of what is left goes in first, as
+// one change, and the rest an idle period at a time as before; all of it at once was a long task.
+describe('arrive', () => {
+  const store = loadStore('n3')
+  const ttl = Array.from({ length: 8 }, (_, i) => `<https://example.org/s${i}> <https://example.org/p> ${i} .`).join('\n')
+  const quads = parseTurtle(ttl, store.factory)
+  const n = (q: (typeof quads)[number]) => Number(q.object.value)
+
+  /** What arrive does, step by step: each change (its subjects' numbers), each wait. */
+  async function steps(urgent: (waits: number) => boolean | ((q: (typeof quads)[number]) => boolean), task = false) {
+    const log: string[] = []
+    let waits = 0
+    const wait = (kind: string) => async () => {
+      log.push(kind)
+      waits++
+      return { timeRemaining: () => 0 }
+    }
+    await arrive(sliceAddition(quads, 1), {
+      runtime: { apply: (d) => void log.push(d.add.map(n).join(',')), arriving: (on) => void log.push(on ? 'on' : 'off') },
+      idle: wait('idle'),
+      ...(task && { task: wait('task') }),
+      urgent: () => urgent(waits),
+      flush: () => {},
+    })
+    return log
+  }
+
+  it('takes a slice per idle period while the visitor stays', async () => {
+    expect(await steps(() => false)).toEqual(['on', '', 'idle', '0', 'idle', '1', 'idle', '2', 'idle', '3', 'idle', '4', 'idle', '5', 'idle', '6', 'idle', '7', 'off'])
+  })
+
+  it('takes what the page reached needs first, at once, then the rest as before', async () => {
+    const needs = (q: (typeof quads)[number]) => n(q) % 2 === 1
+    expect(await steps((waits) => waits >= 2 && needs)).toEqual(['on', '', 'idle', '0', 'idle', '1,3,5,7', 'off', 'on', 'idle', '2', 'idle', '4', 'idle', '6', 'off'])
+  })
+
+  it('takes the rest a task at a time when what the page needs is not known, and at once without tasks', async () => {
+    expect(await steps((waits) => waits >= 2, true)).toEqual(['on', '', 'idle', '0', 'idle', '1', 'task', '2', 'task', '3', 'task', '4', 'task', '5', 'task', '6', 'task', '7', 'off'])
+    expect(await steps((waits) => waits >= 2)).toEqual(['on', '', 'idle', '0', 'idle', '1,2,3,4,5,6,7', 'off'])
+  })
+})
+
+describe('the index of what each page names', () => {
+  it('gives each page its graphs back, a set shared by pages once, and nothing for a page it does not name', () => {
+    const pages = { '/': ['a', 'c'], '/docs/': ['b', 'c', 'e', 'f'], '/de/': ['a', 'c'], '/x/': [] }
+    const index = encodePageGraphs(pages)
+    expect(index.sets.length).toBe(3)
+    for (const [path, names] of Object.entries(pages)) expect(indexedPageGraphs(JSON.parse(JSON.stringify(index)), path)).toEqual(names)
+    expect(indexedPageGraphs(index, '/reference/c:Window/')).toBeUndefined()
   })
 })
 

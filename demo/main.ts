@@ -17,7 +17,7 @@ import { NetworkCapture } from '../src/network.ts'
 import { Sandboxes } from '../src/sandbox.ts'
 import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
 import { graphLanguages } from '../src/server/render.ts'
-import { pageGraphs, serverRendered, serverStyled, takeOver } from '../src/web/takeover.ts'
+import { indexedPageGraphs, PAGE_GRAPHS_INDEX, type PageGraphsIndex, pageGraphs, serverRendered, serverStyled, takeOver } from '../src/web/takeover.ts'
 import { carryInFragment, type CompileMode, prepareSite, recordSiteSources, ROOT, siteLayers, siteNamedGraphs, siteSources } from './site.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
@@ -536,32 +536,83 @@ else anticipate(runtime, { flush })
 
 /**
  * The graphs the page did not need first, in idle time: fetched, read a file per slice, then loaded
- * as one change through the runtime (their rules join the engine, their reactions the bus, their
- * remembered state is restored), with the sources of the examples among them. Once the visitor
- * moves to another page (a link, the menu, Back), what is left is read and taken in at once: that
- * page may need some of it (#378).
+ * as several changes through the runtime (their rules join the engine, their reactions the bus,
+ * their remembered state is restored), with the sources of the examples among them. Once the
+ * visitor moves to another page (a link, the menu, Back), what that page names (the build's index
+ * of them) is read and taken in first, at once: it may need some of it (#378); the rest follows as
+ * before (all of it at once was a task of a second, #420). A page the index does not name gets
+ * the rest without waiting for idle periods, a few slices per task.
  */
 async function loadRest() {
   performance.mark('sem:graphs-fetch')
   const moved = () => location.pathname !== loadedAt
   const nextIdle = () => new Promise<{ timeRemaining(): number }>((resolve) => idle(resolve))
+  // A task after the browser's turn (a timer), with 40 ms to spend in it.
+  const nextTask = () =>
+    new Promise<{ timeRemaining(): number }>((resolve) =>
+      setTimeout(() => {
+        const end = performance.now() + 40
+        resolve({ timeRemaining: () => end - performance.now() })
+      }),
+    )
   const ontology = ONTOLOGY_NAMES.filter((n) => !wanted(n))
   const gallery = Object.keys(galleryLoaders).filter((n) => !wanted(n))
-  await Promise.all([loadOntology(ontology).then(() => ontologyFetched()), loadGallery(gallery)])
-  const texts = [...ontology.map((n) => ontologyText(n)!), ...gallery.map((n) => galleryFiles[n]!)]
-  const add: Quad[] = []
-  // As many files per idle period as fit in it (at least one): an idle callback comes once per idle
-  // period (up to 50 ms apart on a quiet page), so a file per callback took seconds.
-  for (let i = 0; i < texts.length; ) {
-    const deadline = moved() ? undefined : await nextIdle()
-    do add.push(...parseTurtle(texts[i++]!, store.factory))
-    while (i < texts.length && (!deadline || moved() || deadline.timeRemaining() > 4))
+  const [index] = await Promise.all([
+    fetch(import.meta.env.BASE_URL + PAGE_GRAPHS_INDEX)
+      .then((r) => (r.ok ? (r.json() as Promise<PageGraphsIndex>) : undefined))
+      .catch(() => undefined),
+    loadOntology(ontology).then(() => ontologyFetched()),
+    loadGallery(gallery),
+  ])
+  // What the page shown names, of what is left (undefined: it names none, or it is the page loaded).
+  const named = new Map<string, string[] | undefined>()
+  const needs = () => {
+    if (!moved()) return undefined
+    const path = location.pathname
+    if (!named.has(path)) named.set(path, index && indexedPageGraphs(index, path))
+    return named.get(path)
   }
-  add.push(...sourceQuads(store.factory, siteSources(Object.fromEntries(gallery.map((n) => [n, galleryFiles[n]!])))))
+  // Each file read on its own, with its example's source: what a page needs is by file.
+  const read = new Map<string, Quad[]>()
+  const parse = (n: string) => {
+    if (read.has(n)) return
+    const gallerySource = galleryFiles[n] !== undefined ? sourceQuads(store.factory, siteSources({ [n]: galleryFiles[n]! })) : []
+    read.set(n, [...parseTurtle(ontologyText(n) ?? galleryFiles[n]!, store.factory), ...gallerySource])
+  }
+  let left = [...ontology, ...gallery]
+  // As many files per idle period as fit in it (at least one): an idle callback comes once per idle
+  // period (up to 50 ms apart on a quiet page), so a file per callback took seconds. Once the visitor
+  // has moved, what their page names first, then a task at a time.
+  while (left.length) {
+    const first = new Set(needs())
+    if (first.size) left.filter((n) => first.has(n)).forEach(parse), (left = left.filter((n) => !read.has(n)))
+    if (!left.length) break
+    const deadline = await (moved() ? nextTask() : nextIdle())
+    do parse(left.shift()!)
+    while (left.length && deadline.timeRemaining() > 4)
+  }
+  const add = [...read.values()].flat()
   performance.mark('sem:graphs-parsed', { detail: { quads: add.length } })
   // Taken in as several changes, none a long task: what defines rules first (the rules are read
-  // again once), then the rest a slice per idle period, whole descriptions at a time.
-  await arrive(sliceAddition(add, 150), { runtime, idle: nextIdle, urgent: moved, flush })
+  // again once), then the rest a slice per idle period, whole descriptions at a time; what the page
+  // shown names, once the visitor has moved, at once. Each in a task of its own.
+  const next = () => (moved() ? nextTask() : nextIdle())
+  await next()
+  const slices = sliceAddition(add, 150)
+  await next()
+  const tests = new Map<string, (q: Quad) => boolean>()
+  const urgent = () => {
+    if (!moved()) return false
+    const names = needs()
+    if (!names) return true
+    const path = location.pathname
+    if (!tests.has(path)) {
+      const quads = new Set(names.flatMap((n) => read.get(n) ?? []))
+      tests.set(path, (q) => quads.has(q))
+    }
+    return tests.get(path)!
+  }
+  await arrive(slices, { runtime, idle: nextIdle, task: nextTask, urgent, flush })
   await persistence.restoreAdded().catch((e) => console.warn('[semblance] could not restore remembered state', e))
   flush()
   scheduleWarmup()

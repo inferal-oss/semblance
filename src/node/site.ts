@@ -15,7 +15,8 @@ import { warmRenderer, type WarmRenderer } from '../server/warm.ts'
 import { configureFetching, type GraphStore } from '../store/types.ts'
 import { appOntology, loadStore, loadStoreOf, loadStoreWithOntology, ontologyFiles } from './load.ts'
 import type { Subset } from '../subset.ts'
-import { graphIndex, neededGraphs, pageGraphsMeta, type GraphIndex } from '../server/page-graphs.ts'
+import { PAGE_GRAPHS_INDEX } from '../web/takeover.ts'
+import { encodePageGraphs, graphIndex, neededGraphs, pageGraphsMeta, type GraphIndex } from '../server/page-graphs.ts'
 
 export interface RenderSiteOptions {
   /** One self-contained file (where we are goes in the fragment; Site.setup decides how). */
@@ -225,6 +226,9 @@ export async function buildSite(opts: BuildOptions): Promise<{ pages: number; ms
   for (const r of results) bytes += r.bytes
   const css = results.find((r) => r.css !== undefined)?.css
   if (css !== undefined && !opts.single) writeFileSync(join(opts.outDir, 'semblance.css'), css)
+  // What each page names, in one file: a client that moves to another page before it has every
+  // graph takes in what that page needs first (demo/main.ts, src/slices.ts arrive).
+  if (site.pageGraphs && !opts.single) writeFileSync(join(opts.outDir, PAGE_GRAPHS_INDEX), JSON.stringify(encodePageGraphs(Object.assign({}, ...results.map((r) => r.graphs)))))
   const ms = performance.now() - t0
   log(`semblance: ${routes.length} page${routes.length === 1 ? "" : "s"}, ${(bytes / 1024).toFixed(0)} KiB of HTML, in ${(ms / 1000).toFixed(1)} s`)
   return { pages: routes.length, ms, bytes }
@@ -246,10 +250,11 @@ export interface PagesJob {
 }
 
 /** Render pages of a job here (a worker process does the same). */
-export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?: string }> {
+export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?: string; graphs: Record<string, string[]> }> {
   const site = await loadSite(job.config)
   let bytes = 0
   let css: string | undefined
+  const named: Record<string, string[]> = {}
   const stylesheet: DocumentOptions['stylesheet'] = job.single ? 'inline' : { href: job.base + 'semblance.css' }
   const write = (route: string, html: string, rendered: Awaited<ReturnType<typeof renderSite>>, graphs?: string[]) => {
     const head = graphs ? job.head + pageGraphsMeta(graphs) + graphs.map((g) => job.graphChunks?.[g]).filter(Boolean).map((f) => `<link rel="modulepreload" crossorigin href="${job.base}${f}">`).join('') : job.head
@@ -267,6 +272,7 @@ export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?:
     // The graphs its client loads first (a page rendered in place after it gets them all).
     const graphs = site.pageGraphs && !job.single ? await pageGraphs(site, first!, rendered.html, { base: job.base }) : undefined
     write(first!, rendered.html, rendered, graphs)
+    if (graphs) named[first!] = graphs
     // The rest of the group: the same runtime, moved to each address as a followed link moves it.
     const store = rendered.runtime.store
     const f = store.factory
@@ -278,18 +284,18 @@ export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?:
     }
     rendered.runtime.dispose()
   }
-  return { bytes, css }
+  return { bytes, css, graphs: named }
 }
 
 // The worker beside this module: its source in this repository, its build in the package (lib/).
 const workerPath = fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './site-worker.ts' : './site-worker.js', import.meta.url))
 
-function inWorker(job: PagesJob): Promise<{ bytes: number; css?: string }> {
+function inWorker(job: PagesJob): Promise<{ bytes: number; css?: string; graphs: Record<string, string[]> }> {
   return new Promise((resolveJob, reject) => {
     // tsx loads the TypeScript sources in the worker as in this process.
     const child = fork(workerPath, [], { execArgv: ['--import', 'tsx'], stdio: ['ignore', 'inherit', 'inherit', 'ipc'] })
-    child.once('message', (m: { ok: true; bytes: number; css?: string } | { ok: false; error: string }) => {
-      if (m.ok) resolveJob({ bytes: m.bytes, css: m.css })
+    child.once('message', (m: { ok: true; bytes: number; css?: string; graphs: Record<string, string[]> } | { ok: false; error: string }) => {
+      if (m.ok) resolveJob({ bytes: m.bytes, css: m.css, graphs: m.graphs })
       else reject(new Error(m.error))
       child.disconnect()
     })

@@ -372,7 +372,11 @@ export class ViewRuntime {
       return [referrers.length ? { iri, node: iri, referrers } : { iri, node: iri }]
     }
     const derived = this.readsRendering(f.namedNode(iri))
+    const was = this.templates.get(iri)
     this.templates.set(iri, cls ? { cls: cls.value, derived } : { referrer: referrer!.value, derived })
+    // A template that came later than the views (a graph loaded after start) with nothing to define
+    // yet: what rules derive is read for it from now on, or it never hears of its referrers (#420).
+    if (derived && (was?.derived !== derived || was.cls !== cls?.value || was.referrer !== referrer?.value)) this.derivedPreds = undefined
     const foci = cls
       ? this.store.match(null, f.namedNode(RDF_TYPE), cls as NamedNode).map((q) => q.subject)
       : this.store.match(null, referrer as NamedNode, f.namedNode(iri)).map((q) => q.subject)
