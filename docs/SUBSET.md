@@ -56,6 +56,9 @@ one about something is kept when what it is about is reached. Reached, with ever
 - the component classes a kept rule or reaction may make instances of: those its `CONSTRUCT` or
   `INSERT` templates name (all those its text names, when a template types a node with a variable);
 - any other class a kept rule or reaction names, and the classes of what is kept;
+- the component classes a reached class names by a property of kinds (`rdfs:domain owl:Class`): a
+  chart kind's points' class, `c:pointClass`, and its bars', `c:categoryClass`, which its plan mints
+  by reading them;
 - the themes the app names; all of them when it, or a kept rule, names `sty:theme` (a chooser of
   themes).
 
