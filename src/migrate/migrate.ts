@@ -6,6 +6,7 @@ import { createStore } from '../node/load.ts'
 import { NS, SPARQL_PREFIXES } from '../ns.ts'
 import { parseQuery, SparqlSyntaxError } from '../view/sparql.ts'
 import type { LoadedChange, MigrationStep, Rename } from './changes.ts'
+import { rewriteQuery } from './sparql.ts'
 import { applyEdit, compactIri, type Doc, lex, parseTurtle, type Term, type Tok, type Triple, tripleKey, TurtleSyntaxError, UnsupportedTurtle } from './turtle.ts'
 
 export interface SourceFile {
@@ -61,6 +62,7 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
+const EMBEDDED = 'embedded.ttl'
 const RDF_12 = /\{\||\s~\s|<<\s*[(<?]/
 const lineOf = (text: string, at: number) => text.slice(0, at).split('\n').length
 
@@ -188,8 +190,9 @@ async function applyUpdate(files: SourceFile[], update: string, findings: Findin
     try {
       return parseTurtle(f.text, `f${i}b`)
     } catch (e) {
-      if (!(e instanceof UnsupportedTurtle)) throw e
-      findings.push({ kind: 'review', message: `${e.message}: changes of shape do not reach this file`, file: f.path, ...where })
+      if (!(e instanceof TurtleSyntaxError)) throw e
+      // A fragment in a literal may lean on prefixes declared elsewhere: a retired term left in one is reported later.
+      if (f.path !== EMBEDDED) findings.push({ kind: 'review', message: `${e.message}: changes of shape do not reach this file`, file: f.path, ...where })
       return undefined
     }
   })
@@ -336,8 +339,98 @@ async function applyStep(files: SourceFile[], step: MigrationStep, change: Loade
   }
   const update = back ? step.backward : step.forward
   if (update) out = await applyUpdate(out, update, findings, where)
+  if (update && step.forward) out = await rewriteQueries(out, step, back, findings, where)
   if (back && step.loses) findings.push({ kind: 'review', message: `does not come back: ${step.loses}`, ...where })
   else if (back && step.forward && !step.backward) findings.push({ kind: 'review', message: 'no way back was stated', ...where })
+  return out
+}
+
+/** Classes a query's `$this` is an instance of, from the statements that hold the query, by the place of its literal. */
+function holdersOf(triples: Triple[]): Map<number, { classes: string[]; bindings: Triple[] }> {
+  const out = new Map<number, { classes: string[]; bindings: Triple[] }>()
+  const key = (t: Term) => JSON.stringify(t)
+  const about = new Map<string, Triple[]>()
+  for (const t of triples) about.set(key(t.s), [...(about.get(key(t.s)) ?? []), t])
+  const bindingOf = (s: Term, seen = new Set<string>()): Triple[] => {
+    if (seen.has(key(s))) return []
+    seen.add(key(s))
+    const own = (about.get(key(s)) ?? []).filter((t) => t.p === NS.sem + 'targets' || t.p === NS.beh + 'sourceClass')
+    if (own.length) return own
+    return (about.get(key(s)) ?? []).filter((t) => t.p === NS.sem + 'implements' || t.p === NS.sem + 'constructFrom').flatMap((t) => bindingOf(t.o, seen))
+  }
+  for (const t of triples) {
+    if (t.o.k !== 'lit' || !t.object) continue
+    const bindings = bindingOf(t.s)
+    if (bindings.length) out.set(t.object.at, { classes: bindings.flatMap((b) => (b.o.k === 'iri' ? [b.o.v] : [])), bindings })
+  }
+  return out
+}
+
+/** Every query a file holds, taken through a change of shape, and Turtle in literals with it. */
+async function rewriteText(text: string, step: MigrationStep, back: boolean, inherited: Map<string, string>, report: (kind: FindingKind, message: string, line: number) => void, baseLine = 1): Promise<string> {
+  let doc: Doc | undefined
+  try {
+    doc = parseTurtle(text)
+  } catch (e) {
+    if (!(e instanceof TurtleSyntaxError)) throw e
+  }
+  const prefixes = new Map([...inherited, ...(doc?.prefixes ?? [])])
+  const holders = doc ? holdersOf(doc.triples) : new Map<number, { classes: string[]; bindings: Triple[] }>()
+  const edits: { at: number; end: number; text: string }[] = []
+  const moved = new Map<number, { end: number; text: string }>()
+  for (const t of lex(text)) {
+    if (t.k !== 'str') continue
+    const long = t.text.startsWith('"""') || t.text.startsWith("'''")
+    const quote = long ? 3 : 1
+    const body = t.text.slice(quote, -quote)
+    const line = baseLine + text.slice(0, t.at).split('\n').length - 1
+    let next = body
+    if (looksLikeQuery(body) && !/^\s*(INSERT|DELETE|WITH)\b/i.test(body)) {
+      const holder = holders.get(t.at)
+      try {
+        const r = rewriteQuery({ body, prefixes, holders: holder?.classes ?? [], migration: step.iri, back, forward: step.forward!, backward: step.backward })
+        next = r.body
+        for (const n of r.notes) report(n.kind, n.message, line)
+        for (const b of holder?.bindings ?? []) {
+          if (b.o.k !== 'iri' || !b.object) continue
+          const to = r.holderMoves.get(b.o.v)
+          if (to) moved.set(b.object.at, { end: b.object.end, text: compactIri(to, prefixes) })
+        }
+      } catch (e) {
+        if (!(e instanceof SparqlSyntaxError)) throw e
+        if (!/unknown prefix/i.test(e.message)) report('review', `a query this tool cannot read: ${e.message}`, line)
+      }
+    } else if (long && looksLikeTurtle(body)) {
+      const update = back ? step.backward : step.forward
+      const collected: Finding[] = []
+      if (update) next = (await applyUpdate([{ path: EMBEDDED, text: body }], update, collected, { change: '', migration: step.iri }))[0]!.text
+      for (const f of collected) if (f.kind !== 'migrated') report(f.kind, f.message, line)
+      if (next !== body) report('migrated', 'Turtle held in a literal', line)
+      next = await rewriteText(next, step, back, new Map(), report, line)
+    }
+    if (next !== body) edits.push({ at: t.at, end: t.end, text: t.text.slice(0, quote) + next + t.text.slice(-quote) })
+  }
+  for (const [at, m] of moved) edits.push({ at, end: m.end, text: m.text })
+  edits.sort((a, b) => a.at - b.at)
+  let out = ''
+  let i = 0
+  for (const e of edits) {
+    out += text.slice(i, e.at) + e.text
+    i = e.end
+  }
+  return out + text.slice(i)
+}
+
+async function rewriteQueries(files: SourceFile[], step: MigrationStep, back: boolean, findings: Finding[], where: { change: string; migration: string }): Promise<SourceFile[]> {
+  const out: SourceFile[] = []
+  for (const f of files) {
+    if (!TURTLE.test(f.path)) {
+      out.push(f)
+      continue
+    }
+    const text = await rewriteText(f.text, step, back, frameworkPrefixes, (kind, message, line) => findings.push({ kind, message, file: f.path, line, ...where }))
+    out.push(text === f.text ? f : { path: f.path, text })
+  }
   return out
 }
 

@@ -8,6 +8,8 @@ import { Parser } from 'n3'
 import { describe, expect, it } from 'vitest'
 import { loadChanges } from '../src/migrate/changes.ts'
 import { migrate, type SourceFile, verify } from '../src/migrate/migrate.ts'
+import { createStore } from '../src/node/load.ts'
+import { SPARQL_PREFIXES } from '../src/ns.ts'
 import { applyEdit, lex, parseTurtle, type Term, tripleKey, UnsupportedTurtle } from '../src/migrate/turtle.ts'
 
 const root = new URL('../', import.meta.url).pathname
@@ -277,5 +279,131 @@ change:r1 a mig:Migration ; mig:of c:Thing ; mig:from 1 ; mig:to 2 ; mig:renames
     expect(JSON.parse(cli('migrate', '--check', '--json').stdout).changes).toEqual([])
     expect(cli('migrate', '--to', '0.0.0').status).toBe(0)
     expect(readFileSync(join(dir, 'app.ttl'), 'utf8')).toContain('c:value 1')
+  }, 60_000)
+})
+
+describe('the SPARQL apps write', () => {
+  const changes = shaping(SPLIT.f, SPLIT.b)
+  const held = (q: string) => file(`ex:r sem:construct """${q}""" .`)
+  const run = async (q: string, c = changes) => {
+    const there = await migrate({ files: [held(q)], changes: c, from: '0' })
+    const parsed = parseTurtle(there.files[0]!.text).triples.find((t) => t.p.endsWith('construct'))!
+    return { there, query: (parsed.o as { value: string }).value, findings: there.findings.filter((f) => f.kind === 'review' || f.kind === 'manual').map((f) => f.message) }
+  }
+
+  it('rewrites a template and moves the mint into the WHERE', async () => {
+    const r = await run(`CONSTRUCT { ?f a c:Frame ; c:width ?w ; c:height ?h } WHERE { ?f ex:w ?w ; ex:h ?h }`)
+    expect(r.query).toContain('c:size')
+    expect(r.query).toContain('BIND(IRI(CONCAT(STR(?f), "/~size")) AS ?sz)')
+    expect(r.query).not.toContain('c:width')
+    expect(r.findings).toEqual([])
+  })
+  it('rewrites a read, which keeps its meaning', async () => {
+    const r = await run(`CONSTRUCT { $this c:shown ?v } WHERE { $this c:of ?f . ?f a c:Frame ; c:width ?v ; c:height ?h }`)
+    expect(r.query).toContain('c:size')
+    expect(r.query).toContain('c:w ?v')
+    expect(r.query).toContain('$this c:shown ?v')
+    expect(r.query).not.toContain('BIND')
+    expect(r.findings).toEqual([])
+  })
+  it('reaches patterns inside OPTIONAL and EXISTS', async () => {
+    const r = await run(`CONSTRUCT { $this c:shown ?v } WHERE { $this c:of ?f OPTIONAL { ?f a c:Frame ; c:width ?v ; c:height ?h } FILTER EXISTS { ?g a c:Frame ; c:width ?a ; c:height ?b } }`)
+    expect(r.query).not.toContain('c:width')
+    expect(r.query.split('c:size').length - 1).toBe(2)
+  })
+  it('reports a template that writes only part of what moves', async () => {
+    const r = await run(`CONSTRUCT { ?f a c:Frame ; c:width ?w } WHERE { ?f ex:w ?w }`)
+    expect(r.findings.join()).toContain('part of what this migration moves')
+    expect(r.query).toContain('c:width')
+  })
+  it('reports a template whose subject has no stated class', async () => {
+    const r = await run(`CONSTRUCT { ?f c:width ?w ; c:height ?h } WHERE { ?f ex:w ?w ; ex:h ?h }`)
+    expect(r.findings.join()).toContain("doesn't state the class")
+  })
+  it('knows the class from what holds the query', async () => {
+    const app = file(`ex:R sem:targets c:Frame .
+ex:r sem:implements ex:R ; sem:construct """CONSTRUCT { $this c:width ?w ; c:height ?h } WHERE { $this ex:w ?w ; ex:h ?h }""" .`)
+    const there = await migrate({ files: [app], changes, from: '0' })
+    expect(there.files[0]!.text).toContain('c:size')
+    expect(there.findings.filter((f) => f.kind === 'review')).toEqual([])
+  })
+  it('comes back: the same template and WHERE', async () => {
+    const q = `CONSTRUCT { ?f a c:Frame ; c:width ?w ; c:height ?h } WHERE { ?f ex:w ?w ; ex:h ?h }`
+    const { there } = await run(q)
+    const back = await migrate({ files: there.files, changes, direction: 'backward', applied: there.changes })
+    const parsed = parseTurtle(back.files[0]!.text).triples.find((t) => t.p.endsWith('construct'))!
+    const text = (parsed.o as { value: string }).value
+    expect(text).toContain('c:width ?w')
+    expect(text).not.toContain('BIND')
+    expect(text).not.toContain('c:size')
+  })
+
+  describe('a value mapping', () => {
+    const f = `DELETE { ?x c:align ?old } INSERT { ?x c:justify ?new } WHERE { ?x c:align ?old . VALUES (?old ?new) { ("left" "start") ("right" "end") } }`
+    const b = `DELETE { ?x c:justify ?new } INSERT { ?x c:align ?old } WHERE { ?x c:justify ?new . VALUES (?old ?new) { ("left" "start") ("right" "end") } }`
+    const values = loadChanges([`${CHANGE}change:v a chg:Change ; ${body} ; chg:retires c:align ; chg:migrations ( change:v1 ) .
+change:v1 a mig:Migration ; mig:of c:Thing ; mig:from 1 ; mig:to 2 ; mig:forward """${f}""" ; mig:backward """${b}""" .`])
+    it('takes a constant through the table', async () => {
+      expect((await run(`CONSTRUCT { ?b c:align "left" } WHERE { ?b ex:s 1 }`, values)).query).toContain('c:justify "start"')
+    })
+    it('leaves a constant outside the table', async () => {
+      expect((await run(`CONSTRUCT { ?b c:align "center" } WHERE { ?b ex:s 1 }`, values)).query).toContain('c:align "center"')
+    })
+    it('composes a value known only at run time, and restores it going back', async () => {
+      const q = `CONSTRUCT { ?b c:align ?a } WHERE { ?b ex:side ?a }`
+      const { there, query } = await run(q, values)
+      expect(query).toContain('IF(?a = "left", "start"')
+      expect(query).toContain('c:align ?keep')
+      expect(query.startsWith('# semblance migrate:')).toBe(true)
+      const back = await migrate({ files: there.files, changes: values, direction: 'backward', applied: there.changes })
+      expect(back.files[0]!.text).toContain(q)
+    })
+    it('reads through the table, and the values that did not move', async () => {
+      const { query } = await run(`SELECT ?b ?a WHERE { ?b c:align ?a }`.replace('SELECT ?b ?a', 'CONSTRUCT { ?b ex:a ?a }'), values)
+      expect(query).toContain('UNION')
+      expect(query).toContain('VALUES')
+    })
+    it('gives the same results before and after, in the engine', async () => {
+      const q = `CONSTRUCT { ?b ex:a ?a } WHERE { ?b c:align ?a }`
+      const { query } = await run(q, values)
+      const data = `${P}ex:p c:align "left" . ex:q c:align "center" .`
+      const moved = await migrate({ files: [{ path: 'd.ttl', text: data }], changes: values, from: '0' })
+      const show = (s: { construct: (q: string, g: never[]) => { subject: { value: string }; object: { value: string } }[] }, text: string) =>
+        s.construct(`${SPARQL_PREFIXES}\nPREFIX ex: <https://example.org/x#>\n${text.replace(/^# .*\n/, '')}`, []).map((x) => `${x.subject.value} ${x.object.value}`).sort()
+      const [before, after] = [createStore('wat'), createStore('wat')]
+      before.loadTurtle(data)
+      after.loadTurtle(moved.files[0]!.text)
+      expect(show(after as never, query)).toEqual(show(before as never, q))
+    })
+  })
+
+  describe('a convergence', () => {
+    const f = `DELETE { ?x a c:Radio } INSERT { ?x a c:Choice ; c:variant "radio" } WHERE { ?x a c:Radio }`
+    const b = `DELETE { ?x a c:Choice ; c:variant "radio" } INSERT { ?x a c:Radio } WHERE { ?x a c:Choice ; c:variant "radio" }`
+    const conv = loadChanges([`${CHANGE}change:c a chg:Change ; ${body} ; chg:retires c:Radio ; chg:migrations ( change:c1 ) .
+change:c1 a mig:Migration ; mig:of c:Radio ; mig:from 1 ; mig:to 2 ; mig:forward """${f}""" ; mig:backward """${b}""" ; mig:discriminator c:variant .`])
+    it('keeps a read of the old class to what it was', async () => {
+      const { query } = await run(`CONSTRUCT { ?x ex:y 1 } WHERE { ?x a c:Radio }`, conv)
+      expect(query).toContain('c:Choice')
+      expect(query).toContain('c:variant "radio"')
+    })
+    it("moves a rule's class with its query, and back", async () => {
+      const app = file(`ex:R sem:targets c:Radio .
+ex:r sem:implements ex:R ; sem:construct """CONSTRUCT { ?root sem:renders $this } WHERE { $this c:label ?l }""" .`)
+      const there = await migrate({ files: [app], changes: conv, from: '0' })
+      expect(there.files[0]!.text).toContain('sem:targets c:Choice')
+      expect(there.files[0]!.text).toContain('$this c:variant "radio"')
+      expect(there.findings.filter((x) => x.kind === 'manual')).toEqual([])
+      const back = await migrate({ files: there.files, changes: conv, direction: 'backward', applied: there.changes })
+      expect(back.files[0]!.text).toContain('sem:targets c:Radio')
+      expect(back.files[0]!.text).not.toContain('c:variant')
+    })
+  })
+
+  it('leaves every query on the site byte for byte when nothing matches', async () => {
+    const files = readdirSync(root + 'demo/gallery').filter((x) => x.endsWith('.ttl')).map((x) => ({ path: x, text: readFileSync(root + 'demo/gallery/' + x, 'utf8') }))
+    const none = shaping(`DELETE { ?a c:gone ?b } INSERT { ?a c:nowhere ?b } WHERE { ?a c:gone ?b }`, `DELETE { ?a c:nowhere ?b } INSERT { ?a c:gone ?b } WHERE { ?a c:nowhere ?b }`)
+    const r = await migrate({ files, changes: none, from: '0' })
+    expect(r.files.map((x) => x.text)).toEqual(files.map((x) => x.text))
   }, 60_000)
 })
