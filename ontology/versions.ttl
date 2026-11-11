@@ -146,7 +146,7 @@ c:Grid sem:version 1 ; sem:closure "6fecc7ec4ff5566a" ; sem:internal "new" .
 c:GridRow sem:version 1 ; sem:closure "b9534dc23019efd0" ; sem:internal "new" .
 c:Heading sem:version 1 ; sem:closure "7b722a1f6f9ff5df" ; sem:internal "new" .
 c:HeatCell sem:version 1 ; sem:closure "6f6c2f0ad33a0742" ; sem:internal "new" .
-c:Heatmap sem:version 2 ; sem:closure "122158b57b285bec" ; sem:changedBy change:charts-on-shared-parts .
+c:Heatmap sem:version 2 ; sem:closure "c5953d06719a3f39" ; sem:changedBy change:charts-on-shared-parts .
 c:HexView sem:version 1 ; sem:closure "5683467de7096e01" ; sem:internal "new" .
 c:Highlight sem:version 1 ; sem:closure "7f5b4ff056a93102" ; sem:internal "new" .
 c:Histogram sem:version 1 ; sem:closure "636664598cd02931" ; sem:internal "new" .

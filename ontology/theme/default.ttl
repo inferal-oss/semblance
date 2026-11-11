@@ -1947,7 +1947,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-ramp i" ;
     sty:declares [ sty:property "width" ; sty:raw "14px" ] , [ sty:property "height" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-flag-note" ;
-    sty:declares [ sty:property "margin-left" ; sty:raw "auto" ] ,
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
                  [ sty:property "color" ; sty:token tok:flag ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-h0" ; sty:declares [ sty:property "background" ; sty:token tok:ramp-0 ] , [ sty:property "color" ; sty:token tok:ramp-ink-light ] .

@@ -318,9 +318,7 @@ c:Axis a sem:Term .
 c:AxisChart a sem:Term .
 c:Badge a sem:Term .
 c:BadgeCell a sem:Term .
-c:BarCategory a sem:Term .
 c:BarChart a sem:Term .
-c:BarPoint a sem:Term .
 c:BlockCopy a sem:Term .
 c:BlockCut a sem:Term .
 c:BlockDuplicateKey a sem:Term .
@@ -357,7 +355,6 @@ c:CellStyle a sem:Term .
 c:Charset a sem:Term .
 c:Chart a sem:Term .
 c:ChartCategory a sem:Term .
-c:ChartFacet a sem:Term .
 c:ChartNavigation a sem:Term .
 c:ChartPoint a sem:Term .
 c:ChartSeries a sem:Term .
@@ -459,7 +456,6 @@ c:GridWindowNewer a sem:Term .
 c:GridWindowOlder a sem:Term .
 c:GroupKind a sem:Term .
 c:Heading a sem:Term .
-c:HeatCell a sem:Term .
 c:Heatmap a sem:Term .
 c:HexView a sem:Term .
 c:Hexadecimal a sem:Term .
@@ -499,7 +495,6 @@ c:Legend a sem:Term .
 c:Letters a sem:Term .
 c:Lightbox a sem:Term .
 c:LineChart a sem:Term .
-c:LinePoint a sem:Term .
 c:LineStyle a sem:Term .
 c:Link a sem:Term .
 c:LinkedCard a sem:Term .
@@ -825,7 +820,6 @@ c:case a sem:Term .
 c:caseRetention a sem:Term .
 c:cases a sem:Term .
 c:category a sem:Term .
-c:categoryClass a sem:Term .
 c:categoryIndex a sem:Term .
 c:categoryVariable a sem:Term .
 c:cell a sem:Term .
@@ -935,11 +929,9 @@ c:expands a sem:Term .
 c:expandsTo a sem:Term .
 c:external a sem:Term .
 c:externalHint a sem:Term .
-c:facet a sem:Term .
 c:facetLabel a sem:Term .
 c:facetProperty a sem:Term .
 c:facetVariable a sem:Term .
-c:faceted a sem:Term .
 c:farAngle a sem:Term .
 c:farRank a sem:Term .
 c:fields a sem:Term .
@@ -954,7 +946,6 @@ c:firstDayOfWeek a sem:Term .
 c:flagLabel a sem:Term .
 c:flagProperty a sem:Term .
 c:flagVariable a sem:Term .
-c:flagged a sem:Term .
 c:flipped a sem:Term .
 c:flips a sem:Term .
 c:focusBlock a sem:Term .
@@ -974,7 +965,6 @@ c:fromLine a sem:Term .
 c:fromValue a sem:Term .
 c:fromZero a sem:Term .
 c:front a sem:Term .
-c:fullGrid a sem:Term .
 c:functionName a sem:Term .
 c:galleryLayout a sem:Term .
 c:gathers a sem:Term .
@@ -1103,7 +1093,6 @@ c:listIndex a sem:Term .
 c:lists a sem:Term .
 c:loads a sem:Term .
 c:logScale a sem:Term .
-c:logValues a sem:Term .
 c:logo a sem:Term .
 c:loops a sem:Term .
 c:low a sem:Term .
@@ -1124,7 +1113,6 @@ c:matchKey a sem:Term .
 c:max a sem:Term .
 c:maxSize a sem:Term .
 c:maximizes a sem:Term .
-c:measured a sem:Term .
 c:memberClass a sem:Term .
 c:memberCount a sem:Term .
 c:memberProperty a sem:Term .
@@ -1142,7 +1130,6 @@ c:message a sem:Term .
 c:milestone a sem:Term .
 c:milestoneVariable a sem:Term .
 c:min a sem:Term .
-c:minCategories a sem:Term .
 c:minSize a sem:Term .
 c:minWidth a sem:Term .
 c:minimizes a sem:Term .
@@ -1160,7 +1147,6 @@ c:neighbourhood a sem:Term .
 c:nextBase a sem:Term .
 c:nextLane a sem:Term .
 c:nextValue a sem:Term .
-c:nextX a sem:Term .
 c:nodeCount a sem:Term .
 c:nodeKey a sem:Term .
 c:nodeKind a sem:Term .
@@ -1173,7 +1159,6 @@ c:nodeTerm a sem:Term .
 c:note a sem:Term .
 c:noteLabel a sem:Term .
 c:noteProperty a sem:Term .
-c:numericCategories a sem:Term .
 c:of a sem:Term .
 c:offered a sem:Term .
 c:offersOriginal a sem:Term .
@@ -1219,10 +1204,8 @@ c:pillOf a sem:Term .
 c:placeholder a sem:Term .
 c:pointClass a sem:Term .
 c:pointedTerm a sem:Term .
-c:pointsIn a sem:Term .
 c:polar a sem:Term .
 c:position a sem:Term .
-c:positiveValues a sem:Term .
 c:predicateTerm a sem:Term .
 c:prefix a sem:Term .
 c:presenceProperty a sem:Term .
@@ -1249,10 +1232,6 @@ c:recentLimit a sem:Term .
 c:recentOf a sem:Term .
 c:recentRank a sem:Term .
 c:redoer a sem:Term .
-c:refX1 a sem:Term .
-c:refX2 a sem:Term .
-c:refY1 a sem:Term .
-c:refY2 a sem:Term .
 c:referenceLine a sem:Term .
 c:refusedBy a sem:Term .
 c:reifierOf a sem:Term .
@@ -1289,7 +1268,6 @@ c:runs a sem:Term .
 c:salience a sem:Term .
 c:samples a sem:Term .
 c:sandboxState a sem:Term .
-c:saysRows a sem:Term .
 c:scale a sem:Term .
 c:searchKey a sem:Term .
 c:searches a sem:Term .
@@ -1488,7 +1466,6 @@ c:windowState a sem:Term .
 c:windowTo a sem:Term .
 c:windowsOn a sem:Term .
 c:x a sem:Term .
-c:xAt a sem:Term .
 c:xLabel a sem:Term .
 c:xScale a sem:Term .
 c:xVariable a sem:Term .
