@@ -105,7 +105,8 @@ has only this to go on, a person or an agent:
 
 - A rename is `mig:renames [ mig:old c:a ; mig:new c:b ]`: it reaches every occurrence and is its own reverse.
 - A change of shape is `mig:forward` and `mig:backward`, each a SPARQL Update (`DELETE`/`INSERT WHERE`),
-  with `mig:example` Turtle before and after. Mint IRIs as `<focus>/~<local>`, as rules do.
+  with `mig:example` Turtle before and after, which `test/reversibility.test.ts` runs in both directions.
+  Mint IRIs as `<focus>/~<local>`, as rules do.
 - When several terms converge on one, keep which one each instance was: `mig:discriminator`, written by
   `mig:forward` and read by `mig:backward`. Plain renames onto one term are not a migration.
 - Only when going back is impossible, say what is lost: `mig:loses`. It is the exception, and it is read
