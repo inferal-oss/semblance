@@ -74,9 +74,10 @@ interface Interaction {
 
 const button = (c: Ctx, name: string | RegExp, within = '') => (within ? c.page.locator(within) : c.page).getByRole('button', { name, exact: typeof name === 'string' }).first()
 const click = (c: Ctx, name: string | RegExp, within = '') => button(c, name, within).click()
-/** The site's page switcher: buttons, a picker at phone width. */
+/** The site's page switcher: buttons, or a picker where the app bar has no room for them. */
 const nav = async (c: Ctx, label: string) => {
-  if (c.phone) await c.page.locator('select[aria-label="Page"]').selectOption({ label })
+  const picker = c.page.locator('select[aria-label="Page"]')
+  if (c.phone && (await picker.isVisible())) await picker.selectOption({ label })
   else await click(c, label, '[data-sem-c=segmented][aria-label="Page"]')
 }
 /** A section's own list of pages (docs, components, examples): a picker at phone width. The other sections'
