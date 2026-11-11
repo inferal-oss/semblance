@@ -74,6 +74,25 @@ describe('views over what rules and the runtime derive', () => {
     expect([h.value('Total'), h.value('Half')]).toEqual(['44', '22'])
   })
 
+  // A graph loaded after start (#420): a template arrives with no referrers yet, and a rule derives them.
+  it.each(['wat', 'oxigraph'] as const)('a template that arrives later hears of the referrers rules derive (%s)', (kind) => {
+    const h = setup(kind)
+    expect(h.value('Total')).toBe('30')
+    h.runtime.load(`
+@prefix x: <${X}> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+x:Naming a sem:Rendering ; sem:targets x:Named ; sem:stratum -1 .
+x:Naming-sparql a sem:Rule ; sem:implements x:Naming ;
+    sem:construct """CONSTRUCT { $this x:names x:Late } WHERE { $this a x:Named }""" .
+x:Late a iv:View ; iv:materialize iv:Graph ; iv:perReferrer x:names ; iv:reads x:Naming ;
+    sem:select """SELECT ?value WHERE { $this x:seed ?value }""" .
+x:a a x:Named ; x:seed 7 .`)
+    const ctx = createContext(h.store, [h.f.defaultGraph(), h.f.namedNode(VIEW_GRAPH)], '')
+    expect(maintainedRows(ctx, h.f.namedNode(h.runtime.views.instanceOf(X + 'Late', X + 'a')))?.[0]?.get('value')?.value).toBe('7')
+    h.runtime.dispose()
+  })
+
   it('a change costs the rounds of its chain, not a run of every view', () => {
     const h = setup('wat')
     const ticks = h.runtime.views.tickNo

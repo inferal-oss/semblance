@@ -330,9 +330,10 @@ loads those, takes the page over, and loads the rest in idle time (`Site.pageGra
   in one file beside the pages (`semblance-graphs.json`, `PAGE_GRAPHS_INDEX`: each distinct set of
   graphs as bits, and each page's set). Once the visitor moves to another page, the client reads the
   files that page names first, and `arrive` takes their triples in as one change, before another
-  idle period; the rest follows a slice per idle period as before (all of it at once was a task of
-  a second, 4.7 s at 4× CPU, #420). A page the index does not name (one rendered in place, a
-  Reference term) gets the rest a few slices per task, without waiting for idle periods. The live examples build once the ontology's text is fetched (they
+  idle period; the rest follows a slice per idle period as before. All of it at once was a task of
+  a second after such a click, 4.3 to 4.8 s at 4× CPU (#420); now the longest is under 200 ms, about
+  0.7 s at 4×. A page the index does not name (one rendered in place, a Reference term) gets the
+  rest a few slices per task, without waiting for idle periods. The index is 10 KB, 2 KB gzipped. The live examples build once the ontology's text is fetched (they
   need the whole ontology, in stores of their own). A test takes pages over with only their graphs
   and loads the rest, sliced, without a change (`test/ssr.test.ts`). Every engine reads each rule's
   query once (what it watches, whether its output is attributable), so a sandbox or a reload of the
