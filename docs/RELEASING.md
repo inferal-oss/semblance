@@ -80,6 +80,13 @@ date, and every entry states:
   WebAssembly themselves (`./wasm/*`, a Worker) must serve the release's own builds;
 - breaking changes first, then additions, then fixes.
 
+## Migrations in a release
+
+A breaking change ships with a `chg:Change` in `ontology/changes/` (`AGENTS.md`, "When a component
+changes"; [MIGRATIONS.md](MIGRATIONS.md)), so a consumer's move is `semblance migrate`, not a list of
+edits. `npm run change -- changelog` prints the unreleased changes as changelog lines: paste them
+under **Unreleased**'s breaking changes, with anything else a consumer needs to know.
+
 ## Before a publish
 
 On `main`, with every merge of the release in it:
@@ -89,7 +96,9 @@ On `main`, with every merge of the release in it:
 3. `npm run test:full` (the full suite, AGENTS.md), green, or each failure re-run alone.
 4. `npm run engine:check` and the Engines workflow green (parity, conformance, sizes, speed).
 5. `npm run pack:check` and the Package workflow green.
-6. The changelog's entry written, with the engine ABI.
+6. The changelog's entry written, with the engine ABI and its changes (`npm run change -- changelog`).
+7. `npm run versions -- --check` passes. `npm run change -- release <version>`, and commit it: each
+   change now says which release it shipped in, and `semblance migrate --from` depends on that.
 
 ## Publishing
 

@@ -301,5 +301,6 @@ Rust) are there too; `n3` has no SPARQL and runs only function rules. Choose wit
 - [PERSISTENCE.md](../PERSISTENCE.md): remembering state (`per:Policy`).
 - [IVM.md](IVM.md): maintained views over streams.
 - [SAFETY.md](SAFETY.md): rendering graphs you do not trust, and a Content Security Policy.
+- [MIGRATIONS.md](MIGRATIONS.md): moving your Turtle across framework versions, forward and back.
 - The site, <https://semblance.dev>, is itself a Semblance app (`demo/app.ttl`); its Tools
   (⌘.) show the graph, the rules behind any element, the change log and a SPARQL workbench.

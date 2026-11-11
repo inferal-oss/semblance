@@ -35,6 +35,7 @@ ui:DocViews a ui:DocSection ; rdfs:label "Maintained views" , "Підтриму�
 ui:DocJelly a ui:DocSection ; rdfs:label "Binary RDF (Jelly)" , "Двійковий RDF (Jelly)"@uk , "Binäres RDF (Jelly)"@de , "RDF الثنائي (Jelly)"@ar ; sem:order 16 ; ui:key "jelly" .
 ui:DocTools a ui:DocSection ; rdfs:label "Tools" , "Інструменти"@uk , "Werkzeuge"@de , "الأدوات"@ar ; sem:order 17 ; ui:key "tools" .
 ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 18 ; ui:key "performance" .
+ui:DocMigrations a ui:DocSection ; rdfs:label "Migrations" , "Міграції"@uk , "Migrationen"@de , "الترحيلات"@ar ; sem:order 19 ; ui:key "migrations" .
 
 ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:docsSide ui:docPages ) .
@@ -42,7 +43,7 @@ ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:s
 ui:docsSide a c:Stack ; pos:direction pos:Column ; pos:sticky pos:StickToTop ; c:children ( ui:docsNav ) .
 ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
-    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-remote ui:dcs-fetching ui:dcs-navigation ui:dcs-views ui:dcs-jelly ui:dcs-tools ui:dcs-performance ) .
+    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-remote ui:dcs-fetching ui:dcs-navigation ui:dcs-views ui:dcs-jelly ui:dcs-tools ui:dcs-performance ui:dcs-migrations ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
 ui:dcs-start c:when ui:DocStart ; c:content ui:doc-start .
 ui:dcs-recipes c:when ui:DocRecipes ; c:content ui:doc-recipes .
@@ -61,6 +62,36 @@ ui:dcs-views c:when ui:DocViews ; c:content ui:doc-views .
 ui:dcs-jelly c:when ui:DocJelly ; c:content ui:doc-jelly .
 ui:dcs-tools c:when ui:DocTools ; c:content ui:doc-tools .
 ui:dcs-performance c:when ui:DocPerformance ; c:content ui:doc-performance .
+ui:dcs-migrations c:when ui:DocMigrations ; c:content ui:doc-migrations .
+
+# --- Migrations ---
+ui:doc-migrations a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-mi-h ui:doc-mi-1 ui:doc-mi-sh ui:doc-mi-2
+                 ui:doc-mi-reach-h ui:doc-mi-reach ui:doc-mi-find
+                 ui:doc-mi-which-h ui:doc-mi-which
+                 ui:doc-mi-back-h ui:doc-mi-back ui:doc-mi-back-sh ui:doc-mi-back-2
+                 ui:doc-mi-agents-h ui:doc-mi-agents ui:doc-mi-agents-sh ui:doc-mi-agents-2
+                 ui:doc-mi-more ) .
+ui:doc-mi-h a c:Heading ; c:level 1 ; c:label "Migrations" .
+ui:doc-mi-1 a c:Text ; c:label "Components change and get renamed. Each change ships with what it takes to move across it, written as data, so your Turtle moves by tooling and comes back the same way." .
+ui:doc-mi-sh a c:Code ; c:block true ; c:language "shell" ; c:label """semblance migrate --check
+semblance migrate""" .
+ui:doc-mi-2 a c:Text ; c:label "The first says what would happen and writes nothing. The second rewrites the files in place, and everything else in them stays as written: comments, order and layout." .
+ui:doc-mi-reach-h a c:Heading ; c:level 2 ; c:label "What the tool reaches" .
+ui:doc-mi-reach a c:Text ; c:label "Instances in Turtle, across files. The SPARQL you write in literals: a template takes the step forward, and a pattern that reads an old shape is rewritten to read the new one and keeps its meaning. Turtle held in literals. Slugs, and data-sem-c in CSS held in the graph." .
+ui:doc-mi-find a c:Text ; c:label "Everything else is reported, each finding with the change that explains it: a query that writes half of what moved, a class that cannot be proved, a term named in TypeScript or in a FILTER, a change of meaning that leaves no trace in the source." .
+ui:doc-mi-which-h a c:Heading ; c:level 2 ; c:label "Which changes apply" .
+ui:doc-mi-which a c:Text ; c:label "The tool writes semblance.lock.ttl, which says the release a project is written against; everything after it applies. With none stated, a change applies when a term it retires occurs in your files, which is safe because a retired name is never used again." .
+ui:doc-mi-back-h a c:Heading ; c:level 2 ; c:label "Going back" .
+ui:doc-mi-back a c:Text ; c:label "Going forward and back returns what was there." .
+ui:doc-mi-back-sh a c:Code ; c:block true ; c:language "shell" ; c:label """semblance migrate --to 0.2.0""" .
+ui:doc-mi-back-2 a c:Text ; c:label "A migration that cannot come back says what it loses. Going back lists every such step before anything is written, and proceeds only with --accept-loss." .
+ui:doc-mi-agents-h a c:Heading ; c:level 2 ; c:label "For people and agents" .
+ui:doc-mi-agents a c:Text ; c:label "Each change has its motivation, its substance in full and a guide for each direction. Read the guide for a finding, settle what the tool reported, and let the tools decide:" .
+ui:doc-mi-agents-sh a c:Code ; c:block true ; c:language "shell" ; c:label """semblance changes --since 0.2.0 --json
+semblance migrate --verify""" .
+ui:doc-mi-agents-2 a c:Text ; c:label "It checks that no retired term is left, every file and query parses, and everything applied comes back." .
+ui:doc-mi-more a c:Text ; c:label "docs/MIGRATIONS.md in the repository says the same, at more length, and covers remembered state, authored graphs and remote stores." .
 
 # --- Binary RDF (Jelly) ---
 ui:doc-jelly a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;

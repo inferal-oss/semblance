@@ -3,10 +3,13 @@
 //   npm run versions -- --bump --change <slug>      step the components that change explains
 //   npm run versions -- --bump --internal "<why>"   step the rest: nothing a consumer would notice
 //   npm run change -- new <slug> --affects c:A,c:B  a change file to fill in
+//   npm run change -- changelog                     the unreleased changes as changelog lines
+//   npm run change -- release <version>             state the unreleased changes as released in it
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import { frameworkChanges, type LoadedChange } from '../src/migrate/index.ts'
 import { ONTOLOGY_FILES } from '../src/ontology.ts'
 import { bump, CHANGE_BASE, changeTemplate, check, definitions, type Base, type Problem, readChanges, readTerms, readVersions, shortName, type State, writeRetired, writeTerms, writeVersions } from '../src/migrate/versions.ts'
 
@@ -86,7 +89,28 @@ function report(problems: Problem[]) {
   A removed or renamed term always needs a change. Commit ontology/versions.ttl, ontology/terms.ttl and the change file.`)
 }
 
-if (positionals[0] === 'new') {
+/** Unreleased changes as changelog lines: breaking first, as the changelog's entries are. */
+function changelog(): string {
+  const unreleased = frameworkChanges().filter((c) => c.release === undefined)
+  const line = (c: LoadedChange) => `- **${c.label}.** ${c.forwardGuide.replace(/\s+/g, ' ').trim()}${c.issue ? ` (${c.issue.replace(/.*\/(?=\d+$)/, '#')})` : ''}`
+  return unreleased.map(line).join('\n')
+}
+
+if (positionals[0] === 'changelog') {
+  console.log(changelog())
+} else if (positionals[0] === 'release') {
+  const version = positionals[1]
+  if (!version || !/^\d+\.\d+\.\d+/.test(version)) throw new Error('npm run change -- release <version>')
+  let stamped = 0
+  for (const f of existsSync(CHANGES) ? readdirSync(CHANGES).filter((x) => x.endsWith('.ttl')) : []) {
+    const path = join(CHANGES, f)
+    const text = read(path)
+    if (text.includes('chg:release')) continue
+    const next = text.replace(/\ba chg:Change ;/, `a chg:Change ;\n    chg:release "${version}" ;`)
+    if (next !== text) writeFileSync(path, next), stamped++
+  }
+  console.log(`${stamped} change(s) stated as released in ${version}.`)
+} else if (positionals[0] === 'new') {
   const slug = positionals[1]
   if (!slug || !/^[a-z][a-z0-9-]*$/.test(slug)) throw new Error('npm run change -- new <slug> --affects c:A,c:B (a slug is lower-case-with-dashes)')
   mkdirSync(CHANGES, { recursive: true })
