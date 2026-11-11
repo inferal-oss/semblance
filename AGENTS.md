@@ -246,6 +246,7 @@ npm run pack:check     # the npm packages as a consumer gets them (docs/RELEASIN
 | `src/subset.ts` | the part of the ontology an app uses, shipped in place of the whole (`docs/SUBSET.md`) |
 | `src/jelly/` | RDF Jelly, binary and streaming: the TypeScript codec, and Jelly for stores without an engine (`docs/JELLY.md`; the engines' own are in `rdf-engine/`, `JELLY.md`) |
 | `src/sandbox.ts` | live examples: each in a sandbox of its own (host effect) |
+| `src/migrate/`, `ontology/changes/`, `ontology/versions.ttl`, `ontology/terms.ttl` | versions and their check, changes, `semblance migrate` (`docs/MIGRATIONS.md`); `src/retired.ts` is what a page does with a retired term |
 | `src/safety.ts`, `ontology/layers/safety.ttl` | safe authoring: what an authored graph may render (`docs/SAFETY.md`) |
 | `src/store/` | store adapters (Oxigraph, N3, hybrid); `rdf-engine/` has Semblance's own engines |
 | `demo/` | the site (`app.ttl`, `gallery/`, `main.ts` is the host) |

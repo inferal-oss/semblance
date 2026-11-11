@@ -13,6 +13,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { todoApp } from '../src/examples/todo.ts'
+import { frameworkChanges } from '../src/migrate/index.ts'
 import { addressOf } from '../src/navigation.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { MOD, NS } from '../src/ns.ts'
@@ -30,6 +31,7 @@ const LLMS = 'urn:semblance:llms:'
 
 /** The repository's own guides, linked from the Docs section (they are Markdown already). */
 const GUIDES: [string, string, string][] = [
+  ['Migrations', 'docs/MIGRATIONS.md', 'moving an app across framework versions, forward and back'],
   ['Getting started', 'docs/GETTING-STARTED.md', 'build a small app with a component of its own'],
   ['Building components', 'docs/COMPONENTS.md', 'rules, reactions, layers and integrating with your app'],
   ['Foreign components', 'docs/FOREIGN.md', 'web components and framework components as parts of a Semblance UI'],
@@ -315,12 +317,25 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       })
       .join('\n'),
   ]
+  // What changed in the components, for whoever has to move with it (docs/MIGRATIONS.md).
+  const changes = frameworkChanges()
+  out.set(
+    'llms/changes.md',
+    [
+      '# Changes',
+      '> What changed in the components, and how to move with it. `semblance migrate` carries the mechanical part; `semblance migrate --verify` decides whether a move is done.',
+      ...(changes.length
+        ? changes.map((c) => [`## ${c.label}`, c.release ? `Released in ${c.release}.` : 'Unreleased.', `Affects: ${c.affects.join(', ')}.`, `**Why.** ${c.motivation}`, `**What.** ${c.substance}`, `**Forward.** ${c.forwardGuide}`, `**Back.** ${c.backwardGuide}`].join('\n\n'))
+        : ['No changes yet.']),
+    ].join('\n\n') + '\n',
+  )
   const optional = [
     '## Optional',
     [
       `- [Source on GitHub](${REPO}): the framework, the ontologies (ontology/), the site (demo/) and Semblance's own SPARQL engines (rdf-engine/)`,
       `- [README](${repo('README.md')}): the architecture`,
       `- [npm package ${pkg.name}](https://www.npmjs.com/package/${pkg.name}): not published yet`,
+      `- [Changes](${page('llms/changes.md')}): what changed in the components, why, and how to move with it, in both directions`,
       `- [Full listing](${page('llms-full.txt')}): every component with its description, properties and an example, and every doc section as text`,
     ].join('\n'),
   ]
