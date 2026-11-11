@@ -4,7 +4,7 @@
 // are the same machinery. What cannot be done mechanically is reported, with the change that explains it.
 import { createStore } from '../node/load.ts'
 import { NS, SPARQL_PREFIXES } from '../ns.ts'
-import { parseQuery, SparqlSyntaxError } from '../view/sparql.ts'
+import { parseQuery, parseUpdate, SparqlSyntaxError } from '../view/sparql.ts'
 import type { LoadedChange, MigrationStep, Rename } from './changes.ts'
 import { frameworkPrefixes, looksLikeQuery, looksLikeTurtle, type Names, renameText } from './rename.ts'
 import { rewriteQuery } from './sparql.ts'
@@ -176,12 +176,29 @@ function select(opts: MigrateOptions): { active: LoadedChange[]; findings: Findi
       active.push(c)
       continue
     }
-    const terms = c.retires.some(occurrence)
+    // What it retires, or (a mapping that moves only some values retires nothing) what it deletes.
+    const terms = c.retires.some(occurrence) || c.migrations.some((m) => deletedTerms(m.forward).some(occurrence))
     const slugs = c.migrations.some((m) => m.renames.some((r) => r.kind === 'slug' && occurrence(r.old)))
     if (terms || slugs) active.push(c)
     else if (!c.migrations.length) findings.push({ kind: 'meaning', message: `${c.label}: a change of meaning or behaviour, which leaves no trace in the source. Read it, and say what you were written against (--from).`, change: c.iri })
   }
   return { active, findings }
+}
+
+/** The terms a SPARQL Update's DELETE names, other than rdf:type. */
+function deletedTerms(update: string | undefined): string[] {
+  if (!update) return []
+  try {
+    return parseUpdate(SPARQL_PREFIXES + '\n' + update).ops.flatMap((op) =>
+      op.del.flatMap((t) => {
+        const p = t.p as { k: string; iri?: string }
+        return [...(p.k === 'link' && p.iri !== NS.rdf + 'type' ? [p.iri!] : []), ...(t.o.k === 'iri' ? [t.o.v] : [])]
+      }),
+    )
+  } catch (e) {
+    if (e instanceof SparqlSyntaxError) return []
+    throw e
+  }
 }
 
 /** Whether a term or slug occurs anywhere in the files, cheaply and conservatively. */
