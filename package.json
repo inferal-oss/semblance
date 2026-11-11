@@ -78,6 +78,8 @@
     "engine:compare": "tsx rdf-engine/compare.ts",
     "engine:sizes": "tsx rdf-engine/sizes.ts",
     "engine:speed": "tsx rdf-engine/host/speed-check.ts",
+    "versions": "tsx scripts/versions.ts",
+    "change": "tsx scripts/versions.ts",
     "predev": "npm run engine:build && npm run layout:build",
     "prebuild": "npm run engine:build && npm run layout:build",
     "pretest": "npm run engine:build && npm run layout:build",

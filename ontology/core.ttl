@@ -38,6 +38,23 @@ sem:DebugLayer a sem:Layer ;
 sem:slug a owl:DatatypeProperty ;
     rdfs:comment "Short machine name used in generated attribute values and CSS."@en .
 
+# --- Versions --------------------------------------------------------------
+# Each component is versioned on its own (ontology/versions.ttl, generated): a change to what the
+# ontology says about it is a version step, which says what accounts for it. The terms a consumer
+# states or reads are listed (ontology/terms.ttl); one that goes is retired, and never defined again.
+# AGENTS.md, "When a component changes".
+
+sem:version a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "A component's version: stepped whenever what the ontology says about it changes."@en .
+sem:closure a owl:DatatypeProperty ;
+    rdfs:comment "A hash of what the ontology says about a component at its sem:version."@en .
+sem:changedBy a owl:ObjectProperty ;
+    rdfs:comment "The chg:Change that explains a component's last version step."@en .
+sem:internal a owl:DatatypeProperty ;
+    rdfs:comment "Why a component's last version step needs no chg:Change: nothing a consumer would notice changed."@en .
+sem:Term a owl:Class ; rdfs:comment "A name a consumer states or reads: a class, a property, an individual."@en .
+sem:RetiredTerm a owl:Class ; rdfs:comment "A term a chg:Change removed. It is never defined again."@en .
+
 sem:readsWholeOntology a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:boolean ;
     rdfs:comment "True on a component class whose instances read the whole ontology (the Reference's tree and term pages): an app that reaches it ships all of it, not the subset of what it uses (src/subset.ts)."@en .
 

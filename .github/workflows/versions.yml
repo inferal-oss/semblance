@@ -1,0 +1,31 @@
+# A component's definition that changed needs a version step and a recorded reason (AGENTS.md, "When
+# a component changes"): ontology/versions.ttl and ontology/terms.ttl match the ontology, and against
+# the branch a pull request merges into, a closure that differs has a higher version.
+name: Versions
+
+on:
+  push:
+    branches: [main]
+    paths: ['ontology/**', 'src/migrate/**', 'src/ontology.ts', 'scripts/versions.ts']
+  pull_request:
+    paths: ['ontology/**', 'src/migrate/**', 'src/ontology.ts', 'scripts/versions.ts']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Versions and terms match, with a step for every changed component
+        run: npx tsx scripts/versions.ts --check ${{ github.base_ref && format('--against origin/{0}', github.base_ref) || '' }}

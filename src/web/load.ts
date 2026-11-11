@@ -8,7 +8,7 @@ export { COMPILE_ON_RUN, createStore, hasStore, initStore, type StoreKind, type 
 // The vendored RDF/HTML vocabulary is only read at build time (scripts/gen-rdfhtml-vocab.ts).
 // Each file is a chunk of its own, fetched when asked for (loadOntology): a page loads the files it
 // needs first, the rest after.
-const sourceLoaders = import.meta.glob(['../../ontology/**/*.ttl', '!../../ontology/vendor/**'], { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>
+const sourceLoaders = import.meta.glob(['../../ontology/**/*.ttl', '!../../ontology/vendor/**', '!../../ontology/changes/**', '!../../ontology/versions.ttl', '!../../ontology/terms.ttl'], { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>
 const sources: Record<string, string> = {}
 
 /** The framework's ontology files by name (`ontology/<file>`), in load order. */

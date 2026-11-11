@@ -56,6 +56,8 @@ export const NS = {
   co: 'http://purl.org/co/',
   safe: 'https://semblance.dev/ns/safety#',
   src: 'https://semblance.dev/ns/source#',
+  mig: 'https://semblance.dev/ns/migration#',
+  chg: 'https://semblance.dev/ns/change#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
