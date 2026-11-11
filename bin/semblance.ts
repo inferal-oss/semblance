@@ -8,6 +8,10 @@
 // semblance subset [--out ontology.ttl] [--config semblance.config.ts]
 //   Write the part of Semblance's ontology the site's graphs use (docs/SUBSET.md), as Turtle: what
 //   a server without a filesystem (a Cloudflare Worker, docs/WORKERS.md) loads in place of the whole.
+// semblance migrate [paths] [--check] [--verify] [--json] [--from <release>] [--to <release>] [--accept-loss] [--changes dir]
+//   Move a project's Turtle across framework versions (docs/MIGRATIONS.md, ontology/changes/).
+// semblance changes [--json] [--since <release>]
+//   The changes, each with its motivation, substance and guides.
 // semblance render <address> [--config semblance.config.ts] [--template dist/404.html]
 //   Print one address's page (or its root's HTML alone, without a template).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -20,6 +24,11 @@ import { semblance } from '../src/node/vite.ts'
 import { renderDocument } from '../src/server/document.ts'
 
 const [command, ...rest] = process.argv.slice(2)
+// Moving a project across framework versions needs no site description, only its files.
+if (command === 'migrate' || command === 'changes') {
+  const { run } = await import('../src/migrate/cli.ts')
+  process.exit(await run(command, rest))
+}
 const { values, positionals } = parseArgs({
   args: rest,
   allowPositionals: true,

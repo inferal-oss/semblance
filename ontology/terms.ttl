@@ -249,11 +249,13 @@ blk:within a sem:Term .
 chg:Change a sem:Term .
 chg:affects a sem:Term .
 chg:after a sem:Term .
+chg:applied a sem:Term .
 chg:backwardGuide a sem:Term .
 chg:forwardGuide a sem:Term .
 chg:issue a sem:Term .
 chg:migrations a sem:Term .
 chg:motivation a sem:Term .
+chg:release a sem:Term .
 chg:retires a sem:Term .
 chg:substance a sem:Term .
 clip:Copied a sem:Term .
@@ -1616,6 +1618,7 @@ sem:watchesAnywhere a sem:Term .
 sem:watchesManyValued a sem:Term .
 sem:watchesStatements a sem:Term .
 sem:workKind a sem:Term .
+sem:writtenAgainst a sem:Term .
 sem:zeroOrMore a sem:Term .
 dep:case a sem:Term .
 dep:defaults a sem:Term .

@@ -52,6 +52,8 @@ sem:changedBy a owl:ObjectProperty ;
     rdfs:comment "The chg:Change that explains a component's last version step."@en .
 sem:internal a owl:DatatypeProperty ;
     rdfs:comment "Why a component's last version step needs no chg:Change: nothing a consumer would notice changed."@en .
+sem:writtenAgainst a owl:DatatypeProperty ;
+    rdfs:comment "The framework release a project's Turtle is written against (semblance.lock.ttl, written by semblance migrate)."@en .
 sem:Term a owl:Class ; rdfs:comment "A name a consumer states or reads: a class, a property, an individual."@en .
 sem:RetiredTerm a owl:Class ; rdfs:comment "A term a chg:Change removed. It is never defined again."@en .
 
