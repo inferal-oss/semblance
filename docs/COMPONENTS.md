@@ -41,8 +41,11 @@ Series charts draw a maintained view's rows in long form, a value (`c:valueVaria
 (`c:seriesVariable`, optional) for a category (`c:categoryVariable`): `c:AreaChart`, `c:ColumnChart`
 (grouped, or `c:stacked true`), `c:ScatterChart` (an x, `c:xVariable`; bubbles with
 `c:sizeVariable`), `c:PieChart` and `c:DonutChart`, `c:Histogram` (bins of `c:valueVariable`, about
-`c:binCount`), `c:BoxPlot` (medians, quartiles and ranges) and `c:Sparkline` (word-sized, for tiles
-and table cells). A legend series with `c:axis c:SecondaryAxis` gets a second scale (`c:secondaryUnit`);
+`c:binCount`), `c:BoxPlot` (medians, quartiles and ranges), `c:Sparkline` (word-sized, for tiles
+and table cells), and the faceted kinds: `c:BarChart` (horizontal stacked bars with totals, small multiples
+by `c:facetVariable`) and `c:Heatmap` (series down, categories across, a cell per pair on a log ramp,
+`c:flagVariable` outlining some), and `c:LineChart` (log values against numeric categories, log-log with
+`c:logScale`, a `c:referenceLine "linear"`). A legend series with `c:axis c:SecondaryAxis` gets a second scale (`c:secondaryUnit`);
 `c:annotation` draws a `c:Threshold` (`c:at`) or a `c:MarkedRange` (`c:fromValue`, `c:toValue`); a
 legend item is a toggle that hides or shows its series (`c:hiddenSeries`). They share their parts: a
 plan mints the series (the legend's items, `c:legend` to name and order them), the categories and a
@@ -50,8 +53,8 @@ point per series and category; a layout adds stack bases, the value scale (steps
 and its ticks. The frame writes the scale as custom properties and each point its own values, so the
 theme places the marks: a changed row re-renders its points, not the chart. A point is a list item
 with its value in words and a tooltip; Tab reaches the chart and the arrow keys move between points.
-As text, a series chart is its name and its points' words; bar charts, heatmaps and line charts write
-a line per row. A table column with `c:format "component"` holds the component its value names in
+As text, a series chart is its name and its points' words; bar charts and heatmaps write a line per
+row (`c:saysRows`). A table column with `c:format "component"` holds the component its value names in
 each cell, e.g. a row's sparkline.
 
 ```turtle

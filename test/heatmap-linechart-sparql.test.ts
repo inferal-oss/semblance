@@ -82,11 +82,11 @@ describe('heatmaps and line charts in SPARQL', () => {
       if (!process.env.CHART_ROOTS) {
         const html = s.html()
         expect(html[0]).toContain('<figcaption>1,000 items · ms</figcaption>')
-        expect(html[0]).toContain('class="sem-h12 sem-flagged"')
+        expect(html[0]).toContain('class="sem-point sem-h12 sem-flagged"')
         expect(html[2]).toContain('plain view is not a maintained view')
         expect(html[3]).toBe('<p data-sem-c="heatmap" class="sem-empty">No view.</p>')
         expect(html[4]).toContain('class="sem-reference"')
-        expect(html[5]).toContain('<text y="282" x="540.0" text-anchor="middle" class="sem-axis">1,000</text>')
+        expect(html[5]).toContain('class="sem-chart-xtick">1,000</span>')
       }
       both((h) => h.change([['m7', 'size', 100], ['m7', 'part', 'dom'], ['m7', 'op', 'add'], ['m7', 'ms', 3]]))
       both((h) => h.change([['m1', 'ms', 99.95]], [['m1', 'ms']]))

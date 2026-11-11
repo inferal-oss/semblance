@@ -66,7 +66,8 @@ describe('the activity example', () => {
     const shown = activity()
     shown.open()
     const whileShown = measure(shown, () => shown.click(shown.header('Events')))
-    expect(whileShown).toBeLessThan(40)
+    // A chart's share is its plan, layout and frame and the marks that changed (#384), each small.
+    expect(whileShown).toBeLessThan(48)
     // Elsewhere, a click costs the same whether the dashboard was ever opened or not.
     const visited = activity()
     visited.open()

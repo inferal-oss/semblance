@@ -3,27 +3,15 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { labelOf, rdfList, str, text } from './util.ts'
-import { maintainedRows } from '../view/rows.ts'
 import { md5Key } from './data.ts'
 import { compareKeys, tupleKey } from '../render/order-key.ts'
-import { isKind, measures } from './series.ts'
+import { cssNumber, isKind, kindSays, measures, seriesMessage } from './series.ts'
+import { formatLocale } from '../engine/context.ts'
+import { formatNumber } from '../../rdf-engine/host/intl.ts'
 
 const NUMERIC = new Set(['integer', 'decimal', 'double', 'float', 'int', 'long', 'short', 'byte', 'nonNegativeInteger', 'positiveInteger', 'negativeInteger', 'nonPositiveInteger', 'unsignedInt', 'unsignedLong', 'unsignedShort', 'unsignedByte'].map((t) => NS.xsd + t))
 
 type Row = Map<string, Term>
-
-/** v to k decimals, as the charts' SPARQL rules write it: ROUND(v × 10^k), the point put in its digits. */
-const fixed = (v: number, k: number) => {
-  const d = String(Math.round(v * 10 ** k))
-  const p = d.length <= k ? '0'.repeat(k + 1 - d.length) + d : d
-  return k ? p.slice(0, p.length - k) + '.' + p.slice(p.length - k) : p
-}
-const fmt = (v: number) => (v >= 100 ? fixed(v, 0) : v >= 10 ? fixed(v, 1) : v >= 1 ? fixed(v, 2) : v >= 0.01 ? fixed(v, 3) : '<0.01')
-/** Counts (a chart without a unit) are whole: "5", not "5.00". */
-const fmtIn = (unit: string) => (v: number) => (!unit && Number.isInteger(v) ? String(v) : fmt(v))
-const num = (t: Term | undefined) => (t ? Number(t.value) : undefined)
-/** A whole number (up to 15 digits) with thousands separators; anything else as it is. */
-const grouped = (s: string) => (/^(0|[1-9][0-9]{0,14})$/.test(s) ? s.replace(/\B(?=(\d{3})+$)/g, ',') : s)
 
 /** The chart's encoding: which SELECT variables play which role. */
 export function encoding(ctx: RuleContext, focus: NamedNode) {
@@ -42,199 +30,97 @@ export function encoding(ctx: RuleContext, focus: NamedNode) {
   }
 }
 
-/**
- * The chart's rows, from the views graph where the views runtime keeps them (a maintained SELECT:
- * iv:View, iv:materialize iv:Graph), each row once; else the message it shows instead.
- */
-function rows(ctx: RuleContext, focus: NamedNode): Row[] | string {
-  const view = ctx.object(focus, C.view)
-  if (!view || !ctx.object(view, SEM.select)) return 'No view.'
-  return maintainedRows(ctx, view, true) ?? `${labelOf(ctx, view)} is not a maintained view (iv:View, iv:materialize iv:Graph).`
-}
-
-/** A facet's value in a caption: a number as en-US writes it (1,000), anything else as it is. */
-const facetText = (facet: string) => (/^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(facet) ? Number(facet).toLocaleString('en-US') : facet)
-
-/** Series in legend order (c:legend: nodes with c:key + rdfs:label), else first-seen. */
-function legendOf(ctx: RuleContext, focus: NamedNode, data: Row[], variable: string | undefined) {
-  const declared = rdfList(ctx, ctx.object(focus, C.legend)).map((s) => ({ key: str(ctx.object(s, C.key)) ?? s.value, label: labelOf(ctx, s) }))
-  if (declared.length) return declared
-  // Without a series variable every value is one series, named by the chart.
-  if (!variable) return [{ key: '', label: labelOf(ctx, focus) }]
-  const seen = [...new Set(data.map((r) => (variable ? str(r.get(variable)) : undefined)).filter((x): x is string => x !== undefined))]
-  return seen.map((k) => ({ key: k, label: k }))
-}
-
-const groupBy = <T,>(xs: T[], k: (x: T) => string) => {
-  const m = new Map<string, T[]>()
-  for (const x of xs) m.set(k(x), [...(m.get(k(x)) ?? []), x])
-  return m
-}
-
 export function message(ctx: RuleContext, focus: NamedNode, text: string) {
   const o = ctx.out(focus)
   o.renders(o.el('root', 'P', { class: 'sem-empty' }, [o.text('empty', text)]))
   return o.quads
 }
 
-function legend(o: ReturnType<RuleContext['out']>, series: { label: string }[]) {
-  return o.el('legend', 'Ul', { class: 'sem-legend' }, series.map((s, i) =>
-    o.el(`legend-${i}`, 'Li', {}, [o.el(`legend-${i}-swatch`, 'I', { style: `background: var(--sem-series-${(i % 6) + 1})` }), o.text(`legend-${i}-text`, s.label)]),
-  ))
+// --- bar chart and heatmap: faceted series charts ----------------------------------------------
+
+/** A faceted chart's facets (c:SeriesPlan mints them), in the order first seen. */
+function facetsOf(ctx: RuleContext, chart: NamedNode) {
+  return ctx
+    .match(null, NS.c + 'inChart', chart)
+    .map((q) => q.subject as NamedNode)
+    .filter((n) => ctx.match(n, RDF_TYPE, NS.c + 'ChartFacet').length)
+    .map((n) => ({ n, i: Number(str(ctx.object(n, NS.c + 'index'))), fac: str(ctx.object(n, C.label)) ?? '', max: ctx.object(n, NS.c + 'max') }))
+    .sort((a, b) => a.i - b.i)
 }
 
-// --- bar chart --------------------------------------------------------------------------------
+/** A facet's caption: c:facetLabel with {value} its value, a number in the viewer's locale. */
+function caption(ctx: RuleContext, chart: NamedNode, fac: string) {
+  ctx.readsLanguage()
+  const shown = /^-?(0|[1-9][0-9]*)([.][0-9]+)?([eE][+-]?[0-9]+)?$/.test(fac) ? formatNumber(Number(fac), formatLocale(ctx.languages), 'maximumFractionDigits=4') : fac
+  return encoding(ctx, chart).facetLabel.replace('{value}', shown)
+}
 
-// A bar chart reads its view's rows from the views graph (a maintained SELECT: iv:View with
-// iv:materialize iv:Graph), as its SPARQL rule does; c:BarChartRendering-sparql says the same in SPARQL.
+// A bar chart: a figure per facet (its bars are the plan's categories, their segments its points), then the legend.
 const barchart: FnRule = (ctx, focus) => {
-  const view = ctx.object(focus, C.view)
-  if (!view || !ctx.object(view, SEM.select)) return message(ctx, focus, 'No view.')
-  const data = maintainedRows(ctx, view)
-  if (!data) return message(ctx, focus, `${labelOf(ctx, view)} is not a maintained view (iv:View, iv:materialize iv:Graph).`)
-  // No rows: the chart's own c:emptyText, when it has one, instead of an empty figure.
-  const empty = data.length ? undefined : text(ctx, focus, C.emptyText)
-  if (empty) return message(ctx, focus, empty)
-  const e = encoding(ctx, focus)
-  const series = legendOf(ctx, focus, data, e.series)
+  const msg = seriesMessage(ctx, focus)
+  if (msg !== undefined) return message(ctx, focus, msg)
   const o = ctx.out(focus)
-  const facets = groupBy(data, (r) => (e.facet ? str(r.get(e.facet)) ?? '' : ''))
-  const panels = [...facets].map(([facet, rs]) => {
-    const fid = `f-${md5Key(facet)}`
-    const categories = groupBy(rs, (r) => str(r.get(e.category)) ?? '')
-    const totals = [...categories.values()].map((c) => c.reduce((a, r) => a + (num(r.get(e.value)) ?? 0), 0))
-    const max = Math.max(...totals, 1e-9)
-    const bars = [...categories].map(([category, cs]) => {
-      const id = `b-${md5Key(facet)}-${md5Key(category)}`
-      const measured = cs.some((r) => r.get(e.value))
-      const total = cs.reduce((a, r) => a + (num(r.get(e.value)) ?? 0), 0)
-      const segments = measured
-        ? series.flatMap((s, si) => {
-            const v = num(cs.find((r) => (e.series ? str(r.get(e.series)) === s.key : true))?.get(e.value))
-            if (v === undefined || v <= 0) return []
-            const seg = o.el(`${id}-s${si}`, 'Span', { class: 'sem-seg', style: `width: ${fixed((v / max) * 100, 2)}%; background: var(--sem-series-${(si % 6) + 1})` })
-            o.tip(seg, `${category} · ${s.label}: ${fmtIn(e.unit)(v)} ${e.unit}`.trim())
-            return [seg]
-          })
-        : []
-      const track = o.el(`${id}-track`, 'Span', { class: 'sem-track' }, segments)
-      const value = o.el(`${id}-total`, 'Span', { class: measured ? 'sem-total' : 'sem-total sem-pending' }, [
-        o.text(`${id}-total-text`, measured ? `${fmtIn(e.unit)(total)} ${e.unit}`.trim() : 'running…'),
-      ])
-      return o.el(id, 'Div', { class: 'sem-bar' }, [o.el(`${id}-label`, 'Span', { class: 'sem-category' }, [o.text(`${id}-label-text`, category)]), track, value])
-    })
-    // Small multiples are captioned; an unfaceted chart is one figure without one.
-    const caption = e.facet ? [o.el(`${fid}-caption`, 'Figcaption', {}, [o.text(`${fid}-caption-text`, e.facetLabel.replace('{value}', grouped(facet)))])] : []
-    return o.el(fid, 'Figure', {}, [...caption, ...bars])
+  const faceted = !!ctx.object(focus, C.facetVariable)
+  const figures = facetsOf(ctx, focus).map(({ fac, max }) => {
+    const fid = `f-${md5Key(fac)}`
+    const m = max === undefined ? undefined : Number(max.value)
+    const cap = faceted ? [o.el(`${fid}-caption`, 'Figcaption', {}, [o.text(`${fid}-caption-text`, caption(ctx, focus, fac))])] : []
+    // Its bars (the plan's categories) come after the caption.
+    for (const n of cap) o.t(n, SEM.orderKey, tupleKey([0]))
+    return o.el(fid, 'Figure', { style: m === undefined ? undefined : `--max: ${cssNumber(m > 0 ? m : 1)}` }, cap)
   })
-  const parts = [o.el('panels', 'Div', { class: 'sem-panels' }, panels)]
-  if (e.series && series.length > 1) parts.push(legend(o, series))
-  o.renders(o.el('root', 'Div', {}, parts))
+  o.renders(o.el('root', 'Div', {}, [o.el('panels', 'Div', { class: 'sem-panels' }, figures), o.el('legend', 'Ul', { class: 'sem-legend' })]))
   return o.quads
 }
 
-// --- heatmap ---------------------------------------------------------------------------------
-
+// A heatmap: a table per facet (its column headings the plan's categories, a row per series of the facet that holds
+// its cells), then the ramp's key.
 const heatmap: FnRule = (ctx, focus) => {
-  const data = rows(ctx, focus)
-  if (typeof data === 'string') return message(ctx, focus, data)
-  const e = encoding(ctx, focus)
+  const msg = seriesMessage(ctx, focus)
+  if (msg !== undefined) return message(ctx, focus, msg)
   const o = ctx.out(focus)
-  const lo = Math.log10(0.01)
-  const hi = Math.log10(100)
-  const step = (v: number) => Math.round(Math.min(1, Math.max(0, (Math.log10(Math.max(v, 0.01)) - lo) / (hi - lo))) * 12)
-  // Facets, columns (categories) and rows (series) in the order first seen; keyed by their text.
-  const facets = groupBy(data, (r) => (e.facet ? str(r.get(e.facet)) ?? '' : ''))
-  const tables = [...facets].map(([facet, rs]) => {
-    const f = `f-${md5Key(facet)}`
-    const columns = [...new Set(rs.map((r) => str(r.get(e.category)) ?? ''))]
-    const rowsBy = groupBy(rs, (r) => (e.series ? str(r.get(e.series)) ?? '' : ''))
+  const e = encoding(ctx, focus)
+  const faceted = !!ctx.object(focus, C.facetVariable)
+  const minted = ctx.match(null, NS.c + 'inChart', focus).map((q) => q.subject as NamedNode)
+  const tables = facetsOf(ctx, focus).map(({ n: facet, fac }) => {
+    const f = `f-${md5Key(fac)}`
+    const columns = minted
+      .filter((n) => ctx.match(n, RDF_TYPE, NS.c + 'ChartCategory').length && ctx.object(n, NS.c + 'facet')?.value === facet.value)
+      .map((n) => ({ i: Number(str(ctx.object(n, NS.c + 'index'))), cat: str(ctx.object(n, C.label)) ?? '' }))
+      .sort((a, b) => a.i - b.i)
+    const seriesOf = new Map<string, Term>()
+    for (const p of minted) {
+      if (!ctx.match(p, RDF_TYPE, NS.c + 'ChartPoint').length || ctx.object(p, NS.c + 'facet')?.value !== facet.value) continue
+      const s = ctx.object(p, NS.c + 'series')
+      if (s) seriesOf.set(s.value, s)
+    }
+    const rowsOf = [...seriesOf.values()]
+      .map((s) => ({ i: Number(str(ctx.object(s, NS.c + 'index'))), key: str(ctx.object(s, C.key)) ?? '', label: str(ctx.object(s, C.label)) ?? '' }))
+      .sort((a, b) => a.i - b.i)
     const head = o.el(`${f}-head`, 'Thead', {}, [
-      o.el(`${f}-head-row`, 'Tr', {}, [o.el(`${f}-corner`, 'Th'), ...columns.map((c) => o.el(`${f}-col-${md5Key(c)}`, 'Th', { scope: 'col' }, [o.text(`${f}-col-${md5Key(c)}-text`, c)]))]),
+      o.el(`${f}-head-row`, 'Tr', {}, [o.el(`${f}-corner`, 'Th'), ...columns.map(({ cat }) => o.el(`${f}-col-${md5Key(cat)}`, 'Th', { scope: 'col' }, [o.text(`${f}-col-${md5Key(cat)}-text`, cat)]))]),
     ])
-    const body = o.el(`${f}-body`, 'Tbody', {}, [...rowsBy].map(([row, cs]) => {
-      const rid = `${f}-r-${md5Key(row)}`
-      return o.el(rid, 'Tr', {}, [
-        o.el(`${rid}-h`, 'Th', { scope: 'row' }, [o.text(`${rid}-h-text`, row)]),
-        ...columns.map((c) => {
-          const r = cs.find((x) => (str(x.get(e.category)) ?? '') === c)
-          const v = num(r?.get(e.value))
-          const id = `${rid}-c-${md5Key(c)}`
-          if (v === undefined) return o.el(id, 'Td', { class: 'sem-pending' }, [o.text(id + '-text', '…')])
-          const flagged = e.flag !== undefined && str(r!.get(e.flag)) === 'true'
-          const cell = o.el(id, 'Td', { class: `sem-h${step(v)}${flagged ? ' sem-flagged' : ''}` }, [o.text(id + '-text', `${flagged ? '⚠ ' : ''}${fmt(v)}`)])
-          o.tip(cell, `${c} · ${row}: ${fmt(v)} ${e.unit}${flagged && e.flagLabel ? ` — ${e.flagLabel}` : ''}`.trim())
-          return cell
-        }),
-      ])
+    const body = o.el(`${f}-body`, 'Tbody', {}, rowsOf.map(({ key, label }) => {
+      const rid = `r-${md5Key(fac)}-${md5Key(key)}`
+      // Its name before its cells (the plan's points).
+      const th = o.el(`${rid}-h`, 'Th', { scope: 'row' }, [o.text(`${rid}-h-text`, label)])
+      o.t(th, SEM.orderKey, tupleKey([-1]))
+      return o.el(rid, 'Tr', {}, [th])
     }))
-    const caption = o.el(`${f}-caption`, 'Figcaption', {}, [o.text(`${f}-caption-text`, e.facetLabel.replace('{value}', facetText(facet)))])
-    return o.el(f, 'Figure', {}, [caption, o.el(`${f}-scroll`, 'Div', { class: 'sem-scroll' }, [o.el(`${f}-table`, 'Table', {}, [head, body])])])
+    const cap = faceted ? [o.el(`${f}-caption`, 'Figcaption', {}, [o.text(`${f}-caption-text`, caption(ctx, focus, fac))])] : []
+    return o.el(f, 'Figure', {}, [...cap, o.el(`${f}-scroll`, 'Div', { class: 'sem-scroll' }, [o.el(`${f}-table`, 'Table', {}, [head, body])])])
   })
+  ctx.readsLanguage()
+  const locale = formatLocale(ctx.languages)
+  const withUnit = (v: string) => (e.unit ? `${v} ${e.unit}` : v)
   const ramp = o.el('ramp', 'Span', { class: 'sem-ramp' }, Array.from({ length: 13 }, (_, i) => o.el(`ramp-${i}`, 'I', { class: `sem-h${i}` })))
   const scale = o.el('scale', 'Div', { class: 'sem-scale' }, [
-    o.el('scale-lo', 'Span', {}, [o.text('scale-lo-text', `0.01 ${e.unit}`)]),
+    o.el('scale-lo', 'Span', {}, [o.text('scale-lo-text', withUnit(formatNumber(0.01, locale, 'maximumFractionDigits=2')))]),
     ramp,
-    o.el('scale-hi', 'Span', {}, [o.text('scale-hi-text', `100 ${e.unit}`)]),
-    ...(e.flagLabel ? [o.el('scale-flag', 'Span', { class: 'sem-flag-note' }, [o.text('scale-flag-text', `⚠ ${e.flagLabel}`)])] : []),
+    o.el('scale-hi', 'Span', {}, [o.text('scale-hi-text', withUnit(formatNumber(100, locale, 'maximumFractionDigits=2')))]),
+    ...(e.flagLabel !== undefined ? [o.el('scale-flag', 'Span', { class: 'sem-flag-note' }, [o.text('scale-flag-text', `⚠ ${e.flagLabel}`)])] : []),
   ])
   o.renders(o.el('root', 'Div', {}, [...tables, scale]))
-  return o.quads
-}
-
-// --- line chart (SVG) -----------------------------------------------------------------------------
-
-const linechart: FnRule = (ctx, focus) => {
-  const data = rows(ctx, focus)
-  if (typeof data === 'string') return message(ctx, focus, data)
-  const e = encoding(ctx, focus)
-  const points = data
-    .map((r) => ({ s: e.series ? str(r.get(e.series)) ?? '' : '', x: num(r.get(e.category)), y: num(r.get(e.value)) }))
-    .filter((p): p is { s: string; x: number; y: number } => p.x !== undefined && p.y !== undefined && p.y > 0)
-  const xs = [...new Set(points.map((p) => p.x))].sort((a, b) => a - b)
-  if (xs.length < 2) return message(ctx, focus, text(ctx, focus, C.emptyText) ?? 'Needs at least two sizes.')
-  const series = legendOf(ctx, focus, data, e.series)
-  const o = ctx.out(focus)
-  const W = 560
-  const Hh = 300
-  const m = { l: 62, r: 20, t: 16, b: 40 }
-  const tx = (v: number) => (e.log ? Math.log10(v) : v)
-  const ys = points.map((p) => p.y)
-  const yLo = Math.floor(Math.log10(Math.min(...ys)))
-  const yHi = Math.ceil(Math.log10(Math.max(...ys)))
-  const x = (v: number) => m.l + ((tx(v) - tx(xs[0]!)) / (tx(xs[xs.length - 1]!) - tx(xs[0]!) || 1)) * (W - m.l - m.r)
-  const y = (v: number) => Hh - m.b - ((Math.log10(v) - yLo) / (yHi - yLo || 1)) * (Hh - m.t - m.b)
-  /** A coordinate to one decimal, as ROUND(v × 10) writes it. */
-  const c1 = (v: number) => fixed(v, 1)
-  const parts: NamedNode[] = []
-  // A decade's line and label each; at most 64 decades (1e-32 to 1e32 is already unreadable).
-  for (let k = yLo; k <= Math.min(yHi, yLo + 63); k++) {
-    const v = 10 ** k
-    parts.push(o.svg(`grid${k}`, 'Line', { x1: m.l, x2: W - m.r, y1: c1(y(v)), y2: c1(y(v)), class: 'sem-grid' }))
-    parts.push(o.svg(`ylab${k}`, 'Text', { x: m.l - 8, y: c1(y(v)), 'text-anchor': 'end', 'dominant-baseline': 'central', class: 'sem-axis' }, [o.text(`ylab${k}-t`, `${v >= 1 ? v : v.toFixed(2)} ${e.unit}`.trim())]))
-  }
-  xs.forEach((v, i) => parts.push(o.svg(`xlab${i}`, 'Text', { x: c1(x(v)), y: Hh - m.b + 22, 'text-anchor': 'middle', class: 'sem-axis' }, [o.text(`xlab${i}-t`, `${v.toLocaleString('en-US')}`)])))
-  if (e.reference === 'linear') {
-    const firsts = series.map((s) => points.find((p) => p.s === s.key && p.x === xs[0])).filter(Boolean) as { y: number }[]
-    const start = Math.max(...firsts.map((p) => p.y))
-    const end = Math.min(start * (xs[xs.length - 1]! / xs[0]!), 10 ** yHi)
-    const ref = o.svg('reference', 'Line', { x1: c1(x(xs[0]!)), y1: c1(y(start)), x2: c1(x(xs[xs.length - 1]!)), y2: c1(y(end)), class: 'sem-reference' })
-    o.tip(ref, 'proportional (linear) growth from the slowest configuration')
-    parts.push(ref, o.svg('reference-label', 'Text', { x: c1(x(xs[xs.length - 1]!) - 4), y: c1(y(end) - 8), 'text-anchor': 'end', class: 'sem-axis' }, [o.text('reference-label-t', 'linear')]))
-  }
-  series.forEach((s, si) => {
-    const ps = points.filter((p) => p.s === s.key).sort((a, b) => a.x - b.x)
-    if (!ps.length) return
-    const color = `var(--sem-series-${(si % 6) + 1})`
-    parts.push(o.svg(`line${si}`, 'Path', { d: ps.map((p, i) => `${i ? 'L' : 'M'}${c1(x(p.x))},${c1(y(p.y))}`).join(' '), class: 'sem-line', style: `stroke: ${color}` }))
-    ps.forEach((p, pi) => {
-      const dot = o.svg(`dot${si}-${pi}`, 'Circle', { cx: c1(x(p.x)), cy: c1(y(p.y)), r: 4.5, class: 'sem-dot', style: `fill: ${color}` })
-      o.tip(dot, `${s.label} · ${p.x.toLocaleString('en-US')}: ${fmt(p.y)} ${e.unit}`.trim())
-      parts.push(dot)
-    })
-  })
-  const svg = o.svg('plot', 'Svg', { viewBox: `0 0 ${W} ${Hh}`, role: 'img', 'aria-label': labelOf(ctx, focus) }, parts)
-  o.renders(o.el('root', 'Div', {}, [svg, legend(o, series)]))
   return o.quads
 }
 
@@ -245,8 +131,8 @@ const linechart: FnRule = (ctx, focus) => {
  * the view's order, "facet · category · series: value unit", the value in the viewer's locale.
  */
 const rowsText: FnRule = (ctx, focus) => {
-  // A series chart says its points instead (c:SeriesChartText).
-  if (isKind(ctx, focus, NS.c + 'SeriesChart')) return []
+  // A series chart says its points instead (c:SeriesChartText), unless its kind says its rows.
+  if (isKind(ctx, focus, NS.c + 'SeriesChart') && !kindSays(ctx, focus, NS.c + 'saysRows', 'true')) return []
   const view = ctx.object(focus, C.view)
   if (!view || !ctx.object(view, SEM.select)) return message(ctx, focus, 'No view.')
   if (!ctx.match(view, RDF_TYPE, NS.rs + 'ResultSet').length) return message(ctx, focus, `${labelOf(ctx, view)} is not a maintained view (iv:View, iv:materialize iv:Graph).`)
@@ -335,4 +221,4 @@ const findings: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const chartFunctions: Record<string, FnRule> = { barchart, heatmap, linechart, findings, 'chart:rows-text': rowsText }
+export const chartFunctions: Record<string, FnRule> = { barchart, heatmap, findings, 'chart:rows-text': rowsText }

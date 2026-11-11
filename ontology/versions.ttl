@@ -1,6 +1,7 @@
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix blk: <https://semblance.dev/ns/block#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix change: <https://semblance.dev/change/> .
 @prefix chg: <https://semblance.dev/ns/change#> .
 @prefix clip: <https://semblance.dev/ns/clipboard#> .
 @prefix dnd: <https://semblance.dev/ns/dragdrop#> .
@@ -69,12 +70,14 @@ c:AccordionItem sem:version 1 ; sem:closure "9e05766282279f52" ; sem:internal "n
 c:Alert sem:version 1 ; sem:closure "82a51096882177ca" ; sem:internal "new" .
 c:AppBar sem:version 1 ; sem:closure "3783ab844980788c" ; sem:internal "new" .
 c:AreaChart sem:version 1 ; sem:closure "4b2654c199af9555" ; sem:internal "new" .
-c:AreaPoint sem:version 1 ; sem:closure "e1869541749fadd3" ; sem:internal "new" .
+c:AreaPoint sem:version 2 ; sem:closure "1c32f78ae3dacea2" ; sem:changedBy change:charts-on-shared-parts .
 c:Avatar sem:version 1 ; sem:closure "f287dc13d1441263" ; sem:internal "new" .
 c:AvatarGroup sem:version 1 ; sem:closure "6c180615b6e10e26" ; sem:internal "new" .
-c:AxisChart sem:version 1 ; sem:closure "abd19722feb71ab2" ; sem:internal "new" .
+c:AxisChart sem:version 2 ; sem:closure "089a1a000637e5de" ; sem:changedBy change:charts-on-shared-parts .
 c:Badge sem:version 1 ; sem:closure "9494f209ed528acf" ; sem:internal "new" .
-c:BarChart sem:version 1 ; sem:closure "a6659161b23be0d5" ; sem:internal "new" .
+c:BarCategory sem:version 1 ; sem:closure "94e975e337a4b633" ; sem:internal "new" .
+c:BarChart sem:version 2 ; sem:closure "2f6ed712cdfef2ef" ; sem:changedBy change:charts-on-shared-parts .
+c:BarPoint sem:version 1 ; sem:closure "675911b93a22bc06" ; sem:internal "new" .
 c:BlockEditor sem:version 1 ; sem:closure "81ec19762a58ac2d" ; sem:internal "new" .
 c:Blockquote sem:version 1 ; sem:closure "e866348fff52a3f9" ; sem:internal "new" .
 c:Board sem:version 1 ; sem:closure "d894c8e3f61bb191" ; sem:internal "new" .
@@ -92,7 +95,7 @@ c:CanvasItem sem:version 1 ; sem:closure "ecda9dc74d7abbf0" ; sem:internal "new"
 c:Card sem:version 1 ; sem:closure "e4980c13b492373b" ; sem:internal "new" .
 c:Charset sem:version 1 ; sem:closure "e0bd36111a8206a5" ; sem:internal "new" .
 c:Chart sem:version 1 ; sem:closure "c4cbf309f649c5a7" ; sem:internal "new" .
-c:ChartPoint sem:version 1 ; sem:closure "5be79b5db04a29a9" ; sem:internal "new" .
+c:ChartPoint sem:version 2 ; sem:closure "e8efc0f602b5e769" ; sem:changedBy change:charts-on-shared-parts .
 c:ChartSeries sem:version 1 ; sem:closure "14f559da52a07575" ; sem:internal "new" .
 c:Checkbox sem:version 1 ; sem:closure "dd1293cfeedb76b8" ; sem:internal "new" .
 c:Chips sem:version 1 ; sem:closure "133a4a7a58f76b04" ; sem:internal "new" .
@@ -142,7 +145,8 @@ c:GraphNode sem:version 1 ; sem:closure "0a4f2db208558d26" ; sem:internal "new" 
 c:Grid sem:version 1 ; sem:closure "6fecc7ec4ff5566a" ; sem:internal "new" .
 c:GridRow sem:version 1 ; sem:closure "b9534dc23019efd0" ; sem:internal "new" .
 c:Heading sem:version 1 ; sem:closure "7b722a1f6f9ff5df" ; sem:internal "new" .
-c:Heatmap sem:version 1 ; sem:closure "5bf9db4ae5b247b4" ; sem:internal "new" .
+c:HeatCell sem:version 1 ; sem:closure "6f6c2f0ad33a0742" ; sem:internal "new" .
+c:Heatmap sem:version 2 ; sem:closure "122158b57b285bec" ; sem:changedBy change:charts-on-shared-parts .
 c:HexView sem:version 1 ; sem:closure "5683467de7096e01" ; sem:internal "new" .
 c:Highlight sem:version 1 ; sem:closure "7f5b4ff056a93102" ; sem:internal "new" .
 c:Histogram sem:version 1 ; sem:closure "636664598cd02931" ; sem:internal "new" .
@@ -156,7 +160,8 @@ c:JsonTree sem:version 1 ; sem:closure "630e99a553b16fdd" ; sem:internal "new" .
 c:Kbd sem:version 1 ; sem:closure "f82fcf14689efe08" ; sem:internal "new" .
 c:Legend sem:version 1 ; sem:closure "6b92926554401ed1" ; sem:internal "new" .
 c:Lightbox sem:version 1 ; sem:closure "517d12bc94880243" ; sem:internal "new" .
-c:LineChart sem:version 1 ; sem:closure "2ffcd6fb81a516ea" ; sem:internal "new" .
+c:LineChart sem:version 2 ; sem:closure "1410c7cd9820d413" ; sem:changedBy change:charts-on-shared-parts .
+c:LinePoint sem:version 1 ; sem:closure "f6f0c0a14e8bb5ca" ; sem:internal "new" .
 c:Link sem:version 1 ; sem:closure "3ac39dc5ebf4d5e2" ; sem:internal "new" .
 c:LinkedCard sem:version 1 ; sem:closure "188c9d74982ef735" ; sem:internal "new" .
 c:List sem:version 1 ; sem:closure "055cd3db19599413" ; sem:internal "new" .
@@ -206,14 +211,14 @@ c:Restorable sem:version 1 ; sem:closure "2dceab5e1b75cef4" ; sem:internal "new"
 c:ResultGraph sem:version 1 ; sem:closure "652af62b7648e5c4" ; sem:internal "new" .
 c:ResultTable sem:version 1 ; sem:closure "95946f4822a57dc3" ; sem:internal "new" .
 c:ResultTurtle sem:version 1 ; sem:closure "5d1f8d9e763e0a2b" ; sem:internal "new" .
-c:RowChart sem:version 1 ; sem:closure "2d46eb5829965404" ; sem:internal "new" .
+c:RowChart sem:version 2 ; sem:closure "0ed79056e3a80ecb" ; sem:changedBy change:charts-on-shared-parts .
 c:RunQueryButton sem:version 1 ; sem:closure "3bc2ec8f61d0099c" ; sem:internal "new" .
 c:ScatterChart sem:version 1 ; sem:closure "1342bf38f2800d75" ; sem:internal "new" .
 c:ScatterPoint sem:version 1 ; sem:closure "9b5267d98d1f3100" ; sem:internal "new" .
 c:SearchField sem:version 1 ; sem:closure "e01b8667b8b81272" ; sem:internal "new" .
 c:Segmented sem:version 1 ; sem:closure "a3b208f5df88fc42" ; sem:internal "new" .
 c:Selector sem:version 1 ; sem:closure "ec774feecdfa9139" ; sem:internal "new" .
-c:SeriesChart sem:version 1 ; sem:closure "dd78ec2c1d8cee21" ; sem:internal "new" .
+c:SeriesChart sem:version 2 ; sem:closure "183808c912527bb0" ; sem:changedBy change:charts-on-shared-parts .
 c:Setter sem:version 1 ; sem:closure "64b1555171d4d66a" ; sem:internal "new" .
 c:ShapeField sem:version 1 ; sem:closure "fd87f89699d55824" ; sem:internal "new" .
 c:ShapeForm sem:version 1 ; sem:closure "fdc7a77641c6123c" ; sem:internal "new" .
