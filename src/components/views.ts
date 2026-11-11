@@ -508,10 +508,15 @@ const switchCases: FnRule = (ctx, focus) => {
   const property = ctx.object(focus, C.property)
   const current = target && property ? ctx.object(target, property)?.value : undefined
   const o = ctx.out(focus)
+  // A hidden case holds its content only while the switch's retention policy or the case keeps it.
+  const every = ctx.object(focus, C.caseRetention)?.value === C.KeepEveryCase
   const cases = rdfList(ctx, ctx.object(focus, C.cases)).map((c, i) => {
     const content = ctx.object(c, C.content)
     const on = ctx.object(c, C.when)?.value === current
-    return o.el(`case-${i}`, 'Div', { hidden: on ? undefined : '' }, named(content) ? [content] : [])
+    const holds = on || every || ctx.object(c, C.keptHidden)?.value === 'true'
+    const el = o.el(`case-${i}`, 'Div', { hidden: on ? undefined : '' }, holds && named(content) ? [content] : [])
+    if (!holds && named(content)) o.t(el, SEM.setsAside, content)
+    return el
   })
   o.renders(o.el('root', 'Div', {}, cases))
   return o.quads

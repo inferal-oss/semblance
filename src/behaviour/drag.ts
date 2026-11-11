@@ -164,7 +164,7 @@ export class DragHost {
   /** Pick up a draggable element (an RDF dnd:Start); returns the session or nothing. */
   private lift(el: HTMLElement, mode: Session['mode'], copy: boolean, end: () => void): Session | undefined {
     this.takes.clear()
-    for (const zone of this.renderer.host.querySelectorAll('[data-sem-drop-zone]')) this.takesDrops(zone as HTMLElement)
+    for (const zone of this.renderer.marked('data-sem-drop-zone')) this.takesDrops(zone as HTMLElement)
     const draggable = this.draggableOf(el)
     const carried = el.getAttribute('data-sem-drag')
     if (!draggable || !carried) return undefined
@@ -400,7 +400,7 @@ export class DragHost {
 
   /** The zones shown that take drops, in document order. */
   private zones(): HTMLElement[] {
-    return ([...this.renderer.host.querySelectorAll('[data-sem-drop-zone]')] as HTMLElement[]).filter((z) => this.zoneOf(z) === z)
+    return (this.renderer.marked('data-sem-drop-zone') as HTMLElement[]).filter((z) => this.zoneOf(z) === z)
   }
 
   dispose() {

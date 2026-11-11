@@ -11,12 +11,12 @@ import { appGraph, galleryFiles, mountSite } from './harness.ts'
 // clicks run reactions (members of the change log) must show at least one of them on screen. The
 // docs pages' live examples, each in a sandbox of its own, are test/docs-live-clicks.test.ts.
 // The pages are shared out over the site-clicks-*.test.ts files, each under a minute on the site's
-// own store (WAT; on Oxigraph the Data page alone costs ~17 s to show, #465). SITE_CLICKS_LOG=<file>
+// own store (WAT; on Oxigraph the Data page alone costs some 8 s to show, #465). SITE_CLICKS_LOG=<file>
 // writes what each page clicked and which clicks ran a reaction.
 
 const UI = 'https://semblance.dev/demo#'
 const CLICKABLE = 'button, [role=button], [role=tab], [role=switch], [role=checkbox], [role=menuitem], [role=option], [role=radio]'
-// The page shown: the shell's page switch keeps the pages shown before, hidden.
+// The page shown: the one case of the shell's page switch that is not hidden.
 const PAGE = '#app > [data-sem-c=stack] > [data-sem-c=switch] > :not([hidden])'
 // What opens over the page: dialogs, drawers, menus.
 const DESKTOP = '#app > [data-sem-c=stack] > [data-sem-c=desktop]'
@@ -81,8 +81,7 @@ export function clickThroughPages(title: string, pages: Page[]) {
     const f = s.factory
     // The change log keeps its latest members only: a handled click is a member not seen before.
     const members = () => new Set(s.match(f.namedNode(NS.beh + 'ChangeLog'), f.namedNode(NS.tree + 'member'), null).map((q) => q.object.value))
-    // What a click can show: the page and what opens over it (not the pages shown before, kept
-    // hidden, which only make the comparison slower as the visit goes on; not announcements).
+    // What a click can show: the page and what opens over it (not announcements).
     const content = () =>
       [page(), ...site.document.querySelectorAll(DESKTOP)]
         .map((x) => {

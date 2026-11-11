@@ -1139,11 +1139,29 @@ WHERE {
 
 c:Switch a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment """Shows the case (c:cases) whose c:when equals c:property of c:controls. Every case stays
-rendered (inactive ones hidden), so switching moves no DOM and keeps state."""@en ;
+    rdfs:comment """Shows the case (c:cases) whose c:when equals c:property of c:controls. A hidden case keeps
+what was rendered for it (its derived triples, its elements set aside by the renderer) but leaves the
+document, unless its retention policy (c:caseRetention) keeps it there, hidden: so a visit that shows
+every case in turn leaves a document of one case, and showing a case again moves its subtree back in
+and evaluates only what changed while it was hidden."""@en ;
     sem:slug "switch" .
 c:cases a owl:ObjectProperty ; rdfs:range rdf:List .
 c:when a owl:ObjectProperty .
+
+# Which hidden cases stay in the document, as a stream's ldes:retentionPolicy says which members it
+# keeps. State is triples, so a case that leaves the document loses nothing the graph holds; only
+# state the document alone holds (an iframe's page, media playing, a scroll position inside the case)
+# needs a case kept in it.
+c:caseRetention a owl:ObjectProperty ; rdfs:domain c:Switch ; rdfs:range c:CaseRetentionPolicy ;
+    rdfs:comment "Which of the switch's hidden cases stay in the document, hidden (default: c:KeepShownCase)."@en .
+c:CaseRetentionPolicy a owl:Class ;
+    rdfs:comment "Which of a c:Switch's cases stay in the document while another is shown."@en .
+c:KeepShownCase a c:CaseRetentionPolicy ;
+    rdfs:comment "Only the shown case (and any case that is c:keptHidden) is in the document."@en .
+c:KeepEveryCase a c:CaseRetentionPolicy ;
+    rdfs:comment "Every case stays in the document, the ones not shown hidden: for cases whose state lives in the document alone."@en .
+c:keptHidden a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a case of a c:Switch: it stays in the document while hidden, whatever the switch's c:caseRetention."@en .
 c:SwitchRendering a sem:Rendering ; sem:targets c:Switch ; sem:stratum 0 ; sem:follows c:controls .
 c:SwitchRendering-fn a sem:Rule ; sem:implements c:SwitchRendering ; sem:function "switch" .
 
@@ -1152,23 +1170,29 @@ c:SwitchRendering-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?case .
-  ?case a rdfhtml:Div ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?next .
+  ?case a rdfhtml:Div ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?content ; sem:setsAside ?aside ; ord:immediatelyPrecedes ?next .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Switch .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   {} UNION {
     # One panel per case (c:cases, in order), keyed by its position; the case whose c:when
-    # equals the controlled value is shown.
+    # equals the controlled value is shown. A hidden case holds its content only while the
+    # switch's retention policy (c:caseRetention) or the case itself (c:keptHidden) keeps it.
     $this c:cases/rdf:rest* ?cell . ?cell rdf:first ?c .
     { SELECT ?cell (COUNT(?mid) - 1 AS ?i) WHERE { $this c:cases/rdf:rest* ?mid . ?mid rdf:rest* ?cell } GROUP BY ?cell }
     OPTIONAL { $this c:controls ?target ; c:property ?property . ?target ?property ?current }
+    OPTIONAL { $this c:caseRetention ?retention }
     LATERAL {
-      OPTIONAL { ?c c:content ?content FILTER(isIRI(?content)) }
+      OPTIONAL { ?c c:content ?held FILTER(isIRI(?held)) }
       OPTIONAL { ?c c:when ?when }
+      OPTIONAL { ?c c:keptHidden ?keptHidden }
       OPTIONAL { ?cell rdf:rest ?nextCell FILTER(?nextCell != rdf:nil) }
     }
     BIND((!BOUND(?when) && !BOUND(?current)) || (BOUND(?when) && BOUND(?current) && STR(?when) = STR(?current)) AS ?on)
+    BIND(?on || (BOUND(?retention) && ?retention = c:KeepEveryCase) || (BOUND(?keptHidden) && STR(?keptHidden) = "true") AS ?holds)
+    BIND(IF(?holds, ?held, ?none) AS ?content)
+    BIND(IF(?holds, ?none, ?held) AS ?aside)
     BIND(IF(?on, ?none, "") AS ?hidden)
     BIND(IRI(CONCAT(STR($this), "/~case-", STR(?i))) AS ?case)
     BIND(IF(BOUND(?nextCell), IRI(CONCAT(STR($this), "/~case-", STR(?i + 1))), ?none) AS ?next)

@@ -1089,8 +1089,20 @@ export class Engine {
     // (a description list follows the node it describes, which may be a component placed at stratum 0).
     const back = isPlacementOrProvenance(p) ? undefined : this.links.get(s)
     if (back) {
+      // Which nodes name the predicate along a rule's paths, found from the predicate (once per path set):
+      // a node many components follow (the app's state, which every page's controls name) costs the few
+      // that name this predicate, not every one that follows it.
+      let named: Map<string[][], Set<string>> | undefined
       for (const [fp, subjects] of back) {
         for (const r of this.followers.get(fp) ?? []) {
+          const byPath = subjects.size > 8 && r.watches && r.watchesVia && !r.watchesMarked && !r.watches.has(p)
+          if (byPath) {
+            named ??= new Map()
+            let namers = named.get(r.watchesVia!)
+            if (!namers) named.set(r.watchesVia!, (namers = this.namers(r.watchesVia!, p)))
+            for (const x of namers) if (subjects.has(x) && this.isInstance(x, r)) this.markFollower(r, x)
+            continue
+          }
           for (const x of subjects) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
         }
         // Along a path: back from the nodes linking here, one step at a time, to the foci.
@@ -1846,6 +1858,32 @@ export class Engine {
       }
       return nodes.some((n) => n.termType === 'NamedNode' && n.value === predicate)
     })
+  }
+
+  /**
+   * The nodes that name the predicate along one of these paths (as `names` asks of one node): walked
+   * back from the predicate, so it costs the nodes that name it, not every node that might.
+   */
+  private namers(via: string[][], predicate: string): Set<string> {
+    const f = this.store.factory
+    const out = new Set<string>()
+    for (const path of via) {
+      let nodes: Term[] = [f.namedNode(predicate)]
+      for (let i = path.length - 1; i >= 0 && nodes.length; i--) {
+        const step = path[i]!
+        if (step.startsWith('?')) {
+          const p = f.namedNode(step.slice(1))
+          nodes = nodes.filter((n) => n.termType !== 'Literal' && this.graphs.some((g) => this.store.match(n as never, p, null, g).length > 0))
+          continue
+        }
+        const back = step.startsWith('^')
+        const p = f.namedNode(back ? step.slice(1) : step)
+        // Back along a step: to what has it (p), or to what it is had by (^p).
+        nodes = nodes.flatMap((n) => this.graphs.flatMap((g) => (back ? (n.termType === 'Literal' ? [] : this.store.match(n as never, p, null, g).map((q) => q.object)) : this.store.match(null, p, n as never, g).map((q) => q.subject))))
+      }
+      for (const n of nodes) if (n.termType === 'NamedNode') out.add(n.value)
+    }
+    return out
   }
 
   /** Whether the predicate has one of these properties (Rule.watchesMarked). */

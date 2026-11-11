@@ -102,7 +102,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -271,7 +271,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -350,7 +350,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -400,7 +400,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -911,7 +911,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -1059,7 +1059,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -1212,7 +1212,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -1327,7 +1327,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -1588,7 +1588,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -1695,7 +1695,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -2585,7 +2585,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -2742,7 +2742,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -3046,7 +3046,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
@@ -3228,7 +3228,7 @@ WHERE {
       {
         # A declared legend (c:legend): its series in order, by c:key (else the node).
         $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
-        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?before rdf:rest+ ?cell FILTER(?before = ?l2 || EXISTS { ?l2 rdf:rest+ ?before }) } } GROUP BY ?cell }
         OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
         OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
     OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }

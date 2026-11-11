@@ -9,6 +9,7 @@ import { EventBus } from '../src/behaviour/events.ts'
 import { EX, todoApp, todoOps, todoReactions } from '../src/examples/todo.ts'
 import { loadStore } from '../src/node/load.ts'
 import { A11Y, MOD, NS, PERF_GRAPH, SEM, STY } from '../src/ns.ts'
+import { toHTML } from '../src/render/serialize.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -201,9 +202,9 @@ describe('intent preloading (sem:OnIntent)', () => {
     const nav = (name: string) => [...document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === name)!
     expect(runs('TableRendering')).toBe(0)
     fire(nav('Data'), 'pointerover')
-    // Evaluated and built (hidden) ahead of the click; nothing else was.
+    // Evaluated and built ahead of the click, set aside out of the document (c:caseRetention); nothing else was.
     expect(runs('TableRendering')).toBeGreaterThan(0)
-    expect(document.querySelector('[data-sem-c=table]')!.closest('[hidden]')).not.toBeNull()
+    expect(document.querySelector('[data-sem-c=table]')).toBeNull()
     expect(runs('TreeRendering-fn') + runs('TreeRendering-sparql')).toBeGreaterThan(0)
     expect(runs('AccordionRendering-fn') + runs('AccordionRendering-sparql')).toBe(0)
     const before = screen.engine.stats.ruleRuns
@@ -219,17 +220,20 @@ describe('anticipation (sem:anticipates)', () => {
     const { anticipate } = await import('../src/intent.ts')
     const button = (doc: Document, name: string) => [...doc.querySelectorAll('[data-sem-c=app-bar] button')].find((b) => b.textContent!.trim() === name)!
     const headings = (doc: Document) => [...doc.querySelectorAll('h1, h2')].map((h) => h.textContent!.trim())
+    // What the docs page holds, rendered whether or not it is in the document (a hidden case's content is set aside).
+    const built = (shell: ReturnType<typeof mountShell>) => headings(parseHTML(`<!doctype html><html><body>${toHTML(shell.screen.index, 'https://semblance.dev/demo#docs')}</body></html>`).document)
     // Without it, the first click evaluates the page.
     const cold = mountShell()
     let before = cold.screen.engine.stats.ruleRuns
     cold.fire(button(cold.document, 'Docs'), 'click')
     const coldRuns = cold.screen.engine.stats.ruleRuns - before
-    // With it, the page is there (built, hidden) before the click.
+    // With it, the page is there (built, set aside) before the click.
     const h = mountShell()
     anticipate(h.runtime, { idle: (run) => run(1_000), flush: () => h.shell.flush() })
-    expect(headings(h.document)).toContain('Overview')
+    expect(built(h)).toContain('Overview')
+    expect(headings(h.document)).not.toContain('Overview')
     // What the click would show, not every page under the section: the other docs pages stay parked.
-    expect(headings(h.document)).not.toContain('Rules and the engine')
+    expect(toHTML(h.screen.index, 'https://semblance.dev/demo#doc-ru-h')).toBe('')
     before = h.screen.engine.stats.ruleRuns
     h.fire(button(h.document, 'Docs'), 'click')
     expect(h.screen.engine.stats.ruleRuns - before).toBeLessThan(coldRuns / 5)
