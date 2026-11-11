@@ -1539,6 +1539,7 @@ sem:about a sem:Term .
 sem:alignmentStrength a sem:Term .
 sem:always a sem:Term .
 sem:anticipates a sem:Term .
+sem:anticipatesNear a sem:Term .
 sem:at a sem:Term .
 sem:awaitsWork a sem:Term .
 sem:budget a sem:Term .
