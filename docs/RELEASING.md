@@ -4,8 +4,8 @@ Semblance is published to npm as two packages, released together with one versio
 
 | package | what |
 |---|---|
-| `@inferal-oss/semblance` | the framework: `.` (the core), `./web` (the browser: `mount`), `./node` (Node: stores, sites, the Vite plugin), `./server` (server rendering), `./virtual` (types of the Vite plugin's module), `./ontology/*` (the Turtle), `./wasm/*` (the engines' WebAssembly), and the `semblance` command |
-| `@inferal-oss/semblance-react` | React as the library under Semblance (`docs/HOSTED.md`): `.` and `./server` |
+| `@inferal-oss/semblance` | the framework: `.` (the core), `./web` (the browser: `mount`), `./node` (Node: stores, sites, the Vite plugin), `./server` (server rendering), `./views` (maintained views on their own, `docs/VIEWS.md`; a `node` and a browser build), `./virtual` (types of the Vite plugin's module), `./ontology/*` (the Turtle), `./wasm/*` (the engines' WebAssembly), and the `semblance` command |
+| `@inferal-oss/semblance-react` | React as the library under Semblance (`docs/HOSTED.md`): `.`, `./server` and `./views` (the hooks over views) |
 
 Each release is a tag `v<version>` and a GitHub release whose notes are the changelog's entry.
 
