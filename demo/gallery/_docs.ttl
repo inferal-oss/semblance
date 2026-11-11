@@ -182,7 +182,7 @@ ui:doc-ov-components a c:Link , c:Setter ; c:label "components" ; c:href "/compo
 ui:doc-start a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:doc-gs-h ui:doc-gs-1 ui:doc-gs-install ui:doc-gs-2 ui:doc-gs-vite ui:doc-gs-3 ui:gs-page ui:doc-gs-3b ui:doc-gs-4 ui:doc-gs-mount ui:doc-gs-5 ui:gs-tally ui:doc-gs-5b ui:doc-gs-6 ui:gs-react ui:doc-gs-7 ) .
 ui:doc-gs-h a c:Heading ; c:level 1 ; c:label "Getting started" .
-ui:doc-gs-1 a c:Text ; c:label "Semblance is the npm package @inferal-oss/semblance (not published yet: until it is, use a checkout of the repository, or npm pack it). It ships TypeScript, its ontologies and its WebAssembly engines, built by your bundler - today Vite." .
+ui:doc-gs-1 a c:Text ; c:label "Semblance is the npm package @inferal-oss/semblance: compiled JavaScript with its types, its ontologies and its WebAssembly engines, built into your app by your bundler - today Vite." .
 ui:doc-gs-install a c:Code ; c:block true ; c:language "shell" ; c:label """npm install @inferal-oss/semblance
 npm install --save-dev vite""" .
 ui:doc-gs-2 a c:Text ; c:label "The package finds its ontology files and engine builds with import.meta.glob, so Vite must not pre-bundle it; its Turtle parser, N3, is CommonJS and must be pre-bundled:" .

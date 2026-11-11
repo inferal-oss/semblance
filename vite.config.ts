@@ -2,7 +2,13 @@ import { resolve } from 'node:path'
 import type { Plugin } from 'vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import { defineConfig } from 'vitest/config'
+import packageJson from './package.json' with { type: 'json' }
+import reactPackageJson from './packages/react/package.json' with { type: 'json' }
+import { type Manifest, sourceAliases } from './scripts/package-exports.ts'
 import { semblance } from './src/node/vite.ts'
+
+const semblancePackage = packageJson as Manifest
+const reactPackage = reactPackageJson as Manifest
 
 const here = import.meta.dirname
 
@@ -37,12 +43,9 @@ function llms(): Plugin {
 export default defineConfig(({ command, mode }) => ({
   root: 'demo',
   // The packages in this repository by their names, as an app that installed them imports them.
+  // Every entry of their exports maps to its source (scripts/package-exports.ts), never to lib/.
   resolve: {
-    alias: [
-      { find: /^@inferal-oss\/semblance-react$/, replacement: resolve(here, 'packages/react/src/index.ts') },
-      { find: /^@inferal-oss\/semblance-react\/server$/, replacement: resolve(here, 'packages/react/src/server.ts') },
-      { find: /^@inferal-oss\/semblance$/, replacement: resolve(here, 'src/index.ts') },
-    ],
+    alias: [...sourceAliases(semblancePackage, here), ...sourceAliases(reactPackage, resolve(here, 'packages/react/src'))],
   },
   // The site is served from its domain's root (semblance.dev): its pages are paths (/docs/rules/),
   // so assets are addressed from the root (SEMBLANCE_BASE for another path). The single file

@@ -11,6 +11,14 @@ running example is `examples/react/`: the todo app's graph (`src/examples/todo.t
 drawn by a small design system of the example's own.
 
 ```bash
+npm install @inferal-oss/semblance @inferal-oss/semblance-react react react-dom
+npm install --save-dev vite
+```
+
+The package's Vite configuration is the one [Getting started](GETTING-STARTED.md#install) gives. In
+a checkout of this repository the example runs with
+
+```bash
 npx vite --config examples/react/vite.config.ts
 ```
 
