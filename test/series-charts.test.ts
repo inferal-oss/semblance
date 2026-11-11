@@ -292,14 +292,17 @@ describe('series charts', () => {
     }, 120_000)
   }
 
-  for (const chart of ['AreaChart', 'ColumnChart']) it(`re-renders the points a changed row moves, whatever the number of categories (${chart}, wat, SPARQL)`, () => {
+  // The bar chart, heatmap and line chart too (#384): a bar's segment and total, a cell, a point and the one before it.
+  for (const [chart, most] of [['AreaChart', 2], ['ColumnChart', 2], ['BarChart', 3], ['Heatmap', 2], ['LineChart', 3]] as const) it(`re-renders the points a changed row moves, whatever the number of categories (${chart}, wat, SPARQL)`, () => {
     const cost = (n: number) => {
-      const rows = Array.from({ length: n }, (_, i) => `ex:r${i} ex:month "m${String(i).padStart(3, '0')}" ; ex:channel "${i % 2 ? 'Web' : 'Store'}" ; ex:amount ${10 + (i % 7)} ; ex:at ${i} .`).join('\n')
+      // A line chart's categories are numbers.
+      const month = (i: number) => (chart === 'LineChart' ? `"${i + 1}"` : `"m${String(i).padStart(3, '0')}"`)
+      const rows = Array.from({ length: n }, (_, i) => `ex:r${i} ex:month ${month(i)} ; ex:channel "${i % 2 ? 'Web' : 'Store'}" ; ex:amount ${10 + (i % 7)} ; ex:at ${i} .`).join('\n')
       const view = `ex:Sales a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """SELECT ?month ?channel ?amount WHERE { ?s <https://example.org/#month> ?month ; <https://example.org/#channel> ?channel ; <https://example.org/#at> ?at . OPTIONAL { ?s <https://example.org/#amount> ?amount } } ORDER BY ?at""" .`
       const h = mount(`${PREFIXES}${rows}\n${view}\nex:a a c:${chart} ; c:view ex:Sales ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" .`, 'wat', 'sparql', ['a'])
       h.html()
       const { engine } = h.shown[0]!.screen
-      const runs = () => [...engine.stats.byRule.entries()].filter(([rule]) => /PointRendering|ChartSeriesRendering|AxisChartRendering/.test(rule)).reduce((a, [, st]) => a + st.runs, 0)
+      const runs = () => [...engine.stats.byRule.entries()].filter(([rule]) => /PointRendering|ChartSeriesRendering|AxisChartRendering|BarChartRendering|BarCategoryRendering|HeatmapRendering|HeatCellRendering/.test(rule)).reduce((a, [, st]) => a + st.runs, 0)
       const before = { written: engine.stats.derivedAdded + engine.stats.derivedRemoved, runs: runs() }
       // Within the scale: the frame and the other points stay as they are.
       h.set('r3', 'amount', 12.5)
@@ -308,7 +311,7 @@ describe('series charts', () => {
     }
     const small = cost(10)
     const large = cost(80)
-    expect(small.runs).toBeLessThanOrEqual(2)
+    expect(small.runs).toBeLessThanOrEqual(most)
     expect(large).toEqual(small)
   }, 120_000)
 })
