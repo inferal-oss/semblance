@@ -36,6 +36,10 @@ chg:retires a rdf:Property ; rdfs:domain chg:Change ;
     rdfs:comment "A term this change removes (a mig:renames retires its old term without saying so). A retired term is never defined again."@en .
 chg:after a owl:ObjectProperty ; rdfs:domain chg:Change ; rdfs:range chg:Change ;
     rdfs:comment "A change this one is applied after, when they touch the same terms."@en .
+chg:release a owl:DatatypeProperty ; rdfs:domain chg:Change ;
+    rdfs:comment "The release the change shipped in, stated when it is released. Absent while unreleased."@en .
+chg:applied a owl:ObjectProperty ; rdfs:range chg:Change ;
+    rdfs:comment "An unreleased change a project has already moved across (semblance.lock.ttl)."@en .
 chg:migrations a owl:ObjectProperty ; rdfs:domain chg:Change ;
     rdfs:comment "The change's migrations, an RDF list in the order they apply (backward: the reverse order). Absent for a change of meaning or behaviour alone."@en .
 

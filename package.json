@@ -48,6 +48,10 @@
     "./virtual": {
       "types": "./lib/src/virtual.d.ts"
     },
+    "./migrate": {
+      "types": "./lib/src/migrate/index.d.ts",
+      "default": "./lib/src/migrate/index.js"
+    },
     "./ontology/*": "./lib/ontology/*",
     "./wasm/*": "./lib/rdf-engine/build/*",
     "./package.json": "./package.json"
