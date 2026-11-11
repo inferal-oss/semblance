@@ -123,8 +123,10 @@ export interface ViewHandle {
   readonly strategy: 'incremental' | 'recompute' | 'on request'
   readonly fallback?: string
   readonly figures: ViewFigures
-  /** The current result. */
+  /** The current result: a SELECT's rows (in no particular order; see orderedRows), a CONSTRUCT's triples. */
   rows(): Map<string, Term>[]
+  /** A SELECT's rows in their order: ORDER BY's (LIMIT and OFFSET applied), else by their values. */
+  orderedRows(): Map<string, Term>[]
   quads(): Quad[]
   /** SELECT views with ORDER BY: each row's position (1-based), by its key (as rows() keys it). */
   index(row: Map<string, Term>): number | undefined
@@ -2432,12 +2434,16 @@ export class MaintainedView implements ViewHandle {
       return
     }
     const plan = this.plan
-    const result: RunResult = plan.form === 'select' ? { kind: 'rows', vars: resultColumns(this.text, this.rows()), rows: this.orderedRows() } : { kind: 'triples', quads: this.quads() }
+    const result: RunResult = plan.form === 'select' ? { kind: 'rows', vars: resultColumns(this.text, this.rows()), rows: this.sortedOutput() } : { kind: 'triples', quads: this.quads() }
     this.resultSet.write(resultSetQuads(this.rt.store.factory, this.rt.graph, this.iri, result), out, result)
   }
 
+  orderedRows(): Row[] {
+    return this.plan.kind === 'recompute' ? this.rows() : this.sortedOutput()
+  }
+
   /** The output rows in their order: ORDER BY's (the top-k's positions), else by their values; a row n times, n times. */
-  private orderedRows(): Row[] {
+  private sortedOutput(): Row[] {
     const plan = this.plan as MaintainedPlan
     const at = new Map<string, number>()
     if (this.topk) for (const [k, e] of this.topk.window) at.set(mapKey(project(e.row, plan.vars)), this.topk.positions.get(k) ?? Infinity)

@@ -25,6 +25,10 @@
       "types": "./lib/server.d.ts",
       "default": "./lib/server.js"
     },
+    "./views": {
+      "types": "./lib/views.d.ts",
+      "default": "./lib/views.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

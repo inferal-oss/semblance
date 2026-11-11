@@ -26,6 +26,11 @@ package is `@inferal-oss/semblance` (`npm install @inferal-oss/semblance`), with
 `@inferal-oss/semblance-react` for React; [CHANGELOG.md](CHANGELOG.md) has the versions and
 [docs/RELEASING.md](docs/RELEASING.md) how they are made.
 
+**Only the views:** [Views without the framework](docs/VIEWS.md) is a smaller first step for an app
+with a UI kit of its own. `@inferal-oss/semblance/views` is a store and SPARQL views over your data,
+kept current by deltas, with no ontology and no renderer, and `useRows` / `useView` read them in
+React.
+
 ```bash
 npm install
 npm run dev            # the site (http://localhost:5173)

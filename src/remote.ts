@@ -14,53 +14,16 @@ import { BEH, NS, RDF_TYPE, SOURCES_GRAPH, XSD_INTEGER } from './ns.ts'
 import { type Delta, quadKey } from './rdf.ts'
 import type { Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
-import { concerns, type DeltaMessage, fromNTriples, JELLY_MEDIA_TYPE, jellySourceEvents, type Pattern, serverSentEvents, type Snapshot, statementsOf, toNTriples, type WriteRequest, type WriteResult } from './source-protocol.ts'
+import { concerns, type DeltaMessage, fromNTriples, heldOf, type Pattern, type Snapshot, statementsOf, toNTriples, type WriteRequest, type WriteResult } from './source-protocol.ts'
+import { type Endpoint, httpTransport, type SourceTransport } from './remote-transport.ts'
+
+export { httpTransport, type Endpoint, type SourceTransport } from './remote-transport.ts'
 
 const SRC = NS.src
 const PROV = NS.prov
 const ST_BUSY = NS.st + 'busy'
 const XSD_BOOLEAN = NS.xsd + 'boolean'
 const XSD_DATETIME = NS.xsd + 'dateTime'
-
-/** Where a source's store is, as the host decides: never read from the graph. */
-export interface Endpoint {
-  /** The protocol's base: `{url}/changes`, `{url}/writes`. */
-  url: string
-  /** Sent with every request (credentials). */
-  headers?: Record<string, string>
-  fetch?: typeof fetch
-  /** Ask for the stream as Jelly (docs/JELLY.md), taking server-sent events from a server that answers with those. Default true. */
-  jelly?: boolean
-}
-
-/** How the effect talks to a store: the protocol over HTTP (httpTransport), or anything that behaves the same. */
-export interface SourceTransport {
-  /** Deliver the stream's messages until it ends (resolve) or breaks (reject). */
-  follow(patterns: Pattern[], after: number | undefined, on: (event: string, data: unknown) => void, signal: AbortSignal): Promise<void>
-  /** A write's answer; rejects when the store cannot be reached. */
-  write(req: WriteRequest, signal: AbortSignal): Promise<WriteResult>
-}
-
-/** The protocol of docs/REMOTE.md over HTTP: a Jelly stream or server-sent events, read with fetch (so headers go too); JSON writes. */
-export function httpTransport(endpoint: Endpoint): SourceTransport {
-  const base = endpoint.url.endsWith('/') ? endpoint.url : endpoint.url + '/'
-  const go = (url: string, init: RequestInit) => (endpoint.fetch ?? globalThis.fetch)(url, init)
-  return {
-    async follow(patterns, after, on, signal) {
-      const url = `${base}changes?patterns=${encodeURIComponent(JSON.stringify(patterns))}${after === undefined ? '' : `&after=${after}`}`
-      const accept = endpoint.jelly === false ? 'text/event-stream' : `${JELLY_MEDIA_TYPE}, text/event-stream;q=0.9`
-      const res = await go(url, { headers: { accept, ...endpoint.headers }, signal })
-      if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`)
-      if (res.headers.get('content-type')?.startsWith(JELLY_MEDIA_TYPE)) for await (const { event, data } of jellySourceEvents(res.body)) on(event, data)
-      else for await (const { event, data } of serverSentEvents(res.body)) on(event, JSON.parse(data))
-    },
-    async write(req, signal) {
-      const res = await go(`${base}writes`, { method: 'POST', headers: { 'content-type': 'application/json', ...endpoint.headers }, body: JSON.stringify(req), signal })
-      if (res.status !== 200 && res.status !== 409) throw new Error(`${res.status} ${res.statusText}`)
-      return (await res.json()) as WriteResult
-    },
-  }
-}
 
 export interface RemoteSourcesOptions {
   /** Each source's store, by the source's IRI. A source without one stays src:Unbound. */
@@ -202,17 +165,7 @@ export class RemoteSources {
 
   /** What the page holds of a source: its patterns, matched in its graph (the cost of that part, not of the page). */
   private held(s: Bound): Quad[] {
-    const store = this.runtime.store
-    const g = this.graphTerm(s)
-    const typesOf = this.typesOf(s)
-    const term = (v: string | undefined) => (v === undefined ? null : this.nn(v))
-    const out = new Map<string, Quad>()
-    for (const p of s.patterns) {
-      const subjects = p.class !== undefined ? store.match(term(p.subject), this.nn(RDF_TYPE), this.nn(p.class), g).map((q) => q.subject) : [term(p.subject)]
-      for (const subject of subjects)
-        for (const q of store.match(subject, term(p.predicate), term(p.object), g)) if (concerns(q, [p], typesOf)) out.set(quadKey(q), q)
-    }
-    return [...out.values()]
+    return heldOf(this.runtime.store, s.patterns, this.graphTerm(s))
   }
 
   // --- reading -----------------------------------------------------------------------------------
