@@ -158,6 +158,7 @@ export const SEM = {
   OnIntent: sem + 'OnIntent',
   IntentPreview: sem + 'IntentPreview',
   anticipates: sem + 'anticipates',
+  anticipatesNear: sem + 'anticipatesNear',
   select: sem + 'select',
   text: sem + 'text',
   verdict: sem + 'verdict',

@@ -844,13 +844,27 @@ export class ViewRuntime {
     return out.size ? this.sink(out) : { add: [], remove: [] }
   }
 
-  /** Rebuild suspended views whose component is shown again; returns the view graph's change (applied). */
-  resume(): Delta {
+  /** Whether the last resume() stopped at its deadline with views still to rebuild. */
+  resumeLeft = false
+
+  /**
+   * Rebuild suspended views whose component is shown again; returns the view graph's change
+   * (applied). Given a deadline (performance.now(); idle time preparing hidden content), it
+   * rebuilds one view at least and stops at the deadline (resumeLeft): a later call goes on.
+   */
+  resume(until = Infinity): Delta {
     const out = new ZSet<Quad>()
     const now = this.clock.now()
     const applied: Delta = { add: [], remove: [] }
+    let rebuilt = false
+    this.resumeLeft = false
     for (const v of this.order) {
       if (!v.suspended || !this.demanded(v)) continue
+      if (rebuilt && performance.now() >= until) {
+        this.resumeLeft = true
+        break
+      }
+      rebuilt = true
       v.suspended = false
       out.plus(v.rebuild(now))
       const d = this.sink(out)

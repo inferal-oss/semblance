@@ -91,31 +91,134 @@ export function attachIntent(runtime: Runtime, renderer: DomRenderer, opts: Inte
   }
 }
 
+/** The options a control shows, by what each c:selects, in the order it shows them (its rendered order). */
+function optionsInOrder(runtime: Runtime, control: string): { value: string; key: string }[] {
+  const store = runtime.store
+  const f = store.factory
+  const byKey = new Map<string, string>()
+  for (const q of store.match(null, f.namedNode(C.selects), null)) {
+    if (q.subject.termType === 'NamedNode' && q.object.termType === 'NamedNode' && owningFocus(q.subject.value) === control) byKey.set(q.subject.value, q.object.value)
+  }
+  if (!byKey.size) return []
+  const out: { value: string; key: string }[] = []
+  const values = new Set<string>()
+  const index = runtime.projections[0]?.index
+  const root = index?.rootOf(control)
+  // A walk of what the control renders: its options where it shows them (a list and its compact
+  // picker show the same values: the first place counts).
+  if (index && root) {
+    const seen = new Set<string>()
+    const walk = (key: string) => {
+      if (seen.has(key) || seen.size > 4096) return
+      seen.add(key)
+      const value = byKey.get(key)
+      if (value !== undefined && !values.has(value)) values.add(value), out.push({ value, key })
+      for (const slot of index.childrenOf(key)) {
+        const r = index.resolve(slot)
+        if (r) walk(r)
+      }
+    }
+    walk(root)
+  }
+  // (What the walk did not reach, in no particular order, after it.)
+  for (const [key, value] of byKey) if (!values.has(value)) values.add(value), out.push({ value, key })
+  return out
+}
+
+/** What a control has chosen: c:property of what it c:controls, else its own c:selected. */
+function chosenBy(runtime: Runtime, control: string): string | undefined {
+  const store = runtime.store
+  const f = store.factory
+  const target = store.match(f.namedNode(control), f.namedNode(C.controls), null)[0]?.object
+  const property = store.match(f.namedNode(control), f.namedNode(C.property), null)[0]?.object
+  if (target?.termType === 'NamedNode' && property?.termType === 'NamedNode') return store.match(target, property, null)[0]?.object.value
+  return store.match(f.namedNode(control), f.namedNode(C.selected), null)[0]?.object.value
+}
+
 /**
- * Prepare in idle time what the options of every choice that says sem:anticipates would show, an
- * option at a time, as pointing at each would (its content where its warmth allows: sem:OnIntent,
- * sem:Eager): a first click shows a page evaluated ahead - and so does a tap, which no pointing comes
- * before. Call it once the page is quiet (its graphs in). Returns a function that stops it.
+ * Prepare in idle time what the options of the choices that anticipate would show, an option at a
+ * time, as pointing at each would (its content where its warmth allows: sem:OnIntent, sem:Eager): a
+ * first click shows a page evaluated ahead - and so does a tap, which no pointing comes before.
+ * sem:anticipates prepares every option, and keeps it; sem:anticipatesNear the options near the
+ * chosen one, while the choice is shown, following it. Options are prepared by their distance from
+ * what their choice has chosen, nearest first, across choices (#436). Call it once the page is quiet
+ * (its graphs in). Returns a function that stops it.
  */
 export function anticipate(runtime: Runtime, opts: IntentOptions = {}): () => void {
   const store = runtime.store
   const f = store.factory
   const idle = opts.idle ?? defaultIdle
-  const controls = new Set(store.match(null, f.namedNode(SEM.anticipates), null).filter((q) => q.object.value === 'true').map((q) => q.subject.value))
   const seen = new Map<string, string[]>()
-  const queue: Set<string>[] = []
-  for (const q of store.match(null, f.namedNode(C.selects), null)) {
-    if (q.subject.termType !== 'NamedNode' || !controls.has(owningFocus(q.subject.value))) continue
-    const contents = previewsOf(runtime, q.subject.value, seen)
-    if (contents.length && !queue.some((c) => contents.every((x) => c.has(x)))) queue.push(new Set(contents))
+  /** Each anticipating control's reach: Infinity for sem:anticipates true. */
+  const reach = new Map<string, number>()
+  for (const q of store.match(null, f.namedNode(SEM.anticipates), null)) if (q.object.value === 'true') reach.set(q.subject.value, Infinity)
+  for (const q of store.match(null, f.namedNode(SEM.anticipatesNear), null)) {
+    const n = Number(q.object.value)
+    if (Number.isFinite(n) && n >= 0 && !reach.has(q.subject.value)) reach.set(q.subject.value, n)
+  }
+  // What each control's choice is written as (the target's property): a change to it plans again.
+  const watched = new Set<string>()
+  for (const control of reach.keys()) {
+    const target = store.match(f.namedNode(control), f.namedNode(C.controls), null)[0]?.object.value
+    const property = store.match(f.namedNode(control), f.namedNode(C.property), null)[0]?.object.value
+    watched.add(target && property ? target + ' ' + property : control + ' ' + C.selected)
+  }
+  let queue: { contents: Set<string>; owner: string }[] = []
+  const plan = () => {
+    const ranked: { rank: number; at: number; contents: Set<string>; owner: string }[] = []
+    let at = 0
+    for (const [control, n] of reach) {
+      const near = Number.isFinite(n)
+      // (Only while the choice is shown, for one that follows it.)
+      const options = near && !runtime.shows(control) ? [] : optionsInOrder(runtime, control)
+      const chosen = chosenBy(runtime, control)
+      const here = options.findIndex((o) => o.value === chosen)
+      const kept = new Set<string>()
+      options.forEach((o, i) => {
+        const d = here < 0 ? i + 1 : Math.abs(i - here)
+        if (d > n) return
+        const contents = previewsOf(runtime, o.key, seen)
+        for (const c of contents) kept.add(c)
+        // At each distance the next before the previous; then the order the choices were found in.
+        if (contents.length) ranked.push({ rank: 2 * d + (i < here ? 1 : 0), at: at++, contents: new Set(contents), owner: near ? control : '' })
+      })
+      // Not kept beyond its reach (what is still near stays kept: its views are not suspended).
+      if (near) runtime.forgetAnticipated(control, kept)
+    }
+    ranked.sort((a, b) => a.rank - b.rank || a.at - b.at)
+    queue = []
+    for (const r of ranked) if (!queue.some((c) => c.owner === r.owner && [...r.contents].every((x) => c.contents.has(x)))) queue.push(r)
   }
   let stopped = false
+  let running = false
   const slice = (budgetMs: number) => {
+    running = false
     if (stopped || !queue.length) return
-    if (!runtime.preload(queue[0]!, budgetMs, { anticipated: true })) queue.shift()
+    const next = queue[0]!
+    if (!runtime.preload(next.contents, budgetMs, { anticipated: next.owner || true }) && queue[0] === next) queue.shift()
     opts.flush?.()
-    if (queue.length) idle(slice)
+    schedule()
   }
-  if (queue.length) idle(slice)
-  return () => void (stopped = true)
+  const schedule = () => {
+    if (!running && !stopped && queue.length) (running = true), idle(slice)
+  }
+  let replanning = false
+  const off = runtime.onInput((_graph, delta) => {
+    if (replanning || stopped) return
+    if (![...delta.add, ...delta.remove].some((q) => watched.has(q.subject.value + ' ' + q.predicate.value))) return
+    // Once the change is rendered (its options and what is shown follow it).
+    replanning = true
+    idle(() => {
+      replanning = false
+      if (stopped) return
+      plan()
+      schedule()
+    })
+  })
+  plan()
+  schedule()
+  return () => {
+    stopped = true
+    off()
+  }
 }

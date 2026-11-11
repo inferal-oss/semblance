@@ -588,7 +588,12 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   whether it is on screen or overlaps another, focus, hover, scroll, open) is written to the graph
   for the components that ask (`rnd:observes`); see [Rendered state](#rendered-state) below.
 - **Idle work.** Call `runtime.warm(ms)` in idle time so hidden views are ready before they are
-  shown; `sem:warm sem:Eager | sem:OnIntent` says which.
+  shown; `sem:warm sem:Eager | sem:OnIntent` says which. A step costs about its budget, not the
+  whole of what it set off: what it leaves waits for the next, whole components at a time. Once the
+  page is quiet, `anticipate(runtime)` (`src/intent.ts`) prepares what choices would show, with no
+  pointing first (a tap): `sem:anticipates true` on a choice prepares every option (a site's
+  sections), `sem:anticipatesNear n` the options up to `n` places from the chosen one while the
+  choice is shown, following it (a section's own pages); the nearest go first, across choices.
 - **Live examples.** `c:LiveExample` shows Turtle (code editors, `c:CodeEditor` with `c:language
   "turtle"`) beside what it renders, each in a sandbox of its own: attach `Sandboxes`
   (`src/sandbox.ts`) with a store loader and call `sync()` after each flush. It mounts a sandbox in an

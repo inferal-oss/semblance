@@ -111,6 +111,26 @@ describe('around it', () => {
     for (const name of ['DeclaredTerms', 'UsedClasses', 'UsedProperties']) expect((h.runtime.views.view(NS.c + name) as unknown as { suspended: boolean }).suspended, name).toBe(true)
   }, 120_000)
 
+  it('given a deadline, hidden views are rebuilt a view at a time, and what a person shows all at once (#421)', () => {
+    const h = mountShell(5, 'wat', 'sparql')
+    h.runtime.advance()
+    const views = (h.runtime.views as unknown as { views: Map<string, { suspended: boolean }> }).views
+    const suspended = () => [...views.values()].filter((v) => v.suspended).length
+    const before = suspended()
+    expect(before).toBeGreaterThanOrEqual(3)
+    h.runtime.views.shown = () => true
+    // A deadline already past: one view, and the rest are left for the next step.
+    h.runtime.views.resume(0)
+    expect(suspended()).toBe(before - 1)
+    expect(h.runtime.views.resumeLeft).toBe(true)
+    h.runtime.views.resume(0)
+    expect(suspended()).toBe(before - 2)
+    // No deadline: all that is left.
+    h.runtime.views.resume()
+    expect(suspended()).toBe(0)
+    expect(h.runtime.views.resumeLeft).toBe(false)
+  }, 120_000)
+
   it('an event’s own triples reach the views, as they arrive and as they retire', () => {
     const h = mountShell(5, 'oxigraph', 'sparql')
     const { document, store, fire } = h
