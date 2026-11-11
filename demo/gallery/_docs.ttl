@@ -41,7 +41,7 @@ ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:s
     c:children ( ui:docsSide ui:docPages ) .
 # The side column stays in view while the page scrolls (the column, not the list in it).
 ui:docsSide a c:Stack ; pos:direction pos:Column ; pos:sticky pos:StickToTop ; c:children ( ui:docsNav ) .
-ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker .
+ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker ; sem:anticipatesNear 4 .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
     c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-remote ui:dcs-fetching ui:dcs-navigation ui:dcs-views ui:dcs-jelly ui:dcs-tools ui:dcs-performance ui:dcs-migrations ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .

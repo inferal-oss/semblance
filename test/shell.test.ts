@@ -215,6 +215,40 @@ describe('intent preloading (sem:OnIntent)', () => {
   })
 })
 
+describe('bounded warming steps (#421)', () => {
+  it('prepares what is pointed at in steps of about their budget, leaving no component half evaluated', async () => {
+    const { attachIntent } = await import('../src/intent.ts')
+    const { document, fire, runtime, screen, shell, showPage } = mountShell()
+    // Idle time a step at a time, each with a budget of a millisecond.
+    const steps: ((budgetMs: number) => void)[] = []
+    attachIntent(runtime, shell, { idle: (run) => void steps.push(run), flush: () => shell.flush() })
+    showPage('Components')
+    const nav = (name: string) => [...document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === name)!
+    const start = screen.engine.stats.ruleRuns
+    fire(nav('Data'), 'pointerover')
+    let most = 0
+    let n = 0
+    while (steps.length) {
+      const before = screen.engine.stats.ruleRuns
+      // (Each step builds what it evaluated, hidden: an ambiguous order there would throw.)
+      steps.shift()!(1)
+      most = Math.max(most, screen.engine.stats.ruleRuns - before)
+      n++
+    }
+    const total = screen.engine.stats.ruleRuns - start
+    // Many short steps, not one that evaluates the whole page.
+    expect(n).toBeGreaterThan(4)
+    expect(most).toBeLessThan(total / 4)
+    // Built ahead of the click and set aside, out of the document (c:caseRetention).
+    expect(document.querySelector('[data-sem-c=table]')).toBeNull()
+    expect(toHTML(screen.index, UI + 'gallery-data')).toContain('data-sem-c="table"')
+    const before = screen.engine.stats.ruleRuns
+    fire(nav('Data'), 'click')
+    expect(document.querySelector('[data-sem-c=table]')!.closest('[hidden]')).toBeNull()
+    expect(screen.engine.stats.ruleRuns - before).toBeLessThan(40)
+  })
+})
+
 describe('anticipation (sem:anticipates)', () => {
   it('prepares what each section would show in idle time, and only that, so a first click costs a switch', async () => {
     const { anticipate } = await import('../src/intent.ts')
@@ -229,7 +263,11 @@ describe('anticipation (sem:anticipates)', () => {
     const coldRuns = cold.screen.engine.stats.ruleRuns - before
     // With it, the page is there (built, set aside) before the click.
     const h = mountShell()
-    anticipate(h.runtime, { idle: (run) => run(1_000), flush: () => h.shell.flush() })
+    // Idle time as it comes: after the click, not in it (what is near the docs page it shows then
+    // is prepared in idle time too).
+    const steps: ((budgetMs: number) => void)[] = []
+    anticipate(h.runtime, { idle: (run) => void steps.push(run), flush: () => h.shell.flush() })
+    while (steps.length) steps.shift()!(1_000)
     expect(built(h)).toContain('Overview')
     expect(headings(h.document)).not.toContain('Overview')
     // What the click would show, not every page under the section: the other docs pages stay parked.
@@ -239,5 +277,38 @@ describe('anticipation (sem:anticipates)', () => {
     expect(h.screen.engine.stats.ruleRuns - before).toBeLessThan(coldRuns / 5)
     const overview = [...h.document.querySelectorAll('h1')].find((x) => x.textContent!.trim() === 'Overview')!
     expect(overview.closest('[hidden]')).toBeNull()
+  })
+
+  it('prepares the pages near the current one of a section list, nearest first, and follows the choice (sem:anticipatesNear)', async () => {
+    const { anticipate } = await import('../src/intent.ts')
+    const h = mountShell()
+    h.showPage('Components')
+    const steps: ((budgetMs: number) => void)[] = []
+    anticipate(h.runtime, { idle: (run) => void steps.push(run), flush: () => h.shell.flush() })
+    const built = (group: string) => h.screen.index.rootOf(UI + 'gallery-' + group) !== undefined
+    const groups = ['layout', 'type', 'actions', 'inputs', 'feedback', 'data', 'navigation', 'overlays', 'disclosure']
+    const order: string[] = []
+    const idle = () => {
+      while (steps.length) {
+        steps.shift()!(1_000)
+        for (const g of groups) if (built(g) && !order.includes(g)) order.push(g)
+      }
+    }
+    idle()
+    // ui:galleryNav reaches four places from Foundations, the nearest first; Data, six away, stays parked.
+    expect(order).toEqual(['layout', 'type', 'actions', 'inputs'])
+    // So does the section next to Components (ui:nav anticipates every section)...
+    expect(h.screen.index.rootOf(UI + 'reference')).toBeDefined()
+    // ...but not what a hidden section's own list is near: the docs pages after the first.
+    expect(toHTML(h.screen.index, UI + 'doc-ru-h')).toBe('')
+    // A first click on a near page costs a switch.
+    const nav = (name: string) => [...h.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === name)!
+    const before = h.screen.engine.stats.ruleRuns
+    h.fire(nav('Inputs'), 'click')
+    expect(h.screen.engine.stats.ruleRuns - before).toBeLessThan(60)
+    // It follows the choice: what is near Inputs now is prepared (Disclosure, five away, is not).
+    idle()
+    expect(order).toEqual(['layout', 'type', 'actions', 'inputs', 'feedback', 'data', 'navigation', 'overlays'])
+    expect(built('disclosure')).toBe(false)
   })
 })

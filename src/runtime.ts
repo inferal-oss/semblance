@@ -444,11 +444,16 @@ export class Runtime {
    * the person shows intent to see (see sem:OnIntent) - where their warmth allows it
    * (on intent or eager). Returns whether work remains.
    */
-  preload(contents: ReadonlySet<string>, budgetMs: number, opts: { anticipated?: boolean } = {}): boolean {
-    // What idle time anticipates (sem:anticipates) is kept, so its views stay maintained; what the
-    // person points at replaces what they pointed at before.
-    if (opts.anticipated) for (const c of contents) this.anticipated.add(c)
-    else this.intent = contents
+  preload(contents: ReadonlySet<string>, budgetMs: number, opts: { anticipated?: boolean | string } = {}): boolean {
+    // What idle time anticipates (sem:anticipates) is kept, so its views stay maintained, until what
+    // anticipated it forgets it (sem:anticipatesNear: out of reach); what the person points at
+    // replaces what they pointed at before.
+    if (opts.anticipated !== undefined && opts.anticipated !== false) {
+      const owner = opts.anticipated === true ? '' : opts.anticipated
+      let own = this.anticipatedBy.get(owner)
+      if (!own) this.anticipatedBy.set(owner, (own = new Set()))
+      for (const c of contents) own.add(c), this.anticipated.add(c)
+    } else this.intent = contents
     this.intentShown.clear()
     let more = false
     for (const p of this.projections) {
@@ -468,8 +473,33 @@ export class Runtime {
 
   /** The contents of the last preload: what the person last showed intent to see. */
   private intent?: ReadonlySet<string>
-  /** The contents idle time prepared ahead of any intent (sem:anticipates). */
+  /** The contents idle time prepared ahead of any intent (sem:anticipates): all of anticipatedBy's. */
   private readonly anticipated = new Set<string>()
+  /** Those contents by what anticipated them (a control; '' for preload's `anticipated: true`). */
+  private readonly anticipatedBy = new Map<string, Set<string>>()
+
+  /**
+   * What `owner` anticipated (preload's `anticipated`), but for `keep`, is no longer kept: its
+   * views stop being maintained while hidden, and idle time no longer evaluates under it
+   * (sem:anticipatesNear, when the choice moves). What it evaluated stays, as anything hidden
+   * does, until it changes.
+   */
+  forgetAnticipated(owner: string, keep?: ReadonlySet<string>): void {
+    const own = this.anticipatedBy.get(owner)
+    if (!own) return
+    const before = own.size
+    for (const c of own) if (!keep?.has(c)) own.delete(c)
+    if (own.size === before) return
+    if (!own.size) this.anticipatedBy.delete(owner)
+    this.anticipated.clear()
+    for (const own of this.anticipatedBy.values()) for (const c of own) this.anticipated.add(c)
+    this.intentShown.clear()
+  }
+
+  /** Whether a component is shown in some projection (demanded, or a projection evaluates everything). */
+  shows(focus: string): boolean {
+    return this.projections.some((p) => !p.engine.demand || p.engine.demand(focus))
+  }
   /** intended() per projection and focus, until the projection's structure or the contents change. */
   private readonly intentShown = new Map<Projection, { epoch: number; shown: Map<string, boolean> }>()
 

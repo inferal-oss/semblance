@@ -105,6 +105,8 @@ const focusOf = (key: string) => {
   const i = key.indexOf(SEP)
   return i < 0 ? key : key.slice(0, i)
 }
+/** Prefixes a minting focus in Engine.started (not an IRI: a NUL never occurs in one). */
+const MINTER = '\0'
 const memberOf = (key: string) => {
   const i = key.indexOf(SEP)
   return i < 0 ? undefined : key.slice(i + 1)
@@ -262,8 +264,45 @@ export class Engine {
   private retyped = new Set<string>()
   /** Whether every parked focus must be checked (the instance index was rebuilt). */
   private retypedAll = false
-  /** While warming, parked work is evaluated regardless of demand. */
+  /** While warming, parked work is evaluated regardless of demand (until the step's budget, see warmsNow). */
   private warming = false
+  /** When the current warming step's budget ends (performance.now()). */
+  private warmUntil = Infinity
+  /**
+   * The foci the current warming step has evaluated a pair of (the ones it picked among them), and
+   * (prefixed with MINTER) the foci that minted them: each is finished whatever the budget, with
+   * what it mints and what was minted beside it, so no component is left half evaluated and no
+   * minted parts half placed (a tree's items: each one's own rendering says where it goes among the
+   * others, and the item over them lists them all).
+   */
+  private started = new Set<string>()
+
+  private startWarming(focus: string) {
+    if (this.started.has(focus)) return
+    this.started.add(focus)
+    const minter = owningFocus(focus)
+    if (minter !== focus) this.started.add(MINTER + minter)
+  }
+
+  /**
+   * Whether an undemanded pair is evaluated now rather than parked: while warming, within the
+   * step's budget, or of a focus the step started, minted under one or beside one. Over the budget,
+   * what the step makes due for other components parks as it would outside warming (as a lazy part
+   * is, whole), and a later step picks it up (#421): a step costs about its budget, not the whole
+   * cascade of what it picked, and what it leaves is what lazy parking leaves - components (with
+   * their minted parts) evaluated or not at all.
+   */
+  private warmsNow(key: string): boolean {
+    if (!this.warming) return false
+    if (performance.now() < this.warmUntil) return true
+    for (let at = focusOf(key); ; ) {
+      if (this.started.has(at)) return true
+      const up = owningFocus(at)
+      if (up === at) return false
+      if (this.started.has(MINTER + up)) return true
+      at = up
+    }
+  }
   /**
    * The turn's time budget (src/engine/watchdog.ts): over it, the rest of a run's pending pairs
    * are held instead of evaluated, until the runtime continues or stops them.
@@ -544,17 +583,27 @@ export class Engine {
         return v
       })
     this.warming = true
+    this.warmUntil = until
     try {
       // Mostly nothing parked may be warmed (lazy parts): that costs a look per focus, not per pair.
       while (performance.now() < until && this.hasWarmable(allowed)) {
         let picked = 0
-        for (const [rule, foci] of this.deferred) {
+        this.started.clear()
+        for (const [, foci] of this.deferred) {
           for (const focus of foci) {
+            const owner = focusOf(focus)
             // Lazy parts stay parked until they are shown (or intended: `only`).
-            if (allowed && !allowed(focusOf(focus))) continue
-            this.deferred.delete(rule, focus)
-            this.markDirty(rule, focus)
-            if (++picked >= slice) break
+            if (allowed && !allowed(owner)) continue
+            // A focus is picked whole (every pair parked for it), with the parked foci minted beside
+            // it, so a step that stops at its budget leaves them evaluated, not half.
+            const minter = owningFocus(owner)
+            const foci = [owner]
+            if (minter !== owner) for (const other of this.deferred.foci()) if (other !== owner && owningFocus(other) === minter && (!allowed || allowed(other))) foci.push(other)
+            const pairs = foci.flatMap((x) => this.deferred.take(x))
+            pairs.sort((a, b) => a[2] - b[2] || a[3] - b[3])
+            for (const [r, key] of pairs) this.markDirty(r, key)
+            for (const x of foci) this.startWarming(x)
+            if ((picked += pairs.length) >= slice) break
           }
           if (picked >= slice) break
         }
@@ -563,6 +612,8 @@ export class Engine {
       }
     } finally {
       this.warming = false
+      this.warmUntil = Infinity
+      this.started.clear()
     }
     return this.hasWarmable(allowed)
   }
@@ -1270,7 +1321,7 @@ export class Engine {
       if (!f.reads.some((r) => matchesRead(r, s, p, q.object))) continue
       if (f.rule.refresh === 'now') {
         if (f.rule.stratum >= this.current) this.markDirty(f.rule, f.focus)
-      } else if (this.demand && !this.warming && !f.rule.always && !this.demand(focus)) {
+      } else if (this.demand && !f.rule.always && !this.demand(focus) && !this.warmsNow(f.focus)) {
         // Not shown: it waits, parked, until it is (no frame needed).
         this.deferred.add(f.rule, f.focus)
         this.retyped.add(focus)
@@ -1522,17 +1573,18 @@ export class Engine {
   private evaluateAll(rule: Rule, foci: Set<string>): Leftover | undefined {
     const wd = this.watchdog
     if (wd) (wd.rule = rule.iri), (wd.focus = foci.values().next().value)
-    if (this.demand && !this.warming && !rule.always) {
+    if (this.demand && !rule.always && (!this.warming || performance.now() >= this.warmUntil)) {
       // Park undemanded foci (retractions always run, so nothing stale stays visible).
       // (Deleting the entry being visited from a Set does not disturb the iteration.)
       for (const focus of foci) {
-        if (this.isInstance(focus, rule) && !this.demand(focusOf(focus))) {
+        if (this.isInstance(focus, rule) && !this.demand(focusOf(focus)) && !this.warmsNow(focus)) {
           this.deferred.add(rule, focus)
           foci.delete(focus)
         } else this.deferred.delete(rule, focus)
       }
       if (!foci.size) return
     }
+    if (this.warming) for (const focus of foci) this.startWarming(focusOf(focus))
     // A rule that requires a property its focus doesn't have (or is not for one it has) has nothing to say about it.
     if (rule.requires.length || rule.unless.length) {
       for (const focus of foci) {

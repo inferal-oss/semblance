@@ -185,6 +185,14 @@ options would show is evaluated in idle time, an option at a time, as when it is
 warmth allows: sem:OnIntent, sem:Eager), and kept. A first click shows it at once, and so does a tap,
 which no pointing comes before. Only what the option would show: an inner switch's other cases stay
 parked. For the few choices a visitor is likely to make next, such as a site's sections."""@en .
+sem:anticipatesNear a owl:DatatypeProperty ; rdfs:range xsd:nonNegativeInteger ;
+    rdfs:comment """On a choice (a section's own list of pages, tabs): once the page is quiet, while the choice is
+shown, what the options up to this many places either side of the chosen one would show is evaluated in
+idle time, as sem:anticipates does for every option, nearest first (at each distance the next before
+the previous; places are the order the choice shows its options in). It follows the choice: what moves
+out of reach is no longer kept, so its views stop being maintained. For a choice with many options,
+of which the ones next to the current one are the likely next (#436). Across choices, options are
+prepared by their distance from what each has chosen: the likely ones first."""@en .
 
 # What a control would show, when it is pointed at: intent previews. Each is a
 # SELECT with $control (the component the pointed element belongs to) and

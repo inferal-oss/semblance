@@ -596,7 +596,9 @@ ui:languageChoice a c:Choice ; c:controls ui:app ; c:property l10n:language .
 ui:contrastChoice a c:Choice ; c:controls ui:shell ; c:property sty:contrast .
 ui:motionChoice a c:Choice ; c:controls ui:shell ; c:property mot:preference .
 ui:densityChoice a c:Choice ; c:controls ui:shell ; c:property sty:density .
-ui:galleryNav a c:NavList ; c:controls ui:app ; c:property ui:galleryGroup ; c:label "Components" ; c:compactAs c:Picker .
+# A section's own list prepares the pages near the current one once the page is quiet, nearest first
+# (sem:anticipatesNear), so a first click on one of them shows it at once (#436).
+ui:galleryNav a c:NavList ; c:controls ui:app ; c:property ui:galleryGroup ; c:label "Components" ; c:compactAs c:Picker ; sem:anticipatesNear 4 .
 ui:galleryPages a c:Switch ; c:controls ui:app ; c:property ui:galleryGroup ;
     c:cases ( ui:gc-foundations ui:gc-layout ui:gc-type ui:gc-actions ui:gc-inputs ui:gc-feedback
               ui:gc-data ui:gc-navigation ui:gc-overlays ui:gc-disclosure ui:gc-layers ui:gc-windows ui:gc-themes ui:gc-inspection ui:gc-documents ) .
