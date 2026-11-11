@@ -10,7 +10,7 @@ import type { Engine } from '../engine/engine.ts'
 import { superclasses } from '../engine/rules.ts'
 import { RDF_TYPE } from '../ns.ts'
 import type { GraphStore } from '../store/types.ts'
-import { PAGE_GRAPHS_META } from '../web/takeover.ts'
+import { PAGE_GRAPHS_META, type PageGraphsIndex } from '../web/takeover.ts'
 
 /** Which named graphs state what: by subject, and by subject and predicate. */
 export interface GraphIndex {
@@ -68,4 +68,21 @@ export function neededGraphs(index: GraphIndex, engine: Engine, store: GraphStor
 /** The <meta> naming a page's graphs. */
 export function pageGraphsMeta(names: readonly string[]): string {
   return `<meta name="${PAGE_GRAPHS_META}" content="${names.join(' ').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">`
+}
+
+/** The graphs each page names (by its address), as the build writes them in one file (PAGE_GRAPHS_INDEX). */
+export function encodePageGraphs(pages: Record<string, readonly string[]>): PageGraphsIndex {
+  const graphs = [...new Set(Object.values(pages).flat())].sort()
+  const at = new Map(graphs.map((g, i) => [g, i]))
+  const sets: string[] = []
+  const known = new Map<string, number>()
+  const out: Record<string, number> = {}
+  for (const [path, names] of Object.entries(pages).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const bits = new Array<number>(Math.ceil(graphs.length / 4)).fill(0)
+    for (const n of names) bits[at.get(n)! >> 2]! |= 1 << (at.get(n)! & 3)
+    const set = bits.map((b) => b.toString(16)).join('')
+    if (!known.has(set)) known.set(set, sets.push(set) - 1)
+    out[path] = known.get(set)!
+  }
+  return { graphs, sets, pages: out }
 }

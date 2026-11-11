@@ -46,6 +46,26 @@ export function pageGraphs(doc: Document): string[] | undefined {
   return content ? content.split(/\s+/).filter(Boolean) : undefined
 }
 
+/**
+ * The file a static build writes beside its pages (at the site's base): the graphs each page names,
+ * for a client that moves to another page before it has every graph (it takes in that page's first).
+ */
+export const PAGE_GRAPHS_INDEX = 'semblance-graphs.json'
+
+/** PAGE_GRAPHS_INDEX: the graphs, each distinct set of them (a hex digit per four, the first in its lowest bit), and each page's set by its address. */
+export interface PageGraphsIndex {
+  graphs: string[]
+  sets: string[]
+  pages: Record<string, number>
+}
+
+/** The graphs the page at `path` names, by the index, or undefined: it names none (it needs all). */
+export function indexedPageGraphs(index: PageGraphsIndex, path: string): string[] | undefined {
+  const set = index.sets[index.pages[path] ?? -1]
+  if (set === undefined) return undefined
+  return index.graphs.filter((_, i) => (parseInt(set[i >> 2] ?? '0', 16) >> (i & 3)) & 1)
+}
+
 /** Whether the document has the server's stylesheet. */
 export function serverStyled(doc: Document): boolean {
   return !!doc.querySelector(`[${STYLES_ATTRIBUTE}]`)
