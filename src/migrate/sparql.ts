@@ -120,7 +120,10 @@ function substitute(t: Triple, b: Binding): Triple {
 
 function writeTriples(ts: Triple[], prefixes: Map<string, string>, dollars: Set<string>): string {
   const bySubject = new Map<string, Triple[]>()
+  const written = new Set<string>()
   for (const t of ts) {
+    if (written.has(key(t))) continue
+    written.add(key(t))
     const k = nodeKey(t.s)
     bySubject.set(k, [...(bySubject.get(k) ?? []), t])
   }
@@ -434,9 +437,13 @@ function applyOp(
           markComposed()
         } else {
           add.push(...toWrite)
+          // A BIND is only needed for what the rest of the query still reads: going back, the node a mint made is not.
+          const outside = varsIn(full.slice(offset, block.at) + full.slice(block.end))
+          const around = block.triples.filter((t) => !matched.some((m) => key(m) === key(t))).concat(toWrite)
+          const read = new Set(around.flatMap((t) => [t.s, t.o].flatMap((n) => (n.k === 'var' ? [n.v] : []))))
           for (const bind of ex.binds) {
             const target = b.get(bind.as)
-            if (target?.k === 'var') add.push({ s: { k: 'var', v: '__bind' }, p: { k: 'link', iri: '' }, o: { k: 'lit', value: `BIND(${substituteExpr(bind.e.text, b, merged, dollars, fresh)} AS ${writeNode(target, merged, dollars)})` } } as Triple)
+            if (target?.k === 'var' && (outside.has(target.v) || read.has(target.v))) add.push({ s: { k: 'var', v: '__bind' }, p: { k: 'link', iri: '' }, o: { k: 'lit', value: `BIND(${substituteExpr(bind.e.text, b, merged, dollars, fresh)} AS ${writeNode(target, merged, dollars)})` } } as Triple)
           }
         }
         done = true

@@ -306,6 +306,25 @@ describe('the SPARQL apps write', () => {
     expect(r.query).not.toContain('BIND')
     expect(r.findings).toEqual([])
   })
+  it('reads back to what it read, with nothing left over', async () => {
+    const q = `CONSTRUCT { $this c:shown ?v } WHERE { ?f a c:Frame ; c:width ?v ; c:height ?h ; c:of $this }`
+    const { there, query } = await run(q)
+    expect(query.split('a c:Frame').length - 1).toBe(1)
+    const back = await migrate({ files: there.files, changes, direction: 'backward', applied: there.changes })
+    const text = (parseTurtle(back.files[0]!.text).triples.find((t) => t.p.endsWith('construct'))!.o as { value: string }).value
+    expect(text.split('a c:Frame').length - 1).toBe(1)
+    expect(text).toContain('c:width ?v')
+    expect(text).not.toContain('BIND')
+    expect(text).not.toContain('c:size')
+  })
+  it('finds a mapping that retires nothing by what it deletes', async () => {
+    const f = `DELETE { ?x c:align ?old } INSERT { ?x c:justify ?new } WHERE { ?x c:align ?old . VALUES (?old ?new) { ("left" "start") } }`
+    const b = `DELETE { ?x c:justify ?new } INSERT { ?x c:align ?old } WHERE { ?x c:justify ?new . VALUES (?old ?new) { ("left" "start") } }`
+    const partial = loadChanges([`${CHANGE}change:p a chg:Change ; ${body} ; chg:migrations ( change:p1 ) .
+change:p1 a mig:Migration ; mig:of c:Thing ; mig:from 1 ; mig:to 2 ; mig:forward """${f}""" ; mig:backward """${b}""" .`])
+    expect((await migrate({ files: [file('ex:a c:align "left" .')], changes: partial })).changes).toHaveLength(1)
+    expect((await migrate({ files: [file('ex:a c:label "left" .')], changes: partial })).changes).toHaveLength(0)
+  })
   it('reaches patterns inside OPTIONAL and EXISTS', async () => {
     const r = await run(`CONSTRUCT { $this c:shown ?v } WHERE { $this c:of ?f OPTIONAL { ?f a c:Frame ; c:width ?v ; c:height ?h } FILTER EXISTS { ?g a c:Frame ; c:width ?a ; c:height ?b } }`)
     expect(r.query).not.toContain('c:width')
