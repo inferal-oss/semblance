@@ -792,6 +792,16 @@ export class Dependencies {
       })
       return
     }
+    // An alternative of paths that are not single steps ((a|a/rdfs:subClassOf+)) is the UNION of its
+    // paths, as SPARQL evaluates it: each a branch of its own, joined as a UNION's branches are. (One
+    // whole pattern, it could only say "global" for a change in the middle of a branch.)
+    if (p.k === 'alt' && !linkSteps(p)) {
+      const ends = [s, o].flatMap((x) => ('v' in x ? [x.v] : []))
+      const branches = p.ps.map(() => this.child(scope, false, new Set(ends)))
+      p.ps.forEach((b, n) => this.triple(branches[n]!, s, b, o, rename))
+      scope.joins.push(branches)
+      return
+    }
     this.add(scope, s, { path: p }, o)
   }
 
@@ -807,8 +817,9 @@ export class Dependencies {
           for (const t of it.triples) this.triple(scope, this.pos(t.s, rename), t.p, this.pos(t.o, rename), rename)
           break
         case 'lateral': {
-          const before = [...certainVars({ items: g.items.slice(0, i), at: g.at, end: g.end })].map(rename)
-          this.group(it.g, scope, rename, new Set([...left, ...before]))
+          // What its left side certainly binds: its patterns', and those of BINDs that cannot fail
+          // (a UNION whose branches bind a variable one by a pattern, one by BIND(?x AS ?y)).
+          this.group(it.g, scope, rename, this.certainIn({ items: g.items.slice(0, i), at: g.at, end: g.end }, rename, left))
           break
         }
         case 'group':
