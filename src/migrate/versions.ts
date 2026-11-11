@@ -217,6 +217,7 @@ export function readChanges(texts: string[], shape: string): Change[] {
         const forward = of(m, MIG + 'forward').length > 0
         if (!forward && !renames.length) c.problems.push(`${name}: neither mig:renames nor mig:forward`)
         if (forward && !of(m, MIG + 'backward').length && !of(m, MIG + 'loses').length) c.problems.push(`${name}: mig:forward with neither mig:backward nor mig:loses`)
+        if (forward && !of(m, MIG + 'example').length) c.problems.push(`${name}: mig:forward with no mig:example`)
         for (const p of ['of', 'from', 'to']) if (!of(m, MIG + p).length) c.problems.push(`${name}: no mig:${p}`)
       }
       out.push(c)

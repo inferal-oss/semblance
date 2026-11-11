@@ -434,6 +434,45 @@ function canonical(files: SourceFile[]): string[] {
   return out.sort()
 }
 
+const rejoin = (a: string[], b: string[]) => {
+  const [x, y] = [new Set(a), new Set(b)]
+  return [...a.filter((t) => !y.has(t)).map((t) => `lost: ${t}`), ...b.filter((t) => !x.has(t)).map((t) => `gained: ${t}`)]
+}
+
+/**
+ * What goes wrong taking some files forward across the changes and back: nothing, when every
+ * change comes back. A change that states what it loses is left out; it has said so.
+ */
+export async function roundTrip(files: SourceFile[], changes: LoadedChange[]): Promise<string[]> {
+  const reversible = changes.filter((c) => c.migrations.every((m) => !m.loses))
+  const there = await migrate({ files, changes: reversible, from: '0' })
+  const back = await migrate({ files: there.files, changes: reversible, direction: 'backward', applied: there.changes })
+  const graph = rejoin(canonical(files), canonical(back.files))
+  // A rename is its own reverse, to the byte.
+  const renamesOnly = reversible.every((c) => c.migrations.every((m) => !m.forward))
+  const bytes = renamesOnly ? back.files.flatMap((f, i) => (f.text === files[i]!.text ? [] : [`${f.path}: not the same bytes`])) : []
+  return [...graph, ...bytes]
+}
+
+/** A migration's examples, taken in each direction it states. */
+export async function exampleProblems(change: LoadedChange): Promise<string[]> {
+  const out: string[] = []
+  const head = [...frameworkPrefixes].map(([p, ns]) => `@prefix ${p}: <${ns}> .`).join('\n') + '\n'
+  const on = (text: string): SourceFile[] => [{ path: 'example.ttl', text: head + text }]
+  for (const m of change.migrations) {
+    const one: LoadedChange = { ...change, migrations: [m] }
+    for (const ex of m.examples) {
+      const [before, after] = [on(ex.before), on(ex.after)]
+      const forward = await migrate({ files: before, changes: [one], from: '0' })
+      for (const d of rejoin(canonical(on(ex.after)), canonical(forward.files))) out.push(`${m.iri}, forward: ${d}`)
+      if (m.loses) continue
+      const back = await migrate({ files: after, changes: [one], direction: 'backward', applied: [one.iri] })
+      for (const d of rejoin(canonical(on(ex.before)), canonical(back.files))) out.push(`${m.iri}, backward: ${d}`)
+    }
+  }
+  return out
+}
+
 export interface VerifyOptions {
   files: SourceFile[]
   changes: LoadedChange[]

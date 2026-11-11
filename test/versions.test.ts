@@ -135,9 +135,11 @@ describe('a change', () => {
   })
   it('comes back, or says what is lost', () => {
     const m = (rest: string) => `chg:affects c:Thing ; chg:migrations ( change:m ) . change:m a mig:Migration ; mig:of c:Thing ; mig:from 1 ; mig:to 2 ; ${rest}`
-    expect(problems(m('mig:forward "DELETE"'))).toEqual(['change:m: mig:forward with neither mig:backward nor mig:loses'])
-    expect(problems(m('mig:forward "DELETE" ; mig:backward "INSERT"'))).toEqual([])
-    expect(problems(m('mig:forward "DELETE" ; mig:loses "the delay"'))).toEqual([])
+    const ex = 'mig:example [ mig:before "a" ; mig:after "b" ]'
+    expect(problems(m(`mig:forward "DELETE" ; ${ex}`))).toEqual(['change:m: mig:forward with neither mig:backward nor mig:loses'])
+    expect(problems(m(`mig:forward "DELETE" ; mig:backward "INSERT" ; ${ex}`))).toEqual([])
+    expect(problems(m(`mig:forward "DELETE" ; mig:loses "the delay" ; ${ex}`))).toEqual([])
+    expect(problems(m('mig:forward "DELETE" ; mig:backward "INSERT"'))).toEqual(['change:m: mig:forward with no mig:example'])
   })
   it('does not turn a convergence into plain renames', () => {
     const m = (a: string, loses = '') => `change:${a} a mig:Migration ; mig:of c:${a} ; mig:from 1 ; mig:to 2 ; mig:renames [ mig:old c:${a} ; mig:new c:Choice ] ${loses}`

@@ -7,7 +7,7 @@ import { type LoadedChange, loadChanges } from './changes.ts'
 import { type SourceFile } from './migrate.ts'
 
 export { loadChanges, type LoadedChange, type MigrationStep, type Rename } from './changes.ts'
-export { type Finding, type FindingKind, migrate, type MigrateOptions, type MigrateResult, type SourceFile, updateScript, verify } from './migrate.ts'
+export { exampleProblems, type Finding, type FindingKind, migrate, type MigrateOptions, type MigrateResult, roundTrip, type SourceFile, updateScript, verify } from './migrate.ts'
 
 /** What a project says it was written against. */
 export const LOCK_FILE = 'semblance.lock.ttl'
