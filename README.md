@@ -22,7 +22,9 @@ examples, each with a Markdown page of the site's own text projection (generated
 **Use it:** [Getting started](docs/GETTING-STARTED.md) builds a small app with a component of its
 own; [Building components](docs/COMPONENTS.md) covers rules, reactions, layers and integrating
 with your app; [AGENTS.md](AGENTS.md) has the ground rules for working on the framework. The npm
-package will be `@inferal-oss/semblance` (not published yet).
+package is `@inferal-oss/semblance` (`npm install @inferal-oss/semblance`), with
+`@inferal-oss/semblance-react` for React; [CHANGELOG.md](CHANGELOG.md) has the versions and
+[docs/RELEASING.md](docs/RELEASING.md) how they are made.
 
 ```bash
 npm install

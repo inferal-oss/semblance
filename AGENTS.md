@@ -86,6 +86,7 @@ npm run dev            # the site, http://localhost:5173
 npm test               # the given files (queued, when ARM is not available; see below)
 npm run test:full      # the full suite, in queued shards, with one summary
 npx tsc --noEmit       # typecheck
+npm run pack:check     # the npm packages as a consumer gets them (docs/RELEASING.md)
 ```
 
 - **Heavy work goes through ARM when it is available.** [ARM](https://getarm.org) (Agent Resource
@@ -195,3 +196,4 @@ npx tsc --noEmit       # typecheck
 | `demo/` | the site (`app.ttl`, `gallery/`, `main.ts` is the host) |
 | `examples/hello/` | the Getting started example |
 | `test/` | unit, integration, parity, cost and soak tests |
+| `scripts/build-package.ts`, `scripts/pack-check.ts` | the npm packages: JavaScript and declarations into `lib/` from `exports`, and the tarball check (`docs/RELEASING.md`, `CHANGELOG.md`) |

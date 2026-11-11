@@ -1,0 +1,51 @@
+# Publish @inferal-oss/semblance and @inferal-oss/semblance-react to npm with provenance, when a
+# GitHub release is published for a tag v<version> (docs/RELEASING.md). The packages' versions must be
+# the tag's; the checks of a publish run first. npm authenticates the workflow by its OIDC token
+# (trusted publishing, configured for both packages on npmjs.com); a package not yet on npm, which
+# has no trusted publisher, is published with the NPM_TOKEN secret instead.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: rustup target add wasm32-unknown-unknown
+      - run: npm run engine:build
+      - run: npm run layout:build
+      - name: The packages' versions are the tag's
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for dir in . packages/react; do
+            version=$(node -p "require('./$dir/package.json').version")
+            [ "$version" = "$tag" ] || { echo "$dir/package.json is $version, the tag is $tag"; exit 1; }
+          done
+      - run: npx tsc --noEmit
+      - run: npm run pack:check
+      # The check built lib/; the core first, as the React package's peer.
+      - run: npm publish --provenance --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --provenance --ignore-scripts
+        working-directory: packages/react
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

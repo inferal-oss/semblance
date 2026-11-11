@@ -14,18 +14,20 @@ you type, with its reactions running. Docs → Recipes has more small examples; 
 
 ## Install
 
-> The package is not published yet. Until it is, use a checkout of this repository (`npm install`,
-> then `npm run engine:build`) or `npm pack` it and install the tarball.
-
 ```bash
 npm install @inferal-oss/semblance
 npm install --save-dev vite
 ```
 
-Semblance ships TypeScript sources, its ontologies (Turtle) and its WebAssembly engines, and is
-built by your bundler. Today that bundler is [Vite](https://vite.dev): the package finds its
-ontology files and engine builds with `import.meta.glob`, which Vite resolves. Tell Vite not to
-pre-bundle it (pre-bundling would skip those imports and break Oxigraph's WASM loader), but to
+The package is compiled JavaScript with its type declarations, its ontologies (Turtle) and its
+WebAssembly engines. Its versions, and what changed in each, are in the [changelog](../CHANGELOG.md)
+(0.x: a minor version may break; [RELEASING.md](RELEASING.md)); to try work on `main` before it is
+released, `npm pack` a checkout and install the tarball.
+
+In the browser the package is built into your app by your bundler. Today that bundler is
+[Vite](https://vite.dev): the package finds its ontology files and engine builds with
+`import.meta.glob`, which Vite resolves. Tell Vite not to pre-bundle it (pre-bundling would skip
+those imports and break Oxigraph's WASM loader), but to
 pre-bundle its Turtle parser, N3, which is CommonJS underneath:
 
 ```ts
