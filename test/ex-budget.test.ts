@@ -57,7 +57,7 @@ describe('the budget sheet example', () => {
     expect(stat('Expenses').value).toBe('2,586.5')
     expect(stat('Balance').value).toBe('2,263.5')
     expect(tableRows()[3]).toEqual(['Food', 'Expense', '2', '790.50'])
-    expect(bars()[1]).toEqual(['Food', '791 €'])
+    expect(bars()[1]).toEqual(['Food', '790.5 €'])
   })
 
   it('turns the balance red when expenses pass the income', () => {

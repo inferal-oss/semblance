@@ -123,7 +123,7 @@ c:Chart sem:group c:DataGroup . c:RowChart sem:group c:DataGroup . c:SeriesChart
 c:AreaChart sem:group c:DataGroup . c:AreaPoint sem:group c:DataGroup . c:ColumnChart sem:group c:DataGroup . c:ColumnPoint sem:group c:DataGroup . c:ScatterChart sem:group c:DataGroup . c:ScatterPoint sem:group c:DataGroup .
 c:PieChart sem:group c:DataGroup . c:DonutChart sem:group c:DataGroup . c:SlicePoint sem:group c:DataGroup . c:Histogram sem:group c:DataGroup . c:Sparkline sem:group c:DataGroup . c:BoxPlot sem:group c:DataGroup . c:BoxPoint sem:group c:DataGroup .
 c:Annotation sem:group c:DataGroup . c:Threshold sem:group c:DataGroup . c:MarkedRange sem:group c:DataGroup . c:Axis sem:group c:DataGroup . c:ChartPoint sem:group c:DataGroup . c:ChartSeries sem:group c:DataGroup . c:ChartCategory sem:group c:DataGroup . c:ValueScale sem:group c:DataGroup . c:BarChart sem:group c:DataGroup . c:Heatmap sem:group c:DataGroup .
-c:LineChart sem:group c:DataGroup . c:GanttChart sem:group c:DataGroup . c:GanttTask sem:group c:DataGroup . c:FindingList sem:group c:DataGroup .
+c:LineChart sem:group c:DataGroup . c:LinePoint sem:group c:DataGroup . c:BarCategory sem:group c:DataGroup . c:BarPoint sem:group c:DataGroup . c:HeatCell sem:group c:DataGroup . c:ChartFacet sem:group c:DataGroup . c:GanttChart sem:group c:DataGroup . c:GanttTask sem:group c:DataGroup . c:FindingList sem:group c:DataGroup .
 c:Column sem:group c:DataGroup . c:series sem:group c:DataGroup . c:GridColumn sem:group c:DataGroup .
 c:CellKind sem:group c:DataGroup . c:Filter sem:group c:DataGroup . c:TextFilter sem:group c:DataGroup .
 c:ValueFilter sem:group c:DataGroup . c:FlagFilter sem:group c:DataGroup . c:TimeScale sem:group c:DataGroup .

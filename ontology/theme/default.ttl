@@ -1516,8 +1516,8 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "text-align" ; sty:raw "center" ] .
-# One series needs no legend.
-[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-legend:not(:has(> :nth-child(2)))" ;
+# One series needs no legend (a legend of series; a pie's key of categories stays).
+[] a sty:StyleRule ; sty:appliesTo c:SeriesChart ; sty:part ".sem-legend:has(> [data-sem-c=chart-series]):not(:has(> :nth-child(2)))" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
 # A point: an anchor at its value, in its category's middle (over the tooltip layer's position). Its y (and its
@@ -1547,10 +1547,14 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:ChartPoint ; sty:part ":is(:hover, :focus-visible) > .sem-dot" ;
     sty:declares [ sty:property "scale" ; sty:raw "1.4" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
-# The line to the next point: as long as the hypotenuse, turned by its slope (mirrored right to left).
+# The line to the next point: as long as the hypotenuse, turned by its slope (mirrored right to left). Across one
+# category in an area chart; to the next point's x in a line chart.
 [] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-segment" ;
-    sty:declares [ sty:property "--dx" ; sty:raw "calc(100cqw / var(--n))" ] ,
-                 [ sty:property "--dy" ; sty:raw "calc((var(--ny) - var(--y)) * 1cqh)" ] ,
+    sty:declares [ sty:property "--dx" ; sty:raw "calc(100cqw / var(--n))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinePoint ; sty:part ".sem-segment" ;
+    sty:declares [ sty:property "--dx" ; sty:raw "calc((var(--nx) - var(--x)) / (var(--xhi) - var(--xlo)) * 100cqw)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ; sty:part ".sem-segment" ;
+    sty:declares [ sty:property "--dy" ; sty:raw "calc((var(--ny) - var(--y)) * 1cqh)" ] ,
                  [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
                  [ sty:property "bottom" ; sty:raw "-1px" ] ,
@@ -1561,7 +1565,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "border-radius" ; sty:raw "1px" ] ,
                  [ sty:property "background" ; sty:raw "var(--color)" ] ,
                  [ sty:property "pointer-events" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-segment:dir(rtl)" ;
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ; sty:part ".sem-segment:dir(rtl)" ;
     sty:declares [ sty:property "transform-origin" ; sty:raw "100% 50%" ] ,
                  [ sty:property "rotate" ; sty:raw "atan2(var(--dy), var(--dx))" ] .
 # The area under it, from its base to its value and the next point's (a stack's band).
@@ -1614,7 +1618,35 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-xtick:dir(rtl)" ;
     sty:declares [ sty:property "translate" ; sty:raw "50%" ] .
-# A scatter point sits at its x; a bubble's area grows with its size (--z of the greatest, --zmax).
+# A scatter point sits at its x, as does a line chart's; a bubble's area grows with its size (--z of the greatest, --zmax).
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc((var(--x) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] .
+# A line chart's reference: a dashed line from (--x1, --y1) to (--x2, --y2) in the axes' units, its word at its end.
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference" ;
+    sty:declares [ sty:property "--dx" ; sty:raw "calc((var(--x2) - var(--x1)) / (var(--xhi) - var(--xlo)) * 100cqw)" ] ,
+                 [ sty:property "--dy" ; sty:raw "calc((var(--y2) - var(--y1)) / (var(--hi) - var(--lo)) * 100cqh)" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--x1) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc((var(--y1) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "hypot(var(--dx), var(--dy))" ] ,
+                 [ sty:property "block-size" ; sty:raw "0" ] ,
+                 [ sty:property "border-block-start" ; sty:raw "1.5px dashed var(--sem-faint)" ] ,
+                 [ sty:property "transform-origin" ; sty:raw "0 50%" ] ,
+                 [ sty:property "rotate" ; sty:raw "calc(-1 * atan2(var(--dy), var(--dx)))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference:dir(rtl)" ;
+    sty:declares [ sty:property "transform-origin" ; sty:raw "100% 50%" ] ,
+                 [ sty:property "rotate" ; sty:raw "atan2(var(--dy), var(--dx))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference-label" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--x2) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc((var(--y2) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "translate" ; sty:raw "-100% -2px" ] ,
+                 [ sty:property "font-size" ; sty:raw "11px" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "color" ; sty:token tok:faint ] .
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference-label:dir(rtl)" ;
+    sty:declares [ sty:property "translate" ; sty:raw "100% -2px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ScatterChart ; sty:part ".sem-chart-marks > .sem-point" ;
     sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc((var(--x) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ScatterPoint ; sty:part ".sem-dot" ;
@@ -1846,14 +1878,26 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "height" ; sty:raw "14px" ] ,
-                 [ sty:property "min-width" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-seg" ;
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] .
+# A segment: as wide as its value is of its facet's longest bar (--v of --max), rounder at the bar's end.
+[] a sty:StyleRule ; sty:appliesTo c:BarPoint ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] ,
-                 [ sty:property "height" ; sty:raw "100%" ] ,
-                 [ sty:property "min-width" ; sty:raw "2px" ] ,
-                 [ sty:property "border-radius" ; sty:raw "2px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-seg:last-child" ;
-    sty:declares [ sty:property "border-radius" ; sty:raw "2px 4px 4px 2px" ] .
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--v) / max(var(--max, 1), 0.0001) * 100%)" ] ,
+                 [ sty:property "min-inline-size" ; sty:raw "2px" ] ,
+                 [ sty:property "block-size" ; sty:raw "100%" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BarPoint ; sty:part ".sem-seg" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "block-size" ; sty:raw "100%" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BarPoint ; sty:state ":last-child" ; sty:part ".sem-seg" ;
+    sty:declares [ sty:property "border-start-end-radius" ; sty:raw "4px" ] , [ sty:property "border-end-end-radius" ; sty:raw "4px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BarPoint ; sty:state ":is(:hover, :focus-visible)" ; sty:part ".sem-seg" ;
+    sty:declares [ sty:property "box-shadow" ; sty:token tok:ring ] .
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-total" ;
     sty:declares [ sty:property "font" ; sty:raw "600 11px/1 var(--sem-mono)" ] ,
                  [ sty:property "min-width" ; sty:raw "58px" ] ,
@@ -1886,6 +1930,8 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part "td.sem-flagged" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 2px var(--sem-flag)" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] .
+[] a sty:StyleRule ; sty:appliesTo c:HeatCell ; sty:state ":focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "2px solid var(--sem-text)" ] , [ sty:property "outline-offset" ; sty:raw "-2px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part "td.sem-pending" ;
     sty:declares [ sty:property "color" ; sty:token tok:faint ] ,
                  [ sty:property "background" ; sty:token tok:surface-sunken ] .
@@ -1901,7 +1947,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-ramp i" ;
     sty:declares [ sty:property "width" ; sty:raw "14px" ] , [ sty:property "height" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-flag-note" ;
-    sty:declares [ sty:property "margin-left" ; sty:raw "auto" ] ,
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
                  [ sty:property "color" ; sty:token tok:flag ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-h0" ; sty:declares [ sty:property "background" ; sty:token tok:ramp-0 ] , [ sty:property "color" ; sty:token tok:ramp-ink-light ] .
@@ -1917,23 +1963,6 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-h10" ; sty:declares [ sty:property "background" ; sty:token tok:ramp-10 ] , [ sty:property "color" ; sty:token tok:ramp-ink-dark ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-h11" ; sty:declares [ sty:property "background" ; sty:token tok:ramp-11 ] , [ sty:property "color" ; sty:token tok:ramp-ink-dark ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-h12" ; sty:declares [ sty:property "background" ; sty:token tok:ramp-12 ] , [ sty:property "color" ; sty:token tok:ramp-ink-dark ] .
-
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part "svg" ;
-    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
-                 [ sty:property "width" ; sty:raw "100%" ] ,
-                 [ sty:property "max-width" ; sty:raw "640px" ] ,
-                 [ sty:property "height" ; sty:raw "auto" ] ,
-                 [ sty:property "overflow" ; sty:raw "visible" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-grid" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:border ] , [ sty:property "stroke-width" ; sty:raw "1" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-axis" ;
-    sty:declares [ sty:property "fill" ; sty:token tok:muted ] , [ sty:property "font" ; sty:raw "11px var(--sem-font)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:faint ] , [ sty:property "stroke-width" ; sty:raw "1.5" ] , [ sty:property "stroke-dasharray" ; sty:raw "3 4" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-line" ;
-    sty:declares [ sty:property "fill" ; sty:raw "none" ] , [ sty:property "stroke-width" ; sty:raw "2" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-dot" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:surface ] , [ sty:property "stroke-width" ; sty:raw "2" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:FindingList ;
     sty:declares [ sty:property "font-family" ; sty:token tok:font ] , [ sty:property "color" ; sty:token tok:text ] .

@@ -76,7 +76,8 @@ const parse = (text: string): Quad[] => new Parser().parse(text) as Quad[]
  * The subset of `ontology` (Turtle texts, in load order) that `app` (Turtle texts) uses: every
  * statement about no component class, and every statement about a component class the app reaches.
  * A class is reached when an instance of it is in the app's graphs, when it is a superclass of a
- * reached class, or when a kept rule or reaction may mint an instance of it (its text names it).
+ * reached class, when a kept rule or reaction may mint an instance of it (its text names it), or when
+ * a reached class names it by a property of kinds (rdfs:domain owl:Class: a chart kind's c:pointClass).
  */
 export function ontologySubset(ontology: string[], app: string[], opts: SubsetOptions = {}): Subset {
   const parsed = ontology.map(parse)
@@ -160,6 +161,8 @@ export function ontologySubset(ontology: string[], app: string[], opts: SubsetOp
   // every superclass of each; to a fixpoint.
   const reached = new Set<string>()
   const pending: string[] = []
+  // Properties a kind states about its parts (rdfs:domain owl:Class), such as the class of the points its plan mints.
+  const kindProperties = new Set(quads.filter((q) => q.predicate.value === NS.rdfs + 'domain' && q.object.value === NS.owl + 'Class').map((q) => q.subject.value))
   const reach = (c: string) => {
     if (themes.has(c)) {
       if (!reached.has(c)) reached.add(c), pending.push(c)
@@ -194,6 +197,8 @@ export function ontologySubset(ontology: string[], app: string[], opts: SubsetOp
     kept.add(k)
     for (const t of d.types) reach(t)
     for (const t of d.texts) read(t)
+    // A component class a kind names by a property of kinds (rdfs:domain owl:Class: a chart kind's c:pointClass) may be minted.
+    for (const q of d.quads) if (kindProperties.has(q.predicate.value) && components.has(q.object.value)) reach(q.object.value)
     for (const r of d.refs) {
       if (themes.has(r) && r !== k) reach(r)
       // What it names that is about a class (a rule it takes its query from) is kept with it.

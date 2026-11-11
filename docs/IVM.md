@@ -1535,9 +1535,10 @@ What uses it:
   `c:Stat` (`c:valueQuery` without `$this`), chips' `c:countQuery` read a maintained SELECT's rows
   when its `sem:View` is a materialized `iv:View`. The dashboard's ten queries are views over its
   cube (`iv:reads dx:Cube`); the activity example's views over the change log (the per-minute one
-  reads `NOW()` and stays a SELECT); the performance page's four `perf:View`s. The bar chart, the
-  finding list and formulas are plain SPARQL over those rows (`c:BarChartRendering-sparql`,
-  `c:FindingListRendering-sparql`, `c:Formula-sparql`; #1): a row's value of `?v` read by its IRI
+  reads `NOW()` and stays a SELECT); the performance page's four `perf:View`s. Every chart, the
+  finding list and formulas are plain SPARQL over those rows (`c:SeriesPlan-sparql` for the series
+  charts, the bar chart, heatmap and line chart among them since #384, `c:FindingListRendering-sparql`,
+  `c:Formula-sparql`; #1): a row's value of `?v` read by its IRI
   `<row>-v`, `rs:index` (else the row's node) as the order, with function twins that read the same
   rows and render the same HTML (`test/charts-sparql.test.ts`); so are the heatmap, the line chart
   (`test/heatmap-linechart-sparql.test.ts`), the Gantt chart (`test/gantt.test.ts`), tables (`c:TableRuns`),

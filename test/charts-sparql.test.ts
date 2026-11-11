@@ -138,7 +138,7 @@ describe('charts and finding lists over maintained views, in SPARQL', () => {
       }
       both(() => {})
       const html = s.html()
-      expect(html[0]).toContain('East · Web: 1201 €')
+      expect(html[0]).toContain('East · Web: 1,200.5 €')
       expect(html[1]).toContain('<figcaption>1,000 items</figcaption>')
       expect(html[4]).toBe('<p data-sem-c="bar-chart" class="sem-empty">Nothing yet.</p>')
       expect(html[6]).toContain('plain view is not a maintained view')

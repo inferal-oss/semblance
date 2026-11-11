@@ -185,9 +185,10 @@ describe('the demo shell is a component graph', () => {
     runtime.write(PERF_GRAPH, { remove: [], add: new Parser().parse(observationsTurtle(rows, undefined, [100, 300])) as never })
     shell.flush()
     const chart = document.querySelector('[data-sem-c=line-chart]')!
-    expect(chart.querySelectorAll('path.sem-line')).toHaveLength(2)
-    expect(chart.querySelectorAll('circle.sem-dot title')).toHaveLength(4)
-    expect(chart.querySelector('circle.sem-dot title')!.textContent).toBe('hybrid · function · 100: 11.0 ms')
+    // A point per size and configuration, each but the last of its line joined to the next (#384: an axis chart).
+    expect(chart.querySelectorAll('.sem-line-point')).toHaveLength(4)
+    expect(chart.querySelectorAll('.sem-line-point .sem-segment')).toHaveLength(2)
+    expect(chart.querySelector('.sem-line-point')!.getAttribute('data-sem-tooltip')).toBe('100 · hybrid · function: 11 ms')
   })
 })
 
