@@ -133,6 +133,11 @@ member the rule reads (a list's c:sortBy names the key it reads on each item).""
 
 sem:renders a owl:ObjectProperty ;
     rdfs:comment "Links the RDF/HTML root node produced for a component instance to that instance. By convention the root is <focus>/~root."@en .
+sem:setsAside a owl:ObjectProperty ;
+    rdfs:comment """On an RDF/HTML element: a component it would hold were it shown, kept out of the document meanwhile (a
+hidden c:Switch case's content, c:caseRetention). The component is not placed there, so it is not shown and
+none of its elements are in the document; but what it inherits from the rendered tree (sem:warm), and what
+a choice that would show it prepares (sem:OnIntent, sem:anticipates), reach it through this element."""@en .
 
 # --- Warmth: what may be evaluated before it is shown -------------------------------
 # Projections evaluate only what is shown (demand). In idle time the host may

@@ -141,13 +141,19 @@ export class HtmlIndex {
   private focusByRoot = new Map<string, string>()
   /** Parents of nodes that are children only through the precedence chain. */
   private chainParent = new Map<string, string>()
+  /**
+   * Elements that hold a component aside (sem:setsAside: a hidden switch case's content), by the
+   * component: not where it is placed, but where what it inherits (warmth) and what a choice that
+   * would show it prepares (shownUnder) reach it from.
+   */
+  private asideIn = new Map<string, Set<string>>()
   /** Bumped whenever something that decides visibility changes (placement, roots, hidden). */
   visibility = 0
   /** One dirty set per consumer (each renderer patches independently). */
   private consumers = new Set<Dirty>()
   /** Sizes of the index, for leak checks. */
   footprint(): Record<string, number> {
-    return { nodes: this.nodes.size, attrs: this.attrs.size, immediate: this.immediate.size, strict: this.strict.size, roots: this.rootByFocus.size, chainParents: this.chainParent.size }
+    return { nodes: this.nodes.size, attrs: this.attrs.size, immediate: this.immediate.size, strict: this.strict.size, roots: this.rootByFocus.size, chainParents: this.chainParent.size, aside: this.asideIn.size }
   }
   /**
    * @param urlBase Where relative URLs in what is rendered resolve (nav:base: the site's root, an
@@ -337,6 +343,8 @@ export class HtmlIndex {
       if (n) todo.push(...n.parents)
       const chained = this.chainParent.get(key)
       if (chained !== undefined) todo.push(chained)
+      const aside = this.asideIn.get(key)
+      if (aside) todo.push(...aside)
     }
     return undefined
   }
@@ -370,6 +378,7 @@ export class HtmlIndex {
     if (n?.props.has('hidden')) return false
     if (placedAs !== undefined && this.underFrom(placedAs, contents)) return true
     if (n) for (const p of n.parents) if (this.underFrom(p, contents)) return true
+    for (const p of this.asideIn.get(key) ?? []) if (this.underFrom(p, contents)) return true
     const chained = this.chainParent.get(key)
     return chained !== undefined && this.underFrom(chained, contents)
   }
@@ -709,6 +718,18 @@ export class HtmlIndex {
         else if (p === EXT.name) i.name = sign > 0 ? o : i.name === o ? undefined : i.name
         else i.as = sign > 0 ? o : i.as === o ? undefined : i.as
         for (const owner of i.owners) this.mark('islands', owner)
+        return
+      }
+      case SEM.setsAside: {
+        let holders = this.asideIn.get(o)
+        if (sign > 0) {
+          if (!holders) this.asideIn.set(o, (holders = new Set()))
+          holders.add(s)
+        } else if (holders) {
+          holders.delete(s)
+          if (!holders.size) this.asideIn.delete(o)
+        }
+        this.visibility++
         return
       }
       case SEM.renders:

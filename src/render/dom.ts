@@ -154,7 +154,7 @@ export class DomRenderer {
       this.keys.set(el, k)
       const desired = new Map(this.index.attributes(k))
       const actual = new Map(Array.from(el.attributes, (a) => [a.name, a.value]))
-      this.applied.set(k, actual)
+      this.setApplied(k, actual)
       if (desired.size !== actual.size || [...desired].some(([name, v]) => actual.get(name) !== v)) mismatches++, this.syncAttrs(k)
       this.syncProps(k)
       if (this.index.isVoid(k) || n.slot !== undefined) return el
@@ -207,6 +207,43 @@ export class DomRenderer {
     }
     walk(top)
     this.prune([])
+  }
+
+  /** Keys whose element bears an attribute asked for by `marked`, by attribute name. */
+  private marks = new Map<string, Set<string>>()
+
+  /** What the element of `k` bears now (undefined: it was dropped); kept in `marks` too. */
+  private setApplied(k: string, attrs: Map<string, string> | undefined) {
+    if (attrs) this.applied.set(k, attrs)
+    else this.applied.delete(k)
+    for (const [name, keys] of this.marks) {
+      if (attrs?.has(name)) keys.add(k)
+      else keys.delete(k)
+    }
+  }
+
+  /**
+   * The elements in the document that bear `attribute`, in document order: those this renderer drew
+   * (kept as it patches their attributes, so asking costs what bears it, not the size of the
+   * document, nor what is kept aside while hidden) and those a host library drew. Host effects ask
+   * this instead of searching the document on every event or patch.
+   */
+  marked(attribute: string): Element[] {
+    let keys = this.marks.get(attribute)
+    if (!keys) {
+      this.marks.set(attribute, (keys = new Set()))
+      for (const [k, attrs] of this.applied) if (attrs.has(attribute)) keys.add(k)
+    }
+    const out: Element[] = []
+    for (const k of keys) {
+      const el = this.els.get(k)
+      if (el?.isConnected) out.push(el as Element)
+    }
+    for (const k of this.hosted.keys()) {
+      const container = this.els.get(k) as Element | undefined
+      if (container?.isConnected) out.push(...container.querySelectorAll(`[${attribute}]`))
+    }
+    return out.length > 1 ? out.sort(documentOrder) : out
   }
 
   /** Call `listener` after every patch (host effects that act on what was rendered: islands). */
@@ -277,7 +314,7 @@ export class DomRenderer {
       // connected until that slot has moved to its new parent.
       retired.push(el)
       this.els.delete(k)
-      this.applied.delete(k)
+      this.setApplied(k, undefined)
       this.hosted.get(k)?.destroy()
       this.hosted.delete(k)
     }
@@ -394,7 +431,7 @@ export class DomRenderer {
       this.reflect(el, name, value)
       this.ops++
     }
-    this.applied.set(k, desired)
+    this.setApplied(k, desired)
   }
 
   /** Keep live form state in line with the graph (attributes only set defaults). */
@@ -456,6 +493,24 @@ export class DomRenderer {
       anchor = n
     }
   }
+}
+
+/** Document order, for nodes of one document: from where their ancestors part (not every DOM orders compareDocumentPosition). */
+function documentOrder(a: Node, b: Node): number {
+  if (a === b) return 0
+  const up = (n: Node) => {
+    const out: Node[] = []
+    for (let x: Node | null = n; x; x = x.parentNode) out.push(x)
+    return out.reverse()
+  }
+  const pa = up(a)
+  const pb = up(b)
+  let i = 0
+  while (i < pa.length && i < pb.length && pa[i] === pb[i]) i++
+  if (i === pa.length) return -1
+  if (i === pb.length) return 1
+  for (let x = pa[i]!.nextSibling; x; x = x.nextSibling) if (x === pb[i]) return -1
+  return 1
 }
 
 /**

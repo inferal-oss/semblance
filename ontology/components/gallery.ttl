@@ -176,7 +176,8 @@ WHERE {
   BIND(COALESCE(?n0, 0) AS ?n)
   OPTIONAL {
     ?list rdf:rest* ?cell . ?cell rdf:first ?img FILTER(isIRI(?img))
-    LATERAL { OPTIONAL { SELECT ?list ?cell (COUNT(?p) AS ?k) WHERE { ?list rdf:rest* ?b . ?b rdf:rest+ ?cell ; rdf:first ?p FILTER(isIRI(?p)) } GROUP BY ?list ?cell } }
+    # (A sub-select from $this, not LATERAL: Oxigraph spends seconds on this one as a LATERAL, #465.)
+    OPTIONAL { SELECT ?list ?cell (COUNT(?p) AS ?k) WHERE { $this c:images ?list . ?list rdf:rest* ?b . ?b rdf:rest+ ?cell ; rdf:first ?p FILTER(isIRI(?p)) } GROUP BY ?list ?cell }
     BIND(COALESCE(?k, 0) + 1 AS ?i)
     BIND(IRI(CONCAT(STR($this), "/~at-", STR(?i))) AS ?at)
   }

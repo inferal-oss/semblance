@@ -737,13 +737,13 @@ export class EventBus {
       }
       // Horizontal arrows follow the reading direction: in a right-to-left page, ArrowLeft is "next".
       const flipped = mirrored(combo)
-      const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => {
+      const el = renderer.marked('data-sem-shortcut').find((x) => {
         const own = x.getAttribute('data-sem-shortcut')
         return (own === combo ? flipped === combo || !rightToLeft(x) : flipped !== combo && own === flipped && rightToLeft(x)) && !renderer.inSlot(x)
       }) as HTMLElement | undefined
       if (!el && combo === 'escape') {
         // Escape dismisses the most recent open overlay: its control marked data-sem-escape.
-        const dismiss = [...renderer.host.querySelectorAll('[data-sem-escape]')].filter((x) => !x.closest('[hidden]') && !renderer.inSlot(x)).at(-1) as HTMLElement | undefined
+        const dismiss = renderer.marked('data-sem-escape').filter((x) => !x.closest('[hidden]') && !renderer.inSlot(x)).at(-1) as HTMLElement | undefined
         if (!dismiss) return
         k.preventDefault()
         // A disclosure's toggle (aria-expanded) takes the focus back from what it closes.
@@ -772,7 +772,7 @@ export class EventBus {
     // closes it: the toggle is clicked, so its own reactions do it, as Escape does above.
     const outside = (e: Event) => {
       const target = originOf(e) as Node
-      for (const toggle of renderer.host.querySelectorAll<HTMLElement>('[data-sem-dismiss-outside]')) {
+      for (const toggle of renderer.marked('data-sem-dismiss-outside') as HTMLElement[]) {
         if (toggle.closest('[hidden]')) continue
         const region = toggle.getAttribute('aria-controls')
         const panel = region ? elementById(renderer.host, region) : null
@@ -1029,7 +1029,7 @@ export class EventBus {
     for (let el = active?.parentElement; el && el !== renderer.host; el = el.parentElement) around.push(el)
     const inside = !!active && active !== doc?.body && !!root?.contains(active)
     // The marks standing before the event: a closed overlay's trigger keeps one, to have the focus back on closing.
-    const marks = new Set(inside ? [...renderer.host.querySelectorAll('[data-sem-takes-focus]')].map((el) => renderer.keyOf(el)) : [])
+    const marks = new Set(inside ? renderer.marked('data-sem-takes-focus').map((el) => renderer.keyOf(el)) : [])
     return { active, inside, around, marks }
   }
 
@@ -1280,9 +1280,9 @@ class ModalFocus {
 
   /** Follow what the last flush opened and closed. */
   settle(): void {
-    const host = this.renderer.host
-    const doc = host.ownerDocument
-    const now = [...host.querySelectorAll<HTMLElement>('[aria-modal="true"]')].filter(this.shown)
+    const doc = this.renderer.host.ownerDocument
+    // (What the renderer keeps as bearing the attribute: not a search of the document per patch.)
+    const now = (this.renderer.marked('aria-modal') as HTMLElement[]).filter((el) => el.getAttribute('aria-modal') === 'true' && this.shown(el))
     for (let i = this.open.length - 1; i >= 0; i--) {
       const modal = this.open[i]!
       const { panel, back, place, seen, address, shows } = modal

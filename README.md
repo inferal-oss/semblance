@@ -74,7 +74,10 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   A single-item update re-runs exactly one rule.
 - **Demand.** A projection has mount roots; foci that are not shown under them
   (hidden tabs, the page you are not on, the unflipped back of a card) are parked,
-  not evaluated. Showing them resumes their parked work. In idle time the host
+  not evaluated. Showing them resumes their parked work. A switch's hidden cases
+  also leave the document, their rendering kept in the graph and their elements
+  set aside (`c:caseRetention`), so a long visit leaves a document of what is
+  shown and a click costs the same after it as on arrival. In idle time the host
   warms hidden views a slice at a time (`Runtime.warm`), so navigation finds them
   ready and an interaction never pays for them.
 - **Member-wise rules** (`sem:forEach <property>`) evaluate once per
