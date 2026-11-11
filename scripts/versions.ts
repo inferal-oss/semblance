@@ -8,13 +8,14 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { ONTOLOGY_FILES } from '../src/ontology.ts'
-import { bump, CHANGE_BASE, changeTemplate, check, definitions, type Base, type Problem, readChanges, readTerms, readVersions, shortName, type State, writeTerms, writeVersions } from '../src/migrate/versions.ts'
+import { bump, CHANGE_BASE, changeTemplate, check, definitions, type Base, type Problem, readChanges, readTerms, readVersions, shortName, type State, writeRetired, writeTerms, writeVersions } from '../src/migrate/versions.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const ontology = join(root, 'ontology')
 const VERSIONS = join(ontology, 'versions.ttl')
 const TERMS = join(ontology, 'terms.ttl')
 const CHANGES = join(ontology, 'changes')
+const RETIRED = join(ontology, 'layers/retired.ttl')
 const read = (f: string) => readFileSync(f, 'utf8')
 
 const { values, positionals } = parseArgs({
@@ -36,6 +37,7 @@ function loadState(): State {
     versions: existsSync(VERSIONS) ? readVersions(read(VERSIONS)) : new Map(),
     terms: existsSync(TERMS) ? readTerms(read(TERMS)) : { current: new Set(), retired: new Set() },
     changes: readChanges(changeFiles.map((f) => read(join(CHANGES, f))), read(join(ontology, 'layers/change.ttl'))),
+    retiredFile: read(RETIRED),
   }
 }
 
@@ -63,6 +65,7 @@ function report(problems: Problem[]) {
   list('Step not accounted for (a sem:changedBy whose change does not affect it, or neither it nor sem:internal):', names('unaccounted'))
   list('New term, not listed yet:', names('term-new'))
   list('Term gone, retired by a change, not yet marked:', names('term-gone'))
+  list('Generated, out of date:', problems.filter((p) => p.kind === 'retired-stale').map((p) => p.iri))
   list('Term gone and NO change retires it:', names('term-unexplained'))
   list('Retired term defined again (a name is never reused):', names('term-reused'))
   list('Dropped from the term list:', names('term-dropped'))
@@ -104,6 +107,7 @@ if (positionals[0] === 'new') {
   }
   writeFileSync(VERSIONS, writeVersions(out.versions))
   writeFileSync(TERMS, writeTerms(out.terms))
+  writeFileSync(RETIRED, writeRetired(out.terms, state.changes))
   console.log(`Stepped ${out.stepped.length} component(s).`)
 } else {
   const state = loadState()

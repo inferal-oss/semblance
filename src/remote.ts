@@ -9,6 +9,7 @@
 // src:pending, src:attempts, src:lastError) and members of src:SyncLog; what a page should do
 // about it is reactions to src:WentLive, src:Lost and src:WriteRefused, targeted at the source.
 import type { Quad, Term } from '@rdfjs/types'
+import { readRetired, type Retired, retiredIn } from './retired.ts'
 import type { EventBus } from './behaviour/events.ts'
 import { BEH, NS, RDF_TYPE, SOURCES_GRAPH, XSD_INTEGER } from './ns.ts'
 import { type Delta, quadKey } from './rdf.ts'
@@ -72,6 +73,7 @@ const isTransport = (e: Endpoint | SourceTransport): e is SourceTransport => typ
 
 /** The remote-sources effect for one runtime. */
 export class RemoteSources {
+  private retired?: Retired
   private bound: Bound[] = []
   /** Changes the effect makes itself (from the store, its own reports) are not writes. */
   private applying = 0
@@ -199,6 +201,10 @@ export class RemoteSources {
   private received(s: Bound, event: string, data: unknown) {
     if (this.stopped) return
     const f = this.f
+    if (event === 'snapshot' || event === 'delta') {
+      const m = data as { add?: string; remove?: string }
+      if (this.refusesRetired(s, [...statementsOf(m.add ?? '', f), ...statementsOf(m.remove ?? '', f)])) return
+    }
     if (event === 'snapshot') {
       const snap = data as Snapshot
       const add = statementsOf(snap.add, f)
@@ -220,6 +226,21 @@ export class RemoteSources {
     this.report(s, SRC + 'Live')
     if (!wasLive) this.emit(SRC + 'WentLive', s)
     this.opts.onChange?.()
+  }
+
+  /** A store still written against an older framework is not bound to: a store is the authority, so the page does not rewrite it. */
+  private refusesRetired(s: Bound, quads: Quad[]): boolean {
+    this.retired ??= readRetired(this.runtime.store)
+    if (!this.retired.terms.size) return false
+    for (const q of quads) {
+      const term = retiredIn(q, this.retired)
+      if (!term) continue
+      s.lastError = `The store names ${term}, which has gone: migrate it (semblance migrate --update).`
+      this.emit(SRC + 'Lost', s, [[SRC + 'lastError', this.f.literal(s.lastError)]])
+      this.report(s)
+      return true
+    }
+    return false
   }
 
   /** Apply what the store holds: as it is, and not as a write. */

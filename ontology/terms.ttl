@@ -1916,6 +1916,7 @@ mig:loses a sem:Term .
 mig:new a sem:Term .
 mig:of a sem:Term .
 mig:old a sem:Term .
+mig:renamedTo a sem:Term .
 mig:renames a sem:Term .
 mig:to a sem:Term .
 mod:Modality a sem:Term .

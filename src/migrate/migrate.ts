@@ -6,8 +6,9 @@ import { createStore } from '../node/load.ts'
 import { NS, SPARQL_PREFIXES } from '../ns.ts'
 import { parseQuery, SparqlSyntaxError } from '../view/sparql.ts'
 import type { LoadedChange, MigrationStep, Rename } from './changes.ts'
+import { frameworkPrefixes, looksLikeQuery, looksLikeTurtle, type Names, renameText } from './rename.ts'
 import { rewriteQuery } from './sparql.ts'
-import { applyEdit, compactIri, type Doc, lex, parseTurtle, type Term, type Tok, type Triple, tripleKey, TurtleSyntaxError, UnsupportedTurtle } from './turtle.ts'
+import { applyEdit, compactIri, type Doc, lex, parseTurtle, type Term, type Triple, tripleKey, TurtleSyntaxError, UnsupportedTurtle } from './turtle.ts'
 
 export interface SourceFile {
   path: string
@@ -51,9 +52,6 @@ export interface MigrateResult {
 }
 
 const TURTLE = /\.ttl$/
-const looksLikeQuery = (s: string) => s.includes('{') && /^\s*(PREFIX|BASE|SELECT|CONSTRUCT|ASK|DESCRIBE|INSERT|DELETE|WITH)\b/i.test(s.replace(/#[^\n]*\n/g, ''))
-const looksLikeTurtle = (s: string) => /(^|\n)\s*@prefix\s/.test(s)
-const frameworkPrefixes = new Map<string, string>(Object.entries(NS))
 
 /** Compares dotted versions numerically. */
 export function compareVersions(a: string, b: string): number {
@@ -65,99 +63,6 @@ export function compareVersions(a: string, b: string): number {
 const EMBEDDED = 'embedded.ttl'
 const RDF_12 = /\{\||\s~\s|<<\s*[(<?]/
 const lineOf = (text: string, at: number) => text.slice(0, at).split('\n').length
-
-interface Names {
-  terms: Map<string, string>
-  slugs: Map<string, string>
-}
-
-interface Occurrence {
-  term: string
-  line: number
-  place: 'code' | 'comment' | 'prose'
-}
-
-/** Prefixes a text declares, and the tokens that declare them (which name no terms). */
-function declared(toks: Tok[], inherited: Map<string, string>): { prefixes: Map<string, string>; skip: Set<Tok> } {
-  const prefixes = new Map(inherited)
-  const skip = new Set<Tok>()
-  const sig = toks.filter((t) => t.k !== 'ws' && t.k !== 'comment')
-  for (let i = 0; i < sig.length; i++) {
-    const t = sig[i]!
-    if (t.k === 'dir' ? t.text === '@prefix' : t.k === 'word' && /^PREFIX$/i.test(t.text)) {
-      const [name, iri] = [sig[i + 1], sig[i + 2]]
-      if (name?.k === 'pname' && iri?.k === 'iri') {
-        prefixes.set(name.text.slice(0, -1), iri.text.slice(1, -1))
-        skip.add(name), skip.add(iri)
-      }
-    }
-  }
-  return { prefixes, skip }
-}
-
-const expandName = (t: Tok, prefixes: Map<string, string>): string | undefined => {
-  const c = t.text.indexOf(':')
-  const ns = prefixes.get(t.text.slice(0, c))
-  return ns === undefined ? undefined : ns + t.text.slice(c + 1)
-}
-
-/** The text with every occurrence renamed; what it finds is passed to `seen`. */
-function renameText(text: string, names: Names, inherited: Map<string, string>, seen: (o: Occurrence) => void, baseLine = 1): string {
-  const toks = lex(text)
-  const { prefixes, skip } = declared(toks, inherited)
-  const shortNames = new Map<string, string>()
-  for (const iri of names.terms.keys()) {
-    const short = compactIri(iri, prefixes)
-    if (!short.startsWith('<')) shortNames.set(short, iri)
-  }
-  const prose = shortNames.size ? new RegExp(`(?<![\\w:])(${[...shortNames.keys()].map((s) => s.replace(/[-]/g, '\\-')).join('|')})(?![\\w-])`, 'g') : undefined
-  const line = (t: Tok) => baseLine + text.slice(0, t.at).split('\n').length - 1
-  const SLUG_ATTR = /\[\s*data-sem-c\s*=\s*(\\?["']?)([\w-]+)\1\s*\]/g
-  let previous: Tok | undefined
-  let out = ''
-  let at = 0
-  for (const t of toks) {
-    let replacement: string | undefined
-    if (t.k === 'iri' && !skip.has(t)) {
-      const iri = t.text.slice(1, -1)
-      const to = names.terms.get(iri)
-      if (to) (replacement = `<${to}>`), seen({ term: iri, line: line(t), place: 'code' })
-    } else if (t.k === 'pname' && !skip.has(t)) {
-      const iri = expandName(t, prefixes)
-      const to = iri && names.terms.get(iri)
-      if (iri && to) (replacement = compactIri(to, prefixes, t.text.slice(0, t.text.indexOf(':')))), seen({ term: iri, line: line(t), place: 'code' })
-    } else if (t.k === 'comment') {
-      if (prose) for (const m of t.text.matchAll(prose)) seen({ term: shortNames.get(m[1]!)!, line: line(t), place: 'comment' })
-    } else if (t.k === 'str') {
-      const long = t.text.startsWith('"""') || t.text.startsWith("'''")
-      const quote = long ? 3 : 1
-      const body = t.text.slice(quote, -quote)
-      let next = body
-      if (long && looksLikeQuery(body)) next = renameText(body, names, prefixes, seen, line(t))
-      else if (long && looksLikeTurtle(body)) next = renameText(body, names, new Map(), seen, line(t))
-      else if (prose) for (const m of body.matchAll(prose)) seen({ term: shortNames.get(m[1]!)!, line: line(t), place: 'prose' })
-      if (names.slugs.size) {
-        const previousIri = previous?.k === 'pname' ? expandName(previous, prefixes) : previous?.k === 'iri' ? previous.text.slice(1, -1) : undefined
-        if (previousIri === NS.sem + 'slug' && names.slugs.has(body)) (next = names.slugs.get(body)!), seen({ term: body, line: line(t), place: 'code' })
-        else {
-          next = next.replace(SLUG_ATTR, (whole, q: string, slug: string) => {
-            const to = names.slugs.get(slug)
-            if (!to) return whole
-            seen({ term: slug, line: line(t), place: 'code' })
-            return whole.replace(`=${q}${slug}${q}`, `=${q}${to}${q}`)
-          })
-        }
-      }
-      if (next !== body) replacement = t.text.slice(0, quote) + next + t.text.slice(-quote)
-    }
-    if (t.k !== 'ws' && t.k !== 'comment') previous = t
-    if (replacement !== undefined) {
-      out += text.slice(at, t.at) + replacement
-      at = t.end
-    }
-  }
-  return out + text.slice(at)
-}
 
 /** A bnode as the store holds it during a run: blank nodes keep their identity across the diff. */
 const FROZEN = 'urn:semblance:migrate:bnode:'
@@ -462,6 +367,24 @@ function lineMatches(text: string, name: string): number[] {
   const re = new RegExp(`(?<![\\w:])${name.replace(/[.*+?^$()|[\]\\{}/-]/g, '\\$&')}(?![\\w-])`, 'g')
   for (const m of text.matchAll(re)) out.push(lineOf(text, m.index))
   return out
+}
+
+/** The SPARQL Update that takes a store across the changes that apply: what `semblance migrate --update` prints. */
+export function updateScript(changes: LoadedChange[], from?: string, applied: Iterable<string> = []): string {
+  const skip = new Set(applied)
+  const ops: string[] = []
+  for (const c of changes) {
+    if (skip.has(c.iri) || (from !== undefined && c.release !== undefined && compareVersions(c.release, from) <= 0)) continue
+    for (const m of c.migrations) {
+      for (const r of m.renames) {
+        if (r.kind !== 'term') continue
+        const [o, n] = [`<${r.old}>`, `<${r.new}>`]
+        ops.push(`DELETE { ?s ${o} ?v } INSERT { ?s ${n} ?v } WHERE { ?s ${o} ?v }`, `DELETE { ${o} ?p ?v } INSERT { ${n} ?p ?v } WHERE { ${o} ?p ?v }`, `DELETE { ?s ?p ${o} } INSERT { ?s ?p ${n} } WHERE { ?s ?p ${o} }`)
+      }
+      if (m.forward) ops.push(m.forward)
+    }
+  }
+  return ops.length ? `${SPARQL_PREFIXES}\n${ops.join(' ;\n')}\n` : ''
 }
 
 /** A file's triples with blank node labels left out: enough to compare two versions of one graph. */

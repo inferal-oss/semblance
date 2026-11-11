@@ -8,7 +8,7 @@
 // semblance subset [--out ontology.ttl] [--config semblance.config.ts]
 //   Write the part of Semblance's ontology the site's graphs use (docs/SUBSET.md), as Turtle: what
 //   a server without a filesystem (a Cloudflare Worker, docs/WORKERS.md) loads in place of the whole.
-// semblance migrate [paths] [--check] [--verify] [--json] [--from <release>] [--to <release>] [--accept-loss] [--changes dir]
+// semblance migrate [paths] [--check] [--verify] [--json] [--from <release>] [--to <release>] [--accept-loss] [--changes dir] [--update]
 //   Move a project's Turtle across framework versions (docs/MIGRATIONS.md, ontology/changes/).
 // semblance changes [--json] [--since <release>]
 //   The changes, each with its motivation, substance and guides.

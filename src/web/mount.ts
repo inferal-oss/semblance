@@ -1,4 +1,5 @@
 import { EventBus, type Handled, type ReactionFn } from '../behaviour/events.ts'
+import { migrateAuthored, readRetired } from '../retired.ts'
 import type { FnRule } from '../engine/context.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../ns.ts'
 import { Islands, type IslandAdapter, type WidgetLike } from '../foreign.ts'
@@ -171,9 +172,16 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const isolated = opts.isolate === 'shadow'
   const trustedCss = trusted && !isolated && !serverStyled(element.ownerDocument) ? compileStyles(trusted) : ''
   // The fetch policy is the host's, set on the store itself: no graph is read for it.
-  const store = configureFetching(load(...(opts.graphs ?? []), ...(opts.authored ?? [])), opts.fetchPolicy)
-  const config = trusted ?? store
   const onRefused = opts.onRefused ?? ((e: Error) => console.warn('[semblance]', e.message))
+  // An author's graph written against an older framework: what was renamed moves, what went is reported.
+  const authoredNow = trusted && opts.authored?.map((text) => {
+    const r = migrateAuthored(text, readRetired(trusted))
+    for (const t of r.moved) onRefused(new Error(`Authored graph: ${t} has a new name; it was read under that name.`))
+    for (const t of r.gone) onRefused(new Error(`Authored graph: ${t} no longer exists.`))
+    return r.text
+  })
+  const store = configureFetching(load(...(opts.graphs ?? []), ...(authoredNow ?? [])), opts.fetchPolicy)
+  const config = trusted ?? store
   // Where we are, before the first projection: the address (a server rendered the same one).
   const declared = config.match(null, config.factory.namedNode(NS.nav + 'root'), config.factory.namedNode(opts.root)).length > 0
   const located = !!(opts.navigation && opts.navigation.location) || 'location' in globalThis
