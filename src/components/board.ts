@@ -12,6 +12,9 @@ const RDFS_RANGE = NS.rdfs + 'range'
 const P = {
   card: c('card'),
   cardTitle: c('cardTitle'),
+  cardHref: c('cardHref'),
+  cardContent: c('cardContent'),
+  cardLocked: c('cardLocked'),
   cardTag: c('cardTag'),
   cardPerson: c('cardPerson'),
   cardOrder: c('cardOrder'),
@@ -116,7 +119,9 @@ const boardCard: FnRule = (ctx, focus, item) => {
   const card = o.node('card-' + encodeForUri(item.value))
   o.t(card, RDF_TYPE, ctx.nn(P.BoardCard)).t(card, C.of, item).t(card, P.onBoard, focus)
   // A sortable board's cards can be picked up, carrying their items (the drag and drop layer).
-  if (ctx.match(focus, RDF_TYPE, DND.Sortable).length) {
+  const lockedProperty = ctx.object(focus, P.cardLocked)
+  const locked = named(lockedProperty) && ctx.object(item, lockedProperty.value)?.value === 'true'
+  if (!locked && ctx.match(focus, RDF_TYPE, DND.Sortable).length) {
     o.t(card, RDF_TYPE, ctx.nn(DND.Draggable)).t(card, DND.carries, item)
     const titleProperty = ctx.object(focus, P.cardTitle)
     const title = named(titleProperty) ? text(ctx, item, titleProperty.value) : undefined
@@ -131,7 +136,7 @@ const boardCard: FnRule = (ctx, focus, item) => {
   o.t(o.node(laneKey(lane!) + '-cards'), H.hasChild, card)
   return o.quads
 }
-boardCard.watches = () => new Set([RDF_TYPE, NS.c + 'property', P.cardOrder, P.cardTitle])
+boardCard.watches = () => new Set([RDF_TYPE, NS.c + 'property', P.cardOrder, P.cardTitle, P.cardLocked])
 
 // --- a card ---------------------------------------------------------------------------------------
 
@@ -142,6 +147,12 @@ const cardView: FnRule = (ctx, focus) => {
   const titleProperty = ctx.object(on, P.cardTitle)
   const title = named(titleProperty) ? text(ctx, item, titleProperty.value) : undefined
   if (title === undefined) return []
+  const hrefProperty = ctx.object(on, P.cardHref)
+  const href = named(hrefProperty) ? ctx.object(item, hrefProperty.value)?.value : undefined
+  const contentProperty = ctx.object(on, P.cardContent)
+  const content = named(contentProperty) ? ctx.object(item, contentProperty.value) : undefined
+  const lockedProperty = ctx.object(on, P.cardLocked)
+  const locked = named(lockedProperty) && ctx.object(item, lockedProperty.value)?.value === 'true'
   const valueOf = (p: string) => {
     const property = ctx.object(on, p)
     return named(property) ? ctx.object(item, property.value) : undefined
@@ -154,7 +165,7 @@ const cardView: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [o.text('text', line)]))
     return o.quads
   }
-  const titleEl = o.el('title', 'Span', { class: 'sem-title', id: o.node('title').value }, [o.text('title-text', title)])
+  const titleEl = o.el('title', href === undefined ? 'Span' : 'A', { class: 'sem-title', id: o.node('title').value, href }, [o.text('title-text', title)])
   const headParts: NamedNode[] = [titleEl]
   if (tagValue) {
     const tag = o.node('tag')
@@ -187,9 +198,9 @@ const cardView: FnRule = (ctx, focus) => {
   }
   const prev = ctx.object(focus, P.previousLane)
   const next = ctx.object(focus, P.nextLane)
-  if (prev) step('prev', prev, '←', '1')
-  if (next) step('next', next, '→', '2')
-  if (ctx.objects(on, P.removable).some((t) => t.value === 'true')) {
+  if (prev && !locked) step('prev', prev, '←', '1')
+  if (next && !locked) step('next', next, '→', '2')
+  if (!locked && ctx.objects(on, P.removable).some((t) => t.value === 'true')) {
     const remove = button('remove', '×', phrase(NS.c + 'RemoveCommand'))
     o.t(remove, P.removesCard, item).t(remove, SEM.orderKey, '3')
     o.t(moves, H.hasChild, remove)
@@ -202,10 +213,16 @@ const cardView: FnRule = (ctx, focus) => {
   const foot = o.el('foot', 'Div', { class: 'sem-card-foot' })
   for (const part of footParts) o.t(foot, H.hasChild, part)
   for (let i = 1; i < footParts.length; i++) o.t(footParts[i - 1]!, ORD.precedes, footParts[i]!)
-  o.t(head, ORD.immediatelyPrecedes, foot)
+  if (named(content)) {
+    o.t(head, ORD.immediatelyPrecedes, content)
+    o.t(content, ORD.immediatelyPrecedes, foot)
+  } else {
+    o.t(head, ORD.immediatelyPrecedes, foot)
+  }
   const refused = ctx.objects(focus, P.refusedBy).length > 0
-  const root = o.el('root', 'Li', { tabIndex: '0', class: refused ? 'sem-refused' : undefined, 'aria-labelledby': titleEl.value, 'aria-keyshortcuts': 'ArrowLeft ArrowRight' })
+  const root = o.el('root', 'Li', { tabIndex: '0', class: refused ? 'sem-refused' : undefined, 'aria-labelledby': titleEl.value, 'aria-keyshortcuts': locked ? undefined : 'ArrowLeft ArrowRight' })
   o.t(root, H.hasChild, head).t(root, H.hasChild, foot)
+  if (named(content)) o.t(root, H.hasChild, content)
   o.renders(root)
   return o.quads
 }
@@ -242,6 +259,8 @@ function moveOf(ctx: ReactionContext, to: Term | undefined) {
   const on = ctx.object(ctx.target, P.onBoard)
   const property = on && ctx.object(on, NS.c + 'property')
   if (!to || !item || !property) return undefined
+  const lockedProperty = ctx.object(on, P.cardLocked)
+  if (named(lockedProperty) && ctx.object(item, lockedProperty.value)?.value === 'true') return undefined
   const held = ctx.match(null, property.value, to).length
   const max = limitOf(ctx, to, property)
   return { item, property, to, room: max === undefined || held < max, limited: max !== undefined }
