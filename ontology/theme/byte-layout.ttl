@@ -1,0 +1,71 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+
+# Offsets run left to right in every language (as in a hex dump): the diagram is not mirrored in RTL,
+# and it scrolls from byte 0 when it is wider than its column.
+
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ;
+    sty:declares [ sty:property "overflow" ; sty:raw "auto" ],
+                 [ sty:property "min-width" ; sty:raw "0" ],
+                 [ sty:property "direction" ; sty:raw "ltr" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ],
+                 [ sty:property "width" ; sty:raw "100%" ],
+                 [ sty:property "height" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg text" ;
+    sty:declares [ sty:property "fill" ; sty:raw "var(--sem-text)" ],
+                 [ sty:property "font" ; sty:raw "600 12px var(--sem-font-mono)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg :is(.axis-label, .offset, .meta, .card-offset)" ;
+    sty:declares [ sty:property "fill" ; sty:raw "var(--sem-muted)" ],
+                 [ sty:property "font-size" ; sty:raw "11px" ],
+                 [ sty:property "font-weight" ; sty:raw "400" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg .annotation" ;
+    sty:declares [ sty:property "fill" ; sty:raw "var(--sem-accent-11)" ],
+                 [ sty:property "font-size" ; sty:raw "11px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg rect" ;
+    sty:declares [ sty:property "fill" ; sty:raw "var(--sem-surface)" ],
+                 [ sty:property "stroke" ; sty:raw "var(--sem-border-strong)" ],
+                 [ sty:property "stroke-width" ; sty:raw "1" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg .variable" ;
+    sty:declares [ sty:property "fill" ; sty:raw "var(--sem-surface-sunken)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg .emphasized" ;
+    sty:declares [ sty:property "fill" ; sty:raw "var(--sem-accent-4)" ],
+                 [ sty:property "stroke" ; sty:raw "var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg .used" ;
+    sty:declares [ sty:property "fill" ; sty:raw "var(--sem-accent-9)" ],
+                 [ sty:property "stroke" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg path" ;
+    sty:declares [ sty:property "fill" ; sty:raw "none" ],
+                 [ sty:property "stroke" ; sty:raw "var(--sem-border-strong)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg .continuation" ;
+    sty:declares [ sty:property "stroke" ; sty:raw "var(--sem-muted)" ],
+                 [ sty:property "stroke-width" ; sty:raw "1.4" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg .bracket" ;
+    sty:declares [ sty:property "stroke" ; sty:raw "var(--sem-accent-9)" ],
+                 [ sty:property "stroke-width" ; sty:raw "1.2" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg .card-offset" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "svg :is(.rail, .tick, .offset)" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "svg .card-offset" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "svg g > rect:first-child" ;
+    sty:declares [ sty:property "transform-box" ; sty:raw "fill-box" ],
+                 [ sty:property "transform-origin" ; sty:raw "center" ],
+                 [ sty:property "transform" ; sty:raw "scale(.965, 1.04)" ],
+                 [ sty:property "rx" ; sty:raw "6px" ],
+                 [ sty:property "stroke-width" ; sty:raw "0" ],
+                 [ sty:property "fill" ; sty:raw "var(--sem-gray-3)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "svg g > .emphasized:first-child" ;
+    sty:declares [ sty:property "fill" ; sty:raw "var(--sem-accent-4)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "svg rect:not(.used, .emphasized)" ;
+    sty:declares [ sty:property "fill" ; sty:raw "none" ],
+                 [ sty:property "stroke" ; sty:raw "currentColor" ],
+                 [ sty:property "stroke-width" ; sty:raw ".75" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "svg :is(.rail, .bracket, .tick)" ;
+    sty:declares [ sty:property "stroke" ; sty:raw "currentColor" ],
+                 [ sty:property "stroke-width" ; sty:raw ".75" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "svg .annotation" ;
+    sty:declares [ sty:property "fill" ; sty:raw "currentColor" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "svg .variable" ;
+    sty:declares [ sty:property "stroke-dasharray" ; sty:raw "4 2" ] .

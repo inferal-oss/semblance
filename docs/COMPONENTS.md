@@ -681,6 +681,39 @@ slot through `renderer.slot(name)`. Stable message and body IRIs let the rendere
 content, including drafts and focus, when other messages are inserted. Keep those IRIs stable
 when updating the graph with `runtime.apply`.
 
+### Byte layouts
+
+`c:ByteLayout` draws ordered binary fields in Screen and lists them with offsets and sizes in
+Text. Supply one caption and one label per field. The field indices are consecutive integers
+starting at 0. Fields and brackets are IRIs: each is drawn member-wise (`sem:forEach`), so a change
+to one field re-renders that field alone. Marks can be blank nodes.
+
+```turtle
+ex:header a c:ByteLayout ; c:label "Record header" ; c:byteExtent 6 ;
+    c:byteLayoutStyle c:ByteRuler ;
+    c:byteField ex:length , ex:identifier ;
+    c:byteSpan ex:header-span .
+ex:length c:byteIndex 0 ; c:label "Length" ; c:byteOffset 0 ;
+    c:byteLength 2 ; c:byteEncoding "uint16 LE" .
+ex:identifier c:byteIndex 1 ; c:label "Identifier" ; c:byteOffset 2 ;
+    c:byteLength 4 ; c:byteEmphasis true ;
+    c:byteMark [ c:byteOffset 3 ; c:byteLength 2 ] .
+ex:header-span c:firstByteIndex 0 ; c:lastByteIndex 1 ; c:label "Header" .
+```
+
+With `c:byteExtent`, fields use proportional widths and each field needs an offset and length
+inside the extent. Omit the extent for a schematic with equal-width fields. In a schematic,
+omit a field's length to show it as variable and use `c:byteSizeLabel` to describe its size.
+Marks use the same offset origin as their enclosing field. Span indices are inclusive.
+`c:byteAxisLabel` optionally names the offset origin. Choose `c:ByteRuler` (default),
+`c:ByteRecord` (separate rounded fields), or `c:ByteOutline` (monochrome outlines).
+The gallery uses `c:Segmented` to change the style in RDF.
+
+The diagram is a figure named by its caption; its fields are a list whose items are named by their
+Text line (`@4 · ChunkSize · uint32 LE · 4 B`, the unit from `c:BytesPhrase` in the viewer's
+language). Offsets run left to right in every language, as in a hex dump: in a right-to-left page the
+diagram is not mirrored, and when it is wider than its column it scrolls from byte 0.
+
 ### Description list values
 
 Explicit `c:DescriptionList` items can supply a component through `c:content`, including a link,
