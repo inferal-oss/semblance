@@ -10,29 +10,40 @@ import { workerThumbnails } from '../src/file-store.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
-import { Navigation, rendererReveal, setBase } from '../src/navigation.ts'
-import { attachIntent } from '../src/intent.ts'
+import { Navigation, rendererReveal, setBase, windowScroll } from '../src/navigation.ts'
+import { anticipate, attachIntent } from '../src/intent.ts'
+import { type IdleDeadline, whenIdle } from '../src/idle.ts'
 import { NetworkCapture } from '../src/network.ts'
 import { Sandboxes } from '../src/sandbox.ts'
 import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
 import { graphLanguages } from '../src/server/render.ts'
-import { serverRendered, serverStyled, takeOver } from '../src/web/takeover.ts'
-import { carryInFragment, type CompileMode, prepareSite, recordSiteSources, ROOT, siteGraphs, siteLayers } from './site.ts'
+import { indexedPageGraphs, PAGE_GRAPHS_INDEX, type PageGraphsIndex, pageGraphs, serverRendered, serverStyled, takeOver } from '../src/web/takeover.ts'
+import { carryInFragment, type CompileMode, prepareSite, recordSiteSources, ROOT, siteLayers, siteNamedGraphs, siteSources } from './site.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
-import { Runtime } from '../src/runtime.ts'
+import { parseTurtle, Runtime } from '../src/runtime.ts'
+import { sourceQuads } from '../src/sources.ts'
+import { arrive, sliceAddition } from '../src/slices.ts'
+import type { Quad } from '@rdfjs/types'
 import { compileStyles } from '../src/style/compile.ts'
-import { hasStore, initWeb, loadStoreWith, type StoreKind } from '../src/web/load.ts'
+import { hasStore, initWeb, loadOntology, loadStoreOf, loadStoreWith, ONTOLOGY_NAMES, ontologyText, type StoreKind } from '../src/web/load.ts'
 import { attachWalkthroughs } from '../src/web/walkthrough.ts'
+import { markPlatform } from '../src/web/platform.ts'
 import { attachConnectors } from '../src/web/connectors.ts'
 import { attachSnaps } from '../src/web/snap.ts'
 import { attachLightboxes } from '../src/web/lightbox.ts'
 import { attachAnchoredPopups } from '../src/web/anchored-popups.ts'
+import { attachSizeHandles } from '../src/web/size-handles.ts'
+import { attachStickyTop } from '../src/web/sticky-top.ts'
 import { RenderedState } from '../src/rendered.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
-import { chartJs, flatpickr, leaflet, modules } from './foreign.ts'
+import { chartJs, flatpickr, leaflet, modules, tex } from './foreign.ts'
+import { scriptURL } from '../src/web/trusted-types.ts'
+// The workers' URLs, for Semblance's Trusted Types policy (a worker is a script sink).
+import heartbeatWorker from '../src/behaviour/heartbeat.worker.ts?worker&url'
+import thumbnailWorker from '../src/thumbnail.worker.ts?worker&url'
 
 // The host: a mount point, the effects of graph state (theme on <html>,
 // engine layers, store choice, URL, benchmark runs) and nothing else. The
@@ -54,26 +65,44 @@ const defaultCompile = (store: string): CompileMode => (store === 'rust' ? 'idle
 const compileParam = ['off', 'run', 'idle'].includes(params.get('compile') ?? '') ? (params.get('compile') as CompileMode) : undefined
 const compile = compileParam ?? defaultCompile(kind)
 
-// Only the chosen store's code and WASM are loaded.
-await initWeb(kind)
+// The graphs a page rendered beforehand needs first (it names them; the build checked that they
+// render it): the rest load in idle time, once the page is interactive. Any other page loads all.
+const firstGraphs = serverRendered(document.getElementById('app')!) ? pageGraphs(document) : undefined
+// The page they render: another page reached before the rest have arrived needs them at once (#378).
+const loadedAt = location.pathname
+const wanted = (name: string) => !firstGraphs || firstGraphs.includes(name)
+// The Components page: one graph per component group (demo/gallery/*.ttl), each a chunk of its own.
+const galleryLoaders = Object.fromEntries(Object.entries(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>).map(([p, load]) => ['demo/' + p.slice(2), load]))
+const galleryFiles: Record<string, string> = {}
+const loadGallery = (names: string[]) => Promise.all(names.map(async (n) => void (galleryFiles[n] ??= await galleryLoaders[n]!())))
+// Only the chosen store's code and WASM are loaded, and the graphs the page needs, at once.
+await Promise.all([initWeb(kind, { ontology: false }), loadOntology(ONTOLOGY_NAMES.filter(wanted)), loadGallery(Object.keys(galleryLoaders).filter(wanted))])
 performance.mark('sem:wasm')
-// The Components page: one graph per component group (demo/gallery/*.ttl).
-const galleryFiles = Object.fromEntries(Object.entries(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>).map(([p, t]) => ['demo/' + p.slice(2), t]))
 const storeOptions = { compiled: compile === 'idle' ? ('idle' as const) : compile === 'run' }
-const store = loadStoreWith(kind, storeOptions, ...siteGraphs(appGraph, galleryFiles))
-performance.mark('sem:store')
+const store = loadStoreOf(kind, storeOptions, ONTOLOGY_NAMES.filter(wanted), ...Object.values(siteNamedGraphs(appGraph, galleryFiles)))
+performance.mark('sem:store', { detail: { graphs: firstGraphs?.length } })
 // The examples show their own source, recorded as data (c:SourceText).
 recordSiteSources(store, galleryFiles)
 // One file is one page: where we are goes in the fragment.
 if (import.meta.env.MODE === 'single') carryInFragment(store)
-// Served under a path (SEMBLANCE_BASE): the site's paths start there.
-else if (import.meta.env.BASE_URL.startsWith('/') && import.meta.env.BASE_URL !== '/') setBase(store, import.meta.env.BASE_URL)
+// Its paths start at where it is served (SEMBLANCE_BASE, else "/"), and relative URLs in its data resolve there.
+else setBase(store, import.meta.env.BASE_URL.startsWith('/') ? import.meta.env.BASE_URL : '/')
 // Remembered state (per:Policy nodes in the graph) is restored before the first projection.
-const persistence = new Persistence(store, {
-  [NS.per + 'Session']: webStorageBackend(sessionStorage),
-  [NS.per + 'Device']: webStorageBackend(localStorage),
-  [NS.per + 'Database']: indexedDbBackend(),
-})
+// A choice another tab stores under a policy across tabs (per:acrossTabs) is shown here too.
+const persistence = new Persistence(
+  store,
+  {
+    [NS.per + 'Session']: webStorageBackend(sessionStorage),
+    [NS.per + 'Device']: webStorageBackend(localStorage),
+    [NS.per + 'Database']: indexedDbBackend(),
+  },
+  {
+    onFollowed: () => {
+      syncSettings()
+      flush()
+    },
+  },
+)
 await persistence.restore().catch((e) => console.warn('[semblance] could not restore remembered state', e))
 // Where we are (ui:location in app.ttl): the address over what storage kept, before the first projection too.
 const navigation = new Navigation(store, { root: UI + 'shell', persistence })
@@ -98,8 +127,9 @@ const screen = runtime.project({ modality: MOD.Screen, layers: enabledLayers(), 
 const text = runtime.project({ modality: MOD.Text, prefer, provenance: 'onDemand', languages, name: 'text', roots: [EX + 'page'] })
 performance.mark('sem:rules')
 
-// The keyboard layer shows ⌘ / ⌥ glyphs on Apple platforms, Ctrl / Alt elsewhere.
-if (/Mac|iPhone|iPad/.test(navigator.platform)) document.documentElement.setAttribute('data-sem-platform', 'apple')
+// The keyboard layer shows ⌘ / ⌥ glyphs on Apple platforms, Ctrl / Alt elsewhere (a page rendered
+// beforehand has marked the platform in its head already).
+markPlatform(document)
 
 // A page rendered beforehand links the stylesheet the build compiled from this graph: it is not compiled again.
 let css = serverStyled(document) ? undefined : compileStyles(store)
@@ -147,6 +177,12 @@ function deferUntilSeen(slot: Element, build: () => void) {
   observer.observe(slot)
 }
 
+// The whole ontology's text, once the rest of it (beyond what the page needed first) is fetched:
+// what a live example's sandbox loads into a store of its own.
+let ontologyFetched: () => void
+const wholeOntology = new Promise<void>((resolve) => (ontologyFetched = resolve))
+if (!firstGraphs) ontologyFetched!()
+
 // Live examples (c:LiveExample) run in sandboxes of their own, mounted in their slots once shown.
 let sandboxes: Sandboxes | undefined
 // DOM patches are timed: a hang outside every turn of the engine is blamed on them (the stall log).
@@ -169,8 +205,12 @@ sandboxes = new Sandboxes(runtime, screen, {
   languages: () => [...screen.engine.languages],
   siteCss,
   // Each example loads the ontology into a store of its own: built once its slot is near the view,
-  // after the page has painted (an example below the fold waits until it is scrolled to).
-  defer: deferUntilSeen,
+  // after the page has painted (an example below the fold waits until it is scrolled to), and once
+  // the whole ontology's text is here (its pre-rendered HTML shows until then). It does not wait for
+  // the site's own graph to take the rest in: its clicks are held until it is built.
+  defer: (slot, build) => void wholeOntology.then(() => deferUntilSeen(slot, build)),
+  // Its build and its mount (taking the server's rendering over) are tasks of their own.
+  pace: (mount) => idle(() => mount()),
 })
 sandboxes.attach()
 flush()
@@ -308,6 +348,8 @@ const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer })
 attachIntent(runtime, shell, { flush: () => flush() })
 // Walkthroughs: the step in view is reported to the graph; arrows follow what it mentions.
 attachWalkthroughs(document.getElementById('app')!)
+// What sticks to the top (the side column, a walkthrough's diagram) sticks below the app bar as laid out.
+attachStickyTop(document.getElementById('app')!)
 // Connectors (a sheet's dependencies, a walkthrough's arrows, a canvas's): drawn where their ends are.
 const connectors = attachConnectors(document.getElementById('app')!)
 // Swiped tracks (a gallery's carousel, a lightbox): where they come to rest, and the current item in view.
@@ -315,6 +357,7 @@ attachSnaps(document.getElementById('app')!)
 // Lightboxes: grown from their image and given back to it, sliding, zooming and panning.
 attachLightboxes(document.getElementById('app')!)
 attachAnchoredPopups(document.getElementById('app')!, node => !shell.inSlot(node))
+attachSizeHandles(shell)
 persistence.attach(runtime)
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })
@@ -348,7 +391,7 @@ stalls = new StallMonitor(runtime, {
     syncSettings()
     flush()
   },
-  worker: () => new Worker(new URL('../src/behaviour/heartbeat.worker.ts', import.meta.url), { type: 'module' }),
+  worker: () => new Worker(scriptURL(heartbeatWorker), { type: 'module' }),
 })
 stalls.attach()
 stalls.observe()
@@ -416,7 +459,7 @@ new Fullscreen(bus, {
 // mounted in their slots after each patch; what they report comes back as events.
 new Islands(bus, shell, {
   modules,
-  widgets: { 'chart.js': chartJs, leaflet, flatpickr },
+  widgets: { 'chart.js': chartJs, leaflet, flatpickr, tex },
   onHandled: () => {
     syncSettings()
     flush()
@@ -445,7 +488,7 @@ const demoUpload: Uploader = (file, ctx) =>
 // made in a worker, so decoding a large photo never holds up the page.
 new Files(bus, {
   handlers: { demo: demoUpload },
-  thumbnail: workerThumbnails(() => new Worker(new URL('../src/thumbnail.worker.ts', import.meta.url), { type: 'module' })),
+  thumbnail: workerThumbnails(() => new Worker(scriptURL(thumbnailWorker), { type: 'module' })),
   onHandled: () => {
     syncSettings()
     flush()
@@ -453,10 +496,12 @@ new Files(bus, {
 }).attach(shell)
 
 // Changes of where we are go to the address; Back, Forward and typed or followed addresses
-// come back as nav:Navigate events, and a followed link's target is brought into view.
+// come back as nav:Navigate events, and a followed link's target is brought into view. A step to
+// another place starts at its top; Back and Forward return to where the page was.
 navigation.attach(runtime, {
   bus,
   reveal: rendererReveal(shell),
+  scroll: windowScroll(window),
   onNavigate: () => {
     syncSettings()
     flush()
@@ -466,16 +511,12 @@ navigation.attach(runtime, {
 const checkPerf = perfRunner(runtime, flush)
 syncSettings()
 flush()
-// What the visitor did before the client was ready happens now (the page was taken over).
-if (takeover) takeover.replay()
-performance.mark('sem:ready')
 
 // Hidden views are evaluated in idle time, a slice at a time, so navigation finds
 // them ready and interactions never pay for them.
-const idle = (cb: (d: { timeRemaining(): number }) => void) =>
-  'requestIdleCallback' in window ? requestIdleCallback(cb, { timeout: 1000 }) : setTimeout(() => cb({ timeRemaining: () => 8 }), 30)
+const idle = whenIdle
 let warming = false
-function warmup(deadline: { timeRemaining(): number }) {
+function warmup(deadline: IdleDeadline) {
   const more = runtime.warm(Math.max(2, deadline.timeRemaining() - 2))
   flush()
   warming = more
@@ -484,7 +525,99 @@ function warmup(deadline: { timeRemaining(): number }) {
 const scheduleWarmup = () => {
   if (!warming) (warming = true), idle(warmup)
 }
+// What the visitor did before the client was ready happens now (the page was taken over), once
+// what handling it calls is defined (a replayed click schedules warming up).
+if (takeover) takeover.replay()
+performance.mark('sem:ready')
 scheduleWarmup()
+// Once the page has its graphs: what the sections would show is prepared, in idle time (sem:anticipates).
+if (firstGraphs) idle(() => void loadRest().then(() => anticipate(runtime, { flush })))
+else anticipate(runtime, { flush })
+
+/**
+ * The graphs the page did not need first, in idle time: fetched, read a file per slice, then loaded
+ * as several changes through the runtime (their rules join the engine, their reactions the bus,
+ * their remembered state is restored), with the sources of the examples among them. Once the
+ * visitor moves to another page (a link, the menu, Back), what that page names (the build's index
+ * of them) is read and taken in first, at once: it may need some of it (#378); the rest follows as
+ * before (all of it at once was a task of a second, #420). A page the index does not name gets
+ * the rest without waiting for idle periods, a few slices per task.
+ */
+async function loadRest() {
+  performance.mark('sem:graphs-fetch')
+  const moved = () => location.pathname !== loadedAt
+  const nextIdle = () => new Promise<{ timeRemaining(): number }>((resolve) => idle(resolve))
+  // A task after the browser's turn (a timer), with 40 ms to spend in it.
+  const nextTask = () =>
+    new Promise<{ timeRemaining(): number }>((resolve) =>
+      setTimeout(() => {
+        const end = performance.now() + 40
+        resolve({ timeRemaining: () => end - performance.now() })
+      }),
+    )
+  const ontology = ONTOLOGY_NAMES.filter((n) => !wanted(n))
+  const gallery = Object.keys(galleryLoaders).filter((n) => !wanted(n))
+  const [index] = await Promise.all([
+    fetch(import.meta.env.BASE_URL + PAGE_GRAPHS_INDEX)
+      .then((r) => (r.ok ? (r.json() as Promise<PageGraphsIndex>) : undefined))
+      .catch(() => undefined),
+    loadOntology(ontology).then(() => ontologyFetched()),
+    loadGallery(gallery),
+  ])
+  // What the page shown names, of what is left (undefined: it names none, or it is the page loaded).
+  const named = new Map<string, string[] | undefined>()
+  const needs = () => {
+    if (!moved()) return undefined
+    const path = location.pathname
+    if (!named.has(path)) named.set(path, index && indexedPageGraphs(index, path))
+    return named.get(path)
+  }
+  // Each file read on its own, with its example's source: what a page needs is by file.
+  const read = new Map<string, Quad[]>()
+  const parse = (n: string) => {
+    if (read.has(n)) return
+    const gallerySource = galleryFiles[n] !== undefined ? sourceQuads(store.factory, siteSources({ [n]: galleryFiles[n]! })) : []
+    read.set(n, [...parseTurtle(ontologyText(n) ?? galleryFiles[n]!, store.factory), ...gallerySource])
+  }
+  let left = [...ontology, ...gallery]
+  // As many files per idle period as fit in it (at least one): an idle callback comes once per idle
+  // period (up to 50 ms apart on a quiet page), so a file per callback took seconds. Once the visitor
+  // has moved, what their page names first, then a task at a time.
+  while (left.length) {
+    const first = new Set(needs())
+    if (first.size) left.filter((n) => first.has(n)).forEach(parse), (left = left.filter((n) => !read.has(n)))
+    if (!left.length) break
+    const deadline = await (moved() ? nextTask() : nextIdle())
+    do parse(left.shift()!)
+    while (left.length && deadline.timeRemaining() > 4)
+  }
+  const add = [...read.values()].flat()
+  performance.mark('sem:graphs-parsed', { detail: { quads: add.length } })
+  // Taken in as several changes, none a long task: what defines rules first (the rules are read
+  // again once), then the rest a slice per idle period, whole descriptions at a time; what the page
+  // shown names, once the visitor has moved, at once. Each in a task of its own.
+  const next = () => (moved() ? nextTask() : nextIdle())
+  await next()
+  const slices = sliceAddition(add, 150)
+  await next()
+  const tests = new Map<string, (q: Quad) => boolean>()
+  const urgent = () => {
+    if (!moved()) return false
+    const names = needs()
+    if (!names) return true
+    const path = location.pathname
+    if (!tests.has(path)) {
+      const quads = new Set(names.flatMap((n) => read.get(n) ?? []))
+      tests.set(path, (q) => quads.has(q))
+    }
+    return tests.get(path)!
+  }
+  await arrive(slices, { runtime, idle: nextIdle, task: nextTask, urgent, flush })
+  await persistence.restoreAdded().catch((e) => console.warn('[semblance] could not restore remembered state', e))
+  flush()
+  scheduleWarmup()
+  performance.mark('sem:graphs')
+}
 void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 

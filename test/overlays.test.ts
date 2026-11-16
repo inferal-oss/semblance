@@ -201,6 +201,87 @@ describe('overlay components', () => {
     expect(document.activeElement).toBe(status())
   })
 
+  describe('what opened a modal, scrolled away or gone', () => {
+    /** The Overlays page with its dialog, and each focus's options. */
+    const dialog = () => {
+      const h = showGroup('GroupOverlays')
+      const { document, window, runtime, store, shell } = h
+      trackFocus(window, document)
+      const focus = window.HTMLElement.prototype.focus
+      const moved: [Element, boolean][] = []
+      window.HTMLElement.prototype.focus = function (this: HTMLElement, o?: FocusOptions) {
+        moved.push([this, !o?.preventScroll])
+        return focus.call(this, o)
+      }
+      Object.assign(window, { innerWidth: 1000, innerHeight: 800 })
+      const f = store.factory
+      const set = (v: boolean) => {
+        const s = f.namedNode(UI + 'ov-dialog')
+        const p = f.namedNode(NS.c + 'open')
+        runtime.apply({ remove: store.match(s, p, null), add: [f.quad(s, p, f.literal(String(v), f.namedNode('http://www.w3.org/2001/XMLSchema#boolean')))] })
+        shell.flush()
+      }
+      const place = (el: Element, top: number) => {
+        ;(el as unknown as { getBoundingClientRect: () => object }).getBoundingClientRect = () => ({ top, bottom: top + 40, left: 100, right: 300, width: 200, height: 40 })
+      }
+      return { ...h, moved, set, place, f }
+    }
+
+    it('in view when it opened, it comes back into view; out of view then, the page stays', () => {
+      const { root, click, fact, document, moved, set, place } = dialog()
+      const opener = root('ov-open-dialog')
+      place(opener, 300)
+      opener.focus()
+      click(opener)
+      expect(fact('ov-dialog', 'open')).toBe('true')
+      expect(document.activeElement).not.toBe(opener)
+      // The reader scrolls the page under the modal; it closes.
+      place(opener, -600)
+      moved.length = 0
+      set(false)
+      expect(document.activeElement).toBe(opener)
+      expect(moved.at(-1)).toEqual([opener, true])
+      // A focus left off screen, and a shortcut that opens over it: nobody saw it, nothing scrolls.
+      opener.focus()
+      set(true)
+      moved.length = 0
+      set(false)
+      expect(document.activeElement).toBe(opener)
+      expect(moved.at(-1)).toEqual([opener, false])
+    })
+
+    it('the address changed: the page stays where it was asked to be', () => {
+      const { root, click, document, window, moved, set, place } = dialog()
+      const opener = root('ov-open-dialog')
+      place(opener, 300)
+      Object.defineProperty(window, 'location', { configurable: true, value: { href: 'https://semblance.dev/a' } })
+      opener.focus()
+      click(opener)
+      Object.defineProperty(window, 'location', { configurable: true, value: { href: 'https://semblance.dev/b' } })
+      moved.length = 0
+      set(false)
+      expect(document.activeElement).toBe(opener)
+      expect(moved.at(-1)).toEqual([opener, false])
+    })
+
+    it('gone, a control near where it was takes the focus, without scrolling', () => {
+      const { root, click, fact, document, runtime, store, shell, moved, set, f } = dialog()
+      const opener = root('ov-open-dialog')
+      const next = root('ov-open-confirm')
+      opener.focus()
+      click(opener)
+      runtime.apply({ remove: store.match(f.namedNode(UI + 'ov-open-dialog'), null, null), add: [] })
+      shell.flush()
+      expect(opener.isConnected).toBe(false)
+      expect(fact('ov-dialog', 'open')).toBe('true')
+      moved.length = 0
+      set(false)
+      expect(fact('ov-dialog', 'open')).toBe('false')
+      expect(document.activeElement).toBe(next)
+      expect(moved.at(-1)).toEqual([next, false])
+    })
+  })
+
   it('every interaction is one recorded event', () => {
     const { root, click, bus } = showGroup('GroupOverlays')
     const before = bus.recent(50).length

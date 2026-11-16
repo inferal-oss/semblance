@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix blk: <https://semblance.dev/ns/block#> .
 @prefix clip: <https://semblance.dev/ns/clipboard#> .
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -43,12 +44,15 @@ c:WindowsGroup a sem:ComponentGroup ; sem:order 10 ;
 c:InspectionGroup a sem:ComponentGroup ; sem:order 11 ;
     rdfs:label "Inspection"@en , "Інспекція"@uk , "Inspektion"@de , "الفحص"@ar ;
     rdfs:comment "Looking at the graph itself: the SPARQL workbench and its results, query, triples and stream views, the element markup inspector, the reference."@en .
+c:DocumentsGroup a sem:ComponentGroup ; sem:order 12 ;
+    rdfs:label "Documents"@en , "Документи"@uk , "Dokumente"@de , "المستندات"@ar ;
+    rdfs:comment "Documents of blocks in DoCo, edited in place: the block editor, its block types and marks."@en .
 
 # --- Layout ---
 c:Stack sem:group c:LayoutGroup . c:HostSlot sem:group c:LayoutGroup . c:Surface sem:group c:LayoutGroup . c:Divider sem:group c:LayoutGroup .
 c:Grid sem:group c:LayoutGroup . c:Spacer sem:group c:LayoutGroup . c:Card sem:group c:LayoutGroup . c:LinkedCard sem:group c:LayoutGroup .
 c:Specimen sem:group c:LayoutGroup . c:Swatches sem:group c:LayoutGroup . c:StatusBar sem:group c:LayoutGroup .
-c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup . c:Foldable sem:group c:LayoutGroup . c:TiledWorkspace sem:group c:LayoutGroup . c:TabHandle sem:group c:LayoutGroup . c:CloseTile sem:group c:LayoutGroup .
+c:Switch sem:group c:LayoutGroup . c:CaseRetentionPolicy sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup . c:Foldable sem:group c:LayoutGroup . c:TiledWorkspace sem:group c:LayoutGroup . c:TabHandle sem:group c:LayoutGroup . c:CloseTile sem:group c:LayoutGroup .
 c:Canvas sem:group c:LayoutGroup . c:CanvasItem sem:group c:LayoutGroup . c:Connector sem:group c:LayoutGroup .
 # A foreign component (web component, framework component, widget) is laid out like any other part.
 ext:Island sem:group c:LayoutGroup .
@@ -59,11 +63,12 @@ c:Heading sem:group c:TypeGroup . c:Text sem:group c:TypeGroup . c:Link sem:grou
 c:Kbd sem:group c:TypeGroup . c:Code sem:group c:TypeGroup . c:Blockquote sem:group c:TypeGroup .
 c:GraphMark sem:group c:TypeGroup . c:MarkNode sem:group c:TypeGroup . c:Emblem sem:group c:TypeGroup .
 c:Walkthrough sem:group c:TypeGroup . c:WalkthroughStep sem:group c:TypeGroup . c:Mention sem:group c:TypeGroup .
+c:WalkNode sem:group c:TypeGroup . c:WalkBand sem:group c:TypeGroup .
 c:SourceSpan sem:group c:TypeGroup . c:StepInView sem:group c:TypeGroup .
 # Source shown as text: a source text verbatim (the walkthrough's), and a live example's Turtle
 # beside what it renders, with its sandbox's state and problems.
 c:SourceView sem:group c:TypeGroup . c:SourceText sem:group c:TypeGroup .
-c:LiveExample sem:group c:TypeGroup . c:SandboxState sem:group c:TypeGroup . c:SandboxProblem sem:group c:TypeGroup . c:DataLine sem:group c:TypeGroup . c:LineChange sem:group c:TypeGroup .
+c:LiveExample sem:group c:TypeGroup . c:SandboxState sem:group c:TypeGroup . c:SandboxProblem sem:group c:TypeGroup .
 
 # --- Actions ---
 c:Button sem:group c:ActionsGroup . c:IconButton sem:group c:ActionsGroup . c:ButtonGroup sem:group c:ActionsGroup .
@@ -91,11 +96,12 @@ c:MonthGrid sem:group c:InputsGroup . c:DateField sem:group c:InputsGroup . c:Da
 c:TimeField sem:group c:InputsGroup . c:MonthGridKey sem:group c:InputsGroup . c:TimeFieldKey sem:group c:InputsGroup .
 # A code editor's text is its value, like any field's; the SPARQL editor is one in SPARQL. The
 # words of the languages they know (c:CodeWord) and their key event are their parts.
-c:CodeEditor sem:group c:InputsGroup . c:QueryEditor sem:group c:InputsGroup . c:EditorKey sem:group c:InputsGroup .
+c:CodeEditor sem:group c:InputsGroup . c:CodeLexicon sem:group c:InputsGroup . c:LanguageLexicon sem:group c:InputsGroup . c:QueryEditor sem:group c:InputsGroup . c:EditorKey sem:group c:InputsGroup .
 c:CodeWord sem:group c:InputsGroup . c:CodeKeyword sem:group c:InputsGroup . c:CodeFunction sem:group c:InputsGroup .
 c:TurtleKeyword sem:group c:InputsGroup .
-c:SparqlWord sem:group c:InputsGroup . c:SparqlKeyword sem:group c:InputsGroup . c:SparqlFunction sem:group c:InputsGroup .
-c:Sheet sem:group c:DataGroup . c:SheetCell sem:group c:DataGroup . c:SheetFunction sem:group c:DataGroup . c:SheetKey sem:group c:DataGroup .
+c:SparqlWord sem:group c:InputsGroup . c:SparqlKeyword sem:group c:InputsGroup . c:SparqlFunction sem:group c:InputsGroup . c:CodeLexicon sem:group c:InputsGroup .
+c:EditorLine sem:group c:InputsGroup .
+c:Sheet sem:group c:DataGroup . c:SheetCell sem:group c:DataGroup . c:SheetFunction sem:group c:DataGroup . c:SheetKey sem:group c:DataGroup . c:SheetEscapeKey sem:group c:DataGroup .
 
 # --- Feedback ---
 c:Alert sem:group c:FeedbackGroup . c:Badge sem:group c:FeedbackGroup . c:Tag sem:group c:FeedbackGroup .
@@ -109,12 +115,15 @@ c:DescriptionList sem:group c:DataGroup . c:Stat sem:group c:DataGroup . c:Metri
 c:Avatar sem:group c:DataGroup . c:AvatarGroup sem:group c:DataGroup . c:Timeline sem:group c:DataGroup .
 c:Gallery sem:group c:DataGroup . c:ImageBrowser sem:group c:DataGroup . c:Snapped sem:group c:DataGroup .
 c:Picture sem:group c:DataGroup . c:GalleryLayout sem:group c:DataGroup .
-c:TimelineItem sem:group c:DataGroup . c:Tree sem:group c:DataGroup . c:Legend sem:group c:DataGroup .
+c:TimelineItem sem:group c:DataGroup . c:Tree sem:group c:DataGroup . c:TreeItem sem:group c:DataGroup . c:Legend sem:group c:DataGroup .
 c:DataGrid sem:group c:DataGroup . c:GridRow sem:group c:DataGroup . c:TimeAxis sem:group c:DataGroup .
 c:JsonTree sem:group c:DataGroup . c:JsonNode sem:group c:DataGroup . c:HexView sem:group c:DataGroup .
 c:BodyViewer sem:group c:DataGroup . c:ImageView sem:group c:DataGroup .
-c:Chart sem:group c:DataGroup . c:BarChart sem:group c:DataGroup . c:Heatmap sem:group c:DataGroup .
-c:LineChart sem:group c:DataGroup . c:GanttChart sem:group c:DataGroup . c:GanttTask sem:group c:DataGroup . c:FindingList sem:group c:DataGroup .
+c:Chart sem:group c:DataGroup . c:RowChart sem:group c:DataGroup . c:SeriesChart sem:group c:DataGroup . c:AxisChart sem:group c:DataGroup .
+c:AreaChart sem:group c:DataGroup . c:AreaPoint sem:group c:DataGroup . c:ColumnChart sem:group c:DataGroup . c:ColumnPoint sem:group c:DataGroup . c:ScatterChart sem:group c:DataGroup . c:ScatterPoint sem:group c:DataGroup .
+c:PieChart sem:group c:DataGroup . c:DonutChart sem:group c:DataGroup . c:SlicePoint sem:group c:DataGroup . c:Histogram sem:group c:DataGroup . c:Sparkline sem:group c:DataGroup . c:BoxPlot sem:group c:DataGroup . c:BoxPoint sem:group c:DataGroup .
+c:Annotation sem:group c:DataGroup . c:Threshold sem:group c:DataGroup . c:MarkedRange sem:group c:DataGroup . c:Axis sem:group c:DataGroup . c:ChartPoint sem:group c:DataGroup . c:ChartSeries sem:group c:DataGroup . c:ChartCategory sem:group c:DataGroup . c:ValueScale sem:group c:DataGroup . c:BarChart sem:group c:DataGroup . c:Heatmap sem:group c:DataGroup .
+c:LineChart sem:group c:DataGroup . c:LinePoint sem:group c:DataGroup . c:BarCategory sem:group c:DataGroup . c:BarPoint sem:group c:DataGroup . c:HeatCell sem:group c:DataGroup . c:ChartFacet sem:group c:DataGroup . c:GanttChart sem:group c:DataGroup . c:GanttTask sem:group c:DataGroup . c:FindingList sem:group c:DataGroup .
 c:Column sem:group c:DataGroup . c:series sem:group c:DataGroup . c:GridColumn sem:group c:DataGroup .
 c:CellKind sem:group c:DataGroup . c:Filter sem:group c:DataGroup . c:TextFilter sem:group c:DataGroup .
 c:ValueFilter sem:group c:DataGroup . c:FlagFilter sem:group c:DataGroup . c:TimeScale sem:group c:DataGroup .
@@ -127,6 +136,8 @@ c:ArrowsMode sem:group c:DataGroup . c:RdfEditorKey sem:group c:DataGroup .
 c:RdfEditorAddKey sem:group c:DataGroup . c:RdfEditorEscapeKey sem:group c:DataGroup . c:RdfEditorDeleteKey sem:group c:DataGroup .
 c:RdfEditorNestKey sem:group c:DataGroup . c:RdfEditorOutdentKey sem:group c:DataGroup . c:RdfEditorMoveKey sem:group c:DataGroup .
 c:RdfDraggableRow sem:group c:DataGroup . c:RdfDropRow sem:group c:DataGroup .
+c:RdfEditorTypeKey sem:group c:DataGroup . c:RdfEditorChooseKey sem:group c:DataGroup . c:RdfEditorMenuKey sem:group c:DataGroup .
+c:RdfEditorContextMenu sem:group c:DataGroup . c:RdfMenuEscapeKey sem:group c:DataGroup .
 c:MessageList sem:group c:DataGroup . c:Message sem:group c:DataGroup .
 c:BoardKey sem:group c:DataGroup .
 # Lists an app shows its people, read from the graph: its keyboard shortcuts, and what it remembers.
@@ -154,7 +165,7 @@ c:Desktop sem:group c:WindowsGroup . c:Taskbar sem:group c:WindowsGroup .
 c:DesktopLayout sem:group c:WindowsGroup .
 c:Draggable sem:group c:WindowsGroup . c:Resizable sem:group c:WindowsGroup . c:Raisable sem:group c:WindowsGroup .
 c:Restorable sem:group c:WindowsGroup . c:Minimizable sem:group c:WindowsGroup . c:Maximizable sem:group c:WindowsGroup .
-c:Dockable sem:group c:WindowsGroup . fs:Fullscreenable sem:group c:WindowsGroup .
+c:Dockable sem:group c:WindowsGroup . c:DockResizable sem:group c:WindowsGroup . fs:Fullscreenable sem:group c:WindowsGroup .
 c:WindowState sem:group c:WindowsGroup . c:Edge sem:group c:WindowsGroup . c:PointerDown sem:group c:WindowsGroup .
 
 # --- Inspection ---
@@ -167,6 +178,7 @@ c:WindowState sem:group c:WindowsGroup . c:Edge sem:group c:WindowsGroup . c:Poi
 c:QueryWorkbench sem:group c:InspectionGroup . c:RunQueryButton sem:group c:InspectionGroup .
 c:QueryResultView sem:group c:InspectionGroup . c:ResultTable sem:group c:InspectionGroup .
 c:ResultGraph sem:group c:InspectionGroup . c:ResultTurtle sem:group c:InspectionGroup .
+c:GraphNode sem:group c:InspectionGroup . c:GraphLink sem:group c:InspectionGroup . c:GraphLayer sem:group c:InspectionGroup .
 c:GraphKey sem:group c:InspectionGroup . c:Salience sem:group c:InspectionGroup .
 c:QueryView sem:group c:InspectionGroup . c:TriplesView sem:group c:InspectionGroup .
 c:StreamMembers sem:group c:InspectionGroup . c:StreamStats sem:group c:InspectionGroup .
@@ -178,3 +190,29 @@ c:TermSection sem:group c:InspectionGroup . c:TermOverview sem:group c:Inspectio
 c:TermAlignment sem:group c:InspectionGroup . c:TermKind sem:group c:InspectionGroup .
 c:TermMembers sem:group c:InspectionGroup . c:TermCard sem:group c:InspectionGroup . c:TermRole sem:group c:InspectionGroup .
 c:InverseFacet sem:group c:InspectionGroup .
+
+# --- Documents ---
+c:BlockEditor sem:group c:DocumentsGroup . blk:BlockHandle sem:group c:DocumentsGroup . blk:Block sem:group c:DocumentsGroup . blk:TextBlock sem:group c:DocumentsGroup . blk:Container sem:group c:DocumentsGroup .
+blk:Document sem:group c:DocumentsGroup . blk:Paragraph sem:group c:DocumentsGroup . blk:Heading sem:group c:DocumentsGroup . blk:Heading1 sem:group c:DocumentsGroup .
+blk:Heading2 sem:group c:DocumentsGroup . blk:Heading3 sem:group c:DocumentsGroup . blk:Quote sem:group c:DocumentsGroup . blk:List sem:group c:DocumentsGroup .
+blk:BulletedList sem:group c:DocumentsGroup . blk:NumberedList sem:group c:DocumentsGroup . blk:TodoList sem:group c:DocumentsGroup . blk:Item sem:group c:DocumentsGroup .
+blk:ListItem sem:group c:DocumentsGroup . blk:TodoItem sem:group c:DocumentsGroup . blk:Toggle sem:group c:DocumentsGroup . blk:Callout sem:group c:DocumentsGroup .
+blk:Divider sem:group c:DocumentsGroup . blk:Code sem:group c:DocumentsGroup . blk:Math sem:group c:DocumentsGroup . blk:Table sem:group c:DocumentsGroup .
+blk:Row sem:group c:DocumentsGroup . blk:Cell sem:group c:DocumentsGroup . blk:Columns sem:group c:DocumentsGroup . blk:Column sem:group c:DocumentsGroup .
+blk:Image sem:group c:DocumentsGroup . blk:File sem:group c:DocumentsGroup . blk:Bookmark sem:group c:DocumentsGroup . blk:Embed sem:group c:DocumentsGroup .
+blk:Linked sem:group c:DocumentsGroup . blk:DocumentLink sem:group c:DocumentsGroup . blk:Contents sem:group c:DocumentsGroup . blk:Mark sem:group c:DocumentsGroup .
+blk:Strong sem:group c:DocumentsGroup . blk:Emphasis sem:group c:DocumentsGroup . blk:Strike sem:group c:DocumentsGroup . blk:InlineCode sem:group c:DocumentsGroup .
+blk:Link sem:group c:DocumentsGroup . blk:Mention sem:group c:DocumentsGroup .
+c:TextEdit sem:group c:DocumentsGroup . c:InsertText sem:group c:DocumentsGroup . c:DeleteText sem:group c:DocumentsGroup . c:SplitBlock sem:group c:DocumentsGroup .
+c:HistoryStep sem:group c:DocumentsGroup . c:FormatText sem:group c:DocumentsGroup . c:BlockEditorKey sem:group c:DocumentsGroup . c:BlockSelect sem:group c:DocumentsGroup . c:BlockCopy sem:group c:DocumentsGroup . c:BlockCut sem:group c:DocumentsGroup .
+blk:Shortcut sem:group c:DocumentsGroup . blk:BlockShortcut sem:group c:DocumentsGroup . blk:InlineShortcut sem:group c:DocumentsGroup .
+c:BlockMenuKey sem:group c:DocumentsGroup .
+c:BlockStructureKey sem:group c:DocumentsGroup .
+c:BlockHandleKey sem:group c:DocumentsGroup . c:BlockHandleMenuKey sem:group c:DocumentsGroup . c:BlockDuplicateKey sem:group c:DocumentsGroup .
+blk:Conversion sem:group c:DocumentsGroup .
+blk:PlainTextBlock sem:group c:DocumentsGroup .
+blk:Typeset sem:group c:DocumentsGroup .
+c:BlockLinkKey sem:group c:DocumentsGroup .
+blk:Addressed sem:group c:DocumentsGroup .
+blk:TableAction sem:group c:DocumentsGroup .
+blk:Uploadable sem:group c:DocumentsGroup .

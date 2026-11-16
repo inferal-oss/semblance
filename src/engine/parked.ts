@@ -9,6 +9,7 @@ export class Parked<R> {
   /** owning focus -> rule -> keys. */
   private readonly byFocus = new Map<string, Map<R, Set<string>>>()
   private readonly rank = new Map<R, number>()
+  private ranks = 0
   private seq = 0
   private count = 0
 
@@ -20,7 +21,7 @@ export class Parked<R> {
 
   add(rule: R, key: string): void {
     let keys = this.byRule.get(rule)
-    if (!keys) this.byRule.set(rule, (keys = new Map())), this.rank.set(rule, this.rank.size)
+    if (!keys) this.byRule.set(rule, (keys = new Map())), this.rank.set(rule, this.ranks++)
     if (keys.has(key)) return
     keys.set(key, this.seq++)
     this.count++
@@ -42,6 +43,13 @@ export class Parked<R> {
     if (!own.size) rules.delete(rule)
     if (!rules.size) this.byFocus.delete(owner)
     return true
+  }
+
+  /** Forget every pair of a rule. */
+  dropRule(rule: R): void {
+    for (const key of [...(this.byRule.get(rule)?.keys() ?? [])]) this.delete(rule, key)
+    this.byRule.delete(rule)
+    this.rank.delete(rule)
   }
 
   hasFocus(owner: string): boolean {

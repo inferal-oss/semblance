@@ -22,7 +22,16 @@ examples, each with a Markdown page of the site's own text projection (generated
 **Use it:** [Getting started](docs/GETTING-STARTED.md) builds a small app with a component of its
 own; [Building components](docs/COMPONENTS.md) covers rules, reactions, layers and integrating
 with your app; [AGENTS.md](AGENTS.md) has the ground rules for working on the framework. The npm
-package will be `@inferal-oss/semblance` (not published yet).
+package is `@semblance-dev/semblance` (`npm install @semblance-dev/semblance`), with
+`@semblance-dev/semblance-react` for React, and its engine's two builds in packages of their own
+(`@semblance-dev/rdf-engine-wat`, installed with it, and `@semblance-dev/rdf-engine-rust`, optional);
+[CHANGELOG.md](CHANGELOG.md) has the versions and
+[docs/RELEASING.md](docs/RELEASING.md) how they are made.
+
+**Only the views:** [Views without the framework](docs/VIEWS.md) is a smaller first step for an app
+with a UI kit of its own. `@semblance-dev/semblance/views` is a store and SPARQL views over your data,
+kept current by deltas, with no ontology and no renderer, and `useRows` / `useView` read them in
+React.
 
 ```bash
 npm install
@@ -72,7 +81,10 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   A single-item update re-runs exactly one rule.
 - **Demand.** A projection has mount roots; foci that are not shown under them
   (hidden tabs, the page you are not on, the unflipped back of a card) are parked,
-  not evaluated. Showing them resumes their parked work. In idle time the host
+  not evaluated. Showing them resumes their parked work. A switch's hidden cases
+  also leave the document, their rendering kept in the graph and their elements
+  set aside (`c:caseRetention`), so a long visit leaves a document of what is
+  shown and a click costs the same after it as on arrival. In idle time the host
   warms hidden views a slice at a time (`Runtime.warm`), so navigation finds them
   ready and an interaction never pays for them.
 - **Member-wise rules** (`sem:forEach <property>`) evaluate once per
@@ -106,13 +118,13 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   `prov:wasInfluencedBy` → activity → `prov:hadPlan` → the rule.
 - **Source**: `c:Flippable` turns any component over to show the rules that
   made it (found through its PROV-O trail, syntax-colored).
-- **Tooltip**: ontological tooltips from `sem:tooltip` annotations.
+- **Tooltip**: ontological tooltips from `sem:tooltip` annotations, shown in the top layer so nothing clips them.
 - **Validation**: fields point at SHACL property shapes (`val:validates`); the
   layer derives `c:error`, which fields already render, and disables buttons
   whose `val:requires` fields are invalid.
 - **Dependency**: views that depend on another view's value. A component follows a
   value (`dep:follows` a node, `dep:property` of it) and takes the properties of the profile
-  that value selects - carried by the value itself (`dep:takes`: a country's `co:postalField`)
+  that value selects - carried by the value itself (`dep:takes`: a country's `ck:postalField`)
   or listed by the component (`dep:case`), else `dep:otherwise` - before validation and the
   components run, so a field's label, placeholder, SHACL shape, options, `c:disabled` or
   `c:hidden` follow it. Choosing a value also applies its `dep:defaults` (a country's
@@ -180,6 +192,16 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   back as events. A host effect (`src/foreign.ts`) mounts each through the adapter of its kind (custom
   element, widget, or one an app registers), loads its code on demand, pushes only changed inputs and
   suppresses echoes. See [docs/FOREIGN.md](docs/FOREIGN.md).
+- **Hosted components** (`ext:Hosted`): an existing component library draws Semblance's components.
+  A class bound to a host component (`ext:component "Button"`) keeps its renderings; a renderer
+  adapter given to the DOM patcher, the HTML serializer and server rendering draws its root, its props
+  and its projected children with the library, nested components in one tree.
+  `@semblance-dev/semblance-react` (`packages/react/`) is the React adapter. See [docs/HOSTED.md](docs/HOSTED.md).
+- **Safe authoring** (`safe:`): a graph from someone you do not trust (a person, a page, a model)
+  renders under a policy that is vocabulary: elements, attributes, URL schemes and CSS from allow-lists,
+  checked where the HTML index takes a rendering, so the DOM, server-rendered HTML and text agree; what
+  is refused is reported. The live example editors run in it. [docs/SAFETY.md](docs/SAFETY.md) and the site's
+  [Safe authoring](https://semblance.dev/docs/safety/) docs cover how it works, extending the policy, and a Content Security Policy to go with it.
 - **Network capture**: a host effect (`src/network.ts`) records the page's own
   fetches, WebSockets and the events and spans it reports as members of
   `net:Capture`, a bounded LDES in the network graph
@@ -188,6 +210,12 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   this device, the browser database) and whether; a host effect restores them
   before the first render and writes them back; `per:StateLog` records every
   write and restore. See [PERSISTENCE.md](PERSISTENCE.md).
+- **Remote stores** (`src:`): a graph can live in a triple store behind a server. A `src:Source` says
+  which part a page needs (patterns); the host says where the store is. A host effect (`src/remote.ts`)
+  loads that part, follows the store's changes as ordinary input deltas and sends the page's changes
+  back as compare-and-set writes; a refused write is repaired from the store. Its state is graph data
+  and events, its history `src:SyncLog`. A small protocol (server-sent events and JSON) and a reference
+  server (`src/node/source-server.ts`). See [docs/REMOTE.md](docs/REMOTE.md).
 - **Navigation**: where we are is graph data. A `nav:Location` groups the
   dimensions of one app (`nav:Dimension`: a node's property, e.g. the page or the
   docs section), each saying where it is carried (the address's fragment or
@@ -228,6 +256,11 @@ the component set. The demo's **Components** page shows all of it.
   else the panel. A menu or popover marks `data-sem-takes-focus` instead: its
   popup while open (the first item), its trigger once closed. The host does
   none of this.
+- A text field the bus or the renderer focuses has its caret after its text, not
+  before it, where a browser leaves a field it has not edited. A field marked
+  `data-sem-select-on-focus` (a sheet's cell) holds a value typing replaces: its
+  text is selected however it is entered, a click as Tab, and a press in it while
+  it has the focus places the caret.
 - Each event, with the size of the change it caused, becomes an immutable
   member of the `beh:ChangeLog` `ldes:EventStream` (timestamp and sequence
   paths, a SHACL shape, a `tree:view`). The stream names its newest member
@@ -241,8 +274,8 @@ the component set. The demo's **Components** page shows all of it.
   rule aggregates that stream.
 
 ### Components
-About 140 component classes in eleven groups (layout, type, actions, inputs,
-feedback, data, navigation, overlays, disclosure, windows, inspection), each
+About 140 component classes in twelve groups (layout, type, actions, inputs,
+feedback, data, navigation, overlays, disclosure, windows, inspection, documents), each
 class with its mixins and parts in one group (`sem:group`,
 `ontology/components/groups.ttl`). The parts an in-app inspector is made of are
 general and live in their groups - a data grid with a time axis and filters, a
@@ -360,7 +393,7 @@ unpurged deletions and how the hybrid store works around them.
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
 | `ontology/domain/` | domain vocabularies the demo views (network activity) |
-| `ontology/vendor/` | RDF/HTML vocabulary snapshot (`npm run gen:vocab` regenerates `src/vocab`) |
+| `ontology/vendor/` | RDF/HTML vocabulary snapshot (`npm run gen:vocab` regenerates `src/vocab`); DoCo and the Pattern Ontology (CC BY 4.0, `SPAR-LICENSE.md`) |
 | `src/engine/` | rule registry and incremental engine |
 | `src/render/` | HtmlIndex, ordering, DOM patcher, serializers |
 | `src/behaviour/` | event bus (LDES), reaction functions |
@@ -379,3 +412,6 @@ Semblance is dual-licensed under either the [Apache License, Version 2.0](LICENS
 [MIT License](LICENSE-MIT), at your option (SPDX: `MIT OR Apache-2.0`). Unless you explicitly
 state otherwise, any contribution you submit for inclusion is dual-licensed as above, without any
 additional terms or conditions.
+
+Third-party components, such as the vendored vocabularies in `ontology/vendor/`, keep their own
+licences.

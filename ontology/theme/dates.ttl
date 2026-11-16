@@ -327,7 +327,7 @@
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
 [] a sty:StyleRule ; sty:appliesTo c:MonthGrid ;
     sty:part ".sem-mg-day[data-outside]" ;
-    sty:declares [ sty:property "color" ; sty:token tok:faint ] .
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:MonthGrid ;
     sty:part ".sem-mg-day[aria-current=date]" ;
     sty:declares [ sty:property "color" ; sty:token tok:accent-strong ] ,
@@ -411,7 +411,7 @@
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part ":is([data-sem-c=month-grid] td[aria-selected=true] > .sem-mg-day, [data-sem-c=time-field] > .sem-time-list > li[aria-selected=true]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
     sty:part ":is(:is([data-sem-c=date-field], [data-sem-c=date-range-field]) > .sem-date-row, [data-sem-c=time-field] > .sem-time-row):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
@@ -511,5 +511,5 @@
 [] a sty:StyleRule ; sty:when sty:Fluent ;
     sty:part ":is([data-sem-c=month-grid] td[aria-selected=true] > .sem-mg-day, [data-sem-c=time-field] > .sem-time-list > li[aria-selected=true]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .

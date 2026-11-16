@@ -64,9 +64,24 @@ pub enum Pattern {
     Values(Vec<Var>, Vec<Vec<u32>>),
     Lateral(Box<Pattern>, Box<Pattern>),
     Sub(Box<Select>),
-    Service(bool),
+    Service(Box<Service>),
     /// A magic relation (EXTENSIONS.md): evaluated per row once its inputs are bound.
     Magic(Box<Magic>),
+}
+
+/// `SERVICE [SILENT] endpoint { pattern }` (ABI.md, "Optional: fetching").
+#[derive(Clone)]
+pub struct Service {
+    pub silent: bool,
+    pub endpoint: Tv,
+    /// A variable endpoint is in scope before SERVICE in its group (as BIND's scope counts it):
+    /// its value comes from there. Otherwise only a bound parameter (`bind`) gives it one.
+    pub local: bool,
+    /// The query sent for it: its prologue, then `SELECT * WHERE` and the pattern as written.
+    pub text: Vec<u8>,
+    /// The pattern's in-scope variables (those `SELECT *` returns), and their names.
+    pub vars: Vec<Var>,
+    pub names: Vec<Vec<u8>>,
 }
 
 /// `(inputs) rel (outputs)`.
@@ -184,6 +199,8 @@ pub struct Query {
     pub from: Vec<u32>,
     pub from_named: Vec<u32>,
     pub base: Vec<u8>,
+    /// It has a SERVICE pattern (which a compiled module does not run).
+    pub service: bool,
 }
 
 impl Query {
@@ -218,6 +235,9 @@ pub fn execute(q: &Query, dict: &mut crate::dict::Dict, store: &crate::store::St
         sub[v as usize] = id;
     }
     let mut ctx = Ctx::new(dict, store, default, named, &q.base, nvars);
+    if q.service {
+        ctx.params = sub.clone();
+    }
     let rows = ctx.select(&q.select, &sub, Active::Default);
     match q.form {
         Form::Select => {
@@ -328,7 +348,7 @@ pub type QuadTemplate = [Tt; 4];
 pub enum UpdateOp {
     Data { insert: bool, quads: Vec<QuadTemplate>, bnodes: u32 },
     Modify { delete: Vec<QuadTemplate>, insert: Vec<QuadTemplate>, bnodes: u32, with: Option<u32>, using: Option<(Vec<u32>, Vec<u32>)>, select: Select, nvars: usize },
-    Load { silent: bool },
+    Load { silent: bool, iri: u32, graph: u32 },
     Clear { target: Target },
     Create { silent: bool, graph: u32 },
     Transfer { op: Transfer, from: u32, to: u32 },
@@ -395,7 +415,8 @@ pub fn query_terms(q: &Query, f: &mut dyn FnMut(u32)) {
     }
     fn pattern(p: &Pattern, f: &mut dyn FnMut(u32)) {
         match p {
-            Pattern::Unit | Pattern::Service(_) => {}
+            Pattern::Unit => {}
+            Pattern::Service(sv) => tv(&sv.endpoint, f),
             Pattern::Bgp(ts) => ts.iter().for_each(|t| {
                 [&t.s, &t.p, &t.o].iter().for_each(|x| tv(x, f));
                 if let Some(p) = &t.path {

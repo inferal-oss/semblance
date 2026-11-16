@@ -4,6 +4,7 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, MOD, NS, SEM, STY, XSD_BOOLEAN } from '../ns.ts'
+import { numberText } from '../rdf.ts'
 import { RDFS_LABEL, named, str, picked } from './util.ts'
 
 const S = {
@@ -15,6 +16,7 @@ const S = {
   selectedCell: NS.c + 'selectedCell',
   selectionEnd: NS.c + 'selectionEnd',
   selects: NS.c + 'selects',
+  valueOnEntry: NS.c + 'valueOnEntry',
   recalculated: NS.c + 'recalculated',
   tick: NS.c + 'recalculationTick',
   valueQuery: NS.c + 'valueQuery',
@@ -86,11 +88,13 @@ const cell: FnRule = (ctx, focus) => {
   if (!Number.isFinite(r) || !Number.isFinite(c)) return []
   const o = ctx.out(focus)
   const formula = !!ctx.object(focus, S.valueQuery)
-  const v = str(ctx.object(focus, C.value))
+  const held = ctx.object(focus, C.value)
+  const v = held && numberText(held)
   const content = formula
     ? o.el('content', 'Output', {}, v === undefined ? [] : [o.text('content-text', v)])
     : o.el('content', 'Input', { type: 'text', value: v })
   o.attr(content, 'aria-label', nameOf(r, c))
+  if (!formula) o.attr(content, 'data-sem-select-on-focus', '')
   const root = o.el('root', 'Div', { class: 'sem-cell', style: `grid-row: ${r + 1}; grid-column: ${c + 1}`, 'data-sem-kind': formula ? 'formula' : 'value' }, [content])
   if (v !== undefined && NUMBER.test(v)) o.attr(root, 'data-sem-numeric', 'true')
   o.renders(root)
@@ -149,7 +153,8 @@ const focusRule: FnRule = (ctx, focus) => {
   // The formula bar.
   let bar = 'Select a cell to see its formula, what it reads and what reads it.'
   if (sel) {
-    const value = str(ctx.object(sel, C.value))
+    const held = ctx.object(sel, C.value)
+    const value = held && numberText(held)
     const text = str(ctx.object(sel, S.formulaText))
     bar = `${nameOf(int(ctx, sel, S.row), int(ctx, sel, S.column))}  ${text !== undefined ? `${text}  →  ${value ?? '…'}` : (value ?? '')}`
   }
@@ -165,7 +170,7 @@ const focusRule: FnRule = (ctx, focus) => {
     const rs = range.map((p) => p.r)
     const cs = range.map((p) => p.c)
     const [r0, r1, c0, c1] = [Math.min(...rs), Math.max(...rs), Math.min(...cs), Math.max(...cs)]
-    const values = range.flatMap(({ x }) => ctx.objects(x, C.value).map((v) => v.value))
+    const values = range.flatMap(({ x }) => ctx.objects(x, C.value).map(numberText))
     const numbers = values.filter((v) => NUMBER.test(v)).map(decimal)
     const sum = numbers.reduce((a, b) => a + b, 0n)
     const stats = numbers.length ? `  ·  Sum ${printed(sum)}  ·  Average ${printed(hundredths(sum, BigInt(numbers.length)))}` : ''
@@ -288,6 +293,20 @@ const edit: ReactionFn = (ctx) => {
   const v = ctx.object(ctx.event, NS.beh + 'value')?.value
   const add: Quad[] = v !== undefined && v !== '' ? [f.quad(ctx.target, f.namedNode(C.value), NUMBER.test(v) ? f.literal(v, f.namedNode(NS.xsd + 'decimal')) : f.literal(v))] : []
   return { remove: own(ctx, ctx.target, C.value), add }
+}
+
+/** What a value cell holds now is what Escape puts back. */
+const remember: ReactionFn = (ctx) => {
+  const f = ctx.runtime.store.factory
+  const add = ctx.object(ctx.target, S.valueQuery) ? [] : own(ctx, ctx.target, C.value).map((q) => f.quad(ctx.target, f.namedNode(S.valueOnEntry), q.object))
+  return { remove: own(ctx, ctx.target, S.valueOnEntry), add }
+}
+
+/** Escape: a value cell holds what it kept (nothing, when it kept nothing). */
+const restore: ReactionFn = (ctx) => {
+  if (ctx.object(ctx.target, S.valueQuery)) return { add: [], remove: [] }
+  const f = ctx.runtime.store.factory
+  return { remove: own(ctx, ctx.target, C.value), add: own(ctx, ctx.target, S.valueOnEntry).map((q) => f.quad(ctx.target, f.namedNode(C.value), q.object)) }
 }
 
 /** Whether Shift was held (beh:modifiers). */
@@ -414,4 +433,4 @@ const addColumn: ReactionFn = (ctx) => {
   return { add, remove: had }
 }
 
-export const reactions: Record<string, ReactionFn> = { 'sheet:edit': edit, 'sheet:select': select, 'sheet:extend': extend, 'sheet:extend-by-key': extendByKey, 'sheet:enter-formula': enterFormula, 'sheet:add-row': addRow, 'sheet:add-column': addColumn }
+export const reactions: Record<string, ReactionFn> = { 'sheet:edit': edit, 'sheet:remember': remember, 'sheet:restore': restore, 'sheet:select': select, 'sheet:extend': extend, 'sheet:extend-by-key': extendByKey, 'sheet:enter-formula': enterFormula, 'sheet:add-row': addRow, 'sheet:add-column': addColumn }

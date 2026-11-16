@@ -74,6 +74,8 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $values))))
     (local.set $q (i32.load offset=240 (local.get $q)))
     (br $queries))))
+  ;; what Jelly readers and writers hold
+  (call $jelly_mark)
   ;; graphs made by CREATE
   (if (global.get $made_graphs) (then
     (local.set $i (i32.const 0))

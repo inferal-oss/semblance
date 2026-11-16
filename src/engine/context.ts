@@ -31,6 +31,8 @@ export interface RuleContext {
    */
   rows(view: Term, query?: string): Map<string, Term>[]
   readonly sparql: boolean
+  /** The time zone the store's sx:formatDateTime uses when its options name none (undefined: the host's). */
+  readonly timeZone?: string
   /**
    * When set (by the engine, around one function-rule evaluation), every
    * pattern read is recorded as subject -> predicates ('*' = any predicate).
@@ -42,14 +44,24 @@ export interface RuleContext {
    */
   queryReads?: ReadPattern[]
   /**
+   * Set with `trace` (to false): whether the rule read something the trace does not record - in
+   * `untraced`, by a pattern with no IRI subject, or by a query it does not follow. A rule whose
+   * reads were all traced is re-run by them alone, not by what it declares it follows.
+   */
+  opaque?: boolean
+  /**
    * Run `read` without recording its reads: the rule is not re-run when what it
    * read there changes (for snapshots, such as a view's source on its back side).
    */
   untraced<T>(read: () => T): T
   /** Record that what is being computed depends on the viewer's languages (see util.text). */
   readsLanguage(): void
-  /** The viewer's languages, most preferred first (the localization layer sets them). */
-  languages: string[]
+  /**
+   * The viewer's languages, most preferred first (the localization layer sets them). Reading
+   * them is a read of the language (readsLanguage): a rule that returns early because there are
+   * none is re-run when the viewer gets one (#259).
+   */
+  readonly languages: string[]
   /** Per-engine memo, e.g. for ontology lookups that never change during a run. */
   memo<T>(key: string, compute: () => T): T
   out(focus: NamedNode): Out
@@ -90,6 +102,26 @@ export function languageChain(languages: readonly string[]): string[] {
   return out
 }
 
+/**
+ * The locale numbers (and other Intl formats) are written in for these languages (a
+ * languageChain): the first that Intl knows, else en-US. The engine states it on the viewer
+ * (l10n:formatLocale) for SPARQL rules to pass to sx:formatNumber; function rules call this.
+ */
+export function formatLocale(languages: readonly string[]): string {
+  const key = languages.join(',')
+  let tag = formatLocales.get(key)
+  if (tag === undefined) {
+    try {
+      tag = Intl.NumberFormat.supportedLocalesOf([...languages])[0] ?? 'en-US'
+    } catch {
+      tag = 'en-US'
+    }
+    formatLocales.set(key, tag)
+  }
+  return tag
+}
+const formatLocales = new Map<string, string>()
+
 /** `graphs` is the rule's view: input graphs, then the engine's derived graph (last). */
 export function createContext(store: GraphStore, graphs: Quad_Graph[], modality: string, languages: string[] = []): RuleContext {
   const graph = graphs[graphs.length - 1] as NamedNode
@@ -116,7 +148,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
         let preds = trace.get(subject)
         if (!preds) trace.set(subject, (preds = new Set()))
         preds.add(p === null ? '*' : typeof p === 'string' ? p : p.value)
-      }
+      } else ctx.opaque = true
     }
     const [ts, tp, to] = [term(s), term(p), term(o)]
     // With a subject, and where a lookup across graphs costs what one in a graph does
@@ -141,12 +173,17 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
   }
   const followed = (text: string, opts: QueryOptions | undefined) => {
     if (opts?.follow && ctx.queryReads) ctx.queryReads.push(...(queryReads(text) ?? [{}]))
+    else if (ctx.trace) ctx.opaque = true
     return text
   }
+  const chain = languageChain(languages)
   const ctx: RuleContext = {
     f,
     modality,
-    languages: languageChain(languages),
+    get languages() {
+      ctx.readsLanguage()
+      return chain
+    },
     nn,
     match,
     object: (s, p) => match(s, p, null)[0]?.object,
@@ -156,6 +193,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     },
     untraced<T>(read: () => T): T {
       const { trace, queryReads } = ctx
+      if (trace) ctx.opaque = true
       ctx.trace = ctx.queryReads = undefined
       try {
         return read()
@@ -170,6 +208,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     },
     out: (focus) => new Out(ctx, focus, graph),
     sparql: store.sparql,
+    timeZone: store.timeZone,
     rows: (view, query) => maintainedRows(ctx, view) ?? (query && store.sparql ? ctx.select(query) : []),
     select: (query, opts) => store.select(followed(prefixes() + '\n' + query, opts), graphs),
     construct: (query, opts) => store.construct(followed(prefixes() + '\n' + query, opts), graphs),

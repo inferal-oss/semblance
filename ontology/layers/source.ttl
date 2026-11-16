@@ -1,0 +1,101 @@
+@prefix src: <https://semblance.dev/ns/source#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix st: <https://semblance.dev/ns/status#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix tree: <https://w3id.org/tree#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Remote sources (docs/REMOTE.md). Part of an app's graph can live in a store elsewhere: a
+# triple store behind a server. A source says which part (patterns), the remote-sources effect
+# (src/remote.ts) loads it, follows the store's changes as ordinary input changes and sends the
+# page's changes to it back as writes. The graph never names an endpoint or credentials: the host
+# maps each source to its endpoint, and a source it does not map stays src:Unbound.
+#
+#   ex:stock a src:Source ;
+#       src:pattern [ src:class ex:Item ] , [ src:predicate ex:location ] ;
+#       src:writable true .
+#   ex:list src:awaits ex:stock .        # st:busy while the source loads or reconnects
+#
+# What the effect knows about each source is graph data in urn:semblance:sources (src:state,
+# src:cursor, src:pending, src:attempts, src:lastError), and what happens - snapshots, changes
+# received, writes and their outcome - is a bounded LDES, src:SyncLog. What a page should do
+# about it is reactions to its events: src:WentLive, src:Lost, src:WriteRefused.
+
+<https://semblance.dev/ns/source> a owl:Ontology ;
+    rdfs:label "Semblance remote sources"@en .
+
+src:Source a owl:Class ;
+    rdfs:comment "Part of the graph that lives in a store elsewhere: its src:pattern statements are loaded from the store, follow its changes and, when src:writable, go back to it."@en .
+
+src:pattern a owl:ObjectProperty ; rdfs:domain src:Source ; rdfs:range src:Pattern ;
+    rdfs:comment "What the source covers: the union of its patterns."@en .
+src:Pattern a owl:Class ;
+    rdfs:comment "A triple pattern (any of src:subject, src:predicate, src:object; an omitted one matches anything), or src:class: every statement whose subject is an instance of the class."@en .
+src:subject a owl:ObjectProperty ; rdfs:domain src:Pattern .
+src:predicate a owl:ObjectProperty ; rdfs:domain src:Pattern ; rdfs:range rdf:Property .
+src:object a owl:ObjectProperty ; rdfs:domain src:Pattern .
+src:class a owl:ObjectProperty ; rdfs:domain src:Pattern ; rdfs:range rdfs:Class .
+
+src:graph a owl:ObjectProperty ; rdfs:domain src:Source ;
+    rdfs:comment "The named graph the source's statements land in (default: the default input graph, where components read)."@en .
+src:writable a owl:DatatypeProperty ; rdfs:domain src:Source ; rdfs:range xsd:boolean ;
+    rdfs:comment "The page's changes to the source's statements are written to the store (default false: they stay in the page)."@en .
+src:awaits a owl:ObjectProperty ; rdfs:range src:Source ;
+    rdfs:comment "On a component: it is st:busy while the source loads or reconnects."@en .
+
+# --- what the effect reports (urn:semblance:sources) ---------------------------------------------
+
+src:state a owl:ObjectProperty ; rdfs:domain src:Source ; rdfs:range src:State .
+src:State a owl:Class .
+src:Unbound a src:State ; rdfs:comment "The host gave the source no endpoint."@en .
+src:Loading a src:State ; rdfs:comment "Waiting for the first snapshot."@en .
+src:Live a src:State ; rdfs:comment "Following the store."@en .
+src:Reconnecting a src:State ; rdfs:comment "The connection broke; trying again (src:attempts, src:lastError)."@en .
+src:cursor a owl:DatatypeProperty ; rdfs:domain src:Source ; rdfs:range xsd:integer ;
+    rdfs:comment "The store's step the page has followed up to."@en .
+src:pending a owl:DatatypeProperty ; rdfs:domain src:Source ; rdfs:range xsd:integer ;
+    rdfs:comment "Writes sent or waiting, not yet answered."@en .
+src:attempts a owl:DatatypeProperty ; rdfs:domain src:Source ; rdfs:range xsd:integer .
+src:lastError a owl:DatatypeProperty ; rdfs:domain src:Source .
+
+# --- the sync log: an LDES of what came from the store and what went to it -----------------------
+
+src:SyncLog a ldes:EventStream ;
+    rdfs:label "A source's snapshots, changes received and writes"@en ;
+    ldes:timestampPath prov:generatedAtTime ;
+    tree:view src:SyncLogView .
+src:SyncLogView a tree:Node ; ldes:retentionPolicy [ a beh:LatestMembersPolicy ; ldes:amount 100 ] .
+src:Snapshot a owl:Class ; rdfs:comment "The source's part of the store was loaded (src:reset: in place of what the page held)."@en .
+src:Received a owl:Class ; rdfs:comment "A change from the store was applied."@en .
+src:Write a owl:Class ; rdfs:comment "The page's change was sent to the store (prov:wasInformedBy the change-log member of the event that made it)."@en .
+src:Confirmed a owl:Class ; rdfs:comment "The store took a write (src:of), at src:cursor."@en .
+src:Refused a owl:Class ; rdfs:comment "The store refused a write (src:of) for src:reason; what it holds was put back."@en .
+src:source a owl:ObjectProperty ; rdfs:range src:Source .
+src:of a owl:ObjectProperty ; rdfs:range src:Write .
+src:added a owl:DatatypeProperty ; rdfs:range xsd:integer .
+src:removed a owl:DatatypeProperty ; rdfs:range xsd:integer .
+src:reset a owl:DatatypeProperty ; rdfs:range xsd:boolean .
+src:reason a owl:DatatypeProperty ; rdfs:comment "Why the store refused a write: \"stale\" (it was made from a state changed since) or the store's own reason."@en .
+
+# --- events, targeted at the source -------------------------------------------------------------
+
+src:WentLive a owl:Class ; rdfs:subClassOf beh:Event ; beh:recorded false ;
+    rdfs:comment "The source is following the store (after loading or reconnecting)."@en .
+src:Lost a owl:Class ; rdfs:subClassOf beh:Event ; beh:recorded false ;
+    rdfs:comment "The connection to the store broke (src:lastError on the event); the effect tries again."@en .
+src:WriteRefused a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:comment "The store refused a write; src:reason on the event says why. The page already shows what the store holds."@en .
+
+# --- shape ---------------------------------------------------------------------------------------
+
+src:SourceShape a sh:NodeShape ;
+    sh:targetClass src:Source ;
+    sh:property [ sh:path src:pattern ; sh:minCount 1 ] ,
+                [ sh:path src:writable ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path src:graph ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .

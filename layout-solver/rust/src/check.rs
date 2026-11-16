@@ -6,6 +6,7 @@ const SAME_TOP: i32 = 3;
 const SAME_BOTTOM: i32 = 4;
 const SAME_START: i32 = 5;
 const FITS_WITHIN: i32 = 7;
+const NO_OVERLAP: i32 = 8;
 
 #[inline]
 fn top(b: &[f64], i: usize) -> f64 {
@@ -56,6 +57,24 @@ pub fn check(boxes: &[f64], program: &[i32], out: &mut Vec<f64>) {
             }
             if hi - lo > tolerance {
                 out.extend_from_slice(&[inv as f64, worst as f64, hi - lo]);
+            }
+        } else if rel == NO_OVERLAP {
+            // no member overlaps another: each by the most it overlaps one (the overlap's smaller extent)
+            for k in 0..n {
+                let i = members[k] as usize;
+                let mut over: f64 = 0.0;
+                for (j, &o) in members.iter().enumerate() {
+                    if j == k {
+                        continue;
+                    }
+                    let o = o as usize;
+                    let across = end(boxes, i).min(end(boxes, o)) - start(boxes, i).max(start(boxes, o));
+                    let down = bottom(boxes, i).min(bottom(boxes, o)) - top(boxes, i).max(top(boxes, o));
+                    over = over.max(across.min(down));
+                }
+                if over > tolerance {
+                    out.extend_from_slice(&[inv as f64, members[k] as f64, over]);
+                }
             }
         } else {
             let c = members[0] as usize;

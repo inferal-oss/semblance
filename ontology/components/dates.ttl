@@ -642,6 +642,7 @@ CONSTRUCT {
   ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?row .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?caption .
   ?row a rdfhtml:Div ; rdfhtml:class "sem-date-row" ; rdfhtml:id ?rowId ; rdfhtml:hasChild ?input , ?dash , ?endInput , ?opener ; ord:immediatelyPrecedes ?popup .
+  ?row lc:role lc:SingleLineControl . ?label lc:role lc:FieldLabel .
   ?input a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-date-input" ; rdfhtml:id ?inputId ; rdfhtml:value ?shown ;
          rdfhtml:placeholder ?placeholder ; rdfhtml:autocomplete "off" ; rdfhtml:spellcheck "false" ; rdfhtml:disabled ?disabled ;
          rdfhtml:attribute ?inputDescribed , ?inputInvalid ; ord:immediatelyPrecedes ?afterInput .
@@ -991,6 +992,7 @@ CONSTRUCT {
   ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?row .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?caption .
   ?row a rdfhtml:Div ; rdfhtml:class "sem-time-row" ; rdfhtml:hasChild ?input , ?opener ; ord:immediatelyPrecedes ?list .
+  ?row lc:role lc:SingleLineControl . ?label lc:role lc:FieldLabel .
   ?input a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-time-input" ; rdfhtml:id ?inputId ; rdfhtml:value ?shown ;
          rdfhtml:placeholder ?placeholder ; rdfhtml:autocomplete "off" ; rdfhtml:spellcheck "false" ; rdfhtml:disabled ?disabled ;
          rdfhtml:attribute ?roleAttr , ?autoAttr , ?controlsAttr , ?expandedAttr , ?activeAttr , ?describedAttr , ?invalidAttr , ?focusAttr ;

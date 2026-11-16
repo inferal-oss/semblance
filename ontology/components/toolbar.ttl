@@ -534,7 +534,7 @@ WHERE {
   { SELECT (COUNT(DISTINCT ?m) AS ?direct) WHERE {
       $this c:collection ?c ; c:memberProperty ?p . FILTER(?p != tree:member)
       ?c ?p ?m .
-      FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?k . ?m a/rdfs:subClassOf* ?k })
+      FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?k . ?m (a|a/rdfs:subClassOf+) ?k })
   } }
   BIND(IF(?via != tree:member, ?direct, IF(BOUND(?class), COALESCE(?ofClass, 0), COALESCE(?all, 0))) AS ?counted)
   BIND(STR(?counted) AS ?number)
@@ -571,7 +571,7 @@ WHERE {
   { SELECT (COUNT(DISTINCT ?m) AS ?direct) WHERE {
       $this c:collection ?c ; c:memberProperty ?p . FILTER(?p != tree:member)
       ?c ?p ?m .
-      FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?k . ?m a/rdfs:subClassOf* ?k })
+      FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?k . ?m (a|a/rdfs:subClassOf+) ?k })
   } }
   BIND(IF(?via != tree:member, ?direct, IF(BOUND(?class), COALESCE(?ofClass, 0), COALESCE(?all, 0))) AS ?counted)
   BIND(STR(?counted) AS ?number)

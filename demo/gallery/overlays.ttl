@@ -17,7 +17,7 @@
 
 ui:gallery-overlays a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-overlays-intro ui:ov-dialogs ui:ov-drawers ui:ov-popovers ui:ov-lightboxes ui:ov-palettes ) .
-ui:gallery-overlays-intro a c:Heading ; c:label "Overlays" .
+ui:gallery-overlays-intro a c:Heading ; c:label "Overlays" , "Накладки"@uk , "Overlays"@de , "الطبقات العائمة"@ar .
 
 # Dialogs and drawers are fixed to the viewport, so they live on the shell's desktop
 # (outside the gallery's flippable cards, whose 3D transforms would contain them).
@@ -42,7 +42,7 @@ ui:ov-confirm-delete a c:Button ; c:label "Delete" ; sty:tone sty:Danger ; sty:e
 ui:ov-open-dialog a c:Button ; c:label "Open dialog" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:ov-dialog .
 ui:ov-open-confirm a c:Button ; c:label "Delete todos…" ; sty:tone sty:Danger ; sty:emphasis sty:Soft ; c:opens ui:ov-confirm .
 ui:ov-dialogs a c:Flippable ; c:front ui:ov-dialogs-spec .
-ui:ov-dialogs-spec a c:Specimen ; c:demonstrates c:Dialog ; c:label "Dialog" ;
+ui:ov-dialogs-spec a c:Specimen ; c:demonstrates c:Dialog ; c:label "Dialog" , "Діалог"@uk , "Dialog"@de , "مربع حوار"@ar ;
     c:help "A modal panel over a scrim (role=dialog, aria-modal, labelled by its title). Its state is one fact, c:open: buttons that c:opens or c:closes it set it, and so do its ✕ and a click on the scrim. Closed, its content is not evaluated." ;
     c:children ( ui:ov-open-dialog ui:ov-open-confirm ) .
 
@@ -66,7 +66,7 @@ ui:ov-drawer-start a c:Drawer ; c:side "start" ; c:label "Outline" ;
 ui:ov-open-drawer-end a c:Button ; c:label "Open end drawer" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:ov-drawer-end .
 ui:ov-open-drawer-start a c:Button ; c:label "Open start drawer" ; sty:emphasis sty:Outline ; c:opens ui:ov-drawer-start .
 ui:ov-drawers a c:Flippable ; c:front ui:ov-drawers-spec .
-ui:ov-drawers-spec a c:Specimen ; c:demonstrates c:Drawer ; c:label "Drawer" ;
+ui:ov-drawers-spec a c:Specimen ; c:demonstrates c:Drawer ; c:label "Drawer" , "Висувна панель"@uk , "Schublade"@de , "درج جانبي"@ar ;
     c:help "A dialog attached to an edge (c:side start or end) that slides in on the motion tokens. Same contract as the dialog: c:open, c:opens / c:closes, ✕ and scrim." ;
     c:children ( ui:ov-open-drawer-end ui:ov-open-drawer-start ) .
 
@@ -82,7 +82,7 @@ ui:ov-pop-b2 a c:Badge ; c:label "style" ; sty:tone sty:Accent .
 ui:ov-pop-b3 a c:Badge ; c:label "source" ; sty:tone sty:Info .
 ui:ov-pop-small a c:Popover ; c:trigger "Small" ; sty:size sty:Small ; c:help "The trigger is sized by sty:size, like every control." .
 ui:ov-popovers a c:Flippable ; c:front ui:ov-popovers-spec .
-ui:ov-popovers-spec a c:Specimen ; c:demonstrates c:Popover ; c:label "Popover" ;
+ui:ov-popovers-spec a c:Specimen ; c:demonstrates c:Popover ; c:label "Popover" , "Спливна панель"@uk , "Popover"@de , "نافذة منبثقة"@ar ;
     c:help "Non-modal and anchored, so it can live inside the page (and inside this card). It shows c:help and c:content while c:open." ;
     c:children ( ui:ov-pop-info ui:ov-pop-status ui:ov-pop-small ) .
 
@@ -94,7 +94,7 @@ ui:ov-photos a c:Gallery ; c:label "Places" ; c:galleryLayout c:GridLayout ; c:l
     c:images ( ui:photo-lake ui:photo-lighthouse ui:photo-city ui:photo-harbour ) .
 ui:ov-lightbox a c:Lightbox ; c:of ui:ov-photos ; c:loops true ; c:thumbnails true ; c:offersOriginal true .
 ui:ov-lightboxes a c:Flippable ; c:front ui:ov-lightboxes-spec .
-ui:ov-lightboxes-spec a c:Specimen ; c:demonstrates c:Lightbox ; c:label "Lightbox" ;
+ui:ov-lightboxes-spec a c:Specimen ; c:demonstrates c:Lightbox ; c:label "Lightbox" , "Лайтбокс"@uk , "Lightbox"@de , "صندوق عرض الصور"@ar ;
     c:help "A modal viewer of a gallery's current image: ←/→ (mirrored right to left), a swipe, the thumbnails; Esc, ✕ or the scrim close it. Zoom with the button or a double-click. This one loops (c:loops) and links to the original (c:offersOriginal)." ;
     c:children ( ui:ov-photos ) .
 
@@ -124,6 +124,6 @@ ui:ov-pal-to-combobox c:paletteSection ui:ov-pal-section ; c:to ui:inp-typeahead
 ui:ov-open-palette a c:Button ; c:label "Open the gallery palette" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:ov-palette .
 ui:ov-pal-badge a c:Badge ; c:label "Not waved yet" ; sty:tone sty:Neutral .
 ui:ov-palettes a c:Flippable ; c:front ui:ov-palettes-spec .
-ui:ov-palettes-spec a c:Specimen ; c:demonstrates c:CommandPalette , c:PaletteSection ; c:label "Command palette" ;
+ui:ov-palettes-spec a c:Specimen ; c:demonstrates c:CommandPalette , c:PaletteSection ; c:label "Command palette" , "Палітра команд"@uk , "Befehlspalette"@de , "لوحة الأوامر"@ar ;
     c:help "A modal list of what one can do or go to, filtered as you type (a typeahead: the WAI-ARIA combobox over a listbox, in a dialog). It lists every key:Command, every component with a key:shortcut and every place of the app's location (c:lists), and the app's own c:entries, in sections (c:PaletteSection), the recently run first. ↓ ↑ move, Enter runs: a command gets its key:Press, a component its click, a place is gone to (c:to). A key:Command that c:opens it opens it - on this site ⌘K / Ctrl+K, anywhere - and the focus comes back where it was when it closes." ;
     c:children ( ui:ov-open-palette ui:ov-pal-badge ) .

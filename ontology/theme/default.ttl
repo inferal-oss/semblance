@@ -22,45 +22,45 @@ tok:measure-wide a sty:Token ; sty:scale sty:Measure ; sem:slug "measure-wide" ;
 
 # --- shape, type, motion ---------------------------------------------------------------
 
-tok:radius-card a sty:Token ; sty:scale sty:Radius ; sem:slug "radius-card" ; sty:value "18px" .
-tok:radius a sty:Token ; sty:scale sty:Radius ; sem:slug "radius" ; sty:value "12px" .
-tok:radius-control a sty:Token ; sty:scale sty:Radius ; sem:slug "radius-control" ; sty:value "10px" .
+tok:radius-card a sty:Token ; sty:scale sty:Radius ; sem:slug "radius-card" ; sty:value "6px" .
+tok:radius a sty:Token ; sty:scale sty:Radius ; sem:slug "radius" ; sty:value "6px" .
+tok:radius-control a sty:Token ; sty:scale sty:Radius ; sem:slug "radius-control" ; sty:value "6px" .
 
 tok:font a sty:Token ; sty:scale sty:Font ; sem:slug "font" ;
     sty:value "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" .
-tok:font-features a sty:Token ; sty:scale sty:Font ; sem:slug "font-features" ; sty:value "'cv11', 'ss01', 'ss03'" .
-tok:font-size a sty:Token ; sty:scale sty:Font ; sem:slug "font-size" ; sty:value "15px" .
+tok:font-features a sty:Token ; sty:scale sty:Font ; sem:slug "font-features" ; sty:value "'cv11', 'ss03', 'calt'" .
+tok:font-size a sty:Token ; sty:scale sty:Font ; sem:slug "font-size" ; sty:value "14px" .
 tok:font-size-small a sty:Token ; sty:scale sty:Font ; sem:slug "font-size-small" ; sty:value "13px" .
 tok:font-size-micro a sty:Token ; sty:scale sty:Font ; sem:slug "font-size-micro" ; sty:value "11px" .
-tok:font-size-title a sty:Token ; sty:scale sty:Font ; sem:slug "font-size-title" ; sty:value "28px" .
+tok:font-size-title a sty:Token ; sty:scale sty:Font ; sem:slug "font-size-title" ; sty:value "26px" .
 tok:font-size-metric a sty:Token ; sty:scale sty:Font ; sem:slug "font-size-metric" ; sty:value "26px" .
 tok:line-height a sty:Token ; sty:scale sty:Font ; sem:slug "line-height" ; sty:value "1.5" .
 
 tok:motion a sty:Token ; sem:slug "motion" ; sty:value "var(--sem-duration) var(--sem-ease)" .
 tok:shadow a sty:Token ; sem:slug "shadow" ;
-    sty:value "0 1px 2px light-dark(rgb(17 17 34 / 0.06), rgb(0 0 0 / 0.5))" .
+    sty:value "none" .
 tok:shadow-raised a sty:Token ; sem:slug "shadow-raised" ;
-    sty:value "0 1px 1px light-dark(rgb(17 17 34 / 0.04), rgb(0 0 0 / 0.4)), 0 12px 32px -12px light-dark(rgb(30 27 75 / 0.18), rgb(0 0 0 / 0.65))" .
+    sty:value "none" .
 tok:ring a sty:Token ; sem:slug "ring" ;
-    sty:value "0 0 0 4px color-mix(in oklab, var(--sem-accent) 22%, transparent)" .
+    sty:value "0 0 0 2px var(--sem-surface), 0 0 0 4px var(--sem-accent)" .
 
 # --- color ------------------------------------------------------------------------
 
-tok:surface a sty:Token ; sty:scale sty:Color ; sem:slug "surface" ; sty:value "light-dark(#ffffff, #17171c)" .
-tok:surface-sunken a sty:Token ; sty:scale sty:Color ; sem:slug "surface-sunken" ; sty:value "light-dark(#f6f6fa, #111116)" .
-tok:surface-hover a sty:Token ; sty:scale sty:Color ; sem:slug "surface-hover" ; sty:value "light-dark(#f4f4fb, #1f1f27)" .
-tok:text a sty:Token ; sty:scale sty:Color ; sem:slug "text" ; sty:value "light-dark(#16161d, #f2f2f7)" .
-tok:muted a sty:Token ; sty:scale sty:Color ; sem:slug "muted" ; sty:value "light-dark(#6b6b7b, #9898a8)" .
-tok:faint a sty:Token ; sty:scale sty:Color ; sem:slug "faint" ; sty:value "light-dark(#a3a3b2, #5d5d6c)" .
-tok:border a sty:Token ; sty:scale sty:Color ; sem:slug "border" ; sty:value "light-dark(#e8e8f0, #26262f)" .
-tok:border-strong a sty:Token ; sty:scale sty:Color ; sem:slug "border-strong" ; sty:value "light-dark(#d4d4e0, #3a3a46)" .
-tok:accent a sty:Token ; sty:scale sty:Color ; sem:slug "accent" ; sty:value "light-dark(#5b4cf0, #8f86ff)" .
-tok:accent-strong a sty:Token ; sty:scale sty:Color ; sem:slug "accent-strong" ; sty:value "light-dark(#4535d6, #a49dff)" .
+tok:surface a sty:Token ; sty:scale sty:Color ; sem:slug "surface" ; sty:value "light-dark(#ffffff, #16161c)" .
+tok:surface-sunken a sty:Token ; sty:scale sty:Color ; sem:slug "surface-sunken" ; sty:value "light-dark(#f6f6f9, #111116)" .
+tok:surface-hover a sty:Token ; sty:scale sty:Color ; sem:slug "surface-hover" ; sty:value "light-dark(#f2f2f7, #1d1d25)" .
+tok:text a sty:Token ; sty:scale sty:Color ; sem:slug "text" ; sty:value "light-dark(#141419, #ededf2)" .
+tok:muted a sty:Token ; sty:scale sty:Color ; sem:slug "muted" ; sty:value "light-dark(#5c5c6e, #a0a0b0)" .
+tok:faint a sty:Token ; sty:scale sty:Color ; sem:slug "faint" ; sty:value "light-dark(#80808f, #737385)" .
+tok:border a sty:Token ; sty:scale sty:Color ; sem:slug "border" ; sty:value "light-dark(#e3e3ea, #2a2a34)" .
+tok:border-strong a sty:Token ; sty:scale sty:Color ; sem:slug "border-strong" ; sty:value "light-dark(#cbcbd6, #3b3b48)" .
+tok:accent a sty:Token ; sty:scale sty:Color ; sem:slug "accent" ; sty:value "light-dark(#5447d2, #9d94ff)" .
+tok:accent-strong a sty:Token ; sty:scale sty:Color ; sem:slug "accent-strong" ; sty:value "light-dark(#4336b8, #b3abff)" .
 tok:accent-soft a sty:Token ; sty:scale sty:Color ; sem:slug "accent-soft" ;
-    sty:value "color-mix(in oklab, var(--sem-accent) 13%, transparent)" .
-tok:on-accent a sty:Token ; sty:scale sty:Color ; sem:slug "on-accent" ; sty:value "light-dark(#ffffff, #0e0b26)" .
-tok:danger a sty:Token ; sty:scale sty:Color ; sem:slug "danger" ; sty:value "light-dark(#e0344a, #ff7a8a)" .
-tok:success a sty:Token ; sty:scale sty:Color ; sem:slug "success" ; sty:value "light-dark(#12a37a, #4fd8a8)" .
+    sty:value "color-mix(in oklab, var(--sem-accent) 9%, transparent)" .
+tok:on-accent a sty:Token ; sty:scale sty:Color ; sem:slug "on-accent" ; sty:value "light-dark(#ffffff, #0f0c2a)" .
+tok:danger a sty:Token ; sty:scale sty:Color ; sem:slug "danger" ; sty:value "light-dark(#d12c45, #ff7a8a)" .
+tok:success a sty:Token ; sty:scale sty:Color ; sem:slug "success" ; sty:value "light-dark(#0b8763, #4fd8a8)" .
 
 # --- densities and elevations -------------------------------------------------------
 
@@ -71,8 +71,8 @@ sty:Compact a sty:Density ; sem:slug "compact" ;
                  [ sty:token tok:space-4 ; sty:value "11px" ] ,
                  [ sty:token tok:space-5 ; sty:value "16px" ] ,
                  [ sty:token tok:space-6 ; sty:value "20px" ] ,
-                 [ sty:token tok:font-size ; sty:value "13.5px" ] ,
-                 [ sty:token tok:control-height ; sty:value "32px" ] ,
+                 [ sty:token tok:font-size ; sty:value "13px" ] ,
+                 [ sty:token tok:control-height ; sty:value "28px" ] ,
                  [ sty:token tok:font-size-title ; sty:value "21px" ] .
 
 sty:Flat a sty:Elevation ; sem:slug "flat" .
@@ -81,7 +81,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow-raised ] ,
-                 [ sty:property "padding" ; sty:token tok:space-6 ] .
+                 [ sty:property "padding" ; sty:token tok:space-5 ] .
 
 # --- stack ------------------------------------------------------------------------
 
@@ -98,18 +98,18 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:Heading ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "font-size" ; sty:token tok:font-size-title ] ,
-                 [ sty:property "font-weight" ; sty:raw "700" ] ,
-                 [ sty:property "letter-spacing" ; sty:raw "-0.025em" ] ,
-                 [ sty:property "line-height" ; sty:raw "1.15" ] .
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "-0.02em" ] ,
+                 [ sty:property "line-height" ; sty:raw "1.2" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Heading ; sty:state "::after" ;
     sty:declares [ sty:property "content" ; sty:raw "''" ] ,
                  [ sty:property "display" ; sty:raw "block" ] ,
-                 [ sty:property "width" ; sty:raw "28px" ] ,
-                 [ sty:property "height" ; sty:raw "3px" ] ,
+                 [ sty:property "width" ; sty:raw "20px" ] ,
+                 [ sty:property "height" ; sty:raw "2px" ] ,
                  [ sty:property "margin-top" ; sty:token tok:space-3 ] ,
-                 [ sty:property "border-radius" ; sty:raw "3px" ] ,
-                 [ sty:property "background" ; sty:raw "linear-gradient(90deg, var(--sem-accent), color-mix(in oklab, var(--sem-accent) 30%, #ff7ac6))" ] .
+                 [ sty:property "border-radius" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:token tok:accent ] .
 
 # --- button -----------------------------------------------------------------------
 
@@ -145,13 +145,13 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Primary ;
-    sty:declares [ sty:property "background" ; sty:raw "linear-gradient(180deg, color-mix(in oklab, var(--sem-accent) 88%, white), var(--sem-accent))" ] ,
-                 [ sty:property "border-color" ; sty:token tok:accent-strong ] ,
+    sty:declares [ sty:property "background" ; sty:token tok:accent ] ,
+                 [ sty:property "border-color" ; sty:token tok:accent ] ,
                  [ sty:property "color" ; sty:token tok:on-accent ] ,
-                 [ sty:property "box-shadow" ; sty:raw "inset 0 1px 0 rgb(255 255 255 / 0.22), 0 6px 16px -6px color-mix(in oklab, var(--sem-accent) 70%, transparent)" ] .
+                 [ sty:property "box-shadow" ; sty:token tok:shadow ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Primary ; sty:state ":hover" ;
-    sty:declares [ sty:property "background" ; sty:raw "linear-gradient(180deg, var(--sem-accent), var(--sem-accent-strong))" ] ,
+    sty:declares [ sty:property "background" ; sty:token tok:accent-strong ] ,
                  [ sty:property "border-color" ; sty:token tok:accent-strong ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Secondary ;
@@ -170,6 +170,12 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
+
+# An action in a row of actions (a card's header, an alert, a toast, a dialog) is never wider than
+# the row: the row wraps first, and an action that alone is too wide wraps its label.
+[] a sty:StyleRule ; sty:part ".sem-actions > [data-sem-c]" ;
+    sty:declares [ sty:property "max-width" ; sty:raw "100%" ] ,
+                 [ sty:property "white-space" ; sty:raw "normal" ] .
 
 # --- form controls: they fit the space they are given ----------------------------------------
 # A text control's own minimum width comes from its default size (about 20 characters), and a
@@ -223,6 +229,33 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:part ":where(input)::-webkit-calendar-picker-indicator" ;
     sty:declares [ sty:property "margin-block" ; sty:raw "0" ] ,
                  [ sty:property "padding-block" ; sty:raw "0" ] .
+
+# --- one-axis size handles: a column's edge (a data grid's, a table block's) ---------------------
+# A separator to drag (or move with arrow keys) at its cell's end edge, a line while pointed at or focused.
+[] a sty:StyleRule ; sty:part ".sem-resize" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "top" ; sty:raw "0" ] ,
+                 [ sty:property "bottom" ; sty:raw "0" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "-4px" ] ,
+                 [ sty:property "width" ; sty:raw "8px" ] ,
+                 [ sty:property "z-index" ; sty:raw "2" ] ,
+                 [ sty:property "cursor" ; sty:raw "col-resize" ] ,
+                 [ sty:property "touch-action" ; sty:raw "none" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:part ".sem-resize::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "top" ; sty:raw "20%" ] ,
+                 [ sty:property "bottom" ; sty:raw "20%" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "3px" ] ,
+                 [ sty:property "width" ; sty:raw "2px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:token tok:border ] ,
+                 [ sty:property "transition" ; sty:raw "background var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:part ".sem-resize:is(:hover, :focus-visible)::after" ;
+    sty:declares [ sty:property "top" ; sty:raw "0" ] ,
+                 [ sty:property "bottom" ; sty:raw "0" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent)" ] .
 
 # --- text field ---------------------------------------------------------------------
 
@@ -329,7 +362,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "transition" ; sty:raw "color var(--sem-motion)" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:ListItem ; sty:part "input:checked + label" ;
-    sty:declares [ sty:property "color" ; sty:token tok:faint ] ,
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "text-decoration" ; sty:raw "line-through" ] ,
                  [ sty:property "text-decoration-color" ; sty:token tok:faint ] .
 
@@ -417,7 +450,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "padding" ; sty:raw "4px" ] ,
-                 [ sty:property "border-radius" ; sty:token tok:radius ] ,
+                 [ sty:property "border-radius" ; sty:raw "calc(var(--sem-radius-control) + 4px)" ] ,
                  [ sty:property "background" ; sty:token tok:surface-sunken ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
 # On a phone, more tabs than fit scroll sideways, without a scrollbar taking the row's height
@@ -429,8 +462,8 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 0 auto" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "background" ; sty:raw "transparent" ] ,
-                 [ sty:property "padding" ; sty:raw "7px 14px" ] ,
-                 [ sty:property "border-radius" ; sty:raw "9px" ] ,
+                 [ sty:property "padding" ; sty:raw "6px 12px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
                  [ sty:property "font" ; sty:raw "inherit" ] ,
                  [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
@@ -456,7 +489,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[role=tab][aria-selected=true]" ;
     sty:declares [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
-                 [ sty:property "box-shadow" ; sty:raw "0 1px 2px light-dark(rgb(17 17 34 / 0.08), rgb(0 0 0 / 0.5)), inset 0 0 0 1px var(--sem-border)" ] .
+                 [ sty:property "box-shadow" ; sty:raw "0 1px 2px light-dark(rgb(16 16 28 / 0.06), rgb(0 0 0 / 0.4)), inset 0 0 0 1px var(--sem-border)" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[role=tabpanel]" ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] .
@@ -470,13 +503,16 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] , [ sty:property "scrollbar-width" ; sty:raw "none" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] .
+# As wide as its options, never stretched to its container's width: as a grid or flex item (a field's
+# control, a column of a form) it would be blockified and stretched, the pill running on past them.
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "width" ; sty:raw "fit-content" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "padding" ; sty:raw "3px" ] ,
-                 [ sty:property "border-radius" ; sty:raw "18px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "calc(var(--sem-radius-control) + 3px)" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow ] ,
@@ -484,17 +520,21 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part "> *" ;
     sty:declares [ sty:property "flex" ; sty:raw "none" ] .
+# A symbol and its label are one line of text: both take the option's size and line height, so their
+# equal boxes, centred, share a baseline at any height (a touch screen's taller option, a stretched
+# one), and an option is as tall with a symbol as without. Sizing the symbol on its own parts them.
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part "button" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:raw "6px" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "background" ; sty:raw "transparent" ] ,
-                 [ sty:property "padding" ; sty:raw "5px 11px" ] ,
-                 [ sty:property "border-radius" ; sty:raw "999px" ] ,
+                 [ sty:property "padding" ; sty:raw "5px 10px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
                  [ sty:property "font" ; sty:raw "inherit" ] ,
                  [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "line-height" ; sty:token tok:leading-tight ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] ,
@@ -520,14 +560,14 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "width" ; sty:raw "100%" ] ,
                  [ sty:property "min-height" ; sty:raw "44px" ] ,
                  [ sty:property "padding-block" ; sty:raw "0" ] ,
-                 [ sty:property "padding-inline" ; sty:raw "12px 32px" ] ,
+                 [ sty:property "padding-inline" ; sty:raw "10px 28px" ] ,
                  [ sty:property "appearance" ; sty:raw "none" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
                  [ sty:property "background-color" ; sty:token tok:surface ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow ] ,
                  [ sty:property "color" ; sty:token tok:text ] ,
-                 [ sty:property "font" ; sty:raw "600 14px/1.2 var(--sem-font)" ] ,
+                 [ sty:property "font" ; sty:raw "600 13px/1.2 var(--sem-font)" ] ,
                  [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-picker:focus-visible" ;
@@ -549,19 +589,15 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
     sty:declares [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "background" ; sty:token tok:accent-soft ] .
 
-[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part "button > span:first-child" ;
-    sty:declares [ sty:property "font-size" ; sty:raw "14px" ] ,
-                 [ sty:property "line-height" ; sty:raw "1" ] .
-
 # --- flippable: the view on the front, how it is made on the back ---------------------------
 
-tok:code-bg a sty:Token ; sty:scale sty:Color ; sem:slug "code-bg" ; sty:value "light-dark(#f7f7fb, #0f0f15)" .
-tok:code-keyword a sty:Token ; sty:scale sty:Color ; sem:slug "code-keyword" ; sty:value "light-dark(#7c3aed, #c4b5fd)" .
+tok:code-bg a sty:Token ; sty:scale sty:Color ; sem:slug "code-bg" ; sty:value "light-dark(#f6f6f9, #0f0f14)" .
+tok:code-keyword a sty:Token ; sty:scale sty:Color ; sem:slug "code-keyword" ; sty:value "light-dark(#7434e0, #c4b5fd)" .
 tok:code-var a sty:Token ; sty:scale sty:Color ; sem:slug "code-var" ; sty:value "light-dark(#be185d, #f9a8d4)" .
-tok:code-string a sty:Token ; sty:scale sty:Color ; sem:slug "code-string" ; sty:value "light-dark(#b45309, #fdba74)" .
+tok:code-string a sty:Token ; sty:scale sty:Color ; sem:slug "code-string" ; sty:value "light-dark(#a34b08, #fdba74)" .
 tok:code-name a sty:Token ; sty:scale sty:Color ; sem:slug "code-name" ; sty:value "light-dark(#4338ca, #a5b4fc)" .
 tok:code-iri a sty:Token ; sty:scale sty:Color ; sem:slug "code-iri" ; sty:value "light-dark(#0e7490, #67e8f9)" .
-tok:code-comment a sty:Token ; sty:scale sty:Color ; sem:slug "code-comment" ; sty:value "light-dark(#8a8a9a, #6b6b7b)" .
+tok:code-comment a sty:Token ; sty:scale sty:Color ; sem:slug "code-comment" ; sty:value "light-dark(#6a6a7a, #8f8f9f)" .
 tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" .
 
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ;
@@ -788,14 +824,16 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
 # ================================================================================================
 
 sty:Dots a sty:Backdrop ; sem:slug "dots" ;
-    sty:declares [ sty:property "background" ; sty:raw "radial-gradient(circle at 1px 1px, light-dark(rgb(17 17 34 / 0.07), rgb(255 255 255 / 0.06)) 1px, transparent 0) 0 0 / 16px 16px, var(--sem-surface-sunken)" ] ,
+    sty:declares [ sty:property "background" ; sty:raw "radial-gradient(circle at 1px 1px, light-dark(rgb(17 17 34 / 0.05), rgb(255 255 255 / 0.045)) 1px, transparent 0) 0 0 / 16px 16px, var(--sem-surface-sunken)" ] ,
                  [ sty:property "padding" ; sty:tokens ( tok:space-6 tok:space-5 ) ] ,
                  [ sty:property "border-radius" ; sty:raw "0 0 var(--sem-radius-card) var(--sem-radius-card)" ] .
 
 # --- card ---------------------------------------------------------------------------------------
 
+# Its one column is as wide as the card, whatever its content's minimum (that scrolls or wraps).
 [] a sty:StyleRule ; sty:appliesTo c:Card ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
                  [ sty:property "row-gap" ; sty:raw "0" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
@@ -825,15 +863,20 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 [] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header .sem-badge" ;
     sty:declares [ sty:property "font" ; sty:raw "500 11px/1 var(--sem-mono)" ] ,
-                 [ sty:property "padding" ; sty:raw "4px 7px" ] ,
-                 [ sty:property "border-radius" ; sty:raw "6px" ] ,
+                 [ sty:property "padding" ; sty:raw "3px 6px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "background" ; sty:token tok:accent-soft ] .
 
+# Actions sit at the header's end and wrap there when the card is narrow.
 [] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header .sem-actions" ;
-    sty:declares [ sty:property "margin-left" ; sty:raw "auto" ] ,
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
                  [ sty:property "display" ; sty:raw "flex" ] ,
-                 [ sty:property "gap" ; sty:raw "6px" ] .
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
+                 [ sty:property "gap" ; sty:raw "6px" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header p" ;
     sty:declares [ sty:property "flex-basis" ; sty:raw "100%" ] ,
@@ -898,7 +941,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "font-size" ; sty:raw "11px" ] ,
                  [ sty:property "line-height" ; sty:raw "1" ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] .
+                 [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > .sem-byline [data-sem-c=link]" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > .sem-byline [data-sem-c=text]" ;
@@ -924,7 +967,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 # Focus order is the visual order.
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:declares [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
-                 [ sty:property "gap" ; sty:raw "10px" ] ,
+                 [ sty:property "gap" ; sty:raw "8px" ] ,
                  [ sty:property "padding" ; sty:raw "8px 12px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-brand" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
@@ -933,7 +976,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "justify-items" ; sty:raw "start" ] ,
                  [ sty:property "column-gap" ; sty:raw "8px" ] ,
                  [ sty:property "row-gap" ; sty:raw "2px" ] ,
-                 [ sty:property "flex" ; sty:raw "0 1 auto" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "min-width" ; sty:raw "min-content" ] .
 # The byline goes on a line of its own under the name (past the logo), whether the logo and the
 # name stand alone or are one home link.
@@ -941,17 +984,23 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "white-space" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-brand > .sem-byline" ;
     sty:declares [ sty:property "grid-column" ; sty:raw "1 / -1" ] ,
-                 [ sty:property "padding-inline-start" ; sty:raw "36px" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "0" ] ,
                  [ sty:property "border-inline-start" ; sty:raw "0" ] ,
                  [ sty:property "align-self" ; sty:raw "start" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-brand > strong" ;
     sty:declares [ sty:property "align-self" ; sty:raw "end" ] ,
                  [ sty:property "line-height" ; sty:raw "1.1" ] .
+# On a phone the brand gives the page switcher room: a smaller mark and name.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand [data-sem-c=graph-mark]" ;
+    sty:declares [ sty:property "width" ; sty:raw "24px" ] , [ sty:property "height" ; sty:raw "24px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand strong" ;
+    sty:declares [ sty:property "font-size" ; sty:raw "15px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-actions" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
                  [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
-                 [ sty:property "gap" ; sty:raw "8px" ] .
+                 [ sty:property "gap" ; sty:raw "4px" ] ,
+                 [ sty:property "--control-px" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-actions > :not(.sem-more)" ;
     sty:declares [ sty:property "flex" ; sty:raw "0 1 auto" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
@@ -963,8 +1012,8 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-more-toggle" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-grid" ] ,
                  [ sty:property "place-items" ; sty:raw "center" ] ,
-                 [ sty:property "width" ; sty:raw "44px" ] ,
-                 [ sty:property "height" ; sty:raw "44px" ] ,
+                 [ sty:property "width" ; sty:raw "40px" ] ,
+                 [ sty:property "height" ; sty:raw "40px" ] ,
                  [ sty:property "padding" ; sty:raw "0" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
@@ -1004,12 +1053,12 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "width" ; sty:raw "28px" ] ,
                  [ sty:property "height" ; sty:raw "28px" ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
-                 [ sty:property "filter" ; sty:raw "drop-shadow(0 4px 10px rgb(91 76 240 / 0.35))" ] .
+                 [ sty:property "filter" ; sty:raw "drop-shadow(0 1px 2px rgb(40 32 120 / 0.2))" ] .
 [] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:when sty:Small ;
     sty:declares [ sty:property "width" ; sty:raw "20px" ] , [ sty:property "height" ; sty:raw "20px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:when sty:Large ;
     sty:declares [ sty:property "width" ; sty:raw "72px" ] , [ sty:property "height" ; sty:raw "72px" ] ,
-                 [ sty:property "filter" ; sty:raw "drop-shadow(0 10px 24px rgb(91 76 240 / 0.35))" ] .
+                 [ sty:property "filter" ; sty:raw "drop-shadow(0 4px 12px rgb(40 32 120 / 0.18))" ] .
 # The edge and its echo: one curve, drawn twice.
 [] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:part ":is(.sem-edge, .sem-echo)" ;
     sty:declares [ sty:property "fill" ; sty:raw "none" ] , [ sty:property "stroke" ; sty:raw "white" ] ,
@@ -1130,9 +1179,14 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0.06em" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
+# A narrow header shortens the path, never its toggles.
 [] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part ".sem-source-path" ;
     sty:declares [ sty:property "font" ; sty:raw "12px var(--sem-mono)" ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] .
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part "> .sem-source" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:tokens ( tok:space-4 tok:space-4 ) ] ,
@@ -1183,12 +1237,15 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 # --- frames (windows, palettes; their states and the taskbar are in windows.ttl) ---------------------------
 
+# A frame's minimum width is a floor for resizing, never wider than what holds it (the screen, or
+# the tile a frame outside a desktop stands in): min-width beats max-width, so it is capped itself.
 [] a sty:StyleRule ; sty:appliesTo c:Frame ;
     sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
                  [ sty:property "z-index" ; sty:raw "50" ] ,
                  [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-rows" ; sty:raw "auto minmax(0, 1fr)" ] ,
-                 [ sty:property "min-width" ; sty:raw "280px" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(280px, 100%)" ] ,
                  [ sty:property "min-height" ; sty:raw "180px" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
@@ -1207,8 +1264,13 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "cursor" ; sty:raw "grab" ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] ,
                  [ sty:property "touch-action" ; sty:raw "none" ] .
+# A narrow frame shortens its title, never its controls.
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-bar strong" ;
     sty:declares [ sty:property "flex" ; sty:raw "1" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "font-size" ; sty:raw "13px" ] ,
                  [ sty:property "font-weight" ; sty:raw "650" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-control" ;
@@ -1390,9 +1452,409 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
                  [ sty:property "width" ; sty:raw "10px" ] ,
                  [ sty:property "height" ; sty:raw "10px" ] ,
-                 [ sty:property "margin-right" ; sty:raw "6px" ] ,
+                 [ sty:property "margin-inline-end" ; sty:raw "6px" ] ,
                  [ sty:property "border-radius" ; sty:raw "3px" ] ,
                  [ sty:property "vertical-align" ; sty:raw "-1px" ] .
+
+# Series charts on a value axis. The figure writes the scale (--lo, --hi) and the number of categories
+# (--n); a point writes its category (--i), value (--v), stack base (--b), the next point's (--nv,
+# --nb) and its color. A point is an anchor at its value (inset-inline-start, so categories run right
+# to left in a right-to-left page); its marks reach the next point in the marks' container units.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ;
+    sty:declares [ sty:property "--axis" ; sty:raw "2.75rem" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-plot" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "block-size" ; sty:raw "clamp(150px, 42vw, 240px)" ] ,
+                 [ sty:property "margin-block" ; sty:raw "8px 4px" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "var(--axis)" ] ,
+                 [ sty:property "container-type" ; sty:raw "size" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-ticks" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+# A tick: its value in the gutter at the inline start, a gridline across the plot (the zero line stronger).
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-tick" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline" ; sty:raw "calc(-1 * var(--axis)) 0" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc((var(--at) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "block-size" ; sty:raw "0" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--axis) - 6px)" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
+                 [ sty:property "font-size" ; sty:raw "11px" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-tick::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "''" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--axis))" ] ,
+                 [ sty:property "inline-size" ; sty:raw "100cqw" ] ,
+                 [ sty:property "border-block-start" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-tick[style='--at: 0']::after" ;
+    sty:declares [ sty:property "border-block-start-color" ; sty:raw "var(--sem-border-strong)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-marks" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "container-type" ; sty:raw "size" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-categories" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(var(--n, 1), minmax(0, 1fr))" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "var(--axis)" ] ,
+                 [ sty:property "font-size" ; sty:raw "11px" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-categories > span" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "1" ] ,
+                 [ sty:property "grid-column" ; sty:raw "calc(var(--i) + 1)" ] ,
+                 [ sty:property "padding-inline" ; sty:raw "2px" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] .
+# One series needs no legend (a legend of series; a pie's key of categories stays).
+[] a sty:StyleRule ; sty:appliesTo c:SeriesChart ; sty:part ".sem-legend:has(> [data-sem-c=chart-series]):not(:has(> :nth-child(2)))" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+
+# A point: an anchor at its value, in its category's middle (over the tooltip layer's position). Its y (and its
+# base's, its next point's) in percent of the plot.
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ;
+    sty:declares [ sty:property "--y" ; sty:raw "calc((var(--v) + var(--b) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--yb" ; sty:raw "calc((var(--b) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--ny" ; sty:raw "calc((var(--nv, 0) + var(--nb, 0) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--nyb" ; sty:raw "calc((var(--nb, 0) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--i) + 0.5) / var(--n) * 100%)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc(var(--y) * 1%)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "0" ] ,
+                 [ sty:property "block-size" ; sty:raw "0" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ; sty:part ".sem-dot" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "-5px" ] ,
+                 [ sty:property "bottom" ; sty:raw "-5px" ] ,
+                 [ sty:property "inline-size" ; sty:raw "10px" ] ,
+                 [ sty:property "block-size" ; sty:raw "10px" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "border-radius" ; sty:raw "50%" ] ,
+                 [ sty:property "border" ; sty:raw "2px solid var(--sem-surface)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ; sty:part ":is(:hover, :focus-visible) > .sem-dot" ;
+    sty:declares [ sty:property "scale" ; sty:raw "1.4" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+# The line to the next point: as long as the hypotenuse, turned by its slope (mirrored right to left). Across one
+# category in an area chart; to the next point's x in a line chart.
+[] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-segment" ;
+    sty:declares [ sty:property "--dx" ; sty:raw "calc(100cqw / var(--n))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinePoint ; sty:part ".sem-segment" ;
+    sty:declares [ sty:property "--dx" ; sty:raw "calc((var(--nx) - var(--x)) / (var(--xhi) - var(--xlo)) * 100cqw)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ; sty:part ".sem-segment" ;
+    sty:declares [ sty:property "--dy" ; sty:raw "calc((var(--ny) - var(--y)) * 1cqh)" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "bottom" ; sty:raw "-1px" ] ,
+                 [ sty:property "block-size" ; sty:raw "2px" ] ,
+                 [ sty:property "inline-size" ; sty:raw "hypot(var(--dx), var(--dy))" ] ,
+                 [ sty:property "transform-origin" ; sty:raw "0 50%" ] ,
+                 [ sty:property "rotate" ; sty:raw "calc(-1 * atan2(var(--dy), var(--dx)))" ] ,
+                 [ sty:property "border-radius" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartPoint ; sty:part ".sem-segment:dir(rtl)" ;
+    sty:declares [ sty:property "transform-origin" ; sty:raw "100% 50%" ] ,
+                 [ sty:property "rotate" ; sty:raw "atan2(var(--dy), var(--dx))" ] .
+# The area under it, from its base to its value and the next point's (a stack's band).
+[] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-area" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc(-1 * var(--y) * 1cqh)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(100cqw / var(--n))" ] ,
+                 [ sty:property "block-size" ; sty:raw "100cqh" ] ,
+                 [ sty:property "clip-path" ; sty:raw "polygon(0 calc(100% - var(--y) * 1%), 100% calc(100% - var(--ny) * 1%), 100% calc(100% - var(--nyb) * 1%), 0 calc(100% - var(--yb) * 1%))" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--color) 28%, transparent)" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AreaPoint ; sty:part ".sem-area:dir(rtl)" ;
+    sty:declares [ sty:property "clip-path" ; sty:raw "polygon(100% calc(100% - var(--y) * 1%), 0 calc(100% - var(--ny) * 1%), 0 calc(100% - var(--nyb) * 1%), 100% calc(100% - var(--yb) * 1%))" ] .
+
+# A column: a bar from its base to its value. Grouped, the band's 80% is shared by the shown series (--k) in
+# their order (--r); stacked, one bar 60% of the band holds them all.
+[] a sty:StyleRule ; sty:appliesTo c:ColumnPoint ; sty:part ".sem-bar" ;
+    sty:declares [ sty:property "--band" ; sty:raw "calc(100cqw / var(--n))" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * (-0.4 + var(--r) * 0.8 / var(--k)))" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--band) * 0.8 / var(--k))" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc((min(var(--y), var(--yb)) - var(--y)) * 1cqh)" ] ,
+                 [ sty:property "block-size" ; sty:raw "calc((max(var(--y), var(--yb)) - min(var(--y), var(--yb))) * 1cqh)" ] ,
+                 [ sty:property "border-inline" ; sty:raw "1px solid var(--sem-surface)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "3px 3px 0 0" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ColumnPoint ; sty:part ".sem-bar" ; sty:state ".sem-stacked" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * -0.3)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--band) * 0.6)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "border-block-start" ; sty:raw "1px solid var(--sem-surface)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ColumnPoint ; sty:part ".sem-bar" ; sty:state ":is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:token tok:ring ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] .
+
+# A scatter chart's x scale below the plot: a tick's value at its place, a gridline up the plot.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-xticks" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "block-size" ; sty:raw "1.25rem" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "var(--axis)" ] ,
+                 [ sty:property "font-size" ; sty:raw "11px" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-xtick" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--at) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] ,
+                 [ sty:property "translate" ; sty:raw "-50%" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-xtick:dir(rtl)" ;
+    sty:declares [ sty:property "translate" ; sty:raw "50%" ] .
+# A scatter point sits at its x, as does a line chart's; a bubble's area grows with its size (--z of the greatest, --zmax).
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc((var(--x) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] .
+# A line chart's reference: a dashed line from (--x1, --y1) to (--x2, --y2) in the axes' units, its word at its end.
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference" ;
+    sty:declares [ sty:property "--dx" ; sty:raw "calc((var(--x2) - var(--x1)) / (var(--xhi) - var(--xlo)) * 100cqw)" ] ,
+                 [ sty:property "--dy" ; sty:raw "calc((var(--y2) - var(--y1)) / (var(--hi) - var(--lo)) * 100cqh)" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--x1) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc((var(--y1) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "hypot(var(--dx), var(--dy))" ] ,
+                 [ sty:property "block-size" ; sty:raw "0" ] ,
+                 [ sty:property "border-block-start" ; sty:raw "1.5px dashed var(--sem-faint)" ] ,
+                 [ sty:property "transform-origin" ; sty:raw "0 50%" ] ,
+                 [ sty:property "rotate" ; sty:raw "calc(-1 * atan2(var(--dy), var(--dx)))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference:dir(rtl)" ;
+    sty:declares [ sty:property "transform-origin" ; sty:raw "100% 50%" ] ,
+                 [ sty:property "rotate" ; sty:raw "atan2(var(--dy), var(--dx))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference-label" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--x2) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc((var(--y2) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "translate" ; sty:raw "-100% -2px" ] ,
+                 [ sty:property "font-size" ; sty:raw "11px" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "color" ; sty:token tok:faint ] .
+[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference-label:dir(rtl)" ;
+    sty:declares [ sty:property "translate" ; sty:raw "100% -2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ScatterChart ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc((var(--x) - var(--xlo)) / (var(--xhi) - var(--xlo)) * 100%)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ScatterPoint ; sty:part ".sem-dot" ;
+    sty:declares [ sty:property "--d" ; sty:raw "calc(8px + sqrt(var(--z, 0) / var(--zmax, 1)) * 26px)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "var(--d)" ] ,
+                 [ sty:property "block-size" ; sty:raw "var(--d)" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--d) / -2)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc(var(--d) / -2)" ] ,
+                 [ sty:property "border-width" ; sty:raw "1.5px" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--color) 72%, transparent)" ] .
+
+# A pie: a square of slices beside its key. A slice is a conic wedge from --from, --share of the turn, in its
+# category's color, masked to the circle (no theme's corners reach it) and clipped to its wedge (so hovering
+# finds the slice under the pointer); right to left the slices run counter-clockwise. A donut's hole holds the total.
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:raw "12px 24px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ; sty:part ".sem-pie" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "inline-size" ; sty:raw "min(100%, 200px)" ] ,
+                 [ sty:property "aspect-ratio" ; sty:raw "1" ] ,
+                 [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "place-items" ; sty:raw "center" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ; sty:part ".sem-chart-marks" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PieChart ; sty:part ".sem-pie-total" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "font-size" ; sty:raw "15px" ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SlicePoint ; sty:part ".sem-slice" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "mask" ; sty:raw "radial-gradient(closest-side, #000 calc(100% - 0.5px), transparent 100%)" ] ,
+                 [ sty:property "background" ; sty:raw "conic-gradient(from calc(var(--from) * 1turn), var(--color) 0 calc(var(--share) * 1turn), transparent 0)" ] ,
+                 [ sty:property "clip-path" ; sty:raw "polygon(50% 50%, calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.125) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.125) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.25) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.25) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.375) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.375) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.5) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.5) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.625) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.625) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.75) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.75) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 0.875) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 0.875) * 1turn))), calc(50% + 75% * sin(calc((var(--from) + var(--share) * 1) * 1turn))) calc(50% - 75% * cos(calc((var(--from) + var(--share) * 1) * 1turn))))" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "auto" ] ,
+                 [ sty:property "transition" ; sty:raw "scale var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SlicePoint ; sty:part ".sem-slice:dir(rtl)" ;
+    sty:declares [ sty:property "scale" ; sty:raw "-1 1" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SlicePoint ; sty:part ".sem-slice" ; sty:state ":is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "scale" ; sty:raw "1.05" ] ,
+                 [ sty:property "filter" ; sty:raw "drop-shadow(0 0 2px var(--sem-text))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SlicePoint ; sty:part ".sem-slice:dir(rtl)" ; sty:state ":is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "scale" ; sty:raw "-1.05 1.05" ] .
+[] a sty:StyleRule ; sty:appliesTo c:DonutChart ; sty:part ".sem-slice" ;
+    sty:declares [ sty:property "mask" ; sty:raw "radial-gradient(closest-side, transparent 58%, #000 calc(58% + 0.5px) calc(100% - 0.5px), transparent 100%)" ] .
+
+# A histogram's bins touch: a column is its bin's whole width (shared by the series when grouped).
+[] a sty:StyleRule ; sty:appliesTo c:Histogram ; sty:part ".sem-chart-marks .sem-bar" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * (-0.5 + var(--r) / var(--k)))" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--band) / var(--k))" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Histogram ; sty:part ".sem-chart-marks .sem-stacked .sem-bar" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * -0.5)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "var(--band)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Histogram ; sty:part ".sem-chart-categories > span" ;
+    sty:declares [ sty:property "font-size" ; sty:raw "10px" ] .
+
+# A sparkline is word-sized and sits on the line of text it is in: no axes, its points' dots hidden but the
+# last one's (and the one hovered or focused), a thinner line.
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "inline-size" ; sty:raw "7.5em" ] ,
+                 [ sty:property "block-size" ; sty:raw "1.75em" ] ,
+                 [ sty:property "vertical-align" ; sty:raw "middle" ] ,
+                 [ sty:property "container-type" ; sty:raw "size" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "3px" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "container-type" ; sty:raw "size" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks > .sem-point" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--i) / max(var(--n) - 1, 1) * 100%)" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc(var(--y) * 1%)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "0" ] ,
+                 [ sty:property "block-size" ; sty:raw "0" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks > .sem-point .sem-segment" ;
+    sty:declares [ sty:property "--dx" ; sty:raw "calc(100cqw / max(var(--n) - 1, 1))" ] ,
+                 [ sty:property "block-size" ; sty:raw "1.5px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks > .sem-point .sem-area" ;
+    sty:declares [ sty:property "inline-size" ; sty:raw "calc(100cqw / max(var(--n) - 1, 1))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks > .sem-point:not(:last-child, :hover, :focus-visible) .sem-dot" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sparkline ; sty:part ".sem-chart-marks .sem-dot" ;
+    sty:declares [ sty:property "inline-size" ; sty:raw "6px" ] ,
+                 [ sty:property "block-size" ; sty:raw "6px" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "-3px" ] ,
+                 [ sty:property "bottom" ; sty:raw "-3px" ] ,
+                 [ sty:property "border-width" ; sty:raw "1px" ] .
+
+# A box plot's box: placed by its series' rank in the band as a grouped column is; a whisker over its
+# range, a box over its quartiles, a line at its median (the point's anchor).
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ;
+    sty:declares [ sty:property "--band" ; sty:raw "calc(100cqw / var(--n))" ] ,
+                 [ sty:property "--yq1" ; sty:raw "calc((var(--q1) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--yq3" ; sty:raw "calc((var(--q3) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--ylow" ; sty:raw "calc((var(--low) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] ,
+                 [ sty:property "--yhigh" ; sty:raw "calc((var(--high) - var(--lo)) / (var(--hi) - var(--lo)) * 100)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ":is(.sem-whisker, .sem-box, .sem-median)" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--band) * (-0.4 + var(--r) * 0.8 / var(--k)) + var(--band) * 0.1 / var(--k))" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--band) * 0.6 / var(--k))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ".sem-whisker" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "calc((var(--ylow) - var(--y)) * 1cqh)" ] ,
+                 [ sty:property "block-size" ; sty:raw "calc((var(--yhigh) - var(--ylow)) * 1cqh)" ] ,
+                 [ sty:property "border-block" ; sty:raw "1.5px solid var(--color)" ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(var(--color), var(--color)) center / 1.5px 100% no-repeat" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ".sem-box" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "calc((var(--yq1) - var(--y)) * 1cqh)" ] ,
+                 [ sty:property "block-size" ; sty:raw "calc((var(--yq3) - var(--yq1)) * 1cqh)" ] ,
+                 [ sty:property "min-block-size" ; sty:raw "2px" ] ,
+                 [ sty:property "border" ; sty:raw "1.5px solid var(--color)" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--color) 30%, var(--sem-surface))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ".sem-median" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "-1.5px" ] ,
+                 [ sty:property "block-size" ; sty:raw "3px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoxPoint ; sty:part ".sem-box" ; sty:state ":is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:token tok:ring ] .
+
+# Dual axes: the secondary axis's ticks in a gutter at the plot's inline end (no gridlines of their own); a
+# point of a series on it reads the secondary scale. Its legend swatch is outlined.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-plot:has(> .sem-secondary)" ;
+    sty:declares [ sty:property "margin-inline-end" ; sty:raw "var(--axis)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-ticks.sem-secondary" ;
+    sty:declares [ sty:property "--lo" ; sty:raw "var(--lo2)" ] ,
+                 [ sty:property "--hi" ; sty:raw "var(--hi2)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-ticks.sem-secondary > .sem-chart-tick" ;
+    sty:declares [ sty:property "inset-inline" ; sty:raw "calc(100% + 6px) auto" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-ticks.sem-secondary > .sem-chart-tick::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-marks > .sem-point.sem-secondary" ;
+    sty:declares [ sty:property "--lo" ; sty:raw "var(--lo2)" ] ,
+                 [ sty:property "--hi" ; sty:raw "var(--hi2)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:state ":has(.sem-chart-ticks.sem-secondary)" ; sty:part ".sem-chart-categories" ;
+    sty:declares [ sty:property "margin-inline-end" ; sty:raw "var(--axis)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:state ":has(.sem-chart-ticks.sem-secondary)" ; sty:part ".sem-chart-xticks" ;
+    sty:declares [ sty:property "margin-inline-end" ; sty:raw "var(--axis)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SeriesChart ; sty:part ".sem-legend > .sem-secondary > i" ;
+    sty:declares [ sty:property "outline" ; sty:raw "1.5px solid var(--sem-text)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "1px" ] .
+# Annotations: a threshold is a dashed line at its value, a marked range a tinted band; each names itself at
+# the inline end, over the plot and under its marks.
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-annotations" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "font-size" ; sty:raw "10px" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-chart-annotations > span" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline" ; sty:raw "0" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-threshold" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "calc((var(--at) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "align-items" ; sty:raw "flex-end" ] ,
+                 [ sty:property "border-block-end" ; sty:raw "1.5px dashed var(--sem-danger-9)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-danger-11)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AxisChart ; sty:part ".sem-marked-range" ;
+    sty:declares [ sty:property "bottom" ; sty:raw "calc((var(--from) - var(--lo)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "block-size" ; sty:raw "calc((var(--to) - var(--from)) / (var(--hi) - var(--lo)) * 100%)" ] ,
+                 [ sty:property "align-items" ; sty:raw "flex-start" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--sem-accent-9) 12%, transparent)" ] .
+
+# A series chart's legend items are toggles: plain text buttons; a hidden series' item is faded, its swatch hollow.
+[] a sty:StyleRule ; sty:appliesTo c:ChartSeries ; sty:part "button" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "padding" ; sty:raw "2px 4px" ] ,
+                 [ sty:property "margin" ; sty:raw "-2px -4px" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "color" ; sty:raw "inherit" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartSeries ; sty:part "button:is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartSeries ; sty:part "button[aria-pressed=false]" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.55" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "line-through" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ChartSeries ; sty:part "button[aria-pressed=false] > i" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent !important" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1.5px currentColor" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
@@ -1416,14 +1878,26 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "height" ; sty:raw "14px" ] ,
-                 [ sty:property "min-width" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-seg" ;
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] .
+# A segment: as wide as its value is of its facet's longest bar (--v of --max), rounder at the bar's end.
+[] a sty:StyleRule ; sty:appliesTo c:BarPoint ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] ,
-                 [ sty:property "height" ; sty:raw "100%" ] ,
-                 [ sty:property "min-width" ; sty:raw "2px" ] ,
-                 [ sty:property "border-radius" ; sty:raw "2px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-seg:last-child" ;
-    sty:declares [ sty:property "border-radius" ; sty:raw "2px 4px 4px 2px" ] .
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--v) / max(var(--max, 1), 0.0001) * 100%)" ] ,
+                 [ sty:property "min-inline-size" ; sty:raw "2px" ] ,
+                 [ sty:property "block-size" ; sty:raw "100%" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BarPoint ; sty:part ".sem-seg" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "block-size" ; sty:raw "100%" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--color)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BarPoint ; sty:state ":last-child" ; sty:part ".sem-seg" ;
+    sty:declares [ sty:property "border-start-end-radius" ; sty:raw "4px" ] , [ sty:property "border-end-end-radius" ; sty:raw "4px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BarPoint ; sty:state ":is(:hover, :focus-visible)" ; sty:part ".sem-seg" ;
+    sty:declares [ sty:property "box-shadow" ; sty:token tok:ring ] .
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-total" ;
     sty:declares [ sty:property "font" ; sty:raw "600 11px/1 var(--sem-mono)" ] ,
                  [ sty:property "min-width" ; sty:raw "58px" ] ,
@@ -1456,6 +1930,8 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part "td.sem-flagged" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 2px var(--sem-flag)" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] .
+[] a sty:StyleRule ; sty:appliesTo c:HeatCell ; sty:state ":focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "2px solid var(--sem-text)" ] , [ sty:property "outline-offset" ; sty:raw "-2px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part "td.sem-pending" ;
     sty:declares [ sty:property "color" ; sty:token tok:faint ] ,
                  [ sty:property "background" ; sty:token tok:surface-sunken ] .
@@ -1471,7 +1947,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-ramp i" ;
     sty:declares [ sty:property "width" ; sty:raw "14px" ] , [ sty:property "height" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-flag-note" ;
-    sty:declares [ sty:property "margin-left" ; sty:raw "auto" ] ,
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
                  [ sty:property "color" ; sty:token tok:flag ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-h0" ; sty:declares [ sty:property "background" ; sty:token tok:ramp-0 ] , [ sty:property "color" ; sty:token tok:ramp-ink-light ] .
@@ -1487,23 +1963,6 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-h10" ; sty:declares [ sty:property "background" ; sty:token tok:ramp-10 ] , [ sty:property "color" ; sty:token tok:ramp-ink-dark ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-h11" ; sty:declares [ sty:property "background" ; sty:token tok:ramp-11 ] , [ sty:property "color" ; sty:token tok:ramp-ink-dark ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part ".sem-h12" ; sty:declares [ sty:property "background" ; sty:token tok:ramp-12 ] , [ sty:property "color" ; sty:token tok:ramp-ink-dark ] .
-
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part "svg" ;
-    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
-                 [ sty:property "width" ; sty:raw "100%" ] ,
-                 [ sty:property "max-width" ; sty:raw "640px" ] ,
-                 [ sty:property "height" ; sty:raw "auto" ] ,
-                 [ sty:property "overflow" ; sty:raw "visible" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-grid" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:border ] , [ sty:property "stroke-width" ; sty:raw "1" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-axis" ;
-    sty:declares [ sty:property "fill" ; sty:token tok:muted ] , [ sty:property "font" ; sty:raw "11px var(--sem-font)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-reference" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:faint ] , [ sty:property "stroke-width" ; sty:raw "1.5" ] , [ sty:property "stroke-dasharray" ; sty:raw "3 4" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-line" ;
-    sty:declares [ sty:property "fill" ; sty:raw "none" ] , [ sty:property "stroke-width" ; sty:raw "2" ] .
-[] a sty:StyleRule ; sty:appliesTo c:LineChart ; sty:part ".sem-dot" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:surface ] , [ sty:property "stroke-width" ; sty:raw "2" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:FindingList ;
     sty:declares [ sty:property "font-family" ; sty:token tok:font ] , [ sty:property "color" ; sty:token tok:text ] .
@@ -1546,17 +2005,16 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "width" ; sty:raw "16px" ] ,
                  [ sty:property "height" ; sty:raw "16px" ] ,
                  [ sty:property "border-radius" ; sty:raw "50%" ] ,
-                 [ sty:property "color" ; sty:raw "white" ] ,
                  [ sty:property "font-size" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-good" ;
-    sty:declares [ sty:property "color" ; sty:token tok:good ] , [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-good) 12%, transparent)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-good b" ; sty:declares [ sty:property "background" ; sty:token tok:good ] .
+    sty:declares [ sty:property "color" ; sty:token tok:success-11 ] , [ sty:property "background" ; sty:token tok:success-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-good b" ; sty:declares [ sty:property "background" ; sty:token tok:success-9 ] , [ sty:property "color" ; sty:token tok:on-status ] .
 [] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-concern" ;
-    sty:declares [ sty:property "color" ; sty:token tok:flag ] , [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-flag) 12%, transparent)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-concern b" ; sty:declares [ sty:property "background" ; sty:token tok:flag ] .
+    sty:declares [ sty:property "color" ; sty:token tok:warning-11 ] , [ sty:property "background" ; sty:token tok:warning-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-concern b" ; sty:declares [ sty:property "background" ; sty:token tok:warning-9 ] , [ sty:property "color" ; sty:token tok:on-warning ] .
 [] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-insight" ;
     sty:declares [ sty:property "color" ; sty:token tok:accent-strong ] , [ sty:property "background" ; sty:token tok:accent-soft ] .
-[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-insight b" ; sty:declares [ sty:property "background" ; sty:token tok:accent ] .
+[] a sty:StyleRule ; sty:appliesTo c:FindingList ; sty:part ".sem-insight b" ; sty:declares [ sty:property "background" ; sty:token tok:accent ] , [ sty:property "color" ; sty:token tok:on-accent ] .
 
 # --- toggle as a switch; detach as a quiet affordance -----------------------------------------------
 

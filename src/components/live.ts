@@ -17,16 +17,7 @@ const L = {
   showSources: c + 'showSources',
   textHeading: c + 'textHeading',
   dataPreview: c + 'dataPreview',
-  lineSubject: c + 'lineSubject',
-  linePredicate: c + 'linePredicate',
-  lineObject: c + 'lineObject',
-  lineNode: c + 'lineNode',
-  subjectToken: c + 'subjectToken',
-  predicateToken: c + 'predicateToken',
-  objectToken: c + 'objectToken',
-  lineKey: c + 'lineKey',
-  lineChange: c + 'lineChange',
-  changedLine: c + 'changedLine',
+  changedRow: c + 'changedRow',
   triplesAdded: c + 'triplesAdded',
   triplesRemoved: c + 'triplesRemoved',
   sandboxState: c + 'sandboxState',
@@ -116,7 +107,8 @@ const liveExample: FnRule = (ctx, focus) => {
   // The actions: how long the last build took, Reset (once a source is edited or the example used) and Copy.
   const ms = str(ctx.object(focus, L.renderTime))
   const actions: NamedNode[] = []
-  if (ms !== undefined) actions.push(o.el('time', 'Span', { class: 'sem-live-time' }, [o.text('time-text', fill(phrase(ctx, P.time), 'ms', ms))]))
+  // The time's place is kept before it is known (a page rendered beforehand, until its sandbox runs): the bar does not move when it is.
+  actions.push(o.el('time', 'Span', { class: 'sem-live-time' }, ms !== undefined ? [o.text('time-text', fill(phrase(ctx, P.time), 'ms', ms))] : []))
   const button = (local: string, label: string, p: string) => {
     const b = o.node(local)
     o.t(b, RDF_TYPE, ctx.nn(NS.c + 'Button')).t(b, C.label, label).t(b, p, focus)
@@ -182,10 +174,13 @@ const liveExample: FnRule = (ctx, focus) => {
   parts.push(o.el('preview', 'Div', { class: 'sem-live-preview', role: 'region', 'aria-label': phrase(ctx, P.rendering) }, preview))
   if (withData) {
     const dataPhrase = phrase(ctx, P.data)
+    // The host's: the sandbox's diff viewer is mounted (or taken over) in it.
+    const data = o.el('data', 'Div', { class: 'sem-live-data' })
+    o.t(data, SEM.slot, `${focus.value} data`)
     parts.push(
       o.el('data-pane', 'Div', { class: 'sem-live-pane', role: 'region', 'aria-label': dataPhrase }, [
         o.el('data-head', 'P', { class: 'sem-live-modality' }, [o.text('data-head-text', dataPhrase)]),
-        o.el('data', 'Div', { class: 'sem-live-data' }),
+        data,
       ]),
     )
     if (withText) parts.push(o.el('text-pane', 'Div', { class: 'sem-live-pane' }, textParts))
@@ -196,33 +191,7 @@ const liveExample: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** c:LiveExampleData: one triple of the example's data, as a row of its subject's node in the data tree. */
-const dataLine: FnRule = (ctx, focus, member) => {
-  if (!member || !ctx.object(focus, L.dataPreview)) return []
-  const o = ctx.out(focus)
-  const get = (p: string) => str(ctx.object(member, p))
-  const [subject, sk, node, p, pk, obj, ok, key] = [L.lineSubject, L.subjectToken, L.lineNode, L.linePredicate, L.predicateToken, L.lineObject, L.objectToken, L.lineKey].map(get)
-  if ([subject, sk, node, p, pk, obj, ok, key].some((x) => x === undefined)) return []
-  // The subject's node, minted alike by each of its lines.
-  const n = `node-${node}`
-  const rows = o.el(`${n}-rows`, 'Div', { class: 'sem-live-rows' })
-  const group = o.el(n, 'Div', { class: 'sem-live-node', role: 'group', 'aria-label': subject }, [
-    o.el(`${n}-subject`, 'Span', { class: `sem-live-subject tok-${sk}` }, [o.text(`${n}-subject-text`, subject!)]),
-    rows,
-  ])
-  o.t(group, SEM.orderKey, subject!)
-  o.t(o.node('data'), H.hasChild, group)
-  // The row: predicate and object, coloured by kind, marked with what the last interaction did.
-  const change = ctx.object(member, L.lineChange)
-  const local = 'line-' + member.value.replace(/^.*\//, '')
-  const term = (part: string, kind: string, text: string) => o.el(`${local}-${part}`, 'Span', { class: `tok-${kind}` }, [o.text(`${local}-${part}-text`, text)])
-  const line = o.el(local, 'Div', { class: 'sem-live-line', 'data-sem-change': (change && str(ctx.object(change, SEM.slug))) || undefined }, [term('p', pk!, p!), term('o', ok!, obj!)])
-  o.t(line, SEM.orderKey, key!)
-  o.t(rows, H.hasChild, line)
-  return o.quads
-}
-
-/** c:LiveExampleFlow: the caption of what happened, and the arrows from the rendering to the changed line and on to the text. */
+/** c:LiveExampleFlow: the caption of what happened, and the arrows from the rendering to the data viewer's changed row and on to the text. */
 const flow: FnRule = (ctx, focus) => {
   if (!ctx.object(focus, L.dataPreview)) return []
   const o = ctx.out(focus)
@@ -233,9 +202,8 @@ const flow: FnRule = (ctx, focus) => {
     ? fill(fill(phrase(ctx, P.flow), 'added', added ?? '0'), 'removed', removed ?? '0')
     : phrase(ctx, P.hint)
   o.t(o.node('flow'), H.hasChild, o.text('flow-text', caption))
-  const changed = ctx.object(focus, L.changedLine)
-  if (!changed) return o.quads
-  const line = o.node('line-' + changed.value.replace(/^.*\//, ''))
+  const line = ctx.object(focus, L.changedRow)
+  if (line?.termType !== 'NamedNode') return o.quads
   const links = o.node('links')
   const connector = (local: string, from: NamedNode, to: NamedNode, label: string, tone: string, key: string) => {
     const n = o.node(local)
@@ -256,7 +224,7 @@ const flow: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { 'live-example': liveExample, 'live-example:line': dataLine, 'live-example:flow': flow }
+export const functions: Record<string, FnRule> = { 'live-example': liveExample, 'live-example:flow': flow }
 
 // --- reactions (for stores without SPARQL) ---------------------------------------------------------
 

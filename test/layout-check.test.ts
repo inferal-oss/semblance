@@ -53,15 +53,25 @@ const EXPECTED: [RegExp, string[]][] = [
   [/^375-after_components-(data|type)/, []],
   [/^375-after_components-themes/, ['contentStaysInCards']], // c:Progress's 260px minimum, fixed by 71686f3
   // #57: the checkout's code and phone fields (before PR #125: 57-main; after it, on main: 57-after);
-  // on a phone they wrap. Doodle tilts its card, so its rotated boxes drift 0.55 px per field along a
-  // row: 1.1 px over three, just past the tolerance (#192: measure layout boxes, not transformed ones)
+  // on a phone they wrap. Doodle's 1280 px recording is of layout boxes, before its card's tilt (#192, #256)
   [/^57-main_.*_1280_/, ['fieldRowControlsShareTops']],
   [/^57-main_.*_375_/, []],
-  [/^57-after_examples-checkout_1280_doodle/, ['fieldRowControlsShareTops']],
-  [/^57-after_.*_(375_|semblance)/, []],
-  // main at 320px: only the themes page (a c:Window specimen wider than its card)
-  [/^today_components-themes_320/, ['contentStaysInCards', 'pageFits']],
-  [/^today_components-(inspection|navigation|feedback)_320/, []],
+  [/^57-after_/, []],
+  // main at 320px; the themes page's frame specimens fit since #195 (a frame's minimum width is capped at its container)
+  [/^today_components-(themes|inspection|navigation|feedback)_320/, []],
+  // #233: a card's header actions in a row that does not wrap (the windows page, the dashboard), and a
+  // source view's path pushing its toggles out (the windows page)
+  [/^233-before_components-windows_320/, ['contentStaysInCards', 'pageFits']],
+  [/^233-before_examples-dashboard_320/, ['contentStaysInCards', 'pageFits']],
+  [/^today_(components-windows|examples-dashboard)_320/, []],
+  // parts the components name themselves (lc:role, #193): the shape form's controls are one height in
+  // every theme, an inline choice's pill is its control where wide; nav items fit, in German and Arabic
+  [/^today_examples-shape-form_/, []],
+  [/^today_components-navigation_(1280|375)_/, []],
+  // #299: in a short window, scrolled, the sticky section menu runs over the settings after it in the
+  // side column; the column sticks as one since, in every theme and right to left
+  [/^299-before_/, ['stackChildrenApart']],
+  [/^299-after_/, []],
 ]
 
 describe('layout checker over recorded pages', () => {
@@ -84,7 +94,7 @@ describe('layout checker over recorded pages', () => {
     store.loadTurtle(toTurtle(p, decl))
     const key = (inv: string, scope: number, member: number, by: number) => `${local(inv)} ${scope} ${member} ${by.toFixed(2)}`
     // a group's finding names the group; a Fits finding also the box that sticks out
-    const fits = (r: unknown) => r === Rel.FitsInline || r === Rel.FitsWithin
+    const fits = (r: unknown) => r === Rel.FitsInline || r === Rel.FitsWithin || r === Rel.NoOverlap
     const fn = checkMeasured(p, decl).map((x) => key(x.instance.declaration.iri, x.instance.scope, fits(x.instance.declaration.relation) ? x.member : -1, x.by))
     const sparql = checkSparql(store).map((x) => key(x.invariant, x.scope, x.member, x.by))
     store.dispose?.()

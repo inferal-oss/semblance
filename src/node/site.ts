@@ -7,12 +7,16 @@ import { availableParallelism } from 'node:os'
 import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { followDelta, inPlaceKey, readLocations, routesOf, setBase } from '../navigation.ts'
-import { toHTML } from '../render/serialize.ts'
 import { renderDocument, type DocumentOptions } from '../server/document.ts'
-import { type Rendered, renderToString } from '../server/render.ts'
+import { withCsp } from '../server/csp.ts'
+import { type Rendered, renderToString, serializeRoot } from '../server/render.ts'
 import type { Site } from '../server/site.ts'
-import type { GraphStore } from '../store/types.ts'
-import { loadStore } from './load.ts'
+import { warmRenderer, type WarmRenderer } from '../server/warm.ts'
+import { configureFetching, type GraphStore } from '../store/types.ts'
+import { appOntology, loadStore, loadStoreOf, loadStoreWithOntology, ontologyFiles } from './load.ts'
+import type { Subset } from '../subset.ts'
+import { PAGE_GRAPHS_INDEX } from '../web/takeover.ts'
+import { encodePageGraphs, graphIndex, neededGraphs, pageGraphsMeta, type GraphIndex } from '../server/page-graphs.ts'
 
 export interface RenderSiteOptions {
   /** One self-contained file (where we are goes in the fragment; Site.setup decides how). */
@@ -23,24 +27,95 @@ export interface RenderSiteOptions {
   styles?: boolean
 }
 
-const graphsOf = new WeakMap<Site, Promise<string[]>>()
+const graphsOf = new WeakMap<Site, Promise<Record<string, string>>>()
 
-/** A fresh store with the site's graphs, set up as its client sets it up. */
-export async function siteStore(site: Site, opts: RenderSiteOptions = {}): Promise<GraphStore> {
+/** A site's graphs by name (a list's are numbered). */
+export function namedGraphs(site: Site): Promise<Record<string, string>> {
   let graphs = graphsOf.get(site)
-  if (!graphs) graphsOf.set(site, (graphs = Promise.resolve(site.graphs())))
-  const store = loadStore(site.store ?? 'wat', ...(await graphs))
-  site.setup?.(store, { single: !!opts.single })
-  if (opts.base) setBase(store, opts.base)
+  if (!graphs) graphsOf.set(site, (graphs = Promise.resolve(site.graphs()).then((g) => (Array.isArray(g) ? Object.fromEntries(g.map((t, i) => [String(i), t])) : g))))
+  return graphs
+}
+
+const subsetOf = new WeakMap<Site, Promise<Subset | undefined>>()
+
+/** The part of the framework's ontology a site's graphs use, when it ships only that (Site.subset). */
+export function siteOntology(site: Site): Promise<Subset | undefined> {
+  let subset = subsetOf.get(site)
+  if (!subset) subsetOf.set(site, (subset = site.subset ? namedGraphs(site).then((named) => appOntology(Object.values(named), site.subset === true ? {} : site.subset || {})) : Promise.resolve(undefined)))
+  return subset
+}
+
+/**
+ * A fresh store with the site's graphs, set up as its client sets it up: all of them, or only the
+ * named ones (`ontology/<file>` and the site's own names), as a page's client loads them first;
+ * over the part of the ontology the site uses when it ships only that (Site.subset).
+ */
+export async function siteStore(site: Site, opts: RenderSiteOptions & { graphs?: ReadonlySet<string> } = {}): Promise<GraphStore> {
+  const named = await namedGraphs(site)
+  const subset = await siteOntology(site)
+  const only = opts.graphs
+  const kind = site.store ?? 'wat'
+  const data = Object.entries(named).filter(([n]) => !only || only.has(n)).map(([, t]) => t)
+  const store = configureFetching(subset ? loadStoreWithOntology(kind, subset.turtle, ...data) : only ? loadStoreOf(kind, only, ...data) : loadStore(kind, ...data), site.fetchPolicy)
+  site.setup?.(store, { single: !!opts.single, ...(only && { graphs: only }) })
+  // Where its paths start, and where relative URLs in its data resolve, on every page (one file: as given).
+  if (!opts.single) setBase(store, opts.base ?? '/')
   return store
 }
 
+/** How a site's live examples are rendered on the server: each sandbox in a store of the site's kind, as its client builds them. */
+const sandboxesOf = (site: Site) => ({ load: (...turtle: string[]) => loadStore(site.store ?? 'wat', ...turtle) })
+
 /** Render one address of a site, as its client's first render of it. */
-export async function renderSite(site: Site, url: string, opts: RenderSiteOptions = {}): Promise<Rendered & { attributes: Record<string, string> }> {
+export async function renderSite(site: Site, url: string, opts: RenderSiteOptions & { graphs?: ReadonlySet<string>; prefer?: 'sparql' | 'function' } = {}): Promise<Rendered & { attributes: Record<string, string> }> {
   const store = await siteStore(site, opts)
-  const rendered = await renderToString({ store, root: site.root, url, prepare: site.prepare, layers: site.layers?.(store), prefer: site.prefer, functions: site.functions, styles: opts.styles })
+  const rendered = await renderToString({ store, root: site.root, url, prepare: site.prepare, layers: site.layers?.(store), prefer: opts.prefer ?? site.prefer, functions: site.functions, styles: opts.styles, sandboxes: sandboxesOf(site), hosts: site.hosts })
   const attributes = site.documentAttributes?.(store) ?? {}
   return { ...rendered, attributes }
+}
+
+/** A warm renderer of a site's addresses (src/server/warm.ts): its pages as renderSite renders them, from runtimes loaded once. */
+export function siteRenderer(site: Site, opts: RenderSiteOptions = {}): WarmRenderer {
+  return warmRenderer({
+    root: site.root,
+    load: () => siteStore(site, opts),
+    prepare: site.prepare,
+    layers: site.layers,
+    prefer: site.prefer,
+    functions: site.functions,
+    styles: opts.styles,
+    sandboxes: sandboxesOf(site),
+    attributes: site.documentAttributes,
+    hosts: site.hosts,
+  })
+}
+
+const indexOf = new WeakMap<Site, Promise<GraphIndex>>()
+
+/** Every graph a site's page can name: the framework's ontology files, then the site's own. */
+async function siteGraphIndex(site: Site): Promise<GraphIndex> {
+  let index = indexOf.get(site)
+  // A site that ships its subset loads it whole, first: only its own graphs are named.
+  if (!index) indexOf.set(site, (index = namedGraphs(site).then((named) => graphIndex(site.subset ? named : { ...ontologyFiles(), ...named }))))
+  return index
+}
+
+/**
+ * The graphs a page of a site needs for its first render (Site.pageGraphs), or undefined when it
+ * needs all of them: those its render with function rules read (neededGraphs), when the page
+ * rendered with only those is `html`, the page rendered with all of them.
+ */
+export async function pageGraphs(site: Site, url: string, html: string, opts: RenderSiteOptions = {}): Promise<string[] | undefined> {
+  const index = await siteGraphIndex(site)
+  const traced = await renderSite(site, url, { ...opts, styles: false, prefer: 'function' })
+  // The safety layer always: live examples read their policy from it (src/sandbox.ts), outside any rule.
+  // A site that ships its subset loads it whole, first.
+  const need = neededGraphs(index, traced.projection.engine, traced.runtime.store, [...(site.subset ? [] : ['ontology/core.ttl', 'ontology/layers/safety.ttl']), ...(site.pageGraphs?.always ?? [])])
+  traced.runtime.dispose()
+  if (need.length === index.names.length) return undefined
+  const only = await renderSite(site, url, { ...opts, styles: false, graphs: new Set(need) })
+  only.runtime.dispose()
+  return only.html === html ? need : undefined
 }
 
 /** The addresses of a site to render beforehand: its location's paths (routesOf), as Site.routes changes them. */
@@ -100,6 +175,8 @@ export interface BuildOptions extends RenderSiteOptions {
   template?: string
   /** More for each page's <head> (preloads). */
   head?: string
+  /** The client's chunk for each named graph (Site.pageGraphs): a page preloads those it names. */
+  graphChunks?: Record<string, string>
   /** Worker processes (default: up to 4, leaving a core free; SEMBLANCE_BUILD_WORKERS). */
   workers?: number
   /** Say what is happening. */
@@ -127,11 +204,15 @@ export async function buildSite(opts: BuildOptions): Promise<{ pages: number; ms
   const site = await loadSite(opts.config)
   const groups = await siteRouteGroups(site, opts)
   const routes = groups.flat()
-  if (!opts.single) writeFileSync(join(opts.outDir, '404.html'), template.replace(/<\/head>/i, `${opts.head ?? ''}</head>`))
+  if (!opts.single) {
+    // Any address the build did not render: the client renders it (under the same policy).
+    const notFound = template.replace(/<\/head>/i, () => `${opts.head ?? ''}</head>`)
+    writeFileSync(join(opts.outDir, '404.html'), site.csp ? withCsp([notFound, ''], site.csp === true ? {} : site.csp)[0] : notFound)
+  }
   const want = opts.workers ?? (Number(process.env.SEMBLANCE_BUILD_WORKERS) || Math.max(1, Math.min(4, availableParallelism() - 1)))
   const workers = Math.max(1, Math.min(want, Math.ceil(routes.length / 8)))
   log(`semblance: rendering ${routes.length} page${routes.length === 1 ? '' : 's'} with ${workers} worker${workers === 1 ? '' : 's'}`)
-  const job = { config: resolve(opts.config), outDir: resolve(opts.outDir), template, head: opts.head ?? '', single: !!opts.single, base }
+  const job = { config: resolve(opts.config), outDir: resolve(opts.outDir), template, head: opts.head ?? '', single: !!opts.single, base, graphChunks: opts.graphChunks }
   // The largest groups first, each to the worker with the least to do.
   const chunks: string[][][] = Array.from({ length: workers }, () => [])
   const load = new Array<number>(workers).fill(0)
@@ -145,6 +226,9 @@ export async function buildSite(opts: BuildOptions): Promise<{ pages: number; ms
   for (const r of results) bytes += r.bytes
   const css = results.find((r) => r.css !== undefined)?.css
   if (css !== undefined && !opts.single) writeFileSync(join(opts.outDir, 'semblance.css'), css)
+  // What each page names, in one file: a client that moves to another page before it has every
+  // graph takes in what that page needs first (demo/main.ts, src/slices.ts arrive).
+  if (site.pageGraphs && !opts.single) writeFileSync(join(opts.outDir, PAGE_GRAPHS_INDEX), JSON.stringify(encodePageGraphs(Object.assign({}, ...results.map((r) => r.graphs)))))
   const ms = performance.now() - t0
   log(`semblance: ${routes.length} page${routes.length === 1 ? "" : "s"}, ${(bytes / 1024).toFixed(0)} KiB of HTML, in ${(ms / 1000).toFixed(1)} s`)
   return { pages: routes.length, ms, bytes }
@@ -161,16 +245,21 @@ export interface PagesJob {
   routes: string[][]
   /** This worker compiles the stylesheet (one does). */
   styles: boolean
+  /** The client's chunk for each named graph (Site.pageGraphs): a page preloads those it names. */
+  graphChunks?: Record<string, string>
 }
 
 /** Render pages of a job here (a worker process does the same). */
-export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?: string }> {
+export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?: string; graphs: Record<string, string[]> }> {
   const site = await loadSite(job.config)
   let bytes = 0
   let css: string | undefined
+  const named: Record<string, string[]> = {}
   const stylesheet: DocumentOptions['stylesheet'] = job.single ? 'inline' : { href: job.base + 'semblance.css' }
-  const write = (route: string, html: string, rendered: Awaited<ReturnType<typeof renderSite>>) => {
-    const page = renderDocument(job.template, { ...rendered, html, css: job.single ? rendered.css : undefined }, { mount: site.mount, stylesheet, attributes: rendered.attributes, head: job.head })
+  const write = (route: string, html: string, rendered: Awaited<ReturnType<typeof renderSite>>, graphs?: string[]) => {
+    const head = graphs ? job.head + pageGraphsMeta(graphs) + graphs.map((g) => job.graphChunks?.[g]).filter(Boolean).map((f) => `<link rel="modulepreload" crossorigin href="${job.base}${f}">`).join('') : job.head
+    // One self-contained file (its scripts, styles and engine inline, opened from anywhere) carries no policy.
+    const page = renderDocument(job.template, { ...rendered, html, css: job.single ? rendered.css : undefined }, { mount: site.mount, stylesheet, attributes: rendered.attributes, head, csp: job.single ? undefined : site.csp })
     const file = job.single ? join(job.outDir, 'index.html') : pageFile(job.outDir, job.base, route)
     mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, page)
@@ -180,7 +269,10 @@ export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?:
     const [first, ...rest] = group
     const rendered = await renderSite(site, first!, { single: job.single, base: job.base, styles: job.single || (job.styles && css === undefined) })
     css ??= rendered.css
-    write(first!, rendered.html, rendered)
+    // The graphs its client loads first (a page rendered in place after it gets them all).
+    const graphs = site.pageGraphs && !job.single ? await pageGraphs(site, first!, rendered.html, { base: job.base }) : undefined
+    write(first!, rendered.html, rendered, graphs)
+    if (graphs) named[first!] = graphs
     // The rest of the group: the same runtime, moved to each address as a followed link moves it.
     const store = rendered.runtime.store
     const f = store.factory
@@ -188,21 +280,22 @@ export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?:
     const loc = readLocations(r).find((l) => l.root === site.root)
     for (const route of rest) {
       rendered.runtime.apply(followDelta(r, loc!, route))
-      write(route, toHTML(rendered.projection.index, site.root), rendered)
+      write(route, serializeRoot(rendered.runtime, rendered.projection, site.root, { sandboxes: sandboxesOf(site), prefer: site.prefer, functions: site.functions, hosts: site.hosts }), rendered)
     }
     rendered.runtime.dispose()
   }
-  return { bytes, css }
+  return { bytes, css, graphs: named }
 }
 
-const workerPath = fileURLToPath(new URL('./site-worker.ts', import.meta.url))
+// The worker beside this module: its source in this repository, its build in the package (lib/).
+const workerPath = fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './site-worker.ts' : './site-worker.js', import.meta.url))
 
-function inWorker(job: PagesJob): Promise<{ bytes: number; css?: string }> {
+function inWorker(job: PagesJob): Promise<{ bytes: number; css?: string; graphs: Record<string, string[]> }> {
   return new Promise((resolveJob, reject) => {
     // tsx loads the TypeScript sources in the worker as in this process.
     const child = fork(workerPath, [], { execArgv: ['--import', 'tsx'], stdio: ['ignore', 'inherit', 'inherit', 'ipc'] })
-    child.once('message', (m: { ok: true; bytes: number; css?: string } | { ok: false; error: string }) => {
-      if (m.ok) resolveJob({ bytes: m.bytes, css: m.css })
+    child.once('message', (m: { ok: true; bytes: number; css?: string; graphs: Record<string, string[]> } | { ok: false; error: string }) => {
+      if (m.ok) resolveJob({ bytes: m.bytes, css: m.css, graphs: m.graphs })
       else reject(new Error(m.error))
       child.disconnect()
     })
@@ -221,6 +314,12 @@ export interface HandlerOptions extends RenderSiteOptions {
   template?: string
   /** Inline the stylesheet (with a single-file client build as the template: one self-contained response). */
   embed?: boolean
+  /**
+   * Render from runtimes loaded once (one per language) and moved to each request's address,
+   * rather than from a fresh store per request (src/server/warm.ts): the same pages, for what an
+   * address changes rather than a load and a first projection. Requests are rendered one at a time.
+   */
+  warm?: boolean
 }
 
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.ico': 'image/x-icon' }
@@ -237,6 +336,7 @@ export function createHandler(opts: HandlerOptions): (request: Request) => Promi
   const template = readFileSync(templateFile, 'utf8')
   const base = opts.base ?? '/'
   let css: string | undefined
+  const warm = opts.warm ? siteRenderer(opts.site, { ...opts, styles: !!opts.embed }) : undefined
   return async (request) => {
     const url = new URL(request.url)
     const path = decodeURIComponent(url.pathname)
@@ -248,9 +348,9 @@ export function createHandler(opts: HandlerOptions): (request: Request) => Promi
       css ??= (await renderSite(opts.site, base, { ...opts, styles: true })).css
       return new Response(css, { headers: { 'content-type': 'text/css', 'cache-control': 'public, max-age=600' } })
     }
-    const rendered = await renderSite(opts.site, url.pathname + url.search, { ...opts, styles: !!opts.embed })
-    const page = renderDocument(template, rendered, { mount: opts.site.mount, stylesheet: opts.embed ? 'inline' : { href: base + 'semblance.css' }, attributes: rendered.attributes })
-    rendered.runtime.dispose()
+    const address = url.pathname + url.search
+    const rendered = warm ? await warm.render(address) : await renderSite(opts.site, address, { ...opts, styles: !!opts.embed }).then((r) => (r.runtime.dispose(), r))
+    const page = renderDocument(template, rendered, { mount: opts.site.mount, stylesheet: opts.embed ? 'inline' : { href: base + 'semblance.css' }, attributes: rendered.attributes, csp: opts.site.csp })
     return new Response(page, { status: rendered.status, headers: { 'content-type': 'text/html; charset=utf-8' } })
   }
 }

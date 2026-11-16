@@ -10,6 +10,9 @@
 // (Runtime.continueStall) or stops it (Runtime.stopStall), and the host asks the person (the stall
 // dialog, src/behaviour/stall.ts).
 
+/** Which budget a turn ran out of: its time, its evaluations, or a projection's output (derived triples). */
+export type Limit = 'time' | 'evaluations' | 'output'
+
 /** What kind of work: a rule evaluation, a maintained view's step, a reaction, a single query. */
 export type WorkKind = 'rule' | 'view' | 'reaction' | 'query'
 
@@ -58,6 +61,8 @@ export interface Stall {
   spent: number
   /** Whether a single query was interrupted (store deadline) rather than the turn suspended between evaluations. */
   interrupted: boolean
+  /** The budget it ran out of. */
+  limit: Limit
 }
 
 export type StallListener = (stall: Stall) => void
@@ -68,6 +73,12 @@ export class Watchdog {
    * person (src/behaviour/stall.ts) sets it from the app's sem:budget (1.5 s by default).
    */
   budgetMs = Infinity
+  /**
+   * How many evaluations a turn may make (Infinity by default): a deterministic budget, which a
+   * runtime projecting authored content takes from its policy (safe:maxEvaluations). Continued work
+   * (a slice) is not counted against it.
+   */
+  maxEvaluations = Infinity
   /** The clock is read every this many evaluations (and at every rule batch): the per-evaluation cost is a counter. */
   every = 8
   /** Milliseconds, monotonic: performance.now by default; tests inject one. */
@@ -93,6 +104,8 @@ export class Watchdog {
   private slowest?: Work
   private evaluations = 0
   private turnSuspended = false
+  /** The budget the open turn ran out of first. */
+  private limit?: Limit
   /** Whether the open turn is a slice of continued work: running out of it yields, it is not a stall. */
   private slicing = false
   private holders = new Set<{ readonly heldCount: number }>()
@@ -142,6 +155,7 @@ export class Watchdog {
       this.slowest = undefined
       this.evaluations = 0
       this.turnSuspended = false
+      this.limit = undefined
       this.counter = 0
     } else if (event && !this.turnEvent) this.turnEvent = event
     try {
@@ -158,10 +172,21 @@ export class Watchdog {
 
   /** Between evaluations: whether the turn is over budget. Reads the clock every `every` calls. */
   check(): boolean {
-    this.evaluations++
+    if (++this.evaluations > this.maxEvaluations && !this.slicing) return this.over('evaluations')
     if (++this.counter < this.every) return false
     this.counter = 0
-    return this.read() > this.deadline
+    return this.read() > this.deadline && this.over('time')
+  }
+
+  /** The open turn ran out of a budget (the first it ran out of is the one it is blamed on). Returns true. */
+  over(limit: Limit): true {
+    this.limit ??= limit
+    return true
+  }
+
+  /** Whether budgets bind the open turn (not while continuing a stall: the person chose to wait). */
+  get bounded(): boolean {
+    return this.depth > 0 && !this.slicing
   }
 
   private read(): number {
@@ -186,7 +211,9 @@ export class Watchdog {
 
   /** Whether the turn is over budget now (reads the clock). */
   due(): boolean {
-    return this.depth > 0 && this.read() > this.deadline
+    if (this.depth === 0) return false
+    if (this.evaluations > this.maxEvaluations && !this.slicing) return this.over('evaluations')
+    return this.read() > this.deadline && this.over('time')
   }
 
   /** The deadline of the open turn on the watchdog's clock (Infinity when none, or while continuing a stall). */
@@ -256,6 +283,7 @@ export class Watchdog {
         pending: held,
         spent: end - this.turnStart,
         interrupted: this.pendingInterrupt,
+        limit: this.limit ?? 'time',
       }
       this.pendingInterrupt = false
     }

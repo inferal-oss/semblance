@@ -169,7 +169,7 @@ describe('a walkthrough', () => {
   })
 
   it('renders the same with SPARQL rules and reactions as with functions', () => {
-    expect(implementationGaps(['components/walkthrough.ttl'])).toEqual({ noSparql: [], noFunction: [] })
+    expect(implementationGaps(['components/walkthrough.ttl', 'components/walkthrough-diagram.ttl'])).toEqual({ noSparql: [], noFunction: [] })
     // SPARQL on Oxigraph and on Semblance's own engine, and the function twins.
     const [a, b, c] = ([['sparql', 'oxigraph'], ['sparql', 'wat'], ['function', 'oxigraph']] as const).map(([prefer, kind]) => {
       const t = todo(prefer, kind)
@@ -241,7 +241,7 @@ describe('reading a walkthrough costs only the walkthrough', () => {
 
 describe('every example explains itself with a walkthrough', () => {
   // The examples on the Examples page.
-  const files = ['_ex-todo.ttl', '_network.ttl', '_ex-signin.ttl', '_ex-kanban.ttl', '_ex-checkout.ttl', '_ex-budget.ttl', '_ex-activity.ttl', '_ex-chat.ttl', '_ex-settings.ttl', '_ex-localized.ttl', '_ex-warehouse.ttl', '_ex-shapes.ttl', '_ex-sheet.ttl', '_ex-calendar.ttl', '_ex-dashboard.ttl', '_ex-collab.ttl', '_ex-files.ttl', '_ex-foreign.ttl', '_ex-rdf.ttl', '_ex-reader.ttl']
+  const files = ['_ex-todo.ttl', '_network.ttl', '_ex-signin.ttl', '_ex-kanban.ttl', '_ex-checkout.ttl', '_ex-budget.ttl', '_ex-activity.ttl', '_ex-chat.ttl', '_ex-settings.ttl', '_ex-localized.ttl', '_ex-warehouse.ttl', '_ex-shapes.ttl', '_ex-sheet.ttl', '_ex-calendar.ttl', '_ex-dashboard.ttl', '_ex-collab.ttl', '_ex-files.ttl', '_ex-foreign.ttl', '_ex-rdf.ttl', '_ex-reader.ttl', '_ex-blocks.ttl']
   it.each(files)('%s', (file) => {
     const text = readFileSync(new URL(`../demo/gallery/${file}`, import.meta.url), 'utf8')
     const root = /^(ui:[\w-]+-how) a c:Walkthrough/m.exec(text)?.[1]

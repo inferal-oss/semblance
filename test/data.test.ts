@@ -52,6 +52,84 @@ describe('c:GanttChart', () => {
 })
 
 describe('c:Table', () => {
+  it('keeps host-owned cells and their controls when rows sort', () => {
+    const { document, window } = parseHTML('<!doctype html><html><body><main id="app"></main></body></html>')
+    const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix sem: <${NS.sem}> . @prefix ex: <https://example.org/> .
+      ex:q a sem:View ; sem:select "SELECT ?name ?id WHERE { VALUES (?name ?id) { (\\"Zulu\\" \\"z\\") (\\"Alpha\\" \\"a\\") } }" .
+      ex:name a c:Column ; c:variable "name" ; c:label "Name" ; c:slotPrefix "name-" ; c:slotVariable "id" .
+      ex:action a c:Column ; c:variable "id" ; c:label "Actions" ; c:slotPrefix "action-" ; c:sortable false .
+      ex:t a c:Table ; c:label "Members" ; c:query ex:q ; c:tableColumns ( ex:name ex:action ) .`)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, layers: [A11Y.Layer, STY.Layer], roots: ['https://example.org/t'] })
+    const dom = new DomRenderer(screen.index, document.getElementById('app')!, 'https://example.org/t')
+    dom.flush()
+    const bus = new EventBus(runtime, screen)
+    bus.attach(dom, () => dom.flush())
+    const slot = dom.slot('action-z')!
+    const zuluName = dom.slot('name-z')!
+    zuluName.textContent = 'Zulu'
+    dom.slot('name-a')!.textContent = 'Alpha'
+    const button = document.createElement('button')
+    button.textContent = 'Edit Zulu'
+    slot.append(button)
+    expect(dom.slot('action-a')?.localName).toBe('td')
+    expect(slot.textContent).toBe('Edit Zulu')
+    const headers = [...document.querySelectorAll('thead th')]
+    expect(headers[0]?.querySelector('button')).not.toBeNull()
+    expect(headers[1]?.querySelector('button')).toBeNull()
+    expect(headers[1]?.querySelector('.sem-head-label')).not.toBeNull()
+    expect(headers[1]?.textContent).toBe('Actions')
+    headers[0]!.querySelector('button')!.dispatchEvent(new window.Event('click', { bubbles: true }))
+    expect([...document.querySelectorAll('tbody th')].map((th) => th.textContent)).toEqual(['Alpha', 'Zulu'])
+    expect(dom.slot('action-z')).toBe(slot)
+    expect(dom.slot('name-z')).toBe(zuluName)
+    expect(slot.querySelector('button')).toBe(button)
+    const plain = toText(runtime.project({ modality: MOD.Text, name: 'text' }).index, 'https://example.org/t')
+    expect(plain).toContain('Members')
+    expect(plain).not.toContain('Edit Zulu')
+  })
+
+  it('leaves a cell empty when its slot key is unbound', () => {
+    const { document } = parseHTML('<!doctype html><html><body><main id="app"></main></body></html>')
+    const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix sem: <${NS.sem}> . @prefix ex: <https://example.org/> .
+      ex:q a sem:View ; sem:select "SELECT ?name ?id WHERE { VALUES (?name ?id) { (\\"Known\\" \\"k\\") (\\"Missing\\" UNDEF) } }" .
+      ex:name a c:Column ; c:variable "name" ; c:label "Name" .
+      ex:action a c:Column ; c:variable "name" ; c:label "Actions" ; c:slotPrefix "action-" ; c:slotVariable "id" ; c:sortable false .
+      ex:t a c:Table ; c:query ex:q ; c:tableColumns ( ex:name ex:action ) .`)
+    const screen = new Runtime(store).project({ modality: MOD.Screen, roots: ['https://example.org/t'] })
+    const dom = new DomRenderer(screen.index, document.getElementById('app')!, 'https://example.org/t')
+    dom.flush()
+    expect(dom.slot('action-k')?.localName).toBe('td')
+    expect(dom.slot('action-Missing')).toBeUndefined()
+    const missing = [...document.querySelectorAll('tbody tr')].find((row) => row.querySelector('th')?.textContent === 'Missing')!
+    expect(missing.querySelector('td')?.textContent).toBe('')
+  })
+
+  it('keeps distinct slot cells for rows with the same displayed value', () => {
+    const { document, window } = parseHTML('<!doctype html><html><body><main id="app"></main></body></html>')
+    const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix sem: <${NS.sem}> . @prefix ex: <https://example.org/> .
+      ex:q a sem:View ; sem:select "SELECT ?name ?id ?rank WHERE { VALUES (?name ?id ?rank) { (\\"Same\\" \\"first\\" 2) (\\"Same\\" \\"second\\" 1) } } ORDER BY DESC(?rank)" .
+      ex:name a c:Column ; c:variable "name" ; c:label "Name" ; c:slotPrefix "name-" ; c:slotVariable "id" .
+      ex:rank a c:Column ; c:variable "rank" ; c:label "Rank" .
+      ex:t a c:Table ; c:query ex:q ; c:tableColumns ( ex:name ex:rank ) .`)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, roots: ['https://example.org/t'] })
+    const dom = new DomRenderer(screen.index, document.getElementById('app')!, 'https://example.org/t')
+    dom.flush()
+    const bus = new EventBus(runtime, screen)
+    bus.attach(dom, () => dom.flush())
+    const first = dom.slot('name-first')!
+    const second = dom.slot('name-second')!
+    first.textContent = 'First'
+    second.textContent = 'Second'
+    expect(first).not.toBe(second)
+    expect([...document.querySelectorAll('tbody th')].map((cell) => cell.textContent)).toEqual(['First', 'Second'])
+    document.querySelectorAll('thead th button')[1]!.dispatchEvent(new window.Event('click', { bubbles: true }))
+    expect([...document.querySelectorAll('tbody th')].map((cell) => cell.textContent)).toEqual(['Second', 'First'])
+    expect(dom.slot('name-first')).toBe(first)
+    expect(dom.slot('name-second')).toBe(second)
+  })
+
   it('renders the rows of its SELECT with table semantics and a sticky, sortable header', () => {
     const { root, document } = gallery()
     const t = root('dt-table-component')
@@ -74,8 +152,9 @@ describe('c:Table', () => {
     const counts = rows.map((r) => Number(r.querySelectorAll('td')[2]!.textContent))
     expect(counts).toEqual([...counts].sort((a, b) => b - a))
     expect(rows[0]!.querySelectorAll('td')[2]!.className).toBe('sem-end')
-    const slug = rows.find((r) => r.querySelector('th')!.textContent === 'Table')!.querySelector('code')!
-    expect(slug.textContent).toBe('table')
+    // c:Table, and the block editor's blk:Table, which is labelled "Table" too
+    const slugs = rows.filter((r) => r.querySelector('th')!.textContent === 'Table').map((r) => r.querySelector('code')!.textContent)
+    expect(slugs).toContain('table')
     expect(document.querySelector('[data-sem-c=table] .sem-sort-icon')!.getAttribute('aria-hidden')).toBe('true')
   })
 
@@ -153,8 +232,9 @@ describe('c:DescriptionList, c:Stat and c:Avatar', () => {
     expect(dl.localName).toBe('dl')
     const pairs = [...dl.querySelectorAll('.sem-pair')].map((p) => [p.querySelector('dt')!.textContent, p.querySelector('dd')!.textContent])
     expect(pairs[0]).toEqual(['slug', 'table'])
-    // c:Table is a sem:Component and a c:Sortable, and (ontology/alignments.ttl) a schema:Table.
-    expect(pairs[1]).toEqual(['subClassOf', 'Table, Sortable, Component'])
+    // c:Table is a sem:Component and a c:Sortable, and (ontology/alignments.ttl) a schema:Table: in
+    // the viewer's collation of their labels.
+    expect(pairs[1]).toEqual(['subClassOf', 'Component, Sortable, Table'])
     expect(pairs[2]![1]).toMatch(/^Rows of a SPARQL SELECT/)
     expect([...root('dt-dl-explicit').querySelectorAll('dt')].map((d) => d.textContent)).toEqual(['Store', 'Strata', 'Change log', 'Identity'])
   })
@@ -253,11 +333,11 @@ describe('c:Tree', () => {
     click(twisty)
     expect(objects(UI + 'dt-tree-classes', NS.c + 'expandedNode')).toContain(NS.c + 'Chart')
     expect(item('Chart').getAttribute('aria-expanded')).toBe('true')
-    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['BarChart', 'Gantt chart', 'Heatmap', 'LineChart'])
-    expect(item('BarChart').getAttribute('aria-level')).toBe('3')
+    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['Gantt chart', 'RowChart'])
+    expect(item('RowChart').getAttribute('aria-level')).toBe('3')
     click(item('Chart').querySelector('.sem-twisty')!)
     expect(item('Chart').getAttribute('aria-expanded')).toBe('false')
-    expect(item('BarChart')).toBeUndefined()
+    expect(item('RowChart')).toBeUndefined()
   })
 
   it('selects a node from its label, and the breadcrumbs follow and navigate back up', () => {

@@ -26,6 +26,7 @@
 @prefix tree: <https://w3id.org/tree#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
 @prefix rnd: <https://semblance.dev/ns/rendered#> .
+@prefix lc: <https://semblance.dev/ns/layout-constraints#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 
 # =================================================================================================
@@ -37,7 +38,7 @@
 # --- application state ---------------------------------------------------------------------------
 
 ui:app sty:colorScheme sty:System ;
-    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer, fs:Layer ;
+    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer, fs:Layer, lc:Layer ;
     l10n:language l10n:English ;
     ui:store ui:SemblanceWasm ;
     ui:rules ui:PreferSparql ;
@@ -90,9 +91,9 @@ ui:inspecting rdfs:label "inspecting" .
 ui:location a nav:Location ; nav:root ui:shell ;
     nav:dimensions ( ui:atLanguage ui:atPage ui:atDocSection ui:atExample ui:atGalleryGroup ui:atReferenceTerm ui:atTarget ) .
 # The language leads the path, except the site's own (English): /uk/docs/rules/, /docs/rules/.
-# Links keep it, and it is also what the settings remember (ui:rememberSettings). The home page is /.
+# Links keep it, and it is also what the tab remembers (ui:rememberLanguage). The home page is /.
 ui:atLanguage a nav:Dimension ; nav:subject ui:app ; nav:property l10n:language ; nav:keyProperty l10n:code ;
-    nav:implicit l10n:English ; nav:carriedBy nav:Path ; nav:history nav:MakesHistory .
+    nav:implicit l10n:English ; nav:carriedBy nav:Path ; nav:history nav:MakesHistory ; nav:scroll nav:KeepsScroll .
 ui:atPage a nav:Dimension ; nav:subject ui:app ; nav:property ui:page ; nav:keyProperty ui:key ;
     nav:implicit ui:Home ; nav:carriedBy nav:Path ; nav:history nav:MakesHistory .
 ui:atDocSection a nav:Dimension ; nav:subject ui:app ; nav:property ui:docSection ; nav:keyProperty ui:key ;
@@ -133,7 +134,8 @@ ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:perfPanel ui:desktop ) ;
 
 # Who sponsors the project, in the app bar beside the name, with their chevron (a c:Emblem, drawn from data).
 ui:sponsorLine a c:Text ; c:inline true ;
-    c:children ( "Sponsored by " ui:inferalLink ) .
+    c:children ( ui:sponsoredBy ui:inferalLink ) .
+ui:sponsoredBy a c:Text ; c:inline true ; c:label "Sponsored by " .
 ui:inferalLink a c:Link ; c:href "https://inferal.com/" ; c:external false ; c:label "Inferal" ; c:logo ui:inferalChevron ; sty:tone sty:Neutral .
 ui:inferalChevron a c:Emblem ; rdfs:label "Inferal" ; c:decorative true ;
     c:viewBox "0 0 348.45 415.12" ; c:fillRule "evenodd" ; c:color "#0070f3" ;
@@ -191,7 +193,9 @@ ui:themePicker a c:Choice ; c:controls ui:shell ; c:property sty:theme .
 ui:logo a c:GraphMark ; rdfs:label "Semblance" .
 ui:theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
 # On a phone the page switcher is a picker (one line, the current page shown), which fits the bar.
-ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page ; c:compactAs c:Picker .
+# What each section shows now is prepared once the page is quiet (sem:anticipates), so a first
+# click or tap on it - which has no pointing before it - shows it at once.
+ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page ; c:compactAs c:Picker ; sem:anticipates true .
 
 # The site: a landing page, the docs, the component gallery and complete examples
 # (demo/gallery/_home.ttl, _docs.ttl, _examples.ttl). Each page is evaluated when
@@ -257,7 +261,7 @@ ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
 ui:compileChoice a c:Choice ; c:controls ui:app ; c:property ui:compile .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
-    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer sem:DocsLayer prv:Layer ) .
+    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer sem:DocsLayer prv:Layer lc:Layer ) .
 ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ui:viewRows ) .
 
 # Every tool is a view of the same graph. ↗ opens one in a window; tab and window state are graph state.
@@ -442,7 +446,7 @@ ui:activityCard a c:Flippable ; c:front ex:activity .
 ui:logCard a c:Flippable ; c:front ui:changeLog .
 ui:changeLog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:rememberLogSwitch ui:changeLogHead ui:changeLogMembers ) .
-ui:changeLogHead a c:QueryView ; c:queries ( ui:qStream ui:qStreamView ) .
+ui:changeLogHead a c:QueryView ; c:followUpdates true ; c:queries ( ui:qStream ui:qStreamView ) .
 ui:changeLogMembers a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 8 ;
     c:emptyText "Click, type or tick something. Each relevant interaction becomes an immutable member of the beh:ChangeLog LDES, with the size of the change it caused." .
 ui:qStream a sem:Query ; rdfs:label "the event stream" ;
@@ -460,7 +464,7 @@ WHERE {
 ui:performance a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:perfToolbar ui:perfWorkspace ) .
 
-ui:perfToolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+ui:perfToolbar a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
     c:children ( ui:sizes ui:runButton ui:clearButton ui:perfProgress ) .
 ui:sizes a c:TextField ; c:label "Sizes" ; c:value "100,1000" ; c:placeholder "100,1000,10000" .
 ui:runButton a c:Button ; c:label "Run matrix" ; sty:intent sty:Primary .
@@ -570,10 +574,11 @@ ui:GroupLayers a ui:GalleryGroup ; rdfs:label "Layers" ; sem:order 11 ; ui:key "
 ui:GroupWindows a ui:GalleryGroup ; rdfs:label "Windows" ; sem:order 12 ; ui:key "windows" ; ui:componentGroup c:WindowsGroup .
 ui:GroupThemes a ui:GalleryGroup ; rdfs:label "Themes" ; sem:order 13 ; ui:key "themes" .
 ui:GroupInspection a ui:GalleryGroup ; rdfs:label "Inspection" ; sem:order 14 ; ui:key "inspection" ; ui:componentGroup c:InspectionGroup .
+ui:GroupDocuments a ui:GalleryGroup ; rdfs:label "Documents" ; sem:order 15 ; ui:key "documents" ; ui:componentGroup c:DocumentsGroup .
 
 ui:gallery a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:galleryAside ui:galleryPages ) .
-ui:galleryAside a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+ui:galleryAside a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:sticky pos:StickToTop ;
     c:children ( ui:galleryNav ui:display ) .
 # Display settings: each a control over one property of the shell (or the app). A column beside
 # the navigation; on a phone, where they stack above the page, two to a row (ui:Settings).
@@ -591,10 +596,12 @@ ui:languageChoice a c:Choice ; c:controls ui:app ; c:property l10n:language .
 ui:contrastChoice a c:Choice ; c:controls ui:shell ; c:property sty:contrast .
 ui:motionChoice a c:Choice ; c:controls ui:shell ; c:property mot:preference .
 ui:densityChoice a c:Choice ; c:controls ui:shell ; c:property sty:density .
-ui:galleryNav a c:NavList ; c:controls ui:app ; c:property ui:galleryGroup ; c:label "Components" ; c:compactAs c:Picker .
+# A section's own list prepares the pages near the current one once the page is quiet, nearest first
+# (sem:anticipatesNear), so a first click on one of them shows it at once (#436).
+ui:galleryNav a c:NavList ; c:controls ui:app ; c:property ui:galleryGroup ; c:label "Components" ; c:compactAs c:Picker ; sem:anticipatesNear 4 .
 ui:galleryPages a c:Switch ; c:controls ui:app ; c:property ui:galleryGroup ;
     c:cases ( ui:gc-foundations ui:gc-layout ui:gc-type ui:gc-actions ui:gc-inputs ui:gc-feedback
-              ui:gc-data ui:gc-navigation ui:gc-overlays ui:gc-disclosure ui:gc-layers ui:gc-windows ui:gc-themes ui:gc-inspection ) .
+              ui:gc-data ui:gc-navigation ui:gc-overlays ui:gc-disclosure ui:gc-layers ui:gc-windows ui:gc-themes ui:gc-inspection ui:gc-documents ) .
 ui:gc-foundations c:when ui:GroupFoundations ; c:content ui:gallery-foundations .
 ui:gc-layout c:when ui:GroupLayout ; c:content ui:gallery-layout .
 ui:gc-type c:when ui:GroupType ; c:content ui:gallery-type .
@@ -609,6 +616,7 @@ ui:gc-layers c:when ui:GroupLayers ; c:content ui:gallery-layers .
 ui:gc-windows c:when ui:GroupWindows ; c:content ui:gallery-windows .
 ui:gc-themes c:when ui:GroupThemes ; c:content ui:gallery-themes .
 ui:gc-inspection c:when ui:GroupInspection ; c:content ui:gallery-inspection .
+ui:gc-documents c:when ui:GroupDocuments ; c:content ui:gallery-documents .
 
 # --- remembered state (per:Policy; see PERSISTENCE.md) ------------------------------------------
 # Restored before the first render, written back after the changes they cover.
@@ -636,19 +644,31 @@ WHERE {
   UNION { ui:app ui:inspectorMode ui:Paused ; ui:inspecting ?node }
 }""" .
 
-ui:rememberDisplay a per:Policy ; per:scope per:Session ;
+# How the interface looks is the visitor's, on this device: a new tab or a later visit opens in it,
+# and a tab already open follows a choice made in another (per:acrossTabs).
+ui:rememberDisplay a per:Policy ; per:scope per:Device ; per:acrossTabs true ;
     rdfs:label "Display settings" , "Налаштування відображення"@uk , "Anzeigeeinstellungen"@de , "إعدادات العرض"@ar ;
-    per:subject ui:shell ; per:properties ( mot:preference sty:contrast sty:density sty:theme prv:privacy ) .
+    per:subject ui:shell ; per:properties ( mot:preference sty:contrast sty:density sty:theme ) .
+ui:rememberColorScheme a per:Policy ; per:scope per:Device ; per:acrossTabs true ;
+    rdfs:label "Colour scheme" , "Колірна схема"@uk , "Farbschema"@de , "نظام الألوان"@ar ;
+    per:subject ui:app ; per:properties ( sty:colorScheme ) .
 
+# Private mode is for sharing this tab's screen: it stays with the tab, and ends with it.
+ui:rememberPrivacy a per:Policy ; per:scope per:Session ;
+    rdfs:label "Private mode" , "Приватний режим"@uk , "Privatmodus"@de , "الوضع الخاص"@ar ;
+    per:subject ui:shell ; per:properties ( prv:privacy ) .
+
+# The language is the address's (ui:atLanguage), so a link opens in it: kept for this tab only.
 # The sections of the pages are kept for this tab by the location (ui:location), not here.
-ui:rememberSettings a per:Policy ; per:scope per:Session ;
-    rdfs:label "Language and theme" , "Мова і тема"@uk , "Sprache und Design"@de , "اللغة والسمة"@ar ;
-    per:subject ui:app ; per:properties ( l10n:language sty:colorScheme ) .
+ui:rememberLanguage a per:Policy ; per:scope per:Session ;
+    rdfs:label "Language" , "Мова"@uk , "Sprache"@de , "اللغة"@ar ;
+    per:subject ui:app ; per:properties ( l10n:language ) .
 
 # What the command palette ran lately: kept on this device.
 ui:rememberPalette a per:Policy ; per:scope per:Device ;
     rdfs:label "Recent commands" , "Нещодавні команди"@uk , "Zuletzt verwendete Befehle"@de , "الأوامر الأخيرة"@ar ;
-    per:construct """CONSTRUCT { ?run ?p ?o } WHERE { ?run c:recentOf ui:palette ; ?p ?o }""" .
+    per:construct """CONSTRUCT { ?run a c:RecentRun ; c:recentOf ui:palette ; c:entryFor ?item ; c:recentRank ?rank }
+WHERE { ?run c:recentOf ui:palette ; c:entryFor ?item ; c:recentRank ?rank }""" .
 
 # Opt-in: the change log itself, so the Change log, Activity and Timeline survive a reload.
 # It reads the change log only (an input graph): kept as a view, a write stores the members that came and went.

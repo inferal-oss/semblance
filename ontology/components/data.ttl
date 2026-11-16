@@ -1,6 +1,8 @@
 @prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -21,33 +23,923 @@ c:parentProperty a owl:ObjectProperty ; rdfs:range rdf:Property ;
 # The rows are the solutions of c:query (a sem:View: sem:select). Columns are c:Column nodes
 # naming a variable. Sorting is graph state on the table (c:sortColumn, c:sortDescending),
 # written by a reaction when a header is clicked; the rule sorts the selected rows. A row's
-# elements are keyed by its content, so re-sorting moves rows without re-rendering them.
+# elements are keyed by its content (and its host cells' slot keys), so re-sorting moves rows
+# without re-rendering them, and a host cell (sem:slot) keeps what the host mounted in it.
 
 c:Table a owl:Class ;
     rdfs:subClassOf sem:Component , c:Sortable ;
     rdfs:comment """Rows of a SPARQL SELECT (c:query, a sem:View with sem:select) under declared columns
-(c:tableColumns, an rdf:List of c:Column). Headers sort: clicking one writes c:sortColumn (and toggles
-c:sortDescending on a second click). c:label names the table; c:emptyText shows when there are no rows;
+(c:tableColumns, an rdf:List of c:Column). Headers sort (unless the column is c:sortable false): clicking
+one writes c:sortColumn (and toggles c:sortDescending on a second click). A column with c:slotPrefix
+has host-owned cells (sem:slot), where the embedding application mounts its own controls. c:label names the table; c:emptyText shows when there are no rows;
 c:dataset names a node whose changes mean the rows changed."""@en ;
     sem:slug "table" .
 c:query a owl:ObjectProperty ; rdfs:subPropertyOf c:dataQuery ; rdfs:range sem:View ;
     rdfs:comment "The SELECT whose solutions are the rows (sem:select)."@en .
 c:tableColumns a owl:ObjectProperty ; rdfs:domain c:Table ; rdfs:range rdf:List ;
     rdfs:comment "The columns, in order (c:Column nodes). Not c:columns, which is a c:Grid's column count."@en .
-c:Column a owl:Class ; rdfs:comment "A table column: the SELECT variable it shows (c:variable), a header (c:label), c:align, c:format and c:unit."@en .
+c:Column a owl:Class ; rdfs:comment "A table column: the SELECT variable it shows (c:variable), a header (c:label), c:align, c:format, c:unit, whether its header sorts (c:sortable), or host-owned cells (c:slotPrefix)."@en .
 c:variable a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:comment "Name of a SELECT variable, without the '?'."@en .
+c:slotPrefix a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:range xsd:string ;
+    rdfs:comment "For c:Table, make each cell a host-owned slot named by this prefix plus the bound c:slotVariable value (or c:variable if no slot variable is set). The value must be present and unique across rows."@en .
+c:slotVariable a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:range xsd:string ;
+    rdfs:comment "Name of a SELECT variable, without the '?', that provides each host-owned cell's stable slot key. Defaults to c:variable."@en .
 c:align a owl:DatatypeProperty ; rdfs:domain c:Column ;
     rdfs:comment "\"end\" aligns the column's cells to the end (numbers); \"start\" (default) or \"center\"."@en .
 c:format a owl:DatatypeProperty ; rdfs:domain c:Column ;
-    rdfs:comment "How cells are written: \"number\" (grouped), \"decimal\" (2 places), \"percent\" (of a fraction), \"code\" (monospace), \"time\" (an xsd:dateTime's clock time). IRIs show their label."@en .
+    rdfs:comment "How cells are written: \"number\" (grouped), \"decimal\" (2 places), \"percent\" (of a fraction), \"code\" (monospace), \"time\" (an xsd:dateTime's clock time), \"component\" (the cell holds the component its value names, e.g. a c:Sparkline; as text, its label). IRIs show their label."@en .
 c:sortColumn a owl:ObjectProperty ; rdfs:domain c:Table ; rdfs:range c:Column ; rdfs:comment "The column the rows are sorted by."@en .
 c:sortDescending a owl:DatatypeProperty ; rdfs:domain c:Table ; rdfs:range xsd:boolean .
 c:sorts a owl:ObjectProperty ; rdfs:comment "On a rendered header: the c:Column that activating it sorts by."@en .
 
-c:TableRendering a sem:Rendering ; sem:targets c:Table ; sem:stratum 0 ; sem:follows c:dataset ;
-    sem:functionOnly "awaits sx:Locale (sx:formatNumber, sx:formatDateTime): numbers and times in the viewer's locale. (Its rows, the result of the SELECT named in c:query, become graph data with the views runtime.)" ;
-    sem:needsExtension sx:Locale .
+# A run of each table's query (iv:perQuery, ontology/layers/view.ttl), maintained as the graph changes,
+# its rows a result set in the views graph that the table names (iv:run); a query that is a view of its
+# own keeps its own annotations. It reads what a rule's query would (iv:reads iv:Everything: other views'
+# output, the rendered state, what rules derive) and is written in the tick that changes it, so a table
+# agrees with the figures beside it.
+c:TableRuns a iv:View ;
+    iv:perQuery c:query ; iv:referrerClass c:Table ;
+    iv:strategy iv:Auto ; iv:materialize iv:ResultSet ;
+    iv:reads iv:Everything ; iv:writeEach iv:Tick .
+c:TableRendering a sem:Rendering ; sem:targets c:Table ; sem:stratum 0 ;
+    sem:follows c:dataset , ( iv:run rs:solution rs:binding ) , ( iv:run iv:column ) , ( c:tableColumns [ sem:zeroOrMore rdf:rest ] rdf:first ) .
 c:TableRendering-fn a sem:Rule ; sem:implements c:TableRendering ; sem:function "data:table" .
+# The rows of its run (c:TableRuns), a row per solution keyed by it and placed by an order key: its
+# place in the run, or sorted by a column (has a value, the value - a number, else its displayed text's
+# sx:sortKey -, its place), the first two descending when the sort is. Values are written in the
+# viewer's l10n:formatLocale by sx:formatNumber and sx:formatDateTime (sx:Locale), IRIs by their labels.
+# Per table (sem:bulk false): every sub-select starts from $this.
+c:TableRendering-sparql-screen a sem:Rule ;
+    sem:implements c:TableRendering ;
+    sem:modality mod:Screen ;
+    sem:bulk false ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:scope ?scope ; rdfhtml:type ?type ; rdfhtml:tabIndex ?tabIndex ; rdfhtml:colSpan ?colSpan ;
+      sem:orderKey ?key ; c:sorts ?sorts ; sem:slot ?slot ; rdfhtml:attribute ?attr ; rdfhtml:hasChild ?textNode , ?component .
+  ?parent rdfhtml:hasChild ?el .
+  ?el ord:immediatelyPrecedes ?after .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?attrName ; rdfhtml:attributeValue ?attrValue .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Table ; c:query ?q . ?q sem:select ?select . FILTER(STR(?select) != "")
+  ?viewer l10n:formatLocale ?locale .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this l10n:label ?captionLocal }
+  OPTIONAL { FILTER(!BOUND(?captionLocal)) ?captionAt l10n:of $this ; l10n:label ?captionTwin }
+  OPTIONAL { FILTER(!BOUND(?captionLocal) && !BOUND(?captionTwin)) $this c:label ?captionOnly FILTER(isLiteral(?captionOnly)) }
+  BIND(STR(COALESCE(?captionLocal, ?captionTwin, ?captionOnly)) AS ?caption)
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+  OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+  BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No rows.")) AS ?emptyText)
+  # The run (c:TableRuns): its rows, or the error it ended in.
+  $this iv:run ?run . ?run a rs:ResultSet .
+  OPTIONAL { ?run iv:error ?error }
+  BIND(?q AS ?query)
+  BIND(COALESCE(?query, <urn:semblance:none>) AS ?queryN)
+  OPTIONAL { { ?queryN l10n:label ?queryC } UNION { ?queryCAt l10n:of ?queryN ; l10n:label ?queryC } }
+  OPTIONAL { FILTER(!BOUND(?queryC)) ?queryN c:label ?queryCOnly FILTER(isLiteral(?queryCOnly)) }
+  OPTIONAL { ?queryRAt l10n:of ?queryN ; l10n:name ?queryR }
+  OPTIONAL { FILTER(!BOUND(?queryR)) ?queryN rdfs:label ?queryROnly FILTER(isLiteral(?queryROnly)) }
+  BIND(STR(COALESCE(?queryC, ?queryCOnly, ?queryR, ?queryROnly, REPLACE(STR(?query), "^.*[#/]", ""))) AS ?queryLabel)
+  # The column it is sorted by, when it is one of its sortable columns.
+  OPTIONAL {
+    $this c:sortColumn ?sortBy .
+    FILTER EXISTS {
+      { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+      UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+              $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
+    }
+  }
+  BIND(EXISTS { $this c:sortDescending ?descending0 FILTER(STR(?descending0) = "true") } AS ?descending)
+  { SELECT (COUNT(?anyRow) AS ?rowCount) WHERE { $this iv:run/rs:solution ?anyRow } }
+  { SELECT (COUNT(?anyCol) AS ?columnCount) WHERE {
+      { $this c:tableColumns/rdf:rest*/rdf:first ?anyCol FILTER(isIRI(?anyCol)) }
+      UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn1 FILTER(isIRI(?anyColumn1)) } $this iv:run/iv:column ?anyCol } } }
+  LATERAL {
+  {
+    # A failed run: a line that says so.
+    FILTER(BOUND(?error))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(CONCAT("Query ", ?queryLabel, " failed: ", STR(?error)) AS ?data)
+  } UNION {
+    # The scrolling region, the table and its head and body.
+    FILTER(!BOUND(?error))
+    VALUES (?local ?tag0 ?parentLocal ?afterLocal) {
+      ("root" rdfhtml:Div UNDEF UNDEF) ("table" rdfhtml:Table "root" UNDEF) ("head" rdfhtml:Thead "table" "body")
+      ("head-row" rdfhtml:Tr "head" UNDEF) ("body" rdfhtml:Tbody "table" UNDEF)
+    }
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag)
+    BIND(IF(?local = "root", ?root, ?none) AS ?shownRoot) BIND(IF(?local = "root", "0", ?none) AS ?tabIndex)
+    BIND(IF(BOUND(?parentLocal), IRI(CONCAT(?me, "/~", ?parentLocal)), ?none) AS ?parent)
+    BIND(IF(BOUND(?afterLocal), IRI(CONCAT(?me, "/~", ?afterLocal)), ?none) AS ?after)
+    LATERAL { OPTIONAL {
+      VALUES (?attrOf ?attrName ?attrKind) { ("root" "role" "region") ("root" "aria-label" "caption-or-table") ("table" "aria-label" "caption") ("table" "aria-rowcount" "rows") }
+      FILTER(?attrOf = ?local && (?attrKind != "caption" || BOUND(?caption)))
+      BIND(IRI(CONCAT(?me, "/~", ?local, "-", ?attrName)) AS ?attr)
+      BIND(IF(?attrKind = "region", "region", IF(?attrKind = "rows", STR(?rowCount + 1), COALESCE(?caption, "Table"))) AS ?attrValue)
+    } }
+  } UNION {
+    # A header cell per column: a button that sorts by it (c:sorts), or its label.
+    {
+      $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+      { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+          $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+          ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+      OPTIONAL { ?col c:variable ?variable0 }
+      BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+      OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+      OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+      OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+      OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+      BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+      BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+      OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+      OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+      BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+      OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+      OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+      OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+      OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+      OPTIONAL { ?col c:sortable ?sortable0 }
+      BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+      BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+      BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+    } UNION {
+      FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+      $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+      BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+      BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+    }
+    BIND(COALESCE(?format1, "") AS ?format)
+    BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+    FILTER(!BOUND(?error))
+    BIND(CONCAT(?me, "/~h", STR(?ci)) AS ?h)
+    BIND(BOUND(?sortBy) && ?sortBy = ?col AS ?sorted)
+    VALUES ?part { "th" "sort" "label" "icon" }
+    FILTER(IF(?part IN ("sort", "icon"), ?sortable, true))
+    BIND(IF(?part = "th", IRI(?h), IRI(CONCAT(?h, "-", ?part))) AS ?el)
+    BIND(IF(?part = "th", rdfhtml:Th, IF(?part = "sort", rdfhtml:Button, rdfhtml:Span)) AS ?tag)
+    BIND(IF(?part = "th", "col", ?none) AS ?scope)
+    BIND(IF(?part = "th", ?alignClass, IF(?part = "sort", "sem-sort", IF(?part = "icon", "sem-sort-icon", IF(?sortable, ?none, "sem-head-label")))) AS ?cls)
+    BIND(IF(?part = "sort", "button", ?none) AS ?type)
+    BIND(IF(?part = "sort", ?col, ?none) AS ?sorts)
+    BIND(IF(?part = "th", IRI(CONCAT(?me, "/~head-row")), IF(?part = "sort" || !?sortable, IRI(?h), IRI(CONCAT(?h, "-sort")))) AS ?parent)
+    BIND(IF(?part = "th" && ?ci + 1 < ?columnCount, IRI(CONCAT(?me, "/~h", STR(?ci + 1))), IF(?part = "label" && ?sortable, IRI(CONCAT(?h, "-icon")), ?none)) AS ?after)
+    BIND(IF(?part IN ("label", "icon"), IRI(CONCAT(?h, "-", ?part, "-text")), ?none) AS ?textNode)
+    BIND(IF(?part = "label", ?colLabel, IF(?part = "icon", IF(?sorted, IF(?descending, "↓", "↑"), "↕"), ?none)) AS ?data)
+    BIND(IF(?part = "th" && ?sorted, "aria-sort", IF(?part = "icon", "aria-hidden", ?none)) AS ?attrName)
+    BIND(IF(BOUND(?attrName), IRI(CONCAT(STR(?el), "-", ?attrName)), ?none) AS ?attr)
+    BIND(IF(?part = "icon", "true", IF(?descending, "descending", "ascending")) AS ?attrValue)
+  } UNION {
+    # A row per solution, placed by its order key.
+    FILTER(!BOUND(?error))
+    ?run rs:solution ?r .
+      ?r rs:index ?rowIndex0 . BIND(xsd:integer(?rowIndex0) AS ?rowIndex)
+      OPTIONAL {
+        FILTER(BOUND(?sortBy))
+        {
+          $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+          { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+              $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+              ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+          OPTIONAL { ?col c:variable ?variable0 }
+          BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+          OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+          OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+          OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+          OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+          BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+          BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+          OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+          OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+          BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+          OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+          OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+          OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+          OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+          OPTIONAL { ?col c:sortable ?sortable0 }
+          BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+          BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+          BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+        } UNION {
+          FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+          $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+          BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+          BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+        }
+        BIND(COALESCE(?format1, "") AS ?format)
+        BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+        FILTER(?col = ?sortBy)
+        BIND(?format AS ?sortFormat) BIND(?variable AS ?sortVariable)
+      }
+      BIND(COALESCE(IRI(CONCAT(STR(?r), "-", ?sortVariable)), <urn:semblance:none>) AS ?sortBinding)
+      LATERAL { OPTIONAL { ?sortBinding rs:value ?sortValue } }
+      BIND(COALESCE(?sortValue, <urn:semblance:none>) AS ?sortValueN)
+      OPTIONAL { { ?sortValueN l10n:label ?sortValueC } UNION { ?sortValueCAt l10n:of ?sortValueN ; l10n:label ?sortValueC } }
+      OPTIONAL { FILTER(!BOUND(?sortValueC)) ?sortValueN c:label ?sortValueCOnly FILTER(isLiteral(?sortValueCOnly)) }
+      OPTIONAL { ?sortValueRAt l10n:of ?sortValueN ; l10n:name ?sortValueR }
+      OPTIONAL { FILTER(!BOUND(?sortValueR)) ?sortValueN rdfs:label ?sortValueROnly FILTER(isLiteral(?sortValueROnly)) }
+      BIND(STR(COALESCE(?sortValueC, ?sortValueCOnly, ?sortValueR, ?sortValueROnly, REPLACE(STR(?sortValue), "^.*[#/]", ""))) AS ?sortValueLabel)
+      BIND(isLiteral(?sortValue) && REGEX(STR(?sortValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?sortValueNumeric)
+      BIND(xsd:double(STR(?sortValue)) AS ?sortValueNumber)
+      BIND(IF(!BOUND(?sortValue), "", IF(isIRI(?sortValue), ?sortValueLabel,
+        IF(?sortFormat = "code", STR(?sortValue),
+        IF(?sortFormat = "time", COALESCE(sx:formatDateTime(?sortValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?sortValue)),
+        IF(!?sortValueNumeric, STR(?sortValue),
+        IF(?sortFormat = "number", sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=0"),
+        IF(?sortFormat = "decimal", sx:formatNumber(?sortValueNumber, ?locale, "minimumFractionDigits=2;maximumFractionDigits=2"),
+        IF(?sortFormat = "percent", sx:formatNumber(?sortValueNumber, ?locale, "style=percent;maximumFractionDigits=1"),
+        sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=2"))))))))) AS ?sortShown)
+      BIND(IF(?descending, "-", "") AS ?d)
+      BIND(IF(!BOUND(?sortValue), "s", IF(?sortValueNumeric, CONCAT("n", STR(?sortValue)), CONCAT("s", sx:sortKey(?sortShown, ?locale)))) AS ?sortPart)
+      BIND(IF(BOUND(?sortBy), CONCAT("\\u0001", ?d, "n", IF(BOUND(?sortValue), "0", "1"), "\\u0001", ?d, ?sortPart, "\\u0001n", STR(?rowIndex)), ?rowIndex) AS ?rowKey)
+      BIND(CONCAT(?me, "/~r-", SUBSTR(MD5(STR(?r)), 1, 8)) AS ?rowId)
+    BIND(IRI(?rowId) AS ?el) BIND(rdfhtml:Tr AS ?tag) BIND(?rowKey AS ?key) BIND(IRI(CONCAT(?me, "/~body")) AS ?parent)
+  } UNION {
+    # A cell per row and column: a host-owned slot, code, or the value as text.
+    FILTER(!BOUND(?error))
+    ?run rs:solution ?r .
+    BIND(CONCAT(?me, "/~r-", SUBSTR(MD5(STR(?r)), 1, 8)) AS ?rowId)
+    {
+      $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+      { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+          $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+          ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+      OPTIONAL { ?col c:variable ?variable0 }
+      BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+      OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+      OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+      OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+      OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+      BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+      BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+      OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+      OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+      BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+      OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+      OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+      OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+      OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+      OPTIONAL { ?col c:sortable ?sortable0 }
+      BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+      BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+      BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+    } UNION {
+      FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+      $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+      BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+      BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+    }
+    BIND(COALESCE(?format1, "") AS ?format)
+    BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+    BIND(IRI(CONCAT(STR(?r), "-", ?variable)) AS ?binding)
+    LATERAL { OPTIONAL { ?binding rs:value ?cellValue } }
+    BIND(COALESCE(?cellValue, <urn:semblance:none>) AS ?cellValueN)
+    OPTIONAL { { ?cellValueN l10n:label ?cellValueC } UNION { ?cellValueCAt l10n:of ?cellValueN ; l10n:label ?cellValueC } }
+    OPTIONAL { FILTER(!BOUND(?cellValueC)) ?cellValueN c:label ?cellValueCOnly FILTER(isLiteral(?cellValueCOnly)) }
+    OPTIONAL { ?cellValueRAt l10n:of ?cellValueN ; l10n:name ?cellValueR }
+    OPTIONAL { FILTER(!BOUND(?cellValueR)) ?cellValueN rdfs:label ?cellValueROnly FILTER(isLiteral(?cellValueROnly)) }
+    BIND(STR(COALESCE(?cellValueC, ?cellValueCOnly, ?cellValueR, ?cellValueROnly, REPLACE(STR(?cellValue), "^.*[#/]", ""))) AS ?cellValueLabel)
+    BIND(isLiteral(?cellValue) && REGEX(STR(?cellValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?cellValueNumeric)
+    BIND(xsd:double(STR(?cellValue)) AS ?cellValueNumber)
+    BIND(IF(!BOUND(?cellValue), "", IF(isIRI(?cellValue), ?cellValueLabel,
+      IF(?format = "code", IF(isNumeric(?cellValue), xsd:string(?cellValue), STR(?cellValue)),
+      IF(?format = "time", COALESCE(sx:formatDateTime(?cellValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?cellValue)),
+      IF(!?cellValueNumeric, STR(?cellValue),
+      IF(?format = "number", sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=0"),
+      IF(?format = "decimal", sx:formatNumber(?cellValueNumber, ?locale, "minimumFractionDigits=2;maximumFractionDigits=2"),
+      IF(?format = "percent", sx:formatNumber(?cellValueNumber, ?locale, "style=percent;maximumFractionDigits=1"),
+      sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=2"))))))))) AS ?cellShown)
+    BIND(IF(?cellShown != "" && COALESCE(?unit, "") != "", CONCAT(?cellShown, " ", ?unit), ?cellShown) AS ?cellText)
+    BIND(IRI(CONCAT(STR(?r), "-", ?slotVariable)) AS ?slotBinding)
+    LATERAL { OPTIONAL { ?slotBinding rs:value ?slotValue } }
+    BIND(CONCAT(?rowId, "-c", STR(?ci)) AS ?td)
+    VALUES ?cellPart { "cell" "code" }
+    FILTER(?cellPart = "cell" || (!BOUND(?slotPrefix) && ?format = "code" && ?cellText != ""))
+    BIND(IF(?cellPart = "cell", IRI(?td), IRI(CONCAT(?td, "-code"))) AS ?el)
+    BIND(IF(?cellPart = "code", rdfhtml:Code, IF(?ci = 0, rdfhtml:Th, rdfhtml:Td)) AS ?tag)
+    BIND(IF(?cellPart = "cell" && ?ci = 0, "row", ?none) AS ?scope)
+    BIND(IF(?cellPart = "cell", ?alignClass, ?none) AS ?cls)
+    BIND(IF(?cellPart = "cell", IRI(?rowId), IRI(?td)) AS ?parent)
+    BIND(IF(?cellPart = "cell" && BOUND(?slotPrefix) && BOUND(?slotValue), CONCAT(?slotPrefix, STR(?slotValue)), ?none) AS ?slot)
+    BIND(?format = "code" && ?cellText != "" AS ?asCode)
+    # A component column's cell holds the component its value names (a sparkline, a badge); else the value as text.
+    BIND(IF(?cellPart = "cell" && !BOUND(?slotPrefix) && ?format = "component" && isIRI(?cellValue), ?cellValue, ?none) AS ?component)
+    BIND(IF(!BOUND(?slotPrefix) && !BOUND(?component) && (?cellPart = "code" || !?asCode), IRI(CONCAT(?td, "-text")), ?none) AS ?textNode)
+    BIND(?cellText AS ?data)
+    BIND(IF(?cellPart = "cell" && ?ci + 1 < ?columnCount, IRI(CONCAT(?rowId, "-c", STR(?ci + 1))), ?none) AS ?after)
+  } UNION {
+    # No rows: a cell across the columns that says so.
+    FILTER(!BOUND(?error) && ?rowCount = 0)
+    VALUES ?emptyPart { "row" "cell" }
+    BIND(IRI(CONCAT(?me, "/~empty-", ?emptyPart)) AS ?el)
+    BIND(IF(?emptyPart = "row", rdfhtml:Tr, rdfhtml:Td) AS ?tag)
+    BIND(IF(?emptyPart = "row", IRI(CONCAT(?me, "/~body")), IRI(CONCAT(?me, "/~empty-row"))) AS ?parent)
+    BIND(IF(?emptyPart = "cell", "sem-empty", ?none) AS ?cls)
+    BIND(IF(?emptyPart = "cell", STR(IF(?columnCount > 1, ?columnCount, 1)), ?none) AS ?colSpan)
+    BIND(IF(?emptyPart = "cell", IRI(CONCAT(?me, "/~empty-text")), ?none) AS ?textNode)
+    BIND(?emptyText AS ?data)
+  }
+  }
+}
+""" .
+
+# As text: the caption, the header and its rule, the first 12 rows (in a group, placed by their order
+# keys; their widths fix the columns', at most 28 characters), how many more, or that there are none.
+c:TableRendering-sparql-text a sem:Rule ;
+    sem:implements c:TableRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; sem:orderKey ?key ; rdfhtml:hasChild ?textNode .
+  ?parent rdfhtml:hasChild ?el .
+  ?el ord:immediatelyPrecedes ?after .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Table ; c:query ?q . ?q sem:select ?select . FILTER(STR(?select) != "")
+  ?viewer l10n:formatLocale ?locale .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this l10n:label ?captionLocal }
+  OPTIONAL { FILTER(!BOUND(?captionLocal)) ?captionAt l10n:of $this ; l10n:label ?captionTwin }
+  OPTIONAL { FILTER(!BOUND(?captionLocal) && !BOUND(?captionTwin)) $this c:label ?captionOnly FILTER(isLiteral(?captionOnly)) }
+  BIND(STR(COALESCE(?captionLocal, ?captionTwin, ?captionOnly)) AS ?caption)
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+  OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+  BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No rows.")) AS ?emptyText)
+  # The run (c:TableRuns): its rows, or the error it ended in.
+  $this iv:run ?run . ?run a rs:ResultSet .
+  OPTIONAL { ?run iv:error ?error }
+  BIND(?q AS ?query)
+  BIND(COALESCE(?query, <urn:semblance:none>) AS ?queryN)
+  OPTIONAL { { ?queryN l10n:label ?queryC } UNION { ?queryCAt l10n:of ?queryN ; l10n:label ?queryC } }
+  OPTIONAL { FILTER(!BOUND(?queryC)) ?queryN c:label ?queryCOnly FILTER(isLiteral(?queryCOnly)) }
+  OPTIONAL { ?queryRAt l10n:of ?queryN ; l10n:name ?queryR }
+  OPTIONAL { FILTER(!BOUND(?queryR)) ?queryN rdfs:label ?queryROnly FILTER(isLiteral(?queryROnly)) }
+  BIND(STR(COALESCE(?queryC, ?queryCOnly, ?queryR, ?queryROnly, REPLACE(STR(?query), "^.*[#/]", ""))) AS ?queryLabel)
+  # The column it is sorted by, when it is one of its sortable columns.
+  OPTIONAL {
+    $this c:sortColumn ?sortBy .
+    FILTER EXISTS {
+      { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+      UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+              $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
+    }
+  }
+  BIND(EXISTS { $this c:sortDescending ?descending0 FILTER(STR(?descending0) = "true") } AS ?descending)
+  { SELECT (COUNT(?anyRow) AS ?rowCount) WHERE { $this iv:run/rs:solution ?anyRow } }
+  { SELECT (COUNT(?anyCol) AS ?columnCount) WHERE {
+      { $this c:tableColumns/rdf:rest*/rdf:first ?anyCol FILTER(isIRI(?anyCol)) }
+      UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn1 FILTER(isIRI(?anyColumn1)) } $this iv:run/iv:column ?anyCol } } }
+  LATERAL {
+  {
+    # A failed run: a line that says so.
+    FILTER(BOUND(?error))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(CONCAT("Query ", ?queryLabel, " failed: ", STR(?error)) AS ?data)
+  } UNION {
+    FILTER(!BOUND(?error))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
+  } UNION {
+    # The lines: the caption, the header, its rule, the rows' group, how many more, or that there are none.
+    FILTER(!BOUND(?error))
+    { SELECT (GROUP_CONCAT(?fittedHeader; separator="  ") AS ?headerLine0) (GROUP_CONCAT(?ruled; separator="  ") AS ?ruleLine0) WHERE {
+        { SELECT ?fittedHeader ?ruled WHERE {
+            ?viewer l10n:formatLocale ?locale .
+            OPTIONAL {
+              $this c:sortColumn ?sortBy .
+              FILTER EXISTS {
+                { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                        $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
+              }
+            }
+            BIND(EXISTS { $this c:sortDescending ?descending0 FILTER(STR(?descending0) = "true") } AS ?descending)
+            {
+              $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+              { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+                  $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+                  ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+              OPTIONAL { ?col c:variable ?variable0 }
+              BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+              OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+              OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+              OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+              OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+              BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+              BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+              OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+              OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+              BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+              OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+              OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+              OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+              OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+              OPTIONAL { ?col c:sortable ?sortable0 }
+              BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+              BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+              BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+            } UNION {
+              FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+              $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+              BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+              BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+            }
+            BIND(COALESCE(?format1, "") AS ?format)
+            BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+            BIND(IF(BOUND(?sortBy) && ?sortBy = ?col, CONCAT(?colLabel, IF(?descending, " ↓", " ↑")), ?colLabel) AS ?headerText)
+            OPTIONAL { { SELECT ?ci (MAX(STRLEN(?cellText)) AS ?cellMax) WHERE {
+            ?viewer l10n:formatLocale ?locale .
+            { SELECT ?r WHERE {
+              ?viewer l10n:formatLocale ?locale .
+              OPTIONAL {
+                $this c:sortColumn ?sortBy .
+                FILTER EXISTS {
+                  { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                  UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                          $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
+                }
+              }
+              BIND(EXISTS { $this c:sortDescending ?descending0 FILTER(STR(?descending0) = "true") } AS ?descending)
+              $this iv:run/rs:solution ?r . ?r rs:index ?shownIndex0 . BIND(xsd:integer(?shownIndex0) AS ?shownIndex)
+              OPTIONAL {
+                FILTER(BOUND(?sortBy))
+                {
+                  $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+                  { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+                      $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+                      ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+                  OPTIONAL { ?col c:variable ?variable0 }
+                  BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+                  OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+                  OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+                  OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+                  OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+                  BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+                  BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+                  OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+                  OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+                  BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+                  OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+                  OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+                  OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+                  OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+                  OPTIONAL { ?col c:sortable ?sortable0 }
+                  BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+                  BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+                  BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+                } UNION {
+                  FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+                  $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+                  BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+                  BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+                }
+                BIND(COALESCE(?format1, "") AS ?format)
+                BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+                FILTER(?col = ?sortBy)
+                BIND(?format AS ?sortFormat) BIND(?variable AS ?sortVariable)
+              }
+              BIND(COALESCE(IRI(CONCAT(STR(?r), "-", ?sortVariable)), <urn:semblance:none>) AS ?sortBinding)
+              LATERAL { OPTIONAL { ?sortBinding rs:value ?sortValue } }
+              BIND(COALESCE(?sortValue, <urn:semblance:none>) AS ?sortValueN)
+              OPTIONAL { { ?sortValueN l10n:label ?sortValueC } UNION { ?sortValueCAt l10n:of ?sortValueN ; l10n:label ?sortValueC } }
+              OPTIONAL { FILTER(!BOUND(?sortValueC)) ?sortValueN c:label ?sortValueCOnly FILTER(isLiteral(?sortValueCOnly)) }
+              OPTIONAL { ?sortValueRAt l10n:of ?sortValueN ; l10n:name ?sortValueR }
+              OPTIONAL { FILTER(!BOUND(?sortValueR)) ?sortValueN rdfs:label ?sortValueROnly FILTER(isLiteral(?sortValueROnly)) }
+              BIND(STR(COALESCE(?sortValueC, ?sortValueCOnly, ?sortValueR, ?sortValueROnly, REPLACE(STR(?sortValue), "^.*[#/]", ""))) AS ?sortValueLabel)
+              BIND(isLiteral(?sortValue) && REGEX(STR(?sortValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?sortValueNumeric)
+              BIND(xsd:double(STR(?sortValue)) AS ?sortValueNumber)
+              BIND(IF(!BOUND(?sortValue), "", IF(isIRI(?sortValue), ?sortValueLabel,
+                IF(?sortFormat = "code", STR(?sortValue),
+                IF(?sortFormat = "time", COALESCE(sx:formatDateTime(?sortValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?sortValue)),
+                IF(!?sortValueNumeric, STR(?sortValue),
+                IF(?sortFormat = "number", sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=0"),
+                IF(?sortFormat = "decimal", sx:formatNumber(?sortValueNumber, ?locale, "minimumFractionDigits=2;maximumFractionDigits=2"),
+                IF(?sortFormat = "percent", sx:formatNumber(?sortValueNumber, ?locale, "style=percent;maximumFractionDigits=1"),
+                sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=2"))))))))) AS ?sortShown)
+              BIND(IF(BOUND(?sortValue), 0, 1) AS ?k1)
+              BIND(IF(BOUND(?sortValue) && ?sortValueNumeric, ?sortValueNumber, ?nil) AS ?k2n)
+              BIND(IF(BOUND(?sortValue) && !?sortValueNumeric, sx:sortKey(?sortShown, ?locale), ?nil) AS ?k2s)
+            } ORDER BY (IF(?descending, -?k1, ?k1)) (IF(?descending, ?nil, ?k2n)) DESC(IF(?descending, ?k2n, ?nil))
+              (IF(?descending, ?nil, ?k2s)) DESC(IF(?descending, ?k2s, ?nil)) ?shownIndex LIMIT 12 }
+            {
+              $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+              { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+                  $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+                  ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+              OPTIONAL { ?col c:variable ?variable0 }
+              BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+              OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+              OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+              OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+              OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+              BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+              BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+              OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+              OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+              BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+              OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+              OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+              OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+              OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+              OPTIONAL { ?col c:sortable ?sortable0 }
+              BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+              BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+              BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+            } UNION {
+              FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+              $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+              BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+              BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+            }
+            BIND(COALESCE(?format1, "") AS ?format)
+            BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+            BIND(IRI(CONCAT(STR(?r), "-", ?variable)) AS ?binding)
+            LATERAL { OPTIONAL { ?binding rs:value ?cellValue } }
+            BIND(COALESCE(?cellValue, <urn:semblance:none>) AS ?cellValueN)
+            OPTIONAL { { ?cellValueN l10n:label ?cellValueC } UNION { ?cellValueCAt l10n:of ?cellValueN ; l10n:label ?cellValueC } }
+            OPTIONAL { FILTER(!BOUND(?cellValueC)) ?cellValueN c:label ?cellValueCOnly FILTER(isLiteral(?cellValueCOnly)) }
+            OPTIONAL { ?cellValueRAt l10n:of ?cellValueN ; l10n:name ?cellValueR }
+            OPTIONAL { FILTER(!BOUND(?cellValueR)) ?cellValueN rdfs:label ?cellValueROnly FILTER(isLiteral(?cellValueROnly)) }
+            BIND(STR(COALESCE(?cellValueC, ?cellValueCOnly, ?cellValueR, ?cellValueROnly, REPLACE(STR(?cellValue), "^.*[#/]", ""))) AS ?cellValueLabel)
+            BIND(isLiteral(?cellValue) && REGEX(STR(?cellValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?cellValueNumeric)
+            BIND(xsd:double(STR(?cellValue)) AS ?cellValueNumber)
+            BIND(IF(!BOUND(?cellValue), "", IF(isIRI(?cellValue), ?cellValueLabel,
+              IF(?format = "code", IF(isNumeric(?cellValue), xsd:string(?cellValue), STR(?cellValue)),
+              IF(?format = "time", COALESCE(sx:formatDateTime(?cellValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?cellValue)),
+              IF(!?cellValueNumeric, STR(?cellValue),
+              IF(?format = "number", sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=0"),
+              IF(?format = "decimal", sx:formatNumber(?cellValueNumber, ?locale, "minimumFractionDigits=2;maximumFractionDigits=2"),
+              IF(?format = "percent", sx:formatNumber(?cellValueNumber, ?locale, "style=percent;maximumFractionDigits=1"),
+              sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=2"))))))))) AS ?cellShown)
+            BIND(IF(BOUND(?slotPrefix), "", IF(?cellShown != "" && COALESCE(?unit, "") != "", CONCAT(?cellShown, " ", ?unit), ?cellShown)) AS ?cellText)
+          } GROUP BY ?ci } }
+            BIND(IF(STRLEN(?headerText) > COALESCE(?cellMax, 0), STRLEN(?headerText), COALESCE(?cellMax, 0)) AS ?wide)
+            BIND(IF(?wide > 28, 28, ?wide) AS ?w)
+            BIND(IF(STRLEN(?headerText) > ?w, CONCAT(SUBSTR(?headerText, 1, ?w - 1), "…"), ?headerText) AS ?fittedHeaderCut)
+            BIND(SUBSTR("                            ", 1, ?w - STRLEN(?fittedHeaderCut)) AS ?fittedHeaderPad)
+            BIND(IF(COALESCE(?align, "") = "end", CONCAT(?fittedHeaderPad, ?fittedHeaderCut), CONCAT(?fittedHeaderCut, ?fittedHeaderPad)) AS ?fittedHeader)
+            BIND(SUBSTR("────────────────────────────", 1, ?w) AS ?ruled)
+          } ORDER BY ?ci }
+      } }
+    VALUES ?local { "caption" "header" "rule" "rows" "more" "empty" }
+    FILTER(IF(?local = "caption", BOUND(?caption), IF(?local = "rows", ?rowCount > 0, IF(?local = "more", ?rowCount > 12, IF(?local = "empty", ?rowCount = 0, true)))))
+    BIND(IRI(CONCAT(?me, "/~", IF(?local = "rows", "rows", CONCAT("line-", ?local)))) AS ?el)
+    BIND(rdfhtml:Div AS ?tag) BIND(?root AS ?parent)
+    BIND(IF(?local = "caption", "header", IF(?local = "header", "rule", IF(?local = "rule", IF(?rowCount > 0, "rows", "empty"), IF(?local = "rows" && ?rowCount > 12, "more", ?none)))) AS ?afterLocal)
+    BIND(IF(BOUND(?afterLocal), IRI(CONCAT(?me, "/~", IF(?afterLocal = "rows", "rows", CONCAT("line-", ?afterLocal)))), ?none) AS ?after)
+    BIND(IF(?local = "rows", ?none, IRI(CONCAT(?me, "/~line-", ?local, "-text"))) AS ?textNode)
+    BIND(IF(?local = "caption", ?caption, IF(?local = "header", REPLACE(?headerLine0, " +$", ""), IF(?local = "rule", REPLACE(?ruleLine0, " +$", ""),
+      IF(?local = "more", CONCAT("… ", STR(?rowCount - 12), " more"), ?emptyText)))) AS ?data)
+  } UNION {
+    # A line per row shown, in the rows' group, placed by its order key.
+    FILTER(!BOUND(?error))
+    { SELECT ?r (GROUP_CONCAT(?fittedCell; separator="  ") AS ?rowLine0) WHERE {
+        { SELECT ?r ?fittedCell WHERE {
+            ?viewer l10n:formatLocale ?locale .
+            OPTIONAL {
+              $this c:sortColumn ?sortBy .
+              FILTER EXISTS {
+                { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                        $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
+              }
+            }
+            BIND(EXISTS { $this c:sortDescending ?descending0 FILTER(STR(?descending0) = "true") } AS ?descending)
+            { SELECT ?r WHERE {
+              ?viewer l10n:formatLocale ?locale .
+              OPTIONAL {
+                $this c:sortColumn ?sortBy .
+                FILTER EXISTS {
+                  { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                  UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                          $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
+                }
+              }
+              BIND(EXISTS { $this c:sortDescending ?descending0 FILTER(STR(?descending0) = "true") } AS ?descending)
+              $this iv:run/rs:solution ?r . ?r rs:index ?shownIndex0 . BIND(xsd:integer(?shownIndex0) AS ?shownIndex)
+              OPTIONAL {
+                FILTER(BOUND(?sortBy))
+                {
+                  $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+                  { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+                      $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+                      ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+                  OPTIONAL { ?col c:variable ?variable0 }
+                  BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+                  OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+                  OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+                  OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+                  OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+                  BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+                  BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+                  OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+                  OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+                  BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+                  OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+                  OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+                  OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+                  OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+                  OPTIONAL { ?col c:sortable ?sortable0 }
+                  BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+                  BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+                  BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+                } UNION {
+                  FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+                  $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+                  BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+                  BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+                }
+                BIND(COALESCE(?format1, "") AS ?format)
+                BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+                FILTER(?col = ?sortBy)
+                BIND(?format AS ?sortFormat) BIND(?variable AS ?sortVariable)
+              }
+              BIND(COALESCE(IRI(CONCAT(STR(?r), "-", ?sortVariable)), <urn:semblance:none>) AS ?sortBinding)
+              LATERAL { OPTIONAL { ?sortBinding rs:value ?sortValue } }
+              BIND(COALESCE(?sortValue, <urn:semblance:none>) AS ?sortValueN)
+              OPTIONAL { { ?sortValueN l10n:label ?sortValueC } UNION { ?sortValueCAt l10n:of ?sortValueN ; l10n:label ?sortValueC } }
+              OPTIONAL { FILTER(!BOUND(?sortValueC)) ?sortValueN c:label ?sortValueCOnly FILTER(isLiteral(?sortValueCOnly)) }
+              OPTIONAL { ?sortValueRAt l10n:of ?sortValueN ; l10n:name ?sortValueR }
+              OPTIONAL { FILTER(!BOUND(?sortValueR)) ?sortValueN rdfs:label ?sortValueROnly FILTER(isLiteral(?sortValueROnly)) }
+              BIND(STR(COALESCE(?sortValueC, ?sortValueCOnly, ?sortValueR, ?sortValueROnly, REPLACE(STR(?sortValue), "^.*[#/]", ""))) AS ?sortValueLabel)
+              BIND(isLiteral(?sortValue) && REGEX(STR(?sortValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?sortValueNumeric)
+              BIND(xsd:double(STR(?sortValue)) AS ?sortValueNumber)
+              BIND(IF(!BOUND(?sortValue), "", IF(isIRI(?sortValue), ?sortValueLabel,
+                IF(?sortFormat = "code", STR(?sortValue),
+                IF(?sortFormat = "time", COALESCE(sx:formatDateTime(?sortValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?sortValue)),
+                IF(!?sortValueNumeric, STR(?sortValue),
+                IF(?sortFormat = "number", sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=0"),
+                IF(?sortFormat = "decimal", sx:formatNumber(?sortValueNumber, ?locale, "minimumFractionDigits=2;maximumFractionDigits=2"),
+                IF(?sortFormat = "percent", sx:formatNumber(?sortValueNumber, ?locale, "style=percent;maximumFractionDigits=1"),
+                sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=2"))))))))) AS ?sortShown)
+              BIND(IF(BOUND(?sortValue), 0, 1) AS ?k1)
+              BIND(IF(BOUND(?sortValue) && ?sortValueNumeric, ?sortValueNumber, ?nil) AS ?k2n)
+              BIND(IF(BOUND(?sortValue) && !?sortValueNumeric, sx:sortKey(?sortShown, ?locale), ?nil) AS ?k2s)
+            } ORDER BY (IF(?descending, -?k1, ?k1)) (IF(?descending, ?nil, ?k2n)) DESC(IF(?descending, ?k2n, ?nil))
+              (IF(?descending, ?nil, ?k2s)) DESC(IF(?descending, ?k2s, ?nil)) ?shownIndex LIMIT 12 }
+            {
+              $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+              { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+                  $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+                  ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+              OPTIONAL { ?col c:variable ?variable0 }
+              BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+              OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+              OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+              OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+              OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+              BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+              BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+              OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+              OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+              BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+              OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+              OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+              OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+              OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+              OPTIONAL { ?col c:sortable ?sortable0 }
+              BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+              BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+              BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+            } UNION {
+              FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+              $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+              BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+              BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+            }
+            BIND(COALESCE(?format1, "") AS ?format)
+            BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+            BIND(IRI(CONCAT(STR(?r), "-", ?variable)) AS ?binding)
+            LATERAL { OPTIONAL { ?binding rs:value ?cellValue } }
+            BIND(COALESCE(?cellValue, <urn:semblance:none>) AS ?cellValueN)
+            OPTIONAL { { ?cellValueN l10n:label ?cellValueC } UNION { ?cellValueCAt l10n:of ?cellValueN ; l10n:label ?cellValueC } }
+            OPTIONAL { FILTER(!BOUND(?cellValueC)) ?cellValueN c:label ?cellValueCOnly FILTER(isLiteral(?cellValueCOnly)) }
+            OPTIONAL { ?cellValueRAt l10n:of ?cellValueN ; l10n:name ?cellValueR }
+            OPTIONAL { FILTER(!BOUND(?cellValueR)) ?cellValueN rdfs:label ?cellValueROnly FILTER(isLiteral(?cellValueROnly)) }
+            BIND(STR(COALESCE(?cellValueC, ?cellValueCOnly, ?cellValueR, ?cellValueROnly, REPLACE(STR(?cellValue), "^.*[#/]", ""))) AS ?cellValueLabel)
+            BIND(isLiteral(?cellValue) && REGEX(STR(?cellValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?cellValueNumeric)
+            BIND(xsd:double(STR(?cellValue)) AS ?cellValueNumber)
+            BIND(IF(!BOUND(?cellValue), "", IF(isIRI(?cellValue), ?cellValueLabel,
+              IF(?format = "code", IF(isNumeric(?cellValue), xsd:string(?cellValue), STR(?cellValue)),
+              IF(?format = "time", COALESCE(sx:formatDateTime(?cellValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?cellValue)),
+              IF(!?cellValueNumeric, STR(?cellValue),
+              IF(?format = "number", sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=0"),
+              IF(?format = "decimal", sx:formatNumber(?cellValueNumber, ?locale, "minimumFractionDigits=2;maximumFractionDigits=2"),
+              IF(?format = "percent", sx:formatNumber(?cellValueNumber, ?locale, "style=percent;maximumFractionDigits=1"),
+              sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=2"))))))))) AS ?cellShown)
+            BIND(IF(BOUND(?slotPrefix), "", IF(?cellShown != "" && COALESCE(?unit, "") != "", CONCAT(?cellShown, " ", ?unit), ?cellShown)) AS ?cellText)
+            BIND(IF(BOUND(?sortBy) && ?sortBy = ?col, CONCAT(?colLabel, IF(?descending, " ↓", " ↑")), ?colLabel) AS ?headerText)
+            OPTIONAL { { SELECT ?ci (MAX(STRLEN(?cellText)) AS ?cellMax) WHERE {
+            ?viewer l10n:formatLocale ?locale .
+            { SELECT ?r WHERE {
+              ?viewer l10n:formatLocale ?locale .
+              OPTIONAL {
+                $this c:sortColumn ?sortBy .
+                FILTER EXISTS {
+                  { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?sortBy FILTER NOT EXISTS { ?sortBy c:sortable ?sortableNot FILTER(STR(?sortableNot) != "true") } }
+                  UNION { FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn0 FILTER(isIRI(?anyColumn0)) }
+                          $this iv:run/iv:column/rs:variable ?sortVariable0 FILTER(?sortBy = IRI(CONCAT(STR($this), "#", STR(?sortVariable0)))) }
+                }
+              }
+              BIND(EXISTS { $this c:sortDescending ?descending0 FILTER(STR(?descending0) = "true") } AS ?descending)
+              $this iv:run/rs:solution ?r . ?r rs:index ?shownIndex0 . BIND(xsd:integer(?shownIndex0) AS ?shownIndex)
+              OPTIONAL {
+                FILTER(BOUND(?sortBy))
+                {
+                  $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+                  { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+                      $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+                      ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+                  OPTIONAL { ?col c:variable ?variable0 }
+                  BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+                  OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+                  OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+                  OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+                  OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+                  BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+                  BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+                  OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+                  OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+                  BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+                  OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+                  OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+                  OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+                  OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+                  OPTIONAL { ?col c:sortable ?sortable0 }
+                  BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+                  BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+                  BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+                } UNION {
+                  FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+                  $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+                  BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+                  BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+                }
+                BIND(COALESCE(?format1, "") AS ?format)
+                BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+                FILTER(?col = ?sortBy)
+                BIND(?format AS ?sortFormat) BIND(?variable AS ?sortVariable)
+              }
+              BIND(COALESCE(IRI(CONCAT(STR(?r), "-", ?sortVariable)), <urn:semblance:none>) AS ?sortBinding)
+              LATERAL { OPTIONAL { ?sortBinding rs:value ?sortValue } }
+              BIND(COALESCE(?sortValue, <urn:semblance:none>) AS ?sortValueN)
+              OPTIONAL { { ?sortValueN l10n:label ?sortValueC } UNION { ?sortValueCAt l10n:of ?sortValueN ; l10n:label ?sortValueC } }
+              OPTIONAL { FILTER(!BOUND(?sortValueC)) ?sortValueN c:label ?sortValueCOnly FILTER(isLiteral(?sortValueCOnly)) }
+              OPTIONAL { ?sortValueRAt l10n:of ?sortValueN ; l10n:name ?sortValueR }
+              OPTIONAL { FILTER(!BOUND(?sortValueR)) ?sortValueN rdfs:label ?sortValueROnly FILTER(isLiteral(?sortValueROnly)) }
+              BIND(STR(COALESCE(?sortValueC, ?sortValueCOnly, ?sortValueR, ?sortValueROnly, REPLACE(STR(?sortValue), "^.*[#/]", ""))) AS ?sortValueLabel)
+              BIND(isLiteral(?sortValue) && REGEX(STR(?sortValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?sortValueNumeric)
+              BIND(xsd:double(STR(?sortValue)) AS ?sortValueNumber)
+              BIND(IF(!BOUND(?sortValue), "", IF(isIRI(?sortValue), ?sortValueLabel,
+                IF(?sortFormat = "code", STR(?sortValue),
+                IF(?sortFormat = "time", COALESCE(sx:formatDateTime(?sortValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?sortValue)),
+                IF(!?sortValueNumeric, STR(?sortValue),
+                IF(?sortFormat = "number", sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=0"),
+                IF(?sortFormat = "decimal", sx:formatNumber(?sortValueNumber, ?locale, "minimumFractionDigits=2;maximumFractionDigits=2"),
+                IF(?sortFormat = "percent", sx:formatNumber(?sortValueNumber, ?locale, "style=percent;maximumFractionDigits=1"),
+                sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=2"))))))))) AS ?sortShown)
+              BIND(IF(BOUND(?sortValue), 0, 1) AS ?k1)
+              BIND(IF(BOUND(?sortValue) && ?sortValueNumeric, ?sortValueNumber, ?nil) AS ?k2n)
+              BIND(IF(BOUND(?sortValue) && !?sortValueNumeric, sx:sortKey(?sortShown, ?locale), ?nil) AS ?k2s)
+            } ORDER BY (IF(?descending, -?k1, ?k1)) (IF(?descending, ?nil, ?k2n)) DESC(IF(?descending, ?k2n, ?nil))
+              (IF(?descending, ?nil, ?k2s)) DESC(IF(?descending, ?k2s, ?nil)) ?shownIndex LIMIT 12 }
+            {
+              $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+              { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+                  $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+                  ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+              OPTIONAL { ?col c:variable ?variable0 }
+              BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+              OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+              OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+              OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+              OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+              BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+              BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+              OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+              OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+              BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+              OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+              OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+              OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+              OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+              OPTIONAL { ?col c:sortable ?sortable0 }
+              BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+              BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+              BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+            } UNION {
+              FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+              $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+              BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+              BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+            }
+            BIND(COALESCE(?format1, "") AS ?format)
+            BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+            BIND(IRI(CONCAT(STR(?r), "-", ?variable)) AS ?binding)
+            LATERAL { OPTIONAL { ?binding rs:value ?cellValue } }
+            BIND(COALESCE(?cellValue, <urn:semblance:none>) AS ?cellValueN)
+            OPTIONAL { { ?cellValueN l10n:label ?cellValueC } UNION { ?cellValueCAt l10n:of ?cellValueN ; l10n:label ?cellValueC } }
+            OPTIONAL { FILTER(!BOUND(?cellValueC)) ?cellValueN c:label ?cellValueCOnly FILTER(isLiteral(?cellValueCOnly)) }
+            OPTIONAL { ?cellValueRAt l10n:of ?cellValueN ; l10n:name ?cellValueR }
+            OPTIONAL { FILTER(!BOUND(?cellValueR)) ?cellValueN rdfs:label ?cellValueROnly FILTER(isLiteral(?cellValueROnly)) }
+            BIND(STR(COALESCE(?cellValueC, ?cellValueCOnly, ?cellValueR, ?cellValueROnly, REPLACE(STR(?cellValue), "^.*[#/]", ""))) AS ?cellValueLabel)
+            BIND(isLiteral(?cellValue) && REGEX(STR(?cellValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?cellValueNumeric)
+            BIND(xsd:double(STR(?cellValue)) AS ?cellValueNumber)
+            BIND(IF(!BOUND(?cellValue), "", IF(isIRI(?cellValue), ?cellValueLabel,
+              IF(?format = "code", IF(isNumeric(?cellValue), xsd:string(?cellValue), STR(?cellValue)),
+              IF(?format = "time", COALESCE(sx:formatDateTime(?cellValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?cellValue)),
+              IF(!?cellValueNumeric, STR(?cellValue),
+              IF(?format = "number", sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=0"),
+              IF(?format = "decimal", sx:formatNumber(?cellValueNumber, ?locale, "minimumFractionDigits=2;maximumFractionDigits=2"),
+              IF(?format = "percent", sx:formatNumber(?cellValueNumber, ?locale, "style=percent;maximumFractionDigits=1"),
+              sx:formatNumber(?cellValueNumber, ?locale, "maximumFractionDigits=2"))))))))) AS ?cellShown)
+            BIND(IF(BOUND(?slotPrefix), "", IF(?cellShown != "" && COALESCE(?unit, "") != "", CONCAT(?cellShown, " ", ?unit), ?cellShown)) AS ?cellText)
+          } GROUP BY ?ci } }
+            BIND(IF(STRLEN(?headerText) > COALESCE(?cellMax, 0), STRLEN(?headerText), COALESCE(?cellMax, 0)) AS ?wide)
+            BIND(IF(?wide > 28, 28, ?wide) AS ?w)
+            BIND(IF(STRLEN(?cellText) > ?w, CONCAT(SUBSTR(?cellText, 1, ?w - 1), "…"), ?cellText) AS ?fittedCellCut)
+            BIND(SUBSTR("                            ", 1, ?w - STRLEN(?fittedCellCut)) AS ?fittedCellPad)
+            BIND(IF(COALESCE(?align, "") = "end", CONCAT(?fittedCellPad, ?fittedCellCut), CONCAT(?fittedCellCut, ?fittedCellPad)) AS ?fittedCell)
+          } ORDER BY ?r ?ci }
+      } GROUP BY ?r }
+    ?r rs:index ?rowIndex0 . BIND(xsd:integer(?rowIndex0) AS ?rowIndex)
+      OPTIONAL {
+        FILTER(BOUND(?sortBy))
+        {
+          $this c:tableColumns ?columnList . ?columnList rdf:rest* ?columnCell . ?columnCell rdf:first ?col . FILTER(isIRI(?col))
+          { SELECT ?columnCell (COUNT(?columnBefore) - 1 AS ?ci) WHERE {
+              $this c:tableColumns ?columnList0 . ?columnList0 rdf:rest* ?columnBefore . ?columnBefore rdf:rest* ?columnCell .
+              ?columnBefore rdf:first ?columnBeforeNode FILTER(isIRI(?columnBeforeNode)) } GROUP BY ?columnCell }
+          OPTIONAL { ?col c:variable ?variable0 }
+          BIND(COALESCE(?col, <urn:semblance:none>) AS ?colN)
+          OPTIONAL { { ?colN l10n:label ?colC } UNION { ?colCAt l10n:of ?colN ; l10n:label ?colC } }
+          OPTIONAL { FILTER(!BOUND(?colC)) ?colN c:label ?colCOnly FILTER(isLiteral(?colCOnly)) }
+          OPTIONAL { ?colRAt l10n:of ?colN ; l10n:name ?colR }
+          OPTIONAL { FILTER(!BOUND(?colR)) ?colN rdfs:label ?colROnly FILTER(isLiteral(?colROnly)) }
+          BIND(STR(COALESCE(?colC, ?colCOnly, ?colR, ?colROnly, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?colName)
+          BIND(STR(COALESCE(?variable0, ?colName)) AS ?variable)
+          OPTIONAL { { ?col l10n:label ?colLabelPicked } UNION { ?colLabelAt l10n:of ?col ; l10n:label ?colLabelPicked } }
+          OPTIONAL { FILTER(!BOUND(?colLabelPicked)) ?col c:label ?colLabelOnly FILTER(isLiteral(?colLabelOnly)) }
+          BIND(STR(COALESCE(?colLabelPicked, ?colLabelOnly, ?variable)) AS ?colLabel)
+          OPTIONAL { ?col c:align ?align0 } OPTIONAL { ?col c:format ?format0 }
+          OPTIONAL { ?unitAt l10n:of ?col ; l10n:unit ?unitPicked }
+          OPTIONAL { FILTER(!BOUND(?unitPicked)) ?col c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+          OPTIONAL { ?col c:slotPrefix ?slotPrefix0 } OPTIONAL { ?col c:slotVariable ?slotVariable0 }
+          OPTIONAL { ?col c:sortable ?sortable0 }
+          BIND(STR(?align0) AS ?align) BIND(STR(?format0) AS ?format1) BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+          BIND(STR(?slotPrefix0) AS ?slotPrefix) BIND(STR(COALESCE(?slotVariable0, ?variable)) AS ?slotVariable)
+          BIND(IF(BOUND(?sortable0), STR(?sortable0) = "true", true) AS ?sortable)
+        } UNION {
+          FILTER NOT EXISTS { $this (c:tableColumns/rdf:first|c:tableColumns/rdf:rest+/rdf:first) ?anyColumn FILTER(isIRI(?anyColumn)) }
+          $this iv:run ?columnRun . ?columnRun iv:column ?runColumn . ?runColumn rs:variable ?runVariable ; rs:index ?runIndex .
+          BIND(STR(?runVariable) AS ?variable) BIND(xsd:integer(?runIndex) - 1 AS ?ci) BIND(IRI(CONCAT(STR($this), "#", ?variable)) AS ?col)
+          BIND(?variable AS ?colLabel) BIND(?variable AS ?slotVariable) BIND(true AS ?sortable)
+        }
+        BIND(COALESCE(?format1, "") AS ?format)
+        BIND(IF(COALESCE(?align, "") = "end", "sem-end", IF(COALESCE(?align, "") = "center", "sem-center", ?none)) AS ?alignClass)
+        FILTER(?col = ?sortBy)
+        BIND(?format AS ?sortFormat) BIND(?variable AS ?sortVariable)
+      }
+      BIND(COALESCE(IRI(CONCAT(STR(?r), "-", ?sortVariable)), <urn:semblance:none>) AS ?sortBinding)
+      LATERAL { OPTIONAL { ?sortBinding rs:value ?sortValue } }
+      BIND(COALESCE(?sortValue, <urn:semblance:none>) AS ?sortValueN)
+      OPTIONAL { { ?sortValueN l10n:label ?sortValueC } UNION { ?sortValueCAt l10n:of ?sortValueN ; l10n:label ?sortValueC } }
+      OPTIONAL { FILTER(!BOUND(?sortValueC)) ?sortValueN c:label ?sortValueCOnly FILTER(isLiteral(?sortValueCOnly)) }
+      OPTIONAL { ?sortValueRAt l10n:of ?sortValueN ; l10n:name ?sortValueR }
+      OPTIONAL { FILTER(!BOUND(?sortValueR)) ?sortValueN rdfs:label ?sortValueROnly FILTER(isLiteral(?sortValueROnly)) }
+      BIND(STR(COALESCE(?sortValueC, ?sortValueCOnly, ?sortValueR, ?sortValueROnly, REPLACE(STR(?sortValue), "^.*[#/]", ""))) AS ?sortValueLabel)
+      BIND(isLiteral(?sortValue) && REGEX(STR(?sortValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$") AS ?sortValueNumeric)
+      BIND(xsd:double(STR(?sortValue)) AS ?sortValueNumber)
+      BIND(IF(!BOUND(?sortValue), "", IF(isIRI(?sortValue), ?sortValueLabel,
+        IF(?sortFormat = "code", STR(?sortValue),
+        IF(?sortFormat = "time", COALESCE(sx:formatDateTime(?sortValue, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?sortValue)),
+        IF(!?sortValueNumeric, STR(?sortValue),
+        IF(?sortFormat = "number", sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=0"),
+        IF(?sortFormat = "decimal", sx:formatNumber(?sortValueNumber, ?locale, "minimumFractionDigits=2;maximumFractionDigits=2"),
+        IF(?sortFormat = "percent", sx:formatNumber(?sortValueNumber, ?locale, "style=percent;maximumFractionDigits=1"),
+        sx:formatNumber(?sortValueNumber, ?locale, "maximumFractionDigits=2"))))))))) AS ?sortShown)
+      BIND(IF(?descending, "-", "") AS ?d)
+      BIND(IF(!BOUND(?sortValue), "s", IF(?sortValueNumeric, CONCAT("n", STR(?sortValue)), CONCAT("s", sx:sortKey(?sortShown, ?locale)))) AS ?sortPart)
+      BIND(IF(BOUND(?sortBy), CONCAT("\\u0001", ?d, "n", IF(BOUND(?sortValue), "0", "1"), "\\u0001", ?d, ?sortPart, "\\u0001n", STR(?rowIndex)), ?rowIndex) AS ?rowKey)
+      BIND(CONCAT(?me, "/~r-", SUBSTR(MD5(STR(?r)), 1, 8)) AS ?rowId)
+    BIND(IRI(CONCAT(?me, "/~line-r-", SUBSTR(MD5(STR(?r)), 1, 8))) AS ?el) BIND(rdfhtml:Div AS ?tag) BIND(?rowKey AS ?key)
+    BIND(IRI(CONCAT(?me, "/~rows")) AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~line-r-", SUBSTR(MD5(STR(?r)), 1, 8), "-text")) AS ?textNode)
+    BIND(REPLACE(?rowLine0, " +$", "") AS ?data)
+  }
+  }
+}
+""" .
 
 # --- Sortable: a header sorts by its column --------------------------------------------------------
 
@@ -74,15 +966,243 @@ c:DescriptionList a owl:Class ;
 rdfs:label, with their c:unit) on c:of, or explicit c:items (each a c:label and a c:value), or the
 entries of c:of (its c:entryProperty values, each a c:keyProperty / c:valueProperty pair, by
 sem:order: HTTP headers). Instead of c:of it may describe what c:bindProperty of c:bindFrom holds
-(a grid's selection), and c:via takes one hop from there first (an exchange's response)."""@en ;
+(a grid's selection), and c:via takes one hop from there first (an exchange's response).
+An explicit item can give c:content, a component, as its value (as a message's body does): Screen
+shows the component; Text prefers the item's c:value as a summary, or shows the component without one."""@en ;
     sem:slug "description-list" .
 c:entryProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "A multi-valued property whose values are the pairs to list (e.g. http:headers)."@en .
 c:keyProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's key (e.g. http:fieldName)."@en .
 c:valueProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's value (e.g. http:fieldValue)."@en .
-c:DescriptionListRendering a sem:Rendering ; sem:targets c:DescriptionList ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Locale (sx:formatNumber): numeric values are written in the viewer's locale (Intl.NumberFormat)." ;
-    sem:needsExtension sx:Locale .
+# The pairs it shows are data under it first (c:DescriptionPairs: <list>/~pair-<key>, with its term,
+# its order and its component or the pieces of its value), so the rendering is plain SPARQL over
+# them. Values are written in the viewer's locale (sx:formatNumber), entries by term in its
+# collation (sx:sortKey order keys); a field's values are pieces in its collation of their texts.
+c:pairOf a owl:ObjectProperty ; rdfs:range c:DescriptionList ; rdfs:comment "Derived (c:DescriptionPairs): a pair the description list shows."@en .
+c:term a owl:DatatypeProperty ; rdfs:comment "Derived: a pair's term, as shown."@en .
+c:pairOrder a owl:DatatypeProperty ; rdfs:comment "Derived: a pair's or a piece's place (an order key, as sem:orderKey)."@en .
+c:pairComponent a owl:ObjectProperty ; rdfs:comment "Derived: the component an item gives as its value (c:content)."@en .
+c:pieceOf a owl:ObjectProperty ; rdfs:comment "Derived: a piece of a pair's value as text (a value, its separator, a unit)."@en .
+c:pieceText a owl:DatatypeProperty ; rdfs:comment "Derived: a piece's text."@en .
+c:DescriptionPairs a sem:BuildingBlock ; sem:targets c:DescriptionList ; sem:stratum -1 ;
+    sem:follows c:of , c:bindFrom , ( c:items [ sem:zeroOrMore rdf:rest ] rdf:first ) .
+c:DescriptionPairs-fn a sem:Rule ; sem:implements c:DescriptionPairs ; sem:function "data:description-pairs" .
+c:DescriptionPairs-sparql a sem:Rule ;
+    sem:implements c:DescriptionPairs ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?pair c:pairOf $this ; c:term ?term ; c:pairOrder ?order ; c:pairComponent ?component .
+  ?piece c:pieceOf ?pair ; c:pieceText ?pieceText ; c:pairOrder ?pieceOrder .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:DescriptionList .
+  ?viewer l10n:formatLocale ?locale .
+  # The node it describes: c:of, else what c:bindProperty of c:bindFrom holds; then one c:via hop.
+  OPTIONAL { $this c:of ?declared }
+  OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bound . FILTER(isIRI(?from) && isIRI(?bound)) ?from ?bound ?held }
+  # Unbound nodes would match anything below: a missing subject or hop is a node with no triples.
+  BIND(COALESCE(?declared, ?held, sem:Nothing) AS ?subject)
+  BIND(EXISTS { $this c:via ?anyVia FILTER(isIRI(?anyVia)) } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . FILTER(isIRI(?via)) ?subject ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?of)
+  BIND(EXISTS { $this (c:items/rdf:first|c:items/rdf:rest+/rdf:first) ?anyItem FILTER(isIRI(?anyItem)) } AS ?hasItems)
+  BIND(EXISTS { $this c:entryProperty ?anyEntryProperty } AS ?hasEntries)
+  LATERAL {
+  {
+    # Explicit items, in their list's order.
+    FILTER(?hasItems)
+    $this c:items/rdf:rest*/rdf:first ?item . FILTER(isIRI(?item))
+    { SELECT ?item (COUNT(DISTINCT ?before) AS ?at) WHERE {
+      $this c:items ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?item .
+      OPTIONAL { ?list rdf:rest* ?before . ?before rdf:rest+ ?cell }
+    } GROUP BY ?item }
+    OPTIONAL { ?item l10n:label ?itemPicked }
+    OPTIONAL { FILTER(!BOUND(?itemPicked)) ?itemAt l10n:of ?item ; l10n:label ?itemTwin }
+    OPTIONAL { FILTER(!BOUND(?itemPicked) && !BOUND(?itemTwin)) ?item c:label ?itemOnly FILTER(isLiteral(?itemOnly)) }
+    OPTIONAL { FILTER(!BOUND(?itemPicked) && !BOUND(?itemTwin) && !BOUND(?itemOnly)) ?itemNameAt l10n:of ?item ; l10n:name ?itemName }
+    OPTIONAL { FILTER(!BOUND(?itemPicked) && !BOUND(?itemTwin) && !BOUND(?itemOnly) && !BOUND(?itemName)) ?item rdfs:label ?itemRdfs FILTER(isLiteral(?itemRdfs)) }
+    BIND(COALESCE(STR(?itemPicked), STR(?itemTwin), STR(?itemOnly), STR(?itemName), STR(?itemRdfs), REPLACE(STR(?item), "^.*[#/]", "")) AS ?term)
+    OPTIONAL { ?item c:content ?component FILTER(isIRI(?component)) }
+    OPTIONAL { ?item c:value ?itemValue .
+      OPTIONAL { ?itemValue l10n:label ?itemValuePicked }
+      OPTIONAL { FILTER(!BOUND(?itemValuePicked)) ?itemValueAt l10n:of ?itemValue ; l10n:label ?itemValueTwin }
+      OPTIONAL { FILTER(!BOUND(?itemValuePicked) && !BOUND(?itemValueTwin)) ?itemValue c:label ?itemValueOnly FILTER(isLiteral(?itemValueOnly)) }
+      OPTIONAL { FILTER(!BOUND(?itemValuePicked) && !BOUND(?itemValueTwin) && !BOUND(?itemValueOnly)) ?itemValueNameAt l10n:of ?itemValue ; l10n:name ?itemValueName }
+      OPTIONAL { FILTER(!BOUND(?itemValuePicked) && !BOUND(?itemValueTwin) && !BOUND(?itemValueOnly) && !BOUND(?itemValueName)) ?itemValue rdfs:label ?itemValueRdfs FILTER(isLiteral(?itemValueRdfs)) }
+    }
+    BIND(IF(isLiteral(?itemValue) && REGEX(STR(?itemValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?itemValue)), ?none) AS ?itemValueNumber)
+    BIND(IF(!BOUND(?itemValue), "", IF(isIRI(?itemValue), COALESCE(STR(?itemValuePicked), STR(?itemValueTwin), STR(?itemValueOnly), STR(?itemValueName), STR(?itemValueRdfs), REPLACE(STR(?itemValue), "^.*[#/]", "")),
+         COALESCE(IF(?itemValueNumber * 0 = 0, sx:formatNumber(?itemValueNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?itemValue)))) AS ?itemText)
+    BIND(SUBSTR(MD5(STR(?item)), 1, 8) AS ?key)
+    BIND(CONCAT("\\u0001n", STR(?at)) AS ?order)
+    BIND(IF(BOUND(?itemValue) || !BOUND(?component), "-v", ?none) AS ?suffix)
+    BIND(?itemText AS ?pieceText)
+    BIND("\\u0001n0" AS ?pieceOrder)
+  } UNION {
+    # The entries of the node it describes, by sem:order, then by term in the viewer's collation.
+    FILTER(!?hasItems && ?hasEntries)
+    $this c:entryProperty ?entryP ; c:keyProperty ?keyP ; c:valueProperty ?valueP .
+    FILTER(isIRI(?entryP) && isIRI(?keyP) && isIRI(?valueP))
+    ?of ?entryP ?entry . FILTER(isIRI(?entry))
+    OPTIONAL { ?entry sem:order ?position }
+    OPTIONAL { ?entry ?keyP ?entryKey .
+      OPTIONAL { ?entryKey l10n:label ?entryKeyPicked }
+      OPTIONAL { FILTER(!BOUND(?entryKeyPicked)) ?entryKeyAt l10n:of ?entryKey ; l10n:label ?entryKeyTwin }
+      OPTIONAL { FILTER(!BOUND(?entryKeyPicked) && !BOUND(?entryKeyTwin)) ?entryKey c:label ?entryKeyOnly FILTER(isLiteral(?entryKeyOnly)) }
+      OPTIONAL { FILTER(!BOUND(?entryKeyPicked) && !BOUND(?entryKeyTwin) && !BOUND(?entryKeyOnly)) ?entryKeyNameAt l10n:of ?entryKey ; l10n:name ?entryKeyName }
+      OPTIONAL { FILTER(!BOUND(?entryKeyPicked) && !BOUND(?entryKeyTwin) && !BOUND(?entryKeyOnly) && !BOUND(?entryKeyName)) ?entryKey rdfs:label ?entryKeyRdfs FILTER(isLiteral(?entryKeyRdfs)) }
+    }
+    BIND(IF(isLiteral(?entryKey) && REGEX(STR(?entryKey), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?entryKey)), ?none) AS ?entryKeyNumber)
+    BIND(IF(!BOUND(?entryKey), "", IF(isIRI(?entryKey), COALESCE(STR(?entryKeyPicked), STR(?entryKeyTwin), STR(?entryKeyOnly), STR(?entryKeyName), STR(?entryKeyRdfs), REPLACE(STR(?entryKey), "^.*[#/]", "")),
+         COALESCE(IF(?entryKeyNumber * 0 = 0, sx:formatNumber(?entryKeyNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?entryKey)))) AS ?term)
+    OPTIONAL { ?entry ?valueP ?entryValue .
+      OPTIONAL { ?entryValue l10n:label ?entryValuePicked }
+      OPTIONAL { FILTER(!BOUND(?entryValuePicked)) ?entryValueAt l10n:of ?entryValue ; l10n:label ?entryValueTwin }
+      OPTIONAL { FILTER(!BOUND(?entryValuePicked) && !BOUND(?entryValueTwin)) ?entryValue c:label ?entryValueOnly FILTER(isLiteral(?entryValueOnly)) }
+      OPTIONAL { FILTER(!BOUND(?entryValuePicked) && !BOUND(?entryValueTwin) && !BOUND(?entryValueOnly)) ?entryValueNameAt l10n:of ?entryValue ; l10n:name ?entryValueName }
+      OPTIONAL { FILTER(!BOUND(?entryValuePicked) && !BOUND(?entryValueTwin) && !BOUND(?entryValueOnly) && !BOUND(?entryValueName)) ?entryValue rdfs:label ?entryValueRdfs FILTER(isLiteral(?entryValueRdfs)) }
+    }
+    BIND(IF(isLiteral(?entryValue) && REGEX(STR(?entryValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?entryValue)), ?none) AS ?entryValueNumber)
+    BIND(IF(!BOUND(?entryValue), "", IF(isIRI(?entryValue), COALESCE(STR(?entryValuePicked), STR(?entryValueTwin), STR(?entryValueOnly), STR(?entryValueName), STR(?entryValueRdfs), REPLACE(STR(?entryValue), "^.*[#/]", "")),
+         COALESCE(IF(?entryValueNumber * 0 = 0, sx:formatNumber(?entryValueNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?entryValue)))) AS ?pieceText)
+    BIND(CONCAT("\\u0001s", sx:sortKey(?term, ?locale)) AS ?sorted)
+    BIND(IF(BOUND(?position) && xsd:double(STR(?position)) * 0 = 0, CONCAT("\\u0001n0\\u0001n", STR(?position), ?sorted), CONCAT("\\u0001n1", ?sorted)) AS ?order)
+    BIND(SUBSTR(MD5(STR(?entry)), 1, 8) AS ?key)
+    BIND("-v" AS ?suffix)
+    BIND("\\u0001n0" AS ?pieceOrder)
+  } UNION {
+    # The values of c:fields on it, in the fields' order; a field's values in the viewer's collation, then its unit.
+    FILTER(!?hasItems && !?hasEntries)
+    $this c:fields/rdf:rest*/rdf:first ?field . FILTER(isIRI(?field))
+    ?of ?field ?fieldValue .
+    { SELECT ?field (COUNT(DISTINCT ?before) AS ?at) WHERE {
+      $this c:fields ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?field .
+      OPTIONAL { ?list rdf:rest* ?before . ?before rdf:rest+ ?cell }
+    } GROUP BY ?field }
+    OPTIONAL { ?field l10n:label ?fieldPicked }
+    OPTIONAL { FILTER(!BOUND(?fieldPicked)) ?fieldAt l10n:of ?field ; l10n:label ?fieldTwin }
+    OPTIONAL { FILTER(!BOUND(?fieldPicked) && !BOUND(?fieldTwin)) ?field c:label ?fieldOnly FILTER(isLiteral(?fieldOnly)) }
+    OPTIONAL { FILTER(!BOUND(?fieldPicked) && !BOUND(?fieldTwin) && !BOUND(?fieldOnly)) ?fieldNameAt l10n:of ?field ; l10n:name ?fieldName }
+    OPTIONAL { FILTER(!BOUND(?fieldPicked) && !BOUND(?fieldTwin) && !BOUND(?fieldOnly) && !BOUND(?fieldName)) ?field rdfs:label ?fieldRdfs FILTER(isLiteral(?fieldRdfs)) }
+    BIND(COALESCE(STR(?fieldPicked), STR(?fieldTwin), STR(?fieldOnly), STR(?fieldName), STR(?fieldRdfs), REPLACE(STR(?field), "^.*[#/]", "")) AS ?term)
+    OPTIONAL { ?fieldValue l10n:label ?fieldValuePicked }
+    OPTIONAL { FILTER(!BOUND(?fieldValuePicked)) ?fieldValueAt l10n:of ?fieldValue ; l10n:label ?fieldValueTwin }
+    OPTIONAL { FILTER(!BOUND(?fieldValuePicked) && !BOUND(?fieldValueTwin)) ?fieldValue c:label ?fieldValueOnly FILTER(isLiteral(?fieldValueOnly)) }
+    OPTIONAL { FILTER(!BOUND(?fieldValuePicked) && !BOUND(?fieldValueTwin) && !BOUND(?fieldValueOnly)) ?fieldValueNameAt l10n:of ?fieldValue ; l10n:name ?fieldValueName }
+    OPTIONAL { FILTER(!BOUND(?fieldValuePicked) && !BOUND(?fieldValueTwin) && !BOUND(?fieldValueOnly) && !BOUND(?fieldValueName)) ?fieldValue rdfs:label ?fieldValueRdfs FILTER(isLiteral(?fieldValueRdfs)) }
+    BIND(IF(isLiteral(?fieldValue) && REGEX(STR(?fieldValue), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?fieldValue)), ?none) AS ?fieldValueNumber)
+    BIND(IF(!BOUND(?fieldValue), "", IF(isIRI(?fieldValue), COALESCE(STR(?fieldValuePicked), STR(?fieldValueTwin), STR(?fieldValueOnly), STR(?fieldValueName), STR(?fieldValueRdfs), REPLACE(STR(?fieldValue), "^.*[#/]", "")),
+         COALESCE(IF(?fieldValueNumber * 0 = 0, sx:formatNumber(?fieldValueNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?fieldValue)))) AS ?valueText)
+    OPTIONAL { ?unitAt l10n:of ?field ; l10n:unit ?unitPicked }
+    OPTIONAL { FILTER(!BOUND(?unitPicked)) ?field c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+    BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+    BIND(SUBSTR(MD5(STR(?field)), 1, 8) AS ?key)
+    BIND(CONCAT("\\u0001n", STR(?at)) AS ?order)
+    BIND(SUBSTR(MD5(IF(isLiteral(?fieldValue), CONCAT(STR(?fieldValue), "@", LANG(?fieldValue), "^", STR(DATATYPE(?fieldValue))), STR(?fieldValue))), 1, 8) AS ?valueKey)
+    BIND(CONCAT("\\u0001s", sx:sortKey(?valueText, ?locale), "\\u0001s", ?key, "-v", ?valueKey) AS ?valueOrder)
+    # The first in that order: no other value of the field comes before it.
+    BIND(NOT EXISTS {
+      ?of ?field ?other . FILTER(!sameTerm(?other, ?fieldValue))
+      OPTIONAL { ?other l10n:label ?otherPicked }
+      OPTIONAL { FILTER(!BOUND(?otherPicked)) ?otherAt l10n:of ?other ; l10n:label ?otherTwin }
+      OPTIONAL { FILTER(!BOUND(?otherPicked) && !BOUND(?otherTwin)) ?other c:label ?otherOnly FILTER(isLiteral(?otherOnly)) }
+      OPTIONAL { FILTER(!BOUND(?otherPicked) && !BOUND(?otherTwin) && !BOUND(?otherOnly)) ?otherNameAt l10n:of ?other ; l10n:name ?otherName }
+      OPTIONAL { FILTER(!BOUND(?otherPicked) && !BOUND(?otherTwin) && !BOUND(?otherOnly) && !BOUND(?otherName)) ?other rdfs:label ?otherRdfs FILTER(isLiteral(?otherRdfs)) }
+      BIND(IF(isLiteral(?other) && REGEX(STR(?other), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?other)), ?none) AS ?otherNumber)
+      BIND(IF(isIRI(?other), COALESCE(STR(?otherPicked), STR(?otherTwin), STR(?otherOnly), STR(?otherName), STR(?otherRdfs), REPLACE(STR(?other), "^.*[#/]", "")),
+           COALESCE(IF(?otherNumber * 0 = 0, sx:formatNumber(?otherNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?other))) AS ?otherText)
+      BIND(SUBSTR(MD5(IF(isLiteral(?other), CONCAT(STR(?other), "@", LANG(?other), "^", STR(DATATYPE(?other))), STR(?other))), 1, 8) AS ?otherKey)
+      FILTER(CONCAT("\\u0001s", sx:sortKey(?otherText, ?locale), "\\u0001s", ?key, "-v", ?otherKey) < ?valueOrder)
+    } AS ?first)
+    VALUES ?part { "value" "unit" }
+    BIND(IF(?part = "value", CONCAT("-v", ?valueKey), IF(COALESCE(?unit, "") != "", "-unit", ?none)) AS ?suffix)
+    BIND(IF(?part = "value", CONCAT(IF(?first, "", ", "), ?valueText), CONCAT(" ", ?unit)) AS ?pieceText)
+    BIND(IF(?part = "value", CONCAT("\\u0001n0", ?valueOrder), "\\u0001n1") AS ?pieceOrder)
+  }
+  }
+  BIND(IRI(CONCAT(STR($this), "/~pair-", ?key)) AS ?pair)
+  BIND(IRI(CONCAT(STR($this), "/~pair-", ?key, ?suffix)) AS ?piece)
+}""" .
+c:DescriptionListRendering a sem:Rendering ; sem:targets c:DescriptionList ; sem:stratum 0 ; sem:readsMinted true .
 c:DescriptionListRendering-fn a sem:Rule ; sem:implements c:DescriptionListRendering ; sem:function "data:description-list" .
+c:DescriptionListRendering-sparql-screen a sem:Rule ;
+    sem:implements c:DescriptionListRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootType ; sem:renders $this ; rdfhtml:class ?emptyClass ; rdfhtml:hasChild ?empty , ?pairEl .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyData .
+  ?pairEl a rdfhtml:Div ; rdfhtml:class "sem-pair" ; sem:orderKey ?order ; rdfhtml:hasChild ?dt , ?dd .
+  ?dt a rdfhtml:Dt ; rdfhtml:hasChild ?dtText ; ord:immediatelyPrecedes ?dd .
+  ?dtText a rdfhtml:Text ; rdfhtml:data ?term .
+  ?dd a rdfhtml:Dd ; rdfhtml:hasChild ?component , ?pieceEl .
+  ?pieceEl a rdfhtml:Text ; rdfhtml:data ?pieceText ; sem:orderKey ?pieceOrder .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:DescriptionList .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(EXISTS { ?anyPair c:pairOf $this } AS ?some)
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+  OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+  BIND(IF(?some, ?none, "sem-empty") AS ?emptyClass)
+  BIND(IF(?some, ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?empty)
+  BIND(IF(?some, ?none, COALESCE(STR(?emptyPicked), STR(?emptyOnly), "Nothing to describe.")) AS ?emptyData)
+  BIND(IF(?some, rdfhtml:Dl, rdfhtml:P) AS ?rootType)
+  OPTIONAL {
+    ?pair c:pairOf $this ; c:term ?term ; c:pairOrder ?order .
+    OPTIONAL { ?pair c:pairComponent ?component }
+    BIND(STRAFTER(STR(?pair), "/~pair-") AS ?key)
+    BIND(CONCAT(STR($this), "/~p", ?key) AS ?p)
+    BIND(IRI(?p) AS ?pairEl)
+    BIND(IRI(CONCAT(?p, "-dt")) AS ?dt)
+    BIND(IRI(CONCAT(?p, "-dt-text")) AS ?dtText)
+    BIND(IRI(CONCAT(?p, "-dd")) AS ?dd)
+    # Screen shows the component; else each piece of the value, as a text node of its own.
+    OPTIONAL { FILTER(!BOUND(?component)) ?piece c:pieceOf ?pair ; c:pieceText ?pieceText ; c:pairOrder ?ownOrder }
+    BIND(CONCAT("\\u0001n1", ?ownOrder) AS ?pieceOrder)
+    BIND(IRI(CONCAT(?p, "-dd-text", STRAFTER(STR(?piece), STR(?pair)))) AS ?pieceEl)
+  }
+}""" .
+c:DescriptionListRendering-sparql-text a sem:Rule ;
+    sem:implements c:DescriptionListRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootType ; sem:renders $this ; rdfhtml:class ?emptyClass ; rdfhtml:hasChild ?empty , ?pairEl .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyData .
+  ?pairEl a rdfhtml:Div ; sem:orderKey ?order ; rdfhtml:hasChild ?head , ?pieceEl , ?shownComponent .
+  ?head a rdfhtml:Text ; rdfhtml:data ?headData ; sem:orderKey ?headOrder ; ord:immediatelyPrecedes ?shownComponent .
+  ?pieceEl a rdfhtml:Text ; rdfhtml:data ?pieceText ; sem:orderKey ?pieceOrder .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:DescriptionList .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(EXISTS { ?anyPair c:pairOf $this } AS ?some)
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+  OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+  BIND(IF(?some, ?none, "sem-empty") AS ?emptyClass)
+  BIND(IF(?some, ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?empty)
+  BIND(IF(?some, ?none, COALESCE(STR(?emptyPicked), STR(?emptyOnly), "Nothing to describe.")) AS ?emptyData)
+  BIND(IF(?some, rdfhtml:Div, rdfhtml:P) AS ?rootType)
+  # Terms are padded to the longest, in characters.
+  { SELECT (MAX(STRLEN(?anyTerm)) AS ?width) WHERE { ?anyTermPair c:pairOf $this ; c:term ?anyTerm } }
+  OPTIONAL {
+    ?pair c:pairOf $this ; c:term ?term ; c:pairOrder ?order .
+    OPTIONAL { ?pair c:pairComponent ?component }
+    BIND(STRAFTER(STR(?pair), "/~pair-") AS ?key)
+    BIND(CONCAT(STR($this), "/~p", ?key) AS ?p)
+    BIND(IRI(?p) AS ?pairEl)
+    BIND(IRI(CONCAT(?p, "-text")) AS ?head)
+    # Text prefers the value; without one, the component follows the term.
+    BIND(EXISTS { ?anyPiece c:pieceOf ?pair } AS ?hasPieces)
+    BIND(IF(?hasPieces, "\\u0001n0", ?none) AS ?headOrder)
+    BIND(IF(?hasPieces, ?none, ?component) AS ?shownComponent)
+    OPTIONAL { ?piece c:pieceOf ?pair ; c:pieceText ?pieceText ; c:pairOrder ?ownOrder }
+    BIND(CONCAT("\\u0001n1", ?ownOrder) AS ?pieceOrder)
+    BIND(IRI(CONCAT(?p, "-text", STRAFTER(STR(?piece), STR(?pair)))) AS ?pieceEl)
+  }
+  BIND(CONCAT(?term, SUBSTR("                                                                                                                                ", 1, ?width - STRLEN(?term)), "  ") AS ?headData)
+}""" .
 
 # --- Stat: a KPI tile -------------------------------------------------------------------------------
 
@@ -96,10 +1216,159 @@ c:delta a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:range xsd:decimal ; r
 c:deltaUnit a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:comment "Unit of c:delta (e.g. \"%\")."@en .
 c:lowerIsBetter a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:range xsd:boolean ;
     rdfs:comment "A falling value is good news (latency, errors): the trend's tone flips."@en .
-c:StatRendering a sem:Rendering ; sem:targets c:Stat ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Locale (sx:formatNumber): the value and its change are written in the viewer's locale." ;
-    sem:needsExtension sx:Locale .
+c:StatRendering a sem:Rendering ; sem:targets c:Stat ; sem:stratum 0 .
 c:StatRendering-fn a sem:Rule ; sem:implements c:StatRendering ; sem:function "data:stat" .
+# The value and its change are written by sx:formatNumber in the viewer's l10n:formatLocale.
+c:StatRendering-sparql-screen a sem:Rule ;
+    sem:implements c:StatRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?labelEl , ?figure , ?deltaEl , ?helpEl .
+  ?labelEl a rdfhtml:Span ; rdfhtml:class "sem-label" ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?figure .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?figure a rdfhtml:Div ; rdfhtml:class "sem-figure" ; rdfhtml:hasChild ?valueEl , ?unitEl ; ord:immediatelyPrecedes ?afterFigure .
+  ?valueEl a rdfhtml:Span ; rdfhtml:class "sem-value" ; rdfhtml:hasChild ?valueText ; ord:immediatelyPrecedes ?unitEl .
+  ?valueText a rdfhtml:Text ; rdfhtml:data ?shownValue .
+  ?unitEl a rdfhtml:Span ; rdfhtml:class "sem-unit" ; rdfhtml:hasChild ?unitText .
+  ?unitText a rdfhtml:Text ; rdfhtml:data ?unit .
+  ?deltaEl a rdfhtml:Span ; rdfhtml:class ?deltaClass ; rdfhtml:hasChild ?arrowEl , ?deltaValueEl ; ord:immediatelyPrecedes ?helpEl ;
+    rdfhtml:attribute ?trendAttr , ?roleAttr , ?ariaLabelAttr .
+  ?trendAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-trend" ; rdfhtml:attributeValue ?trend .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "img" .
+  ?ariaLabelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?spoken .
+  ?arrowEl a rdfhtml:Span ; rdfhtml:attribute ?arrowHidden ; rdfhtml:hasChild ?arrowText ; ord:immediatelyPrecedes ?deltaValueEl .
+  ?arrowHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?arrowText a rdfhtml:Text ; rdfhtml:data ?arrow .
+  ?deltaValueEl a rdfhtml:Span ; rdfhtml:attribute ?deltaValueHidden ; rdfhtml:hasChild ?deltaValueText .
+  ?deltaValueHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?deltaValueText a rdfhtml:Text ; rdfhtml:data ?signed .
+  ?helpEl a rdfhtml:P ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?help .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Stat .
+  ?viewer l10n:formatLocale ?locale .
+  # Its label: in the viewer's language (l10n:label), else its one c:label, else its rdfs:label, else its local name.
+  OPTIONAL { $this l10n:label ?pickedLabel }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel)) $this c:label ?onlyLabel FILTER(isLiteral(?onlyLabel)) }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel) && !BOUND(?onlyLabel)) ?nameAt l10n:of $this ; l10n:name ?pickedName }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel) && !BOUND(?onlyLabel) && !BOUND(?pickedName)) $this rdfs:label ?onlyName FILTER(isLiteral(?onlyName)) }
+  BIND(COALESCE(STR(?pickedLabel), STR(?onlyLabel), STR(?pickedName), STR(?onlyName), REPLACE(STR($this), "^.*[#/]", "")) AS ?label)
+  # Its value as text: a node by its label, a number grouped (at most two decimals), else as it is.
+  OPTIONAL {
+    $this c:value ?v .
+    OPTIONAL { ?v l10n:label ?vPicked }
+    OPTIONAL { FILTER(!BOUND(?vPicked)) ?vAt l10n:of ?v ; l10n:label ?vTwin }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin)) ?v c:label ?vOnly FILTER(isLiteral(?vOnly)) }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin) && !BOUND(?vOnly)) ?vNameAt l10n:of ?v ; l10n:name ?vName }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin) && !BOUND(?vOnly) && !BOUND(?vName)) ?v rdfs:label ?vRdfs FILTER(isLiteral(?vRdfs)) }
+  }
+  BIND(IF(isLiteral(?v) && REGEX(STR(?v), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?v)), ?none) AS ?vNumber)
+  BIND(IF(!BOUND(?v), "",
+       IF(isIRI(?v), COALESCE(STR(?vPicked), STR(?vTwin), STR(?vOnly), STR(?vName), STR(?vRdfs), REPLACE(STR(?v), "^.*[#/]", "")),
+       COALESCE(IF(?vNumber * 0 = 0, sx:formatNumber(?vNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?v)))) AS ?value)
+  # Texts in the viewer's language (l10n:Terms twins), else the one value.
+  OPTIONAL { ?unitAt l10n:of $this ; l10n:unit ?unitPicked }
+  OPTIONAL { FILTER(!BOUND(?unitPicked)) $this c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+  BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit0)
+  BIND(IF(COALESCE(?unit0, "") != "", ?unit0, ?none) AS ?unit)
+  OPTIONAL { ?helpAt l10n:of $this ; l10n:help ?helpPicked }
+  OPTIONAL { FILTER(!BOUND(?helpPicked)) $this c:help ?helpOnly FILTER(isLiteral(?helpOnly)) }
+  BIND(STR(COALESCE(?helpPicked, ?helpOnly)) AS ?help0)
+  BIND(IF(COALESCE(?help0, "") != "", ?help0, ?none) AS ?help)
+  OPTIONAL { ?deltaUnitAt l10n:of $this ; l10n:deltaUnit ?deltaUnitPicked }
+  OPTIONAL { FILTER(!BOUND(?deltaUnitPicked)) $this c:deltaUnit ?deltaUnitOnly FILTER(isLiteral(?deltaUnitOnly)) }
+  BIND(COALESCE(STR(?deltaUnitPicked), STR(?deltaUnitOnly), "") AS ?deltaUnit)
+  # The change: its trend, and its magnitude and sign as text.
+  OPTIONAL { $this c:delta ?deltaTerm }
+  BIND(xsd:double(STR(?deltaTerm)) AS ?delta)
+  BIND(IF(?delta * 0 = 0, IF(?delta > 0, "up", IF(?delta < 0, "down", "flat")), ?none) AS ?trend)
+  BIND(IF(?trend = "up", "↑", IF(?trend = "down", "↓", "→")) AS ?arrow)
+  BIND(CONCAT(sx:formatNumber(ABS(?delta), ?locale, "maximumFractionDigits=2"), ?deltaUnit) AS ?magnitude)
+  BIND(CONCAT(IF(?delta > 0, "+", IF(?delta < 0, "−", "")), ?magnitude) AS ?signed)
+  BIND(EXISTS { $this c:lowerIsBetter true } AS ?lowerIsBetter)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?value != "", ?value, "–") AS ?shownValue)
+  BIND(CONCAT("sem-delta sem-", IF(?trend = "flat", "neutral", IF((?trend = "up") != ?lowerIsBetter, "good", "bad"))) AS ?deltaClass)
+  BIND(IF(?trend = "flat", "unchanged", CONCAT(?trend, " ", ?magnitude)) AS ?spoken)
+  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelEl)
+  BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
+  BIND(IRI(CONCAT(STR($this), "/~figure")) AS ?figure)
+  BIND(IRI(CONCAT(STR($this), "/~value")) AS ?valueEl)
+  BIND(IRI(CONCAT(STR($this), "/~value-text")) AS ?valueText)
+  BIND(IF(BOUND(?unit), IRI(CONCAT(STR($this), "/~unit")), ?none) AS ?unitEl)
+  BIND(IF(BOUND(?unit), IRI(CONCAT(STR($this), "/~unit-text")), ?none) AS ?unitText)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta")), ?none) AS ?deltaEl)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-data-trend")), ?none) AS ?trendAttr)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-role")), ?none) AS ?roleAttr)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-aria-label")), ?none) AS ?ariaLabelAttr)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-arrow")), ?none) AS ?arrowEl)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-arrow-aria-hidden")), ?none) AS ?arrowHidden)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-arrow-text")), ?none) AS ?arrowText)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-value")), ?none) AS ?deltaValueEl)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-value-aria-hidden")), ?none) AS ?deltaValueHidden)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-value-text")), ?none) AS ?deltaValueText)
+  BIND(IF(BOUND(?help), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?helpEl)
+  BIND(IF(BOUND(?help), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(COALESCE(?deltaEl, ?helpEl) AS ?afterFigure)
+}""" .
+c:StatRendering-sparql-text a sem:Rule ;
+    sem:implements c:StatRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?lineData .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Stat .
+  ?viewer l10n:formatLocale ?locale .
+  # Its label: in the viewer's language (l10n:label), else its one c:label, else its rdfs:label, else its local name.
+  OPTIONAL { $this l10n:label ?pickedLabel }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel)) $this c:label ?onlyLabel FILTER(isLiteral(?onlyLabel)) }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel) && !BOUND(?onlyLabel)) ?nameAt l10n:of $this ; l10n:name ?pickedName }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel) && !BOUND(?onlyLabel) && !BOUND(?pickedName)) $this rdfs:label ?onlyName FILTER(isLiteral(?onlyName)) }
+  BIND(COALESCE(STR(?pickedLabel), STR(?onlyLabel), STR(?pickedName), STR(?onlyName), REPLACE(STR($this), "^.*[#/]", "")) AS ?label)
+  # Its value as text: a node by its label, a number grouped (at most two decimals), else as it is.
+  OPTIONAL {
+    $this c:value ?v .
+    OPTIONAL { ?v l10n:label ?vPicked }
+    OPTIONAL { FILTER(!BOUND(?vPicked)) ?vAt l10n:of ?v ; l10n:label ?vTwin }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin)) ?v c:label ?vOnly FILTER(isLiteral(?vOnly)) }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin) && !BOUND(?vOnly)) ?vNameAt l10n:of ?v ; l10n:name ?vName }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin) && !BOUND(?vOnly) && !BOUND(?vName)) ?v rdfs:label ?vRdfs FILTER(isLiteral(?vRdfs)) }
+  }
+  BIND(IF(isLiteral(?v) && REGEX(STR(?v), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?v)), ?none) AS ?vNumber)
+  BIND(IF(!BOUND(?v), "",
+       IF(isIRI(?v), COALESCE(STR(?vPicked), STR(?vTwin), STR(?vOnly), STR(?vName), STR(?vRdfs), REPLACE(STR(?v), "^.*[#/]", "")),
+       COALESCE(IF(?vNumber * 0 = 0, sx:formatNumber(?vNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?v)))) AS ?value)
+  # Texts in the viewer's language (l10n:Terms twins), else the one value.
+  OPTIONAL { ?unitAt l10n:of $this ; l10n:unit ?unitPicked }
+  OPTIONAL { FILTER(!BOUND(?unitPicked)) $this c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+  BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit0)
+  BIND(IF(COALESCE(?unit0, "") != "", ?unit0, ?none) AS ?unit)
+  OPTIONAL { ?helpAt l10n:of $this ; l10n:help ?helpPicked }
+  OPTIONAL { FILTER(!BOUND(?helpPicked)) $this c:help ?helpOnly FILTER(isLiteral(?helpOnly)) }
+  BIND(STR(COALESCE(?helpPicked, ?helpOnly)) AS ?help0)
+  BIND(IF(COALESCE(?help0, "") != "", ?help0, ?none) AS ?help)
+  OPTIONAL { ?deltaUnitAt l10n:of $this ; l10n:deltaUnit ?deltaUnitPicked }
+  OPTIONAL { FILTER(!BOUND(?deltaUnitPicked)) $this c:deltaUnit ?deltaUnitOnly FILTER(isLiteral(?deltaUnitOnly)) }
+  BIND(COALESCE(STR(?deltaUnitPicked), STR(?deltaUnitOnly), "") AS ?deltaUnit)
+  # The change: its trend, and its magnitude and sign as text.
+  OPTIONAL { $this c:delta ?deltaTerm }
+  BIND(xsd:double(STR(?deltaTerm)) AS ?delta)
+  BIND(IF(?delta * 0 = 0, IF(?delta > 0, "up", IF(?delta < 0, "down", "flat")), ?none) AS ?trend)
+  BIND(IF(?trend = "up", "↑", IF(?trend = "down", "↓", "→")) AS ?arrow)
+  BIND(CONCAT(sx:formatNumber(ABS(?delta), ?locale, "maximumFractionDigits=2"), ?deltaUnit) AS ?magnitude)
+  BIND(CONCAT(IF(?delta > 0, "+", IF(?delta < 0, "−", "")), ?magnitude) AS ?signed)
+  BIND(EXISTS { $this c:lowerIsBetter true } AS ?lowerIsBetter)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(CONCAT(?label, ": ", ?value, IF(BOUND(?unit), CONCAT(" ", ?unit), ""), IF(BOUND(?trend), CONCAT("  ", ?arrow, " ", ?signed), "")) AS ?lineData)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+}""" .
 
 # --- Avatar and AvatarGroup ---------------------------------------------------------------------
 
@@ -445,14 +1714,118 @@ WHERE {
   }
 }""" .
 c:TimelineItemRendering a sem:Rendering ; sem:targets c:TimelineItem ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Locale (sx:formatDateTime): the event's clock time in the viewer's time zone and locale." ;
     sem:needsExtension sx:Locale .
 c:TimelineItemRendering-fn a sem:Rule ; sem:implements c:TimelineItemRendering ; sem:function "data:timeline-item" .
+# The event's clock time by sx:formatDateTime (sx:Locale) in the viewer's l10n:formatLocale and the
+# store's time zone; what (the event's class) and on what (beh:target) by their labels in the viewer's language.
+c:TimelineItemRendering-sparql-screen a sem:Rule ;
+    sem:implements c:TimelineItemRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:hasChild ?dot , ?body , ?meta .
+  ?dot ord:immediatelyPrecedes ?body . ?body ord:immediatelyPrecedes ?meta .
+  ?dot a rdfhtml:Span ; rdfhtml:class "sem-dot" ; rdfhtml:attribute ?dotHidden .
+  ?dotHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?whatEl , ?targetEl .
+  ?whatEl ord:immediatelyPrecedes ?targetEl .
+  ?whatEl a rdfhtml:Strong ; rdfhtml:hasChild ?whatText . ?whatText a rdfhtml:Text ; rdfhtml:data ?what .
+  ?targetEl a rdfhtml:Span ; rdfhtml:class "sem-target" ; rdfhtml:hasChild ?targetText . ?targetText a rdfhtml:Text ; rdfhtml:data ?on .
+  ?meta a rdfhtml:Div ; rdfhtml:class "sem-meta" ; rdfhtml:hasChild ?timeEl , ?effectEl .
+  ?timeEl ord:immediatelyPrecedes ?effectEl .
+  ?timeEl a rdfhtml:Time ; rdfhtml:dateTime ?atText ; rdfhtml:hasChild ?timeText . ?timeText a rdfhtml:Text ; rdfhtml:data ?time .
+  ?effectEl a rdfhtml:Span ; rdfhtml:class "sem-effect" ; rdfhtml:hasChild ?effectText ; sem:tooltip ?tip .
+  ?effectText a rdfhtml:Text ; rdfhtml:data ?effect .
+}
+WHERE {
+  $this c:of ?m . FILTER(isIRI(?m))
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?m a ?type FILTER(isIRI(?type)) }
+  BIND(COALESCE(?type, <urn:semblance:none>) AS ?typeN)
+  OPTIONAL { { ?typeN l10n:label ?typeC } UNION { ?typeCAt l10n:of ?typeN ; l10n:label ?typeC } }
+  OPTIONAL { FILTER(!BOUND(?typeC)) ?typeN c:label ?typeCOnly FILTER(isLiteral(?typeCOnly)) }
+  OPTIONAL { ?typeRAt l10n:of ?typeN ; l10n:name ?typeR }
+  OPTIONAL { FILTER(!BOUND(?typeR)) ?typeN rdfs:label ?typeROnly FILTER(isLiteral(?typeROnly)) }
+  BIND(STR(COALESCE(?typeC, ?typeCOnly, ?typeR, ?typeROnly, REPLACE(STR(?type), "^.*[#/]", ""))) AS ?typeLabel)
+  BIND(COALESCE(?typeLabel, "Event") AS ?what)
+  OPTIONAL { ?m beh:target ?target FILTER(isIRI(?target)) }
+  BIND(COALESCE(?target, <urn:semblance:none>) AS ?targetN)
+  OPTIONAL { { ?targetN l10n:label ?targetC } UNION { ?targetCAt l10n:of ?targetN ; l10n:label ?targetC } }
+  OPTIONAL { FILTER(!BOUND(?targetC)) ?targetN c:label ?targetCOnly FILTER(isLiteral(?targetCOnly)) }
+  OPTIONAL { ?targetRAt l10n:of ?targetN ; l10n:name ?targetR }
+  OPTIONAL { FILTER(!BOUND(?targetR)) ?targetN rdfs:label ?targetROnly FILTER(isLiteral(?targetROnly)) }
+  BIND(STR(COALESCE(?targetC, ?targetCOnly, ?targetR, ?targetROnly, REPLACE(STR(?target), "^.*[#/]", ""))) AS ?targetLabel)
+  BIND(?targetLabel AS ?on)
+  OPTIONAL { ?m beh:at ?at }
+  BIND(COALESCE(sx:formatDateTime(?at, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?at), "") AS ?time)
+  OPTIONAL { ?m beh:added ?addedRaw }
+  OPTIONAL { ?m beh:removed ?removedRaw }
+  BIND(COALESCE(xsd:integer(STR(?addedRaw)), 0) AS ?added)
+  BIND(COALESCE(xsd:integer(STR(?removedRaw)), 0) AS ?removed)
+  BIND(IF(?added != 0 || ?removed != 0, CONCAT("+", STR(?added), " −", STR(?removed)), "") AS ?effectText0)
+  BIND(IF(BOUND(?at), STR(?at), ?none) AS ?atText)
+  BIND(IF(?effectText0 != "", ?effectText0, ?none) AS ?effect)
+  BIND(IF(BOUND(?effect), CONCAT(STR(?added), " triples added, ", STR(?removed), " removed"), ?none) AS ?tip)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~dot")) AS ?dot)
+  BIND(IRI(CONCAT(STR($this), "/~dot-aria-hidden")) AS ?dotHidden)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~what")) AS ?whatEl)
+  BIND(IRI(CONCAT(STR($this), "/~what-text")) AS ?whatText)
+  BIND(IF(BOUND(?on), IRI(CONCAT(STR($this), "/~target")), ?none) AS ?targetEl)
+  BIND(IRI(CONCAT(STR($this), "/~target-text")) AS ?targetText)
+  BIND(IRI(CONCAT(STR($this), "/~meta")) AS ?meta)
+  BIND(IRI(CONCAT(STR($this), "/~time")) AS ?timeEl)
+  BIND(IRI(CONCAT(STR($this), "/~time-text")) AS ?timeText)
+  BIND(IF(BOUND(?effect), IRI(CONCAT(STR($this), "/~effect")), ?none) AS ?effectEl)
+  BIND(IRI(CONCAT(STR($this), "/~effect-text")) AS ?effectText)
+}""" .
+c:TimelineItemRendering-sparql-text a sem:Rule ;
+    sem:implements c:TimelineItemRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?text .
+}
+WHERE {
+  $this c:of ?m . FILTER(isIRI(?m))
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?m a ?type FILTER(isIRI(?type)) }
+  BIND(COALESCE(?type, <urn:semblance:none>) AS ?typeN)
+  OPTIONAL { { ?typeN l10n:label ?typeC } UNION { ?typeCAt l10n:of ?typeN ; l10n:label ?typeC } }
+  OPTIONAL { FILTER(!BOUND(?typeC)) ?typeN c:label ?typeCOnly FILTER(isLiteral(?typeCOnly)) }
+  OPTIONAL { ?typeRAt l10n:of ?typeN ; l10n:name ?typeR }
+  OPTIONAL { FILTER(!BOUND(?typeR)) ?typeN rdfs:label ?typeROnly FILTER(isLiteral(?typeROnly)) }
+  BIND(STR(COALESCE(?typeC, ?typeCOnly, ?typeR, ?typeROnly, REPLACE(STR(?type), "^.*[#/]", ""))) AS ?typeLabel)
+  BIND(COALESCE(?typeLabel, "Event") AS ?what)
+  OPTIONAL { ?m beh:target ?target FILTER(isIRI(?target)) }
+  BIND(COALESCE(?target, <urn:semblance:none>) AS ?targetN)
+  OPTIONAL { { ?targetN l10n:label ?targetC } UNION { ?targetCAt l10n:of ?targetN ; l10n:label ?targetC } }
+  OPTIONAL { FILTER(!BOUND(?targetC)) ?targetN c:label ?targetCOnly FILTER(isLiteral(?targetCOnly)) }
+  OPTIONAL { ?targetRAt l10n:of ?targetN ; l10n:name ?targetR }
+  OPTIONAL { FILTER(!BOUND(?targetR)) ?targetN rdfs:label ?targetROnly FILTER(isLiteral(?targetROnly)) }
+  BIND(STR(COALESCE(?targetC, ?targetCOnly, ?targetR, ?targetROnly, REPLACE(STR(?target), "^.*[#/]", ""))) AS ?targetLabel)
+  BIND(?targetLabel AS ?on)
+  OPTIONAL { ?m beh:at ?at }
+  BIND(COALESCE(sx:formatDateTime(?at, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?at), "") AS ?time)
+  OPTIONAL { ?m beh:added ?addedRaw }
+  OPTIONAL { ?m beh:removed ?removedRaw }
+  BIND(COALESCE(xsd:integer(STR(?addedRaw)), 0) AS ?added)
+  BIND(COALESCE(xsd:integer(STR(?removedRaw)), 0) AS ?removed)
+  BIND(IF(?added != 0 || ?removed != 0, CONCAT("+", STR(?added), " −", STR(?removed)), "") AS ?effectText0)
+  BIND(CONCAT(?time, "  ", ?what, IF(BOUND(?on), CONCAT(" → ", ?on), ""), IF(?effectText0 != "", CONCAT("  ", ?effectText0), "")) AS ?text)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+}""" .
 
 # --- Tree: an expandable hierarchy ----------------------------------------------------------------
 # The tree starts at c:of; a node's children are the subjects whose c:parentProperty is the node
 # (for rdfs:subClassOf: its direct subclasses). Which nodes are open is graph state on the tree
-# (c:expandedNode), toggled by a reaction on the twisty. With c:controls and c:property, a node's label
+# (c:expandedNode), toggled by a reaction on the twisty. The tree mints the c:TreeItem of its root; an
+# open item mints its children's, so items are keyed by the path to them. With c:controls and c:property, a node's label
 # selects it: clicking writes `<controls> <property> <node>`, and that node is aria-selected.
 
 c:Tree a owl:Class ;
@@ -468,13 +1841,221 @@ c:expandedNode a owl:ObjectProperty ; rdfs:domain c:Tree ;
 c:detailProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "A property whose value is shown beside each node's label."@en .
 c:expands a owl:ObjectProperty ; rdfs:comment "On a rendered twisty: the tree node that activating it opens or closes."@en .
 
-c:TreeRendering a sem:Rendering ; sem:targets c:Tree ; sem:stratum 0 ;
-    sem:needsExtension sx:Locale ;
-    sem:functionOnly """awaits sx:Locale (sx:collated, or sx:sortKey for sem:orderKey): siblings sort in the viewer's collation
-(localeCompare), which no SPARQL (1.1 or 1.2) function gives. The walk itself needs no extension: per-tree step edges
-along c:parentProperty, as c:BreadcrumbSteps mints them, and items keyed by their path, which a building block can mint
-level by level for the open nodes.""" .
+c:TreeItem a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Internal: one node (c:of) of a c:Tree at a level, minted by the tree for its root and by an open item for its children (keyed by the path to it)."@en ;
+    sem:slug "tree-item" .
+c:itemLevel a owl:DatatypeProperty ; rdfs:domain c:TreeItem ; rdfs:range xsd:integer ; rdfs:comment "Its level in the tree (1 for the root)."@en .
+c:parentItem a owl:ObjectProperty ; rdfs:domain c:TreeItem ; rdfs:range c:TreeItem ; rdfs:comment "The item it is a child of."@en .
+
+c:TreeRendering a sem:Rendering ; sem:targets c:Tree ; sem:stratum 0 .
 c:TreeRendering-fn a sem:Rule ; sem:implements c:TreeRendering ; sem:function "data:tree" .
+c:TreeRendering-sparql a sem:Rule ;
+    sem:implements c:TreeRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Ul ; sem:renders $this ; rdfhtml:hasChild ?item ; rdfhtml:attribute ?roleAttr , ?labelAttr .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tree" .
+  ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
+  ?item a c:TreeItem ; c:inTree $this ; c:of ?node ; c:itemLevel 1 .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Tree ; c:of ?node ; c:parentProperty ?prop . FILTER(isIRI(?node) && isIRI(?prop))
+  OPTIONAL { $this l10n:label ?capPicked }
+  OPTIONAL { FILTER(!BOUND(?capPicked)) ?capAt l10n:of $this ; l10n:label ?capTwin }
+  OPTIONAL { FILTER(!BOUND(?capPicked) && !BOUND(?capTwin)) $this c:label ?capOnly FILTER(isLiteral(?capOnly)) }
+  OPTIONAL { ?node l10n:label ?nodePicked }
+  OPTIONAL { FILTER(!BOUND(?nodePicked)) ?nodeAt l10n:of ?node ; l10n:label ?nodeTwin }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin)) ?node c:label ?nodeOnly FILTER(isLiteral(?nodeOnly)) }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly)) ?nodeNameAt l10n:of ?node ; l10n:name ?nodeName }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly) && !BOUND(?nodeName)) ?node rdfs:label ?nodeRdfs FILTER(isLiteral(?nodeRdfs)) }
+  BIND(COALESCE(STR(?capPicked), STR(?capTwin), STR(?capOnly), COALESCE(STR(?nodePicked), STR(?nodeTwin), STR(?nodeOnly), STR(?nodeName), STR(?nodeRdfs), REPLACE(STR(?node), "^.*[#/]", ""))) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?labelAttr)
+  BIND(IRI(CONCAT(STR($this), "/~n", SUBSTR(MD5(STR(?node)), 1, 8))) AS ?item)
+}""" .
+c:TreeRendering-sparql-text a sem:Rule ;
+    sem:implements c:TreeRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?item .
+  ?item a c:TreeItem ; c:inTree $this ; c:of ?node ; c:itemLevel 1 .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Tree ; c:of ?node ; c:parentProperty ?prop . FILTER(isIRI(?node) && isIRI(?prop))
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~n", SUBSTR(MD5(STR(?node)), 1, 8))) AS ?item)
+}""" .
+
+# An item hears its tree (open nodes, the parent and detail properties, selection), its node and the
+# children pointing at it through the tree's parent property, a property in the data (sem:inverseVia).
+# Siblings are placed by their own sem:orderKey: the label in the viewer's collation, then the IRI.
+c:TreeItemRendering a sem:Rendering ; sem:targets c:TreeItem ; sem:stratum 0 ;
+    sem:follows c:inTree , ( c:inTree c:controls ) , c:of , ( c:of [ sem:inverseVia ( c:inTree c:parentProperty ) ] ) .
+c:TreeItemRendering-fn a sem:Rule ; sem:implements c:TreeItemRendering ; sem:function "data:tree-item" .
+c:TreeItemRendering-sparql a sem:Rule ;
+    sem:implements c:TreeItemRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  $this sem:orderKey ?orderKey .
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:style ?style ; rdfhtml:attribute ?roleAttr , ?levelAttr , ?expandedAttr , ?selectedAttr ; rdfhtml:hasChild ?row , ?group .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
+  ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?levelText .
+  ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
+  ?selectedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-selected" ; rdfhtml:attributeValue ?selectedText .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?labelEl , ?detail , ?count ; ord:immediatelyPrecedes ?group ; dnd:receptacle ?receptacle .
+  ?zoneOf dnd:zone ?row .
+  ?lead a ?leadTag ; rdfhtml:type ?leadType ; rdfhtml:class ?leadClass ; c:expands ?expands ; rdfhtml:attribute ?leadAttr ;
+        rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?labelEl .
+  ?leadAttr a rdfhtml:Attribute ; rdfhtml:attributeName ?leadAttrName ; rdfhtml:attributeValue ?leadAttrValue .
+  ?icon a rdfhtml:Span ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText .
+  ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?iconText a rdfhtml:Text ; rdfhtml:data "▸" .
+  ?labelEl a ?labelTag ; rdfhtml:type ?labelType ; rdfhtml:class "sem-label" ; c:selects ?selects ; c:expands ?labelExpands ;
+        rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?afterLabel .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?detail a rdfhtml:Code ; rdfhtml:class "sem-detail" ; rdfhtml:hasChild ?detailText ; ord:immediatelyPrecedes ?afterDetail .
+  ?detailText a rdfhtml:Text ; rdfhtml:data ?detailString .
+  ?count a rdfhtml:Span ; rdfhtml:class "sem-count" ; rdfhtml:hasChild ?countText .
+  ?countText a rdfhtml:Text ; rdfhtml:data ?countString .
+  ?group a rdfhtml:Ul ; rdfhtml:attribute ?groupRole ; rdfhtml:hasChild ?child .
+  ?groupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
+  ?child a c:TreeItem ; c:inTree ?tree ; c:of ?kid ; c:itemLevel ?childLevel ; c:parentItem $this .
+}
+WHERE {
+  $this a c:TreeItem ; c:inTree ?tree ; c:of ?node . FILTER(isIRI(?node))
+  ?tree c:parentProperty ?prop . FILTER(isIRI(?prop))
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { $this c:itemLevel ?level0 }
+  BIND(COALESCE(xsd:integer(STR(?level0)), 1) AS ?level)
+  OPTIONAL { ?node l10n:label ?nodePicked }
+  OPTIONAL { FILTER(!BOUND(?nodePicked)) ?nodeAt l10n:of ?node ; l10n:label ?nodeTwin }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin)) ?node c:label ?nodeOnly FILTER(isLiteral(?nodeOnly)) }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly)) ?nodeNameAt l10n:of ?node ; l10n:name ?nodeName }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly) && !BOUND(?nodeName)) ?node rdfs:label ?nodeRdfs FILTER(isLiteral(?nodeRdfs)) }
+  BIND(COALESCE(STR(?nodePicked), STR(?nodeTwin), STR(?nodeOnly), STR(?nodeName), STR(?nodeRdfs), REPLACE(STR(?node), "^.*[#/]", "")) AS ?label)
+  BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale), "\\u0001s", STR(?node)) AS ?orderKey)
+  # Its children, unless its node is already on the path to it (a cycle).
+  LATERAL { OPTIONAL { SELECT ?prop ?node (COUNT(DISTINCT ?k) AS ?kids0) WHERE { ?k ?prop ?node FILTER(isIRI(?k)) } GROUP BY ?prop ?node } }
+  BIND(IF(EXISTS { $this c:parentItem+ ?ancestor . ?ancestor c:of ?node }, 0, COALESCE(?kids0, 0)) AS ?kids)
+  BIND(?kids > 0 && EXISTS { ?tree c:expandedNode ?node } AS ?open)
+  OPTIONAL { ?tree c:controls ?target ; c:property ?selectP FILTER(isIRI(?target) && isIRI(?selectP)) }
+  BIND(BOUND(?target) AS ?selectable)
+  BIND(?selectable && EXISTS { ?target ?selectP ?node } AS ?selected)
+  # The least value of the detail property, if the node has several.
+  OPTIONAL { ?tree c:detailProperty ?detailP FILTER(isIRI(?detailP))
+    ?node ?detailP ?dv . FILTER NOT EXISTS { ?node ?detailP ?dvBefore FILTER(STR(?dvBefore) < STR(?dv)) }
+    OPTIONAL { ?dv l10n:label ?dvPicked }
+    OPTIONAL { FILTER(!BOUND(?dvPicked)) ?dvAt l10n:of ?dv ; l10n:label ?dvTwin }
+    OPTIONAL { FILTER(!BOUND(?dvPicked) && !BOUND(?dvTwin)) ?dv c:label ?dvOnly FILTER(isLiteral(?dvOnly)) }
+    OPTIONAL { FILTER(!BOUND(?dvPicked) && !BOUND(?dvTwin) && !BOUND(?dvOnly)) ?dvNameAt l10n:of ?dv ; l10n:name ?dvName }
+    OPTIONAL { FILTER(!BOUND(?dvPicked) && !BOUND(?dvTwin) && !BOUND(?dvOnly) && !BOUND(?dvName)) ?dv rdfs:label ?dvRdfs FILTER(isLiteral(?dvRdfs)) }
+  }
+  BIND(IF(isLiteral(?dv) && REGEX(STR(?dv), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?dv)), ?none) AS ?dvNumber)
+  BIND(IF(!BOUND(?dv), "", IF(isIRI(?dv), COALESCE(STR(?dvPicked), STR(?dvTwin), STR(?dvOnly), STR(?dvName), STR(?dvRdfs), REPLACE(STR(?dv), "^.*[#/]", "")),
+       COALESCE(IF(?dvNumber * 0 = 0, sx:formatNumber(?dvNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?dv)))) AS ?detailString)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(CONCAT("--tree-level: ", STR(?level - 1)) AS ?style)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-level")) AS ?levelAttr)
+  BIND(STR(?level) AS ?levelText)
+  BIND(IF(?kids > 0, IRI(CONCAT(STR($this), "/~root-aria-expanded")), ?none) AS ?expandedAttr)
+  BIND(IF(?open, "true", "false") AS ?openText)
+  BIND(IF(?selectable, IRI(CONCAT(STR($this), "/~root-aria-selected")), ?none) AS ?selectedAttr)
+  BIND(IF(?selected, "true", "false") AS ?selectedText)
+  BIND(IRI(CONCAT(STR($this), "/~row")) AS ?row)
+  # A tree that is a drop target receives into each node: its row is the node's zone.
+  BIND(EXISTS { ?tree a ?dropClass FILTER(?dropClass IN (dnd:DropTarget, dnd:Sortable)) } AS ?drops)
+  BIND(IF(?drops, ?tree, ?none) AS ?zoneOf)
+  BIND(IF(?drops, ?node, ?none) AS ?receptacle)
+  # The lead: a twisty for a node with children, a dot for a leaf.
+  BIND(?kids > 0 AS ?parent)
+  BIND(IRI(CONCAT(STR($this), IF(?parent, "/~twisty", "/~leaf"))) AS ?lead)
+  BIND(IF(?parent, rdfhtml:Button, rdfhtml:Span) AS ?leadTag)
+  BIND(IF(?parent, "button", ?none) AS ?leadType)
+  BIND(IF(?parent, "sem-twisty", "sem-leaf") AS ?leadClass)
+  BIND(IF(?parent, ?node, ?none) AS ?expands)
+  BIND(IRI(CONCAT(STR(?lead), IF(?parent, "-aria-label", "-aria-hidden"))) AS ?leadAttr)
+  BIND(IF(?parent, "aria-label", "aria-hidden") AS ?leadAttrName)
+  BIND(IF(?parent, CONCAT(IF(?open, "Collapse ", "Expand "), ?label), "true") AS ?leadAttrValue)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~twisty-icon")), ?none) AS ?icon)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~twisty-icon-aria-hidden")), ?none) AS ?iconHidden)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~twisty-text")), ?none) AS ?iconText)
+  # The label selects its node; without selection, it toggles it too (a larger hit area than the twisty).
+  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelEl)
+  BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
+  BIND(IF(?selectable, rdfhtml:Button, rdfhtml:Span) AS ?labelTag)
+  BIND(IF(?selectable, "button", ?none) AS ?labelType)
+  BIND(IF(?selectable, ?node, ?none) AS ?selects)
+  BIND(IF(!?selectable && ?parent, ?node, ?none) AS ?labelExpands)
+  BIND(IF(?detailString != "", IRI(CONCAT(STR($this), "/~detail")), ?none) AS ?detail)
+  BIND(IF(BOUND(?detail), IRI(CONCAT(STR($this), "/~detail-text")), ?none) AS ?detailText)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~count")), ?none) AS ?count)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~count-text")), ?none) AS ?countText)
+  BIND(STR(?kids) AS ?countString)
+  BIND(COALESCE(?detail, ?count) AS ?afterLabel)
+  BIND(IF(BOUND(?detail), ?count, ?none) AS ?afterDetail)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~group-role")), ?none) AS ?groupRole)
+  LATERAL { {} UNION {
+    FILTER(?open)
+    ?kid ?prop ?node . FILTER(isIRI(?kid))
+    BIND(IRI(CONCAT(STR($this), "/~c", SUBSTR(MD5(STR(?kid)), 1, 8))) AS ?child)
+    BIND(?level + 1 AS ?childLevel)
+  } }
+}""" .
+c:TreeItemRendering-sparql-text a sem:Rule ;
+    sem:implements c:TreeItemRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  $this sem:orderKey ?orderKey .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line , ?group .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText ; ord:immediatelyPrecedes ?group .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?data .
+  ?group a rdfhtml:Div ; rdfhtml:hasChild ?child .
+  ?child a c:TreeItem ; c:inTree ?tree ; c:of ?kid ; c:itemLevel ?childLevel ; c:parentItem $this .
+}
+WHERE {
+  $this a c:TreeItem ; c:inTree ?tree ; c:of ?node . FILTER(isIRI(?node))
+  ?tree c:parentProperty ?prop . FILTER(isIRI(?prop))
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { $this c:itemLevel ?level0 }
+  BIND(COALESCE(xsd:integer(STR(?level0)), 1) AS ?level)
+  OPTIONAL { ?node l10n:label ?nodePicked }
+  OPTIONAL { FILTER(!BOUND(?nodePicked)) ?nodeAt l10n:of ?node ; l10n:label ?nodeTwin }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin)) ?node c:label ?nodeOnly FILTER(isLiteral(?nodeOnly)) }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly)) ?nodeNameAt l10n:of ?node ; l10n:name ?nodeName }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly) && !BOUND(?nodeName)) ?node rdfs:label ?nodeRdfs FILTER(isLiteral(?nodeRdfs)) }
+  BIND(COALESCE(STR(?nodePicked), STR(?nodeTwin), STR(?nodeOnly), STR(?nodeName), STR(?nodeRdfs), REPLACE(STR(?node), "^.*[#/]", "")) AS ?label)
+  BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale), "\\u0001s", STR(?node)) AS ?orderKey)
+  # Its children, unless its node is already on the path to it (a cycle).
+  LATERAL { OPTIONAL { SELECT ?prop ?node (COUNT(DISTINCT ?k) AS ?kids0) WHERE { ?k ?prop ?node FILTER(isIRI(?k)) } GROUP BY ?prop ?node } }
+  BIND(IF(EXISTS { $this c:parentItem+ ?ancestor . ?ancestor c:of ?node }, 0, COALESCE(?kids0, 0)) AS ?kids)
+  BIND(?kids > 0 && EXISTS { ?tree c:expandedNode ?node } AS ?open)
+  OPTIONAL { ?tree c:controls ?target ; c:property ?selectP FILTER(isIRI(?target) && isIRI(?selectP)) }
+  BIND(BOUND(?target) AS ?selectable)
+  BIND(?selectable && EXISTS { ?target ?selectP ?node } AS ?selected)
+  # Two spaces per level (up to 64 levels).
+  BIND(SUBSTR("                                                                                                                                ", 1, 2 * (?level - 1)) AS ?indent)
+  BIND(CONCAT(?indent, IF(?kids > 0, IF(?open, "\u25BE ", "\u25B8 "), "  "), ?label, IF(?selected, "  \u25C2", "")) AS ?data)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
+  LATERAL { {} UNION {
+    FILTER(?open)
+    ?kid ?prop ?node . FILTER(isIRI(?kid))
+    BIND(IRI(CONCAT(STR($this), "/~c", SUBSTR(MD5(STR(?kid)), 1, 8))) AS ?child)
+    BIND(?level + 1 AS ?childLevel)
+  } }
+}""" .
 
 c:TreeToggle a beh:Reaction ;
     beh:when beh:Click ;

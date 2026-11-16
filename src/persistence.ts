@@ -12,16 +12,21 @@
 // view reads the input graphs only (views step before projections), so a policy
 // opts in when that is all it reads.
 import type { Quad, Term } from '@rdfjs/types'
+import { migrateQuads, readRetired } from './retired.ts'
 import { Parser, Writer } from 'n3'
 import type { ReactionFn } from './behaviour/events.ts'
 import type { FnRule } from './engine/context.ts'
-import { BEH, EVENTS_GRAPH, MOD, NS, PERSIST_GRAPH, RDF_TYPE, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
+import { formatLocale } from './engine/context.ts'
+import { BEH, EVENTS_GRAPH, H, MOD, NS, PERSIST_GRAPH, RDF_TYPE, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
 import { prefixesFor } from './prefixes.ts'
 import { type Delta, mint, parseDuration, quadKey } from './rdf.ts'
 import type { ViewHandle } from './view/runtime.ts'
 import type { Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
-import { labelOf, named, str } from './components/util.ts'
+import { labelOf, named, RDFS_LABEL, str, text } from './components/util.ts'
+import { md5Key } from './components/data.ts'
+import { TUPLE } from './render/order-key.ts'
+import { dateOf, formatDateTime, formatNumber, numberOf, sortKey } from '../rdf-engine/host/intl.ts'
 
 const PER = NS.per
 const PROV = NS.prov
@@ -30,11 +35,16 @@ const XSD_DATETIME = NS.xsd + 'dateTime'
 /** A term's kind and value, so an IRI and a blank node of the same label stay apart. */
 const termKey = (t: Term) => t.termType + ':' + t.value
 
+/** What a stored key starts with, unless Persistence is told otherwise. */
+export const STORAGE_PREFIX = 'semblance:'
+
 /** Where a scope keeps its strings. Asynchronous, so IndexedDB fits too. */
 export interface Backend {
   get(key: string): Promise<string | undefined>
   set(key: string, value: string): Promise<void>
   remove(key: string): Promise<void>
+  /** Hear about keys another tab changed (a scope other tabs share); returns a function that stops it. */
+  watch?(listener: (key: string) => void): () => void
 }
 
 export function memoryBackend(): Backend {
@@ -42,11 +52,22 @@ export function memoryBackend(): Backend {
   return { get: async (k) => m.get(k), set: async (k, v) => void m.set(k, v), remove: async (k) => void m.delete(k) }
 }
 
-export function webStorageBackend(storage: Storage): Backend {
+/** `events` hears the `storage` events other tabs' writes to it fire (the window, in a browser). */
+export function webStorageBackend(storage: Storage, events: EventTarget | undefined = 'addEventListener' in globalThis ? globalThis : undefined): Backend {
   return {
     get: async (k) => storage.getItem(k) ?? undefined,
     set: async (k, v) => storage.setItem(k, v),
     remove: async (k) => storage.removeItem(k),
+    ...(events && {
+      watch: (listener: (key: string) => void) => {
+        const heard = (e: Event) => {
+          const { key, storageArea } = e as StorageEvent
+          if (storageArea === storage && key !== null) listener(key)
+        }
+        events.addEventListener('storage', heard)
+        return () => events.removeEventListener('storage', heard)
+      },
+    }),
   }
 }
 
@@ -88,6 +109,10 @@ interface Policy {
   watches: Set<string>
   /** A storage-carried nav:Dimension rather than a declared policy (no switch of its own). */
   dimension?: true
+  /** per:acrossTabs: an open tab takes what another tab stores. */
+  acrossTabs?: true
+  /** The triple patterns of per:construct's template: what it may store, and so restore (read once). */
+  template?: Quad[]
 }
 
 interface Blob {
@@ -142,7 +167,14 @@ export class Persistence {
   constructor(
     readonly store: GraphStore,
     readonly backends: Record<string, Backend>,
-    readonly opts: { prefix?: string; delayMs?: number } = {},
+    /**
+     * onFollowed: another tab's write was taken (per:acrossTabs), so the host shows the change, as after an event.
+     * trusted: where the policies are declared (per:Policy, its subject, properties, query, scope and
+     * graph, and storage-carried dimensions): the trusted graphs when the page renders authored
+     * content (mount's `trusted`), so an author cannot add a policy or pick a storage key; the store
+     * otherwise. Whether a policy is on (per:enabled) is state, read from the store.
+     */
+    readonly opts: { prefix?: string; delayMs?: number; onFollowed?: () => void; trusted?: GraphStore } = {},
   ) {
     created?.(this)
   }
@@ -156,7 +188,7 @@ export class Persistence {
   }
 
   private key(policy: string) {
-    return (this.opts.prefix ?? 'semblance:') + policy
+    return (this.opts.prefix ?? STORAGE_PREFIX) + policy
   }
   private backend(scope: string) {
     return this.backends[scope] ?? this.backends[PER + 'Session']!
@@ -169,11 +201,17 @@ export class Persistence {
     return (this.cachedPolicies ??= this.readPolicies())
   }
 
+  /** Where the policies are declared. */
+  private get declared(): GraphStore {
+    return this.opts.trusted ?? this.store
+  }
+
   private readPolicies(): Policy[] {
-    const s = this.store
+    const s = this.declared
     const f = s.factory
     const nn = (x: string) => f.namedNode(x)
     const one = (subject: Term, p: string) => s.match(subject, nn(p), null)[0]?.object
+    const enabled = (p: Term) => this.store.match(p, nn(PER + 'enabled'), null)[0]?.object.value !== 'false'
     const policies = s.match(null, nn(RDF_TYPE), nn(PER + 'Policy')).map(({ subject: p }) => {
       const construct = one(p, PER + 'construct')?.value
       const listHead = one(p, PER + 'properties')
@@ -186,7 +224,7 @@ export class Persistence {
       return {
         iri: p.value,
         scope: one(p, PER + 'scope')?.value ?? PER + 'Session',
-        enabled: one(p, PER + 'enabled')?.value !== 'false',
+        enabled: enabled(p),
         version: one(p, PER + 'version')?.value ?? '1',
         graph: one(p, PER + 'graph')?.value,
         retentionMs: duration ? parseDuration(duration) : undefined,
@@ -195,6 +233,7 @@ export class Persistence {
         construct,
         incremental: one(p, NS.iv + 'strategy')?.value === NS.iv + 'Incremental',
         watches: new Set([...properties, ...(construct ? this.mentioned(construct) : [])]),
+        ...(one(p, PER + 'acrossTabs')?.value === 'true' && { acrossTabs: true as const }),
       }
     })
     // A dimension of a location (nav:Dimension) carried by a storage scope is remembered like a
@@ -217,7 +256,7 @@ export class Persistence {
   }
   private declaredPrefixes(): Record<string, string> {
     const out: Record<string, string> = {}
-    for (const line of prefixesFor(this.store).split('\n')) {
+    for (const line of prefixesFor(this.declared).split('\n')) {
       const m = /^PREFIX (\S*): <([^>]*)>/.exec(line)
       if (m) out[m[1]!] = m[2]!
     }
@@ -233,49 +272,148 @@ export class Persistence {
     // The switches themselves are remembered on the device.
     const flags = await this.backend(PER + 'Device').get(this.key('enabled'))
     if (flags) {
+      // Only the switches of the policies declared: a stored flag names no other node.
+      const declared = new Set(this.policies().filter((p) => !p.dimension).map((p) => p.iri))
       for (const [iri, on] of Object.entries(JSON.parse(flags) as Record<string, boolean>)) {
+        if (!declared.has(iri) || typeof on !== 'boolean') continue
         const p = f.namedNode(iri)
         for (const q of this.store.match(p, f.namedNode(PER + 'enabled'), null)) this.store.delete(q)
         this.store.add(f.quad(p, f.namedNode(PER + 'enabled'), f.literal(String(on), f.namedNode(XSD_BOOLEAN))))
       }
     }
+    this.cachedPolicies = undefined
     let total = 0
     for (const policy of this.policies()) {
-      if (!policy.enabled) continue
-      const raw = await this.backend(policy.scope).get(this.key(policy.iri))
-      if (!raw) continue
-      let blob: Blob
-      try {
-        blob = JSON.parse(raw)
-      } catch {
-        continue
-      }
-      const expired = policy.retentionMs !== undefined && Date.now() - blob.savedAt > policy.retentionMs
-      if (blob.version !== policy.version || expired) {
-        await this.removeStored(policy)
-        continue
-      }
-      const g = policy.graph ? f.namedNode(policy.graph) : f.defaultGraph()
-      const held = new Map(this.parse(blob.nt).map((q) => [quadKey(q), q]))
-      for (let i = 1; i <= (blob.chunks ?? 0); i++) {
-        const raw = await this.backend(policy.scope).get(this.key(policy.iri) + '#' + i)
-        if (!raw) break
-        const chunk = JSON.parse(raw) as Chunk
-        for (const q of this.parse(chunk.remove)) held.delete(quadKey(q))
-        for (const q of this.parse(chunk.add)) held.set(quadKey(q), q)
-      }
-      const quads = [...held.values()].map((q) => f.quad(q.subject, q.predicate, q.object, g))
-      // What is restored replaces the current values of the same subject and property.
-      // Keyed by the terms themselves (a remembered subject may be a blank node, not an IRI).
-      const pairs = new Map(quads.map((q) => [termKey(q.subject) + ' ' + termKey(q.predicate), q] as const))
-      if (!policy.graph) {
-        for (const { subject, predicate } of pairs.values()) for (const q of this.store.match(subject, predicate, null, g)) this.store.delete(q)
-      }
-      for (const q of quads) if (!this.store.has(q)) this.store.add(q)
-      this.restoredCounts.set(policy.iri, quads.length)
-      total += quads.length
+      this.considered.add(policy.iri)
+      const change = await this.storedChange(policy)
+      if (!change) continue
+      for (const q of change.remove) this.store.delete(q)
+      for (const q of change.add) if (!this.store.has(q)) this.store.add(q)
+      this.restoredCounts.set(policy.iri, change.add.length)
+      total += change.add.length
     }
     return total
+  }
+
+  /** The policies restore() has seen (a graph loaded later may bring more: restoreAdded). */
+  private considered = new Set<string>()
+
+  /**
+   * Put back what the policies added since restore() stored (a graph loaded after start brought
+   * them), as one change through the runtime, so what shows them updates. Returns how many triples.
+   */
+  async restoreAdded(): Promise<number> {
+    const runtime = this.runtime
+    if (!runtime) return 0
+    const change: { add: Quad[]; remove: Quad[] } = { add: [], remove: [] }
+    for (const policy of this.policies()) {
+      if (this.considered.has(policy.iri)) continue
+      this.considered.add(policy.iri)
+      const c = await this.storedChange(policy)
+      if (!c) continue
+      change.add.push(...c.add)
+      change.remove.push(...c.remove)
+      this.restoredCounts.set(policy.iri, c.add.length)
+      this.record(PER + 'Restore', policy, c.add.length)
+    }
+    // Named graphs are input graphs too: each part goes where its policy keeps it.
+    const byGraph = new Map<string, { add: Quad[]; remove: Quad[] }>()
+    for (const [k, qs] of [['add', change.add], ['remove', change.remove]] as const) {
+      for (const q of qs) {
+        const g = q.graph.termType === 'DefaultGraph' ? '' : q.graph.value
+        let d = byGraph.get(g)
+        if (!d) byGraph.set(g, (d = { add: [], remove: [] }))
+        d[k].push(q)
+      }
+    }
+    for (const [g, d] of byGraph) (g ? runtime.write(g, d) : runtime.apply(d))
+    return change.add.length
+  }
+
+  /** What restoring a policy changes: its stored triples, replacing the current values of their subjects and properties (none: nothing stored, or disabled). */
+  private async storedChange(policy: Policy): Promise<{ add: Quad[]; remove: Quad[] } | undefined> {
+    const f = this.store.factory
+    if (!policy.enabled) return undefined
+    const raw = await this.backend(policy.scope).get(this.key(policy.iri))
+    if (!raw) return undefined
+    let blob: Blob
+    try {
+      blob = JSON.parse(raw)
+    } catch {
+      return undefined
+    }
+    const expired = policy.retentionMs !== undefined && Date.now() - blob.savedAt > policy.retentionMs
+    if (blob.version !== policy.version || expired) {
+      await this.removeStored(policy)
+      return undefined
+    }
+    const g = policy.graph ? f.namedNode(policy.graph) : f.defaultGraph()
+    const retired = readRetired(this.store)
+    const remembered = migrateQuads(this.parse(blob.nt), retired, f)
+    // A remembered triple that names a term which went without a new name cannot be carried over.
+    if (!remembered) {
+      await this.removeStored(policy)
+      return undefined
+    }
+    const held = new Map(remembered.map((q) => [quadKey(q), q]))
+    for (let i = 1; i <= (blob.chunks ?? 0); i++) {
+      const raw = await this.backend(policy.scope).get(this.key(policy.iri) + '#' + i)
+      if (!raw) break
+      const chunk = JSON.parse(raw) as Chunk
+      const [removed, added] = [migrateQuads(this.parse(chunk.remove), retired, f), migrateQuads(this.parse(chunk.add), retired, f)]
+      if (!removed || !added) {
+        await this.removeStored(policy)
+        return undefined
+      }
+      for (const q of removed) held.delete(quadKey(q))
+      for (const q of added) held.set(quadKey(q), q)
+    }
+    // Only what the policy covers comes back: whatever else storage holds stays there.
+    const add = [...held.values()].filter((q) => this.covers(policy, q)).map((q) => f.quad(q.subject, q.predicate, q.object, g))
+    // What is restored replaces the current values of the same subject and property.
+    // Keyed by the terms themselves (a remembered subject may be a blank node, not an IRI).
+    const pairs = new Map(add.map((q) => [termKey(q.subject) + ' ' + termKey(q.predicate), q] as const))
+    const keep = new Set(add.map(quadKey))
+    const remove: Quad[] = []
+    if (!policy.graph) for (const { subject, predicate } of pairs.values()) for (const q of this.store.match(subject, predicate, null, g)) if (!keep.has(quadKey(q))) remove.push(q)
+    return { add, remove }
+  }
+
+  /**
+   * Whether a policy covers a stored triple, so restoring it may bring the triple back: its
+   * subject's properties (per:subject, per:properties), else a pattern of its query's template
+   * (per:construct), a sensitive property never. A policy with a graph (per:graph) restores into
+   * that graph alone, but the same holds there.
+   */
+  private covers(policy: Policy, q: Quad): boolean {
+    if (this.isSensitive(q.predicate)) return false
+    if (policy.subject) return termKey(q.subject) === termKey(policy.subject) && policy.properties.includes(q.predicate.value)
+    if (!policy.construct) return false
+    policy.template ??= this.templateOf(policy.construct)
+    const fits = (pattern: Term, t: Term) => pattern.termType === 'Variable' || pattern.termType === 'BlankNode' || pattern.equals(t)
+    return policy.template.some((p) => fits(p.subject, q.subject) && fits(p.predicate, q.predicate) && fits(p.object, q.object))
+  }
+
+  /** The triple patterns of a CONSTRUCT query's template (none when it cannot be read: nothing is restored). */
+  private templateOf(query: string): Quad[] {
+    const at = /\bCONSTRUCT\s*\{/i.exec(query)
+    if (!at) return []
+    const start = at.index + at[0].length
+    // Braces outside IRIs, strings and comments, until the template's own closes.
+    const token = /<[^>\s]*>|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|#[^\n]*|[{}]/g
+    token.lastIndex = start
+    let depth = 1
+    let end = -1
+    for (let m; end < 0 && (m = token.exec(query)); ) {
+      if (m[0] === '{') depth++
+      else if (m[0] === '}' && !--depth) end = m.index
+    }
+    if (end < 0) return []
+    try {
+      return new Parser({ format: 'N3' }).parse(prefixesFor(this.declared) + '\n' + query.slice(start, end).trim().replace(/\.?$/, ' .')) as Quad[]
+    } catch {
+      return []
+    }
   }
 
   /** Whether the last restore put back what a policy (or a storage-carried dimension) stored. */
@@ -293,15 +431,39 @@ export class Persistence {
     if (this.dirty.size) this.schedule()
     this.keep()
     const stop = runtime.onInput((graph, delta) => this.changed(graph, delta))
+    const unwatch = Object.entries(this.backends).flatMap(([scope, b]) => (b.watch ? [b.watch((key) => void this.follow(scope, key))] : []))
     // The runtime ending (a web mount's unmount) releases the store: a waiting write must not run.
     const unend = runtime.onEnd(() => this.stop())
     this.detachInput = () => {
       stop()
       unend()
+      for (const u of unwatch) u()
       for (const [iri, k] of this.kept) k.stop(), runtime.views.unhost(mint(iri, 'view'))
       this.kept.clear()
     }
     return () => this.stop()
+  }
+
+  /**
+   * Another tab stored `key` in `scope`: a policy across tabs (per:acrossTabs) takes it, as one change
+   * through the runtime, so what shows it updates. Not written back: it is what is stored already.
+   */
+  private async follow(scope: string, key: string) {
+    const policy = this.policies().find((p) => p.acrossTabs && p.enabled && p.scope === scope && this.key(p.iri) === key)
+    const runtime = this.runtime
+    if (!policy || !runtime || this.stopped) return
+    const change = await this.storedChange(policy)
+    if (!change || this.stopped) return
+    const add = change.add.filter((q) => !this.store.has(q))
+    if (!add.length && !change.remove.length) return
+    const dirty = this.dirty.has(policy.iri)
+    const d = { add, remove: change.remove }
+    if (policy.graph) runtime.write(policy.graph, d)
+    else runtime.apply(d)
+    if (!dirty) this.dirty.delete(policy.iri)
+    this.restoredCounts.set(policy.iri, change.add.length)
+    this.record(PER + 'Restore', policy, change.add.length)
+    this.opts.onFollowed?.()
   }
 
   /**
@@ -490,7 +652,7 @@ export class Persistence {
     } else if (policy.construct && s.sparql) {
       const graphs = [f.defaultGraph(), f.namedNode(EVENTS_GRAPH), ...(this.runtime?.projections.map((p) => p.engine.graph) ?? [])]
       if (policy.graph) graphs.push(f.namedNode(policy.graph))
-      quads = s.construct(prefixesFor(s) + '\n' + policy.construct, graphs)
+      quads = s.construct(prefixesFor(this.declared) + '\n' + policy.construct, graphs)
     }
     return quads.filter((q) => !sensitive(q.predicate))
   }
@@ -561,45 +723,73 @@ export class Persistence {
 
 // --- c:PolicyList ------------------------------------------------------------------------------
 
+const DATED = new Set([NS.xsd + 'dateTime', NS.xsd + 'dateTimeStamp', NS.xsd + 'date'])
+
+/** A phrase's first `code` replaced by `value`, as the SPARQL rule's STRBEFORE / STRAFTER do. */
+const fill = (phrase: string, code: string, value: string) => {
+  const i = phrase.indexOf(code)
+  return i < 0 ? phrase : phrase.slice(0, i) + value + phrase.slice(i + code.length)
+}
+
+/**
+ * Every policy, in the viewer's collation of their labels (an order key from sx:sortKey; a row is keyed
+ * by its policy), its size and last write as sx:formatNumber and sx:formatDateTime write them in the
+ * viewer's locale, its status in the viewer's language: as c:PolicyListRendering-sparql does.
+ */
 const policyList: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
+  ctx.readsLanguage()
+  const lang = formatLocale(ctx.languages)
   const policies = ctx
     .match(null, RDF_TYPE, PER + 'Policy')
     .map((q) => q.subject)
     .filter(named)
-    .sort((a, b) => labelOf(ctx, a).localeCompare(labelOf(ctx, b)))
+    .map((p) => {
+      const label = labelOf(ctx, p)
+      return { p, label, on: ctx.object(p, PER + 'enabled')?.value !== 'false', k: 'p-' + md5Key(p.value), order: TUPLE + 's' + sortKey(label, lang) }
+    })
   if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Div', {}, policies.map((p, i) => o.text('l' + i, `[${ctx.object(p, PER + 'enabled')?.value === 'false' ? ' ' : 'x'}] ${labelOf(ctx, p)}\n`))))
+    const root = o.el('root', 'Div')
+    for (const { label, on, k, order } of policies) {
+      const line = o.text(k + '-line', `[${on ? 'x' : ' '}] ${label}\n`)
+      o.t(line, SEM.orderKey, order).t(root, H.hasChild, line)
+    }
+    o.renders(root)
     return o.quads
   }
-  const rows = policies.map((p, i) => {
-    const on = ctx.object(p, PER + 'enabled')?.value !== 'false'
+  const phrase = (name: string) => text(ctx, ctx.nn(PER + name), RDFS_LABEL) ?? ''
+  const rows = policies.map(({ p, label, on, k, order }) => {
     const scope = ctx.object(p, PER + 'scope')
     const size = Number(str(ctx.object(p, PER + 'storedSize')) ?? 0)
     const restored = str(ctx.object(p, PER + 'restored'))
-    const when = str(ctx.object(p, PER + 'lastWritten'))
-    const k = 'p' + i
-    const toggle = o.el(k + '-switch', 'Button', { type: 'button', role: 'switch', 'aria-checked': String(on), 'aria-label': labelOf(ctx, p) }, [o.el(k + '-thumb', 'Span', { 'aria-hidden': 'true' })])
+    const when = ctx.object(p, PER + 'lastWritten')
+    const at = when?.termType === 'Literal' && DATED.has(when.datatype.value) ? dateOf(when.value) : undefined
+    const time = at && !Number.isNaN(at.getTime()) ? formatDateTime(at, lang, 'hour=2-digit;minute=2-digit;second=2-digit;hour12=false', ctx.timeZone) : when?.value
+    const toggle = o.el(k + '-switch', 'Button', { type: 'button', role: 'switch', 'aria-checked': String(on), 'aria-label': label }, [o.el(k + '-thumb', 'Span', { 'aria-hidden': 'true' })])
     o.t(toggle, PER + 'toggles', p)
     const forget = o.el(k + '-forget', 'Button', { type: 'button', class: 'sem-forget', disabled: size > 0 ? undefined : '' }, [o.text(k + '-forget-text', '⌫')])
-    o.attr(forget, 'aria-label', `Forget ${labelOf(ctx, p)}`)
+    o.attr(forget, 'aria-label', fill(phrase('ForgetPhrase'), '{label}', label))
     o.t(forget, PER + 'forgets', p)
     const status = [
       scope ? labelOf(ctx, scope) : '',
-      on ? (size ? `${size} triples` : 'nothing stored yet') : 'off',
-      restored ? `${restored} restored at load` : '',
-      when ? `saved ${when.slice(11, 19)}` : '',
+      on ? (size ? fill(phrase('StoredPhrase'), '{n}', formatNumber(size, lang)) : phrase('NothingStoredPhrase')) : phrase('OffPhrase'),
+      restored ? fill(phrase('RestoredPhrase'), '{n}', formatNumber(numberOf(restored), lang)) : '',
+      time ? fill(phrase('SavedPhrase'), '{time}', time) : '',
     ].filter(Boolean)
-    return o.el(k, 'Li', {}, [
+    const row = o.el(k, 'Li', {}, [
       toggle,
       o.el(k + '-what', 'Div', { class: 'sem-what' }, [
-        o.el(k + '-label', 'Strong', {}, [o.text(k + '-label-text', labelOf(ctx, p))]),
+        o.el(k + '-label', 'Strong', {}, [o.text(k + '-label-text', label)]),
         o.el(k + '-status', 'Span', {}, [o.text(k + '-status-text', status.join(' · '))]),
       ]),
       forget,
     ])
+    o.t(row, SEM.orderKey, order)
+    return row
   })
-  o.renders(o.el('root', 'Ul', { 'aria-label': labelOf(ctx, ctx.nn(PER + 'Policy')) }, rows))
+  const root = o.el('root', 'Ul', { 'aria-label': labelOf(ctx, ctx.nn(PER + 'Policy')) })
+  for (const row of rows) o.t(root, H.hasChild, row)
+  o.renders(root)
   return o.quads
 }
 
@@ -628,5 +818,22 @@ const forgetPolicy: ReactionFn = (ctx) => {
   return { remove: [], add: [f.quad(p as never, f.namedNode(PER + 'request'), f.literal('forget'))] }
 }
 
-export const persistenceFunctions: Record<string, FnRule> = { 'policy-list': policyList }
+/** A chooser bound to a remembered, hooked property says so on its root (per:RememberedChooser). */
+const rememberedChooser: FnRule = (ctx, focus) => {
+  const subject = ctx.object(focus, NS.c + 'controls')
+  const property = ctx.object(focus, NS.c + 'property')
+  if (!subject || !property || !ctx.object(property, STY.hookAttribute)) return []
+  const covers = ctx.match(null, PER + 'subject', subject).some((q) => isPolicy(ctx, q.subject) && inList(ctx, ctx.object(q.subject, PER + 'properties'), property.value))
+  if (!covers) return []
+  const o = ctx.out(focus)
+  o.attr(o.node('root'), 'data-sem-remembered', subject.value + ' ' + property.value, 'root-remembered')
+  return o.quads
+}
+const isPolicy = (ctx: Parameters<FnRule>[0], node: Term) => ctx.match(node, RDF_TYPE, PER + 'Policy').length > 0
+const inList = (ctx: Parameters<FnRule>[0], head: Term | undefined, value: string): boolean => {
+  for (let n = head; n && n.value !== NS.rdf + 'nil'; n = ctx.object(n, NS.rdf + 'rest')) if (ctx.object(n, NS.rdf + 'first')?.value === value) return true
+  return false
+}
+
+export const persistenceFunctions: Record<string, FnRule> = { 'policy-list': policyList, 'persistence:remembered-chooser': rememberedChooser }
 export const persistenceReactions: Record<string, ReactionFn> = { 'persistence:toggle': togglePolicy, 'persistence:forget': forgetPolicy }

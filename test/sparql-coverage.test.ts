@@ -17,13 +17,13 @@ describe('SPARQL coverage', () => {
   FILTER NOT EXISTS { ?rendering sem:needsExtension ?extension }
   FILTER NOT EXISTS { ?rendering sem:awaitsWork ?issue }
   BIND(EXISTS { ?fn sem:implements ?rendering ; sem:function ?name } AS ?hasFunction)
-  BIND(EXISTS { ?q sem:implements ?rendering ; sem:construct ?text } AS ?hasSparql)
+  BIND(EXISTS { ?q sem:implements ?rendering ; sem:construct|sem:constructFrom/sem:construct ?text } AS ?hasSparql)
   OPTIONAL {
     FILTER NOT EXISTS { ?rendering sem:modality ?own }
     VALUES ?modality { mod:Screen mod:Text }
-    ?some sem:implements ?rendering ; sem:construct ?someText ; sem:modality ?named .
+    ?some sem:implements ?rendering ; sem:construct|sem:constructFrom/sem:construct ?someText ; sem:modality ?named .
     FILTER NOT EXISTS {
-      ?q2 sem:implements ?rendering ; sem:construct ?text2 .
+      ?q2 sem:implements ?rendering ; sem:construct|sem:constructFrom/sem:construct ?text2 .
       FILTER(NOT EXISTS { ?q2 sem:modality ?m2 } || EXISTS { ?q2 sem:modality ?modality })
     }
   }
@@ -47,10 +47,6 @@ describe('SPARQL coverage', () => {
     expect(awaiting).toEqual([
       // The combobox work (#14) brings the typeahead's function twins.
       ...['TagInputPills', 'TypeaheadMatches', 'TypeaheadOptionRendering', 'TypeaheadOptions', 'TypeaheadRendering'].map((rendering) => ({ rendering, issue: '14' })),
-      // Views over derived triples (#147): formulas over a sheet's derived inputs or a view's figures.
-      { rendering: 'QueryFormula', issue: '147' },
-      // Query runs as graph data (#148): the result table, of a query run when asked.
-      { rendering: 'ResultTableRendering', issue: '148' },
     ])
   })
 
@@ -68,11 +64,10 @@ describe('SPARQL coverage', () => {
     expect(reactions).toEqual([])
   })
 
-  it('every reaction has SPARQL (beh:deletes / beh:inserts), unless it awaits an extension', () => {
+  it('every reaction has SPARQL (beh:deletes / beh:inserts)', () => {
     const loose = rows(`SELECT ?reaction WHERE {
   ?reaction a beh:Reaction .
   FILTER NOT EXISTS { ?reaction beh:inserts ?i } FILTER NOT EXISTS { ?reaction beh:deletes ?d }
-  FILTER NOT EXISTS { ?reaction sem:needsExtension ?extension }
 } ORDER BY ?reaction`)
     expect(loose).toEqual([])
   })

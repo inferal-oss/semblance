@@ -15,7 +15,7 @@
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-linked ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-fields ui:ly-spacer ui:ly-host-slot ui:ly-panes ui:ly-connect ) .
-ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
+ui:gallery-layout-intro a c:Heading ; c:label "Layout" , "Розкладка"@uk , "Layout"@de , "التخطيط"@ar .
 
 # --- surfaces and elevation ---
 ui:ly-flat a c:Surface ; sty:elevation sty:Flat ; c:children ( ui:ly-flat-over ui:ly-flat-title ui:ly-flat-text ) .
@@ -32,7 +32,7 @@ ui:ly-overlay-title a c:Text ; sty:textStyle sty:Subtitle ; c:label "Overlay" .
 ui:ly-overlay-text a c:Text ; sty:textStyle sty:Caption ; c:label "Floats above everything: menus, popovers, dialogs." .
 ui:ly-surfaces-grid a c:Grid ; c:minWidth "200px" ; pos:gap tok:space-5 ; c:children ( ui:ly-flat ui:ly-raised ui:ly-overlay ) .
 ui:ly-surfaces a c:Flippable ; c:front ui:ly-surfaces-spec .
-ui:ly-surfaces-spec a c:Specimen ; c:demonstrates c:Surface ; c:label "Surface" ;
+ui:ly-surfaces-spec a c:Specimen ; c:demonstrates c:Surface ; c:label "Surface" , "Поверхня"@uk , "Fläche"@de , "سطح"@ar ;
     c:help "A padded container for c:children. sty:elevation says how far it stands off the page (flat, raised, overlay); pos:inset and pos:gap override its padding and spacing." ;
     c:children ( ui:ly-surfaces-grid ) .
 
@@ -49,7 +49,7 @@ ui:ly-linked-out-card a c:Card ; c:label "RDF/HTML" ;
     c:note "Leaves the site: a new tab, an ↗ mark, a spoken hint." , "Виходить із сайту: нова вкладка, позначка ↗, озвучена підказка."@uk , "Verlässt die Seite: neuer Tab, ein ↗, ein gesprochener Hinweis."@de , "يغادر الموقع: علامة تبويب جديدة وعلامة ↗ وتلميح منطوق."@ar .
 ui:ly-linked-grid a c:Grid ; c:minWidth "200px" ; pos:gap tok:space-4 ; c:children ( ui:ly-linked-here ui:ly-linked-to ui:ly-linked-out ) .
 ui:ly-linked a c:Flippable ; c:front ui:ly-linked-spec .
-ui:ly-linked-spec a c:Specimen ; c:demonstrates c:LinkedCard ; c:label "Linked card" ;
+ui:ly-linked-spec a c:Specimen ; c:demonstrates c:LinkedCard ; c:label "Linked card" , "Картка-посилання"@uk , "Verlinkte Karte"@de , "بطاقة مرتبطة"@ar ;
     c:help "A c:Link around one non-interactive component (c:content), here a c:Card, so every theme styles it as a card. c:label, if any, names the link; c:to, c:external and c:currentPage work as on any link. Keep buttons and other links out of it." ;
     c:children ( ui:ly-linked-grid ) .
 
@@ -72,7 +72,7 @@ ui:ly-tint-danger-c a c:Text ; sty:textStyle sty:Caption ; c:label "Cannot be un
 ui:ly-tinted-grid a c:Grid ; c:minWidth "150px" ; pos:gap tok:space-3 ;
     c:children ( ui:ly-tint-accent ui:ly-tint-info ui:ly-tint-success ui:ly-tint-warning ui:ly-tint-danger ) .
 ui:ly-tinted a c:Flippable ; c:front ui:ly-tinted-spec .
-ui:ly-tinted-spec a c:Specimen ; c:demonstrates c:Surface ; c:label "Tinted surface" ;
+ui:ly-tinted-spec a c:Specimen ; c:demonstrates c:Surface ; c:label "Tinted surface" , "Тонована поверхня"@uk , "Getönte Fläche"@de , "سطح ملوّن"@ar ;
     c:help "sty:tone on a surface tints its background with the tone's soft fill and its border with the tone's border color." ;
     c:children ( ui:ly-tinted-grid ) .
 
@@ -91,7 +91,7 @@ ui:ly-div-below a c:Text ; sty:textStyle sty:Caption ; c:label "Below the rule" 
 ui:ly-div-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ly-div-above ui:ly-div-plain ui:ly-div-below ui:ly-div-label ui:ly-div-row ) .
 ui:ly-dividers a c:Flippable ; c:front ui:ly-dividers-spec .
-ui:ly-dividers-spec a c:Specimen ; c:demonstrates c:Divider ; c:label "Divider" ;
+ui:ly-dividers-spec a c:Specimen ; c:demonstrates c:Divider ; c:label "Divider" , "Роздільник"@uk , "Trennlinie"@de , "فاصل"@ar ;
     c:help "An <hr>, or with a c:label a separator whose label sits in the line. pos:direction pos:Column stands it upright between the items of a row." ;
     c:children ( ui:ly-div-col ) .
 
@@ -125,7 +125,7 @@ ui:ly-grid-three a c:Grid ; c:columns 3 ; c:children ( ui:ly-tile-a ui:ly-tile-b
 ui:ly-grids-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ly-grid-auto-cap ui:ly-grid-auto ui:ly-grid-three-cap ui:ly-grid-three ) .
 ui:ly-grids a c:Flippable ; c:front ui:ly-grids-spec .
-ui:ly-grids-spec a c:Specimen ; c:demonstrates c:Grid ; c:label "Grid" ;
+ui:ly-grids-spec a c:Specimen ; c:demonstrates c:Grid ; c:label "Grid" , "Сітка"@uk , "Raster"@de , "شبكة"@ar ;
     c:help "c:children as equal tiles. c:minWidth is the narrowest a tile may get; c:columns caps the column count. Both reach the theme as custom properties on the grid's root; pos:gap spaces the tiles." ;
     c:children ( ui:ly-grids-col ) .
 
@@ -222,7 +222,7 @@ ui:ly-sp-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
     c:children ( ui:ly-sp-title ui:ly-sp-spacer ui:ly-sp-kbd ui:ly-sp-button ) .
 ui:ly-sp-bar a c:Surface ; pos:direction pos:Column ; pos:inset tok:space-3 ; c:children ( ui:ly-sp-row ) .
 ui:ly-spacer a c:Flippable ; c:front ui:ly-spacer-spec .
-ui:ly-spacer-spec a c:Specimen ; c:demonstrates c:Spacer ; c:label "Spacer" ;
+ui:ly-spacer-spec a c:Specimen ; c:demonstrates c:Spacer ; c:label "Spacer" , "Проміжок"@uk , "Abstandshalter"@de , "فاصل فراغ"@ar ;
     c:help "Space that grows: in a row it pushes what follows it to the far end." ;
     c:children ( ui:ly-sp-bar ) .
 
@@ -234,7 +234,7 @@ ui:ly-hs-after a c:Text ; sty:textStyle sty:Caption ; c:label "Rendered by Sembl
 ui:ly-hs-box a c:Surface ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
     c:children ( ui:ly-hs-before ui:ly-hs-slot ui:ly-hs-after ) .
 ui:ly-host-slot a c:Flippable ; c:front ui:ly-host-slot-spec .
-ui:ly-host-slot-spec a c:Specimen ; c:demonstrates c:HostSlot ; c:label "Host slot" ;
+ui:ly-host-slot-spec a c:Specimen ; c:demonstrates c:HostSlot ; c:label "Host slot" , "Місце для хоста"@uk , "Host-Platz"@de , "فتحة المضيف"@ar ;
     c:help "An unstyled place (c:slot names it) where the host application mounts content of its own - here a native slider - inside a Semblance layout. Semblance never touches what the host puts there; c:ProjectionView is the styled kind, for another projection of the graph." ;
     c:children ( ui:ly-hs-box ) .
 
@@ -306,7 +306,7 @@ ui:ly-rows-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; pos:g
 ui:ly-rows-guides a c:Segmented ; c:controls ui:ly-rows-body ; c:property pos:guides ; c:label "Guides" .
 ui:ly-rows-stage a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:ly-rows-guides ui:ly-rows-body ) .
 ui:ly-rows a c:Flippable ; c:front ui:ly-rows-spec .
-ui:ly-rows-spec a c:Specimen ; c:demonstrates c:Stack ; c:label "Rows that line up" ;
+ui:ly-rows-spec a c:Specimen ; c:demonstrates c:Stack ; c:label "Rows that line up" , "Рядки, що вирівнюються"@uk , "Zeilen, die fluchten"@de , "صفوف متحاذية"@ar ;
     c:help "The same three rows, twice; the dashed boxes are the cells. A stack lays out only its own children, so on the left each row places its cells from its own content. On the right the list declares its column tracks once (a pos:Layout with grid-template-columns) and each row is pos:Subgrid, sharing them - also the last row, inside a c:Switch, which takes no part in layout. A badge stays as wide as its label in its column." ;
     c:children ( ui:ly-rows-stage ) .
 
@@ -318,6 +318,6 @@ ui:ly-connect-arrow a c:Connector ; c:from ui:ly-connect-order ; c:to ui:ly-conn
 ui:ly-connect-canvas a c:Canvas , c:Resizable ; c:label "Two cards and a connector" ; c:height 240 ;
     c:children ( ui:ly-connect-order ui:ly-connect-invoice ui:ly-connect-arrow ) .
 ui:ly-connect a c:Flippable ; c:front ui:ly-connect-spec .
-ui:ly-connect-spec a c:Specimen ; c:demonstrates c:Connector , c:Canvas ; c:label "Connector" ;
+ui:ly-connect-spec a c:Specimen ; c:demonstrates c:Connector , c:Canvas ; c:label "Connector" , "Зʼєднувач"@uk , "Verbinder"@de , "موصّل"@ar ;
     c:help "A c:Connector is an arrow c:from one component c:to another, as data: c:route (curved, straight, elbow, an arc to the side), c:arrowheads, c:line, sty:tone and a c:label, which with the ends' names is its text alternative (\"Order → Invoice: is billed as\"). The host measures the ends and draws it, once a frame at most and only when something moved, so it stays attached: drag a card (each sits in a c:CanvasItem, which is c:Draggable), or resize the c:Canvas from its corner. An end that is hidden or out of view hides it. A sheet's dependency arrows and a walkthrough's are connectors too, derived by rules." ;
     c:children ( ui:ly-connect-canvas ) .

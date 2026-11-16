@@ -66,7 +66,9 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
   it('typing updates c:value and re-renders only the editor', () => {
     const h = workbench()
     const runs = (rule: string) => h.screen.engine.stats.byRule.get(C + rule)?.runs ?? 0
-    const before = { bench: runs('QueryWorkbenchRendering-fn'), table: runs('ResultTableRendering-fn'), editor: runs('CodeEditorRendering-fn') }
+    // On Oxigraph (no sx: functions) the editor renders by its function twin.
+    const editorRuns = () => runs('CodeEditorRendering-sparql-screen') + runs('CodeEditorRendering-fn')
+    const before = { bench: runs('QueryWorkbenchRendering-fn'), table: runs('ResultTableRendering-sparql'), editor: editorRuns() }
     const rows = panel(h).querySelector('tbody')!.innerHTML
     const query = 'SELECT ?tab WHERE { ?tab a c:Tab }'
     type(h, query)
@@ -77,9 +79,9 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(spans).toContain('tok-var:?tab')
     expect(spans).toContain('tok-pname:c:Tab')
     expect(highlighted(h).textContent).toBe(query + ' ')
-    expect(runs('CodeEditorRendering-fn')).toBe(before.editor + 1)
+    expect(editorRuns()).toBe(before.editor + 1)
     expect(runs('QueryWorkbenchRendering-fn')).toBe(before.bench)
-    expect(runs('ResultTableRendering-fn')).toBe(before.table)
+    expect(runs('ResultTableRendering-sparql')).toBe(before.table)
     expect(panel(h).querySelector('tbody')!.innerHTML).toBe(rows) // results change only on Run
     // A second line adds a line number; editing it leaves the first line's nodes alone.
     const first = highlighted(h).querySelector('span')!
@@ -176,9 +178,9 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(panel(h).querySelector('.sem-summary')!.textContent).toBe('Triples: 5')
     expect([...panel(h).querySelectorAll('th')].map((t) => t.textContent)).toEqual(['subject', 'predicate', 'object'])
     // Running the same text again re-runs it.
-    const runs = h.screen.engine.stats.byRule.get(C + 'ResultTableRendering-fn')!.runs
+    const runs = h.screen.engine.stats.byRule.get(C + 'ResultTableRendering-sparql')!.runs
     run(h)
-    expect(h.screen.engine.stats.byRule.get(C + 'ResultTableRendering-fn')!.runs).toBe(runs + 1)
+    expect(h.screen.engine.stats.byRule.get(C + 'ResultTableRendering-sparql')!.runs).toBe(runs + 1)
   })
 
   it('every sample runs, into a table, a graph and Turtle', () => {
@@ -240,6 +242,19 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     // The hub (sem:Component) is in the middle.
     const hub = [...graph.querySelectorAll('.sem-node')].find((n) => n.querySelector('.sem-node-label')!.textContent === 'sem:Component')!
     expect(hub.querySelector('circle')!.getAttribute('cx')).toBe('360')
+  })
+
+  it('labels the rarest predicates of a busy graph, and counts every predicate in a legend', () => {
+    const h = workbench()
+    const many = Array.from({ length: 30 }, (_, i) => `ex:n${i}`).join(' ')
+    type(h, `CONSTRUCT { ex:hub ex:many ?n . ex:hub ex:rare ex:other } WHERE { VALUES ?n { ${many} } }`)
+    run(h)
+    showResults(h, 'Graph')
+    const graph = panel(h).querySelector('[data-sem-c=result-graph]')!
+    expect(graph.querySelector('.sem-summary')!.textContent).toBe('Nodes: 32 · edges: 31')
+    // 30 edges of one predicate are past the 24 labels; the one rare edge keeps its label.
+    expect([...graph.querySelectorAll('.sem-edge-label')].map((t) => t.textContent)).toEqual(['ex:rare'])
+    expect(graph.querySelector('.sem-legend')!.textContent).toBe('ex:many ×30 · ex:rare ×1')
   })
 
   it('shows a failing query as an error, and never throws', () => {
@@ -322,7 +337,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(out).toMatch(/1 │ # Every component class/)
     expect(out).toContain('[ Run ]')
     expect(out).toContain('Results of: Components and their renderings · SELECT')
-    expect(implementationGaps(['components/workbench.ttl'])).toEqual({ noSparql: [], noFunction: [] })
+    expect(implementationGaps(['components/workbench.ttl', 'components/result-graph.ttl'])).toEqual({ noSparql: [], noFunction: [] })
   })
 })
 
@@ -382,13 +397,13 @@ describe('selecting a node in the graph view', () => {
     expect(selectionLine(h).textContent).toMatch(/^Select a node/)
     expect(selectionLine(h).getAttribute('aria-live')).toBe('polite')
 
-    const before = { graph: runs('ResultGraphRendering-fn'), selection: runs('ResultGraphSelection-sparql'), table: runs('ResultTableRendering-fn'), ops: h.shell.ops }
+    const before = { graph: runs('ResultGraphRendering-fn'), selection: runs('ResultGraphSelection-sparql'), table: runs('ResultTableRendering-sparql'), ops: h.shell.ops }
     const tabs = graphNode(h, 'c:Tabs')
     h.fire(tabs.querySelector('circle')!, 'click')
     expect(value(h, UI + 'queryGraph', C + 'selectedTerm')).toBe(C + 'Tabs')
     // Only the selection rule ran for the view: the query did not run again, nothing was laid out.
     expect(runs('ResultGraphRendering-fn')).toBe(before.graph)
-    expect(runs('ResultTableRendering-fn')).toBe(before.table)
+    expect(runs('ResultTableRendering-sparql')).toBe(before.table)
     expect(runs('ResultGraphSelection-sparql')).toBe(before.selection + 1)
 
     const pairs = links(h)
@@ -519,7 +534,7 @@ describe('selecting a node in the graph view', () => {
       expect(a, `step ${i}`).toBe(b)
       expect(shells.map((h) => value(h, UI + 'queryGraph', C + 'selectedTerm'))).toEqual(Array(2).fill(value(shells[0]!, UI + 'queryGraph', C + 'selectedTerm')))
     })
-    expect(implementationGaps(['components/workbench.ttl'])).toEqual({ noSparql: [], noFunction: [] })
+    expect(implementationGaps(['components/workbench.ttl', 'components/result-graph.ttl'])).toEqual({ noSparql: [], noFunction: [] })
   })
 
   it('is remembered with the rest of the workbench', async () => {

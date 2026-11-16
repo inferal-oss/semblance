@@ -18,7 +18,7 @@
 
 ui:gallery-actions a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-actions-intro ui:act-buttons ui:act-button-states ui:act-icon-buttons ui:act-copiers ui:act-button-groups ui:act-menus ui:act-tb-toolbar ) .
-ui:gallery-actions-intro a c:Heading ; c:label "Actions" .
+ui:gallery-actions-intro a c:Heading ; c:label "Actions" , "Дії"@uk , "Aktionen"@de , "الإجراءات"@ar .
 # --- Button: tone x emphasis ---
 ui:act-b-solid-neutral a c:Button ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Solid .
 ui:act-b-solid-accent a c:Button ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
@@ -50,7 +50,7 @@ ui:act-b-ghost-danger a c:Button ; c:label "Danger" ; sty:tone sty:Danger ; sty:
 ui:act-b-row-ghost a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-ghost-neutral ui:act-b-ghost-accent ui:act-b-ghost-info ui:act-b-ghost-success ui:act-b-ghost-warning ui:act-b-ghost-danger ) .
 ui:act-b-grid a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:act-b-row-solid ui:act-b-row-soft ui:act-b-row-outline ui:act-b-row-ghost ) .
 ui:act-buttons a c:Flippable ; c:front ui:act-buttons-spec .
-ui:act-buttons-spec a c:Specimen ; c:demonstrates c:Button ; c:label "Button" ;
+ui:act-buttons-spec a c:Specimen ; c:demonstrates c:Button ; c:label "Button" , "Кнопка"@uk , "Schaltfläche"@de , "زر"@ar ;
     c:help "Six tones by four emphases (rows: solid, soft, outline, ghost) - 24 looks from ten theme rules. Tone and emphasis are object properties with style hooks, so the button rule knows nothing about them." ;
     c:children ( ui:act-b-grid ) .
 
@@ -69,7 +69,7 @@ ui:act-b-disabled-plain a c:Button ; c:label "Disabled" ; c:disabled true .
 ui:act-b-disabled a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-disabled-solid ui:act-b-disabled-outline ui:act-b-disabled-plain ) .
 ui:act-b-states-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:act-b-sizes ui:act-b-intents ui:act-b-disabled ) .
 ui:act-button-states a c:Flippable ; c:front ui:act-button-states-spec .
-ui:act-button-states-spec a c:Specimen ; c:demonstrates c:Button ; c:label "Button sizes and states" ;
+ui:act-button-states-spec a c:Specimen ; c:demonstrates c:Button ; c:label "Button sizes and states" , "Розміри й стани кнопки"@uk , "Größen und Zustände von Schaltflächen"@de , "أحجام الزر وحالاته"@ar ;
     c:help "sty:size sets the control height, padding, font and radius custom properties; sty:intent is the older shorthand (Primary = accent solid); c:disabled true renders a disabled button." ;
     c:children ( ui:act-b-states-col ) .
 
@@ -99,7 +99,7 @@ ui:act-ib-states a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
     c:children ( ui:act-ib-sm ui:act-ib-md ui:act-ib-lg ui:act-ib-star ui:act-ib-pin ui:act-ib-off ) .
 ui:act-ib-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:act-ib-emphases ui:act-ib-tones ui:act-ib-states ) .
 ui:act-icon-buttons a c:Flippable ; c:front ui:act-icon-buttons-spec .
-ui:act-icon-buttons-spec a c:Specimen ; c:demonstrates c:IconButton , c:Pressable ; c:label "Icon button" ;
+ui:act-icon-buttons-spec a c:Specimen ; c:demonstrates c:IconButton , c:Pressable ; c:label "Icon button" , "Кнопка-значок"@uk , "Symbolschaltfläche"@de , "زر أيقونة"@ar ;
     c:help "Square and icon-only: c:icon is the glyph, c:label its accessible name and tooltip. Toned and sized like a button. The star and the pin are also c:Pressable, a behaviour mixin whose reaction flips c:pressed (aria-pressed); the graph holds the state." ;
     c:children ( ui:act-ib-col ) .
 
@@ -116,7 +116,7 @@ ui:act-copy-off a c:IconButton , clip:Copier ; clip:copies ui:act-copy-sample ; 
 ui:act-copy-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-copy-icon ui:act-copy-button ui:act-copy-off ) .
 ui:act-copy-row a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:act-copy-controls ui:act-copy-sample ) .
 ui:act-copiers a c:Flippable ; c:front ui:act-copiers-spec .
-ui:act-copiers-spec a c:Specimen ; c:label "Copy to the clipboard" ; c:demonstrates clip:Copier ;
+ui:act-copiers-spec a c:Specimen ; c:label "Copy to the clipboard" , "Копіювання в буфер обміну"@uk , "In die Zwischenablage kopieren"@de , "النسخ إلى الحافظة"@ar ; c:demonstrates clip:Copier ;
     c:help "Any button that is also a clip:Copier copies a value of a node (clip:copies, clip:property): here the sample's c:label, elsewhere a result table's c:markdown or an editor's text. The click records a clip:Request; the host's clipboard effect writes it and reports back as an event, so the glyph shows ✓ (or ✕) for a moment and a toast says what was copied. A button is keyboard accessible by construction: Enter or Space copies." ;
     c:children ( ui:act-copy-row ) .
 
@@ -138,7 +138,7 @@ ui:act-bg-next a c:Button ; c:label "Next ›" .
 ui:act-bg-small a c:ButtonGroup ; c:label "Pages" ; sty:size sty:Small ; c:children ( ui:act-bg-prev ui:act-bg-page ui:act-bg-next ) .
 ui:act-bg-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:act-bg-edit ui:act-bg-format ui:act-bg-split ui:act-bg-small ) .
 ui:act-button-groups a c:Flippable ; c:front ui:act-button-groups-spec .
-ui:act-button-groups-spec a c:Specimen ; c:demonstrates c:ButtonGroup ; c:label "Button group" ;
+ui:act-button-groups-spec a c:Specimen ; c:demonstrates c:ButtonGroup ; c:label "Button group" , "Група кнопок"@uk , "Schaltflächengruppe"@de , "مجموعة أزرار"@ar ;
     c:help "An attached row of buttons (c:children) with shared inner borders and role=group. Icon buttons and toned buttons mix freely; a sty:size on the group sizes every button in it (the last group is small)." ;
     c:children ( ui:act-bg-row ) .
 
@@ -166,7 +166,7 @@ ui:act-mi-none a c:MenuItem ; c:label "Nothing" .
 ui:act-menu-off a c:Menu ; c:label "Disabled" ; c:disabled true ; c:items ( ui:act-mi-none ) .
 ui:act-menu-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:act-menu-actions ui:act-menu-new ui:act-menu-sort ui:act-menu-off ui:act-menu-log ) .
 ui:act-menus a c:Flippable ; c:front ui:act-menus-spec .
-ui:act-menus-spec a c:Specimen ; c:demonstrates c:Menu , c:MenuItem , c:Setter ; c:label "Menu" ;
+ui:act-menus-spec a c:Specimen ; c:demonstrates c:Menu , c:MenuItem , c:Setter ; c:label "Menu" , "Меню"@uk , "Menü"@de , "قائمة"@ar ;
     c:help "A menu button: c:open is graph state that the trigger's reaction flips (Escape closes it too). Items are c:MenuItem instances, built only while the menu is open; choosing one closes the menu, and these are also c:Setter, so they write their c:value into the badge." ;
     c:children ( ui:act-menu-row ) .
 
@@ -190,6 +190,6 @@ ui:act-tb-bar a c:Toolbar ; c:label "Filters" ;
     c:children ( ui:act-tb-search ui:act-tb-choice ui:act-tb-switch ui:act-tb-spacer ui:act-tb-clear ) .
 ui:act-tb-state a c:Metrics ; c:of ui:act-tb-filter ; c:fields ( ui:act-tb-text ui:act-tb-kind ui:act-tb-older ) .
 ui:act-tb-toolbar a c:Flippable ; c:front ui:act-tb-toolbar-spec .
-ui:act-tb-toolbar-spec a c:Specimen ; c:demonstrates c:Toolbar ; c:label "Toolbar" ;
+ui:act-tb-toolbar-spec a c:Specimen ; c:demonstrates c:Toolbar ; c:label "Toolbar" , "Панель інструментів"@uk , "Werkzeugleiste"@de , "شريط الأدوات"@ar ;
     c:help "A filter bar: a c:Toolbar (role=toolbar, named by c:label) of controls that each edit one property of the same node - a search field, a choice and a switch - and a button, a c:Spacer pushing it to the end. The chips below read the node back." ;
     c:children ( ui:act-tb-bar ui:act-tb-state ) .

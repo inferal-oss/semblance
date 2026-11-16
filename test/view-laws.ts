@@ -18,6 +18,8 @@ export const LAW_VIEWS: Record<string, string> = {
   join: `SELECT ?m ?label WHERE { v:s tree:member ?m . ?m v:target ?t . ?t rdfs:label ?label }`,
   chain: `SELECT ?glabel (COUNT(?m) AS ?n) WHERE { v:s tree:member ?m . ?m v:target ?t . ?t v:group ?g . ?g rdfs:label ?glabel } GROUP BY ?glabel`,
   distinct: `SELECT DISTINCT ?t WHERE { v:s tree:member ?m . ?m v:target ?t }`,
+  scanPredicates: `SELECT DISTINCT ?p WHERE { ?anySubject ?p ?anyObject }`,
+  scanKinds: `SELECT DISTINCT ?k WHERE { ?m v:kind ?k }`,
   distinctPath: `SELECT DISTINCT ?label WHERE { v:s tree:member ?m . ?m v:target/rdfs:label ?label }`,
   union: `SELECT ?m ?v WHERE { v:s tree:member ?m . { ?m v:x ?v } UNION { ?m v:target ?t . ?t rdfs:label ?v } }`,
   values: `SELECT ?m ?w WHERE { VALUES (?k ?w) { (v:K1 "one") (v:K2 "two") } v:s tree:member ?m . ?m v:kind ?k }`,
@@ -107,6 +109,8 @@ ${Object.entries(CONSTRUCTS).map(([k, q]) => `v:${k} a iv:View ; sem:construct "
 v:rows a iv:View ; iv:materialize iv:Graph ; sem:select """${LAW_VIEWS.topk}""" .
 v:paged a iv:View ; iv:parameter [ iv:variable "k" ; iv:from v:cfg ; iv:property v:limit ; iv:default 2 ] ;
     sem:select """SELECT ?m ?x WHERE { v:s tree:member ?m . ?m v:x ?x } ORDER BY ?x ?m LIMIT $k""" .
+v:scanKind a iv:View ; iv:parameter [ iv:variable "kind" ; iv:from v:cfg ; iv:property v:kind ; iv:default v:K1 ] ;
+    sem:select "SELECT DISTINCT ?m WHERE { ?m v:kind $kind }" .
 v:kinded a iv:View ; iv:parameter [ iv:variable "kind" ; iv:from v:cfg ; iv:property v:kind ; iv:default v:K1 ] ;
     sem:select """SELECT ?m ?t WHERE { v:s tree:member ?m . ?m v:kind $kind OPTIONAL { ?m v:target ?t } }""" .
 v:atLeast a iv:View ; iv:parameter [ iv:variable "min" ; iv:from v:cfg ; iv:property v:min ; iv:default 3 ] , [ iv:variable "k" ; iv:from v:cfg ; iv:property v:limit ; iv:default 2 ] ;

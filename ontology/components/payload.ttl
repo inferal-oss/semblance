@@ -56,7 +56,7 @@ c:JsonNode a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Internal: one value of a c:JsonTree, minted by its parsing (keyed by its JSON Pointer)."@en ;
     sem:slug "json-node" .
-c:inTree a owl:ObjectProperty ; rdfs:domain c:JsonNode ; rdfs:range c:JsonTree .
+c:inTree a owl:ObjectProperty ; rdfs:comment "From a node a tree minted (a c:JsonNode, a c:TreeItem) to its tree."@en .
 c:jsonPath a owl:DatatypeProperty ; rdfs:domain c:JsonNode ; rdfs:comment "Its JSON Pointer."@en .
 c:jsonKey a owl:DatatypeProperty ; rdfs:domain c:JsonNode ; rdfs:comment "Its key in its parent (an array index for items; the tree's name for the root)."@en .
 c:jsonType a owl:DatatypeProperty ; rdfs:domain c:JsonNode ; rdfs:comment "object, array, string, number, boolean or null."@en .
@@ -67,10 +67,181 @@ c:jsonParent a owl:ObjectProperty ; rdfs:domain c:JsonNode ; rdfs:range c:JsonNo
 # c:expanded (a disclosure's boolean) says whether a container node is open; sem:orderKey places it
 # among its siblings (its position in its parent).
 
-c:JsonTreeRendering a sem:Rendering ; sem:targets c:JsonTree ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Json (sx:json): it parses the payload as JSON. What it mints, the c:JsonNode structure, is rendered by SPARQL." ;
-    sem:needsExtension sx:Json .
+c:JsonTreeRendering a sem:Rendering ; sem:targets c:JsonTree ; sem:stratum 0 ; sem:follows c:of , c:bindFrom .
 c:JsonTreeRendering-fn a sem:Rule ; sem:implements c:JsonTreeRendering ; sem:function "payload:json-tree" .
+# The payload read as the hex view reads it, parsed by sx:json: a node per value JSON.parse keeps,
+# keyed by its JSON Pointer as the function twin keys it (the first eight hex digits of its MD5),
+# minted only under open containers. A scalar shows ?json, as JSON.stringify writes it.
+c:JsonTreeRendering-sparql a sem:Rule ;
+    sem:implements c:JsonTreeRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Json ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:attribute ?rootRole , ?rootName ; rdfhtml:hasChild ?empty , ?note , ?rawEl , ?top .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?rootRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tree" .
+  ?rootName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
+  ?note a rdfhtml:P ; rdfhtml:class "sem-note" ; rdfhtml:hasChild ?noteText ; ord:immediatelyPrecedes ?rawEl .
+  ?noteText a rdfhtml:Text ; rdfhtml:data "Not valid JSON; shown as text." .
+  ?rawEl a rdfhtml:Pre ; rdfhtml:class "sem-raw" ; rdfhtml:hasChild ?rawText .
+  ?rawText a rdfhtml:Text ; rdfhtml:data ?payload .
+  ?node a c:JsonNode ; c:inTree $this ; c:jsonPath ?path ; c:jsonKey ?key ; c:jsonType ?kind ; c:jsonDepth ?depth ; sem:orderKey ?orderKey ;
+        c:jsonParent ?parentNode ; c:jsonCount ?count ; c:expanded ?open ; c:jsonValue ?json .
+}
+WHERE {
+  $this a c:JsonTree .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?payload)
+  LATERAL { OPTIONAL { $this c:expandDepth ?depthRaw } }
+  BIND(COALESCE(xsd:double(STR(?depthRaw)), 1) AS ?openDepth)
+  OPTIONAL { $this l10n:label ?labelPicked }
+  OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+  BIND(STR(COALESCE(?labelPicked, ?labelOnly, "root")) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?payload))
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No payload.")) AS ?emptyText)
+      BIND(rdfhtml:P AS ?rootTag)
+      BIND("sem-empty" AS ?rootClass)
+    } UNION {
+      FILTER(BOUND(?payload))
+      FILTER NOT EXISTS { (?payload) sx:json (?anyPath ?anyParent ?anyKey ?anyKind ?anyValue) }
+      BIND(IRI(CONCAT(STR($this), "/~note")) AS ?note)
+      BIND(IRI(CONCAT(STR($this), "/~note-text")) AS ?noteText)
+      BIND(IRI(CONCAT(STR($this), "/~raw")) AS ?rawEl)
+      BIND(IRI(CONCAT(STR($this), "/~raw-text")) AS ?rawText)
+      BIND(rdfhtml:Div AS ?rootTag)
+      BIND("sem-invalid" AS ?rootClass)
+    } UNION {
+      FILTER(BOUND(?payload))
+      BIND(rdfhtml:Ul AS ?rootTag)
+      BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?rootRole)
+      BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?rootName)
+      # One row per value JSON.parse keeps, with its number of members (the members' rows count one
+      # each, in one pass: no join); shown when no ancestor is closed: none collapsed, and every
+      # ancestor at c:expandDepth or deeper expanded.
+      { SELECT ?payload ?path (SAMPLE(?parent0) AS ?parent) (SAMPLE(?key00) AS ?key0) (SAMPLE(?kind0) AS ?kind) (SAMPLE(?index0) AS ?index)
+          (SAMPLE(?json0) AS ?json) (SUM(?member) AS ?count0) WHERE {
+        { (?payload) sx:json (?path ?parent0 ?key00 ?kind0 ?value0 ?index0 ?json0 ?kept) FILTER(?kept) BIND(0 AS ?member) }
+        UNION
+        { (?payload) sx:json (?memberPath ?path ?memberKey ?memberKind ?memberValue ?memberIndex ?memberJson ?memberKept)
+          FILTER(?memberKept && BOUND(?path)) BIND(1 AS ?member) }
+      } GROUP BY ?payload ?path }
+      BIND(STRLEN(?path) - STRLEN(REPLACE(?path, "/", "")) AS ?depth)
+      FILTER NOT EXISTS { $this c:collapsedPath ?closedAbove FILTER(STRSTARTS(?path, CONCAT(STR(?closedAbove), "/"))) }
+      LATERAL { OPTIONAL { SELECT ?path ?openDepth (COUNT(DISTINCT ?openAbove) AS ?openedAbove) WHERE {
+        $this c:expandedPath ?openAbove0 BIND(STR(?openAbove0) AS ?openAbove)
+        FILTER(STRSTARTS(?path, CONCAT(?openAbove, "/")) && STRLEN(?openAbove) - STRLEN(REPLACE(?openAbove, "/", "")) >= ?openDepth)
+      } GROUP BY ?path ?openDepth } }
+      FILTER(COALESCE(?openedAbove, 0) >= ?depth - ?openDepth)
+      BIND(?kind IN ("object", "array") AS ?container)
+      BIND(IF(?container, !EXISTS { $this c:collapsedPath ?path } && (EXISTS { $this c:expandedPath ?path } || ?depth < ?openDepth), ?none) AS ?open)
+      BIND(IF(?container, ?count0, ?none) AS ?count)
+      BIND(STR(?key0) AS ?keyText)
+      BIND(COALESCE(?keyText, ?caption) AS ?key)
+      # Where JavaScript lists a member: names that are array indices first, by number, then the
+      # rest in source order (sx:json's ?index).
+      BIND(IF(!BOUND(?parent), 0, IF(REGEX(?keyText, "^(0|[1-9][0-9]{0,9})$") && xsd:integer(?keyText) <= 4294967294, xsd:integer(?keyText), 4294967295 + ?index)) AS ?orderKey)
+      BIND(IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(?path), 1, 8))) AS ?node)
+      BIND(IF(BOUND(?parent), IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(?parent), 1, 8))), ?none) AS ?parentNode)
+      BIND(IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(""), 1, 8))) AS ?top)
+    }
+  }
+}""" .
+c:JsonTreeRendering-sparql-text a sem:Rule ;
+    sem:implements c:JsonTreeRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Json ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?empty , ?note , ?rawEl , ?top .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?note a rdfhtml:Div ; rdfhtml:hasChild ?noteText ; ord:immediatelyPrecedes ?rawEl .
+  ?noteText a rdfhtml:Text ; rdfhtml:data "Not valid JSON; shown as text." .
+  ?rawEl a rdfhtml:Div ; rdfhtml:hasChild ?rawText .
+  ?rawText a rdfhtml:Text ; rdfhtml:data ?payload .
+  ?node a c:JsonNode ; c:inTree $this ; c:jsonPath ?path ; c:jsonKey ?key ; c:jsonType ?kind ; c:jsonDepth ?depth ; sem:orderKey ?orderKey ;
+        c:jsonParent ?parentNode ; c:jsonCount ?count ; c:expanded ?open ; c:jsonValue ?json .
+}
+WHERE {
+  $this a c:JsonTree .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?payload)
+  LATERAL { OPTIONAL { $this c:expandDepth ?depthRaw } }
+  BIND(COALESCE(xsd:double(STR(?depthRaw)), 1) AS ?openDepth)
+  OPTIONAL { $this l10n:label ?labelPicked }
+  OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+  BIND(STR(COALESCE(?labelPicked, ?labelOnly, "root")) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?payload))
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No payload.")) AS ?emptyText)
+      BIND("sem-empty" AS ?rootClass)
+    } UNION {
+      FILTER(BOUND(?payload))
+      FILTER NOT EXISTS { (?payload) sx:json (?anyPath ?anyParent ?anyKey ?anyKind ?anyValue) }
+      BIND(IRI(CONCAT(STR($this), "/~note")) AS ?note)
+      BIND(IRI(CONCAT(STR($this), "/~note-text")) AS ?noteText)
+      BIND(IRI(CONCAT(STR($this), "/~raw")) AS ?rawEl)
+      BIND(IRI(CONCAT(STR($this), "/~raw-text")) AS ?rawText)
+    } UNION {
+      FILTER(BOUND(?payload))
+      # One row per value JSON.parse keeps, with its number of members (the members' rows count one
+      # each, in one pass: no join); shown when no ancestor is closed: none collapsed, and every
+      # ancestor at c:expandDepth or deeper expanded.
+      { SELECT ?payload ?path (SAMPLE(?parent0) AS ?parent) (SAMPLE(?key00) AS ?key0) (SAMPLE(?kind0) AS ?kind) (SAMPLE(?index0) AS ?index)
+          (SAMPLE(?json0) AS ?json) (SUM(?member) AS ?count0) WHERE {
+        { (?payload) sx:json (?path ?parent0 ?key00 ?kind0 ?value0 ?index0 ?json0 ?kept) FILTER(?kept) BIND(0 AS ?member) }
+        UNION
+        { (?payload) sx:json (?memberPath ?path ?memberKey ?memberKind ?memberValue ?memberIndex ?memberJson ?memberKept)
+          FILTER(?memberKept && BOUND(?path)) BIND(1 AS ?member) }
+      } GROUP BY ?payload ?path }
+      BIND(STRLEN(?path) - STRLEN(REPLACE(?path, "/", "")) AS ?depth)
+      FILTER NOT EXISTS { $this c:collapsedPath ?closedAbove FILTER(STRSTARTS(?path, CONCAT(STR(?closedAbove), "/"))) }
+      LATERAL { OPTIONAL { SELECT ?path ?openDepth (COUNT(DISTINCT ?openAbove) AS ?openedAbove) WHERE {
+        $this c:expandedPath ?openAbove0 BIND(STR(?openAbove0) AS ?openAbove)
+        FILTER(STRSTARTS(?path, CONCAT(?openAbove, "/")) && STRLEN(?openAbove) - STRLEN(REPLACE(?openAbove, "/", "")) >= ?openDepth)
+      } GROUP BY ?path ?openDepth } }
+      FILTER(COALESCE(?openedAbove, 0) >= ?depth - ?openDepth)
+      BIND(?kind IN ("object", "array") AS ?container)
+      BIND(IF(?container, !EXISTS { $this c:collapsedPath ?path } && (EXISTS { $this c:expandedPath ?path } || ?depth < ?openDepth), ?none) AS ?open)
+      BIND(IF(?container, ?count0, ?none) AS ?count)
+      BIND(STR(?key0) AS ?keyText)
+      BIND(COALESCE(?keyText, ?caption) AS ?key)
+      # Where JavaScript lists a member: names that are array indices first, by number, then the
+      # rest in source order (sx:json's ?index).
+      BIND(IF(!BOUND(?parent), 0, IF(REGEX(?keyText, "^(0|[1-9][0-9]{0,9})$") && xsd:integer(?keyText) <= 4294967294, xsd:integer(?keyText), 4294967295 + ?index)) AS ?orderKey)
+      BIND(IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(?path), 1, 8))) AS ?node)
+      BIND(IF(BOUND(?parent), IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(?parent), 1, 8))), ?none) AS ?parentNode)
+      BIND(IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(""), 1, 8))) AS ?top)
+    }
+  }
+}""" .
 
 c:JsonNodeRendering a sem:Rendering ; sem:targets c:JsonNode ; sem:stratum 0 .
 c:JsonNodeRendering-fn a sem:Rule ; sem:implements c:JsonNodeRendering ; sem:function "payload:json-node" .
@@ -193,10 +364,202 @@ c:HexView a owl:Class ;
 ASCII characters ('.' for the rest), in a scrolling region. At most c:limit bytes (default 512)
 are shown; a note counts the rest."""@en ;
     sem:slug "hex-view" .
-c:HexViewRendering a sem:Rendering ; sem:targets c:HexView ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Text (sx:codepoint): it writes each UTF-8 byte of the text in hex, which needs a character's code point." ;
-    sem:needsExtension sx:Text .
+c:HexViewRendering a sem:Rendering ; sem:targets c:HexView ; sem:stratum 0 ; sem:follows c:of , c:bindFrom .
 c:HexViewRendering-fn a sem:Rule ; sem:implements c:HexViewRendering ; sem:function "payload:hex-view" .
+# The payload read as the body viewer reads it; its bytes by sx:utf8Hex (sx:Text), 16 to a row, a
+# row per character of a string as long as the rows (sx:chars, sx:Matches); the offset in hex from
+# the row's number; the ASCII column from the payload's characters, each as many '.' as its UTF-8
+# bytes unless it is printable ASCII.
+c:HexViewRendering-sparql-screen a sem:Rule ;
+    sem:implements c:HexViewRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Text , sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:tabIndex ?tabIndex ; rdfhtml:attribute ?rootRole , ?rootName ;
+    rdfhtml:hasChild ?empty , ?table , ?moreEl .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?rootRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "region" .
+  ?rootName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue "Hex dump" .
+  ?table a rdfhtml:Table ; rdfhtml:attribute ?tableName ; rdfhtml:hasChild ?thead , ?tbody ; ord:immediatelyPrecedes ?moreEl .
+  ?tableName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?count .
+  ?thead a rdfhtml:Thead ; rdfhtml:hasChild ?headRow ; ord:immediatelyPrecedes ?tbody .
+  ?headRow a rdfhtml:Tr ; rdfhtml:hasChild ?hOffset , ?hHex , ?hAscii .
+  ?hOffset a rdfhtml:Th ; rdfhtml:scope "col" ; rdfhtml:hasChild ?hOffsetText ; ord:immediatelyPrecedes ?hHex .
+  ?hOffsetText a rdfhtml:Text ; rdfhtml:data "Offset" .
+  ?hHex a rdfhtml:Th ; rdfhtml:scope "col" ; rdfhtml:hasChild ?hHexText ; ord:immediatelyPrecedes ?hAscii .
+  ?hHexText a rdfhtml:Text ; rdfhtml:data "Hex" .
+  ?hAscii a rdfhtml:Th ; rdfhtml:scope "col" ; rdfhtml:hasChild ?hAsciiText .
+  ?hAsciiText a rdfhtml:Text ; rdfhtml:data "ASCII" .
+  ?tbody a rdfhtml:Tbody ; rdfhtml:hasChild ?row .
+  ?previousRow ord:immediatelyPrecedes ?row .
+  ?row a rdfhtml:Tr ; rdfhtml:hasChild ?offsetEl , ?hexEl , ?asciiEl .
+  ?offsetEl a rdfhtml:Th ; rdfhtml:scope "row" ; rdfhtml:class "sem-offset" ; rdfhtml:hasChild ?offsetText ; ord:immediatelyPrecedes ?hexEl .
+  ?offsetText a rdfhtml:Text ; rdfhtml:data ?offset .
+  ?hexEl a rdfhtml:Td ; rdfhtml:class "sem-bytes" ; rdfhtml:hasChild ?hexText ; ord:immediatelyPrecedes ?asciiEl .
+  ?hexText a rdfhtml:Text ; rdfhtml:data ?rowHex .
+  ?asciiEl a rdfhtml:Td ; rdfhtml:class "sem-ascii" ; rdfhtml:hasChild ?asciiText .
+  ?asciiText a rdfhtml:Text ; rdfhtml:data ?rowAscii .
+  ?moreEl a rdfhtml:P ; rdfhtml:class "sem-more" ; rdfhtml:hasChild ?moreText .
+  ?moreText a rdfhtml:Text ; rdfhtml:data ?more .
+}
+WHERE {
+  $this a c:HexView .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?payload)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?payload))
+      BIND(rdfhtml:P AS ?rootTag)
+      BIND("sem-empty" AS ?rootClass)
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No payload.")) AS ?emptyText)
+    } UNION {
+      FILTER(BOUND(?payload))
+      BIND(rdfhtml:Div AS ?rootTag)
+      BIND("0" AS ?tabIndex)
+      BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?rootRole)
+      BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?rootName)
+      LATERAL { OPTIONAL { $this c:limit ?limitRaw } }
+      BIND(FLOOR(COALESCE(xsd:double(STR(?limitRaw)), 512)) AS ?limit0)
+      BIND(IF(?limit0 > 65536, 65536, IF(?limit0 < 16, 16, ?limit0)) AS ?limit)
+      BIND(sx:utf8Hex(?payload) AS ?allHex)
+      BIND(IF(?allHex = "", 0, xsd:integer((STRLEN(?allHex) + 1) / 3)) AS ?bytes)
+      BIND(IF(?bytes < ?limit, ?bytes, xsd:integer(?limit)) AS ?shown)
+      BIND(SUBSTR(?allHex, 1, ?shown * 3 - 1) AS ?shownHex)
+      BIND(xsd:integer(CEIL(?shown / 16)) AS ?rowCount)
+      BIND(?bytes - ?shown AS ?rest)
+      BIND(IF(?rest > 0, CONCAT("… ", STR(?rest), " more ", IF(?rest = 1, "byte", "bytes")), ?none) AS ?more)
+      # The printable ASCII of each byte, '.' for the rest: a character's bytes are as many as UTF-8 takes.
+      BIND(SUBSTR(?payload, 1, xsd:integer(?limit)) AS ?head)
+      LATERAL { OPTIONAL { SELECT ?head (GROUP_CONCAT(?asciiPart; separator="") AS ?asciiAll) WHERE {
+        { SELECT ?head ?asciiPart WHERE { (?head) sx:chars (?asciiCh ?asciiAt)
+            BIND(sx:codepoint(?asciiCh, 1) AS ?cp)
+            BIND(IF(?cp >= 32 && ?cp < 127, ?asciiCh, IF(?cp < 128, ".", IF(?cp < 2048, "..", IF(?cp < 65536, "...", "....")))) AS ?asciiPart) } ORDER BY ?asciiAt }
+      } GROUP BY ?head } }
+      BIND(SUBSTR(COALESCE(?asciiAll, ""), 1, ?shown) AS ?ascii)
+      BIND(CONCAT(STR(?bytes), " ", IF(?bytes = 1, "byte", "bytes")) AS ?count)
+      BIND(IRI(CONCAT(STR($this), "/~table")) AS ?table)
+      BIND(IRI(CONCAT(STR($this), "/~table-aria-label")) AS ?tableName)
+      BIND(IRI(CONCAT(STR($this), "/~head")) AS ?thead)
+      BIND(IRI(CONCAT(STR($this), "/~head-row")) AS ?headRow)
+      BIND(IRI(CONCAT(STR($this), "/~h-offset")) AS ?hOffset)
+      BIND(IRI(CONCAT(STR($this), "/~h-offset-text")) AS ?hOffsetText)
+      BIND(IRI(CONCAT(STR($this), "/~h-hex")) AS ?hHex)
+      BIND(IRI(CONCAT(STR($this), "/~h-hex-text")) AS ?hHexText)
+      BIND(IRI(CONCAT(STR($this), "/~h-ascii")) AS ?hAscii)
+      BIND(IRI(CONCAT(STR($this), "/~h-ascii-text")) AS ?hAsciiText)
+      BIND(IRI(CONCAT(STR($this), "/~body")) AS ?tbody)
+      BIND(IF(BOUND(?more), IRI(CONCAT(STR($this), "/~more")), ?none) AS ?moreEl)
+      BIND(IRI(CONCAT(STR($this), "/~more-text")) AS ?moreText)
+      LATERAL { OPTIONAL {
+        BIND(SUBSTR(?allHex, 1, ?rowCount) AS ?rowSpan)
+        (?rowSpan) sx:chars (?rowCh ?rowAt)
+        BIND(?rowAt - 1 AS ?r)
+        BIND("0123456789abcdef" AS ?digits)
+        BIND(CONCAT("0000", SUBSTR(?digits, xsd:integer(FLOOR(?r / 256)) + 1, 1), SUBSTR(?digits, xsd:integer(FLOOR(?r / 16) - 16 * FLOOR(?r / 256)) + 1, 1),
+          SUBSTR(?digits, xsd:integer(?r - 16 * FLOOR(?r / 16)) + 1, 1), "0") AS ?offset)
+        BIND(SUBSTR(?shownHex, ?r * 48 + 1, 47) AS ?rowHex)
+        BIND(SUBSTR(?ascii, ?r * 16 + 1, 16) AS ?rowAscii)
+        BIND(CONCAT(STR($this), "/~r", STR(?r)) AS ?k)
+        BIND(IRI(?k) AS ?row)
+        BIND(IF(?r > 0, IRI(CONCAT(STR($this), "/~r", STR(?r - 1))), ?none) AS ?previousRow)
+        BIND(IRI(CONCAT(?k, "-offset")) AS ?offsetEl)
+        BIND(IRI(CONCAT(?k, "-offset-text")) AS ?offsetText)
+        BIND(IRI(CONCAT(?k, "-hex")) AS ?hexEl)
+        BIND(IRI(CONCAT(?k, "-hex-text")) AS ?hexText)
+        BIND(IRI(CONCAT(?k, "-ascii")) AS ?asciiEl)
+        BIND(IRI(CONCAT(?k, "-ascii-text")) AS ?asciiText)
+      } }
+    }
+  }
+}""" .
+c:HexViewRendering-sparql-text a sem:Rule ;
+    sem:implements c:HexViewRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Text , sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?empty , ?line .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?previousLine ord:immediatelyPrecedes ?line .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?data .
+}
+WHERE {
+  $this a c:HexView .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?payload)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?payload))
+      BIND("sem-empty" AS ?rootClass)
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No payload.")) AS ?emptyText)
+    } UNION {
+      FILTER(BOUND(?payload))
+      LATERAL { OPTIONAL { $this c:limit ?limitRaw } }
+      BIND(FLOOR(COALESCE(xsd:double(STR(?limitRaw)), 512)) AS ?limit0)
+      BIND(IF(?limit0 > 65536, 65536, IF(?limit0 < 16, 16, ?limit0)) AS ?limit)
+      BIND(sx:utf8Hex(?payload) AS ?allHex)
+      BIND(IF(?allHex = "", 0, xsd:integer((STRLEN(?allHex) + 1) / 3)) AS ?bytes)
+      BIND(IF(?bytes < ?limit, ?bytes, xsd:integer(?limit)) AS ?shown)
+      BIND(SUBSTR(?allHex, 1, ?shown * 3 - 1) AS ?shownHex)
+      BIND(xsd:integer(CEIL(?shown / 16)) AS ?rowCount)
+      BIND(?bytes - ?shown AS ?rest)
+      BIND(IF(?rest > 0, CONCAT("… ", STR(?rest), " more ", IF(?rest = 1, "byte", "bytes")), ?none) AS ?more)
+      # The printable ASCII of each byte, '.' for the rest: a character's bytes are as many as UTF-8 takes.
+      BIND(SUBSTR(?payload, 1, xsd:integer(?limit)) AS ?head)
+      LATERAL { OPTIONAL { SELECT ?head (GROUP_CONCAT(?asciiPart; separator="") AS ?asciiAll) WHERE {
+        { SELECT ?head ?asciiPart WHERE { (?head) sx:chars (?asciiCh ?asciiAt)
+            BIND(sx:codepoint(?asciiCh, 1) AS ?cp)
+            BIND(IF(?cp >= 32 && ?cp < 127, ?asciiCh, IF(?cp < 128, ".", IF(?cp < 2048, "..", IF(?cp < 65536, "...", "....")))) AS ?asciiPart) } ORDER BY ?asciiAt }
+      } GROUP BY ?head } }
+      BIND(SUBSTR(COALESCE(?asciiAll, ""), 1, ?shown) AS ?ascii)
+      LATERAL { {
+        BIND(SUBSTR(?allHex, 1, ?rowCount) AS ?rowSpan)
+        (?rowSpan) sx:chars (?rowCh ?rowAt)
+        BIND(?rowAt - 1 AS ?r)
+        BIND("0123456789abcdef" AS ?digits)
+        BIND(CONCAT("0000", SUBSTR(?digits, xsd:integer(FLOOR(?r / 256)) + 1, 1), SUBSTR(?digits, xsd:integer(FLOOR(?r / 16) - 16 * FLOOR(?r / 256)) + 1, 1),
+          SUBSTR(?digits, xsd:integer(?r - 16 * FLOOR(?r / 16)) + 1, 1), "0") AS ?offset)
+        BIND(SUBSTR(?shownHex, ?r * 48 + 1, 47) AS ?rowHex)
+        BIND(SUBSTR(?ascii, ?r * 16 + 1, 16) AS ?rowAscii)
+        BIND(?r AS ?n)
+        BIND(CONCAT(?offset, "  ", ?rowHex, SUBSTR("                                               ", 1, 47 - STRLEN(?rowHex)), "  |", ?rowAscii, "|") AS ?data)
+      } UNION {
+        FILTER(BOUND(?more))
+        BIND(?rowCount AS ?n)
+        BIND(?more AS ?data)
+      } }
+      BIND(IRI(CONCAT(STR($this), "/~line", STR(?n))) AS ?line)
+      BIND(IRI(CONCAT(STR($this), "/~line", STR(?n), "-text")) AS ?lineText)
+      BIND(IF(?n > 0, IRI(CONCAT(STR($this), "/~line", STR(?n - 1))), ?none) AS ?previousLine)
+    }
+  }
+}""" .
 
 # --- BodyViewer: one payload as text, hex or JSON ------------------------------------------------
 # The representation is graph state on the viewer (c:representation), chosen by toggle buttons

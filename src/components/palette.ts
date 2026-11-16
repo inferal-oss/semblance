@@ -1,6 +1,6 @@
-// The command palette (ontology/components/palette.ttl): its texts layer (labels in the viewer's
-// language and search keys, which SPARQL cannot make), and the function twins of its SPARQL rules
-// (the options it mints when it opens, and its own rendering). Same minted IRIs, same HTML.
+// The command palette (ontology/components/palette.ttl): the function twins of its SPARQL rules
+// (its texts layer: labels in the viewer's language and search keys; the options it mints when it
+// opens; and its own rendering). Same minted IRIs, same HTML.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, KEY, L10N, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'

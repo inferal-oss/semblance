@@ -1,24 +1,31 @@
-// @inferal-oss/semblance: the runtime, its engine and the RDF/HTML it keeps, independent of
-// where it runs. Load a store with `@inferal-oss/semblance/web` (browser, Vite) or
-// `@inferal-oss/semblance/node`, then project it here.
+// @semblance-dev/semblance: the runtime, its engine and the RDF/HTML it keeps, independent of
+// where it runs. Load a store with `@semblance-dev/semblance/web` (browser, Vite) or
+// `@semblance-dev/semblance/node`, then project it here.
 
 export { Runtime, type Projection } from './runtime.ts'
 export type { EngineOptions, EngineStats } from './engine/engine.ts'
 export type { FnRule, RuleContext } from './engine/context.ts'
-export type { GraphStore, Factory } from './store/types.ts'
+export type { GraphStore, Factory, FetchPolicy, QueryAnswer, QueryOptions, Remote } from './store/types.ts'
+export { configureFetching } from './store/types.ts'
 export { type Delta, emptyDelta, mint } from './rdf.ts'
 export { NS, SEM, MOD, C, STY, BEH, A11Y, VAL, KEY, ANN, ST, L10N, DND, CLIP, EXT, RND, RENDERED_GRAPH, SPARQL_PREFIXES } from './ns.ts'
-export { HtmlIndex } from './render/html-index.ts'
+export { HtmlIndex, type HNode } from './render/html-index.ts'
+export { HOST_ELEMENT, hostedBy, type HostAdapter, type HostContext, type HostMount, type HostRenderer } from './render/hosts.ts'
 export { toHTML, toIndentedHTML, toText } from './render/serialize.ts'
 export { compileStyles } from './style/compile.ts'
 export { EventBus, type Handled, type ReactionContext, type ReactionFn } from './behaviour/events.ts'
 export { Persistence, memoryBackend, webStorageBackend, indexedDbBackend, type Backend } from './persistence.ts'
-export { Navigation, rendererReveal, type NavigationOptions } from './navigation.ts'
+export { RemoteSources, httpTransport, type Endpoint, type RemoteSourcesOptions, type SourceTransport } from './remote.ts'
+export { concerns, fromNTriples, JELLY_MEDIA_TYPE, JellyEventWriter, jellySourceEvents, serverSentEvents, statementsOf, toNTriples, type DeltaMessage, type Pattern, type Snapshot, type SourceEvent, type WriteRequest, type WriteResult } from './source-protocol.ts'
+export { FrameSplitter, frames, JellyError, JellyReader, readJelly, type JellyFactory, type JellySink, type StreamOptions } from './jelly/decode.ts'
+export { delimit, JellyWriter, writeJelly, type JellyWriterOptions } from './jelly/encode.ts'
+export { dumpJellyStream, loadJellyStream, type JellyDumpOptions, type JellyStoreReader } from './jelly/store.ts'
+export { Navigation, rendererReveal, windowScroll, type NavigationOptions, type ScrollLike, type ScrollOffset } from './navigation.ts'
 export { Clipboard, type ClipboardLike, type ClipboardOptions } from './clipboard.ts'
 export { type FileLike, Files, type FilesOptions, type Picker, type PickOptions, type UploadContext, type Uploader, xhrSend } from './files.ts'
 export { Fullscreen, type FullscreenOptions } from './fullscreen.ts'
 export { decodeThumbnail, type FileStoreBackend, indexedDbFileStore, type KeptFile, memoryFileStore, PREVIEW_SIZE, type Thumbnailer, workerThumbnails } from './file-store.ts'
 export { RenderedState, domLayout, stateOf, type RenderedLayout, type RenderedOptions } from './rendered.ts'
 export { Scheduler } from './behaviour/schedule.ts'
-export { Islands, applyInputs, customElementAdapter, widgetAdapter, inputValue, type IslandAdapter, type IslandContext, type IslandHandle, type IslandsOptions, type Input, type Widget, type WidgetLike } from './foreign.ts'
+export { Islands, applyInputs, customElementAdapter, widgetAdapter, inputValue, classesOf, outputsOf, emitOutput, type OutputBinding, type IslandAdapter, type IslandContext, type IslandHandle, type IslandsOptions, type Input, type Widget, type WidgetLike } from './foreign.ts'
 export { labelOf, text, rdfList, nodes } from './components/util.ts'
