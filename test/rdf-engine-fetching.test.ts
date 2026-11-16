@@ -61,8 +61,7 @@ function setup(build: (typeof BUILDS)[number], extra: Partial<FetchPolicy> = {})
   policy.fetch ??= mock.fetch
   const e = new Engine(module)
   e.load(Format.Turtle, LOCAL)
-  // an IRI no query could write (the engine interns IRIs from the host unchecked)
-  e.add(e.iri('http://a'), e.iri('http://alias'), e.iri('http://a b> } #'), 1)
+  // (an IRI no query could write cannot enter the store at all: test/rdf-engine.test.ts, #311)
   e.add(e.iri('http://b'), e.iri('http://alias'), e.iri('http://a'), 1)
   return { e, policy, mock }
 }
@@ -103,7 +102,6 @@ const CASES: [string, string, (Partial<FetchPolicy> | undefined)?, [string, stri
   ['unlisted endpoint, SILENT', 'SELECT * { ?s <http://r> ?ep SERVICE SILENT <https://evil.example/sparql> { ?s ?p ?o } }'],
   ['a blank node is not sent', 'SELECT ?s ?x { ?s <http://r> ?b FILTER(isBlank(?b)) SERVICE <https://two.example/sparql> { ?b <http://q> ?x } }'],
   ['a hostile literal is escaped', 'SELECT ?o { VALUES ?o { "x\\"y"@en "a\\") } ; DROP ALL #" } SERVICE <https://one.example/sparql> { ?s <http://p> ?o } }'],
-  ['an IRI that cannot be written goes without VALUES', 'SELECT ?s ?o { ?x <http://alias> ?s SERVICE <https://one.example/sparql> { ?s <http://p> ?o } }'],
   ['bindings: false', 'SELECT ?s ?o { ?s <http://r> ?ep SERVICE <https://one.example/sparql> { ?s <http://p> ?o } }', { endpoints: { 'https://one.example/sparql': { bindings: false } } }],
   ['MINUS and UNION around SERVICE', 'SELECT ?s { { ?s <http://r> ?ep } UNION { SERVICE <https://one.example/sparql> { ?s <http://p> 2 } } MINUS { SERVICE <https://two.example/sparql> { ?s <http://q> "two" } } }'],
   ['a compiled build declines it', 'SELECT * { SERVICE <https://one.example/sparql> { ?s <http://p> ?o } } LIMIT 1'],
@@ -303,7 +301,9 @@ describe('the requests the host makes, and the responses it accepts', () => {
     expect(sparqlTerm(e, e.literal('a") } ; DROP ALL #\n '))).toBe('"a\\") } ; DROP ALL #\\n\\u2028"')
     expect(sparqlTerm(e, e.langLiteral('x', 'en-gb', 2))).toBe('"x"@en-gb--rtl')
     expect(sparqlTerm(e, e.literal('1', e.iri('http://www.w3.org/2001/XMLSchema#integer')))).toBe('"1"^^<http://www.w3.org/2001/XMLSchema#integer>')
-    expect(sparqlTerm(e, e.iri('http://a> } ; DROP ALL #'))).toBeUndefined()
+    // An IRI no query could write never reaches it: the store refuses one (#311).
+    expect(() => e.iri('http://a> } ; DROP ALL #')).toThrow(/bad IRI/)
+    expect(sparqlTerm(e, e.iri('http://a/%41'))).toBe('<http://a/%41>')
     expect(sparqlTerm(e, e.bnode())).toBeUndefined()
   })
 })

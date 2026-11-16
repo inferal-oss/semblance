@@ -66,12 +66,15 @@ describe('a view of one triple pattern is a scan', () => {
 
   }
 
-  it('holds an IRI that query text could not (wat)', () => {
-    const { runtime, f, nn } = runtimeOn('wat')
-    const bad = f.namedNode(V + 'bad%E0%A4%A')
-    runtime.apply({ add: [f.quad(nn('a'), nn('p'), bad)], remove: [] })
-    expect(runtime.views.view(V + 'objects')!.rows().map((r) => r.get('o')!.value)).toEqual([bad.value])
-  })
+  // The store never holds an IRI that query text could not write (#311): each refuses it, as Oxigraph does.
+  for (const kind of ['wat', 'rust', 'oxigraph'] as const) {
+    it(`refuses an IRI that query text could not write (${kind})`, () => {
+      const { runtime, f, nn } = runtimeOn(kind)
+      expect(() => runtime.apply({ add: [f.quad(nn('a'), nn('p'), f.namedNode(V + 'bad%E0%A4%A'))], remove: [] })).toThrow()
+      runtime.apply({ add: [f.quad(nn('a'), nn('p'), nn('good%E0%A4%A4'))], remove: [] })
+      expect(runtime.views.view(V + 'objects')!.rows().map((r) => r.get('o')!.value)).toEqual([V + 'good%E0%A4%A4'])
+    })
+  }
 
   it('says so in its plan', () => {
     const { store, f, nn } = runtimeOn('oxigraph')

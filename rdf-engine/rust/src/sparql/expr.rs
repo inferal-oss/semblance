@@ -718,7 +718,7 @@ impl Ctx<'_> {
                 _ => {
                     self.str_check(&v[0])?;
                     let (s, l) = self.str_view(&v[0]);
-                    if l.is_some() {
+                    if l.is_some() || !iri::valid(s) {
                         return Err(());
                     }
                     let mut out = Vec::new();

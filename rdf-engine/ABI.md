@@ -65,6 +65,17 @@ Id `1` is always the default graph.
 | triple term | 4 | subject, predicate, object ids |
 | default graph | 5 | none |
 
+**What an IRI may be.** One rule, wherever an IRI enters: `intern_iri`, every
+`load` format (Jelly included), SPARQL and Update text (an `IRIREF`, or a prefixed
+name whose local part has one of `# % / : ? [ ]`), and `IRI()`/`URI()` (an error,
+so unbound). The reference as written, escapes decoded and before resolution,
+holds none of the characters `IRIREF` excludes (controls, space, `<` `>` `"` `{` `}` `|` `^` `` ` `` `\`),
+and passes the cheap parts of RFC 3987: `%` starts two hex digits; a reference
+without a scheme has no `:` in its first segment; one `#` at most; an authority is
+`[userinfo @] host [: digits]` where the host may be an IP literal in `[` `]`, and
+brackets appear nowhere else. So the store never holds an IRI that query text
+cannot name (Oxigraph refuses these too, and checks more).
+
 Literals keep their lexical form: `"01"^^xsd:integer` and `"1"^^xsd:integer`
 are different terms (Oxigraph canonicalizes them; the W3C tests do not).
 A language-tagged literal has datatype `rdf:langString`, or `rdf:dirLangString`
@@ -73,7 +84,7 @@ scoped to the instance: interning the same label twice gives the same node.
 
 | export | |
 |---|---|
-| `intern_iri(len) -> id` | IRI from the input buffer. Not validated (the host's terms are trusted). |
+| `intern_iri(len) -> id` | IRI from the input buffer; an error (`bad IRI`) for one query text could not write (below). |
 | `intern_bnode(len) -> id` | Blank node with that label. |
 | `fresh_bnode() -> id` | A new blank node. |
 | `intern_literal(len, datatype) -> id` | `datatype` is an IRI id; `0` means `xsd:string`. |

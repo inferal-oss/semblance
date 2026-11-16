@@ -24,6 +24,7 @@
 ;; --- terms ---------------------------------------------------------------------
 
 (func (export "intern_iri") (param $n i32) (result i32)
+  (if (i32.eqz (call $iri_valid (global.get $in) (local.get $n))) (then (return (call $fail (@str "bad IRI")))))
   (call $intern (i32.const 1) (global.get $in) (local.get $n) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 1)))
 (func (export "lookup_iri") (param $n i32) (result i32)
   (call $intern (i32.const 1) (global.get $in) (local.get $n) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))

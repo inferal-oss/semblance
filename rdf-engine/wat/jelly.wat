@@ -475,6 +475,7 @@
   (call $jbuf_room (local.get $n))
   (if (local.get $pn) (then (memory.copy (global.get $jbuf) (i32.load (local.get $pe)) (local.get $pn))))
   (memory.copy (i32.add (global.get $jbuf) (local.get $pn)) (i32.load (local.get $ne)) (i32.load offset=4 (local.get $ne)))
+  (if (i32.eqz (call $iri_valid (global.get $jbuf) (local.get $n))) (then (return (call $jerr0 (@str "bad IRI")))))
   (local.set $id (call $intern (i32.const 1) (global.get $jbuf) (local.get $n) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 1)))
   (i32.store offset=12 (local.get $ne) (local.get $stamp))
   (i32.store offset=16 (local.get $ne) (local.get $prefix))
@@ -485,6 +486,7 @@
   (local $e i32) (local $t i32)
   (if (i32.eqz (local.tee $e (call $jr_entry (local.get $r) (i32.const 2) (local.get $id)))) (then (return (i32.const 0))))
   (if (local.tee $t (i32.load offset=20 (local.get $e))) (then (return (local.get $t))))
+  (if (i32.eqz (call $iri_valid (i32.load (local.get $e)) (i32.load offset=4 (local.get $e)))) (then (return (call $jerr0 (@str "bad IRI")))))
   (local.set $t (call $intern (i32.const 1) (i32.load (local.get $e)) (i32.load offset=4 (local.get $e)) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 1)))
   (if (i32.or (i32.eq (local.get $t) (i32.const 3)) (i32.eq (local.get $t) (i32.const 4))) (then
     (return (call $jerr0 (@str "rdf:langString or rdf:dirLangString as a datatype")))))
