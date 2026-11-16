@@ -215,7 +215,7 @@ c:RowChart sem:version 2 ; sem:closure "0ed79056e3a80ecb" ; sem:changedBy change
 c:RunQueryButton sem:version 1 ; sem:closure "3bc2ec8f61d0099c" ; sem:internal "new" .
 c:ScatterChart sem:version 1 ; sem:closure "1342bf38f2800d75" ; sem:internal "new" .
 c:ScatterPoint sem:version 1 ; sem:closure "9b5267d98d1f3100" ; sem:internal "new" .
-c:SearchField sem:version 1 ; sem:closure "e01b8667b8b81272" ; sem:internal "new" .
+c:SearchField sem:version 2 ; sem:closure "4f169cbd8809357c" ; sem:changedBy change:search-field-disabled .
 c:Segmented sem:version 1 ; sem:closure "a3b208f5df88fc42" ; sem:internal "new" .
 c:Selector sem:version 1 ; sem:closure "ec774feecdfa9139" ; sem:internal "new" .
 c:SeriesChart sem:version 2 ; sem:closure "183808c912527bb0" ; sem:changedBy change:charts-on-shared-parts .

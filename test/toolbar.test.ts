@@ -86,6 +86,34 @@ describe.each([
     expect(press(input(), 'Escape')).toBe(false)
   })
 
+  it('keeps a disabled search field inert and enables it when the graph changes', () => {
+    const { root, fire, values, press, runtime, shell, f } = gallery('GroupActions', kind, prefer)
+    const field = () => root('act-tb-search')!
+    const input = () => field().querySelector('input')!
+    input().value = 'socket'
+    fire(input(), 'input')
+    expect(values('act-tb-filter', UI + 'act-tb-text')).toEqual(['socket'])
+
+    const disabled = f.quad(f.namedNode(UI + 'act-tb-search'), f.namedNode(NS.c + 'disabled'),
+      f.literal('true', f.namedNode('http://www.w3.org/2001/XMLSchema#boolean')))
+    runtime.apply({ add: [disabled], remove: [] })
+    shell.flush()
+    expect(input().hasAttribute('disabled')).toBe(true)
+    expect(field().querySelector('.sem-clear')!.hasAttribute('disabled')).toBe(true)
+    input().value = 'changed'
+    fire(input(), 'input')
+    fire(field().querySelector('.sem-clear')!, 'click')
+    press(input(), 'Escape')
+    expect(values('act-tb-filter', UI + 'act-tb-text')).toEqual(['socket'])
+
+    runtime.apply({ add: [], remove: [disabled] })
+    shell.flush()
+    expect(input().hasAttribute('disabled')).toBe(false)
+    expect(field().querySelector('.sem-clear')!.hasAttribute('disabled')).toBe(false)
+    fire(field().querySelector('.sem-clear')!, 'click')
+    expect(values('act-tb-filter', UI + 'act-tb-text')).toEqual([])
+  })
+
   it('a legend lists categories in order, each in its swatch color or tone', () => {
     const { root } = gallery('GroupData', kind, prefer)
     const kinds = root('dt-legend-kinds')!
