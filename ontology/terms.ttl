@@ -1063,6 +1063,7 @@ c:keyCount a sem:Term .
 c:keyProperty a sem:Term .
 c:keys a sem:Term .
 c:keyword a sem:Term .
+c:keywords a sem:Term .
 c:kindOf a sem:Term .
 c:label a sem:Term .
 c:labelFrom a sem:Term .

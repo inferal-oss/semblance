@@ -110,7 +110,7 @@ c:Column sem:version 1 ; sem:closure "464f99def558b8e2" ; sem:internal "new" .
 c:ColumnChart sem:version 1 ; sem:closure "6fa522ecb469ab0f" ; sem:internal "new" .
 c:ColumnPoint sem:version 1 ; sem:closure "5dad8ba33da00056" ; sem:internal "new" .
 c:Combobox sem:version 1 ; sem:closure "7f502a5ddb46824e" ; sem:internal "new" .
-c:CommandPalette sem:version 1 ; sem:closure "962a702c4e4a28e1" ; sem:internal "new" .
+c:CommandPalette sem:version 2 ; sem:closure "3b8525dba5e88eab" ; sem:changedBy change:palette-keywords .
 c:Connector sem:version 1 ; sem:closure "e60a508aa6a7f144" ; sem:internal "new" .
 c:CountBadge sem:version 1 ; sem:closure "9e1a00ed237471d6" ; sem:internal "new" .
 c:DataGrid sem:version 1 ; sem:closure "cced3fb79757287f" ; sem:internal "new" .
