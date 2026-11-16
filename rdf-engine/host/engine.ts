@@ -3,7 +3,7 @@
 
 import { intlImport, MATH_OPS } from './intl.ts'
 
-export const ABI_VERSION = 3
+export const ABI_VERSION = 4
 
 export enum Kind {
   Free = 0,
@@ -84,6 +84,7 @@ interface Exports {
   remove(s: number, p: number, o: number, g: number): number
   has(s: number, p: number, o: number, g: number): number
   match(s: number, p: number, o: number, g: number): number
+  match_batch(n: number): number
   apply(removes: number, adds: number): number
   quad_count(): number
   load(format: number, textLen: number, baseLen: number, graph: number): number
@@ -444,6 +445,23 @@ export class Engine {
   /** Matching quads, 4 ids each. `g = 0`: all graphs. */
   match(s = 0, p = 0, o = 0, g = 0): Uint32Array {
     return this.results(this.check(this.x.match(s, p, o, g)) * 4)
+  }
+  /**
+   * The matches of several patterns (4 ids each, as `match` takes them) in one call: each
+   * pattern's quads, 4 ids each, in order.
+   */
+  matchBatch(patterns: ArrayLike<number>): Uint32Array[] {
+    const n = patterns.length / 4
+    this.putIds(patterns)
+    const total = this.check(this.x.match_batch(n))
+    const all = this.results(n + total * 4)
+    const out: Uint32Array[] = new Array(n)
+    for (let i = 0, at = n; i < n; i++) {
+      const end = at + all[i]! * 4
+      out[i] = all.subarray(at, end)
+      at = end
+    }
+    return out
   }
   apply(removes: ArrayLike<number>, adds: ArrayLike<number>): void {
     const all = new Uint32Array(removes.length + adds.length)

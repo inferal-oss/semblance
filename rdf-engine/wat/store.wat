@@ -200,7 +200,12 @@
                (i32.add (local.get $q) (i32.const 1)))))
   (i32.const 1))
 
+;; Matching quads, 4 ids each, at the start of the result buffer; their count.
 (func $match (param $s i32) (param $p i32) (param $o i32) (param $g i32) (result i32)
+  (call $match_at (local.get $s) (local.get $p) (local.get $o) (local.get $g) (i32.const 0)))
+
+;; The same, written $at bytes into the result buffer (what is before them kept); their count.
+(func $match_at (param $s i32) (param $p i32) (param $o i32) (param $g i32) (param $at i32) (result i32)
   (local $best i32) (local $n i32) (local $i i32) (local $q i32) (local $out i32) (local $l i32)
   ;; the shortest list among bound positions; a bound term without a list matches nothing
   (if (local.get $s) (then
@@ -222,8 +227,8 @@
     (if (i32.or (i32.eqz (local.get $best)) (i32.lt_u (i32.load (local.get $l)) (i32.load (local.get $best))))
       (then (local.set $best (local.get $l))))))
   (local.set $n (if (result i32) (local.get $best) (then (i32.load (local.get $best))) (else (global.get $qn))))
-  (call $res_reserve (i32.shl (local.get $n) (i32.const 4)))
-  (local.set $out (global.get $res))
+  (call $res_grow (i32.add (local.get $at) (i32.shl (local.get $n) (i32.const 4))) (local.get $at))
+  (local.set $out (i32.add (global.get $res) (local.get $at)))
   (loop $each
     (if (i32.lt_u (local.get $i) (local.get $n)) (then
       (local.set $q (call $quad
@@ -240,7 +245,25 @@
           (local.set $out (i32.add (local.get $out) (i32.const 16)))))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $each))))
-  (i32.shr_u (i32.sub (local.get $out) (global.get $res)) (i32.const 4)))
+  (i32.shr_u (i32.sub (local.get $out) (i32.add (global.get $res) (local.get $at))) (i32.const 4)))
+
+;; Several patterns at once (match_batch): n patterns of 4 ids in the input buffer; the result
+;; buffer gets n counts, then each pattern's quads in order. Returns the number of quads.
+(func $match_batch (param $n i32) (result i32)
+  (local $i i32) (local $at i32) (local $c i32) (local $pat i32) (local $total i32)
+  (call $res_grow (local.tee $at (i32.shl (local.get $n) (i32.const 2))) (i32.const 0))
+  (loop $each
+    (if (i32.lt_u (local.get $i) (local.get $n)) (then
+      (local.set $pat (i32.add (global.get $in) (i32.shl (local.get $i) (i32.const 4))))
+      (local.set $c (call $match_at (i32.load (local.get $pat)) (i32.load offset=4 (local.get $pat))
+                                    (i32.load offset=8 (local.get $pat)) (i32.load offset=12 (local.get $pat)) (local.get $at)))
+      ;; (after: matching may have moved the result buffer)
+      (i32.store (i32.add (global.get $res) (i32.shl (local.get $i) (i32.const 2))) (local.get $c))
+      (local.set $at (i32.add (local.get $at) (i32.shl (local.get $c) (i32.const 4))))
+      (local.set $total (i32.add (local.get $total) (local.get $c)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $each))))
+  (local.get $total))
 
 (func $init_store
   (global.set $qcap (i32.const 64))
