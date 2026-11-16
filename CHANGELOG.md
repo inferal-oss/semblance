@@ -7,6 +7,10 @@ Each entry states the engines' ABI version (`rdf-engine/ABI.md`).
 
 ## Unreleased
 
+- Engine ABI 4: `match_batch` asks the engine several patterns in one call (`Engine.matchBatch`,
+  the stores' optional `matchBatch`). Maintained views ask it for the partitions a change may
+  start, once per step: the sales dashboard's batch of orders crosses into the engine 2,616
+  times instead of 11,222 (#248). Serve this release's own engine builds with it.
 - `semblance migrate` moves a project's Turtle across framework versions, forward and back, including the SPARQL it holds, and reports what it cannot reach; `semblance changes` says what changed and why, for people and agents ([docs/MIGRATIONS.md](docs/MIGRATIONS.md), `@semblance-dev/semblance/migrate`, #473).
 - Each component has a version, and a retired term is reported at run time, moved on the way in where it was renamed.
 

@@ -29,6 +29,9 @@ export interface Factory {
  * The minimal store surface the engine needs. Adapters exist for Oxigraph
  * (WASM, with SPARQL) and N3.js (pure JS, no SPARQL).
  */
+/** A pattern for `GraphStore.matchBatch`: subject, predicate, object, graph (`undefined` = all graphs). */
+export type MatchPattern = readonly [s: Term | null, p: Term | null, o: Term | null, g?: Term | null]
+
 export interface GraphStore {
   readonly kind: string
   readonly factory: Factory
@@ -51,6 +54,11 @@ export interface GraphStore {
   has(q: Quad): boolean
   /** Match in one graph (`undefined` = all graphs). */
   match(s?: Term | null, p?: Term | null, o?: Term | null, g?: Term | null): Quad[]
+  /**
+   * Several matches at once, each as `match` takes it: one crossing for them all where a call
+   * crosses into WebAssembly (the engines' `match_batch`). Optional; others ask `match` each time.
+   */
+  matchBatch?(patterns: readonly MatchPattern[]): Quad[][]
   /** Evaluate a SELECT query; one map of variable name to term per solution. */
   select(query: string, graphs: Quad_Graph[]): Map<string, Term>[]
   /** Evaluate a CONSTRUCT query whose default graph is the union of `graphs`. */

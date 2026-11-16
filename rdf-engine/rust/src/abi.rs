@@ -98,7 +98,7 @@ fn args<const N: usize>(input: &[u8], lens: [u32; N]) -> [&[u8]; N] {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn abi_version() -> i32 {
-    3
+    4
 }
 
 /// The SPARQL extension groups implemented (EXTENSIONS.md, "Capabilities").
@@ -289,6 +289,27 @@ pub extern "C" fn match_(s: u32, p: u32, o: u32, g: u32) -> i32 {
     st.result.clear();
     st.store.scan([s, p, o, g], &mut st.result);
     (st.result.len() / 4) as i32
+}
+
+/// Several patterns at once: `n` patterns of 4 ids in the input buffer; the result buffer gets
+/// `n` counts, then each pattern's quads in order. Returns the number of quads.
+#[unsafe(no_mangle)]
+pub extern "C" fn match_batch(n: u32) -> i32 {
+    let s = st();
+    let n = n as usize;
+    if s.input.len() < n * 16 {
+        return fail(b"input buffer too short");
+    }
+    s.result.clear();
+    s.result.resize(n, 0);
+    for i in 0..n {
+        let w = |k: usize| u32::from_le_bytes([s.input[k], s.input[k + 1], s.input[k + 2], s.input[k + 3]]);
+        let pat = [w(i * 16), w(i * 16 + 4), w(i * 16 + 8), w(i * 16 + 12)];
+        let before = s.result.len();
+        s.store.scan(pat, &mut s.result);
+        s.result[i] = ((s.result.len() - before) / 4) as u32;
+    }
+    ((s.result.len() - n) / 4) as i32
 }
 
 #[unsafe(no_mangle)]

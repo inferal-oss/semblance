@@ -154,6 +154,38 @@ describe.skipIf(!built)('Semblance queries on both builds', () => {
     expect(engines.rust.e.quadCount()).toBe(source.quadCount())
   })
 
+  // match_batch (ABI 4, #248): each pattern's quads as match gives them alone, the same on both builds.
+  it('answer a batch of patterns as each pattern alone', () => {
+    const quads = source.match()
+    let seed = 248
+    const next = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32
+    const patterns: string[][] = []
+    for (let i = 0; i < 2000; i++) {
+      const at = 4 * Math.floor(next() * (quads.length / 4))
+      let m = Math.floor(next() * 16)
+      if (!(m & 5)) m |= 1
+      // A blank node's text is not its own (termText), so it stays unbound; a node stays bound.
+      const p = [0, 1, 2, 3].map((j) => (m & (1 << j) && source.kind(quads[at + j]!) !== Kind.BlankNode ? termText(source, quads[at + j]!) : ''))
+      if (p[0] || p[2]) patterns.push(p)
+    }
+    patterns.push(['<http://never.example/seen>', '', '', ''])
+    const answers = KINDS.map((k) => {
+      const { e } = engines[k]
+      const ids = patterns.flatMap((p) => p.map((t) => (t ? idOf(k, t) || e.iri(t.slice(1, -1)) : 0)))
+      const text = (r: Uint32Array) => {
+        const out: string[] = []
+        for (let i = 0; i < r.length; i += 4) out.push([0, 1, 2, 3].map((j) => termText(e, r[i + j]!)).join(' '))
+        return out.sort().join('\n')
+      }
+      const batch = e.matchBatch(ids).map(text)
+      const alone = patterns.map((_, i) => text(e.match(...(Array.from(ids.slice(i * 4, i * 4 + 4)) as [number, number, number, number]))))
+      expect(batch, k).toEqual(alone)
+      return batch
+    })
+    expect(answers[0]).toEqual(answers[1])
+    expect(answers[0]!.filter(Boolean).length).toBeGreaterThan(500)
+  })
+
   it('give the same results for every query the shell ran, interpreted and compiled', () => {
     const seen = new Set<string>()
     const mismatches: string[] = []
