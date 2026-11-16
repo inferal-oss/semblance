@@ -404,6 +404,12 @@ c:DesktopFloatingLayout a sem:Term .
 c:DesktopGridLayout a sem:Term .
 c:DesktopLayout a sem:Term .
 c:Dialog a sem:Term .
+c:DiffAdded a sem:Term .
+c:DiffContext a sem:Term .
+c:DiffKind a sem:Term .
+c:DiffLine a sem:Term .
+c:DiffRemoved a sem:Term .
+c:DiffView a sem:Term .
 c:Digits a sem:Term .
 c:Dimmed a sem:Term .
 c:DisclosureGroup a sem:Term .
@@ -898,6 +904,7 @@ c:detailProperty a sem:Term .
 c:diagramExcludes a sem:Term .
 c:diagramIncludes a sem:Term .
 c:diff a sem:Term .
+c:diffKind a sem:Term .
 c:dimension a sem:Term .
 c:disabled a sem:Term .
 c:docks a sem:Term .

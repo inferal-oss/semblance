@@ -549,6 +549,10 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   policy, read from your own graphs, and what it refuses is reported to `onRefused`. Wiring by hand,
   pass `policy: authoredPolicy(trustedStore)` to `runtime.project` and `compileStyles`. How it works,
   extending the policy and a Content Security Policy to go with it: [SAFETY.md](SAFETY.md).
+- **Text diffs.** A `c:DiffView` names an ordered `c:items` list of `c:DiffLine`s. Each line has
+  `c:value` with no leading diff sign and `c:diffKind` set to `c:DiffAdded`, `c:DiffRemoved`, or
+  `c:DiffContext`. The view supplies the sign, theme colors, and a text projection. It is for
+  source text and other ordered lines; `c:RdfEditor` has its own statement diff mode.
 - **Files.** A `c:FileDrop` asks for the system picker (a `file:Pick`) and receives files dropped on
   its zone; `Files` (`src/files.ts`) performs both and reports each file as events, offered to the
   drop so its shape decides (`file:Added`, `file:Refusal`). It uploads each accepted file at once when
