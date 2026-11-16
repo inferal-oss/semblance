@@ -17,6 +17,9 @@ Each entry states the engines' ABI version (`rdf-engine/ABI.md`).
 - A static build writes `semblance-graphs.json` beside its pages (the graphs each page names). A
   click while the rest of the graphs arrive takes in what the page reached names first, and the
   rest in slices, instead of everything in one long task (`arrive`, `src/slices.ts`).
+- An input-only rule's state goes with its owner's last input type: its output, reads, followed
+  queries, member registrations and pending work, without evaluating the owner, at the cost of that
+  owner's pairs. A rule that leaves drops its own pairs, held and parked work and order (#242).
 - Maintained views: a template (`iv:targets`, `iv:perReferrer`) that arrives after start, before
   its referrers, now hears of the referrers rules derive.
 - On a phone (`sty:CompactWidth`) a card's body, a surface's own inset, a specimen and its stage

@@ -326,6 +326,15 @@ export class Engine {
   /** Pairs a stopped stall left out of date: their output is as it was before the stall. */
   private stopped = new Map<Rule, Set<string>>()
   private stoppedPairs = 0
+  /**
+   * Input-only (rule, key) pairs that hold state (output, reads and their tracing, followed queries,
+   * member registrations, dirty, held or stopped work: ownsPairState), by owning focus and by rule: the owner's last
+   * input type going retires exactly these (retireInputPairs), and a rule leaving drops its own
+   * (retire), without a search of the rest. Parked pairs are indexed by owner in `deferred`.
+   */
+  private inputPairs = new Map<string, Map<Rule, Set<string>>>()
+  private inputPairsByRule = new Map<Rule, Set<string>>()
+  private inputPairCount = 0
 
   constructor(
     readonly store: GraphStore,
@@ -415,7 +424,7 @@ export class Engine {
     for (const byFocus of this.queryFollowers.values()) following += byFocus.size
     let memberReaders = 0
     for (const byRule of this.memberReaders.values()) for (const keys of byRule.values()) memberReaders += keys.size
-    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, memberReaders, types: this.types.size, links: this.links.size, following, stale: this.stale.size }
+    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, memberReaders, types: this.types.size, links: this.links.size, following, stale: this.stale.size, inputPairOwners: this.inputPairs.size, inputPairRules: this.inputPairsByRule.size, inputPairs: this.inputPairCount }
   }
 
   onChange(listener: Listener): () => void {
@@ -445,11 +454,35 @@ export class Engine {
     this.typedIn.clear()
     for (const q of delta.remove) this.propagate(q, -1)
     for (const q of delta.add) this.propagate(q, 1)
+    this.retireInputPairs(delta)
     this.noteManyValued(delta)
     // A graph loaded (or unloaded) after start that defines rules: they join (or leave) the running engine.
     if (this.definesRules(delta)) return this.reloadRules()
     this.locationChanged(delta)
     this.run()
+  }
+
+  /**
+   * An input type removed: the input-only pairs of that owner that are no longer its (the owner is
+   * no longer typed in the input, or no longer an instance of the rule's target) retire. Parked
+   * pairs are dropped; pairs with state are dirtied, and evaluateAll withdraws what they hold
+   * without evaluating an owner absent from the input. markFocus alone cannot reach them all: a
+   * member pair with no output whose link went in the same change is named by nothing in the store.
+   * It costs the changed owners' pairs.
+   */
+  private retireInputPairs(delta: Delta) {
+    let owners: Set<string> | undefined
+    for (const q of delta.remove) if (q.predicate.value === RDF_TYPE && q.subject.termType === 'NamedNode' && this.inputGraphKeys.has(q.graph.value)) (owners ??= new Set()).add(q.subject.value)
+    if (!owners) return
+    const retired = (rule: Rule, key: string) => rule.inputOnly && (!this.typedInInput(focusOf(key)) || !this.isInstance(key, rule))
+    for (const owner of owners) {
+      if (this.deferred.hasFocus(owner)) this.deferred.take(owner, retired)
+      const byRule = this.inputPairs.get(owner)
+      if (!byRule) continue
+      const due: [Rule, string][] = []
+      for (const [rule, keys] of byRule) for (const key of keys) if (retired(rule, key)) due.push([rule, key])
+      for (const [rule, key] of due) this.markDirty(rule, key)
+    }
   }
 
   /**
@@ -641,7 +674,10 @@ export class Engine {
         for (let i = 0; i < shown.length; i += REREAD_SLICE) due.push([rule, shown.slice(i, i + REREAD_SLICE)])
       }
     }
+    const moved = [...this.dirty.values()]
     this.dirty.clear()
+    // Due or parked now, no longer dirty: an input-only pair stays indexed only for what else it holds.
+    for (const byRule of moved) for (const [rule, foci] of byRule) if (rule.inputOnly) for (const focus of foci) this.syncInputPair(rule, focus)
     this.due = due
     this.next = 0
   }
@@ -729,14 +765,7 @@ export class Engine {
     const kept = new Set(full ? [] : after.filter((r) => before.has(r)))
     // A rule on its way out is not probed while its output is withdrawn (nor is one about to run for every focus).
     if (this.exact) for (const r of [...this.rules, ...after]) if (!kept.has(r)) this.pristine.add(r)
-    for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
-    for (const r of this.rules) if (!kept.has(r)) this.retire(r)
-    for (const [member, byRule] of [...this.memberReaders]) {
-      for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
-      if (!byRule.size) this.memberReaders.delete(member)
-    }
-    // Keep what the retractions dirtied for rules that stay; drop the rest.
-    for (const byRule of this.dirty.values()) for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
+    this.dropRules(kept)
     this.activate(after)
     this.reindex()
     for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r) || (supersBefore && !supersBefore(c).has(r.target))) this.markFocus(r, focus)
@@ -751,11 +780,15 @@ export class Engine {
    * rule that took its slot (a function rule on a page whose first graphs lacked its SPARQL twin, #332).
    */
   private retire(rule: Rule) {
+    // An input-only rule's pairs with state are indexed: their member registrations go by that index.
+    const keys = rule.inputOnly ? [...(this.inputPairsByRule.get(rule) ?? [])] : []
     this.outputs.delete(rule)
     this.memberKeys.delete(rule)
     this.forgetAllFollowing(rule)
     this.deferred.dropRule(rule)
     this.due = this.due.filter(([r], i) => r !== rule || i < this.next)
+    // What the retractions dirtied for it (rules that stay keep theirs).
+    for (const byRule of this.dirty.values()) byRule.delete(rule)
     for (const byRule of this.held.values()) {
       this.heldPairs -= byRule.get(rule)?.size ?? 0
       byRule.delete(rule)
@@ -765,6 +798,31 @@ export class Engine {
     for (const focus of [...(this.readsOf.get(rule)?.keys() ?? [])]) this.forgetReads(rule, focus)
     this.readsOf.delete(rule)
     this.traced.delete(rule)
+    this.pristine.delete(rule)
+    this.checked.delete(rule)
+    this.evaluations.delete(rule)
+    for (const key of keys) {
+      if (rule.forEach && rule.kind === 'sparql' && memberOf(key) !== undefined) this.trackMember(rule, key, false)
+      this.syncInputPair(rule, key)
+    }
+    if (!this.heldPairs) this.watchdog?.released(this)
+  }
+
+  /**
+   * The rules not kept leave: their output withdrawn, then each retired. It costs what they held:
+   * only a member-wise SPARQL rule that is not input-only (whose member registrations are not
+   * indexed by rule) has the registrations of every member searched for its own.
+   */
+  private dropRules(kept: ReadonlySet<Rule>) {
+    const going = this.rules.filter((r) => !kept.has(r))
+    for (const r of going) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
+    for (const r of going) this.retire(r)
+    const unindexed = new Set(going.filter((r) => !r.inputOnly && r.forEach && r.kind === 'sparql'))
+    if (!unindexed.size) return
+    for (const [member, byRule] of [...this.memberReaders]) {
+      for (const r of unindexed) byRule.delete(r)
+      if (!byRule.size) this.memberReaders.delete(member)
+    }
   }
 
   /**
@@ -815,6 +873,30 @@ export class Engine {
     for (const { q } of this.refs.values()) this.store.delete(q)
     this.refs.clear()
     this.outputs.clear()
+    // Nor what it kept to re-run them: nothing it holds outlives it.
+    this.readers.clear()
+    this.readsOf.clear()
+    this.traced.clear()
+    this.queryFollowers.clear()
+    this.queryFollowersByPredicate.clear()
+    this.stale.clear()
+    this.memberKeys.clear()
+    this.memberReaders.clear()
+    this.dirty.clear()
+    this.held.clear()
+    this.heldPairs = 0
+    this.stopped.clear()
+    this.stoppedPairs = 0
+    this.deferred.clear()
+    this.due = []
+    this.next = 0
+    this.retyped.clear()
+    this.pristine.clear()
+    this.evaluations.clear()
+    this.inputPairs.clear()
+    this.inputPairsByRule.clear()
+    this.inputPairCount = 0
+    this.watchdog?.released(this)
   }
 
   // --- the viewer ------------------------------------------------------------
@@ -978,7 +1060,9 @@ export class Engine {
   private markDirty(rule: Rule, focus: string) {
     // Input-only rules never hear about instances other rules mint, nor about what
     // higher strata derive (they judge the input, which is settled before them).
-    if (rule.inputOnly && (this.derivedTrigger || rule.stratum < this.current || !this.typedInInput(focusOf(focus)))) return
+    // A pair whose owner left the input may still hold state: it is dirtied to withdraw it
+    // (evaluateAll), never to evaluate an owner the input does not type.
+    if (rule.inputOnly && (this.derivedTrigger || rule.stratum < this.current || (!this.typedInInput(focusOf(focus)) && !this.ownsPairState(rule, focus)))) return
     if (rule.stratum < this.current) {
       throw new Error(`Stratification violation: stratum ${this.current} invalidated <${rule.iri}> (stratum ${rule.stratum}) for <${focus}>. If that rule judges only the input, mark its rendering sem:inputOnly true; otherwise move it above stratum ${this.current} (docs/COMPONENTS.md, "Strata and layers")`)
     }
@@ -990,6 +1074,57 @@ export class Engine {
     // Dirty again: it is evaluated now, not as held or stopped work.
     if (this.heldPairs && this.held.get(rule.stratum)?.get(rule)?.delete(focus)) this.heldPairs--
     if (this.stoppedPairs && this.stopped.get(rule)?.delete(focus)) this.stoppedPairs--
+    if (rule.inputOnly) this.indexInputPair(rule, focus)
+  }
+
+  /**
+   * Whether an input-only pair holds state: output, traced reads, followed queries, a member
+   * registration, or work dirty, held or stopped (parked work is indexed in `deferred`). A fixed
+   * number of lookups.
+   */
+  private ownsPairState(rule: Rule, key: string): boolean {
+    const member = memberOf(key)
+    return !!(
+      this.outputs.get(rule)?.has(key) ||
+      this.readsOf.get(rule)?.has(key) ||
+      this.traced.get(rule)?.has(key) ||
+      this.queryFollowers.get(rule)?.has(key) ||
+      (member !== undefined && this.memberReaders.get(member)?.get(rule)?.has(key)) ||
+      this.dirty.get(rule.stratum)?.get(rule)?.has(key) ||
+      this.held.get(rule.stratum)?.get(rule)?.has(key) ||
+      this.stopped.get(rule)?.has(key)
+    )
+  }
+
+  /** Index an input-only pair that now holds state. */
+  private indexInputPair(rule: Rule, key: string) {
+    const owner = focusOf(key)
+    let byRule = this.inputPairs.get(owner)
+    if (!byRule) this.inputPairs.set(owner, (byRule = new Map()))
+    let keys = byRule.get(rule)
+    if (!keys) byRule.set(rule, (keys = new Set()))
+    if (keys.has(key)) return
+    keys.add(key)
+    let byKey = this.inputPairsByRule.get(rule)
+    if (!byKey) this.inputPairsByRule.set(rule, (byKey = new Set()))
+    byKey.add(key)
+    this.inputPairCount++
+  }
+
+  /** Index an input-only pair, or drop it, by whether it holds state now (after a commit, parking, retirement). */
+  private syncInputPair(rule: Rule, key: string) {
+    if (!rule.inputOnly) return
+    if (this.ownsPairState(rule, key)) return this.indexInputPair(rule, key)
+    const owner = focusOf(key)
+    const byRule = this.inputPairs.get(owner)
+    const keys = byRule?.get(rule)
+    if (!keys?.delete(key)) return
+    this.inputPairCount--
+    const byKey = this.inputPairsByRule.get(rule)!
+    byKey.delete(key)
+    if (!byKey.size) this.inputPairsByRule.delete(rule)
+    if (!keys.size) byRule!.delete(rule)
+    if (!byRule!.size) this.inputPairs.delete(owner)
   }
 
   /** Whether a node is typed in one of the input graphs (not only by a rule's output). */
@@ -1448,7 +1583,10 @@ export class Engine {
     if (!byRule) this.held.set(stratum, (byRule = new Map()))
     let set = byRule.get(rule)
     if (!set) byRule.set(rule, (set = new Set()))
-    for (const f of foci) if (!set.has(f)) set.add(f), this.heldPairs++
+    for (const f of foci) {
+      if (!set.has(f)) set.add(f), this.heldPairs++
+      if (rule.inputOnly) this.indexInputPair(rule, f)
+    }
   }
 
   /** (rule, focus) pairs a suspended run set aside, still to evaluate. */
@@ -1498,6 +1636,7 @@ export class Engine {
       let set = this.stopped.get(rule)
       if (!set) this.stopped.set(rule, (set = new Set()))
       if (!set.has(focus)) set.add(focus), this.stoppedPairs++
+      if (rule.inputOnly) this.indexInputPair(rule, focus)
     }
     for (const byRule of held.values()) {
       for (const [rule, foci] of byRule) {
@@ -1520,7 +1659,13 @@ export class Engine {
     const stopped = this.stopped
     this.stopped = new Map()
     this.stoppedPairs = 0
-    for (const [rule, foci] of stopped) for (const focus of foci) this.markDirty(rule, focus)
+    for (const [rule, foci] of stopped) {
+      for (const focus of foci) {
+        this.markDirty(rule, focus)
+        // (An input-only pair whose owner left the input in the meantime was retired then.)
+        this.syncInputPair(rule, focus)
+      }
+    }
     this.run()
   }
 
@@ -1573,6 +1718,16 @@ export class Engine {
   private evaluateAll(rule: Rule, foci: Set<string>): Leftover | undefined {
     const wd = this.watchdog
     if (wd) (wd.rule = rule.iri), (wd.focus = foci.values().next().value)
+    if (rule.inputOnly) {
+      // An owner the input no longer types (a rule may still type it): what the pair held is
+      // withdrawn before demand could park it, and no function or query runs for it.
+      for (const focus of foci) {
+        if (this.typedInInput(focusOf(focus))) continue
+        this.withdrawInputPair(rule, focus)
+        foci.delete(focus)
+      }
+      if (!foci.size) return
+    }
     if (this.demand && !rule.always && (!this.warming || performance.now() >= this.warmUntil)) {
       // Park undemanded foci (retractions always run, so nothing stale stays visible).
       // (Deleting the entry being visited from a Set does not disturb the iteration.)
@@ -1580,6 +1735,7 @@ export class Engine {
         if (this.isInstance(focus, rule) && !this.demand(focusOf(focus)) && !this.warmsNow(focus)) {
           this.deferred.add(rule, focus)
           foci.delete(focus)
+          if (rule.inputOnly) this.syncInputPair(rule, focus)
         } else this.deferred.delete(rule, focus)
       }
       if (!foci.size) return
@@ -1662,6 +1818,16 @@ export class Engine {
       if (wd.check() || this.overOutput(wd)) left = { foci: new Set(), interrupted: false }
     }
     return left?.foci.size ? left : undefined
+  }
+
+  /** Withdraw an input-only pair whose owner left the input: its output, reads, follows, member registration and parked work. */
+  private withdrawInputPair(rule: Rule, key: string) {
+    if (this.outputs.get(rule)?.has(key)) this.commit(rule, key, [])
+    this.forgetReads(rule, key)
+    this.forgetFollowing(rule, key)
+    if (rule.forEach && rule.kind === 'sparql' && memberOf(key) !== undefined) this.trackMember(rule, key, false)
+    this.deferred.delete(rule, key)
+    this.syncInputPair(rule, key)
   }
 
   private evaluateOne(rule: Rule, focus: string): Quad[] {
@@ -1847,6 +2013,7 @@ export class Engine {
         if (!keys.size) byOwner.delete(owner)
       }
     }
+    if (rule.inputOnly) this.syncInputPair(rule, focus)
   }
 
   /** Back along a path's steps, from the nodes at its end to the nodes at its start. */
