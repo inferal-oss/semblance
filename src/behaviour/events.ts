@@ -773,8 +773,12 @@ export class EventBus {
         return (own === combo ? flipped === combo || !rightToLeft(x) : flipped !== combo && own === flipped && rightToLeft(x)) && !renderer.inSlot(x)
       }) as HTMLElement | undefined
       if (!el && combo === 'escape') {
-        // Escape dismisses the most recent open overlay: its control marked data-sem-escape.
-        const dismiss = renderer.marked('data-sem-escape').filter((x) => !x.closest('[hidden]') && !renderer.inSlot(x)).at(-1) as HTMLElement | undefined
+        // Escape dismisses the most recent open overlay: its control marked data-sem-escape. It
+        // never reaches behind the last open modal: one without such a control (c:dismissible
+        // false) keeps Escape from closing what is under it.
+        const open = (x: Element) => !x.closest('[hidden]') && !renderer.inSlot(x)
+        const modal = renderer.marked('aria-modal').filter((x) => x.getAttribute('aria-modal') === 'true' && open(x)).at(-1)
+        const dismiss = renderer.marked('data-sem-escape').filter((x) => open(x) && !(modal && before(x, modal))).at(-1) as HTMLElement | undefined
         if (!dismiss) return
         k.preventDefault()
         // A disclosure's toggle (aria-expanded) takes the focus back from what it closes.
