@@ -153,12 +153,27 @@ function chosenBy(runtime: Runtime, control: string): string | undefined {
 }
 
 /**
+ * Where an option comes in anticipation's queue, lower first (#436): what each choice has chosen
+ * (what graphs that arrived made due again under it); then each choice's next option, the one after
+ * the chosen as one reads on; then the options near what the choices within the page have chosen
+ * (sem:anticipatesNear: a section's own pages), then the options of the choices around it
+ * (sem:anticipates: the other sections), each by distance, the next before the previous. Ties keep
+ * the order the choices were found in. A first visit comes about a second after a page is quiet,
+ * time to prepare two or three pages: the next of each list, and the pages near the current one.
+ */
+function rankOf(distance: number, next: boolean, previous: boolean, near: boolean): number {
+  if (distance === 0) return 0
+  if (next) return 1
+  return (near ? 1 : 2) * 1e6 + 2 * distance + (previous ? 1 : 0)
+}
+
+/**
  * Prepare in idle time what the options of the choices that anticipate would show, an option at a
  * time, as pointing at each would (its content where its warmth allows: sem:OnIntent, sem:Eager): a
  * first click shows a page evaluated ahead - and so does a tap, which no pointing comes before.
  * sem:anticipates prepares every option, and keeps it; sem:anticipatesNear the options near the
- * chosen one, while the choice is shown, following it. Options are prepared by their distance from
- * what their choice has chosen, nearest first, across choices (#436). A control with no options (a
+ * chosen one, while the choice is shown, following it. Options are prepared in the order rankOf gives,
+ * across choices (#436). A control with no options (a
  * toggle that opens a window) prepares what it opens (sem:OpenPreview), one step away (#434); a choice
  * that follows its choice is planned again when it is shown or hidden. Call it once the page is quiet
  * (its graphs in). Returns a function that stops it.
@@ -202,14 +217,13 @@ export function anticipate(runtime: Runtime, opts: IntentOptions = {}): () => vo
         if (d > n) return
         const contents = previewsOf(runtime, o.key, seen)
         for (const c of contents) kept.add(c)
-        // At each distance the next before the previous; then the order the choices were found in.
-        if (contents.length) ranked.push({ rank: 2 * d + (i < here ? 1 : 0), at: at++, contents: new Set(contents), owner: near ? control : '' })
+        if (contents.length) ranked.push({ rank: rankOf(d, i === here + 1, i < here, near), at: at++, contents: new Set(contents), owner: near ? control : '' })
       })
       // A control with no options (a toggle that opens a window): what it opens, one step away.
       if (!options.length && n >= 1 && !hidden) {
         const contents = previewsFor(runtime, control, undefined, seen)
         for (const c of contents) kept.add(c)
-        if (contents.length) ranked.push({ rank: 2, at: at++, contents: new Set(contents), owner: near ? control : '' })
+        if (contents.length) ranked.push({ rank: rankOf(1, false, false, near), at: at++, contents: new Set(contents), owner: near ? control : '' })
       }
       // Not kept beyond its reach (what is still near stays kept: its views are not suspended).
       if (near) runtime.forgetAnticipated(control, kept)
