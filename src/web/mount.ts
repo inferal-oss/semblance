@@ -6,6 +6,8 @@ import { Islands, type IslandAdapter, type WidgetLike } from '../foreign.ts'
 import { DomRenderer } from '../render/dom.ts'
 import type { HostContext, HostRenderer } from '../render/hosts.ts'
 import { RenderedState } from '../rendered.ts'
+import { indexedDbBackend } from '../persistence.ts'
+import type { OffloadBackend } from '../retention/offload.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import { configureFetching, doesNotFetch, type FetchPolicy, type GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
@@ -109,6 +111,12 @@ export interface MountOptions {
   /** Record provenance (ontology/layers/provenance.ttl). */
   provenance?: boolean
   /**
+   * Retention (docs/RETENTION.md): where history the graph's policies offload goes (ret:Offload; by
+   * default this browser's IndexedDB, database "semblance-offload"); false keeps nothing beyond what
+   * the policies hold in memory, and says so on each stream's horizon.
+   */
+  retention?: { storage?: OffloadBackend | false }
+  /**
    * Remote sources (src:Source, docs/REMOTE.md): each source's store, by the source's IRI. The graph
    * says what a page binds to; the host, here, says where it is and with what credentials.
    */
@@ -196,6 +204,9 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   if (shadow) shadow.replaceChildren(host)
   const ssr = !shadow && serverRendered(element)
   const runtime = new Runtime(store)
+  // History its policies let go is offloaded to this browser's storage, from where it can come back.
+  const offload = opts.retention?.storage === false ? undefined : (opts.retention?.storage ?? (typeof indexedDB === 'undefined' ? undefined : indexedDbBackend('semblance-offload')))
+  if (offload) void runtime.retention.use(offload)
   const projection = runtime.project({
     modality: MOD.Screen,
     layers: opts.layers ?? DEFAULT_LAYERS,

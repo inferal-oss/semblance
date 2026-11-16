@@ -20,6 +20,7 @@ import { formatLocale } from './engine/context.ts'
 import { BEH, EVENTS_GRAPH, H, MOD, NS, PERSIST_GRAPH, RDF_TYPE, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
 import { prefixesFor } from './prefixes.ts'
 import { type Delta, mint, parseDuration, quadKey } from './rdf.ts'
+import { logStream } from './retention/offload.ts'
 import type { ViewHandle } from './view/runtime.ts'
 import type { Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
@@ -45,11 +46,13 @@ export interface Backend {
   remove(key: string): Promise<void>
   /** Hear about keys another tab changed (a scope other tabs share); returns a function that stops it. */
   watch?(listener: (key: string) => void): () => void
+  /** The keys stored that start with `prefix` (for sweeping what nothing declares any more). */
+  keys?(prefix: string): Promise<string[]>
 }
 
 export function memoryBackend(): Backend {
   const m = new Map<string, string>()
-  return { get: async (k) => m.get(k), set: async (k, v) => void m.set(k, v), remove: async (k) => void m.delete(k) }
+  return { get: async (k) => m.get(k), set: async (k, v) => void m.set(k, v), remove: async (k) => void m.delete(k), keys: async (prefix) => [...m.keys()].filter((k) => k.startsWith(prefix)) }
 }
 
 /** `events` hears the `storage` events other tabs' writes to it fire (the window, in a browser). */
@@ -58,6 +61,14 @@ export function webStorageBackend(storage: Storage, events: EventTarget | undefi
     get: async (k) => storage.getItem(k) ?? undefined,
     set: async (k, v) => storage.setItem(k, v),
     remove: async (k) => storage.removeItem(k),
+    keys: async (prefix) => {
+      const out: string[] = []
+      for (let i = 0; i < storage.length; i++) {
+        const k = storage.key(i)
+        if (k?.startsWith(prefix)) out.push(k)
+      }
+      return out
+    },
     ...(events && {
       watch: (listener: (key: string) => void) => {
         const heard = (e: Event) => {
@@ -90,6 +101,7 @@ export function indexedDbBackend(name = 'semblance'): Backend {
     get: async (k) => (await tx<string | undefined>('readonly', (s) => s.get(k) as IDBRequest<string | undefined>)) ?? undefined,
     set: async (k, v) => void (await tx('readwrite', (s) => s.put(v, k))),
     remove: async (k) => void (await tx('readwrite', (s) => s.delete(k))),
+    keys: async (prefix) => ((await tx<IDBValidKey[]>('readonly', (s) => s.getAllKeys(IDBKeyRange.bound(prefix, prefix + '\uffff')))) as string[]).filter((k) => typeof k === 'string'),
   }
 }
 
@@ -691,12 +703,9 @@ export class Persistence {
     // Which interaction led to it: the newest member of the change log.
     const cause = this.store.match(nn(BEH.ChangeLog), nn(BEH.latest), null)[0]?.object
     if (cause && kind === PER + 'Write') add.push(f.quad(m, nn(PROV + 'wasInformedBy'), cause))
-    this.log.push(m)
-    const remove: Quad[] = []
-    while (this.log.length > 100) {
-      const old = this.log.shift()!
-      remove.push(...this.store.match(old, null, null, nn(PERSIST_GRAPH)), ...this.store.match(stream, nn(TREE_MEMBER), old, nn(PERSIST_GRAPH)))
-    }
+    // Bounded by its policies in the graph (per:StateLogView), as every retained stream is (docs/RETENTION.md).
+    const log = logStream(runtime.retention, PER + 'StateLog', PERSIST_GRAPH, (d) => runtime.write(PERSIST_GRAPH, d))
+    const remove = log.append({ iri: m.value, seq: this.seq, at: Date.now() })
     runtime.write(PERSIST_GRAPH, { add, remove })
   }
 

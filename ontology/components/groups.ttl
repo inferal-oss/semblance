@@ -145,7 +145,7 @@ c:RdfEditorContextMenu sem:group c:DataGroup . c:RdfMenuEscapeKey sem:group c:Da
 c:MessageList sem:group c:DataGroup . c:Message sem:group c:DataGroup .
 c:BoardKey sem:group c:DataGroup .
 # Lists an app shows its people, read from the graph: its keyboard shortcuts, and what it remembers.
-c:ShortcutList sem:group c:DataGroup . c:PolicyList sem:group c:DataGroup .
+c:ShortcutList sem:group c:DataGroup . c:PolicyList sem:group c:DataGroup . c:HorizonList sem:group c:DataGroup .
 
 # --- Navigation ---
 c:Tabs sem:group c:NavigationGroup . c:Tab sem:group c:NavigationGroup . c:NavList sem:group c:NavigationGroup . c:NavLink sem:group c:NavigationGroup .

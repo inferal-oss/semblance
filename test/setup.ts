@@ -3,6 +3,7 @@ import { watchStores } from '../src/node/load.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { type Persistence, watchPersistence } from '../src/persistence.ts'
 import { type Sandboxes, watchSandboxes } from '../src/sandbox.ts'
+import { type Retention, watchRetention } from '../src/retention/offload.ts'
 
 // Stores are released when they are done with (GraphStore.dispose): Oxigraph's share one capped
 // WebAssembly memory that garbage collection does not see, so a file that mounts the whole site a
@@ -36,6 +37,14 @@ const halt = (all: WeakRef<Persistence>[]) => {
   for (const p of all.splice(0)) p.deref()?.stop()
 }
 
+// And retention: a write to storage or a recall finishing after its test.
+const retentionOfTest: WeakRef<Retention>[] = []
+const retentionOfFile: WeakRef<Retention>[] = []
+watchRetention((r) => (inTest ? retentionOfTest : retentionOfFile).push(new WeakRef(r)))
+const quiet = (all: WeakRef<Retention>[]) => {
+  for (const r of all.splice(0)) r.deref()?.stop()
+}
+
 beforeEach(() => {
   inTest = true
 })
@@ -47,11 +56,13 @@ afterEach(() => {
   inTest = false
   stop(sandboxesOfTest)
   halt(persistenceOfTest)
+  quiet(retentionOfTest)
   dispose(ofTest)
   return new Promise<void>((resolve) => setImmediate(resolve))
 })
 afterAll(() => {
   stop(sandboxesOfFile)
   halt(persistenceOfFile)
+  quiet(retentionOfFile)
   dispose(ofFile)
 })

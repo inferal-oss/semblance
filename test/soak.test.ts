@@ -12,6 +12,13 @@ describe('soak', () => {
     // interactions as a browser would give it.
     const h = mountShell(5, 'wat')
     const { document, fire } = h
+    // The log keeps 1,000 members that recorded an undoable change besides its 200 newest
+    // (docs/RETENTION.md): fewer here, so the session passes that bound as well before it is measured.
+    const f = h.store.factory
+    const undo = f.namedNode('https://semblance.dev/ns/behaviour#UndoRetention')
+    const amount = f.namedNode('https://w3id.org/ldes#amount')
+    for (const q of h.store.match(undo, amount, null)) h.store.delete(q)
+    h.store.add(f.quad(undo, amount, f.literal('60', f.namedNode('http://www.w3.org/2001/XMLSchema#integer'))))
     const button = (text: string) => {
       const all = [...document.querySelectorAll('button, [role=tab]')]
       return (all.find((b) => b.textContent!.trim() === text) ?? all.find((b) => b.textContent!.trim().endsWith(text))) as HTMLElement
@@ -61,7 +68,7 @@ describe('soak', () => {
       log: h.bus.recent(10_000).length,
     })
     const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[xs.length >> 1]!
-    session(3 * PERIOD) // past the change log's bound (200 events)
+    session(3 * PERIOD) // past the change log's bounds (200 events, and 60 undoable ones before them)
     const warm = footprint()
     const early = median(times.slice(-300))
     session(11 * PERIOD)

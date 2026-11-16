@@ -118,6 +118,9 @@ const appValues = (p: string) => store.match(app, nn(p), null, dg).map((q) => q.
 prepareSite(store, { kind, prefer, compile })
 
 const runtime = new Runtime(store)
+// History the graph's retention policies let go (the change log past its bounds) goes to IndexedDB, and
+// comes back on Show older or an undo past it (docs/RETENTION.md).
+void runtime.retention.use(indexedDbBackend('semblance-offload'))
 const enabledLayers = () => siteLayers(store)
 // Each projection evaluates only what is shown under its mount root (demand-driven), in the
 // graph's language (the address's): a page rendered beforehand was too. Provenance is recorded

@@ -17,6 +17,10 @@ import { deepActive, elementById, originOf } from '../web/builtins.ts'
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 /** Distinguishes event IRIs across page loads sharing a store snapshot. */
 const RUN = Date.now().toString(36)
+/** An undo among this many of the oldest undoable members in memory recalls more from storage. */
+const UNDO_LOW_WATER = 16
+/** How many offloaded members a recall for undo brings back. */
+const RECALL_STEP = 64
 
 // Re-exported: persistence imports it from rdf.ts, so it does not import this module (which imports it back).
 export { parseDuration }
@@ -94,8 +98,6 @@ export class EventBus {
   /** How deep in emit() this bus is (an event raised while handling another). */
   private depth = 0
   private readonly graphs: Quad_Graph[]
-  /** Retained members, oldest first, so retirement touches only what expires. */
-  private retained?: { event: NamedNode; at: number }[]
   /** What time an event happens at (beh:at): the host's clock, which tests can move by hand. */
   readonly clock: Clock
 
@@ -391,7 +393,7 @@ export class EventBus {
       // Completing the member: its effect, its predecessor, then the tree:member link
       // and the stream's head pointer.
       const int = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
-      const remove = this.expired()
+      const remove = this.retain(event, Number(quads.find((q) => q.predicate.value === BEH.sequence)?.object.value ?? 0))
       const head = this.runtime.store.match(this.stream, nn(BEH.latest), null, this.graph)
       const change = this.statements(event, applied, undoable, raisedBy, continues)
       // That a member was undone is state (the input graph): forgotten there, in the same tick.
@@ -410,7 +412,8 @@ export class EventBus {
           f.quad(this.stream, nn(BEH.latest), event),
         ],
       })
-      this.members().push({ event, at: Date.now() })
+      const undone = applied.add.filter((q) => q.predicate.value === BEH.undone).map((q) => q.object)
+      if (undone.length) this.recallForUndo(undone)
       return { recorded: true, event, type, target: nn(target), reactions: reactions.map((r) => r.iri), delta: applied }
     })
   }
@@ -488,55 +491,66 @@ export class EventBus {
   }
 
   /**
-   * Members (with their triples) that no retention policy of the stream's view keeps
-   * once one more member is appended. Policies: beh:LatestMembersPolicy (ldes:amount)
-   * and ldes:DurationAgoPolicy (tree:value, or the older ldes:fullLogDuration). No
-   * policy keeps everything. Only the retired members are touched.
+   * The change log's retention (src/retention/, docs/RETENTION.md): its policies, read from the graph,
+   * say which members stay once one more is appended; what leaves goes with its recorded change, by
+   * its policy's exit (dropped, or offloaded to the browser's storage). The members already in the
+   * graph (a remembered log) are taken in at first use.
    */
-  private expired(): Quad[] {
-    const store = this.runtime.store
-    const view = this.value(this.stream, LDES.view)
-    const policies = view ? this.match(view, LDES.retentionPolicy, null).map((q) => q.object) : []
-    if (!policies.length) return []
-    const keeps: ((index: number, at: number, size: number) => boolean)[] = policies.map((p) => {
-      const amount = this.value(p, LDES.amount)
-      if (amount) return (i, _at, size) => size - i <= Number(amount.value)
-      const duration = this.value(p, NS.tree + 'value') ?? this.value(p, LDES.fullLogDuration)
-      const ms = duration ? parseDuration(duration.value) : undefined
-      if (ms !== undefined) {
-        const cutoff = Date.now() - ms
-        return (_i, at) => at >= cutoff
-      }
-      return () => true
+  private retained() {
+    const runtime = this.runtime
+    const existing = runtime.retention.get(this.stream.value)
+    if (existing) return existing
+    const store = runtime.store
+    const f = this.f
+    const stream = runtime.retention.stream(this.stream.value, {
+      graph: this.graph.value,
+      closure: (m) => {
+        const out = [...store.match(this.stream, f.namedNode(LDES.member), m, this.graph), ...store.match(m, null, null, this.graph)]
+        // Its recorded change (for undo) goes with it.
+        for (const p of [BEH.asserted, BEH.retracted]) for (const q of store.match(m, f.namedNode(p), null, this.graph)) out.push(...store.match(q.object as NamedNode, null, null, this.graph))
+        return out
+      },
+      write: (delta) => runtime.log(delta),
+      leaveFirst: () => store.match(this.stream, f.namedNode(BEH.undone), null, f.defaultGraph()).map((q) => q.object.value),
+      // An undone member is stored without its recorded change: its redo goes with it, and a recall
+      // never offers to undo it again.
+      storable: (m, closure) => {
+        if (!store.match(this.stream, f.namedNode(BEH.undone), m, f.defaultGraph()).length) return closure
+        const statements = new Set(store.match(m, null, null, this.graph).filter((q) => q.predicate.value === BEH.asserted || q.predicate.value === BEH.retracted).map((q) => q.object.value))
+        return closure.filter((q) => !statements.has(q.subject.value) && !((q.predicate.value === BEH.asserted || q.predicate.value === BEH.retracted) && q.subject.equals(m)))
+      },
+      crossed: (kind) => {
+        if (!runtime.ended) this.emit(kind === 'offloaded' ? NS.ret + 'Offloaded' : NS.ret + 'Dropped', this.stream.value)
+      },
     })
-    const members = this.members()
-    const size = members.length + 1
-    const out: Quad[] = []
-    let n = 0
-    while (n < members.length && !keeps.some((keep) => keep(n, members[n].at, size))) {
-      const m = members[n++].event
-      out.push(...store.match(this.stream, this.f.namedNode(LDES.member), m, this.graph), ...store.match(m, null, null, this.graph))
-      // Its recorded change (for undo) goes with it.
-      for (const p of [BEH.asserted, BEH.retracted]) for (const q of store.match(m, this.f.namedNode(p), null, this.graph)) out.push(...store.match(q.object as NamedNode, null, null, this.graph))
-    }
-    members.splice(0, n)
-    return out
+    const found = store
+      .match(this.stream, f.namedNode(LDES.member), null, this.graph)
+      .map((m) => ({ iri: m.object.value, seq: Number(this.value(m.object, BEH.sequence)?.value ?? 0), at: Date.parse(this.value(m.object, BEH.at)?.value ?? '') || 0 }))
+    const leaving = stream.load(found, this.clock.now())
+    if (leaving.length) runtime.log({ add: [], remove: leaving })
+    return stream
   }
 
-  /** The retained members in append order, read from the graph once. */
-  private members() {
-    if (this.retained) return this.retained
-    const store = this.runtime.store
-    this.retained = store
-      .match(this.stream, this.f.namedNode(LDES.member), null, this.graph)
-      .map((m) => ({
-        event: m.object as NamedNode,
-        seq: Number(this.value(m.object, BEH.sequence)?.value ?? 0),
-        at: Date.parse(this.value(m.object, BEH.at)?.value ?? '') || 0,
-      }))
-      .sort((a, b) => a.seq - b.seq)
-      .map(({ event, at }) => ({ event, at }))
-    return this.retained
+  /** Take a new member in: what no policy keeps any more, to remove in the same write. */
+  private retain(event: NamedNode, seq: number): Quad[] {
+    const now = this.clock.now()
+    return this.retained().append({ iri: event.value, seq, at: now }, now)
+  }
+
+  /**
+   * After an undo reached one of the oldest undoable members in memory, the most recent offloaded
+   * ones come back from storage, so the next undo finds them (undo is bounded by storage, not memory).
+   */
+  private recallForUndo(undone: Term[]) {
+    const stream = this.runtime.retention.get(this.stream.value)
+    if (!stream) return
+    for (const policy of stream.policies()) {
+      if (!policy.having.includes(BEH.asserted) && !policy.having.includes(BEH.retracted)) continue
+      if (!stream.stored(policy.iri)) continue
+      const oldest = [...stream.retention.recalled(), ...stream.retention.queue(policy.iri)].slice(0, UNDO_LOW_WATER).map((m) => m.iri)
+      const near = undone.some((m) => oldest.includes(m.value)) || oldest.length < UNDO_LOW_WATER
+      if (near) void stream.recall(RECALL_STEP, policy.iri)
+    }
   }
 
   /** Stream members, most recent first, with all their triples (walks back from the head). */
