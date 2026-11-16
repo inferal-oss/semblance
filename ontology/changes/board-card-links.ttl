@@ -1,0 +1,27 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:board-card-links a chg:Change ;
+    rdfs:label "Board cards can link their title, show a component and be locked in their lane"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/240> ;
+    chg:motivation """A c:Board card showed only its title, tag and person, so a board of work items could not link
+each card to its page, show anything more about it, or keep a finished item from being moved.""" ;
+    chg:substance """Three new properties of c:Board, each naming a property of the card items, as c:cardTitle does:
+c:cardHref (its value is the address the card's title links to: the title is an a[href] instead of a span),
+c:cardContent (its value, a component, is shown between the card's head and its foot) and c:cardLocked (when its
+value is true, the card is locked: it has no move or remove controls, no aria-keyshortcuts, cannot be dragged on a
+dnd:Sortable board, and the arrow keys and the move reactions do nothing; it shows the c:CardLockedPhrase, "Locked",
+where its controls would be). The Text rendering of a card ends with " <address>" when it is linked and
+" (Locked)" when it is locked, and is followed by the content's own rendering. A board without these properties
+renders and behaves as before.""" ;
+    chg:forwardGuide """Nothing to move. To use them, state c:cardHref, c:cardContent or c:cardLocked on the board
+with the item properties that hold the address, the component and the lock.""" ;
+    chg:backwardGuide """Going back, remove c:cardHref, c:cardContent and c:cardLocked from boards: titles are plain
+again, content is not shown and every card can be moved.""" ;
+    chg:affects c:Board , c:BoardCard .

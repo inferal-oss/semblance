@@ -17,6 +17,24 @@ property works on it (`c:external`, the spoken new-tab hint, `c:currentPage true
 one link around the component; the text rendering gives the address after the content. Keep
 buttons and other links outside that card.
 
+`c:Board` can link a card's title and show more than its built-in tag and
+person. Set `c:cardHref` to the property holding each item's address and
+`c:cardContent` to the property holding a component to show between the
+title and move controls. A card without an address keeps a plain title; a
+card without content keeps the compact layout. Set `c:cardLocked` to a
+boolean property to prevent moving selected items. This also removes their
+move controls and drag handle; other cards on the board still move.
+
+```turtle
+ex:board a c:Board ; c:property ex:stage ; c:cardTitle rdfs:label ;
+    c:cardHref ex:page ; c:cardContent ex:details ; c:cardLocked ex:locked ;
+    c:card ex:one, ex:two .
+ex:one ex:stage ex:Open ; rdfs:label "First task" ;
+    ex:page "/tasks/one" ; ex:details ex:oneDetails .
+ex:oneDetails a c:Text ; c:label "Due Friday" .
+ex:two ex:stage ex:Open ; rdfs:label "Blocked task" ; ex:locked true .
+```
+
 `c:GanttChart` draws dated tasks from a maintained `sem:View` (also an `iv:View` with
 `iv:materialize iv:Graph`, so its rows are graph data the SPARQL rules read). Each row may bind
 `?task`, `?label`, `?start`, `?end`, `?baselineStart`, `?baselineEnd`, `?uncertainty` (the latest it
@@ -507,6 +525,14 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   unstyled `c:HostSlot` inside a layout, name it with `c:slot`, and mount existing application
   content into `renderer.slot(name)`. Use `c:ProjectionView` for a styled inspection surface.
 - **Server-side.** `loadStore` from `@semblance-dev/semblance/node`, project, `toHTML` / `toText`.
+- **Serving the stylesheet yourself.** `mount` compiles the theme from the graph and adopts it, which
+  restyles the page once it runs. To have the styles from the first paint, compile them ahead
+  (`compileStyles(store)` over the same ontology, theme and app graphs, or the `semblance.css` that
+  `semblance build` writes) and link them with the `data-sem-styles` attribute:
+  `<link rel="stylesheet" href="/semblance.css" data-sem-styles>`. A document with a
+  `[data-sem-styles]` element is taken as styled: `mount` compiles and adopts nothing, and `unmount`
+  leaves the stylesheet in place. (Server-rendered pages get the attribute from `renderDocument`.)
+  Recompile it whenever those graphs change, since nothing checks that it matches them.
 - **Remembering state.** `per:Policy` nodes say what to keep where; attach `Persistence` with
   storage backends before the first projection ([PERSISTENCE.md](../PERSISTENCE.md)).
 - **The address.** `nav:Location` and `nav:Dimension`s say which state lives in the URL;
