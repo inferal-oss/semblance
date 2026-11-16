@@ -228,7 +228,21 @@ expressions (`cq_str`, `cq_iri`, `cq_num`, `cq_tonum`, `cq_term`, `cq_cplen`,
 `cq_cpoff`, `cq_strfn`, `cq_ebv`); `rdf-engine/wat/cx-header.ts` lists them.
 The Rust engine's: helpers for typed expressions (`cq_lex`, `cq_num`,
 `cq_numterm`, `cq_strterm`, `cq_iri`, `cq_strfn`, `cq_cplen`, `cq_substr`,
-`cq_tonum`, `cq_ebv`); `rust/src/sparql/compile.rs` lists them.
+`cq_tonum`, `cq_ebv`), and for the rows of an ordinary pattern collected in
+the module (`cq_pack`, `cq_pack_count`, `cq_unpack`); `rust/src/sparql/compile.rs`
+lists them.
+
+The Rust engine stores those rows packed when that is no larger: `cq_pack(at)`
+finishes the collection at word `at` and returns `(end << 1) | sparse`, its row
+count read right after through `cq_pack_count()`. A sparse row is a pair count and
+then `(variable slot, term id)` pairs for its bound slots; `cq_unpack(cursor, scratch)`
+expands one into a dense row at `scratch` (above every live table, reserved by the
+module) and returns the next row's cursor. Packing is chosen only when the sparse
+rows plus that one scratch row take no more words than the dense table, so a table
+never grows; the 16M-word stack limit, row fuel, row order, duplicates and term
+ids are unchanged. `cq_group` is unchanged (a count and dense rows, `k = -1`
+included), and subqueries' finished rows and `cq_eval` tables stay dense. The WAT
+engine collects no such table: it compiles that right side in line, masked.
 
 A compiled run is budgeted as an interpreted one is (`set_deadline`,
 `set_fuel`): `cq_begin` starts the budget, and `cq_end` returns -2 with the
