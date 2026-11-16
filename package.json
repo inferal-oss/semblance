@@ -96,7 +96,8 @@
     "serve": "node bin/semblance.mjs serve",
     "perf:interactions": "tsx scripts/interactions.ts",
     "build:package": "tsx scripts/build-package.ts",
-    "pack:check": "tsx scripts/pack-check.ts"
+    "pack:check": "tsx scripts/pack-check.ts",
+    "release:version": "tsx scripts/release-version.ts"
   },
   "dependencies": {
     "@rdfjs/types": "^2.0.1",
@@ -123,7 +124,7 @@
     "wabt": "^1.0.39"
   },
   "bin": {
-    "semblance": "./bin/semblance.mjs"
+    "semblance": "bin/semblance.mjs"
   },
   "peerDependencies": {
     "@semblance-dev/rdf-engine-rust": "0.1.0",

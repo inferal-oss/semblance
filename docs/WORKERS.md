@@ -27,7 +27,7 @@ requests a page, a page again, an address that names nothing and the stylesheet.
 
 ```ts
 import { engineStore, renderDocument, warmRenderer } from '@semblance-dev/semblance/server'
-import wat from '@semblance-dev/semblance/wasm/wat.wasm' // a WebAssembly.Module
+import wat from '@semblance-dev/rdf-engine-wat/wasm' // a WebAssembly.Module
 import ontology from './build/ontology.ttl' // `semblance subset`
 import app from './app.ttl'
 

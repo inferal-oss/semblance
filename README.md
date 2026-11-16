@@ -23,7 +23,9 @@ examples, each with a Markdown page of the site's own text projection (generated
 own; [Building components](docs/COMPONENTS.md) covers rules, reactions, layers and integrating
 with your app; [AGENTS.md](AGENTS.md) has the ground rules for working on the framework. The npm
 package is `@semblance-dev/semblance` (`npm install @semblance-dev/semblance`), with
-`@semblance-dev/semblance-react` for React; [CHANGELOG.md](CHANGELOG.md) has the versions and
+`@semblance-dev/semblance-react` for React, and its engine's two builds in packages of their own
+(`@semblance-dev/rdf-engine-wat`, installed with it, and `@semblance-dev/rdf-engine-rust`, optional);
+[CHANGELOG.md](CHANGELOG.md) has the versions and
 [docs/RELEASING.md](docs/RELEASING.md) how they are made.
 
 **Only the views:** [Views without the framework](docs/VIEWS.md) is a smaller first step for an app

@@ -247,7 +247,7 @@ console.log(JSON.stringify(out))
 
 // For the release notes (docs/RELEASING.md).
 console.log(`Version: ${version}; engine ABI: ${abi}`)
-if (values.keep) console.log(`The projects: ${app}, ${bare}`)
+if (values.keep) console.log(`The tarballs: ${tarballs}; the projects: ${app}, ${bare}`)
 else rmSync(work, { recursive: true, force: true })
 if (failures.length) {
   console.error(`\n${failures.length} check(s) failed`)

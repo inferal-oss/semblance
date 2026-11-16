@@ -19,16 +19,19 @@ npm install @semblance-dev/semblance
 npm install --save-dev vite
 ```
 
-The package is compiled JavaScript with its type declarations, its ontologies (Turtle) and its
-WebAssembly engines. Its versions, and what changed in each, are in the [changelog](../CHANGELOG.md)
-(0.x: a minor version may break; [RELEASING.md](RELEASING.md)); to try work on `main` before it is
-released, `npm pack` a checkout and install the tarball.
+The package is compiled JavaScript with its type declarations and its ontologies (Turtle). Its
+default store, Semblance's own SPARQL engine, comes with it: `@semblance-dev/rdf-engine-wat`, a
+dependency. The engine's other build, `@semblance-dev/rdf-engine-rust` (the same results, a larger
+file), is an optional peer: install it only to use the `rust` store. The versions, and what changed in
+each, are in the [changelog](../CHANGELOG.md) (0.x: a minor version may break;
+[RELEASING.md](RELEASING.md)); to try work on `main` before it is released, `npm run pack:check --
+--keep` in a checkout leaves the four tarballs to install.
 
 In the browser the package is built into your app by your bundler. Today that bundler is
-[Vite](https://vite.dev): the package finds its ontology files and engine builds with
-`import.meta.glob`, which Vite resolves. Tell Vite not to pre-bundle it (pre-bundling would skip
-those imports and break Oxigraph's WASM loader), but to
-pre-bundle its Turtle parser, N3, which is CommonJS underneath:
+[Vite](https://vite.dev): the package finds its ontology files with `import.meta.glob`, and each
+engine package its WebAssembly with `new URL(…, import.meta.url)`, which Vite resolves. Tell Vite not
+to pre-bundle them (pre-bundling would skip those imports and break Oxigraph's WASM loader), but to
+pre-bundle the Turtle parser, N3, which is CommonJS underneath:
 
 ```ts
 // vite.config.ts
@@ -36,10 +39,20 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   optimizeDeps: {
-    exclude: ['@semblance-dev/semblance', 'oxigraph'],
+    exclude: ['@semblance-dev/semblance', '@semblance-dev/rdf-engine-wat', '@semblance-dev/rdf-engine-rust', 'oxigraph'],
     include: ['@semblance-dev/semblance > n3'],
   },
 })
+```
+
+A page has the wat engine. To offer the rust one too, install it and add it before the first store
+(`mount`, `initWeb`, `openStore`); it becomes a chunk of its own, fetched only when a store of its
+kind is made. In Node it is used once it is installed.
+
+```ts
+import { addEngine } from '@semblance-dev/semblance/web'
+
+addEngine('rust', () => import('@semblance-dev/rdf-engine-rust'))
 ```
 
 ## A page

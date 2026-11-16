@@ -1,6 +1,7 @@
 {
   "name": "@semblance-dev/semblance-react",
   "version": "0.1.0",
+  "private": true,
   "license": "MIT OR Apache-2.0",
   "type": "module",
   "description": "React as the component library under Semblance: hosted components drawn by React, with events and server rendering",

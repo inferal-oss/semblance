@@ -1,15 +1,18 @@
-# The npm packages as a consumer gets them (docs/RELEASING.md): build @semblance-dev/semblance and
-# @semblance-dev/semblance-react, pack them, check what the tarballs carry, install them into an empty
-# project and build and render examples/hello from them (the browser build, renderToString in
-# Node, the CLI, the declarations). On every pull request and push to main that touches what ships.
+# The npm packages as a consumer gets them (docs/RELEASING.md): build the four packages
+# (@semblance-dev/rdf-engine-wat, -rust, @semblance-dev/semblance, @semblance-dev/semblance-react),
+# pack them, check what the tarballs carry and that their versions agree, install them into an empty
+# project and build and render examples/hello from them (the browser build, renderToString in Node
+# with both engines, the CLI, the declarations), and the core without the optional rust engine; then
+# the Release workflow's publish as a dry run. On every pull request and push to main that touches
+# what ships.
 name: Package
 
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'bin/**', 'ontology/**', 'rdf-engine/**', 'layout-solver/**', 'packages/**', 'examples/hello/**', 'scripts/build-package.ts', 'scripts/pack-check.ts', 'scripts/package-exports.ts', 'package.json', 'package-lock.json', 'tsconfig.json', '.github/workflows/package.yml']
+    paths: ['src/**', 'bin/**', 'ontology/**', 'rdf-engine/**', 'layout-solver/**', 'packages/**', 'examples/hello/**', 'scripts/build-package.ts', 'scripts/pack-check.ts', 'scripts/package-exports.ts', 'scripts/release-version.ts', 'package.json', 'package-lock.json', 'tsconfig.json', '.github/workflows/package.yml', '.github/workflows/release.yml']
   pull_request:
-    paths: ['src/**', 'bin/**', 'ontology/**', 'rdf-engine/**', 'layout-solver/**', 'packages/**', 'examples/hello/**', 'scripts/build-package.ts', 'scripts/pack-check.ts', 'scripts/package-exports.ts', 'package.json', 'package-lock.json', 'tsconfig.json', '.github/workflows/package.yml']
+    paths: ['src/**', 'bin/**', 'ontology/**', 'rdf-engine/**', 'layout-solver/**', 'packages/**', 'examples/hello/**', 'scripts/build-package.ts', 'scripts/pack-check.ts', 'scripts/package-exports.ts', 'scripts/release-version.ts', 'package.json', 'package-lock.json', 'tsconfig.json', '.github/workflows/package.yml', '.github/workflows/release.yml']
   workflow_dispatch:
 
 permissions:
@@ -35,3 +38,9 @@ jobs:
       - run: npm run engine:build
       - run: npm run layout:build
       - run: npm run pack:check
+      # What the Release workflow publishes, in its order, with npm's own checks and nothing sent.
+      - name: npm publish --dry-run, the engines first
+        run: |
+          for dir in packages/rdf-engine-wat packages/rdf-engine-rust . packages/react; do
+            (cd "$dir" && npm publish --dry-run --access public --ignore-scripts)
+          done
