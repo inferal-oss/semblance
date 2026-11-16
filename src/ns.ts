@@ -422,6 +422,7 @@ export const POS = {
   FieldRow: NS.pos + 'FieldRow',
   rows: NS.pos + 'rows',
   RowSubgrid: NS.pos + 'RowSubgrid',
+  Subgrid: NS.pos + 'Subgrid',
   rowParts: NS.pos + 'rowParts',
   rowSpan: NS.pos + 'rowSpan',
   RowSpan: NS.pos + 'RowSpan',

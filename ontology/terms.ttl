@@ -1899,7 +1899,9 @@ lc:ContentFits a sem:Term .
 lc:Descendants a sem:Term .
 lc:Docked a sem:Term .
 lc:EachChild a sem:Term .
+lc:EachChildAtPart a sem:Term .
 lc:Field a sem:Term .
+lc:FieldBeside a sem:Term .
 lc:FieldLabel a sem:Term .
 lc:FieldRow a sem:Term .
 lc:Finding a sem:Term .
@@ -1917,10 +1919,12 @@ lc:Role a sem:Term .
 lc:SameBlockSize a sem:Term .
 lc:SameBottom a sem:Term .
 lc:SameInlineSize a sem:Term .
+lc:SameMiddle a sem:Term .
 lc:SameTop a sem:Term .
 lc:SingleLineControl a sem:Term .
 lc:WithParts a sem:Term .
 lc:atWidth a sem:Term .
+lc:besideFieldOnItsControl a sem:Term .
 lc:contentStaysInCards a sem:Term .
 lc:derive a sem:Term .
 lc:fieldRowControlsShareHeight a sem:Term .

@@ -359,28 +359,45 @@ sty:Raised rdfs:label "Raised"@en , "Піднята"@uk , "Erhöht"@de , "مرت
     sty:declares [ sty:property "flex-basis" ; sty:raw "100%" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] .
 
-# --- fields side by side (pos:FieldRow) ------------------------------------------------------------
-# Each field's parts sit in the row's tracks: label, control, help, error. A field's own gap would put
-# space under the tracks it leaves empty (no help, no error), so in a row the parts are spaced by
-# their own margins instead: an empty track is no taller than nothing. Popups (a date's month grid, a
-# time list) are out of the flow and take no track.
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span]" ;
+# --- fields side by side (pos:FieldRow), and fields in a row of a list (pos:Subgrid) -----------------
+# Each field's parts sit in the row's tracks: label, control, help, error. A part goes in its track by
+# its role (data-sem-part): a field without a label leaves the label track empty (an empty first
+# item), so its control is in the control track like every other field's. A field's own gap would
+# put space under the tracks it leaves empty (no help, no error), so in a row the parts are spaced
+# by their own margins instead: the label's below it, help and errors above them; an empty track is
+# no taller than nothing, and the control track is the control alone. Popups (a date's month grid,
+# a time list) are out of the flow and take no track. A row of a list (pos:Subgrid) does this only
+# when it holds a field (#518).
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span]" ;
     sty:declares [ sty:property "row-gap" ; sty:raw "0" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span] > :not(:first-child, [role=dialog], [role=listbox])" ;
-    sty:declares [ sty:property "margin-block-start" ; sty:token tok:space-2 ] .
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span]:not(:has(> [data-sem-part=field-label]))::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] .
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span] > [data-sem-part=field-label]" ;
+    sty:declares [ sty:property "margin-block-end" ; sty:token tok:space-2 ] .
+# The control track is as tall as the tallest thing in it (a toolbar whose buttons wrap): a
+# single-line control is centred in it, as what sits beside it is, so they stay on one line.
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span] > [data-sem-part=single-line-control]" ;
+    sty:declares [ sty:property "align-self" ; sty:raw "center" ] .
 # Help and errors wrap to their column: they never size it, so an error that appears does not move
 # the columns.
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span] > :nth-child(n+3):not([role=dialog], [role=listbox])" ;
-    sty:declares [ sty:property "contain" ; sty:raw "inline-size" ] .
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span] > :not([data-sem-part=field-label]) ~ :not([role=dialog], [role=listbox])" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:token tok:space-2 ] ,
+                 [ sty:property "contain" ; sty:raw "inline-size" ] .
 # What is not a field (a button acting on the fields, a switch, a segmented control) sits beside the
-# controls, at its own width, centred on their row: a shorter control (a switch) lines up on their
+# controls, at its own width, centred on their track: a shorter control (a switch) lines up on their
 # middle, one of the control height on their edges.
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-row-span])" ;
     sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
                  [ sty:property "justify-self" ; sty:raw "start" ] ,
-                 [ sty:property "align-self" ; sty:raw "center" ] ,
-                 [ sty:property "margin-block-start" ; sty:token tok:space-2 ] .
+                 [ sty:property "align-self" ; sty:raw "center" ] .
+# In a row of a list the other cells (a tag, a unit, a status) keep the column they are in: placed
+# column by column, a cell in the control track does not take the field's column first.
+[] a sty:StyleRule ; sty:when pos:Subgrid ; sty:state ":has(> [data-sem-row-span])" ;
+    sty:declares [ sty:property "grid-auto-flow" ; sty:raw "column" ] .
+[] a sty:StyleRule ; sty:when pos:Subgrid ; sty:state ":has(> [data-sem-row-span])" ; sty:part "> :not([data-sem-row-span])" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
+                 [ sty:property "align-self" ; sty:raw "center" ] .
 # On a phone the fields wrap, two or one to a line (each line with rows of its own).
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "grid-auto-flow" ; sty:raw "row" ] ,

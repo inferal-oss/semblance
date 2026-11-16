@@ -54,7 +54,7 @@ lc:over a owl:ObjectProperty ; rdfs:domain lc:Invariant ;
     rdfs:comment "A class: each of its instances is one group (or, for a Fits relation, the container)."@en .
 lc:members a owl:ObjectProperty ; rdfs:domain lc:Invariant ;
     rdfs:label "Members"@en , "Учасники"@uk , "Mitglieder"@de , "الأعضاء"@ar ;
-    rdfs:comment "lc:EachChild (one member per child component: its first lc:part, or its root), lc:Parts (every lc:part inside), lc:Descendants (every component inside, but not inside a scroller in between)."@en .
+    rdfs:comment "lc:EachChild (one member per child component: its first lc:part, or its root), lc:EachChildAtPart (one per child: its first lc:part; a child that names no parts, itself), lc:Parts (every lc:part inside), lc:Descendants (every component inside, but not inside a scroller in between)."@en .
 lc:part a owl:ObjectProperty ; rdfs:domain lc:Invariant ; rdfs:range lc:Role ;
     rdfs:label "Part"@en , "Частина"@uk , "Teil"@de , "الجزء"@ar .
 lc:tolerance a owl:DatatypeProperty ; rdfs:domain lc:Invariant ; rdfs:range xsd:decimal ;
@@ -65,6 +65,8 @@ lc:atWidth a owl:ObjectProperty ; rdfs:range sty:WidthClass ;
     rdfs:comment "A width class (sty:CompactWidth, ...). On an invariant: it holds only there. On a part: it has its role only there (a pill is a choice's control when wide, its select on a phone). Without one, at every width."@en .
 
 lc:EachChild a sem:Value ; rdfs:label "Each child"@en , "Кожна дочірня"@uk , "Jedes Kind"@de , "كل فرع"@ar .
+lc:EachChildAtPart a sem:Value ; rdfs:label "Each child, at its part"@en , "Кожна дочірня, за її частиною"@uk , "Jedes Kind, an seinem Teil"@de , "كل فرع، عند جزئه"@ar ;
+    rdfs:comment "One member per child component: its first part of the invariant's role (a field's control), or the child itself where it names no parts (a tag, a button beside the field). A child that names parts but not that one (a text area) is left out."@en .
 lc:Parts a sem:Value ; rdfs:label "Parts"@en , "Частини"@uk , "Teile"@de , "الأجزاء"@ar .
 lc:Descendants a sem:Value ; rdfs:label "Everything inside"@en , "Усе всередині"@uk , "Alles darin"@de , "كل ما بداخله"@ar .
 
@@ -91,6 +93,8 @@ lc:NavItem a lc:Role ; sem:slug "nav-item" ;
     rdfs:comment "One destination of a navigation list."@en .
 
 c:TextField rdfs:subClassOf lc:WithParts .
+c:TextArea rdfs:subClassOf lc:WithParts .
+c:Field rdfs:subClassOf lc:WithParts .
 c:ShapeField rdfs:subClassOf lc:WithParts .
 c:Choice rdfs:subClassOf lc:WithParts .
 c:DateField rdfs:subClassOf lc:WithParts .
@@ -159,6 +163,19 @@ WHERE {
   ?a a ?ka . lc:Field lc:includes ?ka . ?b a ?kb . lc:Field lc:includes ?kb .
 }""" .
 
+lc:FieldBeside a owl:Class ;
+    rdfs:label "Something beside a field"@en , "Щось поруч із полем"@uk , "Etwas neben einem Feld"@de , "شيء بجانب حقل"@ar ;
+    rdfs:comment "A row whose fields take its tracks (pos:FieldRow, or a row of a list, pos:Subgrid) with something in it that is not a field: a tag, a unit, a button (#518: the budget sheet's tags)."@en ;
+    lc:derive """
+CONSTRUCT { ?row a lc:FieldBeside }
+WHERE {
+  ?row pos:layout ?layout FILTER(?layout IN (pos:FieldRow, pos:Subgrid))
+  ?row c:children ?list .
+  ?list rdf:rest*/rdf:first ?field . ?field a ?kf . lc:Field lc:includes ?kf .
+  ?list rdf:rest*/rdf:first ?other . FILTER(isIRI(?other))
+  FILTER NOT EXISTS { ?other a ?ko . lc:Field lc:includes ?ko }
+}""" .
+
 lc:Page a owl:Class ;
     rdfs:label "Page"@en , "Сторінка"@uk , "Seite"@de , "الصفحة"@ar ;
     rdfs:comment "The document in its viewport (rnd:Viewport)."@en .
@@ -189,6 +206,12 @@ lc:groupMembers a owl:NamedIndividual ;
     ?inv lc:members lc:EachChild . FILTER NOT EXISTS { ?inv lc:part ?p }
     ?m rnd:parent ?sb . FILTER NOT EXISTS { ?m lc:role ?r3 }
   } UNION {
+    ?inv lc:members lc:EachChildAtPart ; lc:part ?role .
+    ?cb rnd:parent ?sb . FILTER NOT EXISTS { ?cb lc:role ?r7 }
+    OPTIONAL { ?pm lc:role ?role ; lc:index 0 ; rnd:parent ?cb . }
+    FILTER(BOUND(?pm) || NOT EXISTS { ?anyPart lc:role ?r8 ; rnd:parent ?cb })
+    BIND(COALESCE(?pm, ?cb) AS ?m)
+  } UNION {
     ?inv lc:members lc:Parts ; lc:part ?role .
     ?m lc:role ?role ; rnd:parent+ ?sb .
   }""" .
@@ -204,6 +227,9 @@ lc:SameTop a lc:Relation ;
     lc:measure rnd:y .
 lc:SameBottom a lc:Relation ;
     rdfs:label "Same bottom"@en , "Однаковий низ"@uk , "Gleiche Unterkante"@de , "نفس الحافة السفلية"@ar .
+lc:SameMiddle a lc:Relation ;
+    rdfs:label "Same middle"@en , "Однакова середина"@uk , "Gleiche Mitte"@de , "نفس المنتصف"@ar ;
+    rdfs:comment "All members are centred on one line across the row: their middles (rnd:y + rnd:height / 2) agree, whatever their heights (a tag beside an input)."@en .
 lc:FitsInline a lc:Relation ;
     rdfs:label "Fits across"@en , "Вміщується вшир"@uk , "Passt in die Breite"@de , "يتسع عرضًا"@ar .
 lc:FitsWithin a lc:Relation ;
@@ -234,10 +260,10 @@ SELECT ?inv ?scope ?member ?by WHERE {
   {
     SELECT ?inv ?scope ?line (MAX(?v) - MIN(?v) AS ?by) (SAMPLE(?tol) AS ?t) WHERE {
       ?inv a lc:Invariant ; lc:relation ?rel ; lc:over ?cls ; lc:tolerance ?tol .
-      FILTER(?rel IN (lc:SameBlockSize, lc:SameInlineSize, lc:SameTop, lc:SameBottom))
+      FILTER(?rel IN (lc:SameBlockSize, lc:SameInlineSize, lc:SameTop, lc:SameBottom, lc:SameMiddle))
       %groupMembers%
       ?m rnd:y ?y ; rnd:height ?h ; rnd:width ?w .
-      BIND(IF(?rel = lc:SameBlockSize, ?h, IF(?rel = lc:SameInlineSize, ?w, IF(?rel = lc:SameTop, ?y, ?y + ?h))) AS ?v)
+      BIND(IF(?rel = lc:SameBlockSize, ?h, IF(?rel = lc:SameInlineSize, ?w, IF(?rel = lc:SameTop, ?y, IF(?rel = lc:SameMiddle, ?y + ?h * 0.5, ?y + ?h)))) AS ?v)
       OPTIONAL { ?m rnd:parent ?mc . ?mc rnd:line ?ln . ?mc rnd:parent ?sb }
       OPTIONAL { ?m rnd:line ?ln2 . ?m rnd:parent ?sb }
       BIND(COALESCE(?ln, ?ln2, 0) AS ?line)
@@ -304,6 +330,10 @@ lc:fieldRowControlsShareTops a lc:Invariant ;
 lc:fieldRowControlsShareHeight a lc:Invariant ;
     rdfs:label "Fields side by side are one height"@en , "Поля поруч однієї висоти"@uk , "Felder nebeneinander gleich hoch"@de , "الحقول المتجاورة بارتفاع واحد"@ar ;
     lc:relation lc:SameBlockSize ; lc:over lc:FieldRow ; lc:members lc:EachChild ; lc:part lc:SingleLineControl ; lc:tolerance 0.5 .
+lc:besideFieldOnItsControl a lc:Invariant ;
+    rdfs:label "Beside a field, centred on its control"@en , "Поруч із полем — по центру його елемента"@uk , "Neben einem Feld, mittig zu seinem Steuerelement"@de , "بجانب الحقل، في منتصف عنصره"@ar ;
+    rdfs:comment "What sits beside a field in a row (a tag, a unit, a button) is centred on the field's control, not on the field's whole box with its label and help (#518)."@en ;
+    lc:relation lc:SameMiddle ; lc:over lc:FieldBeside ; lc:members lc:EachChildAtPart ; lc:part lc:SingleLineControl ; lc:tolerance 1.0 .
 lc:formControlsShareHeight a lc:Invariant ;
     rdfs:label "A form's single-line controls are one height"@en , "Однорядкові елементи форми однієї висоти"@uk , "Einzeilige Steuerelemente eines Formulars gleich hoch"@de , "عناصر النموذج ذات السطر الواحد بارتفاع واحد"@ar ;
     rdfs:comment "Text, select, date and number inputs in one form have the control height (#34)."@en ;
