@@ -3,10 +3,22 @@
 @prefix change: <https://semblance.dev/change/> .
 @prefix c: <https://semblance.dev/ns/component#> .
 
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
 change:rdf-editor-entry-pages a chg:Change ;
     rdfs:label "Page the RDF editor's top-level resources"@en ;
-    chg:motivation "Large RDF documents can ask the editor to build thousands of rows before the reader can open a single resource." ;
-    chg:substance "An RDF editor with c:entryPageSize renders a window of its named resources in IRI order. c:page is one-based and defaults to 1. Page changes reuse the document graph and replace only the visible rows. Resources outside the current page can still be expanded in place when reached as objects." ;
-    chg:forwardGuide "Existing documents need no changes. Set c:entryPageSize on the editor to opt in and update c:page when the application changes pages." ;
-    chg:backwardGuide "Remove c:entryPageSize and c:page. The editor again shows all resources listed in c:entry." ;
-    chg:affects c:RdfEditor, c:RdfTerm .
+    chg:issue <https://github.com/inferal-oss/semblance/issues/525> ;
+    chg:motivation """Large RDF documents can ask the editor to build thousands of rows before the reader can open a
+single resource.""" ;
+    chg:substance """An RDF editor with c:entryPageSize renders a window of its named resources (c:entry) in IRI order:
+c:entryPageSize of them, from page c:page (1-based, 1 when absent; a page past the end shows none). A maintained view
+(c:RdfEditorEntryWindow) holds the window and c:RdfEditorPage derives the page's resources on the editor
+(c:rdfPageEntry), so a page change reuses the document graph and replaces only the visible rows. A link jumps only to a
+resource of the page; one to a resource of another page opens in place like any other IRI with statements of its own.
+Arrows (c:arrows) join rows of the page only. An editor without c:entryPageSize renders and behaves as before. Nothing
+in the editor changes the page: the application writes c:page.""" ;
+    chg:forwardGuide """Existing documents need no changes. Set c:entryPageSize on the editor to opt in, and update c:page
+when the application changes pages; keep the document's c:entry statements in the graph.""" ;
+    chg:backwardGuide """Remove c:entryPageSize and c:page from editors. The editor again shows all resources listed in
+c:entry, and links jump to any of them.""" ;
+    chg:affects c:RdfEditor , c:RdfTerm .

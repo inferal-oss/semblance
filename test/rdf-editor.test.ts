@@ -295,7 +295,80 @@ ${rows}`
     expect(fn.html()).toBe(sparql.html())
   })
 
-  const EDITABLE = `@prefix c: <https://semblance.dev/ns/component#> . @prefix beh: <https://semblance.dev/ns/behaviour#> . @prefix ui: <https://semblance.dev/demo#> .
+  /** An editor of n resources (lib:page000 …), each linking to the next, paged by `size`. */
+  const paged = (n: number, size: number, extra = '') => `@prefix c: <https://semblance.dev/ns/component#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix lib: <https://semblance.dev/demo/library#> .
+ui:paged-rdf a c:RdfEditor ; c:entryPageSize ${size} ; c:expandDepth 1 .
+${extra}
+${Array.from({ length: n }, (_, i) => {
+  const key = String(i).padStart(3, '0')
+  const next = i + 1 < n ? ` ; lib:next lib:page${String(i + 1).padStart(3, '0')}` : ''
+  return `ui:paged-rdf c:entry lib:page${key} . lib:page${key} lib:title "Entry ${key}"${next} .`
+}).join('\n')}`
+  const PAGED = UI + 'paged-rdf'
+  const setOne = (m: ReturnType<typeof mount>, p: string, value: string | number) =>
+    m.apply({
+      remove: m.store.match(m.nn(PAGED), m.nn(p), null),
+      add: [m.f.quad(m.nn(PAGED), m.nn(p), typeof value === 'number' ? m.f.literal(String(value), m.nn(NS.xsd + 'integer')) : m.nn(value))],
+    })
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`renders the same paged HTML with SPARQL and function rules after every step (${kind})`, () => {
+      const both = [mount(kind, 'sparql', paged(24, 3), [], PAGED), mount(kind, 'function', paged(24, 3), [], PAGED)]
+      const tops = (m: ReturnType<typeof mount>) => [...m.editor().querySelectorAll(':scope > .sem-tree > [role=treeitem] > .sem-row > .sem-label')].map((l) => l.textContent)
+      const same = (step: string, shown?: string[]) => {
+        expect(both[1]!.html(), step).toBe(both[0]!.html())
+        if (shown) expect(tops(both[0]!), step).toEqual(shown)
+      }
+      const each = (act: (m: ReturnType<typeof mount>) => void) => both.forEach(act)
+      same('page 1', ['lib:page000', 'lib:page001', 'lib:page002'])
+      // A link to a resource of the page jumps; one to a resource of another page does not.
+      const link = (m: ReturnType<typeof mount>, from: string, to: string) => m.item(from, 'lib:next', to).querySelector(':scope > .sem-row > .sem-label')!.getAttribute('data-sem-link')
+      expect(link(both[0]!, 'lib:page000', 'lib:page001')).toBe('resource')
+      expect(link(both[0]!, 'lib:page002', 'lib:page003')).not.toBe('resource')
+      each((m) => setOne(m, C + 'page', 2))
+      same('page 2', ['lib:page003', 'lib:page004', 'lib:page005'])
+      each((m) => setOne(m, C + 'entryPageSize', 5))
+      same('a larger page', ['lib:page005', 'lib:page006', 'lib:page007', 'lib:page008', 'lib:page009'])
+      each((m) => setOne(m, C + 'arrows', C + 'ArrowsOn'))
+      same('all arrows')
+      // Arrows join rows of the page only: four links among five rows.
+      expect(both[0]!.editor().querySelectorAll('[data-sem-c=connector]').length).toBe(4)
+      each((m) => setOne(m, C + 'page', 1))
+      same('back to page 1', ['lib:page000', 'lib:page001', 'lib:page002', 'lib:page003', 'lib:page004'])
+      each((m) => m.apply({ add: [m.f.quad(m.nn(PAGED), m.nn(C + 'entry'), m.nn(LIB + 'page000a'))] }))
+      same('a resource that sorts into the page', ['lib:page000', 'lib:page000a', 'lib:page001', 'lib:page002', 'lib:page003'])
+      each((m) => m.apply({ remove: m.store.match(m.nn(PAGED), m.nn(C + 'entry'), m.nn(LIB + 'page001')) }))
+      same('a resource of the page removed', ['lib:page000', 'lib:page000a', 'lib:page002', 'lib:page003', 'lib:page004'])
+      each((m) => setOne(m, C + 'page', 9))
+      same('a page past the end', [])
+      each((m) => m.apply({ remove: m.store.match(m.nn(PAGED), m.nn(C + 'entryPageSize'), null) }))
+      same('paging off')
+      expect(tops(both[0]!)).toHaveLength(24)
+    })
+  }
+
+  it('costs a page change the rows of the page, however many resources the document has', () => {
+    const counters = (m: ReturnType<typeof mount>) => ({
+      ruleRuns: m.screen.engine.stats.ruleRuns,
+      written: m.screen.engine.stats.derivedAdded + m.screen.engine.stats.derivedRemoved,
+      viewRows: m.runtime.views.totals.rowsIn,
+    })
+    const turn = (kind: Kind, prefer: 'sparql' | 'function', n: number) => {
+      const m = mount(kind, prefer, paged(n, 3), [], PAGED)
+      setOne(m, C + 'page', 2)
+      const a = counters(m)
+      setOne(m, C + 'page', 5)
+      const b = counters(m)
+      expect(m.objects(PAGED, C + 'rdfPageEntry').sort()).toEqual([LIB + 'page012', LIB + 'page013', LIB + 'page014'])
+      return Object.fromEntries(Object.entries(b).map(([k, v]) => [k, v - a[k as keyof typeof a]]))
+    }
+    for (const kind of ['oxigraph', 'wat'] as const)
+      for (const prefer of ['sparql', 'function'] as const) expect(turn(kind, prefer, 240), `${kind} ${prefer}`).toEqual(turn(kind, prefer, 24))
+  })
+
+  const EDITABLE =`@prefix c: <https://semblance.dev/ns/component#> . @prefix beh: <https://semblance.dev/ns/behaviour#> . @prefix ui: <https://semblance.dev/demo#> .
 ui:dt-rdf-editor c:editable true .
 ui:rdf-edit a c:Stack ; c:children ( ui:rdf-undo ui:dt-rdf-editor ) .
 ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`

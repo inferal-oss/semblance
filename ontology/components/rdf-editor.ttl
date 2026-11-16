@@ -251,11 +251,12 @@ c:RdfEditorEntries a sem:Rendering ;
     sem:targets c:RdfEditor ;
     sem:stratum 0 ;
     sem:unless c:entryPageSize ; sem:forEach c:entry ;
-    sem:watches rdf:type , c:editable , c:validated , c:diff , c:expandDepth , c:current .
+    sem:watches rdf:type , c:editable , c:validated , c:diff , c:expandDepth , c:current , c:entryPageSize .
+# Paged (c:entryPageSize): the resources of the page (c:rdfPageEntry, below), member-wise, so a page costs its rows.
 c:RdfEditorPagedEntries a sem:Rendering ;
     sem:targets c:RdfEditor ; sem:stratum 0 ;
     sem:requires c:entryPageSize ; sem:forEach c:rdfPageEntry ;
-    sem:watches rdf:type , c:editable , c:validated , c:diff , c:expandDepth , c:current .
+    sem:watches rdf:type , c:editable , c:validated , c:diff , c:expandDepth , c:current , c:entryPageSize .
 c:RdfEditorEntries-fn a sem:Rule ; sem:implements c:RdfEditorEntries ; sem:function "rdf-editor:entry" .
 c:RdfEditorEntries-sparql a sem:Rule ;
     sem:implements c:RdfEditorEntries ;
@@ -372,9 +373,11 @@ WHERE {
   $this a/rdfs:subClassOf* c:RdfEditor ; c:arrows ?mode .
   FILTER(?mode IN (c:ArrowsOn, c:ArrowsCurrent))
   OPTIONAL { $this c:current ?current }
-  $this c:entry ?s . FILTER(isIRI(?s))
+  # The resources with rows: those of the page when the editor is paged.
+  BIND(IF(EXISTS { $this c:entryPageSize ?size }, c:rdfPageEntry, c:entry) AS ?shown)
+  $this ?shown ?s . FILTER(isIRI(?s))
   ?s ?p ?o . FILTER(isIRI(?o) && !sameTerm(?o, ?s))
-  $this c:entry ?o .
+  $this ?shown ?o .
   FILTER(?mode = c:ArrowsOn || (BOUND(?current) && (sameTerm(?s, ?current) || sameTerm(?o, ?current))))
   BIND(IF(BOUND(?current) && (sameTerm(?s, ?current) || sameTerm(?o, ?current)), sty:Solid, ?none) AS ?emphasis)
   BIND(IRI(CONCAT(STR($this), "/~arrows")) AS ?arrows)
@@ -508,11 +511,9 @@ WHERE {
   # Open, it shows its reifiers; and its statements when it nests by nature, or was opened on purpose.
   BIND(?open && ?hasStatements && (?depth = 0 || ?blank || ?list || ?reifier || COALESCE(?own, false)) AS ?nest)
   # A link: to a resource of the document (jump), else to a class or a property (the Reference).
-  BIND(?depth > 0 && isIRI(?t) && !?blank && EXISTS {
-    ?editor ?entryProperty ?t .
-    BIND(IF(EXISTS { ?editor c:entryPageSize ?any }, c:rdfPageEntry, c:entry) AS ?chosenEntryProperty)
-    FILTER(?entryProperty = ?chosenEntryProperty)
-  } AS ?jumps)
+  # (A resource with a row: of the page when the editor is paged.)
+  BIND(IF(EXISTS { ?editor c:entryPageSize ?pageSize }, c:rdfPageEntry, c:entry) AS ?shownEntry)
+  BIND(?depth > 0 && isIRI(?t) && !?blank && EXISTS { ?editor ?shownEntry ?t } AS ?jumps)
   BIND(!?jumps && ?vocab AS ?goes)
   BIND(IF(?jumps, ?t, ?none) AS ?jumpsTo)
   BIND(IF(?goes, ?t, ?none) AS ?goesTo)

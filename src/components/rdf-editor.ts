@@ -130,6 +130,9 @@ const editor: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** The editor's property for the resources it shows rows of: c:rdfPageEntry when it is paged (c:entryPageSize), else c:entry. */
+const shownEntry = (ctx: RuleContext, editor: Term) => (ctx.match(editor, C + 'entryPageSize', null).length > 0 ? C + 'rdfPageEntry' : C_ENTRY)
+
 /** Read the bounded, ordered view. Stores without SPARQL slice their entry list. */
 const page: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
@@ -221,7 +224,7 @@ const arrows: FnRule = (ctx, focus) => {
   if (mode !== C + 'ArrowsOn' && mode !== C + 'ArrowsCurrent') return []
   const o = ctx.out(focus)
   const current = ctx.object(focus, C_CURRENT)
-  const entries = ctx.objects(focus, C_ENTRY).filter(named)
+  const entries = ctx.objects(focus, shownEntry(ctx, focus)).filter(named)
   const isEntry = new Set(entries.map((e) => e.value))
   const layer = o.node('arrows')
   for (const s of entries) {
@@ -648,9 +651,8 @@ const term: FnRule = (ctx, focus) => {
   const shown = shownTerm
   const badge = f.reifier ? phrase(ctx, 'RdfAboutPhrase') : f.lit && f.lang !== '' ? '@' + f.lang : f.named !== undefined && f.lit ? f.compactName : undefined
   const note = t.termType === 'NamedNode' && !f.blank ? saysMore(text(ctx, t, RDFS_LABEL), t.value) : undefined
-  const paged = ctx.match(f.editor, C + 'entryPageSize', null).length > 0
-  const jumps = f.depth > 0 && t.termType === 'NamedNode' && !f.blank &&
-    (paged ? ctx.match(f.editor, C + 'rdfPageEntry', t).length > 0 : ctx.untraced(() => ctx.match(f.editor, C_ENTRY, t).length > 0))
+  // A resource of the document (of its page, when it is paged), read untraced: the SPARQL rule declares no dependency on it.
+  const jumps = f.depth > 0 && t.termType === 'NamedNode' && !f.blank && ctx.untraced(() => ctx.match(f.editor, shownEntry(ctx, f.editor), t).length > 0)
   const goes = !jumps && f.vocab
   const link = jumps ? 'resource' : goes ? 'term' : undefined
   const description = f.reifier ? phrase(ctx, 'RdfReifierPhrase') : f.list ? phrase(ctx, 'RdfListPhrase').replace('{n}', String(f.count)) : f.blank ? phrase(ctx, 'RdfNestedPhrase') : undefined
