@@ -393,12 +393,12 @@ sty:Raised rdfs:label "Raised"@en , "Піднята"@uk , "Erhöht"@de , "مرت
 # What is not a field (a button acting on the fields, a switch, a segmented control) sits beside the
 # controls, at its own width, centred on their track: a shorter control (a switch) lines up on their
 # middle, one of the control height on their edges, and a taller one makes the track as tall as it is.
-# Its cell (no component of its own) is a subgrid of the line, with nothing in the label track.
+# Its cell (no component of its own) is a subgrid of the line, with nothing in the label track; at
+# least as wide as the item, so a button keeps its one line while the fields beside it narrow.
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-c])" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
-                 [ sty:property "row-gap" ; sty:raw "0" ] ,
-                 [ sty:property "min-width" ; sty:raw "0" ] .
+                 [ sty:property "row-gap" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-c]) > *" ;
     sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
                  [ sty:property "justify-self" ; sty:raw "start" ] ,
