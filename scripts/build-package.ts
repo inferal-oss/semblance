@@ -1,5 +1,7 @@
 // The packages' build (docs/RELEASING.md): JavaScript and declarations for every entry of
-// @inferal-oss/semblance and @inferal-oss/semblance-react, into lib/ and packages/react/lib/.
+// @semblance-dev/rdf-engine-wat and @semblance-dev/rdf-engine-rust (packages/rdf-engine-*/lib/: the
+// engine build, its kind and ABI), @semblance-dev/semblance (lib/) and @semblance-dev/semblance-react
+// (packages/react/lib/), in that order: each package's declarations are what the next one imports.
 //
 //   npx tsx scripts/build-package.ts     (npm run build:package; npm pack runs it first)
 //
@@ -9,7 +11,7 @@
 // build did not make. A new entry is a line in `exports`.
 //
 // lib/ mirrors the repository's layout (lib/src/…, lib/rdf-engine/host/…, lib/bin/…), and the files
-// the code reads beside itself at run time are copied into it (lib/ontology/, the engines' .wasm),
+// the code reads beside itself at run time are copied into it (lib/ontology/, the layout solver's .wasm),
 // so the paths the sources use relative to their own module (`../../ontology/`) hold in the output.
 // The repository itself runs from source: Vite, Vitest and tsx resolve the packages by name to src/
 // (vite.config.ts, tsconfig.json `paths`), never to lib/.
@@ -95,28 +97,97 @@ function verify(manifest: Manifest, packageDir: string): void {
 }
 
 const read = (file: string) => JSON.parse(readFileSync(file, 'utf8')) as Manifest
+// npm packs a package's own licence files only.
+const licences = (dir: string) => {
+  for (const file of ['LICENSE-APACHE', 'LICENSE-MIT']) cpSync(join(repo, file), join(dir, file))
+}
 
-// --- @inferal-oss/semblance -------------------------------------------------------------------
+// --- @semblance-dev/rdf-engine-wat, @semblance-dev/rdf-engine-rust ------------------------------
+
+// Each is its build's WebAssembly and a module naming it, its kind and the engine ABI it implements
+// (the host's ABI_VERSION when it was built); the host that runs it is the core's (rdf-engine/host/).
+// In the repository the same names come from packages/rdf-engine-*/src/index.ts, over rdf-engine/build/.
+const abi = Number(readFileSync(join(repo, 'rdf-engine/host/engine.ts'), 'utf8').match(/export const ABI_VERSION = (\d+)/)?.[1])
+if (!abi) throw new Error('No ABI_VERSION in rdf-engine/host/engine.ts')
+const ENGINE_KINDS = ['wat', 'rust'] as const
+const engineNames: string[] = []
+for (const kind of ENGINE_KINDS) {
+  const dir = join(repo, `packages/rdf-engine-${kind}`)
+  const manifest = read(join(dir, 'package.json'))
+  const wasm = join(repo, `rdf-engine/build/${kind}.wasm`)
+  if (!existsSync(wasm)) throw new Error(`No ${kind} engine build at rdf-engine/build/${kind}.wasm (npm run engine:build)`)
+  const out = join(dir, 'lib')
+  rmSync(out, { recursive: true, force: true })
+  mkdirSync(out, { recursive: true })
+  cpSync(wasm, join(out, `${kind}.wasm`))
+  writeFileSync(
+    join(out, 'index.js'),
+    `// ${manifest.name}: Semblance's ${kind} engine build (docs/RELEASING.md in the repository).
+
+/** Which build this is: the store kind that runs it. */
+export const kind = '${kind}'
+
+/** The engine ABI it implements (rdf-engine/ABI.md); @semblance-dev/semblance checks it before it loads the build. */
+export const abi = ${abi}
+
+/** The build's WebAssembly, beside this module: a file: URL in Node, the asset's URL in a bundle. */
+export const wasm = new URL('./${kind}.wasm', import.meta.url)
+`,
+  )
+  writeFileSync(
+    join(out, 'index.d.ts'),
+    `/** Which build this is: the store kind that runs it. */
+export declare const kind: '${kind}'
+
+/** The engine ABI it implements (rdf-engine/ABI.md); @semblance-dev/semblance checks it before it loads the build. */
+export declare const abi: number
+
+/** The build's WebAssembly, beside this module: a file: URL in Node, the asset's URL in a bundle. */
+export declare const wasm: URL
+`,
+  )
+  writeFileSync(
+    join(out, 'wasm.d.ts'),
+    `/** The build's WebAssembly, as a platform that imports .wasm files hands it over (a Cloudflare Worker: a compiled module). */
+declare const module: WebAssembly.Module
+export default module
+`,
+  )
+  licences(dir)
+  verify(manifest, dir)
+  engineNames.push(manifest.name)
+}
+
+// --- @semblance-dev/semblance -------------------------------------------------------------------
 
 const core = read(join(repo, 'package.json'))
 const lib = join(repo, 'lib')
-const engines = globSync('rdf-engine/build/*.wasm', { cwd: repo })
-if (!engines.length) throw new Error('No engine builds in rdf-engine/build (npm run engine:build)')
 const coreEntries = [...sources(core, 'lib', repo), ...Object.values(core.bin ?? {}).map((b) => b.replace(/^\.\//, '').replace(/\.mjs$/, '.ts')).filter((b) => existsSync(join(repo, b)))]
 compile(repo, lib, coreEntries)
+// The core meets the engine packages in src/store/engines/: in the repository their own modules, in
+// the package imports of the packages (a dependency and an optional peer), not copies of them.
+rmSync(join(lib, 'packages'), { recursive: true, force: true })
+for (const kind of ENGINE_KINDS) {
+  const name = `@semblance-dev/rdf-engine-${kind}`
+  const seam = join(lib, `src/store/engines/${kind}`)
+  if (!existsSync(seam + '.js')) throw new Error(`The core no longer imports ${name} through src/store/engines/${kind}.ts`)
+  const text = `// ${name}, a package of its own (docs/RELEASING.md in the repository).\nexport * from '${name}';\n`
+  writeFileSync(seam + '.js', text)
+  writeFileSync(seam + '.d.ts', text)
+}
 // What the code reads beside itself at run time, and the declarations-only entry.
 // ontology/vendor/ is read at build time only (scripts/gen-rdfhtml-vocab.ts).
 cpSync(join(repo, 'ontology'), join(lib, 'ontology'), { recursive: true, filter: (from) => !from.startsWith(join(repo, 'ontology', 'vendor')) })
-for (const file of [...engines, ...globSync('layout-solver/build/*.wasm', { cwd: repo })]) {
+for (const file of globSync('layout-solver/build/*.wasm', { cwd: repo })) {
   mkdirSync(dirname(join(lib, file)), { recursive: true })
   cpSync(join(repo, file), join(lib, file))
 }
 for (const file of globSync('src/**/*.d.ts', { cwd: repo })) cpSync(join(repo, file), join(lib, file))
 verify(core, repo)
 
-// --- @inferal-oss/semblance-react -------------------------------------------------------------
+// --- @semblance-dev/semblance-react -------------------------------------------------------------
 
-// Its imports of @inferal-oss/semblance resolve to the declarations just built, so they stay imports
+// Its imports of @semblance-dev/semblance resolve to the declarations just built, so they stay imports
 // of the package (a peer dependency) rather than copies of its sources.
 const reactDir = join(repo, 'packages/react')
 const react = read(join(reactDir, 'package.json'))
@@ -126,8 +197,7 @@ for (const [key, value] of Object.entries(core.exports)) {
   coreTypes[core.name + key.slice(1)] = [relative(join(reactDir, 'lib'), join(repo, value.types))]
 }
 compile(join(reactDir, 'src'), join(reactDir, 'lib'), sources(react, 'lib', join(reactDir, 'src')), coreTypes)
-// npm packs a package's own licence files only.
-for (const file of ['LICENSE-APACHE', 'LICENSE-MIT']) cpSync(join(repo, file), join(reactDir, file))
+licences(reactDir)
 verify(react, reactDir)
 
-console.log(`Built ${core.name} (lib/) and ${react.name} (packages/react/lib/)`)
+console.log(`Built ${engineNames.join(', ')} (packages/rdf-engine-*/lib/, engine ABI ${abi}), ${core.name} (lib/) and ${react.name} (packages/react/lib/)`)

@@ -21,11 +21,12 @@ const SETTLE_MS = 120
 export function attachSnaps(host: HTMLElement): SnapHost {
   const doc = host.ownerDocument
   const win = doc.defaultView!
-  /** Items that were there at the last update: one that was not is jumped to, not slid to. */
-  let seen = new WeakSet<Element>()
+  let disposed = false
+  /** The last rendered track, to distinguish a re-key from a reader swipe. */
+  const rendered = new WeakMap<Element, { current: Element | null; children: Element[] }>()
   /** Where each track was left: moved since by a re-render (not by the reader), it jumps. */
   const left = new WeakMap<Element, number>()
-  const settling = new WeakMap<Element, ReturnType<typeof setTimeout>>()
+  const settling = new Map<Element, ReturnType<typeof setTimeout>>()
   let frame = 0
 
   const reduced = (el: Element) => {
@@ -40,29 +41,41 @@ export function attachSnaps(host: HTMLElement): SnapHost {
   }
   const items = (track: Element) => [...track.children].filter((x) => x.getClientRects().length > 0)
 
+  const stateOf = (track: Element) => ({ current: track.querySelector(':scope > [data-sem-current]'), children: [...track.children] })
+  const sameChildren = (a: Element[], b: Element[]) => a.length === b.length && a.every((item, i) => item === b[i])
+
   function update() {
     frame = 0
-    const now = new WeakSet<Element>()
+    if (disposed) return
     for (const track of host.querySelectorAll<HTMLElement>('[data-sem-snap]')) {
-      for (const item of track.children) now.add(item)
-      const current = track.querySelector(':scope > [data-sem-current]')
+      const next = stateOf(track), previous = rendered.get(track)
+      const rekeyed = !previous || !sameChildren(previous.children, next.children)
+      rendered.set(track, next)
+      const current = next.current
       // A zoomed image's box is the person's to scroll.
       if (!current || track.getClientRects().length === 0 || track.closest('[data-zoomed]')) continue
       const by = offset(track, current)
-      const jump = !seen.has(current) || left.get(track) !== track.scrollLeft
+      const jump = rekeyed || left.get(track) !== track.scrollLeft
       if (Math.abs(by) >= 1) track.scrollBy({ left: by, behavior: jump || reduced(track) ? 'instant' : 'smooth' })
       left.set(track, jump || reduced(track) ? track.scrollLeft : track.scrollLeft + by)
     }
-    seen = now
   }
   const schedule = () => {
-    if (!frame) frame = win.requestAnimationFrame(update)
+    if (!disposed && !frame) frame = win.requestAnimationFrame(update)
   }
 
   /** The track came to rest: the item nearest its middle is where the reader is. */
   function settle(track: HTMLElement) {
     settling.delete(track)
-    if (track.closest('[data-zoomed]')) return
+    if (disposed || track.closest('[data-zoomed]')) return
+    const next = stateOf(track), previous = rendered.get(track)
+    // A layout change may queue scrollend before our animation frame. Position
+    // the graph's new frame before treating any scroll as a reader's choice.
+    if (next.current && (!previous || next.current !== previous.current || !sameChildren(previous.children, next.children))) {
+      if (frame) win.cancelAnimationFrame(frame)
+      update()
+      return
+    }
     left.set(track, track.scrollLeft)
     let nearest: Element | undefined
     let best = Infinity
@@ -94,6 +107,9 @@ export function attachSnaps(host: HTMLElement): SnapHost {
   return {
     update,
     dispose() {
+      disposed = true
+      for (const timer of settling.values()) clearTimeout(timer)
+      settling.clear()
       host.removeEventListener('scroll', onScroll, true)
       host.removeEventListener('scrollend', onScroll, true)
       observer.disconnect()

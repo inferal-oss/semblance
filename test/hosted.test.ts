@@ -17,7 +17,7 @@ import { components } from '../examples/react/design-system.tsx'
 import { createElement } from 'react'
 
 // Hosted components (docs/HOSTED.md): the todo app's graph, unchanged, drawn by the example's design
-// system (examples/react) through @inferal-oss/semblance-react. Driven through DOM events on what
+// system (examples/react) through @semblance-dev/semblance-react. Driven through DOM events on what
 // React drew, as a person would; the graph and the DOM are both checked.
 
 const read = (f: string) => readFileSync(new URL('../examples/react/' + f, import.meta.url), 'utf8')

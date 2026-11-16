@@ -1,4 +1,4 @@
-// @inferal-oss/semblance/views: maintained views on their own (docs/VIEWS.md). A store and the
+// @semblance-dev/semblance/views: maintained views on their own (docs/VIEWS.md). A store and the
 // views over it, kept up to date by deltas, with no ontology, no rule engine and no renderer: SPARQL
 // SELECT and CONSTRUCT views over your own data, under the UI kit you already have. This module
 // runs anywhere; `./web.ts` and `./node.ts` add the built-in stores (openStore, openViews), and the

@@ -83,7 +83,7 @@ check('add, has, remove', (e) => {
   assert.equal(e.quadCount(), 1)
 })
 
-check('match agrees with a brute-force scan', (e) => {
+check('match and match_batch agree with a brute-force scan', (e) => {
   let seed = 7
   const rand = (n: number) => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff), (seed >>> 8) % n)
   const terms = Array.from({ length: 12 }, (_, i) => e.iri('http://example/t' + i))
@@ -105,12 +105,26 @@ check('match agrees with a brute-force scan', (e) => {
     for (let i = 0; i < ids.length; i += 4) out.push([ids[i], ids[i + 1], ids[i + 2], ids[i + 3]].join())
     return out.sort()
   }
+  const pats: number[][] = []
+  const wants: string[][] = []
   for (let i = 0; i < 400; i++) {
     const pick = (pool: number[]) => (rand(2) ? pool[rand(pool.length)]! : 0)
     const pat = [pick(terms.slice(0, 6)), pick(terms.slice(0, 4)), pick(terms.slice(0, 8)), rand(2) ? 0 : graphs[rand(3)]!]
     const want = [...quads.values()].filter((q) => pat.every((x, k) => !x || x === q[k])).map((q) => q.join()).sort()
     assert.deepEqual(sorted(e.match(pat[0], pat[1], pat[2], pat[3])), want, `match(${pat})`)
+    pats.push(pat)
+    wants.push(want)
   }
+  // match_batch: the same patterns in one call, each answered as alone (and a free id matches nothing).
+  const free = 1 << 20
+  const batch = e.matchBatch([...pats.flat(), free, 0, 0, 0, ...pats.flat()])
+  assert.equal(batch.length, 2 * pats.length + 1)
+  pats.forEach((pat, i) => {
+    assert.deepEqual(sorted(batch[i]!), wants[i], `match_batch, ${i}: ${pat}`)
+    assert.deepEqual(sorted(batch[pats.length + 1 + i]!), wants[i], `match_batch, again ${i}: ${pat}`)
+  })
+  assert.equal(batch[pats.length]!.length, 0)
+  assert.deepEqual(e.matchBatch([]), [])
 })
 
 check('apply removes, then adds', (e) => {

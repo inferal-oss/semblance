@@ -47,7 +47,7 @@ const { values, positionals } = parseArgs({
 })
 const config = resolve(values.config!)
 if (command !== 'help' && command !== undefined && !existsSync(config)) {
-  console.error(`semblance: no site description at ${config} (export default defineSite({ root, graphs }) from '@inferal-oss/semblance/node')`)
+  console.error(`semblance: no site description at ${config} (export default defineSite({ root, graphs }) from '@semblance-dev/semblance/node')`)
   process.exit(1)
 }
 

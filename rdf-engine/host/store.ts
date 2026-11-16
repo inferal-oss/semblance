@@ -437,6 +437,29 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       for (let i = 0, k = 0; i < r.length; i += 4, k++) out[k] = quad(termOf(r[i]!), termOf(r[i + 1]!), termOf(r[i + 2]!), termOf(r[i + 3]!))
       return out
     },
+    matchBatch(patterns) {
+      // One crossing for the patterns whose bound terms the engine knows (any other matches nothing).
+      const ids: number[] = []
+      const asked: number[] = []
+      patterns.forEach(([s, p, o, g], i) => {
+        const a = s ? known(s) : 0
+        const b = p ? known(p) : 0
+        const c = o ? known(o) : 0
+        const d = g ? known(g) : 0
+        if ((s && !a) || (p && !b) || (o && !c) || (g && !d)) return
+        ids.push(a, b, c, d)
+        asked.push(i)
+      })
+      const out: Quad[][] = patterns.map(() => [])
+      if (!asked.length) return out
+      const found = e.matchBatch(ids)
+      asked.forEach((i, k) => {
+        const r = found[k]!
+        const qs: Quad[] = (out[i] = new Array(r.length / 4))
+        for (let j = 0, n = 0; j < r.length; j += 4, n++) qs[n] = quad(termOf(r[j]!), termOf(r[j + 1]!), termOf(r[j + 2]!), termOf(r[j + 3]!))
+      })
+      return out
+    },
     select(query, graphs) {
       if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet`)
       return sync(() => selectRows(query, graphs as Term[]))

@@ -1,0 +1,25 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:lightbox-compact a chg:Change ;
+    rdfs:label "A lightbox fits a phone's viewport, its Close button in reach"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/142> , <https://github.com/inferal-oss/semblance/issues/208> ;
+    chg:motivation """At phone width the lightbox's panel took its content's minimum width (404 px in a 375 px
+viewport), and its header kept the title, the count, Zoom, Open original, the two size toggles and Close in one
+row, so Close was past the edge of the screen.""" ;
+    chg:substance """Styles only. The lightbox's grid has one minmax(0, 1fr) column and row, and its panel a zero
+minimum and a 100 % maximum, so the panel never outgrows the viewport. At compact width the header wraps: the
+title and count keep the first row, the actions go to the next, Close at the inline end. Doodle keeps its tilted
+panel and, at compact width, leaves room for the tilt (about 1 % of the other dimension). The markup is
+unchanged.""" ;
+    chg:forwardGuide """Nothing to move. A stylesheet that sized .sem-panel inside a lightbox, or laid out its
+.sem-head at compact width, should check it against the new rules.""" ;
+    chg:backwardGuide """Nothing to move. Going back, the panel can again be wider than a phone's viewport, and the
+header stays one row.""" ;
+    chg:affects c:Lightbox .

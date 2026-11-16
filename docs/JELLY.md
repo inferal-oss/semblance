@@ -30,7 +30,7 @@ The engine stores (`wat`, `rust`) do this natively, in WebAssembly (`rdf-engine/
 which you can also use on its own:
 
 ```ts
-import { FrameSplitter, JellyReader, writeJelly } from '@inferal-oss/semblance'
+import { FrameSplitter, JellyReader, writeJelly } from '@semblance-dev/semblance'
 
 const bytes = writeJelly(quads, { physical: 2 })          // a whole delimited stream
 const split = new FrameSplitter()                         // a stream arriving in chunks

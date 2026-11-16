@@ -49,13 +49,15 @@ ui:inp-ta-about a c:TextArea ; c:label "Description" ; c:rows 3 ;
     c:placeholder "What is this project about?" ; c:help "Plain text. Every keystroke sets c:value on this instance." .
 ui:inp-ta-error a c:TextArea ; c:label "Release notes" ; c:rows 2 ; c:value "tbd" ;
     c:error "Release notes need at least one full sentence." .
+ui:inp-tf-off a c:TextField ; c:label "Managed account" , "Керований обліковий запис"@uk , "Verwaltetes Konto"@de , "حساب مُدار"@ar ;
+    c:value "service-account" ; c:disabled true .
 ui:inp-ta-off a c:TextArea ; c:label "Archived note" ; c:rows 2 ; c:disabled true ; c:value "This note is read-only." .
 ui:inp-ta-sm a c:TextArea ; c:label "Small" ; c:rows 1 ; sty:size sty:Small ; c:placeholder "A small, single-row text area" .
 ui:inp-text-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:inp-tf-name ui:inp-ta-about ui:inp-ta-error ui:inp-ta-off ui:inp-ta-sm ) .
+    c:children ( ui:inp-tf-name ui:inp-tf-off ui:inp-ta-about ui:inp-ta-error ui:inp-ta-off ui:inp-ta-sm ) .
 ui:inp-text a c:Flippable ; c:front ui:inp-text-spec .
 ui:inp-text-spec a c:Specimen ; c:demonstrates c:TextField , c:TextArea ; c:label "Text field and text area" , "Текстове поле й область"@uk , "Textfeld und Textbereich"@de , "حقل النص ومنطقة النص"@ar ;
-    c:help "A c:TextArea is the multi-line sibling of c:TextField: label, placeholder, c:rows, help and an announced error line (aria-describedby, aria-invalid). Typing is an RDF event whose reaction sets c:value." ;
+    c:help "A c:TextArea is the multi-line sibling of c:TextField: label, placeholder, c:rows, help and an announced error line (aria-describedby, aria-invalid). Typing is an RDF event whose reaction sets c:value; with c:disabled, either one is locked and keeps its value and error." ;
     c:children ( ui:inp-text-col ) .
 
 # --- Search field: what is typed, as a property of a node ------------------------------------------
@@ -63,11 +65,17 @@ ui:inp-text-spec a c:Specimen ; c:demonstrates c:TextField , c:TextArea ; c:labe
 ui:inp-search-text a owl:DatatypeProperty ; rdfs:label "search"@en .
 ui:inp-search-field a c:SearchField ; c:label "Search the components" ; c:placeholder "Name, slug or group…" ;
     c:controls ui:inp-search-query ; c:property ui:inp-search-text .
+ui:inp-search-waiting ui:inp-search-text "Waiting for index" .
+ui:inp-search-field-off a c:SearchField ;
+    c:label "Search while loading"@en , "Пошук під час завантаження"@uk ,
+            "Suche während des Ladens"@de , "البحث أثناء التحميل"@ar ;
+    c:disabled true ;
+    c:controls ui:inp-search-waiting ; c:property ui:inp-search-text .
 ui:inp-search-state a c:Metrics ; c:of ui:inp-search-query ; c:fields ( ui:inp-search-text ) .
 ui:inp-search a c:Flippable ; c:front ui:inp-search-spec .
 ui:inp-search-spec a c:Specimen ; c:demonstrates c:SearchField ; c:label "Search field" , "Поле пошуку"@uk , "Suchfeld"@de , "حقل البحث"@ar ;
     c:help "A search box (type=search) bound to a property of a node (c:controls / c:property): typing writes what is typed, and emptying it, its ✕ or Escape removes the triple. The chip below reads the node back. A toolbar's filters are fields like this one." ;
-    c:children ( ui:inp-search-field ui:inp-search-state ) .
+    c:children ( ui:inp-search-field ui:inp-search-field-off ui:inp-search-state ) .
 
 # --- Code input: one-time codes of any length and alphabet ----------------------------------------
 # What a code may contain is a c:Charset; this one is defined here, not in the framework: no

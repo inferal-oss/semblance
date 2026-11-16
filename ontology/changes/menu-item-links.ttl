@@ -1,0 +1,26 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:menu-item-links a chg:Change ;
+    rdfs:label "A menu item with a destination is a link"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/105> ;
+    chg:motivation """A menu often lists places as well as actions ("Open in…", "Go to the guide"). A menu item could only
+be a button, so a place had to be a reaction that changed the address, which loses what a link gives: the
+address on hover, opening in a new tab, the browser's own history.""" ;
+    chg:substance """A c:MenuItem with c:href (or a resolved nav:href, which wins) and not c:disabled renders an
+a[role=menuitem][href] in place of button[role=menuitem][type=button]; its icon and label spans are as before.
+Enter follows it as any link; Space chooses it too (the menu pattern), by clicking it. Choosing it closes its
+menu, as any item. A disabled item with a destination stays a disabled button and does not navigate. In the Text
+modality a linked item's line ends with " <address>". A shape (c:MenuItemShape) allows one c:href, a web, mail or
+relative address. An item without a destination renders as it did.""" ;
+    chg:forwardGuide """Nothing to move. An item that changed the address through a reaction can say c:href instead.
+A stylesheet or test that selected menu items as button[role=menuitem] selects [role=menuitem].""" ;
+    chg:backwardGuide """Nothing to move in the graph. Going back, an item with c:href renders a button again and its
+destination is ignored: give it a reaction if it must still go there.""" ;
+    chg:affects c:MenuItem .

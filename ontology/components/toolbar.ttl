@@ -67,7 +67,8 @@ c:SearchField a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A search input (type=search) for the text value of c:property on the node it c:controls.
 c:label is its accessible name (default "Search"), c:placeholder its hint. Typing writes the text,
-emptying it removes the value; a clear button and Escape remove it as well."""@en ;
+emptying it removes the value; a clear button and Escape remove it as well. c:disabled makes the input
+and clear button unavailable until the graph enables them."""@en ;
     sem:slug "search-field" ;
     c:labelPart "input" .
 c:clears a owl:ObjectProperty ;
@@ -86,10 +87,10 @@ CONSTRUCT {
   ?icon a rdfhtml:Span ; rdfhtml:class "sem-icon" ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText ; ord:immediatelyPrecedes ?input .
   ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?iconText a rdfhtml:Text ; rdfhtml:data "⌕" .
-  ?input a rdfhtml:Input ; rdfhtml:type "search" ; rdfhtml:id ?inputId ; rdfhtml:autocomplete "off" ;
+  ?input a rdfhtml:Input ; rdfhtml:type "search" ; rdfhtml:id ?inputId ; rdfhtml:autocomplete "off" ; rdfhtml:disabled ?disabled ;
          rdfhtml:value ?value ; rdfhtml:placeholder ?placeholder ; rdfhtml:attribute ?inputName ; ord:immediatelyPrecedes ?clear .
   ?inputName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
-  ?clear a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-clear" ; c:clears $this ;
+  ?clear a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-clear" ; rdfhtml:disabled ?disabled ; c:clears $this ;
          rdfhtml:attribute ?clearName ; rdfhtml:hasChild ?clearIcon .
   ?clearName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?clearLabel .
   ?clearIcon a rdfhtml:Span ; rdfhtml:attribute ?clearIconHidden ; rdfhtml:hasChild ?clearIconText .
@@ -98,6 +99,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* c:SearchField ; c:controls ?target ; c:property ?property .
+  BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
   OPTIONAL { ?target ?property ?raw FILTER(isLiteral(?raw) && STR(?raw) != "") }
   BIND(STR(?raw) AS ?value)
   OPTIONAL { $this l10n:label ?localLabel }
@@ -165,18 +167,18 @@ WHERE {
 c:SearchFieldInput a beh:Reaction ;
     beh:when beh:Input ;
     beh:sourceClass c:SearchField ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?text } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . FILTER(STR(?v) != "") BIND(STR(?v) AS ?text) }""" ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { FILTER NOT EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?text } WHERE { FILTER NOT EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } $this c:controls ?target ; c:property ?p . $event beh:value ?v . FILTER(STR(?v) != "") BIND(STR(?v) AS ?text) }""" ;
     sem:function "toolbar:search-input" .
 c:SearchFieldClear a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:SearchField ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:clears $this . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { FILTER NOT EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:clears $this . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
     sem:function "toolbar:search-clear" .
 c:SearchFieldEscape a beh:Reaction ;
     beh:when c:SearchKey ;
     beh:sourceClass c:SearchField ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:key "escape" . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { FILTER NOT EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } $event beh:key "escape" . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
     sem:function "toolbar:search-escape" .
 
 # --- Legend: categories and their colors ------------------------------------------------------------

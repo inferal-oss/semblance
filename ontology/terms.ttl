@@ -1060,6 +1060,7 @@ c:keyCount a sem:Term .
 c:keyProperty a sem:Term .
 c:keys a sem:Term .
 c:keyword a sem:Term .
+c:keywords a sem:Term .
 c:kindOf a sem:Term .
 c:label a sem:Term .
 c:labelFrom a sem:Term .
@@ -1524,6 +1525,7 @@ sem:Narrower a sem:Term .
 sem:NextFrame a sem:Term .
 sem:Observed a sem:Term .
 sem:OnIntent a sem:Term .
+sem:OpenPreview a sem:Term .
 sem:Query a sem:Term .
 sem:QueryDeadline a sem:Term .
 sem:QueryWork a sem:Term .

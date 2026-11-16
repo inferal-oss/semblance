@@ -1,7 +1,7 @@
 // The page: views over the todo store, kept up to date by its deltas, drawn by React. No ontology,
 // no renderer: the store's stream (docs/REMOTE.md) goes into a store of Semblance's engine, the
 // views follow it, and the components read the views.
-import { followSource, httpTransport, openViews } from '@inferal-oss/semblance/views'
+import { followSource, httpTransport, openViews } from '@semblance-dev/semblance/views'
 import { createRoot } from 'react-dom/client'
 import { App } from './Todos.tsx'
 import { patterns, todoViews } from './todos.ts'

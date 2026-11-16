@@ -83,6 +83,11 @@ c:lists a owl:ObjectProperty ; rdfs:domain c:CommandPalette ; rdfs:range c:Palet
 c:entries a owl:ObjectProperty ; rdfs:domain c:CommandPalette ; rdfs:range rdf:List ;
     rdfs:label "Entries"@en , "Записи"@uk , "Einträge"@de , "الإدخالات"@ar ;
     rdfs:comment "More items the app lists, in this order: a key:Command, a component (clicked), or any node with a c:to (gone to). Each is labelled by c:label or rdfs:label and described by c:help or rdfs:comment."@en .
+c:keywords a owl:DatatypeProperty ; rdfs:range rdfs:Literal ;
+    rdfs:label "Search keywords"@en , "Ключові слова пошуку"@uk , "Suchbegriffe"@de , "كلمات البحث"@ar ;
+    rdfs:comment """On an item a palette lists: more words it is found by (other names, an identifier), one literal.
+Folded as its label is and appended to its search key after a line break; never shown, never highlighted.
+Only its first 32768 characters are indexed."""@en .
 c:paletteSection a owl:ObjectProperty ; rdfs:range c:PaletteSection ;
     rdfs:label "Section"@en , "Розділ"@uk , "Abschnitt"@de , "القسم"@ar ;
     rdfs:comment "On an item a palette lists: the section it is shown in (default: by what it is: a command, an action, a place). On an option: the section it is in."@en .
@@ -138,7 +143,9 @@ c:PaletteTexts a sem:Rendering ;
     sem:targets c:CommandPalette ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:watches rdf:type , c:open , c:label , c:placeholder , c:lists , c:entries .
+    sem:watches rdf:type , c:open , c:label , c:placeholder , c:lists , c:entries ;
+    # An item's keywords and whether it is disabled are read on the item, which the palette does not follow.
+    sem:watchesAnywhere c:keywords , c:disabled .
 c:PaletteTexts-fn a sem:Rule ; sem:implements c:PaletteTexts ; sem:function "palette:texts" .
 c:PaletteTexts-sparql a sem:Rule ;
     sem:implements c:PaletteTexts ;
@@ -224,6 +231,7 @@ WHERE {
     FILTER(?self = $this && ?listed = 1)
     FILTER NOT EXISTS { ?item c:opens $this }
     FILTER NOT EXISTS { ?item c:controls $this }
+    FILTER NOT EXISTS { ?item c:disabled ?itemDisabled FILTER(STR(?itemDisabled) = "true") }
     BIND(EXISTS { ?item a key:Command } AS ?isCommand)
     # A place: the least value (by IRI) of the cases showing it, and the place it is in (its
     # dimension's only nav:when).
@@ -438,7 +446,16 @@ WHERE {
           BIND(sx:sortKey(?searchKey0Ch, "en") AS ?searchKey0Base) BIND(LCASE(?searchKey0Ch) AS ?searchKey0Lower)
           BIND(IF(STRLEN(?searchKey0Base) = 1, ?searchKey0Base, IF(STRLEN(?searchKey0Lower) = 1, ?searchKey0Lower, ?searchKey0Ch)) AS ?searchKey0Part) } ORDER BY ?searchKey0At }
     } GROUP BY ?label } }
-    BIND(COALESCE(?searchKey0, "") AS ?searchKey)
+    # Its keywords (c:keywords), folded the same way, after a line break: found by, never shown.
+    LATERAL { OPTIONAL { ?item c:keywords ?keywords0 FILTER(isLiteral(?keywords0))
+      FILTER NOT EXISTS { ?item c:keywords ?keywordsLess FILTER(isLiteral(?keywordsLess) && STR(?keywordsLess) < STR(?keywords0)) } } }
+    BIND(SUBSTR(STR(?keywords0), 1, 32768) AS ?keywords)
+    LATERAL { OPTIONAL { SELECT ?keywords (GROUP_CONCAT(?keywordKey0Part; separator="") AS ?keywordKey0) WHERE {
+      { SELECT ?keywords ?keywordKey0Part WHERE { (?keywords) sx:chars (?keywordKey0Ch ?keywordKey0At)
+          BIND(sx:sortKey(?keywordKey0Ch, "en") AS ?keywordKey0Base) BIND(LCASE(?keywordKey0Ch) AS ?keywordKey0Lower)
+          BIND(IF(STRLEN(?keywordKey0Base) = 1, ?keywordKey0Base, IF(STRLEN(?keywordKey0Lower) = 1, ?keywordKey0Lower, ?keywordKey0Ch)) AS ?keywordKey0Part) } ORDER BY ?keywordKey0At }
+    } GROUP BY ?keywords } }
+    BIND(CONCAT(COALESCE(?searchKey0, ""), IF(COALESCE(?keywordKey0, "") != "", CONCAT("\\n", ?keywordKey0), "")) AS ?searchKey)
     BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?item)))) AS ?node)
     # Its section: the least it names, else by what it is.
     LATERAL { OPTIONAL { ?item c:paletteSection ?declaredSection FILTER NOT EXISTS { ?item c:paletteSection ?otherSection FILTER(STR(?otherSection) < STR(?declaredSection)) } } }
@@ -523,6 +540,7 @@ WHERE {
   # Not what opens the palette itself (its command, its button).
   FILTER NOT EXISTS { ?item c:opens $this }
   FILTER NOT EXISTS { ?item c:controls $this }
+  FILTER NOT EXISTS { ?item c:disabled ?itemDisabled FILTER(STR(?itemDisabled) = "true") }
   # What running it does: a command's key press, a place's or a c:to's address, else a click.
   BIND(EXISTS { ?item a key:Command } AS ?isCommand)
   BIND(?placed = 1 AS ?isPlace)

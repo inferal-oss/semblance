@@ -8,8 +8,8 @@ const repo = resolve(import.meta.dirname, '../..')
 
 export default defineConfig({
   root: import.meta.dirname,
-  resolve: { alias: [{ find: /^@inferal-oss\/semblance(.*)$/, replacement: repo + '/src$1/index.ts' }] },
+  resolve: { alias: [{ find: /^@semblance-dev\/semblance(.*)$/, replacement: repo + '/src$1/index.ts' }] },
   // A linked node_modules (a worktree's) is served from where it really is.
   server: { fs: { allow: [repo, ...linkedModules(repo)] } },
-  optimizeDeps: { exclude: ['@inferal-oss/semblance', 'oxigraph'], include: ['n3'] },
+  optimizeDeps: { exclude: ['@semblance-dev/semblance', 'oxigraph'], include: ['n3'] },
 })

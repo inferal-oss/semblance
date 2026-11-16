@@ -3,7 +3,6 @@
 exports[`LOAD > INTO GRAPH 1`] = `
 {
   "quads": [
-    "http://a http://alias http://a b> } # ",
     "http://a http://r https://two.example/sparql ",
     "http://b http://alias http://a ",
     "http://b http://r "not an IRI" ",
@@ -16,7 +15,6 @@ exports[`LOAD > INTO GRAPH 1`] = `
 exports[`LOAD > Jelly: its default graph only 1`] = `
 {
   "quads": [
-    "http://a http://alias http://a b> } # ",
     "http://a http://r https://two.example/sparql ",
     "http://b http://alias http://a ",
     "http://b http://r "not an IRI" ",
@@ -42,7 +40,6 @@ exports[`LOAD > a type it does not read 1`] = `
 exports[`LOAD > in order with the other operations 1`] = `
 {
   "quads": [
-    "http://a http://alias http://a b> } # ",
     "http://a http://r https://two.example/sparql ",
     "http://b http://alias http://a ",
     "http://b http://r "not an IRI" ",
@@ -57,7 +54,6 @@ exports[`LOAD > into the default graph 1`] = `
 {
   "quads": [
     "_ http://p "y"@en ",
-    "http://a http://alias http://a b> } # ",
     "http://a http://r https://two.example/sparql ",
     "http://b http://alias http://a ",
     "http://b http://r "not an IRI" ",
@@ -76,7 +72,6 @@ exports[`LOAD > unlisted 1`] = `
 exports[`LOAD > unlisted, SILENT: nothing 1`] = `
 {
   "quads": [
-    "http://a http://alias http://a b> } # ",
     "http://a http://r https://two.example/sparql ",
     "http://b http://alias http://a ",
     "http://b http://r "not an IRI" ",
@@ -202,26 +197,6 @@ VALUES (?o) {
   ("x\\"y"@en)
   ("a\\") } ; DROP ALL #")
 }",
-  ],
-}
-`;
-
-exports[`SERVICE: WAT and Rust give the same results and send the same requests > an IRI that cannot be written goes without VALUES 1`] = `
-{
-  "results": {
-    "requests": undefined,
-    "rows": [
-      "http://a "1"",
-      "http://a "x\\"y"@en",
-    ],
-  },
-  "rust": [
-    "POST https://one.example/sparql
-SELECT * WHERE { ?s <http://p> ?o }",
-  ],
-  "wat": [
-    "POST https://one.example/sparql
-SELECT * WHERE { ?s <http://p> ?o }",
   ],
 }
 `;

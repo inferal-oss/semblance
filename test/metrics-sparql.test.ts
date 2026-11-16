@@ -47,7 +47,8 @@ describe('metrics, SPARQL and function rules alike (wat)', () => {
     set((h) => h.store.factory.namedNode(UI + 'caf%C3%A9%20au%20lait'))
     same('a percent-encoded IRI')
     expect(metrics(hs[0]!).join()).toContain('ui:café au lait')
-    set((h) => h.store.factory.namedNode(UI + 'bad%E0%A4%A'))
+    // An escape that is not UTF-8 (the store refuses one that is not two hex digits, #311).
+    set((h) => h.store.factory.namedNode(UI + 'bad%E0%A4'))
     same('a malformed escape')
     set((h) => h.store.factory.namedNode(NS.c + 'Button'))
     same('a framework IRI')

@@ -4,7 +4,7 @@
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 // In this repository the entry is imported from its source (Node's half of it); an app imports
-// '@inferal-oss/semblance/views', whose `node` condition is this file.
+// '@semblance-dev/semblance/views', whose `node` condition is this file.
 import { followSource, httpTransport, openViews } from '../../src/views/node.ts'
 import { DataFactory } from 'n3'
 import { renderToString } from 'react-dom/server'

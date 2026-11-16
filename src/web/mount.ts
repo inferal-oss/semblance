@@ -95,7 +95,7 @@ export interface MountOptions {
   adapters?: Record<string, IslandAdapter>
   /**
    * A component library that draws hosted components (ext:Hosted, docs/HOSTED.md): `reactHosts(…)`
-   * from @inferal-oss/semblance-react, or an adapter of your own.
+   * from @semblance-dev/semblance-react, or an adapter of your own.
    */
   hosts?: HostRenderer
   /**

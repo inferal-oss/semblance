@@ -11,5 +11,5 @@
   // The app's graphs and its subset of the ontology are bundled as text.
   "rules": [{ "type": "Text", "globs": ["**/*.ttl"], "fallthrough": true }],
   // In this repository the package is its own source.
-  "alias": { "@inferal-oss/semblance/server": "../../src/server/index.ts" }
+  "alias": { "@semblance-dev/semblance/server": "../../src/server/index.ts" }
 }

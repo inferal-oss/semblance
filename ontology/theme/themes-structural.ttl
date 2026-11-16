@@ -1203,7 +1203,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent], [aria-current=page]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-button)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part "[data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-pressed)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
     sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
@@ -1864,7 +1864,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent], [aria-current=page]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-button)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part "[data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-pressed)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
     sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
@@ -2724,6 +2724,12 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox]) > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "rotate" ; sty:raw "-0.6deg" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--wob-c)" ] .
+# A full-viewport sheet needs cross-axis room for its retained -0.6deg tilt.
+# sin(0.6deg) < 0.0105: subtract that fraction of the other viewport dimension.
+[] a sty:StyleRule ; sty:when sty:Doodle ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=lightbox] > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:declares [ sty:property "max-width" ; sty:raw "max(0px, calc(100% - 1.05vh))" ] ,
+                 [ sty:property "max-height" ; sty:raw "max(0px, calc(100% - 1.05vw))" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
     sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox]) > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))::before" ;
     sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
@@ -2948,7 +2954,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "border-color" ; sty:raw "transparent" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--fl-accent-edge)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part "[data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--fl-accent-edge)" ] ,
                  [ sty:property "border-color" ; sty:raw "transparent" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Primary ;

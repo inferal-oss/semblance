@@ -1002,6 +1002,13 @@ impl<'a> Ctx<'a> {
 /// pattern's own, so the expression cannot tell.
 /// What `sideways` gives, uncached: None when `b` is pure, else per variable
 /// whether a left row may pass its binding into `b`.
+/// Every variable `p` mentions, its expressions' and EXISTS patterns' included.
+pub(crate) fn mentioned(p: &Pattern, nvars: usize) -> Vec<bool> {
+    let mut m = alloc::vec![false; nvars];
+    pattern_vars(p, &mut m);
+    m
+}
+
 pub(crate) fn side_safe(b: &Pattern, nvars: usize) -> Option<Vec<bool>> {
     if pure(b) {
         return None;

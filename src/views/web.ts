@@ -1,4 +1,4 @@
-// @inferal-oss/semblance/views in the browser (Vite): the views (./index.ts) and the built-in stores,
+// @semblance-dev/semblance/views in the browser (Vite): the views (./index.ts) and the built-in stores,
 // without the framework's ontology. openStore fetches only what its kind needs: an engine build, or
 // (in a chunk of its own) the other kinds' code and Oxigraph's WASM.
 import type { GraphStore } from '../store/types.ts'
@@ -7,6 +7,7 @@ import type { StoreKind } from '../web/stores.ts'
 import { createViews, type Views, type ViewsOptions } from './views.ts'
 
 export * from './index.ts'
+export { addEngine } from '../web/engine.ts'
 export type { StoreKind, StoreOptions }
 
 /** A store of a built-in kind (default `wat`, Semblance's own engine), empty: no ontology loaded. */

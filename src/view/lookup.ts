@@ -6,11 +6,14 @@
 //   a node is bound (a few quads), then keeps the dataset's graphs, instead of asking graph by graph;
 // - is answered once per probe set: the same lookup again (another change binding the same node,
 //   another pattern through it) is remembered while the store holds still - the lifetime of one
-//   Lookup, which its maker creates for one step and drops.
+//   Lookup, which its maker creates for one step and drops;
+// - is asked with the others of its walk step where the store answers many at once
+//   (store.matchBatch, #248): `prefetch` plans the store calls each lookup makes, asks them in one
+//   crossing, and remembers the answers, so the step's lookups then cross nothing.
 import type { Quad, Term } from '@rdfjs/types'
 import { termKey } from '../rdf.ts'
-import type { GraphStore } from '../store/types.ts'
-import type { Lookup } from './deps.ts'
+import type { GraphStore, MatchPattern } from '../store/types.ts'
+import type { Lookup, LookupPattern } from './deps.ts'
 
 /** The removed triples by subject ('s' + term key), predicate ('p' + IRI) and object ('o' + term key). */
 export function indexRemoved(removed: readonly Quad[], by = new Map<string, Quad[]>()): Map<string, Quad[]> {
@@ -42,17 +45,24 @@ export interface ProbeLookupOptions {
   graphMode: 'named' | 'any'
 }
 
+/** A store call: what `store.match` is asked. */
+type Match = (s: Term | null, p: Term | null, o: Term | null, g?: Term) => Quad[]
+
+const lookupKey = (s: Term | null, p: Term | null, o: Term | null, g: Term | null | undefined) =>
+  (s ? termKey(s) : '') + '\u0001' + (p ? termKey(p) : '') + '\u0001' + (o ? termKey(o) : '') + '\u0001' + (g === undefined ? '-' : g ? termKey(g) : '*')
+
 /** A memoized lookup over a dataset's graphs with removed triples put back (see the top of this file). */
 export function probeLookup({ store, graphs, removed, removedBy, graphMode }: ProbeLookupOptions): Lookup {
   const by = removed.length ? (removedBy ?? indexRemoved(removed)) : undefined
   const index = new Map(graphs.map((g, i) => [g.value, i]))
   const cross = !!store.crossGraphMatch && index.size === graphs.length
   const memo = new Map<string, Quad[]>()
+  const direct: Match = (s, p, o, g) => store.match(s as never, p as never, o as never, g as never)
   /** Matches in the graphs `wanted` lets through, graph by graph in the dataset's order. */
-  const inGraphs = (s: Term | null, p: Term | null, o: Term | null, wanted: (i: number) => boolean): Quad[] => {
+  const inGraphs = (s: Term | null, p: Term | null, o: Term | null, wanted: (i: number) => boolean, match: Match): Quad[] => {
     if (cross && (s || o)) {
       // One call across all graphs: keep the dataset's (in its order: a stable sort by graph).
-      const all = store.match(s as never, p as never, o as never)
+      const all = match(s, p, o)
       let out: Quad[] = []
       let sorted = true
       let last = -1
@@ -69,12 +79,13 @@ export function probeLookup({ store, graphs, removed, removedBy, graphMode }: Pr
     let out: Quad[] = []
     for (let i = 0; i < graphs.length; i++) {
       if (!wanted(i)) continue
-      const found = store.match(s as never, p as never, o as never, graphs[i] as never)
+      const found = match(s, p, o, graphs[i])
       if (found.length) out = out.length ? out.concat(found) : found
     }
     return out
   }
-  const fresh = (s: Term | null, p: Term | null, o: Term | null, g: Term | null | undefined): Quad[] => {
+  /** A lookup's answer, its store calls made through `match` (which calls is fixed by the lookup alone). */
+  const fresh = (s: Term | null, p: Term | null, o: Term | null, g: Term | null | undefined, match: Match): Quad[] => {
     const named = graphMode === 'named' && g !== undefined
     const out: Quad[] = []
     const seen = new Set<string>()
@@ -90,18 +101,42 @@ export function probeLookup({ store, graphs, removed, removedBy, graphMode }: Pr
     if (named) wanted = (i) => graphs[i]!.termType === 'NamedNode' && (!g || graphs[i]!.equals(g))
     if (graphMode === 'any' && g) {
       // A graph of its own (not necessarily the dataset's): asked directly.
-      for (const q of store.match(s as never, p as never, o as never, g as never)) put(q)
-    } else for (const q of inGraphs(s, p, o, wanted)) put(q)
+      for (const q of match(s, p, o, g)) put(q)
+    } else for (const q of inGraphs(s, p, o, wanted, match)) put(q)
     if (by) {
       const pool = s ? by.get('s' + termKey(s)) : o ? by.get('o' + termKey(o)) : p ? by.get('p' + p.value) : removed
       for (const q of pool ?? []) if ((!s || q.subject.equals(s)) && (!p || q.predicate.equals(p)) && (!o || q.object.equals(o))) put(q)
     }
     return out
   }
-  return (s, p, o, g) => {
-    const k = (s ? termKey(s) : '') + '\u0001' + (p ? termKey(p) : '') + '\u0001' + (o ? termKey(o) : '') + '\u0001' + (g === undefined ? '-' : g ? termKey(g) : '*')
+  const lookup: Lookup = (s, p, o, g) => {
+    const k = lookupKey(s, p, o, g)
     let hit = memo.get(k)
-    if (!hit) memo.set(k, (hit = fresh(s, p, o, g)))
+    if (!hit) memo.set(k, (hit = fresh(s, p, o, g, direct)))
     return hit
   }
+  if (store.matchBatch) {
+    const batch = store.matchBatch.bind(store)
+    lookup.prefetch = (patterns: readonly LookupPattern[]) => {
+      // The lookups not answered yet, and the store calls each will make.
+      const todo = new Map<string, LookupPattern>()
+      for (const x of patterns) {
+        const k = lookupKey(x[0], x[1], x[2], x[3])
+        if (!memo.has(k) && !todo.has(k)) todo.set(k, x)
+      }
+      const calls = new Map<string, MatchPattern>()
+      const plan: Match = (s, p, o, g) => {
+        calls.set(lookupKey(s, p, o, g), [s, p, o, g])
+        return []
+      }
+      for (const [s, p, o, g] of todo.values()) fresh(s, p, o, g, plan)
+      if (calls.size < 2) return
+      // One crossing for them all, then each lookup from its calls' answers.
+      const asked = [...calls.values()]
+      const answers = new Map(batch(asked).map((qs, i) => [lookupKey(...asked[i]!), qs] as const))
+      const answered: Match = (s, p, o, g) => answers.get(lookupKey(s, p, o, g))!
+      for (const [k, [s, p, o, g]] of todo) memo.set(k, fresh(s, p, o, g, answered))
+    }
+  }
+  return lookup
 }

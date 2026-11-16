@@ -1,0 +1,46 @@
+{
+  "name": "@semblance-dev/rdf-engine-rust",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "description": "Semblance's SPARQL engine, built from Rust: the build @semblance-dev/semblance's rust store runs (the same results as the wat build)",
+  "keywords": [
+    "semblance",
+    "rdf",
+    "sparql",
+    "webassembly",
+    "rust"
+  ],
+  "homepage": "https://semblance.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inferal-oss/semblance.git",
+    "directory": "packages/rdf-engine-rust"
+  },
+  "bugs": {
+    "url": "https://github.com/inferal-oss/semblance/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./wasm": {
+      "types": "./lib/wasm.d.ts",
+      "default": "./lib/rust.wasm"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "LICENSE-APACHE",
+    "LICENSE-MIT"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepack": "npm --prefix ../.. run build:package"
+  }
+}
