@@ -428,7 +428,12 @@ component defers to a hook it should not override with a `sty:state` such as
 `:not([data-sem-direction])` (as `c:Surface` does). Two layouts make parts line up across siblings:
 
 - **Rows that share columns.** A container declares its column tracks (a `pos:Layout` with
-  `grid-template-columns`) and each row says `pos:layout pos:Subgrid`.
+  `grid-template-columns`) and each row says `pos:layout pos:Subgrid`. A field in such a row (a
+  class with `pos:rowParts`: a text field, a choice, a date) lines up part by part as in a row of
+  fields (`pos:FieldRow`): it takes the row's own tracks (label, control, help, error) and the
+  row's other cells, a tag or a unit or a button, sit in the control track, centred on the control
+  rather than on the label and control together (#518). A field's parts go in their tracks by role
+  (`data-sem-part`), so a field without a label still has its control in the control track.
 - **Columns whose parts line up.** A container says `pos:layout pos:AlignedColumns` (or is any grid
   of columns, such as a `c:Grid`, that says it): each child with parts takes its rows from it
   (`pos:rows pos:RowSubgrid`) and spans one row per part (`pos:rowSpan`). Both are derived, before the

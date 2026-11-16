@@ -1,0 +1,41 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:field-beside-control a chg:Change ;
+    rdfs:label "What sits beside a field in a row is centred on its control"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/518> ;
+    chg:motivation """In a row of a list (pos:Subgrid), a labelled field was one grid item, so a tag, a unit or a
+button beside it was centred on the field's whole box, its label and its input: the budget sheet's tags floated
+between label and input, at a different height wherever a label wrapped. Aligning the list's rows to their ends
+did not help: the end of a field with help or an error is its message. In a row of fields (pos:FieldRow) a field
+without a label put its control in the label track, above the buttons beside it, and a tall neighbour (a toolbar
+whose buttons wrap) left the text inputs at the top of the control track while everything else was centred.""" ;
+    chg:substance """pos:AlignedColumnRows (SPARQL and its twin) now gives the fields (a class with pos:rowParts) of a
+pos:Subgrid row their rows from it (pos:rows pos:RowSubgrid, so pos:rowSpan), as it did for a pos:FieldRow; a
+pos:Subgrid row with no field in it is as before. The theme (theme/layout.ttl) lays such a row out as a field row:
+each field's parts in the row's tracks (label, control, help, error), the row placed column by column
+(grid-auto-flow: column), and its other cells in the control track (grid-row: 2), centred. In both kinds of row a
+field's parts go in their tracks by role (data-sem-part): the label is spaced below it rather than the control
+above it, a field without a label gets an empty first item (::before) so its control is in the control track,
+and a single-line control is centred in its track. So that every field with row parts names its label, c:TextArea
+and c:Field are lc:WithParts and their renderings (SPARQL and twins) put lc:role lc:FieldLabel on the label, shown
+as data-sem-part="field-label" with the parts layer. The layout checker gains lc:SameMiddle (middles agree,
+y + height / 2), lc:EachChildAtPart (each child at its first part of a role, or itself where it names no parts),
+the derived group lc:FieldBeside (a pos:FieldRow or pos:Subgrid row with a field and something that is not one)
+and the invariant lc:besideFieldOnItsControl over them.""" ;
+    chg:forwardGuide """Nothing to move. A list whose rows hold a field and other cells may drop its own alignment
+(align-items: end on the tracks it declares, as the budget sheet had): the rows centre the cells on the control.
+A row of a list that placed a field's cells by explicit grid-row may need them placed again, since the field now
+spans four of the row's tracks. A stylesheet that spaced a field's control from its label inside a field row
+(margin-block-start on the second part) now finds the space under the label.""" ;
+    chg:backwardGuide """Going back, a field in a pos:Subgrid row is one grid item again and the cells beside it are
+centred on its whole box; a field without a label in a pos:FieldRow puts its control in the label track. The
+labels of c:TextArea and c:Field lose data-sem-part, and the four layout-checker terms are gone (an app that
+declared invariants with them removes them).""" ;
+    chg:affects sem:Component , c:TextArea , c:Field .

@@ -155,13 +155,13 @@ ui:ex-budget-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
 
 # The sheet: a row per entry - its amount field, labelled by its description, and its category.
 # Each list declares its column tracks once (bud:SheetColumns) and each row is a pos:Subgrid of
-# them, so the fields and the tags line up from row to row.
+# them, so the fields and the tags line up from row to row. A field in such a row takes the row's
+# own tracks (label, control, help, error) and the tag sits in the control's, centred on the input.
 bud:SheetColumns a pos:Layout ; sem:slug "budget-sheet-columns" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) max-content" ] ,
                  [ sty:property "column-gap" ; sty:raw "var(--sem-space-4)" ] ,
-                 [ sty:property "row-gap" ; sty:raw "var(--sem-space-3)" ] ,
-                 [ sty:property "align-items" ; sty:raw "end" ] .
+                 [ sty:property "row-gap" ; sty:raw "var(--sem-space-3)" ] .
 ui:ex-budget-sheet a c:Card ; c:label "October" ; c:badge "editable" ;
     c:note "Amounts in euros. Each field validates against bud:AmountShape." ;
     c:content ui:ex-budget-lines .

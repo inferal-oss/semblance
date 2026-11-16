@@ -126,7 +126,9 @@ ui:inp-rg-plan a c:RadioGroup ; c:label "Plan" ; c:controls ui:inputsDemo ; c:pr
 ui:inp-rg-row a c:RadioGroup ; c:controls ui:inputsDemo ; c:property ui:inp-plan ; pos:direction pos:Row ; sty:size sty:Small .
 ui:inp-rg-seg a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
 ui:inp-rg-choice a c:Choice ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
-ui:inp-rg-others a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inp-rg-seg ui:inp-rg-choice ) .
+# A segmented control beside a choice: a row of fields (pos:FieldRow), so it lines up with the select, not
+# with the choice's caption and select together.
+ui:inp-rg-others a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ; c:children ( ui:inp-rg-seg ui:inp-rg-choice ) .
 ui:inp-rg-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-rg-plan ui:inp-rg-row ui:inp-rg-others ) .
 ui:inp-radios a c:Flippable ; c:front ui:inp-radios-spec .
 ui:inp-radios-spec a c:Specimen ; c:demonstrates c:RadioGroup ; c:label "Radio group" , "Група перемикачів"@uk , "Optionsgruppe"@de , "مجموعة خيارات"@ar ;

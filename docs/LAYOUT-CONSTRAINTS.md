@@ -38,17 +38,20 @@ lc:fieldRowControlsShareTops a lc:Invariant ;
     lc:members lc:EachChild ; lc:part lc:SingleLineControl ; lc:tolerance 1.0 .
 ```
 
-- **Relations** (`lc:Relation`): `SameBlockSize`, `SameInlineSize`, `SameTop`, `SameBottom`
-  (groups: spread = max − min > tolerance), `FitsInline`, `FitsWithin` (containment),
+- **Relations** (`lc:Relation`): `SameBlockSize`, `SameInlineSize`, `SameTop`, `SameBottom`,
+  `SameMiddle` (groups: spread = max − min > tolerance; a middle is `y + height / 2`), `FitsInline`, `FitsWithin` (containment),
   `ContentFits` (an element's own scroll width against its client width), `NoPageOverflow`.
   Borrowed from Galen's relational predicates (with tolerances) and ReDeCheck's failure taxonomy
   (protrusion, viewport protrusion, collision, wrapping).
 - **Scope** `lc:over`: a class; each instance is one group or one container. Classes may be
   **derived** from layout vocabulary that already promises the invariant: `lc:FieldRow` is
-  "a `pos:direction pos:Row` with two `lc:Field`s or more" (a SPARQL `lc:derive` CONSTRUCT).
+  "a `pos:direction pos:Row` with two `lc:Field`s or more" (a SPARQL `lc:derive` CONSTRUCT), and
+  `lc:FieldBeside` "a `pos:FieldRow` or `pos:Subgrid` row with a field and something that is not
+  one" (#518).
   `pos:AlignedColumns` (part N of each column on one line) is the next derivation.
 - **Members** `lc:members`: `lc:EachChild` (one per child: its first `lc:part`, or its root),
-  `lc:Parts` (every part of a role inside), `lc:Descendants` (every component inside, but not
+  `lc:EachChildAtPart` (one per child: its first `lc:part`; a child that names no parts, a tag or
+  a button, itself; one that names others but not that one is left out), `lc:Parts` (every part of a role inside), `lc:Descendants` (every component inside, but not
   inside a scroller between).
 - **Parts** `lc:Role`: a component's renderings say which node they mint is which part, on the
   node itself (`<field>/~input lc:role lc:SingleLineControl`, `<field>/~label lc:role
@@ -64,7 +67,8 @@ lc:fieldRowControlsShareTops a lc:Invariant ;
 - **Lines**: a group in a row that wraps is compared line by line (`rnd:line`, which the host
   measures), so fields that wrap on a phone don't count as misaligned.
 - Declared invariants in the spike: `formControlsShareHeight` (#34), `fieldRowControlsShareTops`
-  and `…ShareHeight` (#57), `navItemsFit` and `navItemsShowTheirText` (#53),
+  and `…ShareHeight` (#57), `besideFieldOnItsControl` (#518: a tag, a unit or a button beside a
+  field is centred on its control, not on the field's label and control together), `navItemsFit` and `navItemsShowTheirText` (#53),
   `contentStaysInCards` (cards and specimens), `pageFits`.
 
 Where invariants are declared: on **components** (a nav list's items fit it), on **layers**
