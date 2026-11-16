@@ -92,7 +92,7 @@ c:Calendar sem:version 1 ; sem:closure "fd8ca49460639de0" ; sem:internal "new" .
 c:CalendarEntry sem:version 1 ; sem:closure "56748a3c2cae2fdb" ; sem:internal "new" .
 c:Canvas sem:version 1 ; sem:closure "69eab156284dc6d5" ; sem:internal "new" .
 c:CanvasItem sem:version 1 ; sem:closure "ecda9dc74d7abbf0" ; sem:internal "new" .
-c:Card sem:version 1 ; sem:closure "e4980c13b492373b" ; sem:internal "new" .
+c:Card sem:version 2 ; sem:closure "1a9403f0448a411e" ; sem:internal "On a phone a specimen, its stage, a card's body and a surface take one step less inset, and a dock panel's header wraps, so what they hold fits at 320px (#246)" .
 c:Charset sem:version 1 ; sem:closure "e0bd36111a8206a5" ; sem:internal "new" .
 c:Chart sem:version 1 ; sem:closure "c4cbf309f649c5a7" ; sem:internal "new" .
 c:ChartPoint sem:version 2 ; sem:closure "e8efc0f602b5e769" ; sem:changedBy change:charts-on-shared-parts .
@@ -119,7 +119,7 @@ c:DescriptionList sem:version 1 ; sem:closure "6f79cc9f9a5162d7" ; sem:internal 
 c:Desktop sem:version 1 ; sem:closure "47242e7e921a9a6c" ; sem:internal "new" .
 c:Dialog sem:version 1 ; sem:closure "a868e0e741834336" ; sem:internal "new" .
 c:Divider sem:version 1 ; sem:closure "c1622b60bcd49b91" ; sem:internal "new" .
-c:DockPanel sem:version 1 ; sem:closure "7eeb6c9f4d788462" ; sem:internal "new" .
+c:DockPanel sem:version 2 ; sem:closure "d5858ed71af1ef9b" ; sem:internal "On a phone a specimen, its stage, a card's body and a surface take one step less inset, and a dock panel's header wraps, so what they hold fits at 320px (#246)" .
 c:DockResizable sem:version 1 ; sem:closure "632091bd30f8fb34" ; sem:internal "new" .
 c:Dockable sem:version 1 ; sem:closure "36c2103e75f3524a" ; sem:internal "new" .
 c:DonutChart sem:version 1 ; sem:closure "3b6976e8ff6b813b" ; sem:internal "new" .
@@ -234,7 +234,7 @@ c:SourceBack sem:version 1 ; sem:closure "47bf94c68653a0d8" ; sem:internal "new"
 c:SourceView sem:version 1 ; sem:closure "9d8a8d14c67d3983" ; sem:internal "new" .
 c:Spacer sem:version 1 ; sem:closure "4a2e522796021853" ; sem:internal "new" .
 c:Sparkline sem:version 1 ; sem:closure "503fd84c93efdbb2" ; sem:internal "new" .
-c:Specimen sem:version 1 ; sem:closure "9c35f89b0d63991c" ; sem:internal "new" .
+c:Specimen sem:version 2 ; sem:closure "51c246631a3148db" ; sem:internal "On a phone a specimen, its stage, a card's body and a surface take one step less inset, and a dock panel's header wraps, so what they hold fits at 320px (#246)" .
 c:Spinner sem:version 1 ; sem:closure "3a6f03108b666df7" ; sem:internal "new" .
 c:SplitView sem:version 1 ; sem:closure "526b048270e89644" ; sem:internal "new" .
 c:Stack sem:version 1 ; sem:closure "d6b11a67d242f448" ; sem:internal "new" .
@@ -244,7 +244,7 @@ c:StatusBar sem:version 1 ; sem:closure "3caac0579317be60" ; sem:internal "new" 
 c:Stepper sem:version 1 ; sem:closure "6ca54ed1ad033b68" ; sem:internal "new" .
 c:StreamMembers sem:version 1 ; sem:closure "8b3294b13a08f830" ; sem:internal "new" .
 c:StreamStats sem:version 1 ; sem:closure "661450f338961373" ; sem:internal "new" .
-c:Surface sem:version 1 ; sem:closure "3d6eeffb8f34448b" ; sem:internal "new" .
+c:Surface sem:version 2 ; sem:closure "b9c2b903f060f736" ; sem:internal "On a phone a specimen, its stage, a card's body and a surface take one step less inset, and a dock panel's header wraps, so what they hold fits at 320px (#246)" .
 c:Swatches sem:version 1 ; sem:closure "db4005d00484dcde" ; sem:internal "new" .
 c:Switch sem:version 1 ; sem:closure "830b8accc49c4d59" ; sem:internal "new" .
 c:Tab sem:version 1 ; sem:closure "aa36c64217cdde1b" ; sem:internal "new" .

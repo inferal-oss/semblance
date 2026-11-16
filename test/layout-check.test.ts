@@ -64,6 +64,9 @@ const EXPECTED: [RegExp, string[]][] = [
   [/^233-before_components-windows_320/, ['contentStaysInCards', 'pageFits']],
   [/^233-before_examples-dashboard_320/, ['contentStaysInCards', 'pageFits']],
   [/^today_(components-windows|examples-dashboard)_320/, []],
+  // #246: on the layout page a ledger's columns and a dock panel's header wider than the card left
+  // inside four nested 24px insets; on a phone each container takes one step less, the header wraps
+  [/^today_components-layout_320/, []],
   // parts the components name themselves (lc:role, #193): the shape form's controls are one height in
   // every theme, an inline choice's pill is its control where wide; nav items fit, in German and Arabic
   [/^today_examples-shape-form_/, []],

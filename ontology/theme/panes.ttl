@@ -286,11 +286,14 @@
 [] a sty:StyleRule ; sty:appliesTo c:DockPanel ; sty:part "> .sem-dock-handle:is(:hover, :focus-visible)" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-accent) 45%, transparent)" ] .
-# Header: fold control and title, then badge and actions.
+# Header: fold control and title, then badge and actions; where they do not fit on one line
+# (a phone, a narrow panel) the actions wrap below, still at the end.
 [] a sty:StyleRule ; sty:appliesTo c:DockPanel ; sty:part "> .sem-dock-header" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
-                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "column-gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "row-gap" ; sty:token tok:space-1 ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "min-height" ; sty:raw "40px" ] ,
                  [ sty:property "padding" ; sty:tokens ( tok:space-1 tok:space-4 ) ] ,

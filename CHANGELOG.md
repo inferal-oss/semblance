@@ -15,6 +15,9 @@ Each entry states the engines' ABI version (`rdf-engine/ABI.md`).
   rest in slices, instead of everything in one long task (`arrive`, `src/slices.ts`).
 - Maintained views: a template (`iv:targets`, `iv:perReferrer`) that arrives after start, before
   its referrers, now hears of the referrers rules derive.
+- On a phone (`sty:CompactWidth`) a card's body, a surface's own inset, a specimen and its stage
+  take one step less inset, and a dock panel's header wraps its actions below its title, so what
+  they hold fits at 320px (#246).
 
 ## 0.1.0 (not yet published)
 
