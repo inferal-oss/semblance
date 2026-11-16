@@ -6,6 +6,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { H, MOD, NS, VAL, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { el, marked, md5 } from './data.ts'
+import { maintainedRows } from '../view/rows.ts'
 import { compact } from './reference.ts'
 import { named, rdfList, RDFS_LABEL, str, text } from './util.ts'
 
@@ -126,6 +127,22 @@ const editor: FnRule = (ctx, focus) => {
   const label = text(ctx, focus, C + 'label')
   const tree = el(o, 'tree', 'Ul', { class: 'sem-tree', role: 'tree', 'aria-label': label })
   o.renders(el(o, 'root', 'Div', {}, [tree, el(o, 'arrows', 'Div', { class: 'sem-arrows' })]))
+  return o.quads
+}
+
+/** Read the bounded, ordered view. Stores without SPARQL slice their entry list. */
+const page: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const entries = ctx.sparql
+    ? (maintainedRows(ctx, o.node('view-RdfEditorEntryWindow')) ?? []).map(row => row.get('entry')).filter(named)
+    : (() => {
+      const size = Math.max(0, Number(ctx.object(focus, C + 'entryPageSize')?.value) || 0)
+      const start = Math.max(0, (Number(ctx.object(focus, C + 'page')?.value) || 1) - 1) * size
+      return ctx.objects(focus, C_ENTRY).filter(named)
+        .sort((a, b) => a.value < b.value ? -1 : a.value > b.value ? 1 : 0)
+        .slice(start, start + size)
+    })()
+  for (const term of entries) o.t(focus, C + 'rdfPageEntry', term)
   return o.quads
 }
 
@@ -631,7 +648,9 @@ const term: FnRule = (ctx, focus) => {
   const shown = shownTerm
   const badge = f.reifier ? phrase(ctx, 'RdfAboutPhrase') : f.lit && f.lang !== '' ? '@' + f.lang : f.named !== undefined && f.lit ? f.compactName : undefined
   const note = t.termType === 'NamedNode' && !f.blank ? saysMore(text(ctx, t, RDFS_LABEL), t.value) : undefined
-  const jumps = f.depth > 0 && t.termType === 'NamedNode' && !f.blank && ctx.untraced(() => ctx.match(f.editor, C_ENTRY, t).length > 0)
+  const paged = ctx.match(f.editor, C + 'entryPageSize', null).length > 0
+  const jumps = f.depth > 0 && t.termType === 'NamedNode' && !f.blank &&
+    (paged ? ctx.match(f.editor, C + 'rdfPageEntry', t).length > 0 : ctx.untraced(() => ctx.match(f.editor, C_ENTRY, t).length > 0))
   const goes = !jumps && f.vocab
   const link = jumps ? 'resource' : goes ? 'term' : undefined
   const description = f.reifier ? phrase(ctx, 'RdfReifierPhrase') : f.list ? phrase(ctx, 'RdfListPhrase').replace('{n}', String(f.count)) : f.blank ? phrase(ctx, 'RdfNestedPhrase') : undefined
@@ -1402,6 +1421,7 @@ export const functions: Record<string, FnRule> = {
   'rdf-editor:diff-removed-predicates': diffRemovedPredicates,
   'rdf-editor': editor,
   'rdf-editor:entry': entry,
+  'rdf-editor:page': page,
   'rdf-editor:listing': listing,
   'rdf-editor:arrows': arrows,
   'rdf-editor:status': status,

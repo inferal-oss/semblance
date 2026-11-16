@@ -265,6 +265,36 @@ describe('c:RdfEditor', () => {
     expect(editRuns(40)).toBe(small)
   })
 
+  it('materializes only the requested page of a large RDF document', () => {
+    const root = UI + 'paged-rdf'
+    const rows = Array.from({ length: 240 }, (_, i) => {
+      const key = String(i).padStart(3, '0')
+      return `ui:paged-rdf c:entry lib:page${key} . lib:page${key} lib:title "Entry ${key}" .`
+    }).join('\n')
+    const config = `@prefix c: <https://semblance.dev/ns/component#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix lib: <https://semblance.dev/demo/library#> .
+ui:paged-rdf a c:RdfEditor ; c:entryPageSize 3 .
+${rows}`
+    const viewers = [mount('oxigraph', 'sparql', config, [], root), mount('oxigraph', 'function', config, [], root)]
+    const [sparql, fn] = viewers
+    const labels = (m: ReturnType<typeof mount>) => [...m.editor().querySelectorAll(':scope > .sem-tree > [role=treeitem] > .sem-row > .sem-label')]
+      .map(row => row.textContent)
+    expect(labels(sparql)).toEqual(['lib:page000', 'lib:page001', 'lib:page002'])
+    expect(fn.html()).toBe(sparql.html())
+
+    for (const viewer of viewers) {
+      const page = viewer.f.quad(viewer.nn(root), viewer.nn(C + 'page'), viewer.f.literal('75', viewer.nn(NS.xsd + 'integer')))
+      const runs = viewer.runs('Rdf')
+      viewer.apply({ add: [page] })
+      expect(labels(viewer)).toEqual(['lib:page222', 'lib:page223', 'lib:page224'])
+      expect(viewer.objects(root, C + 'entry')).toHaveLength(240)
+      expect(viewer.objects(root, C + 'rdfPageEntry')).toHaveLength(3)
+      expect(viewer.runs('Rdf') - runs).toBeLessThan(100)
+    }
+    expect(fn.html()).toBe(sparql.html())
+  })
+
   const EDITABLE = `@prefix c: <https://semblance.dev/ns/component#> . @prefix beh: <https://semblance.dev/ns/behaviour#> . @prefix ui: <https://semblance.dev/demo#> .
 ui:dt-rdf-editor c:editable true .
 ui:rdf-edit a c:Stack ; c:children ( ui:rdf-undo ui:dt-rdf-editor ) .
