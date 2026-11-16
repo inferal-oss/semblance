@@ -1,0 +1,57 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:charts-on-shared-parts a chg:Change ;
+    rdfs:label "The bar chart, heatmap and line chart are series charts, drawn from the shared chart parts"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/384> ;
+    chg:motivation """Each of the three charts had a rule of its own that read the view's rows and repeated the series
+sub-select four times, re-rendered the whole chart on any changed row, wrote its numbers in en-US, and (the line
+chart, an SVG) did not mirror right to left. The series charts already had shared parts for all of this: a plan
+that mints series, categories and points, a layout that adds scales and neighbours, a legend that toggles series,
+points placed by custom properties. The three now use them, so a changed row re-renders its marks and a new kind
+is mostly its marks.""" ;
+    chg:substance """c:BarChart and c:Heatmap are c:SeriesChart kinds, c:LineChart a c:AxisChart kind. What a consumer
+states about them (c:view, c:categoryVariable, c:seriesVariable, c:valueVariable, c:facetVariable, c:facetLabel,
+c:legend, c:unit, c:emptyText, c:flagVariable, c:flagLabel, c:logScale, c:referenceLine) means what it meant;
+no term went.
+
+c:SeriesPlan learned what the three need, each said by the kind: facets (c:faceted: a c:ChartFacet per value of
+c:facetVariable in the order first seen, and a facet's own categories and points, c:facet), category components
+(c:categoryClass, with c:total and c:measured) and points placed in them (c:pointsIn "category"), a point for
+every series and category of a facet (c:fullGrid, with c:flagged), points for values above zero only
+(c:positiveValues), and numeric categories on an x scale (c:numericCategories, c:xAt). c:SeriesLayout adds a
+facet's longest bar (c:max on the facet), log scales in decades (c:logValues; the x scale with c:logScale; a tick's
+c:value its power of ten), the next point of a numeric series by x (c:nextX) and the linear reference
+(c:refX1, c:refY1, c:refX2, c:refY2). A kind with c:minCategories shows its c:emptyText, else "Needs at least two
+sizes.", with fewer numeric categories. A kind with c:saysRows keeps c:RowChartText, a line per row, as its Text
+modality (the bar chart and heatmap); the line chart's Text modality is now its points' words (c:SeriesChartText).
+
+What renders differently:
+- Bar chart: a bar is a c:BarCategory component (div.sem-bar: span.sem-category, ol.sem-track, span.sem-total), a
+  segment a c:BarPoint (li.sem-point.sem-bar-point holding span.sem-seg, its words visually hidden, a tab stop in
+  the chart's arrow-key navigation), as wide as --v of its figure's --max. Totals and words are in the viewer's
+  locale with up to two decimals ("1,200.5 €", not "1201 €"); "running…" is c:ChartRunningPhrase in the viewer's
+  language. The legend is the shared one (toggle buttons; hidden with one series); a segment's value is the sum of
+  its rows' values times their multiplicity (it was the first row's).
+- Heatmap: a cell is a c:HeatCell (td.sem-point, with sem-h0 to sem-h12, sem-flagged or sem-pending), its digits in
+  the viewer's locale; a row's heading is the series' legend label (it was its key); rows are in the series' order
+  across facets (they were in the order first seen within each facet); an unfaceted heatmap has no empty caption.
+- Line chart: no SVG. It is an axis chart (figure with the plot, ticks, marks, x ticks below, the shared legend),
+  its y ticks decades (unit-less), its x ticks a nice scale (decades with c:logScale) rather than each size, a point a
+  c:LinePoint (li.sem-point.sem-line-point with a dot and the segment to the next), the reference a
+  span.sem-reference and its word span.sem-reference-label. One series has no legend.""" ;
+    chg:forwardGuide """Nothing to move in the graph. A stylesheet or test that read the old markup: the bar chart's
+.sem-seg is now inside li.sem-bar-point and carries the series color (background: var(--color)); the heatmap's td
+has class sem-point before its ramp class; the line chart's svg, .sem-grid, .sem-axis, .sem-line and .sem-dot
+(the SVG circle) are gone, its marks are .sem-chart-marks > .sem-point as in the other axis charts. A test that
+compared a bar chart's total or tooltip text compares the viewer's locale's, at most two decimals.""" ;
+    chg:backwardGuide """Nothing to move in the graph either way: the terms the kinds read are those they read before,
+and the new ones are derived or said by the framework's own classes. Going back returns the old markup and its
+en-US numbers.""" ;
+    chg:affects c:BarChart , c:Heatmap , c:LineChart , c:RowChart , c:SeriesChart , c:AxisChart , c:ChartPoint , c:AreaPoint .

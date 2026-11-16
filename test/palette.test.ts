@@ -5,19 +5,11 @@ import { describe, expect, it } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { memoryBackend } from '../src/persistence.ts'
+import { trackFocus } from './focus.ts'
 import { mountNavigating, mountRemembering, mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const C = NS.c
-
-/** A focus the DOM can say it has: linkedom keeps none, so focus() records it here. */
-function trackFocus(window: Window & typeof globalThis, document: Document) {
-  let current: Element | null = null
-  Object.defineProperty(document, 'activeElement', { configurable: true, get: () => current ?? document.body })
-  ;(window.HTMLElement.prototype as HTMLElement).focus = function (this: HTMLElement) {
-    current = this
-  }
-}
 
 type Shell = ReturnType<typeof mountShell>
 
@@ -167,6 +159,24 @@ describe.each(['oxigraph', 'wat'] as const)('command palette (%s)', (kind) => {
     expect(p.document.activeElement).toBe(before)
   })
 
+  it('opened by the graph rather than an event, it still takes the focus to its field and gives it back', () => {
+    const p = drive(mountShell(5, kind))
+    const before = p.document.querySelector('[data-sem-c=app-bar] button') as HTMLElement
+    before.focus()
+    const f = p.store.factory
+    const palette = f.namedNode(UI + 'palette')
+    const open = f.namedNode(C + 'open')
+    const set = (v: boolean) => {
+      p.runtime.apply({ remove: p.store.match(palette, open, null), add: [f.quad(palette, open, f.literal(String(v), f.namedNode(NS.xsd + 'boolean')))] })
+      p.shell.flush()
+    }
+    set(true)
+    expect(p.document.activeElement).toBe(p.input())
+    set(false)
+    expect(p.root().hidden).toBe(true)
+    expect(p.document.activeElement).toBe(before)
+  })
+
   it('remembers what was run, first in a Recent section while nothing is typed', () => {
     const p = drive(mountShell(5, kind))
     p.open()
@@ -310,13 +320,35 @@ describe('the command palette goes to places', () => {
     p.press('Enter')
     await new Promise((r) => setTimeout(r, 0))
     h.shell.flush()
-    expect(t.location.hash).toBe('#docs/rules')
+    expect(t.location.pathname + t.location.hash).toBe('/docs/rules/')
     expect(t.history.pushes).toBe(1)
     expect(p.fact('app', UI + 'page')).toEqual([UI + 'Docs'])
     expect(p.fact('app', UI + 'docSection')).toEqual([UI + 'DocRules'])
     // The request is spent; the step was a nav:Navigate event.
     expect(p.fact('palette', NS.nav + 'goTo')).toEqual([])
     expect(p.log(1)).toEqual([[NS.nav + 'Navigate', UI + 'location']])
+  })
+
+  it('leaves the focus with the page on a place: nothing on the new page takes it, or scrolls to itself', async () => {
+    const t = tab()
+    const h = await mountNavigating({ ...t, schedule: (run) => queueMicrotask(run), frame: () => {} })
+    const p = drive(h as unknown as Shell)
+    const pulled: unknown[] = []
+    const focus = h.window.HTMLElement.prototype.focus
+    h.window.HTMLElement.prototype.focus = function (this: HTMLElement, o?: FocusOptions) {
+      if (!o?.preventScroll) pulled.push(this.className)
+      return focus.call(this, o)
+    }
+    p.open()
+    p.type('checkout')
+    pulled.length = 0
+    p.press('Enter')
+    await new Promise((r) => setTimeout(r, 0))
+    h.shell.flush()
+    expect(t.location.pathname).toBe('/examples/checkout/')
+    expect(pulled).toEqual([])
+    expect(h.document.activeElement).toBe(h.document.body)
+    h.window.HTMLElement.prototype.focus = focus
   })
 })
 
@@ -349,8 +381,9 @@ describe('the gallery palette', () => {
 })
 
 describe('the command palette renders the same with SPARQL rules as with functions', () => {
-  it('after every step', () => {
-    const shells = (['sparql', 'function'] as const).map((prefer) => drive(mountShell(5, 'oxigraph', prefer)))
+  // On wat its texts layer is SPARQL too (sx:sortKey, sx:chars); Oxigraph runs the function twin either way.
+  it.each(['oxigraph', 'wat'] as const)('after every step (%s)', (kind) => {
+    const shells = (['sparql', 'function'] as const).map((prefer) => drive(mountShell(5, kind, prefer)))
     const same = (step: string) => {
       const [a, b] = shells.map((p) => p.document.getElementById('app')!.innerHTML)
       expect(a, `after ${step}: SPARQL and function renderings differ`).toBe(b)
@@ -370,6 +403,12 @@ describe('the command palette renders the same with SPARQL rules as with functio
     all((p) => p.open(), 'reopening, with a recent run')
     all((p) => p.press('ArrowUp'), 'Up')
     all((p) => p.press('Escape'), 'Escape')
+    for (const languages of [['uk'], ['ar'], ['de']]) {
+      all((p) => (p.screen.engine.reconfigure({ languages }), p.shell.flush()), languages.join())
+      all((p) => p.open(), `opening in ${languages.join()}`)
+      all((p) => p.type('ре'), `typing in ${languages.join()}`)
+      all((p) => p.press('Escape'), `closing in ${languages.join()}`)
+    }
   })
 })
 

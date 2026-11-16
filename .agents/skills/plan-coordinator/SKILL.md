@@ -56,8 +56,8 @@ done
 3. Bugs, then the plan's "Next", then "Later".
 
 Engine work (`rdf-engine/`, tracker #9) is its own worker, kept apart from framework work. Several
-workers at once is fine; the machine-wide test queue (two runs) is the real limit, so more than
-about six or seven mostly wait.
+workers at once is fine; the machine's capacity (ARM's admission, or without ARM the test queue's
+two runs) is the real limit, so more than about six or seven mostly wait.
 
 ## 4. Start a worker per piece
 
@@ -70,8 +70,9 @@ Each brief (it is all the worker knows) says:
   `npm run engine:build`;
 - the work: the issue's remaining tasks, in AGENTS.md's terms (SPARQL first, parity, every theme,
   width and language, browser check);
-- tests only through `scripts/test-queue.sh npx vitest run --maxWorkers=2 <files>`, the full suite
-  before a merge;
+- targeted tests only, never the full suite: under an ARM lease when ARM is available
+  (`arm run … --wait -- npx vitest run --maxWorkers=2 <files>`, as AGENTS.md says), otherwise
+  through `scripts/test-queue.sh npx vitest run --maxWorkers=2 <files>`;
 - how it ships: a small issue commits and pushes `main`; a larger one opens a PR with
   `Closes #<n>`. Either way, rebase onto the latest `origin/main` right before merging, since
   other workers land too. Then tick the issue's boxes and the plan line (#8 / #9), and close it;
@@ -107,13 +108,16 @@ that decides what may start must be written there, not just held in your briefs:
   whenever you start a worker, a worker reports, something lands, or a wait clears; remove rows
   for work that landed. Read it first when you take over, and don't start anything a row owns.
 - **A `Coordination:` comment on each issue that waits**, naming what it waits on and who owns
-  it: another PR or issue landing ("starts after PR #31 merges"), the user's approval ("stays
-  uncommitted until the user approves"; "the design needs approval before implementation"), or
-  the user's go-ahead for costly work. Post it when the wait is decided, and comment again when it
-  clears.
+  it: another PR or issue landing ("starts after PR #31 merges"), an approval ("stays uncommitted
+  until approved"; "implementation waits for design approval"), or a go-ahead for costly work. Post
+  it when the wait is decided, and comment again when it clears.
 - **Gates the user sets are recorded verbatim in spirit** (approve each refactor first, don't
   commit until approved): they bind every coordinator and worker, not just the session that heard
   them.
+- **Write in the project's voice** (AGENTS.md): everything you post goes out under the maintainer's
+  account, so never "the user" or "the user's approval" on GitHub, in issues, comments, the
+  Coordination table, PRs or commits. Write "waits for design approval", "Decided: …", "Wanted: …".
+  Briefs to workers say the same.
 
 ## 5b. PRs opened by others
 
@@ -126,15 +130,23 @@ who recommends which survives and asks the user before closing any. PRs from out
 reviewed without running their code, and merged only with the user's approval. Record each reviewer
 as a "review PR #N" row.
 
+**Scheduled turns can't start sessions.** A cron turn (or one started by another session's message)
+is refused by `start_session`: propose each reviewer as a card (`initiation: "own_initiative"`) and
+record the row as "none (proposed as a card)"; don't propose the same PR twice. When a card's PR
+merges or is picked up some other way, withdraw it (`dismiss_task`) and drop the row.
+
 ## 5c. Tests and the shared machine
 
 - Workers' briefs say: run **targeted tests only** (the files the change affects), then merge;
   never the full suite on a branch or PR (AGENTS.md).
 - **You** run the full suite on `main` after a batch of merges (`npm run test:full`, in the
-  background), file an issue for each failure, and **get each fixed**: start a worker (or hand it
+  background; under an ARM lease when ARM is available, e.g. `--cpu 6 --memory 10GiB --ttl 90m`,
+  after `npm run engine:build` under its own lease), file an issue for each failure, and **get each fixed**: start a worker (or hand it
   to the worker whose code it is). Never leave a failure labelled "known" or "flaky under load";
   a test that only passes on an idle machine gets made fast enough to pass with margin.
-- Watch the machine: `uptime`, the queue (`ls /tmp/semblance-vitest.queue`), stuck waiters (a queue
+- With ARM, watch `arm status --json` and `arm runs --json`; its admission is the limit, and the
+  slot hold below is not needed. Without ARM, recommend installing it (<https://getarm.org>) to the
+  operator, and watch the machine: `uptime`, the queue (`ls /tmp/semblance-vitest.queue`), stuck waiters (a queue
   process with no ticket). When the CPU is too high, hold test slot 2 yourself
   (`lockf -s /tmp/semblance-vitest.lock.2 sleep 86400`, in the background) so one run goes at a time,
   and ask lower-priority workers to hold their runs. Record holds in #8 and lift them when the
@@ -151,4 +163,13 @@ as a "review PR #N" row.
   the question goes to the user.
 - Keep #8 (its Coordination table too) and #9 current as things land; when a PR merges, offer to
   archive its worker.
+- **Before archiving a session, check its worktree.** `git -C <worktree> status -sb` and
+  `git log origin/main..<branch>` for every branch it made: unpushed commits or uncommitted changes
+  mean the work isn't done. Push the branch (or have the worker push it and open its PR) before it
+  is archived. When the maintainer asks about work from an archived session, look there first: its
+  branches, its worktree, the end of its transcript.
+- **A worker's blocked action goes back to the maintainer.** When a worker reports that a permission
+  check blocked a merge or a force-push, tell the maintainer it waits on them in that session. Act
+  yourself only on the maintainer's own words to you (and say so on the issue or PR), never on the
+  worker's request.
 - Report to the user in a line or two per worker: what landed (with links), what is left.

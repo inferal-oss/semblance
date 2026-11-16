@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach } from 'vitest'
 import { watchStores } from '../src/node/load.ts'
 import type { GraphStore } from '../src/store/types.ts'
+import { type Persistence, watchPersistence } from '../src/persistence.ts'
 import { type Sandboxes, watchSandboxes } from '../src/sandbox.ts'
 
 // Stores are released when they are done with (GraphStore.dispose): Oxigraph's share one capped
@@ -26,16 +27,31 @@ watchSandboxes((s) => (inTest ? sandboxesOfTest : sandboxesOfFile).push(new Weak
 const stop = (all: WeakRef<Sandboxes>[]) => {
   for (const s of all.splice(0)) s.deref()?.dispose()
 }
+// So does persistence: a write waiting for its delay (60 s in the harness) would otherwise run
+// against a store released here, in a later test.
+const persistenceOfTest: WeakRef<Persistence>[] = []
+const persistenceOfFile: WeakRef<Persistence>[] = []
+watchPersistence((p) => (inTest ? persistenceOfTest : persistenceOfFile).push(new WeakRef(p)))
+const halt = (all: WeakRef<Persistence>[]) => {
+  for (const p of all.splice(0)) p.deref()?.stop()
+}
 
 beforeEach(() => {
   inTest = true
 })
+// Then the turn ends. V8 keeps what a WeakRef was made for or deref'd to alive until the microtask
+// queue drains (N3's stores make them, and so does this file), and vitest goes from one synchronous
+// test to the next in microtasks: without a macrotask between them, every site a file mounts stays
+// alive until the file ends (the reference tests reached 4 GB at about 300 MB a test).
 afterEach(() => {
   inTest = false
   stop(sandboxesOfTest)
+  halt(persistenceOfTest)
   dispose(ofTest)
+  return new Promise<void>((resolve) => setImmediate(resolve))
 })
 afterAll(() => {
   stop(sandboxesOfFile)
+  halt(persistenceOfFile)
   dispose(ofFile)
 })

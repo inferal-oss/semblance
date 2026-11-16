@@ -90,7 +90,7 @@ describe('behaviour layer', () => {
       // Typing is an RDF event; the TextField's own reaction stores the value and clears the error.
       input.value = 'Ship the spike'
       fire(input, 'input')
-      expect(handled.at(-1)).toEqual(['TextFieldInput'])
+      expect(handled.at(-1)).toEqual(['TypeText'])
       expect(value()).toBe('Ship the spike')
       expect(input.hasAttribute('aria-invalid')).toBe(false)
 

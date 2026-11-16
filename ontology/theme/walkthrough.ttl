@@ -78,7 +78,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-step[aria-current=step] .sem-walk-num" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent ] ,
                  [ sty:property "border-color" ; sty:token tok:accent ] ,
-                 [ sty:property "color" ; sty:raw "white" ] .
+                 [ sty:property "color" ; sty:token tok:on-accent ] .
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-title" ;
     sty:declares [ sty:property "margin" ; sty:raw "2px 0 var(--sem-space-2)" ] ,
                  [ sty:property "font-size" ; sty:token tok:text-md ] ,
@@ -146,7 +146,7 @@
                  [ sty:property "scroll-behavior" ; sty:raw "smooth" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-band" ;
     sty:declares [ sty:property "font" ; sty:raw "600 11px var(--sem-font-mono)" ] ,
-                 [ sty:property "fill" ; sty:token tok:faint ] .
+                 [ sty:property "fill" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-edge" ;
     sty:declares [ sty:property "fill" ; sty:raw "none" ] ,
                  [ sty:property "stroke" ; sty:raw "color-mix(in oklab, var(--sem-muted) 55%, transparent)" ] ,

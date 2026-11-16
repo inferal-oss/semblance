@@ -36,8 +36,37 @@ const title = (h: H, id: string) => h.root(id).querySelector('.sem-mg-title')!.t
 const input = (h: H, id: string, end = false) => h.root(id).querySelectorAll<HTMLInputElement>('input')[end ? 1 : 0]!
 
 describe('dates and times as rules', () => {
-  it('every rendering has a SPARQL rule and a function twin (the locale texts are Intl, function only)', () => {
+  it('every rendering has a SPARQL rule and a function twin', () => {
     expect(implementationGaps(['components/dates.ttl', 'layers/l10n.ttl'])).toEqual({ noSparql: [], noFunction: [] })
+  })
+})
+
+// The locale's calendar (#7): from sx:formatDateTime's fields, parts and info in the SPARQL rule, the
+// same as its function twin derives; on wat (Oxigraph has no sx: functions, so it runs the twin either way).
+describe('the locale’s calendar, SPARQL and function rules alike (wat)', () => {
+  /** Every l10n: triple the calendar derived about a dated component and the nodes minted under it. */
+  const calendar = (h: H) =>
+    h.store
+      .match(null, null, null, h.screen.engine.graph)
+      .filter((q) => q.predicate.value.startsWith(NS.l10n) && (/\/~l10n-/.test(q.subject.value) || !q.subject.value.includes('/~')) && q.subject.value.startsWith(EX))
+      .map((q) => `${q.subject.value} ${q.predicate.value} ${q.object.termType} ${q.object.value} ${q.object.termType === 'Literal' ? q.object.datatype.value : ''}`)
+      .sort()
+
+  it('chooses the SPARQL rule on wat', () => {
+    const rules = (mountDates('wat').screen.engine as unknown as { rules: { slot: string; kind: string }[] }).rules
+    expect(rules.find((r) => r.slot === NS.l10n + 'CalendarTexts')?.kind).toBe('sparql')
+  })
+
+  const LOCALES = DATES_APP.replace('ex:start a c:TimeField ;', 'ex:start a c:TimeField ; l10n:locale "en-GB" ;').replace('ex:grid a c:MonthGrid ;', 'ex:grid a c:MonthGrid ; l10n:locale "ar-EG" ;')
+  it.each([['default', DATES_APP], ['own locales', LOCALES]])('derives the same calendar in every language (%s)', (_, app) => {
+    const sites = (['sparql', 'function'] as const).map((p) => mountDates('wat', p, [], app))
+    for (const languages of [[], ['uk'], ['de'], ['ar'], ['en'], ['fr', 'uk']]) {
+      for (const h of sites) h.screen.engine.reconfigure({ languages })
+      for (const h of sites) h.renderer.flush()
+      const [a, b] = sites.map(calendar)
+      expect(a!.length, languages.join()).toBeGreaterThan(4 * 40)
+      expect([a!.filter((x) => !b!.includes(x)), b!.filter((x) => !a!.includes(x))], languages.join()).toEqual([[], []])
+    }
   })
 })
 

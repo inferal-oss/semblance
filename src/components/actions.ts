@@ -98,8 +98,10 @@ const menu: FnRule = (ctx, focus) => {
     o.attr(trigger, 'data-sem-shortcut', 'escape').attr(trigger, 'data-sem-shortcut-apple', 'Esc').attr(trigger, 'data-sem-shortcut-other', 'Esc')
     const popup = o.el('popup', 'Div', { id: popupId, class: 'sem-menu-popup' }, items)
     o.attr(popup, 'role', 'menu').attr(popup, 'aria-labelledby', triggerId).attr(popup, 'data-sem-anchor', triggerId)
+    // Opened from the trigger, the focus goes to the first item; closed, back to the trigger.
+    o.attr(popup, 'data-sem-takes-focus', '')
     parts.push(popup)
-  }
+  } else o.attr(trigger, 'data-sem-takes-focus', '')
   const root = o.el('root', 'Div', {}, parts)
   if (open) o.attr(root, 'data-open', 'true')
   o.renders(root)

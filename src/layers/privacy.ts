@@ -7,7 +7,8 @@ const PRV = NS.prv
 
 /** A concealed text field without a declared input type is a password field. */
 const mask: FnRule = (ctx, focus) => {
-  if (!isTrue(ctx.object(focus, PRV + 'concealed')) || ctx.object(focus, NS.c + 'inputType')) return []
+  // (Its own output is no declared type: a re-evaluation reads it too.)
+  if (!isTrue(ctx.object(focus, PRV + 'concealed')) || ctx.objects(focus, NS.c + 'inputType').some((t) => t.value !== 'password')) return []
   const o = ctx.out(focus)
   o.t(focus, NS.c + 'inputType', 'password')
   return o.quads

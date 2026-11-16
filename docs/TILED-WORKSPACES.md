@@ -13,14 +13,16 @@ What the workspace adds is that the tree is the user's to change, by dragging ta
 
 ui:workspace a c:TiledWorkspace ; c:label "Workspace" ; c:rootTile ui:columns .
 ui:columns a c:SplitView ; c:primary ui:main ; c:secondary ui:side .
-ui:main a c:Tabs , dnd:Sortable ; c:tabs ( ui:editor ui:preview ) ; c:selected ui:editor .
-ui:side a c:Tabs , dnd:Sortable ; c:tabs ( ui:notes ) .
+ui:main a c:Tabs , dnd:Sortable ; c:label "Editor and preview" ; c:tabs ( ui:editor ui:preview ) ; c:selected ui:editor .
+ui:side a c:Tabs , dnd:Sortable ; c:label "Notes" ; c:tabs ( ui:notes ) .
 ui:editor a c:Tab ; c:label "Editor" ; c:slot "editor" .
 ui:preview a c:Tab ; c:label "Preview" ; c:content ui:previewPane .
 ui:notes a c:Tab ; c:label "Notes" ; c:content ui:notesPane .
 ```
 
 ## Rearranging
+
+Give each `c:Tabs` group a `c:label`. With `a11y:Layer` enabled, its resolved label names the native tab list, so assistive technology can distinguish the panes. Language-tagged labels follow the viewer’s language. An unlabeled group stays unnamed.
 
 Sortable tabs (`c:Tabs` that are also `dnd:Sortable`) use the drag and drop layer
 ([dragdrop.ttl](../ontology/layers/dragdrop.ttl)): each tab's button is the root of a
@@ -45,6 +47,11 @@ of the pane the new one would take.
 Every change is one reaction (a `CONSTRUCT` pair with a function twin) to one recorded event, and
 each tab keeps its IRI, its content node and its slot throughout, so whatever a tab shows keeps
 its state and its DOM.
+
+A pane's tabs fit their document labels rather than spreading across it, up to a bound past which
+a label is ellipsized (its tab's accessible name stays whole); when the documents do not fit, the
+strip scrolls sideways, in every theme. Section tabs elsewhere, including inside a document a pane
+shows, keep their own sizing.
 
 ## Keeping an arrangement
 

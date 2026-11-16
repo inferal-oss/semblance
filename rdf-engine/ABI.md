@@ -1,4 +1,4 @@
-# Engine ABI (version 2)
+# Engine ABI (version 3)
 
 The contract every engine build implements: Rust (`rust/`) and hand-written
 WebAssembly (`wat/`). One host adapter (`host/`) drives any of them, so the
@@ -98,7 +98,7 @@ scoped to the instance: interning the same label twice gives the same node.
 | `match(s, p, o, g) -> n` | Quads matching the pattern (`0` = any; `g = 1` = default graph only, `g = 0` = all graphs), as `n × 4` ids. Order unspecified. |
 | `apply(removes, adds) -> 0` | Batch: the input buffer holds `removes` quads, then `adds` quads (4 ids each). Removes first. |
 | `quad_count() -> n` | |
-| `load(format, text_len, base_len, graph) -> n` | Parse and add. `format`: 1 N-Triples, 2 N-Quads, 3 Turtle, 4 TriG. Triples go to `graph`; quads keep theirs. Blank node labels are scoped to this document. Returns the number of statements parsed, duplicates included. On a syntax error nothing is added. |
+| `load(format, text_len, base_len, graph) -> n` | Parse and add. `format`: 1 N-Triples, 2 N-Quads, 3 Turtle, 4 TriG, 5 Jelly (a whole delimited stream, or one bare frame, of `text_len` bytes; `base_len` is 0; see "Jelly"). Triples go to `graph`; quads keep theirs. Blank node labels are scoped to this document. Returns the number of statements parsed, duplicates included. On a syntax error nothing is added. |
 | `collect() -> n` | Free terms that no quad, prepared query or pending result uses; their ids are listed in the result buffer and may be reused afterwards. Hosts must forget them. |
 
 ## Queries (SPARQL 1.2)
@@ -125,11 +125,33 @@ results are specified.
 Terms computed by a query (`CONCAT`, `IRI()`, `BNODE()`, aggregates, CONSTRUCT
 blank nodes) are interned and appear in results like any other term.
 
+## Jelly
+
+[Jelly-RDF](https://w3id.org/jelly) streams, read and written frame by frame (JELLY.md has the
+design). A reader reads 1.2 (the column layout) and 1.0/1.1 (the row layout); a writer writes
+1.2. A frame on the wire is a bare `RdfStreamFrame`; the writer's output is delimited (each frame
+after its length as a varint). Readers and writers are handles, released with `jelly_release`.
+
+| export | |
+|---|---|
+| `jelly_reader(graph) -> h` | A reader of one stream. The statements of a TRIPLES stream (and the default graph of a GRAPHS one) go to `graph` (0: the default graph). Blank node labels are the stream's own (FLAT) or each message's (MESSAGES). |
+| `jelly_frame(h, len, mode) -> n` | Read one frame: `len` bytes of the input buffer. `mode` bit 1 adds its statements to the store, bit 2 lists them at `result_ptr()` as `n × 4` ids, in stream order (duplicates kept). All or nothing: on an error nothing of the frame is added, and the reader refuses every later frame. |
+| `jelly_ends(h) -> k` | The RDF Messages that ended in the last frame read: `k` positions at `result_ptr()`, each the number of the frame's statements before that end (an end before any statement is 0; restated stream options end a message too). |
+| `jelly_finish(h) -> 0 \| 1` | The end of the stream: 1 when the message in progress had statements and so ends here. |
+| `jelly_writer(physical, stream_type, rdf_version, max_names, max_prefixes, max_datatypes, frame_rows) -> h` | A writer of one stream, with these stream options (`physical` 1 triples, 2 quads; `stream_type` 0 FLAT, 1 MESSAGES; `rdf_version` 0-3; `max_names` at least 128; `frame_rows` statements per frame, 0 for 4,096). |
+| `jelly_write(h, count) -> n` | Add `count` statements (the input buffer holds `count × 4` ids, in order); returns `n` bytes at `result_ptr()`: the frames they completed (often none). A statement the stream cannot hold (a literal subject, a triple term in RDF 1.1, a typed literal without a datatype lookup) is an error, after which the writer must be released. |
+| `jelly_message(h) -> 0` | End the current RDF Message (MESSAGES streams). |
+| `jelly_flush(h) -> n` | The statements and message ends since the last frame, as a frame: `n` bytes at `result_ptr()`. The first frame also carries the stream options, so a writer that wrote nothing flushes the options alone. Nothing pending later: 0 bytes. |
+| `jelly_release(h)` | |
+
+The writer's choices (IRI split, least-recently-used lookups, runs) are fixed (JELLY.md,
+"Decisions"), so both builds write the same bytes from the same statements.
+
 ## Housekeeping
 
 | export | |
 |---|---|
-| `abi_version() -> 2` | Version 2 added the `math` and `intl` imports and `extensions`. |
+| `abi_version() -> 3` | Version 2 added the `math` and `intl` imports and `extensions`; version 3 added Jelly (`load` format 5 and the `jelly_*` exports). |
 | `extensions() -> bits` | Optional: the SPARQL extension groups the engine implements (EXTENSIONS.md, "Capabilities"); absent means none. |
 | `input(len) -> ptr` | |
 | `result_ptr() -> ptr` | |
@@ -220,6 +242,99 @@ group's patterns through `cq_eval`); they decline DESCRIBE, aggregates,
 ORDER BY / LIMIT / OFFSET of the query itself, and triple terms in templates.
 The WAT engine also compiles subqueries (any modifiers; the engine finishes
 them) and typed expressions in the module; the Rust engine follows.
+
+## Optional: fetching (`SERVICE` and `LOAD`)
+
+An engine has no network, and a run is synchronous: it cannot wait for a
+response. A browser cannot block its main thread on one either (no
+`Atomics.wait` there, and JSPI is not in every browser), so the engine does not
+call out to fetch. **A run that needs something from elsewhere stops, says what,
+and is run again once the host has it.**
+
+- `run` and `update` return **-3, "waiting"**, when the query or update needs a
+  `SERVICE` result or a `LOAD`ed document the engine has not been given. Nothing
+  was changed, and nothing was written to the result buffer. Evaluation goes on
+  past the first missing answer (as if it had no solutions), so one round names
+  every request it can.
+- The host reads the **requests** (below), fetches them as it likes (in
+  parallel, asynchronously, under its own policy), gives the engine each answer
+  or failure, and calls the same `run` or `update` again. The engine then reads
+  the answers instead of asking. A request that needs an earlier answer (a
+  `SERVICE ?endpoint` whose endpoint another `SERVICE` binds) shows up in a
+  later round; the rounds end when the call returns anything but -3.
+- Answers stay until `fetch_clear()`, which the host calls when the operation is
+  over. The table is the instance's, not the query's: an answer serves any run
+  that asks the same request. Its terms are in use until then (the host does not
+  `collect` while a fetch is in flight).
+
+Requests are numbered from 0 in the order the engine made them, and keep their
+numbers until `fetch_clear`. **The host fetches only what its own call asked
+for** (`asked`, read right after that call returns -3): a request another run
+left waiting (a rule's, between two rounds of the host's operation) is not
+the host's to fetch, and a synchronous call that waits clears the table when
+no operation is in flight.
+
+| export | |
+|---|---|
+| `fetch_count() -> n` | Requests made since `fetch_clear`, answered or not. |
+| `fetch_request(i) -> n` | Request `i` at `result_ptr()`: `state` (0 waiting, 1 answered, 2 failed), `kind` (1 `SERVICE`, 2 `LOAD`), `target` (the endpoint's or the document's IRI id), `width` (variables), `asked` (1 if the last `run` or `update` waited on it), then `n` binding rows of `width` ids. |
+| `fetch_text_ptr(i)`, `fetch_text_len(i)` | `SERVICE`: the query to send, `SELECT * WHERE { … }` with the pattern as written, after the `BASE` and `PREFIX` declarations it was parsed under (and `BASE <base>` first when `prepare` had one). `LOAD`: empty. |
+| `fetch_var_ptr(i, j)`, `fetch_var_len(i, j)` | `SERVICE`: variable `j` (name without `?`): the pattern's in-scope variables, those `SELECT *` returns. |
+| `fetch_answer(i, n) -> 0` | Answer request `i`: the input buffer holds `n` rows of `width` ids (`SERVICE`: the endpoint's solutions, 0 = unbound) or `n` triples of 3 ids (`LOAD`: the document's triples). |
+| `fetch_fail(i, len) -> 0` | Request `i` failed: the input buffer holds why, `len` bytes of UTF-8. |
+| `fetch_clear() -> 0` | Forget every request and answer. |
+
+**`SERVICE [SILENT] (<iri> | ?var) { P }`** evaluates, for a solution `μ` of
+what is joined before it (the left side passes its bindings in, as it does to a
+basic graph pattern):
+
+1. The endpoint: the IRI, or `μ(?var)` when `?var` is in scope before
+   `SERVICE` in its own group (as BIND's scope rule counts it), or else the
+   value a parameter (`bind`) gives `?var`. A binding from outside the group
+   does not reach it: each engine passes outer bindings into a nested group
+   its own way, and this rule keeps them equal. No IRI there (unbound, a
+   literal, a blank node): no solutions (`SILENT`: `μ` alone), not an error,
+   so the result does not depend on whether a `FILTER` on the endpoint ran
+   before `SERVICE` or after.
+2. The **binding row**: `μ` restricted to `P`'s variables, leaving out blank
+   nodes and triple terms (they cannot be sent). The bound positions are the
+   row's *domain*.
+3. The request is `(endpoint, text, domain)`; rows of one request share their
+   domain. The host sends the text with `VALUES (?domain …) { (row) … }` after
+   it when the domain is not empty, so the endpoint joins the rows after
+   evaluating `P` (a `FILTER` in `P` does not see them, as SPARQL scopes it).
+4. Answered: the answer rows compatible with `μ`, merged into it. Failed: an
+   error, the run fails with it (`SILENT`: `μ` alone, as one empty solution
+   joined). Not yet asked or answered: no solutions, and the run returns -3.
+
+So rows of one request with the same domain are answered by one fetch, and
+an answer row belongs to the row it agrees with. Results do not depend on how
+the evaluator orders a join: `SERVICE` with the left side's bindings passed in
+equals `SERVICE` evaluated alone and joined. Which bindings reach a `SERVICE`
+(and so the `VALUES` a request carries) is each evaluator's own: WAT passes a
+nested group only the variables it certainly binds and applies a `FILTER` as
+soon as its variables are bound, Rust passes what a join may substitute. The
+two builds give the same results, not always the same requests.
+
+**`LOAD [SILENT] <iri> [INTO GRAPH <g>]`**: answered, the document's triples
+are added to `g` (the default graph without `INTO`), in the order of the
+update's operations; failed, the update fails (`SILENT`: the operation does
+nothing); not answered, the whole update returns -3 and changes nothing.
+The host parses the document: an answer is triples of ids, whatever the format
+was (blank nodes fresh per document).
+
+`compile` declines a query with `SERVICE` (`not compilable: SERVICE`). Each
+round is a run like any other, budgeted by `set_deadline` / `set_fuel`; the
+time between rounds, the fetch itself, is the host's to bound
+(`rdf-engine/host/fetching.ts`: a deadline for the whole operation, a timeout
+and a size limit per request, a cap on rounds).
+
+These exports are optional, as `compile` is: the host checks for
+`fetch_count`, and the ABI version does not change for them. A host that does not fetch sees -3
+as an error ("waiting: …"), which is what a rule or view running such a query
+should see: **only the host's own asynchronous calls fetch** (`GraphStore.query`, `update`),
+never a synchronous `run` or `update`, so nothing a graph says can reach the
+network on its own.
 
 ## Changing the ABI
 

@@ -2,8 +2,22 @@ import { resolve } from 'node:path'
 import type { Plugin } from 'vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import { defineConfig } from 'vitest/config'
+import packageJson from './package.json' with { type: 'json' }
+import reactPackageJson from './packages/react/package.json' with { type: 'json' }
+import rustPackageJson from './packages/rdf-engine-rust/package.json' with { type: 'json' }
+import watPackageJson from './packages/rdf-engine-wat/package.json' with { type: 'json' }
+import { type Manifest, sourceAliases } from './scripts/package-exports.ts'
+import { semblance } from './src/node/vite.ts'
+
+const semblancePackage = packageJson as Manifest
+const reactPackage = reactPackageJson as Manifest
 
 const here = import.meta.dirname
+
+// The engine packages' modules in this repository point at rdf-engine/build/ (npm run engine:build).
+const enginePackages = ([[watPackageJson, 'wat'], [rustPackageJson, 'rust']] as const).flatMap(([manifest, kind]) =>
+  sourceAliases(manifest as Manifest, resolve(here, `packages/rdf-engine-${kind}/src`), { './wasm': resolve(here, `rdf-engine/build/${kind}.wasm`) }),
+)
 
 // /llms.txt, /llms-full.txt and the Markdown pages under /llms/ (scripts/gen-llms.ts), generated
 // from the graph: emitted into the build, and served by the dev server (again after a .ttl changes).
@@ -35,9 +49,15 @@ function llms(): Plugin {
 // ontologies and the Oxigraph WASM inlined) in dist-single/.
 export default defineConfig(({ command, mode }) => ({
   root: 'demo',
-  // Relative asset URLs, so a build works from any path (GitHub Pages serves it under
-  // /semblance/ until a domain is set). The app routes by fragment only, so this is safe.
-  base: command === 'build' ? './' : '/',
+  // The packages in this repository by their names, as an app that installed them imports them.
+  // Every entry of their exports maps to its source (scripts/package-exports.ts), never to lib/.
+  resolve: {
+    alias: [...sourceAliases(semblancePackage, here), ...sourceAliases(reactPackage, resolve(here, 'packages/react/src')), ...enginePackages],
+  },
+  // The site is served from its domain's root (semblance.dev): its pages are paths (/docs/rules/),
+  // so assets are addressed from the root (SEMBLANCE_BASE for another path). The single file
+  // routes by fragment, so its URLs stay relative.
+  base: command === 'build' && mode === 'single' ? './' : (process.env.SEMBLANCE_BASE ?? '/'),
   // Cross-origin isolation gives performance.now() microsecond resolution
   // (otherwise browsers coarsen it to ~100µs), which the benchmarks need.
   server: {
@@ -46,11 +66,16 @@ export default defineConfig(({ command, mode }) => ({
   },
   // Pre-bundling would break Oxigraph's wasm-bindgen glue.
   optimizeDeps: { exclude: ['oxigraph'] },
-  plugins: [llms(), ...(mode === 'single' ? [viteSingleFile({ removeViteModuleLoader: true })] : [])],
+  // Every page of the site is rendered at build time (semblance.config.ts) and taken over by the
+  // client; the single file is rendered too, with everything inline.
+  plugins: [llms(), ...(mode === 'single' ? [viteSingleFile({ removeViteModuleLoader: true })] : []), semblance({ config: resolve(here, 'semblance.config.ts') })],
   build: {
     outDir: resolve(here, mode === 'single' ? 'dist-single' : 'dist'),
     emptyOutDir: true,
     target: 'es2023',
+    // Browsers with light-dark(): the color scheme picks the side, as in the compiled theme. Lowered
+    // for older ones, it would read a switch only the minifier's own rules set, not data-sem-color-scheme.
+    cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
     assetsInlineLimit: mode === 'single' ? Number.MAX_SAFE_INTEGER : undefined,
   },
   // Integration tests mount the whole demo; with two runs sharing the machine (scripts/test-queue.sh)

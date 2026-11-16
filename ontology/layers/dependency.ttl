@@ -115,32 +115,12 @@ WHERE {
 }""" .
 
 # --- defaults: choosing a value sets others -----------------------------------------------------------
-# Beside the control's own reaction (c:ChoiceSelect, c:RadioGroupSelect), from the same state:
+# Beside the control's own reaction (c:Pick, on any c:Chooser), from the same state:
 # both see the value before the change, and their effects are applied together.
 
-dep:ChoiceDefaults a beh:Reaction ;
+dep:Defaults a beh:Reaction ;
     beh:when beh:Change ;
-    beh:sourceClass c:Choice ;
-    beh:deletes """
-CONSTRUCT { ?target ?q ?old }
-WHERE {
-  $this c:controls ?target ; c:property ?p . $event beh:value ?v BIND(IRI(?v) AS ?new)
-  FILTER NOT EXISTS { ?target ?p ?new }
-  { ?new dep:defaults ?d } UNION { ?target ?p ?was . ?was dep:defaults ?d }
-  ?d ?q ?any FILTER(?q != rdf:type)
-  ?target ?q ?old
-}""" ;
-    beh:inserts """
-CONSTRUCT { ?target ?q ?o }
-WHERE {
-  $this c:controls ?target ; c:property ?p . $event beh:value ?v BIND(IRI(?v) AS ?new)
-  FILTER NOT EXISTS { ?target ?p ?new }
-  ?new dep:defaults ?d . ?d ?q ?o FILTER(?q != rdf:type)
-}""" ;
-    sem:function "dependency:defaults" .
-dep:RadioDefaults a beh:Reaction ;
-    beh:when beh:Change ;
-    beh:sourceClass c:RadioGroup ;
+    beh:sourceClass c:Chooser ;
     beh:deletes """
 CONSTRUCT { ?target ?q ?old }
 WHERE {

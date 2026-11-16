@@ -1,0 +1,45 @@
+{
+  "name": "@semblance-dev/rdf-engine-wat",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "description": "Semblance's SPARQL engine, written in WebAssembly text: the build @semblance-dev/semblance's wat store runs",
+  "keywords": [
+    "semblance",
+    "rdf",
+    "sparql",
+    "webassembly"
+  ],
+  "homepage": "https://semblance.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inferal-oss/semblance.git",
+    "directory": "packages/rdf-engine-wat"
+  },
+  "bugs": {
+    "url": "https://github.com/inferal-oss/semblance/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./wasm": {
+      "types": "./lib/wasm.d.ts",
+      "default": "./lib/wat.wasm"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "LICENSE-APACHE",
+    "LICENSE-MIT"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepack": "npm --prefix ../.. run build:package"
+  }
+}

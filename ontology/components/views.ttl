@@ -1,4 +1,6 @@
 @prefix sx: <https://semblance.dev/ns/sparql#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
@@ -427,10 +429,308 @@ c:SourceViewRendering a sem:Rendering ;
     sem:targets c:SourceView ;
     sem:stratum 0 ;
     sem:follows c:of ;
-    sem:watches rdf:type , c:of , c:label , c:emptyText ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it splits the text into lexical tokens for coloring." ;
-    sem:needsExtension sx:Matches .
+    sem:watches rdf:type , c:of , c:label , c:emptyText , c:text , c:path .
 c:SourceViewRendering-fn a sem:Rule ; sem:implements c:SourceViewRendering ; sem:function "source-view" .
+# One row per line (c:line, its number), its tokens by the shared lexicon (c:SparqlLexicon), each
+# keyed by where it starts. Lines are tokenized one by one, so a long string that spans lines is
+# found first and its lines are pieces of it.
+c:SourceViewRendering-sparql-screen a sem:Rule ;
+    sem:implements c:SourceViewRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?empty , ?headEl , ?code .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?headEl a rdfhtml:Div ; rdfhtml:class "sem-source-head" ; rdfhtml:hasChild ?name , ?path , ?toggles ; ord:immediatelyPrecedes ?code .
+  ?name a rdfhtml:Span ; rdfhtml:class "sem-source-name" ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?path .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?caption .
+  ?path a rdfhtml:Code ; rdfhtml:class "sem-source-path" ; rdfhtml:hasChild ?pathText ; ord:precedes ?toggles .
+  ?pathText a rdfhtml:Text ; rdfhtml:data ?pathData .
+  ?toggles a rdfhtml:Span ; rdfhtml:class "sem-fullscreen-toggles" ; rdfhtml:hasChild ?vpToggle , ?fsToggle .
+  ?vpToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; fs:property fs:fullViewport ; sem:tooltip ?vpPhrase ;
+            rdfhtml:attribute ?vpKind , ?vpLabel ; ord:immediatelyPrecedes ?fsToggle .
+  ?vpKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "viewport" .
+  ?vpLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?vpPhrase .
+  ?fsToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; fs:property fs:fullscreen ; sem:tooltip ?fsPhrase ;
+            rdfhtml:attribute ?fsKind , ?fsLabel .
+  ?fsKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "screen" .
+  ?fsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?fsPhrase .
+  ?code a rdfhtml:Pre ; rdfhtml:class "sem-turtle sem-source" ; rdfhtml:hasChild ?row .
+  ?row a rdfhtml:Span ; rdfhtml:class "sem-line" ; c:line ?k ; rdfhtml:hasChild ?tok , ?nl ; ord:immediatelyPrecedes ?nextRow .
+  ?nl a rdfhtml:Text ; rdfhtml:data "\\n" .
+  ?tok a ?tokTag ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterTok .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+}
+WHERE {
+  $this a c:SourceView .
+  LATERAL { OPTIONAL { $this c:of ?source FILTER(isIRI(?source)) ?source c:text ?body0 } }
+  LATERAL { OPTIONAL { $this c:of ?pathSource FILTER(isIRI(?pathSource)) ?pathSource c:path ?path0 } }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?body0))
+      BIND(rdfhtml:Div AS ?rootTag)
+      BIND("sem-empty" AS ?rootClass)
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No source.")) AS ?emptyText)
+    } UNION {
+      FILTER(BOUND(?body0))
+      BIND(rdfhtml:Figure AS ?rootTag)
+      OPTIONAL { $this l10n:label ?labelPicked }
+      OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+      BIND(STR(COALESCE(?labelPicked, ?labelOnly, "Source")) AS ?caption)
+      BIND(COALESCE(STR(?path0), "") AS ?pathData)
+      BIND(IRI(CONCAT(STR($this), "/~head")) AS ?headEl)
+      BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+      BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+      BIND(IRI(CONCAT(STR($this), "/~path")) AS ?path)
+      BIND(IRI(CONCAT(STR($this), "/~path-text")) AS ?pathText)
+      # Its own toggles (fs:Fullscreenable): fill the window, full screen; the layer says which is pressed.
+      OPTIONAL { ?l10nAt_vpPhrase0 l10n:of fs:ViewportCommand ; l10n:name ?vpPhrase0 } OPTIONAL { fs:ViewportCommand rdfs:label ?vpPhrase0 FILTER(langMatches(lang(?vpPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of fs:ViewportCommand ; l10n:name ?l10nPick }) }
+      OPTIONAL { ?l10nAt_fsPhrase0 l10n:of fs:ToggleCommand ; l10n:name ?fsPhrase0 } OPTIONAL { fs:ToggleCommand rdfs:label ?fsPhrase0 FILTER(langMatches(lang(?fsPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of fs:ToggleCommand ; l10n:name ?l10nPick }) }
+      BIND(COALESCE(STR(?vpPhrase0), "Fill the window") AS ?vpPhrase)
+      BIND(COALESCE(STR(?fsPhrase0), "Full screen") AS ?fsPhrase)
+      BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggles")) AS ?toggles)
+      BIND(IRI(CONCAT(STR($this), "/~viewport-toggle")) AS ?vpToggle)
+      BIND(IRI(CONCAT(STR($this), "/~viewport-toggle-data-sem-kind")) AS ?vpKind)
+      BIND(IRI(CONCAT(STR($this), "/~viewport-toggle-aria-label")) AS ?vpLabel)
+      BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle")) AS ?fsToggle)
+      BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle-data-sem-kind")) AS ?fsKind)
+      BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle-aria-label")) AS ?fsLabel)
+      BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
+      BIND(REPLACE(STR(?body0), "[ \\t\\n\\r]+$", "") AS ?text)
+      # Its lines as a table of fixed-width records (start, length without the break), in order, read back
+      # by sx:matches: a record's place is its line's number.
+      LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?lineRecord; separator="") AS ?lines0) WHERE {
+        { SELECT ?text ?lineRecord WHERE {
+          LATERAL { (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) }
+          BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
+          BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
+        } ORDER BY ?lineAt }
+      } GROUP BY ?text } }
+      # Long strings that span lines (where they start and end), found past comments, short strings and IRIs
+      # as the tokenizer finds them: a line inside one is a piece of it.
+      LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?stringRecord; separator="") AS ?strings0) WHERE {
+        { SELECT ?text ?stringRecord WHERE {
+          c:SparqlLexicon c:quotedPattern ?quoted .
+          LATERAL { (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
+          FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
+          BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
+          BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
+        } ORDER BY ?stringAt }
+      } GROUP BY ?text } }
+      BIND(COALESCE(?lines0, "") AS ?lines)
+      BIND(COALESCE(?strings0, "") AS ?strings)
+      BIND(STRLEN(?lines) / 14 AS ?lineCount)
+      BIND(CONCAT(STR($this), "/~L") AS ?key)
+      LATERAL { OPTIONAL {
+        LATERAL { (?lines "[0-9]{14}") sx:matches (?record ?recordAt) }
+        BIND(xsd:integer(FLOOR((?recordAt - 1) / 14)) + 1 AS ?k)
+        BIND(xsd:integer(SUBSTR(?record, 1, 7)) AS ?ls)
+        BIND(?ls + xsd:integer(SUBSTR(?record, 8, 7)) AS ?le)
+        BIND(CONCAT(?key, STR(?k)) AS ?rowKey)
+        BIND(IRI(?rowKey) AS ?row)
+        BIND(IF(?k < ?lineCount, IRI(CONCAT(?key, STR(?k + 1))), ?none) AS ?nextRow)
+        BIND(IF(?k < ?lineCount, IRI(CONCAT(?rowKey, "-nl")), ?none) AS ?nl)
+        # A long string open at the line's start (where it ends), and one opened on the line and not closed on it.
+        LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?openRecord)
+          BIND(xsd:integer(SUBSTR(?openRecord, 1, 7)) AS ?openStart) BIND(xsd:integer(SUBSTR(?openRecord, 8, 7)) AS ?openEnd)
+          FILTER(?openStart < ?ls && ?openEnd > ?ls) } }
+        LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?leftRecord)
+          BIND(xsd:integer(SUBSTR(?leftRecord, 1, 7)) AS ?leftStart) BIND(xsd:integer(SUBSTR(?leftRecord, 8, 7)) AS ?leftEnd)
+          FILTER(?leftStart >= ?ls && ?leftStart < ?le && ?leftEnd > ?le) } }
+        BIND(COALESCE(?openEnd, ?ls) AS ?fs)
+        BIND(COALESCE(?leftStart, ?le) AS ?fe)
+        LATERAL { OPTIONAL {
+          {
+            FILTER(BOUND(?openEnd))
+            BIND(?ls AS ?pos)
+            BIND(SUBSTR(?text, ?ls, IF(?openEnd < ?le, ?openEnd, ?le) - ?ls) AS ?piece)
+            BIND("string" AS ?pieceKind)
+            FILTER(?piece != "")
+          } UNION {
+            FILTER(BOUND(?leftStart))
+            BIND(?leftStart AS ?pos)
+            BIND(SUBSTR(?text, ?leftStart, ?le - ?leftStart) AS ?piece)
+            BIND("string" AS ?pieceKind)
+          } UNION {
+            FILTER(?fe > ?fs)
+            BIND(SUBSTR(?text, ?fs, ?fe - ?fs) AS ?src)
+            c:SparqlLexicon c:tokenPattern ?pattern .
+            LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+            BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
+            BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
+            BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+              IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
+              IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
+              IF(BOUND(?g7), IF(false && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
+              IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
+              IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text"))))))))) AS ?kind)
+            BIND(IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m))) AS ?headLen)
+            BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
+            BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
+            BIND(?at + STRLEN(?m) AS ?next)
+            VALUES ?half { 0 1 }
+            FILTER(?half = 0 || BOUND(?tailText))
+            BIND(?fs + ?at - 1 + IF(?half = 0, 0, ?headLen) AS ?pos)
+            BIND(IF(?half = 0, ?head, ?tailText) AS ?piece)
+            BIND(IF(?half = 0, ?kind, "text") AS ?pieceKind)
+          }
+          BIND(IRI(CONCAT(?rowKey, "-", STR(?pos))) AS ?tok)
+          BIND(?pieceKind = "text" AS ?isPlain)
+          BIND(IF(?isPlain, rdfhtml:Text, rdfhtml:Span) AS ?tokTag)
+          BIND(IF(?isPlain, ?none, CONCAT("ttl-", IF(?pieceKind = "var", "pname", IF(?pieceKind = "string", "literal", ?pieceKind)))) AS ?tokClass)
+          BIND(IF(?isPlain, ?piece, ?none) AS ?plain)
+          BIND(IF(?isPlain, ?none, IRI(CONCAT(?rowKey, "-", STR(?pos), "-text"))) AS ?tokText)
+          BIND(IF(?isPlain, ?none, ?piece) AS ?spanned)
+          BIND(?pos + STRLEN(?piece) AS ?pieceEnd)
+          BIND(IF(?pieceEnd < ?le, IRI(CONCAT(?rowKey, "-", STR(?pieceEnd))), ?nl) AS ?afterTok)
+        } }
+      } }
+    }
+  }
+}""" .
+c:SourceViewRendering-sparql-text a sem:Rule ;
+    sem:implements c:SourceViewRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?empty , ?headEl , ?code .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?headEl a rdfhtml:Div ; rdfhtml:class "sem-source-head" ; rdfhtml:hasChild ?name , ?path ; ord:immediatelyPrecedes ?code .
+  ?name a rdfhtml:Span ; rdfhtml:class "sem-source-name" ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?path .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?caption .
+  ?path a rdfhtml:Code ; rdfhtml:class "sem-source-path" ; rdfhtml:hasChild ?pathText .
+  ?pathText a rdfhtml:Text ; rdfhtml:data ?pathData .
+  ?code a rdfhtml:Pre ; rdfhtml:class "sem-turtle sem-source" ; rdfhtml:hasChild ?row .
+  ?row a rdfhtml:Span ; rdfhtml:class "sem-line" ; c:line ?k ; rdfhtml:hasChild ?tok , ?nl ; ord:immediatelyPrecedes ?nextRow .
+  ?nl a rdfhtml:Text ; rdfhtml:data "\\n" .
+  ?tok a ?tokTag ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterTok .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+}
+WHERE {
+  $this a c:SourceView .
+  LATERAL { OPTIONAL { $this c:of ?source FILTER(isIRI(?source)) ?source c:text ?body0 } }
+  LATERAL { OPTIONAL { $this c:of ?pathSource FILTER(isIRI(?pathSource)) ?pathSource c:path ?path0 } }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?body0))
+      BIND(rdfhtml:Div AS ?rootTag)
+      BIND("sem-empty" AS ?rootClass)
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No source.")) AS ?emptyText)
+    } UNION {
+      FILTER(BOUND(?body0))
+      BIND(rdfhtml:Figure AS ?rootTag)
+      OPTIONAL { $this l10n:label ?labelPicked }
+      OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+      BIND(STR(COALESCE(?labelPicked, ?labelOnly, "Source")) AS ?caption)
+      BIND(COALESCE(STR(?path0), "") AS ?pathData)
+      BIND(IRI(CONCAT(STR($this), "/~head")) AS ?headEl)
+      BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+      BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+      BIND(IRI(CONCAT(STR($this), "/~path")) AS ?path)
+      BIND(IRI(CONCAT(STR($this), "/~path-text")) AS ?pathText)
+      BIND(IRI(CONCAT(STR($this), "/~code")) AS ?code)
+      BIND(REPLACE(STR(?body0), "[ \\t\\n\\r]+$", "") AS ?text)
+      # Its lines as a table of fixed-width records (start, length without the break), in order, read back
+      # by sx:matches: a record's place is its line's number.
+      LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?lineRecord; separator="") AS ?lines0) WHERE {
+        { SELECT ?text ?lineRecord WHERE {
+          LATERAL { (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) }
+          BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
+          BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
+        } ORDER BY ?lineAt }
+      } GROUP BY ?text } }
+      # Long strings that span lines (where they start and end), found past comments, short strings and IRIs
+      # as the tokenizer finds them: a line inside one is a piece of it.
+      LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?stringRecord; separator="") AS ?strings0) WHERE {
+        { SELECT ?text ?stringRecord WHERE {
+          c:SparqlLexicon c:quotedPattern ?quoted .
+          LATERAL { (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
+          FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
+          BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
+          BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
+        } ORDER BY ?stringAt }
+      } GROUP BY ?text } }
+      BIND(COALESCE(?lines0, "") AS ?lines)
+      BIND(COALESCE(?strings0, "") AS ?strings)
+      BIND(STRLEN(?lines) / 14 AS ?lineCount)
+      BIND(CONCAT(STR($this), "/~L") AS ?key)
+      LATERAL { OPTIONAL {
+        LATERAL { (?lines "[0-9]{14}") sx:matches (?record ?recordAt) }
+        BIND(xsd:integer(FLOOR((?recordAt - 1) / 14)) + 1 AS ?k)
+        BIND(xsd:integer(SUBSTR(?record, 1, 7)) AS ?ls)
+        BIND(?ls + xsd:integer(SUBSTR(?record, 8, 7)) AS ?le)
+        BIND(CONCAT(?key, STR(?k)) AS ?rowKey)
+        BIND(IRI(?rowKey) AS ?row)
+        BIND(IF(?k < ?lineCount, IRI(CONCAT(?key, STR(?k + 1))), ?none) AS ?nextRow)
+        BIND(IF(?k < ?lineCount, IRI(CONCAT(?rowKey, "-nl")), ?none) AS ?nl)
+        # A long string open at the line's start (where it ends), and one opened on the line and not closed on it.
+        LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?openRecord)
+          BIND(xsd:integer(SUBSTR(?openRecord, 1, 7)) AS ?openStart) BIND(xsd:integer(SUBSTR(?openRecord, 8, 7)) AS ?openEnd)
+          FILTER(?openStart < ?ls && ?openEnd > ?ls) } }
+        LATERAL { OPTIONAL { (?strings "[0-9]{14}") sx:matches (?leftRecord)
+          BIND(xsd:integer(SUBSTR(?leftRecord, 1, 7)) AS ?leftStart) BIND(xsd:integer(SUBSTR(?leftRecord, 8, 7)) AS ?leftEnd)
+          FILTER(?leftStart >= ?ls && ?leftStart < ?le && ?leftEnd > ?le) } }
+        BIND(COALESCE(?openEnd, ?ls) AS ?fs)
+        BIND(COALESCE(?leftStart, ?le) AS ?fe)
+        LATERAL { OPTIONAL {
+          {
+            FILTER(BOUND(?openEnd))
+            BIND(?ls AS ?pos)
+            BIND(SUBSTR(?text, ?ls, IF(?openEnd < ?le, ?openEnd, ?le) - ?ls) AS ?piece)
+            BIND("string" AS ?pieceKind)
+            FILTER(?piece != "")
+          } UNION {
+            FILTER(BOUND(?leftStart))
+            BIND(?leftStart AS ?pos)
+            BIND(SUBSTR(?text, ?leftStart, ?le - ?leftStart) AS ?piece)
+            BIND("string" AS ?pieceKind)
+          } UNION {
+            FILTER(?fe > ?fs)
+            BIND(SUBSTR(?text, ?fs, ?fe - ?fs) AS ?src)
+            c:SparqlLexicon c:tokenPattern ?pattern .
+            LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+            BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
+            BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
+            BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+              IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
+              IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
+              IF(BOUND(?g7), IF(false && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
+              IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
+              IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text"))))))))) AS ?kind)
+            BIND(IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m))) AS ?headLen)
+            BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
+            BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
+            BIND(?at + STRLEN(?m) AS ?next)
+            VALUES ?half { 0 1 }
+            FILTER(?half = 0 || BOUND(?tailText))
+            BIND(?fs + ?at - 1 + IF(?half = 0, 0, ?headLen) AS ?pos)
+            BIND(IF(?half = 0, ?head, ?tailText) AS ?piece)
+            BIND(IF(?half = 0, ?kind, "text") AS ?pieceKind)
+          }
+          BIND(IRI(CONCAT(?rowKey, "-", STR(?pos))) AS ?tok)
+          BIND(?pieceKind = "text" AS ?isPlain)
+          BIND(IF(?isPlain, rdfhtml:Text, rdfhtml:Span) AS ?tokTag)
+          BIND(IF(?isPlain, ?none, CONCAT("ttl-", IF(?pieceKind = "var", "pname", IF(?pieceKind = "string", "literal", ?pieceKind)))) AS ?tokClass)
+          BIND(IF(?isPlain, ?piece, ?none) AS ?plain)
+          BIND(IF(?isPlain, ?none, IRI(CONCAT(?rowKey, "-", STR(?pos), "-text"))) AS ?tokText)
+          BIND(IF(?isPlain, ?none, ?piece) AS ?spanned)
+          BIND(?pos + STRLEN(?piece) AS ?pieceEnd)
+          BIND(IF(?pieceEnd < ?le, IRI(CONCAT(?rowKey, "-", STR(?pieceEnd))), ?nl) AS ?afterTok)
+        } }
+      } }
+    }
+  }
+}""" .
 
 # --- Emblem ---------------------------------------------------------------------------------------
 
@@ -498,10 +798,66 @@ c:Metrics a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Chips showing c:fields of one node (c:of), labelled by the properties' rdfs:label and c:unit."@en ;
     sem:slug "metrics" .
-c:MetricsRendering a sem:Rendering ; sem:targets c:Metrics ; sem:stratum 0 ; sem:follows c:of ;
-    sem:functionOnly "awaits sx:Text (sx:decodeURI): it shows IRIs compacted with the declared prefixes and percent-decoded." ;
-    sem:needsExtension sx:Text .
+c:MetricsRendering a sem:Rendering ; sem:targets c:Metrics ; sem:stratum 0 ; sem:follows c:of .
 c:MetricsRendering-fn a sem:Rule ; sem:implements c:MetricsRendering ; sem:function "metrics" .
+# A chip per field that has a value, placed by its position in c:fields. An IRI is written prefix:local
+# by the longest declared namespace it starts with (sh:prefix; the least prefix of equals), its local
+# part percent-decoded (sx:decodeURI, sx:Text), else by its last 46 characters; a decimal with two
+# places (sx:formatNumber, sx:Locale); a property's label and unit in the viewer's language.
+c:MetricsRendering-sparql a sem:Rule ;
+    sem:implements c:MetricsRendering ;
+    sem:needsExtension sx:Text , sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?chip .
+  ?chip a rdfhtml:Span ; rdfhtml:class ?chipClass ; sem:orderKey ?i ; sem:tooltip ?label ; rdfhtml:hasChild ?valueEl , ?labelText .
+  ?valueEl ord:immediatelyPrecedes ?labelText .
+  ?valueEl a rdfhtml:B ; rdfhtml:hasChild ?valueText . ?valueText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Metrics ; c:of ?of .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(EXISTS { $this (c:fields/rdf:first|c:fields/rdf:rest+/rdf:first) ?anyField . ?of ?anyField ?anyValue FILTER(isIRI(?anyField)) }, ?none, "") AS ?hidden)
+  OPTIONAL {
+    $this c:fields ?fields .
+    ?fields rdf:rest* ?cell . ?cell rdf:first ?p . FILTER(isIRI(?p))
+    { SELECT ?cell (COUNT(?before) - 1 AS ?i) WHERE { $this c:fields ?list . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
+    ?of ?p ?v .
+    OPTIONAL { ?unitAt l10n:of ?p ; l10n:unit ?unitPicked }
+    OPTIONAL { FILTER(!BOUND(?unitPicked)) ?p c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+    BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+    OPTIONAL { ?labelAt l10n:of ?p ; l10n:name ?labelPicked }
+    OPTIONAL { FILTER(!BOUND(?labelPicked)) ?p rdfs:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+    BIND(STR(COALESCE(?labelPicked, ?labelOnly)) AS ?label0)
+    BIND(IF(?label0 != "", ?label0, ?none) AS ?label)
+    # An IRI by the longest declared namespace it starts with.
+    LATERAL {
+      OPTIONAL {
+        ?decl sh:prefix ?prefix ; sh:namespace ?nsTerm .
+        FILTER(isIRI(?v) && STRSTARTS(STR(?v), STR(?nsTerm)))
+        FILTER NOT EXISTS {
+          ?other sh:prefix ?otherPrefix ; sh:namespace ?otherNs .
+          FILTER(STRSTARTS(STR(?v), STR(?otherNs)) && (STRLEN(STR(?otherNs)) > STRLEN(STR(?nsTerm)) || (STRLEN(STR(?otherNs)) = STRLEN(STR(?nsTerm)) && STR(?otherPrefix) < STR(?prefix))))
+        }
+      }
+    }
+    BIND(STRLEN(STR(?nsTerm)) AS ?nsLength)
+    BIND(IF(BOUND(?prefix), CONCAT(STR(?prefix), ":", COALESCE(sx:decodeURI(SUBSTR(STR(?v), ?nsLength + 1)), SUBSTR(STR(?v), ?nsLength + 1))),
+      IF(STRLEN(STR(?v)) > 48, CONCAT("…", SUBSTR(STR(?v), STRLEN(STR(?v)) - 45)), STR(?v))) AS ?iriText)
+    BIND(IF(isIRI(?v), ?iriText,
+      IF(isLiteral(?v) && REGEX(STR(?v), "^-?[0-9]+[.][0-9]+$"),
+        COALESCE(sx:formatNumber(xsd:double(STR(?v)), "en-US", "minimumFractionDigits=2;maximumFractionDigits=2;useGrouping=false"), STR(?v)), STR(?v))) AS ?value)
+    BIND(IF(COALESCE(?unit, "") != "", CONCAT(?value, " ", ?unit), ?value) AS ?shown)
+    BIND(IF(EXISTS { ?p c:emphasis ?emphasis FILTER(STR(?emphasis) = "true") }, "sem-metric sem-lead", "sem-metric") AS ?chipClass)
+    BIND(EXISTS { ?p c:hideLabel ?hide FILTER(STR(?hide) = "true") } AS ?hideLabel)
+    BIND(CONCAT(STR($this), "/~m", STR(?i)) AS ?k)
+  }
+  BIND(IRI(?k) AS ?chip)
+  BIND(IRI(CONCAT(?k, "-v")) AS ?valueEl)
+  BIND(IRI(CONCAT(?k, "-v-text")) AS ?valueText)
+  BIND(IF(BOUND(?label) && !?hideLabel, IRI(CONCAT(?k, "-l")), ?none) AS ?labelText)
+}""" .
 
 # --- Toggle ------------------------------------------------------------------------------------
 
@@ -567,24 +923,118 @@ sem:orderBy a owl:ObjectProperty ; rdfs:domain sem:Query ;
 sem:descending a owl:DatatypeProperty ; rdfs:domain sem:Query ; rdfs:range xsd:boolean .
 
 c:QueryView a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TurtleView ;
     rdfs:comment """Runs named CONSTRUCTs (c:queries) and shows their results as syntax-colored Turtle,
 one section per query. A variable (c:bindVariable) may be bound to the value of c:bindProperty
 on c:bindFrom; c:of names a node whose changes should refresh the view (e.g. an event stream)."""@en ;
-    sem:slug "query-view" .
+    sem:slug "query-view" ;
+    c:turtleInto "root" ;
+    c:turtleHeader true .
 c:queries a owl:ObjectProperty ; rdfs:range rdf:List .
 c:bindVariable a owl:DatatypeProperty .
 c:bindFrom a owl:ObjectProperty .
 c:bindProperty a owl:ObjectProperty .
 c:emptyText a owl:DatatypeProperty .
 c:baseIri a owl:DatatypeProperty ; rdfs:comment "Base IRI for relative display of long IRIs."@en .
+# A run of each query a query view shows (iv:perQuery over its list, iv:listed), as for a result view
+# (c:QueryRuns): run on request - when shown, when its text or its binding changes - or maintained as
+# the graph changes when the view follows updates (c:followUpdates). Its result is a result set in the
+# views graph (iv:ResultSet: a CONSTRUCT's triples as rows ?subject ?predicate ?object), which the view
+# names by iv:run and tells apart by iv:runOf. A view that binds a variable (c:bindVariable) runs its
+# own, <view>/~run-n for its nth query. A change to the node it names by c:of runs it again
+# (iv:refreshedBy). A run reads what a rule's query would, rendered elements included, but not
+# provenance.
+c:QueryViewRuns a iv:View ;
+    iv:perQuery c:queries ; iv:listed true ; iv:referrerClass c:QueryView ; iv:followedBy c:followUpdates ; iv:refreshedBy c:of ; iv:bindsBy c:QueryRunBinding ;
+    iv:strategy iv:OnRequest ; iv:materialize iv:ResultSet .
+# What it prints (the Turtle printer, turtle.ttl): a section per query (by its place in c:queries,
+# under its label) with the subjects of its run (c:QueryViewRuns, iv:runOf it) - in the order of the
+# query's sem:orderBy values (sem:descending), else by IRI; blank nodes no triple of the view's runs
+# points to at the top -, each printing its triples in the run (c:turtleRows).
+c:QueryViewTurtle a sem:BuildingBlock ; sem:targets c:QueryView ; sem:stratum 97 ;
+    sem:follows iv:run , ( iv:run rs:solution rs:binding ) , c:bindFrom ;
+    sem:watches rdf:type , c:queries , iv:run , iv:runOf , iv:error , rs:solution , rs:binding , rs:variable , rs:value , rs:index , c:bindVariable , c:bindFrom , c:bindProperty .
+c:QueryViewTurtle-fn a sem:Rule ; sem:implements c:QueryViewTurtle ; sem:function "queryview:turtle" .
+c:QueryViewTurtle-sparql a sem:Rule ;
+    sem:implements c:QueryViewTurtle ;
+    sem:bulk false ;
+    sem:needsExtension sx:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?head a c:TurtleHead ; c:turtleView $this .
+  ?section a c:TurtleSection ; c:turtleView $this ; c:turtleIndex ?i ; c:turtleTitle ?title .
+  ?node a c:TurtleNode ; c:turtleView $this ; c:turtleTerm ?s ; c:turtleKey ?key ; c:turtleBody 1 ; c:turtleTop ?top ; c:turtleSection ?section ; c:turtleRows ?run .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:QueryView .
+  # Nothing while it says something instead: a failed query, a bound variable without a value.
+  FILTER NOT EXISTS { $this iv:run ?failedRun . ?failedRun iv:error ?anyError }
+  FILTER(NOT EXISTS { $this c:bindVariable ?variable FILTER(STR(?variable) != "") } || EXISTS { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?value FILTER(isIRI(?value)) })
+  BIND(IRI(CONCAT(STR($this), "/~th")) AS ?head)
+  # Each query by its place in the list (from 0), its run.
+  { SELECT ?q ?i WHERE {
+      { SELECT ?cell (COUNT(?before) - 1 AS ?i) WHERE { $this c:queries ?list . ?list rdf:rest* ?before . ?before rdf:rest* ?cell . ?cell rdf:first ?anyQuery } GROUP BY ?cell }
+      ?cell rdf:first ?q FILTER(isIRI(?q))
+    } }
+  $this iv:run ?run . ?run iv:runOf ?q .
+  OPTIONAL { ?titleAt l10n:of ?q ; l10n:name ?title0 } OPTIONAL { FILTER(!BOUND(?title0)) ?q rdfs:label ?title1 FILTER(isLiteral(?title1)) }
+  BIND(STR(COALESCE(?title0, ?title1)) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~ts-", STR(?i))) AS ?section)
+  # Its subjects: IRIs, and blank nodes no triple of the view's runs points to.
+  { SELECT DISTINCT ?run ?s WHERE {
+      $this iv:run ?run . ?run rs:solution ?r . ?r rs:binding ?sb , ?pb . ?sb rs:variable "subject" ; rs:value ?s . ?pb rs:variable "predicate" ; rs:value ?p FILTER(isIRI(?p))
+    } }
+  FILTER(!isBlank(?s) || NOT EXISTS { $this iv:run ?anyRun . ?anyRun rs:solution ?pr . ?pr rs:binding ?pob . ?pob rs:variable "object" ; rs:value ?s })
+  # Its place: the least sem:orderBy value of its triples in the run (missing ones first, or last
+  # when descending), then its IRI.
+  OPTIONAL { ?q sem:orderBy ?orderBy }
+  BIND(EXISTS { ?q sem:descending ?desc FILTER(STR(?desc) = "true") } AS ?descending)
+  OPTIONAL { { SELECT ?run ?s (MIN(?v) AS ?rank) WHERE {
+      $this iv:run ?run . ?run iv:runOf ?rq . ?rq sem:orderBy ?rp .
+      ?run rs:solution ?rr . ?rr rs:binding ?rsb , ?rpb , ?rob . ?rsb rs:variable "subject" ; rs:value ?s . ?rpb rs:variable "predicate" ; rs:value ?rp . ?rob rs:variable "object" ; rs:value ?v FILTER(isNumeric(?v))
+    } GROUP BY ?run ?s } }
+  BIND(IF(!BOUND(?orderBy), "n0\\u0001n0", IF(BOUND(?rank), IF(?descending, CONCAT("n0\\u0001-n", STR(?rank)), CONCAT("n1\\u0001n", STR(?rank))), IF(?descending, "n1\\u0001n0", "n0\\u0001n0"))) AS ?rankKey)
+  BIND(IF(isBlank(?s), CONCAT("_:", sx:blankLabel(?s)), STR(?s)) AS ?termKey)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", SUBSTR(MD5(CONCAT(STR(?i), " ", ?termKey)), 1, 12))) AS ?node)
+  BIND(IF(isBlank(?s), "root", "named") AS ?top)
+  BIND(CONCAT("\\u0001n1\\u0001n", STR(?i), "\\u0001n1\\u0001", ?rankKey, "\\u0001s", IF(isBlank(?s), "~", ""), ?termKey) AS ?key)
+}""" .
+# Its element: the tokens' (when its runs have triples), else a sentence: nothing selected (a bound
+# variable without a value), the first failed query's error, or no results (its c:emptyText).
 c:QueryViewRendering a sem:Rendering ;
     sem:targets c:QueryView ;
     sem:stratum 0 ;
-    sem:follows c:bindFrom, c:of ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it prints the results of the queries in the data (c:queries) as colored Turtle tokens. (The results would be rows written as graph data.)" ;
-    sem:needsExtension sx:Matches .
+    sem:follows c:bindFrom , c:of , iv:run ;
+    sem:watches rdf:type , c:queries , c:bindVariable , c:bindFrom , c:bindProperty , c:emptyText , iv:run , iv:runOf , iv:error , rs:solution .
 c:QueryViewRendering-fn a sem:Rule ; sem:implements c:QueryViewRendering ; sem:function "queryview" .
+c:QueryViewRendering-sparql a sem:Rule ;
+    sem:implements c:QueryViewRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:class ?class ; rdfhtml:hasChild ?message .
+  ?message a rdfhtml:Text ; rdfhtml:data ?text .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:QueryView .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(EXISTS { $this c:bindVariable ?variable FILTER(STR(?variable) != "") } AS ?binds)
+  BIND(EXISTS { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?value FILTER(isIRI(?value)) } AS ?bound)
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?empty0 } OPTIONAL { FILTER(!BOUND(?empty0)) $this c:emptyText ?empty1 FILTER(isLiteral(?empty1)) }
+  BIND(STR(COALESCE(?empty0, ?empty1)) AS ?emptyText)
+  # The first query (by its place in the list) whose run failed.
+  OPTIONAL { SELECT (MIN(?failedKey) AS ?failure) WHERE {
+      { SELECT ?cell (COUNT(?before) AS ?n) WHERE { $this c:queries ?list . ?list rdf:rest* ?before . ?before rdf:rest* ?cell . ?cell rdf:first ?anyQuery } GROUP BY ?cell }
+      ?cell rdf:first ?fq . $this iv:run ?fr . ?fr iv:runOf ?fq ; iv:error ?error .
+      OPTIONAL { ?fqAt l10n:of ?fq ; l10n:name ?fl0 } OPTIONAL { FILTER(!BOUND(?fl0)) ?fq rdfs:label ?fl1 FILTER(isLiteral(?fl1)) }
+      BIND(COALESCE(STR(COALESCE(?fl0, ?fl1)), REPLACE(STR(?fq), "^.*[#/]", "")) AS ?label)
+      BIND(CONCAT(SUBSTR("000000", STRLEN(STR(?n)) + 1), STR(?n), "Query ", ?label, " failed: ", STR(?error)) AS ?failedKey)
+    } }
+  BIND(EXISTS { $this iv:run ?anyRun . ?anyRun rs:solution ?anySolution FILTER NOT EXISTS { ?anyRun iv:error ?anyError } } AS ?results)
+  BIND(IF(?binds && !?bound, COALESCE(?emptyText, "Nothing selected."), IF(BOUND(?failure), SUBSTR(?failure, 7), IF(?results, ?none, COALESCE(?emptyText, "No results.")))) AS ?text)
+  BIND(IF(BOUND(?text), rdfhtml:Div, rdfhtml:Pre) AS ?element)
+  BIND(IF(BOUND(?text), "sem-empty", "sem-turtle") AS ?class)
+  BIND(IF(BOUND(?text), IRI(CONCAT(STR($this), "/~empty")), ?none) AS ?message)
+}""" .
 
 # A rule may show the queries it runs on its back side (c:Flippable lists them).
 c:dataQuery a owl:ObjectProperty ; rdfs:comment "Links a component to a query or view whose result it shows."@en .
@@ -592,23 +1042,65 @@ c:dataQuery a owl:ObjectProperty ; rdfs:comment "Links a component to a query or
 # --- ElementMarkup ---------------------------------------------------------------------------------
 
 c:ElementMarkup a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TurtleView ;
     rdfs:comment """The rendered element held in c:bindProperty of c:bindFrom without its RDF/HTML encoding:
 the component that rendered it (the IRI before the node's first /~), as Turtle, and the HTML the
 element becomes - its subtree with attribute nodes and ordering triples taken off and nested
 components resolved, one element per line - both syntax-colored. Shown while c:active is true (a
 check box can drive it: c:controls it, c:property c:active); otherwise it renders an empty, hidden root."""@en ;
-    sem:slug "element-markup" .
+    sem:slug "element-markup" ;
+    c:turtleInto "root" ;
+    c:turtleHeader true .
 c:active a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether a component that can be switched on (c:ElementMarkup) is."@en .
+# What it prints as Turtle (the Turtle printer, turtle.ttl): the component that rendered the node,
+# under "# the component"; the HTML is markup.ttl's.
+c:ElementMarkupTurtle a sem:BuildingBlock ; sem:targets c:ElementMarkup ; sem:stratum 97 ; sem:follows c:bindFrom .
+c:ElementMarkupTurtle-fn a sem:Rule ; sem:implements c:ElementMarkupTurtle ; sem:function "element-markup:turtle" .
+c:ElementMarkupTurtle-sparql a sem:Rule ;
+    sem:implements c:ElementMarkupTurtle ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?head a c:TurtleHead ; c:turtleView $this .
+  ?section a c:TurtleSection ; c:turtleView $this ; c:turtleIndex 0 ; c:turtleTitle "the component" .
+  ?node a c:TurtleNode ; c:turtleView $this ; c:turtleTerm ?component ; c:turtleKey ?key ; c:turtleBody 1 ; c:turtleTop "named" ; c:turtleSection ?section .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ElementMarkup ; c:active ?active FILTER(STR(?active) = "true")
+  $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?bound FILTER(isIRI(?bound))
+  BIND(IF(CONTAINS(STR(?bound), "/~"), IRI(STRBEFORE(STR(?bound), "/~")), ?bound) AS ?component)
+  BIND(IRI(CONCAT(STR($this), "/~th")) AS ?head)
+  BIND(IRI(CONCAT(STR($this), "/~ts-0")) AS ?section)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", SUBSTR(MD5(CONCAT("0 ", STR(?component))), 1, 12))) AS ?node)
+  BIND(CONCAT("\\u0001n1\\u0001n0\\u0001n1\\u0001n0\\u0001n0\\u0001s", STR(?component)) AS ?key)
+}""" .
+# Its element: hidden while off; a sentence when bound to nothing; else the element its tokens go into.
 c:ElementMarkupRendering a sem:Rendering ;
     sem:targets c:ElementMarkup ;
     sem:modality mod:Screen ;
     sem:stratum 40 ;
-    sem:follows c:bindFrom ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it prints the component's triples as Turtle and the element as HTML, colored token by token; the HTML's order is the HTML index's (a building block could state it)." ;
-    sem:needsExtension sx:Matches .
+    sem:follows c:bindFrom .
 c:ElementMarkupRendering-fn a sem:Rule ; sem:implements c:ElementMarkupRendering ; sem:function "element-markup" .
+c:ElementMarkupRendering-sparql a sem:Rule ;
+    sem:implements c:ElementMarkupRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:class ?class ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?message .
+  ?message a rdfhtml:Text ; rdfhtml:data ?text .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ElementMarkup .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(EXISTS { $this c:active ?active FILTER(STR(?active) = "true") } AS ?on)
+  BIND(EXISTS { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?bound FILTER(isIRI(?bound)) } AS ?bound)
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?empty0 } OPTIONAL { FILTER(!BOUND(?empty0)) $this c:emptyText ?empty1 FILTER(isLiteral(?empty1)) }
+  BIND(IF(?on && !?bound, STR(COALESCE(?empty0, ?empty1, "Nothing selected.")), ?none) AS ?text)
+  BIND(IF(?on && ?bound, rdfhtml:Pre, rdfhtml:Div) AS ?element)
+  BIND(IF(!?on, ?none, IF(?bound, "sem-turtle sem-markup", "sem-empty")) AS ?class)
+  BIND(IF(?on, ?none, "") AS ?hidden)
+  BIND(IF(BOUND(?text), IRI(CONCAT(STR($this), "/~empty")), ?none) AS ?message)
+}""" .
 
 # --- Highlight ------------------------------------------------------------------------------------
 
@@ -647,11 +1139,29 @@ WHERE {
 
 c:Switch a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment """Shows the case (c:cases) whose c:when equals c:property of c:controls. Every case stays
-rendered (inactive ones hidden), so switching moves no DOM and keeps state."""@en ;
+    rdfs:comment """Shows the case (c:cases) whose c:when equals c:property of c:controls. A hidden case keeps
+what was rendered for it (its derived triples, its elements set aside by the renderer) but leaves the
+document, unless its retention policy (c:caseRetention) keeps it there, hidden: so a visit that shows
+every case in turn leaves a document of one case, and showing a case again moves its subtree back in
+and evaluates only what changed while it was hidden."""@en ;
     sem:slug "switch" .
 c:cases a owl:ObjectProperty ; rdfs:range rdf:List .
 c:when a owl:ObjectProperty .
+
+# Which hidden cases stay in the document, as a stream's ldes:retentionPolicy says which members it
+# keeps. State is triples, so a case that leaves the document loses nothing the graph holds; only
+# state the document alone holds (an iframe's page, media playing, a scroll position inside the case)
+# needs a case kept in it.
+c:caseRetention a owl:ObjectProperty ; rdfs:domain c:Switch ; rdfs:range c:CaseRetentionPolicy ;
+    rdfs:comment "Which of the switch's hidden cases stay in the document, hidden (default: c:KeepShownCase)."@en .
+c:CaseRetentionPolicy a owl:Class ;
+    rdfs:comment "Which of a c:Switch's cases stay in the document while another is shown."@en .
+c:KeepShownCase a c:CaseRetentionPolicy ;
+    rdfs:comment "Only the shown case (and any case that is c:keptHidden) is in the document."@en .
+c:KeepEveryCase a c:CaseRetentionPolicy ;
+    rdfs:comment "Every case stays in the document, the ones not shown hidden: for cases whose state lives in the document alone."@en .
+c:keptHidden a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a case of a c:Switch: it stays in the document while hidden, whatever the switch's c:caseRetention."@en .
 c:SwitchRendering a sem:Rendering ; sem:targets c:Switch ; sem:stratum 0 ; sem:follows c:controls .
 c:SwitchRendering-fn a sem:Rule ; sem:implements c:SwitchRendering ; sem:function "switch" .
 
@@ -660,23 +1170,29 @@ c:SwitchRendering-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?case .
-  ?case a rdfhtml:Div ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?next .
+  ?case a rdfhtml:Div ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?content ; sem:setsAside ?aside ; ord:immediatelyPrecedes ?next .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Switch .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   {} UNION {
     # One panel per case (c:cases, in order), keyed by its position; the case whose c:when
-    # equals the controlled value is shown.
+    # equals the controlled value is shown. A hidden case holds its content only while the
+    # switch's retention policy (c:caseRetention) or the case itself (c:keptHidden) keeps it.
     $this c:cases/rdf:rest* ?cell . ?cell rdf:first ?c .
     { SELECT ?cell (COUNT(?mid) - 1 AS ?i) WHERE { $this c:cases/rdf:rest* ?mid . ?mid rdf:rest* ?cell } GROUP BY ?cell }
     OPTIONAL { $this c:controls ?target ; c:property ?property . ?target ?property ?current }
+    OPTIONAL { $this c:caseRetention ?retention }
     LATERAL {
-      OPTIONAL { ?c c:content ?content FILTER(isIRI(?content)) }
+      OPTIONAL { ?c c:content ?held FILTER(isIRI(?held)) }
       OPTIONAL { ?c c:when ?when }
+      OPTIONAL { ?c c:keptHidden ?keptHidden }
       OPTIONAL { ?cell rdf:rest ?nextCell FILTER(?nextCell != rdf:nil) }
     }
     BIND((!BOUND(?when) && !BOUND(?current)) || (BOUND(?when) && BOUND(?current) && STR(?when) = STR(?current)) AS ?on)
+    BIND(?on || (BOUND(?retention) && ?retention = c:KeepEveryCase) || (BOUND(?keptHidden) && STR(?keptHidden) = "true") AS ?holds)
+    BIND(IF(?holds, ?held, ?none) AS ?content)
+    BIND(IF(?holds, ?none, ?held) AS ?aside)
     BIND(IF(?on, ?none, "") AS ?hidden)
     BIND(IRI(CONCAT(STR($this), "/~case-", STR(?i))) AS ?case)
     BIND(IF(BOUND(?nextCell), IRI(CONCAT(STR($this), "/~case-", STR(?i + 1))), ?none) AS ?next)
@@ -788,10 +1304,35 @@ WHERE {
 }""" .
 
 c:TriplesView a owl:Class ;
-    rdfs:subClassOf sem:Component ;
-    rdfs:comment "The triples about one node (c:of) as syntax-colored Turtle."@en ;
-    sem:slug "triples-view" .
-c:TriplesViewRendering a sem:Rendering ; sem:targets c:TriplesView ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it colors the Turtle it prints for the node's triples, token by token." ;
-    sem:needsExtension sx:Matches .
+    rdfs:subClassOf sem:Component , c:TurtleView ;
+    rdfs:comment "The triples about a node (c:of), or about each of several, as syntax-colored Turtle."@en ;
+    sem:slug "triples-view" ;
+    c:turtleInto "root" .
+# What it prints (the Turtle printer, turtle.ttl): each node it is of at the top of its one section
+# (nothing, when it has no triples); its blank nodes inline.
+c:TriplesViewTurtle a sem:BuildingBlock ; sem:targets c:TriplesView ; sem:stratum 97 ; sem:watches rdf:type , c:of .
+c:TriplesViewTurtle-fn a sem:Rule ; sem:implements c:TriplesViewTurtle ; sem:function "triplesview:turtle" .
+c:TriplesViewTurtle-sparql a sem:Rule ;
+    sem:implements c:TriplesViewTurtle ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?node a c:TurtleNode ; c:turtleView $this ; c:turtleTerm ?s ; c:turtleKey ?key ; c:turtleBody 1 ; c:turtleTop "named" ; c:turtleSection ?section .
+  ?section a c:TurtleSection ; c:turtleView $this ; c:turtleIndex 0 .
+  ?head a c:TurtleHead ; c:turtleView $this .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:TriplesView ; c:of ?s FILTER(isIRI(?s))
+  BIND(IRI(CONCAT(STR($this), "/~ts-0")) AS ?section)
+  BIND(IRI(CONCAT(STR($this), "/~th")) AS ?head)
+  BIND(IRI(CONCAT(STR($this), "/~tt-", SUBSTR(MD5(CONCAT("0 ", STR(?s))), 1, 12))) AS ?node)
+  BIND(CONCAT("\\u0001n1\\u0001n0\\u0001n1\\u0001n0\\u0001n0\\u0001s", STR(?s)) AS ?key)
+}""" .
+# The element its tokens go into.
+c:TriplesViewRendering a sem:Rendering ; sem:targets c:TriplesView ; sem:stratum 0 .
 c:TriplesViewRendering-fn a sem:Rule ; sem:implements c:TriplesViewRendering ; sem:function "triplesview" .
+c:TriplesViewRendering-sparql a sem:Rule ;
+    sem:implements c:TriplesViewRendering ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle" . }
+WHERE { $this a/rdfs:subClassOf* c:TriplesView ; c:of ?s FILTER(isIRI(?s)) BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .

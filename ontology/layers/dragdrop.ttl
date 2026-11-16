@@ -33,7 +33,8 @@
 # where, by what means and where it would go. Every target is offered the drag (dnd:offered) and
 # derives its reception (dnd:Reception: accepted, or refused with the shape's sh:message), which
 # the theme shows: accepting zones are outlined, refusing ones dimmed with a not-allowed cursor
-# and the reason over them. An ordered target (dnd:orderBy) has positions between its members:
+# and the reason next to the zone the drag is over, where no scrolling list cuts it off (an
+# anchored panel, src/web/drop-reasons.ts). An ordered target (dnd:orderBy) has positions between its members:
 # the one hovered is marked on its neighbour, and the drop says where (dnd:after / dnd:before)
 # and which order key it would take (dnd:rank, half way between the neighbours' - no renumbering).
 #
@@ -341,10 +342,10 @@ WHERE {
     { $this dnd:accepts ?shape } UNION { ?r dnd:accepts ?shape }
     UNION { $this val:validates ?field . ?field sh:node ?shape .
             { $this dnd:members ?fm . ?field sh:path ?fm } UNION { $this dnd:memberOf ?fm . ?field sh:path/sh:inversePath ?fm } }
-    { ?shape sh:class ?class FILTER NOT EXISTS { ?x a/rdfs:subClassOf* ?class } BIND(?shape AS ?violated) }
+    { ?shape sh:class ?class FILTER NOT EXISTS { ?x (a|a/rdfs:subClassOf+) ?class } BIND(?shape AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:hasValue ?wanted FILTER(isIRI(?p)) FILTER NOT EXISTS { ?x ?p ?wanted } BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:in ?allowed FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?allowed rdf:rest*/rdf:first ?v } BIND(?ps AS ?violated) }
-    UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:class ?valueClass FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?v a/rdfs:subClassOf* ?valueClass } BIND(?ps AS ?violated) }
+    UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:class ?valueClass FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?v (a|a/rdfs:subClassOf+) ?valueClass } BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:pattern ?pattern FILTER(isIRI(?p)) ?x ?p ?v
             OPTIONAL { ?ps sh:flags ?flags }
             FILTER(!REGEX(STR(?v), STR(?pattern), COALESCE(STR(?flags), "")))
@@ -507,7 +508,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-drag")) AS ?carriedAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-roledescription")) AS ?describe)
   # A tab stop, unless its class keeps its own (a roving grid row).
-  BIND(IF(EXISTS { $this a/rdfs:subClassOf* ?keeper . ?keeper dnd:keepsFocus true }, ?none, IRI(CONCAT(STR($this), "/~root-tabindex"))) AS ?tab)
+  OPTIONAL { ?keeper dnd:keepsFocus true . $this a/rdfs:subClassOf* ?keeper }
+  BIND(IF(BOUND(?keeper), ?none, IRI(CONCAT(STR($this), "/~root-tabindex"))) AS ?tab)
   BIND(IF(?lifted, IRI(CONCAT(STR($this), "/~root-data-sem-lifted")), ?none) AS ?liftedAttr)
   BIND(IF(BOUND(?status), IRI(CONCAT(STR($this), "/~root-data-sem-drag-status")), ?none) AS ?statusAttr)
   BIND(IF(EXISTS { $this dnd:refusedBy ?refusal }, IRI(CONCAT(STR($this), "/~root-data-sem-refused")), ?none) AS ?refusedAttr)
