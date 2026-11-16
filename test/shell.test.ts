@@ -216,6 +216,34 @@ describe('intent preloading (sem:OnIntent)', () => {
   })
 })
 
+describe('the order of anticipation (#436)', () => {
+  // What is built first, of these contents, as idle time comes a step at a time.
+  const order = async (h: ReturnType<typeof mountShell>, contents: string[]) => {
+    const { anticipate } = await import('../src/intent.ts')
+    const steps: ((budgetMs: number) => void)[] = []
+    anticipate(h.runtime, { idle: (run) => void steps.push(run), flush: () => h.shell.flush() })
+    const seen: string[] = []
+    while (steps.length) {
+      steps.shift()!(1_000)
+      for (const c of contents) if (!seen.includes(c) && h.screen.index.rootOf(UI + c) !== undefined) seen.push(c)
+    }
+    return seen
+  }
+
+  it('prepares the pages near the current one of a section before the other sections', async () => {
+    // On the first example: the next three examples, then the section before Examples (Reference, one away).
+    const h = mountShell()
+    expect(await order(h, ['exp-network', 'exp-signin', 'exp-kanban', 'reference', 'gallery'])).toEqual(['exp-network', 'exp-signin', 'exp-kanban', 'reference', 'gallery'])
+  })
+
+  it('prepares the next section first, then the pages near the current one', async () => {
+    // On Components: Reference (the next section), then the groups near Foundations, then Docs.
+    const h = mountShell()
+    h.showPage('Components')
+    expect(await order(h, ['reference', 'gallery-layout', 'gallery-type', 'docs'])).toEqual(['reference', 'gallery-layout', 'gallery-type', 'docs'])
+  })
+})
+
 describe('intent preloading of what a control opens (sem:OpenPreview, #434)', () => {
   const toolsButton = (doc: Document) => [...doc.querySelectorAll('[data-sem-c=toggle]')].find((b) => b.textContent!.includes('Tools'))!
   const inspectorBuilt = (h: ReturnType<typeof mountSite>) => h.screen.index.rootOf(UI + 'inspector') !== undefined

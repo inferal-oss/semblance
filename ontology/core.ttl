@@ -192,8 +192,11 @@ shown, what the options up to this many places either side of the chosen one wou
 idle time, as sem:anticipates does for every option, nearest first (at each distance the next before
 the previous; places are the order the choice shows its options in). It follows the choice: what moves
 out of reach is no longer kept, so its views stop being maintained. For a choice with many options,
-of which the ones next to the current one are the likely next (#436). Across choices, options are
-prepared by their distance from what each has chosen: the likely ones first. A choice inside
+of which the ones next to the current one are the likely next (#436). Across choices: first each
+choice's next option (the one after the chosen); then the options near what these choices have chosen,
+by distance; then the options of the sem:anticipates choices around them (the other sections), by
+distance. A first visit comes soon after the page is quiet, when two or three pages can be ready:
+the next of each list and the pages near the current one. A choice inside
 something that opens (tabs in a window) is planned again as it is shown or hidden."""@en .
 
 # What a control would show, when it is pointed at: intent previews. Each is a
