@@ -81,8 +81,8 @@ c:BarChart sem:version 2 ; sem:closure "2f6ed712cdfef2ef" ; sem:changedBy change
 c:BarPoint sem:version 1 ; sem:closure "675911b93a22bc06" ; sem:internal "new" .
 c:BlockEditor sem:version 1 ; sem:closure "81ec19762a58ac2d" ; sem:internal "new" .
 c:Blockquote sem:version 1 ; sem:closure "e866348fff52a3f9" ; sem:internal "new" .
-c:Board sem:version 1 ; sem:closure "d894c8e3f61bb191" ; sem:internal "new" .
-c:BoardCard sem:version 1 ; sem:closure "332c25e2b9dd663c" ; sem:internal "new" .
+c:Board sem:version 2 ; sem:closure "d194107b9f14e979" ; sem:changedBy change:board-card-links .
+c:BoardCard sem:version 2 ; sem:closure "6eba9e22a1525104" ; sem:changedBy change:board-card-links .
 c:BodyViewer sem:version 1 ; sem:closure "8a03584f84a642ad" ; sem:internal "new" .
 c:BoxPlot sem:version 1 ; sem:closure "173dd802c76a79aa" ; sem:internal "new" .
 c:BoxPoint sem:version 1 ; sem:closure "921592796c4e94df" ; sem:internal "new" .

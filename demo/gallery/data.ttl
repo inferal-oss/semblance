@@ -104,16 +104,19 @@ ui:StageReview a ui:Stage ; rdfs:label "Review" ; sem:order 2 .
 ui:StageShipped a ui:Stage ; rdfs:label "Shipped" ; sem:order 3 .
 ui:ReviewLimit a sh:NodeShape ; sh:targetNode ui:StageReview ;
     sh:property [ sh:path [ sh:inversePath ui:stage ] ; sh:maxCount 2 ] .
-ui:dt-change-1 rdfs:label "Formula rule" ; ui:stage ui:StageShipped ; ui:by "Ada Lovelace" ; ui:order 1 .
+ui:dt-change-1 rdfs:label "Formula rule" ; ui:stage ui:StageShipped ; ui:by "Ada Lovelace" ; ui:order 1 ; ui:released true .
 ui:dt-change-2 rdfs:label "Money component" ; ui:stage ui:StageReview ; ui:by "Grace Hopper" ; ui:order 2 .
 ui:dt-change-3 rdfs:label "Board lanes" ; ui:stage ui:StageReview ; ui:by "Alan Kay" ; ui:order 3 .
-ui:dt-change-4 rdfs:label "Board keyboard moves" ; ui:stage ui:StageBuild ; ui:by "Barbara Liskov" ; ui:order 4 .
+ui:dt-change-4 rdfs:label "Board keyboard moves" ; ui:stage ui:StageBuild ; ui:by "Barbara Liskov" ; ui:order 4 ;
+    ui:changePage "/docs/components/" ; ui:changeDetail ui:dt-change-4-detail .
+ui:dt-change-4-detail a c:Text ; sty:textStyle sty:Caption ; c:label "Arrow keys move a focused card between lanes." .
 ui:dt-board-pipeline a c:Board ; c:label "Release pipeline" ;
     c:property ui:stage ; c:cardTitle rdfs:label ; c:cardPerson ui:by ; c:cardOrder ui:order ;
+    c:cardHref ui:changePage ; c:cardContent ui:changeDetail ; c:cardLocked ui:released ;
     c:card ui:dt-change-1 , ui:dt-change-2 , ui:dt-change-3 , ui:dt-change-4 .
 ui:dt-board a c:Flippable ; c:front ui:dt-board-spec .
 ui:dt-board-spec a c:Specimen ; c:demonstrates c:Board , c:BoardCard ; c:label "Board" , "Дошка"@uk , "Board"@de , "لوحة"@ar ;
-    c:help "Items in lanes: the lanes are the range of c:property (here ui:stage), each item goes where its value points. Move a card with its arrows, or focus it and use ← →. Review is limited to two by a SHACL shape (sh:maxCount on the inverse path), so a third is refused." ;
+    c:help "Items in lanes: the lanes are the range of c:property (here ui:stage), each item goes where its value points. Move a card with its arrows, or focus it and use ← →. Review is limited to two by a SHACL shape (sh:maxCount on the inverse path), so a third is refused. c:cardHref links a card's title (Board keyboard moves), c:cardContent shows a component between its title and its person, and c:cardLocked keeps a card where it is (Formula rule, released: no move controls, no dragging, the keys do nothing)." ;
     c:children ( ui:dt-board-pipeline ) .
 
 # --- Tree: the component class hierarchy ----------------------------------------------------------

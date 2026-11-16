@@ -816,6 +816,9 @@ c:byline a sem:Term .
 c:canvas a sem:Term .
 c:caption a sem:Term .
 c:card a sem:Term .
+c:cardContent a sem:Term .
+c:cardHref a sem:Term .
+c:cardLocked a sem:Term .
 c:cardOrder a sem:Term .
 c:cardPerson a sem:Term .
 c:cardTag a sem:Term .
