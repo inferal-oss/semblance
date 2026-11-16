@@ -22,7 +22,7 @@
 # image whose address is data.
 
 ui:dt-payload a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:dt-json ui:dt-hex ui:dt-body ui:dt-image ) .
+    c:children ( ui:dt-json ui:dt-hex ui:dt-body ui:dt-image ui:dt-byte-layout ) .
 
 # --- JsonTree ------------------------------------------------------------------------------------
 
@@ -105,3 +105,19 @@ ui:dt-image a c:Flippable ; c:front ui:dt-image-spec .
 ui:dt-image-spec a c:Specimen ; c:demonstrates c:ImageView ; c:label "Image view" , "Перегляд зображення"@uk , "Bildansicht"@de , "عرض الصورة"@ar ;
     c:help "One image whose address is data - c:payloadProperty of the node it follows (here a choice; in the file explorer, the selected file's file:url) - fitted to its box, with its alt text from c:altProperty." ;
     c:children ( ui:dt-image-picker ui:dt-image-view ) .
+
+# --- ByteLayout ----------------------------------------------------------------------------------
+
+ui:dt-byte-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:dt-byte-title ui:dt-byte-style ui:dt-byte-riff ) .
+ui:dt-byte-title a c:Heading ; c:level 3 ;
+    c:label "Byte layout"@en, "Розкладка байтів"@uk, "Byte-Layout"@de, "تخطيط البايتات"@ar .
+ui:dt-byte-style a c:Segmented ; c:controls ui:dt-byte-riff ; c:property c:byteLayoutStyle ;
+    c:label "Layout style"@en, "Стиль розкладки"@uk, "Layoutstil"@de, "نمط التخطيط"@ar ;
+    c:options ( c:ByteRuler c:ByteRecord c:ByteOutline ) .
+ui:dt-byte-riff a c:ByteLayout ; c:label "RIFF/WAVE" ; c:byteExtent 12 ; c:byteLayoutStyle c:ByteRuler ;
+    c:byteField [ c:byteIndex 0 ; c:label "RIFF" ; c:byteOffset 0 ; c:byteLength 4 ; c:byteEncoding "ASCII" ],
+                [ c:byteIndex 1 ; c:label "ChunkSize" ; c:byteOffset 4 ; c:byteLength 4 ; c:byteEncoding "uint32 LE" ],
+                [ c:byteIndex 2 ; c:label "WAVE" ; c:byteOffset 8 ; c:byteLength 4 ; c:byteEncoding "ASCII" ;
+                  c:byteEmphasis true ; c:byteMark [ c:byteOffset 8 ; c:byteLength 4 ] ] ;
+    c:byteSpan [ c:firstByteIndex 0 ; c:lastByteIndex 2 ; c:label "RIFF/WAVE" ] .

@@ -1,0 +1,28 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+c:ByteLayoutShape a sh:NodeShape ; sh:targetClass c:ByteLayout ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+                [ sh:path c:byteAxisLabel ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+                [ sh:path c:byteField ; sh:minCount 1 ; sh:node c:ByteFieldShape ] ,
+                [ sh:path c:byteSpan ; sh:node c:ByteSpanShape ] ,
+                [ sh:path c:byteExtent ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ] ,
+                [ sh:path c:byteLayoutStyle ; sh:maxCount 1 ; sh:in ( c:ByteRuler c:ByteRecord c:ByteOutline ) ] .
+
+c:ByteFieldShape a sh:NodeShape ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+                [ sh:path c:byteIndex ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] ,
+                [ sh:path c:byteOffset ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] ,
+                [ sh:path c:byteLength ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ] ,
+                [ sh:path c:byteSizeLabel ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+                [ sh:path c:byteEncoding ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+                [ sh:path c:byteEmphasis ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path c:byteMark ; sh:node c:ByteMarkShape ] .
+c:ByteMarkShape a sh:NodeShape ;
+    sh:property [ sh:path c:byteOffset ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] ,
+                [ sh:path c:byteLength ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ] .
+c:ByteSpanShape a sh:NodeShape ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+                [ sh:path c:firstByteIndex ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] ,
+                [ sh:path c:lastByteIndex ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] .

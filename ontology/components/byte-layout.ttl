@@ -1,0 +1,228 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+c:ByteLayout rdfs:subClassOf sem:Component ; sem:slug "byte-layout" ;
+  rdfs:comment "An ordered strip of binary fields. The caption defines the origin for offsets." .
+c:ByteField a rdfs:Class .
+c:byteField a rdf:Property ; rdfs:domain c:ByteLayout ; rdfs:range c:ByteField .
+c:byteIndex a rdf:Property ; rdfs:domain c:ByteField ; rdfs:range xsd:nonNegativeInteger ;
+  rdfs:comment "Zero-based position in the diagram." .
+c:byteOffset a rdf:Property ; rdfs:range xsd:nonNegativeInteger ;
+  rdfs:comment "First byte, when known. Fields and their marks use the same offset origin." .
+c:byteLength a rdf:Property ; rdfs:range xsd:nonNegativeInteger ;
+  rdfs:comment "Width in bytes, when known. A variable field can use a hint instead." .
+c:byteExtent a rdf:Property ; rdfs:domain c:ByteLayout ; rdfs:range xsd:positiveInteger ;
+  rdfs:comment "Total bytes of a zero-based fixed layout. Without a scale, the strip is schematic." .
+c:byteMark a rdf:Property ; rdfs:domain c:ByteField ; rdfs:range c:ByteMark ;
+  rdfs:comment "A highlighted span within the field." .
+c:byteSpan a rdf:Property ; rdfs:domain c:ByteLayout ; rdfs:range c:ByteSpan ;
+  rdfs:comment "A labeled bracket over an inclusive range of field indices given by c:firstByteIndex and c:lastByteIndex." .
+c:ByteMark a rdfs:Class .
+c:ByteSpan a rdfs:Class .
+c:firstByteIndex a rdf:Property ; rdfs:domain c:ByteSpan ; rdfs:range xsd:nonNegativeInteger .
+c:lastByteIndex a rdf:Property ; rdfs:domain c:ByteSpan ; rdfs:range xsd:nonNegativeInteger .
+c:byteAxisLabel a rdf:Property ; rdfs:domain c:ByteLayout .
+c:byteSizeLabel a rdf:Property ; rdfs:domain c:ByteField .
+c:byteEmphasis a rdf:Property ; rdfs:domain c:ByteField ; rdfs:range xsd:boolean .
+c:byteEncoding a rdf:Property ; rdfs:domain c:ByteField ;
+  rdfs:comment "Short data type or encoding label displayed with the width." .
+c:byteLayoutStyle a rdf:Property ; rdfs:domain c:ByteLayout ;
+  rdfs:range c:ByteLayoutStyle ;
+  rdfs:comment "Visual treatment. The default is c:ByteRuler." .
+c:ByteLayoutStyle a rdfs:Class .
+c:ByteRuler a c:ByteLayoutStyle ; rdfs:label "Ruler"@en, "Лінійка"@uk, "Lineal"@de, "مسطرة"@ar .
+c:ByteRecord a c:ByteLayoutStyle ; rdfs:label "Record"@en, "Запис"@uk, "Datensatz"@de, "سجل"@ar .
+c:ByteOutline a c:ByteLayoutStyle ; rdfs:label "Outline"@en, "Контур"@uk, "Umriss"@de, "مخطط"@ar .
+c:ByteLayoutRendering a sem:Rendering ; sem:targets c:ByteLayout ; sem:stratum 0 ; sem:follows c:byteField, c:byteSpan, (c:byteField c:byteMark) .
+c:ByteLayoutFunction a sem:Rule ; sem:implements c:ByteLayoutRendering ; sem:function "byte-layout:render" .
+c:ByteLayoutScreen a sem:Rule ; sem:modality mod:Screen ; sem:implements c:ByteLayoutRendering ;
+  sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class "sem-byte-layout" ; rdfhtml:hasChild ?plot ;
+    rdfhtml:attribute ?appearanceAttr .
+  ?appearanceAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-layout-appearance" ; rdfhtml:attributeValue ?appearance .
+  ?plot a svg:Svg ; rdfhtml:hasChild ?group, ?axisNode, ?rail, ?endOffset, ?endTick, ?bracket, ?annotation ;
+    rdfhtml:attribute ?vb, ?style, ?aria, ?plotRole .
+  ?vb a rdfhtml:Attribute ; rdfhtml:attributeName "viewBox" ; rdfhtml:attributeValue ?view .
+  ?style a rdfhtml:Attribute ; rdfhtml:attributeName "style" ; rdfhtml:attributeValue ?min .
+  ?aria a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?title .
+  ?plotRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
+  ?group a svg:G ; sem:orderKey ?groupOrder ; rdfhtml:hasChild ?tile, ?labelNode, ?metaNode, ?stripe, ?offsetNode, ?cardOffset, ?tick, ?broken .
+  ?tile a svg:Rect ; sem:orderKey "\\u0001n0" .
+  ?tick a svg:Path ; sem:orderKey "\\u0001n1" .
+  ?labelNode a svg:Text ; sem:orderKey "\\u0001n2" ; rdfhtml:hasChild ?labelText .
+  ?metaNode a svg:Text ; sem:orderKey "\\u0001n3" ; rdfhtml:hasChild ?metaText .
+  ?offsetNode a svg:Text ; sem:orderKey "\\u0001n4" ; rdfhtml:hasChild ?offsetText .
+  ?broken a svg:Path ; sem:orderKey "\\u0001n6" .
+  ?cardOffset a svg:Text ; sem:orderKey "\\u0001n5" ; rdfhtml:hasChild ?cardOffsetText .
+  ?cardOffsetText a rdfhtml:Text ; rdfhtml:data ?cardOffsetLabel .
+  ?stripe a svg:Rect ; sem:orderKey ?markOrder .
+  ?axisNode a svg:Text ; sem:orderKey "\\u0001n0\\u0001n1" ; rdfhtml:hasChild ?axisText .
+  ?rail a svg:Path ; sem:orderKey "\\u0001n0\\u0001n0" .
+  ?endOffset a svg:Text ; sem:orderKey "\\u0001n2\\u0001n1" ; rdfhtml:hasChild ?endText .
+  ?endTick a svg:Path ; sem:orderKey "\\u0001n2\\u0001n0" .
+  ?bracket a svg:Path ; sem:orderKey ?bracketOrder .
+  ?annotation a svg:Text ; sem:orderKey ?annotationOrder ; rdfhtml:hasChild ?annotationText .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?metaText a rdfhtml:Text ; rdfhtml:data ?metadata .
+  ?offsetText a rdfhtml:Text ; rdfhtml:data ?offsetLabel .
+  ?axisText a rdfhtml:Text ; rdfhtml:data ?axisLabel .
+  ?endText a rdfhtml:Text ; rdfhtml:data ?endLabel .
+  ?annotationText a rdfhtml:Text ; rdfhtml:data ?spanLabel .
+  ?element rdfhtml:attribute ?att .
+  ?att a rdfhtml:Attribute ; rdfhtml:attributeName ?name ; rdfhtml:attributeValue ?val .
+}
+WHERE {
+  $this a c:ByteLayout .
+  { SELECT ?diagram (COUNT(?member) AS ?count) WHERE {
+      ?diagram a c:ByteLayout .
+      OPTIONAL { ?diagram c:byteField ?member }
+    } GROUP BY ?diagram }
+  FILTER(?diagram = $this)
+  OPTIONAL { $this c:label ?title0 }
+  OPTIONAL { $this c:byteExtent ?total }
+  BIND(COALESCE(STR(?title0), "") AS ?title)
+  OPTIONAL { $this c:byteLayoutStyle ?style0 }
+  OPTIONAL { $this c:byteAxisLabel ?axis0 }
+  BIND(IF(COALESCE(?style0, c:ByteRuler) = c:ByteRecord, "record",
+    IF(COALESCE(?style0, c:ByteRuler) = c:ByteOutline, "outline", "ruler")) AS ?appearance)
+  BIND(COALESCE(STR(?axis0), "") AS ?axisLabel)
+  BIND(IF(?count * 132 > 704, ?count * 132, 704) AS ?extent)
+  BIND(?extent + 36 AS ?width)
+  BIND(CONCAT("0 0 ", STR(?width), IF(EXISTS { $this c:byteSpan ?anySpan }, " 122", " 90")) AS ?view)
+  BIND(CONCAT("min-width:", STR(?extent), "px") AS ?min)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~plot")) AS ?plot)
+  BIND(IRI(CONCAT(STR(?plot), "-view")) AS ?vb)
+  BIND(IRI(CONCAT(STR(?plot), "-style")) AS ?style)
+  BIND(IRI(CONCAT(STR(?plot), "-label")) AS ?aria)
+  BIND(IRI(CONCAT(STR(?plot), "-role")) AS ?plotRole)
+  BIND(IRI(CONCAT(STR(?root), "-appearance")) AS ?appearanceAttr)
+  BIND(IRI(CONCAT(STR(?plot), "-axis")) AS ?axisNode)
+  BIND(IRI(CONCAT(STR(?axisNode), "-text")) AS ?axisText)
+  BIND(IRI(CONCAT(STR(?plot), "-rail")) AS ?rail)
+  $this c:byteField ?field .
+  ?field c:byteIndex ?index ; c:label ?fieldLabel .
+  BIND(STR(?fieldLabel) AS ?label)
+  OPTIONAL { ?field c:byteOffset ?offset }
+  OPTIONAL { ?field c:byteLength ?length }
+  OPTIONAL { ?field c:byteSizeLabel ?hint }
+  OPTIONAL { ?field c:byteEncoding ?encoding }
+  OPTIONAL { ?field c:byteEmphasis ?tone }
+  BIND(18 + FLOOR(IF(BOUND(?total), ?extent * ?offset / ?total, ?index * ?extent / ?count)) AS ?x)
+  BIND(18 + FLOOR(IF(BOUND(?total), ?extent * (?offset + ?length) / ?total, (?index + 1) * ?extent / ?count)) - ?x AS ?size)
+  BIND(IF(BOUND(?length), CONCAT(STR(?length), " B"), COALESCE(STR(?hint), "…")) AS ?detail)
+  BIND(IF(BOUND(?encoding), CONCAT(STR(?encoding), " · ", ?detail), ?detail) AS ?metadata)
+  BIND(IRI(CONCAT(STR($this), "/~field-", STR(?index))) AS ?group)
+  BIND(CONCAT("\\u0001n1\\u0001n", STR(?index)) AS ?groupOrder)
+  BIND(IRI(CONCAT(STR(?group), "-bar")) AS ?tile)
+  BIND(IRI(CONCAT(STR(?group), "-label")) AS ?labelNode)
+  BIND(IRI(CONCAT(STR(?group), "-meta")) AS ?metaNode)
+  BIND(IRI(CONCAT(STR(?group), "-tick")) AS ?tick)
+  BIND(IF(!BOUND(?length), IRI(CONCAT(STR(?group), "-break")), ?none) AS ?broken)
+  BIND(IF(BOUND(?offset), IRI(CONCAT(STR(?group), "-offset")), ?none) AS ?offsetNode)
+  BIND(STR(?offset) AS ?offsetLabel)
+  BIND(IRI(CONCAT(STR(?offsetNode), "-card")) AS ?cardOffset)
+  BIND(IRI(CONCAT(STR(?cardOffset), "-text")) AS ?cardOffsetText)
+  BIND(CONCAT("@", ?offsetLabel) AS ?cardOffsetLabel)
+  BIND(IRI(CONCAT(STR(?offsetNode), "-text")) AS ?offsetText)
+  BIND(IF(?index + 1 = ?count && (BOUND(?total) || (BOUND(?offset) && BOUND(?length))), IRI(CONCAT(STR(?plot), "-end")), ?none) AS ?endOffset)
+  BIND(IRI(CONCAT(STR(?endOffset), "-tick")) AS ?endTick)
+  BIND(IRI(CONCAT(STR(?endOffset), "-text")) AS ?endText)
+  BIND(STR(COALESCE(?total, ?offset + ?length)) AS ?endLabel)
+  OPTIONAL {
+    $this c:byteSpan ?band ; c:byteField ?lastField .
+    ?band c:firstByteIndex ?index ; c:lastByteIndex ?lastIndex ; c:label ?spanTitle .
+    BIND(STR(?spanTitle) AS ?spanLabel)
+    ?lastField c:byteIndex ?lastIndex .
+    OPTIONAL { ?lastField c:byteOffset ?lastOffset ; c:byteLength ?lastLength }
+  }
+  BIND(18 + FLOOR(IF(BOUND(?total), ?extent * (?lastOffset + ?lastLength) / ?total, (?lastIndex + 1) * ?extent / ?count)) AS ?spanEnd)
+  BIND(IF(BOUND(?band), IRI(CONCAT(STR(?group), "-band-", STR(?lastIndex), "-", ENCODE_FOR_URI(STR(?spanLabel)))), ?none) AS ?bracket)
+  BIND(IRI(CONCAT(STR(?bracket), "-caption")) AS ?annotation)
+  BIND(CONCAT("\\u0001n3\\u0001n", STR(?index), "\\u0001n", STR(?lastIndex), "\\u0001s", ?spanLabel, "\\u0001n0") AS ?bracketOrder)
+  BIND(CONCAT("\\u0001n3\\u0001n", STR(?index), "\\u0001n", STR(?lastIndex), "\\u0001s", ?spanLabel, "\\u0001n1") AS ?annotationOrder)
+  BIND(IRI(CONCAT(STR(?annotation), "-text")) AS ?annotationText)
+  BIND(IRI(CONCAT(STR(?labelNode), "-text")) AS ?labelText)
+  BIND(IRI(CONCAT(STR(?metaNode), "-text")) AS ?metaText)
+  OPTIONAL {
+    ?field c:byteMark ?mark .
+    ?mark c:byteOffset ?at ; c:byteLength ?span .
+  }
+  BIND(CONCAT("\\u0001n7\\u0001n", STR(?at), "\\u0001n", STR(?span)) AS ?markOrder)
+  BIND((?at - ?offset) / ?length AS ?start)
+  BIND(?x + FLOOR(?start * ?size) AS ?markX)
+  BIND(IF(?size * ?span / ?length < 2, 2, ?size * ?span / ?length) AS ?minSpan)
+  BIND(FLOOR(IF(?minSpan < ?x + ?size - ?markX, ?minSpan, ?x + ?size - ?markX)) AS ?markWidth)
+  VALUES (?part ?name) {
+    ("bar" "x") ("bar" "y") ("bar" "width") ("bar" "height") ("bar" "class")
+    ("label" "x") ("label" "y") ("label" "class") ("label" "text-anchor")
+    ("meta" "x") ("meta" "y") ("meta" "class") ("meta" "text-anchor")
+    ("offset" "x") ("offset" "y") ("offset" "class") ("offset" "text-anchor")
+    ("card-offset" "x") ("card-offset" "y") ("card-offset" "class") ("card-offset" "text-anchor")
+    ("axis" "x") ("axis" "y") ("axis" "class") ("axis" "text-anchor")
+    ("end" "x") ("end" "y") ("end" "class") ("end" "text-anchor")
+    ("mark" "x") ("mark" "y") ("mark" "width") ("mark" "height") ("mark" "class")
+    ("tick" "d") ("tick" "class") ("break" "d") ("break" "class")
+    ("endTick" "d") ("endTick" "class") ("rail" "d") ("rail" "class")
+    ("bracket" "d") ("bracket" "class")
+    ("annotation" "x") ("annotation" "y") ("annotation" "class") ("annotation" "text-anchor")
+  }
+  BIND(IF(?part = "mark" && BOUND(?mark) && ?at >= ?offset && ?span > 0 && ?markWidth > 0, IRI(CONCAT(STR(?group), "-stripe-", STR(?at), "-", STR(?span))), ?none) AS ?stripe)
+  BIND(COALESCE(
+      IF(?part = "mark", ?stripe, ?none), IF(?part = "axis", ?axisNode, ?none),
+      IF(?part = "rail", ?rail, ?none), IF(?part = "end", ?endOffset, ?none),
+      IF(?part = "endTick", ?endTick, ?none), IF(?part = "break", ?broken, ?none),
+      IF(?part = "offset", ?offsetNode, ?none), IF(?part = "card-offset", ?cardOffset, ?none), IF(?part = "bracket", ?bracket, ?none),
+      IF(?part = "annotation", ?annotation, ?none),
+      IF(?part IN ("bar", "label", "meta", "tick"), IRI(CONCAT(STR(?group), "-", ?part)), ?none)) AS ?element)
+  FILTER(BOUND(?element))
+  BIND(IRI(CONCAT(STR(?element), "-a-", ?name)) AS ?att)
+  BIND(STR(?width - 18) AS ?edge)
+  BIND(IF(COALESCE(?tone, false), "emphasized", IF(BOUND(?length), "data", "variable")) AS ?fieldClass)
+  BIND(COALESCE(
+    IF(?part = "bar", IF(?name = "x", STR(xsd:integer(?x)), IF(?name = "y", "38", IF(?name = "width", STR(xsd:integer(?size)), IF(?name = "height", "47", ?fieldClass)))), ?none),
+    IF(?part = "mark", IF(?name = "x", STR(xsd:integer(?markX)), IF(?name = "width", STR(xsd:integer(?markWidth)), IF(?name = "height", "5", IF(?name = "y", "80", "used")))), ?none),
+    IF(?part = "tick" || ?part = "endTick", IF(?name = "class", "tick", CONCAT("M", IF(?part = "tick", STR(xsd:integer(?x)), ?edge), " 30v8")), ?none),
+    IF(?part = "rail", IF(?name = "class", "rail", CONCAT("M18 37H", ?edge)), ?none),
+    IF(?part = "break", IF(?name = "class", "continuation", CONCAT("M", STR(xsd:integer(?x + ?size - 17)), " 47l5 -7m1 7l5 -7")), ?none),
+    IF(?part = "bracket", IF(?name = "class", "bracket", CONCAT("M", STR(xsd:integer(?x)), " 93v7H", STR(xsd:integer(?spanEnd)), "v-7")), ?none),
+    IF(?part = "axis", IF(?name = "x", "18", IF(?name = "y", "13", IF(?name = "class", "axis-label", "start"))), ?none),
+    IF(?part = "offset" || ?part = "end", IF(?name = "x", IF(?part = "offset", STR(xsd:integer(?x)), ?edge), IF(?name = "y", "26", IF(?name = "class", "offset", "middle"))), ?none),
+    IF(?part = "annotation", IF(?name = "x", STR(xsd:integer(FLOOR((?x + ?spanEnd) / 2))), IF(?name = "y", "116", IF(?name = "class", "annotation", "middle"))), ?none),
+    IF(?name = "x", STR(xsd:integer(FLOOR(?x + ?size / 2))), IF(?name = "y", IF(?part = "label", "59", IF(?part = "card-offset", "25", "76")), IF(?name = "class", ?part, "middle")))) AS ?val)
+}
+""" .
+
+c:ByteLayoutText a sem:Rule ; sem:modality mod:Text ; sem:implements c:ByteLayoutRendering ;
+  sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?caption, ?entry .
+  ?caption a rdfhtml:Text ; rdfhtml:data ?title ; sem:orderKey "0" .
+  ?entry a rdfhtml:P ; sem:orderKey ?order ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?data .
+}
+WHERE {
+  $this a c:ByteLayout ; c:byteField ?field .
+  ?field c:byteIndex ?index ; c:label ?label .
+  OPTIONAL { $this c:label ?heading }
+  OPTIONAL { ?field c:byteOffset ?offset }
+  OPTIONAL { ?field c:byteLength ?length }
+  OPTIONAL { ?field c:byteSizeLabel ?hint }
+  OPTIONAL { ?field c:byteEncoding ?encoding }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~caption")) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~entry-", STR(?index))) AS ?entry)
+  BIND(IRI(CONCAT(STR(?entry), "-text")) AS ?line)
+  BIND(STR(1 + ?index) AS ?order)
+  BIND(COALESCE(STR(?heading), "") AS ?title)
+  BIND(IF(BOUND(?offset), CONCAT("@", STR(?offset), " · "), "") AS ?address)
+  BIND(IF(BOUND(?length), CONCAT(STR(?length), " B"), COALESCE(STR(?hint), "…")) AS ?size)
+  BIND(IF(BOUND(?encoding), CONCAT(STR(?encoding), " · ", ?size), ?size) AS ?detail)
+  BIND(CONCAT(?address, STR(?label), " · ", ?detail) AS ?data)
+}
+""" .

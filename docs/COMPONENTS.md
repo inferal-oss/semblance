@@ -668,6 +668,31 @@ slot through `renderer.slot(name)`. Stable message and body IRIs let the rendere
 content, including drafts and focus, when other messages are inserted. Keep those IRIs stable
 when updating the graph with `runtime.apply`.
 
+### Byte layouts
+
+`c:ByteLayout` draws ordered binary fields in Screen and lists them with offsets and sizes in
+Text. Supply one caption and one label per field. The field indices are consecutive integers
+starting at 0. The values can be blank nodes or named RDF resources.
+
+```turtle
+ex:header a c:ByteLayout ; c:label "Record header" ; c:byteExtent 6 ;
+    c:byteLayoutStyle c:ByteRuler ;
+    c:byteField [ c:byteIndex 0 ; c:label "Length" ; c:byteOffset 0 ;
+                  c:byteLength 2 ; c:byteEncoding "uint16 LE" ],
+                [ c:byteIndex 1 ; c:label "Identifier" ; c:byteOffset 2 ;
+                  c:byteLength 4 ; c:byteEmphasis true ;
+                  c:byteMark [ c:byteOffset 3 ; c:byteLength 2 ] ] ;
+    c:byteSpan [ c:firstByteIndex 0 ; c:lastByteIndex 1 ; c:label "Header" ] .
+```
+
+With `c:byteExtent`, fields use proportional widths and each field needs an offset and length
+inside the extent. Omit the extent for a schematic with equal-width fields. In a schematic,
+omit a field's length to show it as variable and use `c:byteSizeLabel` to describe its size.
+Marks use the same offset origin as their enclosing field. Span indices are inclusive.
+`c:byteAxisLabel` optionally names the offset origin. Choose `c:ByteRuler` (default),
+`c:ByteRecord` (separate rounded fields), or `c:ByteOutline` (monochrome outlines).
+The gallery uses `c:Segmented` to change the style in RDF.
+
 ### Description list values
 
 Explicit `c:DescriptionList` items can supply a component through `c:content`, including a link,
