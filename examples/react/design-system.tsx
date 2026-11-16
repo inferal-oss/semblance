@@ -5,7 +5,7 @@
 // Each component spreads `root` on its root element (the projection's attributes and the ref that
 // tells Semblance which element it is) and puts `children`, what Semblance projected, inside.
 import { createContext, createElement, type ReactNode, useContext } from 'react'
-import type { HostProps } from '@inferal-oss/semblance-react'
+import type { HostProps } from '@semblance-dev/semblance-react'
 
 type Density = 'compact' | 'comfortable'
 /** How roomy what is inside is: a Stack with a density sets it for every component under it. */

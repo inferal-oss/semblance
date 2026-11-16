@@ -1,8 +1,8 @@
 // The example as a site (docs/SSR.md): its page rendered at build time, the design system's markup
 // included (React's renderToString), and hydrated by the client (main.ts) with the same components.
 import { readFileSync } from 'node:fs'
-import { defineSite } from '@inferal-oss/semblance/node'
-import { reactHosts } from '@inferal-oss/semblance-react/server'
+import { defineSite } from '@semblance-dev/semblance/node'
+import { reactHosts } from '@semblance-dev/semblance-react/server'
 import { todoApp } from '../../src/examples/todo.ts'
 import { components } from './design-system.tsx'
 

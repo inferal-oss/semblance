@@ -1,4 +1,4 @@
-import { mount } from '@inferal-oss/semblance/web'
+import { mount } from '@semblance-dev/semblance/web'
 import app from './app.ttl?raw'
 import foreign from './foreign.ttl?raw'
 import { foreignExampleFunctions } from './functions.ts'

@@ -105,7 +105,7 @@ const SAMPLES: Record<string, string[]> = {
     "a / b /* never closed\n'unterminated\n`also",
   ],
   ShellLexicon: [
-    'npm install @inferal-oss/semblance\nnpm install --save-dev vite\n  # indented comment\nif [ -n "$HOME" ]; then echo ${PATH} $1 \'s q\' "a\\"b"; fi',
+    'npm install @semblance-dev/semblance\nnpm install --save-dev vite\n  # indented comment\nif [ -n "$HOME" ]; then echo ${PATH} $1 \'s q\' "a\\"b"; fi',
     'curl -sS https://x.org/a#b?c=d | jq .x && FOO=1 node -e "1" # done',
   ],
   JsonLexicon: ['{ "name": "x", "n": -1.5e3, "ok": true, "none": null, "list": [1, "two", false], "esc": "a\\"b" }', '"unterminated\n{}'],

@@ -1,16 +1,20 @@
 // Semblance's own engines as stores in the browser: the engine build fetched and compiled once
 // (engine.ts), then a store over it. Apart from the other kinds (stores.ts), so a page that only
 // needs the engine - views on their own (src/views/web.ts) - carries no other store's code.
+import { ABI_VERSION } from '../../rdf-engine/host/engine.ts'
 import { engineStore } from '../../rdf-engine/host/store.ts'
+import { checkedBuild } from '../store/engine-build.ts'
 import type { FetchPolicy, GraphStore } from '../store/types.ts'
-import { hasEngine, startEngine } from './engine.ts'
+import { addEngine, engineBuild, hasEngine, startEngine } from './engine.ts'
 
-export { hasEngine }
+export { addEngine, hasEngine }
 
 const engines: Partial<Record<'rust' | 'wat', WebAssembly.Module>> = {}
 
 /** Fetch and compile an engine build, once (a host may have started it already: startEngine). */
 export async function initEngine(kind: 'wat' | 'rust'): Promise<void> {
+  if (engines[kind]) return
+  checkedBuild(kind, await engineBuild(kind), ABI_VERSION)
   engines[kind] ??= await startEngine(kind)
 }
 

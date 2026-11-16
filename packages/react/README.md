@@ -1,4 +1,4 @@
-# @inferal-oss/semblance-react
+# @semblance-dev/semblance-react
 
 React as the component library under [Semblance](https://semblance.dev): Semblance keeps the data,
 the state and the behaviour (the graph, the rules that project it, the reactions to events), and your
@@ -6,7 +6,7 @@ React components draw the components the graph binds to them, with their props a
 children, nested in one React tree, with events and server rendering.
 
 ```bash
-npm install @inferal-oss/semblance @inferal-oss/semblance-react react react-dom
+npm install @semblance-dev/semblance @semblance-dev/semblance-react react react-dom
 ```
 
 ```turtle
@@ -15,7 +15,7 @@ c:Button rdfs:subClassOf ext:Hosted ; ext:component "Button" ;
 ```
 
 ```tsx
-import type { HostProps } from '@inferal-oss/semblance-react'
+import type { HostProps } from '@semblance-dev/semblance-react'
 
 export const Button = ({ root, children, intent }: HostProps & { intent?: string }) => (
   <button type="button" {...root} className={`ds-button ds-button--${intent}`}>{children}</button>
@@ -23,13 +23,13 @@ export const Button = ({ root, children, intent }: HostProps & { intent?: string
 ```
 
 ```ts
-import { mount } from '@inferal-oss/semblance/web'
-import { reactHosts } from '@inferal-oss/semblance-react'
+import { mount } from '@semblance-dev/semblance/web'
+import { reactHosts } from '@semblance-dev/semblance-react'
 
 await mount(el, { root, graphs, hosts: reactHosts({ components: { Button } }) })
 ```
 
-On the server, `reactHosts` from `@inferal-oss/semblance-react/server` (it brings `renderToString`) goes
+On the server, `reactHosts` from `@semblance-dev/semblance-react/server` (it brings `renderToString`) goes
 in `defineSite({ hosts })`; the client hydrates what it wrote.
 
 The guide is [docs/HOSTED.md](https://github.com/inferal-oss/semblance/blob/main/docs/HOSTED.md); the

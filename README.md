@@ -22,12 +22,14 @@ examples, each with a Markdown page of the site's own text projection (generated
 **Use it:** [Getting started](docs/GETTING-STARTED.md) builds a small app with a component of its
 own; [Building components](docs/COMPONENTS.md) covers rules, reactions, layers and integrating
 with your app; [AGENTS.md](AGENTS.md) has the ground rules for working on the framework. The npm
-package is `@inferal-oss/semblance` (`npm install @inferal-oss/semblance`), with
-`@inferal-oss/semblance-react` for React; [CHANGELOG.md](CHANGELOG.md) has the versions and
+package is `@semblance-dev/semblance` (`npm install @semblance-dev/semblance`), with
+`@semblance-dev/semblance-react` for React, and its engine's two builds in packages of their own
+(`@semblance-dev/rdf-engine-wat`, installed with it, and `@semblance-dev/rdf-engine-rust`, optional);
+[CHANGELOG.md](CHANGELOG.md) has the versions and
 [docs/RELEASING.md](docs/RELEASING.md) how they are made.
 
 **Only the views:** [Views without the framework](docs/VIEWS.md) is a smaller first step for an app
-with a UI kit of its own. `@inferal-oss/semblance/views` is a store and SPARQL views over your data,
+with a UI kit of its own. `@semblance-dev/semblance/views` is a store and SPARQL views over your data,
 kept current by deltas, with no ontology and no renderer, and `useRows` / `useView` read them in
 React.
 
@@ -194,7 +196,7 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   A class bound to a host component (`ext:component "Button"`) keeps its renderings; a renderer
   adapter given to the DOM patcher, the HTML serializer and server rendering draws its root, its props
   and its projected children with the library, nested components in one tree.
-  `@inferal-oss/semblance-react` (`packages/react/`) is the React adapter. See [docs/HOSTED.md](docs/HOSTED.md).
+  `@semblance-dev/semblance-react` (`packages/react/`) is the React adapter. See [docs/HOSTED.md](docs/HOSTED.md).
 - **Safe authoring** (`safe:`): a graph from someone you do not trust (a person, a page, a model)
   renders under a policy that is vocabulary: elements, attributes, URL schemes and CSS from allow-lists,
   checked where the HTML index takes a rendering, so the DOM, server-rendered HTML and text agree; what

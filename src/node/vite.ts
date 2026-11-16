@@ -6,7 +6,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { type Plugin, type ResolvedConfig, searchForWorkspaceRoot } from 'vite'
+import type { Plugin, ResolvedConfig } from 'vite'
 import { buildSite, loadSite, siteOntology } from './site.ts'
 import { minifyTurtle } from './turtle-min.ts'
 
@@ -90,11 +90,14 @@ function linked(): Plugin {
   return {
     name: NAME + ':linked-modules',
     apply: 'serve',
-    config(user) {
+    async config(user) {
       const root = resolve(user.root ?? '.')
       const extra = linkedModules(root)
       if (extra.length === 0) return
-      return { server: { fs: { allow: user.server?.fs?.allow ? extra : [searchForWorkspaceRoot(root), ...extra] } } }
+      if (user.server?.fs?.allow) return { server: { fs: { allow: extra } } }
+      // Imported here, not at the top: Vite is an optional peer, and ./node is used without it.
+      const { searchForWorkspaceRoot } = await import('vite')
+      return { server: { fs: { allow: [searchForWorkspaceRoot(root), ...extra] } } }
     },
   }
 }

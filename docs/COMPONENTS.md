@@ -478,12 +478,12 @@ components and shown only where there is no `ol:label`: an island is named by wh
 
 ## Integrating with your app
 
-`mount` (from `@inferal-oss/semblance/web`) is the short way. The pieces it wires, for when you
+`mount` (from `@semblance-dev/semblance/web`) is the short way. The pieces it wires, for when you
 need them yourself:
 
 ```ts
-import { compileStyles, EventBus, MOD, Runtime } from '@inferal-oss/semblance'
-import { DomRenderer, initWeb, loadStore } from '@inferal-oss/semblance/web'
+import { compileStyles, EventBus, MOD, Runtime } from '@semblance-dev/semblance'
+import { DomRenderer, initWeb, loadStore } from '@semblance-dev/semblance/web'
 
 await initWeb('wat')
 const store = loadStore('wat', components, app)       // Semblance's ontology + yours
@@ -506,7 +506,7 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
 - **Embedding.** Mount several roots into several elements of an existing page; or place an
   unstyled `c:HostSlot` inside a layout, name it with `c:slot`, and mount existing application
   content into `renderer.slot(name)`. Use `c:ProjectionView` for a styled inspection surface.
-- **Server-side.** `loadStore` from `@inferal-oss/semblance/node`, project, `toHTML` / `toText`.
+- **Server-side.** `loadStore` from `@semblance-dev/semblance/node`, project, `toHTML` / `toText`.
 - **Remembering state.** `per:Policy` nodes say what to keep where; attach `Persistence` with
   storage backends before the first projection ([PERSISTENCE.md](../PERSISTENCE.md)).
 - **The address.** `nav:Location` and `nav:Dimension`s say which state lives in the URL;
@@ -581,12 +581,12 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   ```
 - **Connectors.** A `c:Connector` (an arrow `c:from` one component `c:to` another) is drawn by a
   host effect that measures its ends: `mount` attaches it; wiring by hand, call
-  `attachConnectors(element)` (`@inferal-oss/semblance/web`). It does nothing while the page has no
+  `attachConnectors(element)` (`@semblance-dev/semblance/web`). It does nothing while the page has no
   connector, at most one frame's work per frame otherwise, and never writes geometry into the graph.
 - **Swiped tracks.** A gallery's carousel and a lightbox scroll on snap points (`data-sem-snap`): a
   host effect brings the item the graph calls current (`data-sem-current`) into view and reports
   where a swipe came to rest as an unrecorded `c:Snapped` event. `mount` attaches it; by hand,
-  `attachSnaps(element)` (`@inferal-oss/semblance/web`).
+  `attachSnaps(element)` (`@semblance-dev/semblance/web`).
 - **Rendered state.** What the page knows about a component and the graph does not (where it is,
   whether it is on screen or overlaps another, focus, hover, scroll, open) is written to the graph
   for the components that ask (`rnd:observes`); see [Rendered state](#rendered-state) below.

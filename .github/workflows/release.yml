@@ -1,16 +1,20 @@
-# Publish @inferal-oss/semblance and @inferal-oss/semblance-react to npm with provenance, when a
-# GitHub release is published for a tag v<version> (docs/RELEASING.md). The packages' versions must be
-# the tag's; the checks of a publish run first. npm authenticates the workflow by its OIDC token
-# (trusted publishing, configured for both packages on npmjs.com); a package not yet on npm, which
-# has no trusted publisher, is published with the NPM_TOKEN secret instead.
+# Publish the four npm packages when a version tag v<version> is pushed (docs/RELEASING.md):
+# @semblance-dev/rdf-engine-wat, @semblance-dev/rdf-engine-rust, @semblance-dev/semblance and
+# @semblance-dev/semblance-react, in that order (each one's dependencies first), with provenance.
+# npm authenticates the workflow by its OIDC token (trusted publishing: a trusted publisher on
+# npmjs.com for each package, naming this repository and this file); no long-lived token. The tag
+# must be every package's version and no package may be private; the checks of a publish run first.
+# Publishing is off until the repository variable NPM_PUBLISHING is `enabled` (Settings → Secrets and
+# variables → Actions → Variables): until then a tag runs nothing.
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
 
 permissions:
   contents: read
+  # The OIDC token npm exchanges for a short-lived publish token, and signs the provenance with.
   id-token: write
 
 concurrency:
@@ -19,8 +23,9 @@ concurrency:
 
 jobs:
   publish:
+    if: vars.NPM_PUBLISHING == 'enabled'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,24 +33,26 @@ jobs:
           node-version: 26
           registry-url: https://registry.npmjs.org
           cache: npm
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@11 && npm --version
       - run: npm ci
       - run: rustup target add wasm32-unknown-unknown
       - run: npm run engine:build
       - run: npm run layout:build
-      - name: The packages' versions are the tag's
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          for dir in . packages/react; do
-            version=$(node -p "require('./$dir/package.json').version")
-            [ "$version" = "$tag" ] || { echo "$dir/package.json is $version, the tag is $tag"; exit 1; }
-          done
+      - name: The four packages are the tag's version, and none is private
+        run: npx tsx scripts/release-version.ts --check "${GITHUB_REF_NAME#v}"
       - run: npx tsc --noEmit
+      # Builds every package's lib/ and checks the tarballs as a consumer installs them.
       - run: npm run pack:check
-      # The check built lib/; the core first, as the React package's peer.
-      - run: npm publish --provenance --ignore-scripts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: npm publish --provenance --ignore-scripts
-        working-directory: packages/react
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish, the engines first
+        run: |
+          for dir in packages/rdf-engine-wat packages/rdf-engine-rust . packages/react; do
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            # A re-run after a partial publish goes on from the first package not yet on npm.
+            if [ "$(npm view "$name@$version" version 2>/dev/null)" = "$version" ]; then
+              echo "$name@$version is on npm already"
+              continue
+            fi
+            (cd "$dir" && npm publish --provenance --access public --ignore-scripts)
+          done
