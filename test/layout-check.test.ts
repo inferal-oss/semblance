@@ -75,6 +75,10 @@ const EXPECTED: [RegExp, string[]][] = [
   // side column; the column sticks as one since, in every theme and right to left
   [/^299-before_/, ['stackChildrenApart']],
   [/^299-after_/, []],
+  // #518: the budget sheet's tags, beside labelled amounts in rows of a list (pos:Subgrid), centred on
+  // each field's whole box, label and input; after, on the input, in every theme, on a phone, in Arabic
+  [/^518-before_/, ['besideFieldOnItsControl']],
+  [/^518-after_/, []],
 ]
 
 describe('layout checker over recorded pages', () => {
@@ -95,12 +99,18 @@ describe('layout checker over recorded pages', () => {
     store.loadTurtle(constraintsTtl)
     store.loadTurtle(hierarchy)
     store.loadTurtle(toTurtle(p, decl))
-    const key = (inv: string, scope: number, member: number, by: number) => `${local(inv)} ${scope} ${member} ${by.toFixed(2)}`
+    const key = (inv: string, scope: number, member: number) => `${local(inv)} ${scope} ${member}`
     // a group's finding names the group; a Fits finding also the box that sticks out
     const fits = (r: unknown) => r === Rel.FitsInline || r === Rel.FitsWithin || r === Rel.NoOverlap
-    const fn = checkMeasured(p, decl).map((x) => key(x.instance.declaration.iri, x.instance.scope, fits(x.instance.declaration.relation) ? x.member : -1, x.by))
-    const sparql = checkSparql(store).map((x) => key(x.invariant, x.scope, x.member, x.by))
+    const fn = checkMeasured(p, decl).map((x) => [key(x.instance.declaration.iri, x.instance.scope, fits(x.instance.declaration.relation) ? x.member : -1), x.by] as const)
+    const sparql = checkSparql(store).map((x) => [key(x.invariant, x.scope, x.member), x.by] as const)
     store.dispose?.()
-    expect(sparql.sort()).toEqual(fn.sort())
+    const order = (a: readonly [string, number], b: readonly [string, number]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1])
+    fn.sort(order)
+    sparql.sort(order)
+    expect(sparql.map(([k]) => k)).toEqual(fn.map(([k]) => k))
+    // by as much, to a hundredth of a px: the SPARQL side is decimal, the function side floating point,
+    // so a middle (y + height / 2) of x.xx5 px may print either way at the last digit
+    sparql.forEach(([k, by], i) => expect([k, Math.abs(by - fn[i]![1]) < 0.006]).toEqual([k, true]))
   })
 })

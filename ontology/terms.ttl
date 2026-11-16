@@ -604,6 +604,7 @@ c:RdfEditorAddKey a sem:Term .
 c:RdfEditorChooseKey a sem:Term .
 c:RdfEditorContextMenu a sem:Term .
 c:RdfEditorDeleteKey a sem:Term .
+c:RdfEditorEntryWindow a sem:Term .
 c:RdfEditorEscapeKey a sem:Term .
 c:RdfEditorKey a sem:Term .
 c:RdfEditorMenuKey a sem:Term .
@@ -949,6 +950,7 @@ c:entries a sem:Term .
 c:entry a sem:Term .
 c:entryDetail a sem:Term .
 c:entryFor a sem:Term .
+c:entryPageSize a sem:Term .
 c:entryProperty a sem:Term .
 c:entryTitle a sem:Term .
 c:error a sem:Term .
@@ -1276,6 +1278,9 @@ c:r a sem:Term .
 c:raises a sem:Term .
 c:rank a sem:Term .
 c:ratio a sem:Term .
+c:rdfPageEntry a sem:Term .
+c:rdfPageLimit a sem:Term .
+c:rdfPageOffset a sem:Term .
 c:recalculated a sem:Term .
 c:recalculationTick a sem:Term .
 c:recentLimit a sem:Term .
@@ -1920,7 +1925,9 @@ lc:ContentFits a sem:Term .
 lc:Descendants a sem:Term .
 lc:Docked a sem:Term .
 lc:EachChild a sem:Term .
+lc:EachChildAtPart a sem:Term .
 lc:Field a sem:Term .
+lc:FieldBeside a sem:Term .
 lc:FieldLabel a sem:Term .
 lc:FieldRow a sem:Term .
 lc:Finding a sem:Term .
@@ -1938,10 +1945,12 @@ lc:Role a sem:Term .
 lc:SameBlockSize a sem:Term .
 lc:SameBottom a sem:Term .
 lc:SameInlineSize a sem:Term .
+lc:SameMiddle a sem:Term .
 lc:SameTop a sem:Term .
 lc:SingleLineControl a sem:Term .
 lc:WithParts a sem:Term .
 lc:atWidth a sem:Term .
+lc:besideFieldOnItsControl a sem:Term .
 lc:contentStaysInCards a sem:Term .
 lc:derive a sem:Term .
 lc:fieldRowControlsShareHeight a sem:Term .

@@ -26,11 +26,12 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 `
 
-const RELATIONS: Record<string, Rel | 'page' | 'content'> = {
+const RELATIONS: Record<string, Rel | 'page' | 'content' | 'middle'> = {
   SameBlockSize: Rel.SameBlockSize,
   SameInlineSize: Rel.SameInlineSize,
   SameTop: Rel.SameTop,
   SameBottom: Rel.SameBottom,
+  SameMiddle: 'middle',
   FitsInline: Rel.FitsInline,
   FitsWithin: Rel.FitsWithin,
   NoOverlap: Rel.NoOverlap,
@@ -41,9 +42,9 @@ const RELATIONS: Record<string, Rel | 'page' | 'content'> = {
 export interface Declaration {
   iri: string
   label: string
-  relation: Rel | 'page' | 'content'
+  relation: Rel | 'page' | 'content' | 'middle'
   over: string[]
-  members: 'EachChild' | 'Parts' | 'Descendants' | ''
+  members: 'EachChild' | 'EachChildAtPart' | 'Parts' | 'Descendants' | ''
   part: string
   tolerance: number
 }
@@ -115,6 +116,8 @@ export interface Instance {
   scope: number
   /** for lc:ContentFits: the member whose own content is checked */
   member?: number
+  /** for lc:SameMiddle: the node each box compared stands for (a box of its middle line) */
+  origin?: Map<number, number>
 }
 
 /** The children (components) of each node, in document order. */
@@ -130,6 +133,14 @@ function isFieldRow(nodes: readonly MeasuredNode[], i: number, kids: number[][],
   if (nodes[i].direction !== 'row' && nodes[i].layout !== 'field-row') return false
   const fields = kids[i].filter((k) => (d.directTypes.get(nodes[k].slug) ?? []).some((c) => d.fields.has(c)))
   return fields.length >= 2
+}
+
+const isField = (n: MeasuredNode, d: Declarations) => (d.directTypes.get(n.slug) ?? []).some((c) => d.fields.has(c))
+
+/** A row whose fields take its tracks (a field row, a row of a list) with something beside a field (lc:FieldBeside). */
+function isFieldBeside(nodes: readonly MeasuredNode[], i: number, kids: number[][], d: Declarations): boolean {
+  if (nodes[i].layout !== 'field-row' && nodes[i].layout !== 'subgrid') return false
+  return kids[i].some((k) => isField(nodes[k], d)) && kids[i].some((k) => !isField(nodes[k], d))
 }
 
 /** Whether node `i` has `ancestor` above it; with `noScrollerBetween`, through no scrolling node. */
@@ -153,8 +164,11 @@ export function instantiate(page: MeasuredPage, d: Declarations): { boxes: Box[]
   const instances: Instance[] = []
   // the first part of each role per component
   const firstPart = new Map<string, number>()
+  // the components that name parts
+  const withParts = new Set<number>()
   nodes.forEach((n, i) => {
     if (n.part && !firstPart.has(n.parent + ' ' + n.part)) firstPart.set(n.parent + ' ' + n.part, i)
+    if (n.part) withParts.add(n.parent)
   })
   for (const decl of d.invariants) {
     if (decl.relation === 'page') {
@@ -166,7 +180,10 @@ export function instantiate(page: MeasuredPage, d: Declarations): { boxes: Box[]
     nodes.forEach((n, i) => {
       if (n.part) return
       const types = d.typesOf.get(n.slug)
-      const inScope = (types && [...types].some((t) => over.has(t))) || (over.has(LC + 'FieldRow') && isFieldRow(nodes, i, kids, d))
+      const inScope =
+        (types && [...types].some((t) => over.has(t))) ||
+        (over.has(LC + 'FieldRow') && isFieldRow(nodes, i, kids, d)) ||
+        (over.has(LC + 'FieldBeside') && isFieldBeside(nodes, i, kids, d))
       if (!inScope) return
       let members: number[] = []
       // the line of a row a member is on (a child of the scope, or a part of one), 0 elsewhere
@@ -176,6 +193,8 @@ export function instantiate(page: MeasuredPage, d: Declarations): { boxes: Box[]
       }
       if (decl.members === 'EachChild')
         members = decl.part ? kids[i].map((k) => firstPart.get(k + ' ' + decl.part) ?? -1).filter((m) => m >= 0) : kids[i]
+      // a child's part; a child that names no parts, itself
+      if (decl.members === 'EachChildAtPart') members = kids[i].flatMap((k) => (firstPart.has(k + ' ' + decl.part) ? [firstPart.get(k + ' ' + decl.part)!] : withParts.has(k) ? [] : [k]))
       // chrome docked to an edge overlaps what scrolls under it by design
       if (decl.relation === Rel.NoOverlap) members = members.filter((m) => !(d.directTypes.get(nodes[m].slug) ?? []).some((c) => d.docked.has(c)))
       else if (decl.members === 'Parts') members = nodes.flatMap((m, j) => (m.part === decl.part && within(nodes, j, i, false) ? [j] : []))
@@ -205,6 +224,19 @@ export function instantiate(page: MeasuredPage, d: Declarations): { boxes: Box[]
       for (const m of members) lines.set(lineOf(m), [...(lines.get(lineOf(m)) ?? []), m])
       for (const group of lines.values()) {
         if (group.length < 2) continue
+        if (decl.relation === 'middle') {
+          // each member's middle line, a box of no height: their tops agree when the middles do
+          const origin = new Map<number, number>()
+          const middles = group.map((m) => {
+            const b = boxes[m]
+            const at = boxes.push({ x: b.x, y: b.y + b.height / 2, width: b.width, height: 0 }) - 1
+            origin.set(at, m)
+            return at
+          })
+          invariants.push({ rel: Rel.SameTop, members: middles, tolerance: decl.tolerance })
+          instances.push({ declaration: decl, scope: i, origin })
+          continue
+        }
         invariants.push({ rel: decl.relation as Rel, members: group, tolerance: decl.tolerance })
         instances.push({ declaration: decl, scope: i })
       }
@@ -225,7 +257,10 @@ export function checkMeasured(page: MeasuredPage, d: Declarations): PageFinding[
 export function checkInstantiated(boxes: Box[], invariants: Invariant[], instances: Instance[]): PageFinding[] {
   const program: number[] = []
   for (const inv of invariants) program.push(inv.rel, Math.round(inv.tolerance * 100), inv.members.length, ...inv.members)
-  return checkLayout(packBoxes(boxes), Int32Array.from(program)).map((f) => ({ ...f, member: instances[f.invariant].member ?? f.member, instance: instances[f.invariant] }))
+  return checkLayout(packBoxes(boxes), Int32Array.from(program)).map((f) => {
+    const instance = instances[f.invariant]
+    return { ...f, member: instance.member ?? instance.origin?.get(f.member) ?? f.member, instance }
+  })
 }
 
 /** A finding in words: the invariant, where, and by how much. */
@@ -270,6 +305,7 @@ export function toTurtle(page: MeasuredPage, d: Declarations): string {
       const c = [`${comp(i)} a sem:Component`, ...(d.directTypes.get(n.slug) ?? []).map((cls) => `a <${cls}>`)]
       if (n.direction === 'row') c.push('pos:direction pos:Row')
       if (n.layout === 'field-row') c.push('pos:layout pos:FieldRow')
+      if (n.layout === 'subgrid') c.push('pos:layout pos:Subgrid')
       if (kids[i].length) c.push(`c:children ( ${kids[i].map(comp).join(' ')} )`)
       lines.push(c.join(' ; ') + ' .')
     }
@@ -320,6 +356,7 @@ export function fromRendered(store: GraphStore, d: Declarations): { page: Measur
       node.slug = types.map((t) => slugOf.get(t)).find((x) => x !== undefined) ?? ''
       if (store.match(nn(of), nn(POS + 'direction'), nn(POS + 'Row')).length) node.direction = 'row'
       if (store.match(nn(of), nn(POS + 'layout'), nn(POS + 'FieldRow')).length) node.layout = 'field-row'
+      if (store.match(nn(of), nn(POS + 'layout'), nn(POS + 'Subgrid')).length) node.layout = 'subgrid'
     }
     if (one(s, RND + 'scrolls') === 'true') node.scrolls = true
     const line = one(s, RND + 'line')

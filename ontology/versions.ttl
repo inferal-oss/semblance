@@ -133,7 +133,7 @@ c:EditorLine sem:version 2 ; sem:closure "7872d67005b35b9d" ; sem:internal "Each
 c:ElementMarkup sem:version 1 ; sem:closure "e33385cd084190fa" ; sem:internal "new" .
 c:Emblem sem:version 1 ; sem:closure "3f017d0438908b35" ; sem:internal "new" .
 c:EmptyState sem:version 1 ; sem:closure "5cb34a45b5e40f34" ; sem:internal "new" .
-c:Field sem:version 1 ; sem:closure "ddfa4481a39e794d" ; sem:internal "new" .
+c:Field sem:version 2 ; sem:closure "af34197898d23ad2" ; sem:changedBy change:field-beside-control .
 c:FileDrop sem:version 1 ; sem:closure "f2c7729f9a3622d2" ; sem:internal "new" .
 c:FileItem sem:version 1 ; sem:closure "199f2f7c6fb68bcf" ; sem:internal "new" .
 c:FindingList sem:version 1 ; sem:closure "c8144e603a866da6" ; sem:internal "new" .
@@ -205,10 +205,10 @@ c:QueryWorkbench sem:version 2 ; sem:closure "bd506d48cbd5de2d" ; sem:internal "
 c:RadioGroup sem:version 1 ; sem:closure "5cfbedd6dee84039" ; sem:internal "new" .
 c:Raisable sem:version 1 ; sem:closure "88bcf9c2effe9e18" ; sem:internal "new" .
 c:RdfDropRow sem:version 1 ; sem:closure "da73dbbbe08b9a74" ; sem:internal "new" .
-c:RdfEditor sem:version 1 ; sem:closure "30839349a9a152b0" ; sem:internal "new" .
+c:RdfEditor sem:version 2 ; sem:closure "f7d1503fda4621c3" ; sem:changedBy change:rdf-editor-entry-pages .
 c:RdfProperty sem:version 1 ; sem:closure "d82e4eef8f4b6544" ; sem:internal "new" .
 c:RdfRow sem:version 1 ; sem:closure "946cddfa2a66797f" ; sem:internal "new" .
-c:RdfTerm sem:version 1 ; sem:closure "d0f06d8e64d2f81f" ; sem:internal "new" .
+c:RdfTerm sem:version 2 ; sem:closure "089bfcfa1a335f18" ; sem:changedBy change:rdf-editor-entry-pages .
 c:RecentRun sem:version 1 ; sem:closure "de885995fc4d34c0" ; sem:internal "new" .
 c:Resizable sem:version 1 ; sem:closure "d54424795ba2adfc" ; sem:internal "new" .
 c:Restorable sem:version 1 ; sem:closure "2dceab5e1b75cef4" ; sem:internal "new" .
@@ -267,7 +267,7 @@ c:TermRole sem:version 1 ; sem:closure "b10a44bc4c192e53" ; sem:internal "new" .
 c:TermSection sem:version 1 ; sem:closure "f8d9a06d5ebd223a" ; sem:internal "new" .
 c:TermTree sem:version 1 ; sem:closure "1d11b8690d644c9b" ; sem:internal "new" .
 c:Text sem:version 1 ; sem:closure "8b9ae4aaaf377e08" ; sem:internal "new" .
-c:TextArea sem:version 1 ; sem:closure "31524a306f370083" ; sem:internal "new" .
+c:TextArea sem:version 2 ; sem:closure "ebeb51d5430f0134" ; sem:changedBy change:field-beside-control .
 c:TextEntry sem:version 2 ; sem:closure "200e9791f11f4707" ; sem:changedBy change:text-entry-disabled .
 c:TextField sem:version 2 ; sem:closure "e73782464aa520f3" ; sem:changedBy change:text-entry-disabled .
 c:ThemeSwitcher sem:version 1 ; sem:closure "72c569ac05a2934c" ; sem:internal "new" .
@@ -294,7 +294,7 @@ c:WalkBand sem:version 1 ; sem:closure "d4a857305b4330b2" ; sem:internal "new" .
 c:Walkthrough sem:version 1 ; sem:closure "02e76ecdd3b8ac53" ; sem:internal "new" .
 c:WalkthroughStep sem:version 1 ; sem:closure "db412d008c2aae21" ; sem:internal "new" .
 c:Window sem:version 1 ; sem:closure "2e2c574d0e79f275" ; sem:internal "new" .
-sem:Component sem:version 1 ; sem:closure "1412e0c6d01e4f3e" ; sem:internal "new" .
+sem:Component sem:version 2 ; sem:closure "c512896ee8137318" ; sem:changedBy change:field-beside-control .
 sem:Watchdog sem:version 1 ; sem:closure "813a864a6b6346de" ; sem:internal "new" .
 dnd:Draggable sem:version 2 ; sem:closure "2519fa168eca7f28" ; sem:changedBy change:drop-refused-state .
 dnd:DropTarget sem:version 1 ; sem:closure "be89e2258958a40c" ; sem:internal "new" .
