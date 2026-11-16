@@ -1,9 +1,13 @@
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 
+# Offsets run left to right in every language (as in a hex dump): the diagram is not mirrored in RTL,
+# and it scrolls from byte 0 when it is wider than its column.
+
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ;
     sty:declares [ sty:property "overflow" ; sty:raw "auto" ],
-                 [ sty:property "min-width" ; sty:raw "0" ] .
+                 [ sty:property "min-width" ; sty:raw "0" ],
+                 [ sty:property "direction" ; sty:raw "ltr" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg" ;
     sty:declares [ sty:property "display" ; sty:raw "block" ],
                  [ sty:property "width" ; sty:raw "100%" ],

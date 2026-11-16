@@ -343,7 +343,9 @@ c:Boxes a sem:Term .
 c:Breadcrumbs a sem:Term .
 c:Button a sem:Term .
 c:ButtonGroup a sem:Term .
+c:ByteCell a sem:Term .
 c:ByteField a sem:Term .
+c:ByteLayout a sem:Term .
 c:ByteLayoutStyle a sem:Term .
 c:ByteMark a sem:Term .
 c:ByteOutline a sem:Term .
@@ -1055,6 +1057,7 @@ c:in a sem:Term .
 c:inChart a sem:Term .
 c:inEditor a sem:Term .
 c:inGrid a sem:Term .
+c:inLayout a sem:Term .
 c:inList a sem:Term .
 c:inOutline a sem:Term .
 c:inSource a sem:Term .

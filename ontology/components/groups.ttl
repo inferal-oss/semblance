@@ -121,7 +121,8 @@ c:TimelineItem sem:group c:DataGroup . c:Tree sem:group c:DataGroup . c:TreeItem
 c:DataGrid sem:group c:DataGroup . c:GridRow sem:group c:DataGroup . c:TimeAxis sem:group c:DataGroup .
 c:JsonTree sem:group c:DataGroup . c:JsonNode sem:group c:DataGroup . c:HexView sem:group c:DataGroup .
 c:BodyViewer sem:group c:DataGroup . c:ImageView sem:group c:DataGroup .
-c:ByteLayout sem:group c:DataGroup .
+c:ByteLayout sem:group c:DataGroup . c:ByteCell sem:group c:DataGroup . c:ByteField sem:group c:DataGroup . c:ByteMark sem:group c:DataGroup .
+c:ByteSpan sem:group c:DataGroup . c:ByteLayoutStyle sem:group c:DataGroup .
 c:Chart sem:group c:DataGroup . c:RowChart sem:group c:DataGroup . c:SeriesChart sem:group c:DataGroup . c:AxisChart sem:group c:DataGroup .
 c:AreaChart sem:group c:DataGroup . c:AreaPoint sem:group c:DataGroup . c:ColumnChart sem:group c:DataGroup . c:ColumnPoint sem:group c:DataGroup . c:ScatterChart sem:group c:DataGroup . c:ScatterPoint sem:group c:DataGroup .
 c:PieChart sem:group c:DataGroup . c:DonutChart sem:group c:DataGroup . c:SlicePoint sem:group c:DataGroup . c:Histogram sem:group c:DataGroup . c:Sparkline sem:group c:DataGroup . c:BoxPlot sem:group c:DataGroup . c:BoxPoint sem:group c:DataGroup .

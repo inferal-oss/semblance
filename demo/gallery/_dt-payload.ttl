@@ -107,17 +107,29 @@ ui:dt-image-spec a c:Specimen ; c:demonstrates c:ImageView ; c:label "Image view
     c:children ( ui:dt-image-picker ui:dt-image-view ) .
 
 # --- ByteLayout ----------------------------------------------------------------------------------
+# A binary format's fields as a diagram: the RIFF/WAVE header, to scale (c:byteExtent), and a chunk
+# as a schematic with a variable-length field. The switch writes the first diagram's style.
 
-ui:dt-byte-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:dt-byte-title ui:dt-byte-style ui:dt-byte-riff ) .
-ui:dt-byte-title a c:Heading ; c:level 3 ;
-    c:label "Byte layout"@en, "Розкладка байтів"@uk, "Byte-Layout"@de, "تخطيط البايتات"@ar .
+ui:dt-byte-layout a c:Flippable ; c:front ui:dt-byte-spec .
+ui:dt-byte-spec a c:Specimen ; c:demonstrates c:ByteLayout ;
+    c:label "Byte layout"@en, "Розкладка байтів"@uk, "Byte-Layout"@de, "تخطيط البايتات"@ar ;
+    c:help "The fields of a binary format from RDF: each c:byteField has an index, a label, an offset and a length, an encoding, highlighted bytes (c:byteMark), and c:byteSpan brackets group fields. With c:byteExtent the widths are to scale; without it the fields are equal cells and one of variable length breaks off. Ruler, Record and Outline are styles of the same graph (c:byteLayoutStyle), written here by the switch. Offsets run left to right in every language." ;
+    c:children ( ui:dt-byte-style ui:dt-byte-riff ui:dt-byte-chunk ) .
 ui:dt-byte-style a c:Segmented ; c:controls ui:dt-byte-riff ; c:property c:byteLayoutStyle ;
-    c:label "Layout style"@en, "Стиль розкладки"@uk, "Layoutstil"@de, "نمط التخطيط"@ar ;
-    c:options ( c:ByteRuler c:ByteRecord c:ByteOutline ) .
+    c:label "Layout style"@en, "Стиль розкладки"@uk, "Layoutstil"@de, "نمط التخطيط"@ar .
 ui:dt-byte-riff a c:ByteLayout ; c:label "RIFF/WAVE" ; c:byteExtent 12 ; c:byteLayoutStyle c:ByteRuler ;
-    c:byteField [ c:byteIndex 0 ; c:label "RIFF" ; c:byteOffset 0 ; c:byteLength 4 ; c:byteEncoding "ASCII" ],
-                [ c:byteIndex 1 ; c:label "ChunkSize" ; c:byteOffset 4 ; c:byteLength 4 ; c:byteEncoding "uint32 LE" ],
-                [ c:byteIndex 2 ; c:label "WAVE" ; c:byteOffset 8 ; c:byteLength 4 ; c:byteEncoding "ASCII" ;
-                  c:byteEmphasis true ; c:byteMark [ c:byteOffset 8 ; c:byteLength 4 ] ] ;
-    c:byteSpan [ c:firstByteIndex 0 ; c:lastByteIndex 2 ; c:label "RIFF/WAVE" ] .
+    c:byteAxisLabel "Offset in bytes" ;
+    c:byteField ui:dt-byte-riff-id , ui:dt-byte-riff-size , ui:dt-byte-riff-form ;
+    c:byteSpan ui:dt-byte-riff-header .
+ui:dt-byte-riff-id c:byteIndex 0 ; c:label "RIFF" ; c:byteOffset 0 ; c:byteLength 4 ; c:byteEncoding "ASCII" .
+ui:dt-byte-riff-size c:byteIndex 1 ; c:label "ChunkSize" ; c:byteOffset 4 ; c:byteLength 4 ; c:byteEncoding "uint32 LE" .
+ui:dt-byte-riff-form c:byteIndex 2 ; c:label "WAVE" ; c:byteOffset 8 ; c:byteLength 4 ; c:byteEncoding "ASCII" ;
+    c:byteEmphasis true ; c:byteMark [ c:byteOffset 8 ; c:byteLength 4 ] .
+ui:dt-byte-riff-header c:firstByteIndex 0 ; c:lastByteIndex 2 ; c:label "RIFF/WAVE" .
+ui:dt-byte-chunk a c:ByteLayout ; c:label "Chunk" ;
+    c:byteField ui:dt-byte-chunk-id , ui:dt-byte-chunk-size , ui:dt-byte-chunk-data ;
+    c:byteSpan ui:dt-byte-chunk-header .
+ui:dt-byte-chunk-id c:byteIndex 0 ; c:label "ckID" ; c:byteLength 4 ; c:byteEncoding "FourCC" .
+ui:dt-byte-chunk-size c:byteIndex 1 ; c:label "ckSize" ; c:byteLength 4 ; c:byteEncoding "uint32 LE" .
+ui:dt-byte-chunk-data c:byteIndex 2 ; c:label "ckData" ; c:byteSizeLabel "ckSize bytes" ; c:byteEmphasis true .
+ui:dt-byte-chunk-header c:firstByteIndex 0 ; c:lastByteIndex 1 ; c:label "Header" .
