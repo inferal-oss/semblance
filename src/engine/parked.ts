@@ -52,6 +52,14 @@ export class Parked<R> {
     this.rank.delete(rule)
   }
 
+  /** Forget every pair, and the rules' order. */
+  clear(): void {
+    this.byRule.clear()
+    this.byFocus.clear()
+    this.rank.clear()
+    this.ranks = this.seq = this.count = 0
+  }
+
   hasFocus(owner: string): boolean {
     return this.byFocus.has(owner)
   }
