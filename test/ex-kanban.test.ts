@@ -243,7 +243,7 @@ describe('the kanban example', () => {
     drag('Crash when pasting an empty query', 1, 0)
     expect(column('c2')).toEqual(['todo'])
     expect(toasts()).toContain('Doing holds at most three cards.')
-    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-refused')).toBe(true)
+    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-drop-refused')).toBe(true)
     expect(bus.recent(1)[0]!.some((q) => q.predicate.value.endsWith('handledBy') && q.object.value === KB + 'DropCard')).toBe(false)
     // Reordering within the full column is still fine (it adds no card).
     drag('Bump Oxigraph', 1, 0)
@@ -251,7 +251,7 @@ describe('the kanban example', () => {
     click(control('Bump Oxigraph', 'Move to Done'))
     drag('Crash when pasting an empty query', 1, 0)
     expect(column('c2')).toEqual(['doing'])
-    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-refused')).toBe(false)
+    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-drop-refused')).toBe(false)
   })
 
   it('carries a card by keyboard: Space, the arrows, Enter - and the arrows are the board\'s again after', () => {

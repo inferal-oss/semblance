@@ -178,7 +178,7 @@ describe('the room bookings example', () => {
     h.drop('Retro', h.slot('mon', 13))
     expect(h.toasts()).toContain('That room is booked then.')
     expect(h.value('m10', 'day')).toEqual(['fri'])
-    expect(h.entry('Retro').hasAttribute('data-sem-refused')).toBe(true)
+    expect(h.entry('Retro').hasAttribute('data-sem-drop-refused')).toBe(true)
     // The all-hands (twelve people) does not fit in Babbage.
     h.drop('All hands', CAL + 'babbage')
     expect(h.toasts()).toContain('Babbage seats 4.')

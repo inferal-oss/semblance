@@ -292,7 +292,7 @@ c:WalkthroughStep sem:version 1 ; sem:closure "db412d008c2aae21" ; sem:internal 
 c:Window sem:version 1 ; sem:closure "2e2c574d0e79f275" ; sem:internal "new" .
 sem:Component sem:version 1 ; sem:closure "1412e0c6d01e4f3e" ; sem:internal "new" .
 sem:Watchdog sem:version 1 ; sem:closure "813a864a6b6346de" ; sem:internal "new" .
-dnd:Draggable sem:version 1 ; sem:closure "5c4ebdad0b5b04a5" ; sem:internal "new" .
+dnd:Draggable sem:version 2 ; sem:closure "2519fa168eca7f28" ; sem:changedBy change:drop-refused-state .
 dnd:DropTarget sem:version 1 ; sem:closure "be89e2258958a40c" ; sem:internal "new" .
 file:File sem:version 1 ; sem:closure "78d0814a1e0a37a2" ; sem:internal "new" .
 file:Receiver sem:version 1 ; sem:closure "bab956f4a283f613" ; sem:internal "new" .
