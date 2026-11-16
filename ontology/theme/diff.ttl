@@ -9,7 +9,10 @@
                  [ sty:property "max-width" ; sty:raw "100%" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
-                 [ sty:property "background" ; sty:token tok:surface-sunken ] .
+                 [ sty:property "background" ; sty:token tok:surface-sunken ] ,
+                 # Source text reads left to right in every language, as in the code editor.
+                 [ sty:property "direction" ; sty:raw "ltr" ] ,
+                 [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:appliesTo c:DiffLine ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "2.5rem max-content" ] ,
