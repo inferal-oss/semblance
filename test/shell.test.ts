@@ -10,7 +10,7 @@ import { EX, todoApp, todoOps, todoReactions } from '../src/examples/todo.ts'
 import { loadStore } from '../src/node/load.ts'
 import { A11Y, MOD, NS, PERF_GRAPH, SEM, STY } from '../src/ns.ts'
 import { toHTML } from '../src/render/serialize.ts'
-import { mountShell } from './harness.ts'
+import { mountShell, mountSite } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 
@@ -213,6 +213,112 @@ describe('intent preloading (sem:OnIntent)', () => {
     expect(document.querySelector('[data-sem-c=table]')!.closest('[hidden]')).toBeNull()
     // The click only switches the case: the page is already there.
     expect(screen.engine.stats.ruleRuns - before).toBeLessThan(40)
+  })
+})
+
+describe('intent preloading of what a control opens (sem:OpenPreview, #434)', () => {
+  const toolsButton = (doc: Document) => [...doc.querySelectorAll('[data-sem-c=toggle]')].find((b) => b.textContent!.includes('Tools'))!
+  const inspectorBuilt = (h: ReturnType<typeof mountSite>) => h.screen.index.rootOf(UI + 'inspector') !== undefined
+
+  it('evaluates the Tools window when its toggle is pointed at, so the click only opens it', async () => {
+    const { attachIntent } = await import('../src/intent.ts')
+    // Without it, the first open evaluates the window's tools.
+    const cold = mountSite()
+    let before = cold.screen.engine.stats.ruleRuns
+    cold.fire(toolsButton(cold.document), 'click')
+    const coldRuns = cold.screen.engine.stats.ruleRuns - before
+    expect(inspectorBuilt(cold)).toBe(true)
+
+    const h = mountSite()
+    attachIntent(h.runtime, h.shell, { idle: (run) => run(1_000), flush: () => h.shell.flush() })
+    expect(inspectorBuilt(h)).toBe(false)
+    h.fire(toolsButton(h.document), 'pointerover')
+    // Built ahead of the click; only the shown tab (the Query tab's workbench stays parked).
+    expect(inspectorBuilt(h)).toBe(true)
+    expect(h.screen.index.rootOf(UI + 'workbench')).toBeUndefined()
+    expect(h.document.querySelector('[data-sem-c=query-view]')).toBeNull()
+    before = h.screen.engine.stats.ruleRuns
+    h.fire(toolsButton(h.document), 'click')
+    const runs = h.screen.engine.stats.ruleRuns - before
+    expect(h.document.querySelector('[data-sem-c=query-view]')!.closest('[hidden]')).toBeNull()
+    expect(runs).toBeLessThan(coldRuns / 5)
+  })
+
+  it('anticipates the Tools window in idle time; while it is closed a hover changes nothing, and a later click costs no more', async () => {
+    const { anticipate } = await import('../src/intent.ts')
+    // The site as it is, and without the toggle's sem:anticipates.
+    const site = (anticipating: boolean) => {
+      const h = mountSite('wat')
+      const f = h.store.factory
+      if (!anticipating) for (const q of h.store.match(f.namedNode(UI + 'toolsToggle'), f.namedNode(SEM.anticipates), null)) h.store.delete(q)
+      const steps: ((budgetMs: number) => void)[] = []
+      anticipate(h.runtime, { idle: (run) => void steps.push(run), flush: () => h.shell.flush() })
+      const idle = () => {
+        while (steps.length) steps.shift()!(1_000)
+      }
+      idle()
+      // What the input costs (not what idle time prepares after it).
+      const runs = (act: () => void) => {
+        const before = h.screen.engine.stats.ruleRuns
+        act()
+        const n = h.screen.engine.stats.ruleRuns - before
+        idle()
+        return n
+      }
+      const nav = (name: string) => [...h.document.querySelectorAll('[data-sem-c=app-bar] button')].find((b) => b.textContent!.trim() === name)!
+      // (Each page shown once.)
+      runs(() => h.fire(nav('Docs'), 'click'))
+      runs(() => h.fire(nav('Home'), 'click'))
+      return {
+        h,
+        built: inspectorBuilt(h),
+        hover: runs(() => h.fire(toolsButton(h.document), 'mouseover')),
+        click: runs(() => h.fire(nav('Docs'), 'click')),
+        open: runs(() => h.fire(toolsButton(h.document), 'click')),
+      }
+    }
+    const without = site(false)
+    const anticipated = site(true)
+    expect(without.built).toBe(false)
+    expect(anticipated.built).toBe(true)
+    // A hover over the toggle (as before any click) leaves the closed inspector as it was prepared.
+    expect(anticipated.hover).toBe(0)
+    expect(anticipated.click).toBe(without.click)
+    expect(anticipated.open).toBeLessThan(without.open / 4)
+    expect(anticipated.h.document.querySelector('[data-sem-c=query-view]')!.closest('[hidden]')).toBeNull()
+  })
+
+  it('prepares the tab next to the shown one while the window is open, and no longer keeps it once closed', async () => {
+    const { anticipate } = await import('../src/intent.ts')
+    const h = mountSite('wat')
+    const steps: ((budgetMs: number) => void)[] = []
+    anticipate(h.runtime, { idle: (run) => void steps.push(run), flush: () => h.shell.flush() })
+    const idle = () => {
+      while (steps.length) steps.shift()!(1_000)
+    }
+    idle()
+    const workbench = () => h.screen.index.rootOf(UI + 'workbench') !== undefined
+    const kept = () => (h.runtime as unknown as { anticipated: Set<string> }).anticipated.has(UI + 'workbench')
+    // Closed, the tabs are not shown: the Query tab's workbench stays parked.
+    expect(workbench()).toBe(false)
+    h.fire(toolsButton(h.document), 'click')
+    expect(workbench()).toBe(false)
+    idle()
+    // Open: ui:views anticipates near its choice, so the next tab is prepared, maintained views and all.
+    expect(workbench()).toBe(true)
+    expect(kept()).toBe(true)
+    const tab = (name: string) => [...h.document.querySelectorAll('[role=tab]')].find((t) => t.textContent === name)!
+    // Reaching for the tab (a hover over the Tools window itself inspects nothing) and clicking it.
+    const before = h.screen.engine.stats.ruleRuns
+    h.fire(tab('Query'), 'mouseover')
+    h.fire(tab('Query'), 'click')
+    expect(h.screen.engine.stats.ruleRuns - before).toBeLessThan(40)
+    h.fire(tab('Inspector'), 'click')
+    idle()
+    // Closed again: no longer kept, so its views stop being maintained.
+    h.fire(toolsButton(h.document), 'click')
+    idle()
+    expect(kept()).toBe(false)
   })
 })
 

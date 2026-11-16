@@ -19,22 +19,25 @@ export interface IntentOptions {
 type Idle = (run: (budgetMs: number) => void) => void
 const defaultIdle: Idle = (run) => whenIdle((d) => run(Math.max(4, d.timeRemaining() - 2)), 200)
 
-/** What a choice's option would show: the sem:IntentPreview queries' ?content, cached per control and option. */
-function previewsOf(runtime: Runtime, key: string, seen: Map<string, string[]>): string[] {
+/**
+ * What a control would show: the sem:IntentPreview queries' ?content, cached per control and option.
+ * With an option (what a pointed element c:selects), the previews of a choice; without one, those
+ * that do not read $option: what a control with no options opens (sem:OpenPreview).
+ */
+function previewsFor(runtime: Runtime, control: string, option: string | undefined, seen: Map<string, string[]>): string[] {
   const store = runtime.store
   const f = store.factory
-  const option = store.match(f.namedNode(key), f.namedNode(C.selects), null)[0]?.object
-  if (!option || !store.sparql) return []
-  const control = owningFocus(key)
-  const cacheKey = control + ' ' + option.value
+  if (!store.sparql) return []
+  const cacheKey = option === undefined ? control : control + ' ' + option
   const hit = seen.get(cacheKey)
   if (hit) return hit
   const prefixes = prefixesFor(store)
   const out = new Set<string>()
   for (const { subject: preview } of store.match(null, f.namedNode(RDF_TYPE), f.namedNode(SEM.IntentPreview))) {
     const query = store.match(preview, f.namedNode(SEM.select), null)[0]?.object.value
-    if (!query) continue
-    const bound = query.replaceAll('$control', `<${control}>`).replaceAll('$option', `<${option.value}>`)
+    if (!query || query.includes('$option') !== (option !== undefined)) continue
+    let bound = query.replaceAll('$control', `<${control}>`)
+    if (option !== undefined) bound = bound.replaceAll('$option', `<${option}>`)
     try {
       for (const row of store.select(prefixes + '\n' + bound, [f.defaultGraph()])) {
         const content = row.get('content')
@@ -44,6 +47,15 @@ function previewsOf(runtime: Runtime, key: string, seen: Map<string, string[]>):
   }
   seen.set(cacheKey, [...out])
   return [...out]
+}
+
+/** What a choice's option would show, by the rendered element that c:selects it. */
+function previewsOf(runtime: Runtime, key: string, seen: Map<string, string[]>): string[] {
+  const store = runtime.store
+  const f = store.factory
+  const option = store.match(f.namedNode(key), f.namedNode(C.selects), null)[0]?.object
+  if (!option) return []
+  return previewsFor(runtime, owningFocus(key), option.value, seen)
 }
 
 /** Follow pointing and focusing in `renderer`'s DOM; preload what choices would show. */
@@ -57,16 +69,21 @@ export function attachIntent(runtime: Runtime, renderer: DomRenderer, opts: Inte
 
   function intend(e: Event) {
     let key: string | undefined
+    let innermost: string | undefined
     for (let el = e.target as Node | null; el && el !== renderer.host; el = el.parentNode) {
       const k = renderer.keyOf(el)
+      if (k && !innermost) innermost = k
       if (k && store.match(f.namedNode(k), f.namedNode(C.selects), null).length) {
         key = k
         break
       }
     }
-    if (!key || key === current) return
-    current = key
-    const contents = previewsOf(runtime, key, seen)
+    // An option of a choice; else the control the innermost element belongs to (a toggle that opens a window).
+    const control = key ? undefined : innermost && owningFocus(innermost)
+    const intent = key ?? control
+    if (!intent || intent === current) return
+    current = intent
+    const contents = key ? previewsOf(runtime, key, seen) : previewsFor(runtime, control!, undefined, seen)
     if (!contents.length) return
     const start = !pending
     pending = new Set(contents)
@@ -141,7 +158,9 @@ function chosenBy(runtime: Runtime, control: string): string | undefined {
  * first click shows a page evaluated ahead - and so does a tap, which no pointing comes before.
  * sem:anticipates prepares every option, and keeps it; sem:anticipatesNear the options near the
  * chosen one, while the choice is shown, following it. Options are prepared by their distance from
- * what their choice has chosen, nearest first, across choices (#436). Call it once the page is quiet
+ * what their choice has chosen, nearest first, across choices (#436). A control with no options (a
+ * toggle that opens a window) prepares what it opens (sem:OpenPreview), one step away (#434); a choice
+ * that follows its choice is planned again when it is shown or hidden. Call it once the page is quiet
  * (its graphs in). Returns a function that stops it.
  */
 export function anticipate(runtime: Runtime, opts: IntentOptions = {}): () => void {
@@ -164,13 +183,17 @@ export function anticipate(runtime: Runtime, opts: IntentOptions = {}): () => vo
     watched.add(target && property ? target + ' ' + property : control + ' ' + C.selected)
   }
   let queue: { contents: Set<string>; owner: string }[] = []
+  /** Whether each choice that follows its choice was shown when last planned. */
+  const shownWhenPlanned = new Map<string, boolean>()
   const plan = () => {
     const ranked: { rank: number; at: number; contents: Set<string>; owner: string }[] = []
     let at = 0
     for (const [control, n] of reach) {
       const near = Number.isFinite(n)
       // (Only while the choice is shown, for one that follows it.)
-      const options = near && !runtime.shows(control) ? [] : optionsInOrder(runtime, control)
+      const hidden = near && !runtime.shows(control)
+      if (near) shownWhenPlanned.set(control, !hidden)
+      const options = hidden ? [] : optionsInOrder(runtime, control)
       const chosen = chosenBy(runtime, control)
       const here = options.findIndex((o) => o.value === chosen)
       const kept = new Set<string>()
@@ -182,6 +205,12 @@ export function anticipate(runtime: Runtime, opts: IntentOptions = {}): () => vo
         // At each distance the next before the previous; then the order the choices were found in.
         if (contents.length) ranked.push({ rank: 2 * d + (i < here ? 1 : 0), at: at++, contents: new Set(contents), owner: near ? control : '' })
       })
+      // A control with no options (a toggle that opens a window): what it opens, one step away.
+      if (!options.length && n >= 1 && !hidden) {
+        const contents = previewsFor(runtime, control, undefined, seen)
+        for (const c of contents) kept.add(c)
+        if (contents.length) ranked.push({ rank: 2, at: at++, contents: new Set(contents), owner: near ? control : '' })
+      }
       // Not kept beyond its reach (what is still near stays kept: its views are not suspended).
       if (near) runtime.forgetAnticipated(control, kept)
     }
@@ -202,15 +231,23 @@ export function anticipate(runtime: Runtime, opts: IntentOptions = {}): () => vo
   const schedule = () => {
     if (!running && !stopped && queue.length) (running = true), idle(slice)
   }
-  let replanning = false
-  const off = runtime.onInput((_graph, delta) => {
-    if (replanning || stopped) return
-    if (![...delta.add, ...delta.remove].some((q) => watched.has(q.subject.value + ' ' + q.predicate.value))) return
+  /** A replanning asked for, once what changed is rendered: whether a choice changed, else only a check of what is shown. */
+  let replanning: 'chose' | 'check' | undefined
+  const off = runtime.onInput((graph, delta) => {
+    if (replanning === 'chose' || stopped) return
+    const chose = [...delta.add, ...delta.remove].some((q) => watched.has(q.subject.value + ' ' + q.predicate.value))
+    // A change of the app's state may show or hide a choice that follows its choice (a window that
+    // holds tabs opens): asked once it is rendered, for those few choices.
+    if (!chose && (replanning || graph !== undefined || !shownWhenPlanned.size)) return
+    const asked = replanning
+    replanning = chose ? 'chose' : 'check'
+    if (asked) return
     // Once the change is rendered (its options and what is shown follow it).
-    replanning = true
     idle(() => {
-      replanning = false
+      const why = replanning
+      replanning = undefined
       if (stopped) return
+      if (why === 'check' && ![...shownWhenPlanned].some(([control, shown]) => runtime.shows(control) !== shown)) return
       plan()
       schedule()
     })
