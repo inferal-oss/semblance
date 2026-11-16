@@ -63,7 +63,11 @@ const CPLEN: u32 = 25;
 const SUBSTR: u32 = 26;
 const TONUM: u32 = 27;
 const EBV: u32 = 28;
-const IMPORTS: [(&[u8], u32); 29] = [
+// Ordinary tables, packed when sparse (abi.rs, cq_pack).
+const PACK: u32 = 29;
+const PACK_COUNT: u32 = 30;
+const UNPACK: u32 = 31;
+const IMPORTS: [(&[u8], u32); 32] = [
     (b"cq_begin", T_III_I),
     (b"cq_combo", T_I_V),
     (b"cq_scan", T_IIII_I),
@@ -93,11 +97,15 @@ const IMPORTS: [(&[u8], u32); 29] = [
     (b"cq_substr", T_III_I),
     (b"cq_tonum", T_IIII_I),
     (b"cq_ebv", T_I_I),
+    (b"cq_pack", T_I_I),
+    (b"cq_pack_count", T_V_I),
+    (b"cq_unpack", T_II_I),
 ];
 const NIMPORTS: u32 = IMPORTS.len() as u32;
 
 const LT_S: u8 = 0x48;
 const XOR: u8 = 0x73;
+const SHR_U: u8 = 0x76;
 const RETURN: u8 = 0x0f;
 const I32: u8 = 0x7f;
 
@@ -146,7 +154,7 @@ enum Step<'a> {
     Optional(&'a Pattern, Option<&'a Expr>),
     /// A pattern's rows, from the interpreter now, joined in.
     Eval(&'a Pattern),
-    /// A pattern's rows computed earlier (by `cq_eval`; where: the globals g, g + 1), joined in.
+    /// Rows computed earlier: g is the base, g + 1 the count, g + 2 the sparse flag.
     Rows(u32, &'a Pattern),
     /// The same, as OPTIONAL with its condition.
     OptRows(u32, &'a Pattern, Option<&'a Expr>),
@@ -828,8 +836,8 @@ impl<'q> Gen<'q> {
         self.masks.len() as u32 - 1
     }
 
-    /// Evaluate `p` with the interpreter now, onto the stack: the rows start at
-    /// the word in global g, g + 1 holds their count. Returns g and the new top's local.
+    /// Collect `p` onto the stack: globals g, g + 1, g + 2 hold the word base,
+    /// row count and sparse flag. Returns g and the new top's local.
     fn table(&mut self, f: usize, p: &'q Pattern, st: &St) -> Res<(u32, u32)> {
         self.table_as(f, p, st, 2)
     }
@@ -838,8 +846,10 @@ impl<'q> Gen<'q> {
     fn table_as(&mut self, f: usize, p: &'q Pattern, st: &St, opt: u32) -> Res<(u32, u32)> {
         let g = self.global();
         self.global();
+        self.global();
         let top = self.f(f).local();
         let (w, cur) = (self.width as i32, st.top);
+        self.f(f).i32(0).global_set(g + 2);
         if let (Pattern::Sub(s), false) = (p, off(16)) {
             // A subquery: its WHERE here, against the frame (the interpreter's
             // substitution row); its solutions collected and finished by the engine.
@@ -853,11 +863,16 @@ impl<'q> Gen<'q> {
             let k = self.base[2] + self.t.patterns.len() as u32 - 1;
             self.f(f).get(cur).global_set(g).i32(k as i32).get(cur).call(EVAL).global_set(g + 1);
         } else {
-            // Any other pattern's rows: computed here too, collected as a
-            // subquery's are, and kept as they are (cq_group(-1)).
+            // Ordinary rows still run once, before their consumer. Their
+            // physical storage may omit unbound slots (cq_pack); Select finishing
+            // and interpreted fallback tables keep their dense format.
             self.f(f).call(SUB);
             self.emit(f, &[Step::Pat(p), Step::Keep], st)?;
-            self.f(f).get(cur).global_set(g).i32(-1).get(cur).call(GROUP).global_set(g + 1);
+            let info = self.f(f).local();
+            self.f(f).get(cur).global_set(g).get(cur).call(PACK).tee(info).i32(1).op(AND).global_set(g + 2);
+            self.f(f).get(info).i32(1).op(SHR_U).set(top);
+            self.f(f).call(PACK_COUNT).global_set(g + 1);
+            return Ok((g, top));
         }
         self.f(f).get(cur).global_get(g + 1).i32(w).op(MUL).op(ADD).set(top);
         Ok((g, top))
@@ -900,18 +915,27 @@ impl<'q> Gen<'q> {
         Ok((g, top))
     }
 
-    /// Loop over the rows of a table (globals g, g + 1): each row compatible
-    /// with the frame is merged into it and runs `rest`.
+    /// Loop over a table (base/count/sparse globals g..g + 2): each row compatible
+    /// with the frame is merged into it and runs `rest`. A sparse row is expanded
+    /// into one dense scratch row at the stack top, which `rest` then starts above.
     fn rows(&mut self, f: usize, g: u32, p: &'q Pattern, rest: &[Step<'q>], st: &St) -> Res<()> {
-        let (i, r, x) = {
+        let (i, r, x, cursor, next_top) = {
             let b = self.f(f);
-            (b.local(), b.local(), b.local())
+            (b.local(), b.local(), b.local(), b.local(), b.local())
         };
-        let w = self.width as i32 * 4;
+        let width = self.width as i32;
+        let w = width * 4;
         let vars = vars_of(p);
+        self.f(f).global_get(g).set(cursor);
         self.f(f).i32(0).set(i).open(BLOCK).open(LOOP).get(i).global_get(g + 1).op(GE_U).br(BR_IF, 1);
         self.step(f);
+        self.f(f).global_get(g + 2).open(IF);
+        self.f(f).get(cursor).get(st.top).call(UNPACK).set(cursor);
+        self.f(f).call(STACK).get(st.top).i32(4).op(MUL).op(ADD).set(r);
+        self.f(f).get(st.top).i32(width).op(ADD).set(next_top);
+        self.f(f).op(ELSE);
         self.f(f).call(STACK).global_get(g).i32(4).op(MUL).op(ADD).get(i).i32(w).op(MUL).op(ADD).set(r);
+        self.f(f).get(st.top).set(next_top).op(END);
         self.f(f).get(i).i32(1).op(ADD).set(i).open(BLOCK);
         // Every check before any merge: a mismatch leaves the block without restoring.
         for &v in &vars {
@@ -932,7 +956,7 @@ impl<'q> Gen<'q> {
             self.f(f).tee(save).op(EQZ).open(IF).i32(0).get(r).load(4 * v).store(a).op(END);
             saves.push((v, save));
         }
-        let mut next = St { bound: st.bound.clone(), top: st.top };
+        let mut next = St { bound: st.bound.clone(), top: next_top };
         for &v in &vars {
             next.bound[v as usize] = next.bound[v as usize].max(MAYBE);
         }
