@@ -1,0 +1,34 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:numeric-rounding a chg:Change ;
+    rdfs:label "Numbers are read rounded once to their target, and shapes check numeric lexical forms"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/182> ;
+    chg:motivation """Decimal text was not always read as the nearest binary64 or binary32 value: the Rust engine
+rounded a wide integer before scaling it, the WAT engine read an xsd:float through a double first (rounding twice),
+and the function twins used Number(), which reads 0x10 and a no-break space. A field's minimum and maximum and a
+shape's datatype check could then disagree between the engines, and between a SPARQL rule and its twin.""" ;
+    chg:substance """The engines (Rust and WAT) and the function twins share one reader (src/numeric.ts on the host):
+the XML Schema lexical form after XML white space (space, tab, CR, LF), rounded once, ties to even, to the
+target's precision; an xsd:float cast from text or an exact number goes straight to binary32. In the shapes layer
+(sh:datatype), a stored literal of any of the sixteen XSD numeric datatypes (integer, decimal, float, double, long,
+int, short, byte and the signed and unsigned subtypes) must be in that datatype's lexical form, sign and range, or
+it is reported: "128"^^xsd:byte, "-1"^^xsd:nonNegativeInteger, "1e2"^^xsd:decimal are now violations. The
+compatibility of xsd:integer, xsd:decimal, xsd:float and xsd:double values among themselves is unchanged, except
+that an infinite or NaN value no longer passes as an xsd:integer. In the validation layer a field's text for
+xsd:integer or xsd:decimal must be in its lexical form around XML white space, as before (#337), with a no-break
+space now refused by the function twin as by the SPARQL rule, and sh:minInclusive / sh:maxInclusive compare the
+text read as xsd:double, so the twin no longer reads "0x10" as 16.""" ;
+    chg:forwardGuide """Nothing to move in an app's graph. Data that stated a numeric literal outside its datatype
+(a byte of 128, an unsigned value below zero) is now reported by the shapes layer: correct the value or its
+datatype. A field that relied on a no-break space around a number being accepted by the function twin trims it
+before validation.""" ;
+    chg:backwardGuide """Going back, out-of-range or ill-formed subtype literals pass sh:datatype again, xsd:float
+is read through a double, and the function twins read numbers with Number(). Nothing in the graph changes.""" ;
+    chg:affects sem:Component .

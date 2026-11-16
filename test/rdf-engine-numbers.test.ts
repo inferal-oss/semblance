@@ -24,7 +24,7 @@ const CASES: [string, string | undefined][] = [
   ['xsd:string("1234567890123456789.50"^^xsd:decimal)', '1234567890123456789.5^^string'],
   ['xsd:string("-000100000000000000000000.000"^^xsd:decimal)', '-100000000000000000000^^string'],
   ['xsd:string("99999999999999999999"^^xsd:integer)', '99999999999999999999^^string'],
-  ['xsd:string("+00012345678901234567890"^^xsd:long)', '12345678901234567890^^string'],
+  ['xsd:string("+0001234567890123456789"^^xsd:long)', '1234567890123456789^^string'],
   ['xsd:string("0.1234567890123456789"^^xsd:decimal)', '0.123456789012345678^^string'],
   ['xsd:string("-0.00000000000000000010"^^xsd:decimal)', '0^^string'],
   ['xsd:string("-0.0"^^xsd:decimal)', '0^^string'],
@@ -45,6 +45,11 @@ const CASES: [string, string | undefined][] = [
   ['xsd:string("maybe"^^xsd:boolean)', undefined],
   ['xsd:string("abc"^^xsd:integer)', undefined],
   ['xsd:string("bad"^^xsd:dateTime)', undefined],
+  // outside its datatype's range (#182): past xsd:long's 2^63 - 1, an xsd:byte of 128
+  ['xsd:string("+00012345678901234567890"^^xsd:long)', undefined],
+  ['xsd:string("128"^^xsd:byte)', undefined],
+  // around XML white space, a valid form (#182)
+  ['xsd:string(" +012 "^^xsd:integer)', '12^^string'],
   // computed doubles and floats: plain notation, the sign of zero kept
   ['"1e7"^^xsd:double * 1', '10000000^^double'],
   ['1e-7 * 1', '0.0000001^^double'],

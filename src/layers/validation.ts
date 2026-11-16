@@ -7,16 +7,26 @@ import { C, NS, VAL, XSD_BOOLEAN } from '../ns.ts'
 import { isBlank, isTrue, nodes, rdfList, str, text } from '../components/util.ts'
 import { LATIN, parseDate, parseTime } from '../components/dates.ts'
 
+import { numericInput } from '../numeric.ts'
+
+// The value of a numeric field's text as xsd:double reads it, rounded once (as the engines'
+// xsd:double cast), for sh:minInclusive / sh:maxInclusive.
+const doubleInput = (value: string) => {
+  const input = numericInput(value, NS.xsd + 'double')
+  return input.valid ? input.value : NaN
+}
+
 const SH = NS.sh
-// The lexical forms of xsd:integer and xsd:decimal, around white space. Number() reads more: 1e3, 0x10.
-const INTEGER = /^\s*[-+]?[0-9]+\s*$/
-const DECIMAL = /^\s*[-+]?([0-9]+([.][0-9]*)?|[.][0-9]+)\s*$/
+// The lexical forms of xsd:integer and xsd:decimal, around XML white space (not \s, which also
+// takes a no-break space, as the SPARQL twin's regex does not). Number() reads more: 1e3, 0x10.
+const INTEGER = /^[ \t\r\n]*[-+]?[0-9]+[ \t\r\n]*$/
+const DECIMAL = /^[ \t\r\n]*[-+]?([0-9]+([.][0-9]*)?|[.][0-9]+)[ \t\r\n]*$/
 
 /** The first constraint of `shape` that `value` violates, as a message; undefined if it conforms. */
 function violation(ctx: RuleContext, shape: Term, value: string | undefined): string | undefined {
   const n = (p: string) => {
     const v = str(ctx.object(shape, SH + p))
-    return v === undefined ? undefined : Number(v)
+    return v === undefined ? undefined : doubleInput(v)
   }
   const message = (fallback: string) => text(ctx, shape, SH + 'message') ?? fallback
   const required = (n('minCount') ?? 0) > 0
@@ -37,7 +47,7 @@ function violation(ctx: RuleContext, shape: Term, value: string | undefined): st
   }
   const datatype = str(ctx.object(shape, SH + 'datatype'))
   const numeric = datatype === NS.xsd + 'integer' || datatype === NS.xsd + 'decimal'
-  const x = Number(value)
+  const x = doubleInput(value)
   if (numeric && !(datatype === NS.xsd + 'integer' ? INTEGER : DECIMAL).test(value)) {
     return message(datatype === NS.xsd + 'integer' ? 'A whole number.' : 'A number.')
   }
@@ -74,7 +84,7 @@ function controlled(ctx: RuleContext, focus: Term, shapes: Term[], target: Term,
   for (const shape of shapes) {
     const bound = (p: string) => {
       const v = str(ctx.object(shape, SH + p))
-      return v === undefined ? undefined : Number(v)
+      return v === undefined ? undefined : doubleInput(v)
     }
     const message = (fallback: string) => text(ctx, shape, SH + 'message') ?? fallback
     const min = bound('minCount')

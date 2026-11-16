@@ -295,7 +295,7 @@ c:WalkBand sem:version 1 ; sem:closure "d4a857305b4330b2" ; sem:internal "new" .
 c:Walkthrough sem:version 1 ; sem:closure "02e76ecdd3b8ac53" ; sem:internal "new" .
 c:WalkthroughStep sem:version 1 ; sem:closure "db412d008c2aae21" ; sem:internal "new" .
 c:Window sem:version 1 ; sem:closure "2e2c574d0e79f275" ; sem:internal "new" .
-sem:Component sem:version 2 ; sem:closure "c512896ee8137318" ; sem:changedBy change:field-beside-control .
+sem:Component sem:version 3 ; sem:closure "601a9d8651c6489f" ; sem:changedBy change:numeric-rounding .
 sem:Watchdog sem:version 1 ; sem:closure "813a864a6b6346de" ; sem:internal "new" .
 dnd:Draggable sem:version 2 ; sem:closure "2519fa168eca7f28" ; sem:changedBy change:drop-refused-state .
 dnd:DropTarget sem:version 1 ; sem:closure "be89e2258958a40c" ; sem:internal "new" .

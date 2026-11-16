@@ -9,7 +9,7 @@
 ;; a block wastes at most a third. A freed block goes on its class's list and
 ;; is reused by the next allocation of that class: O(1) both ways.
 
-(import "env" "now" (func $now_ms (result f64)))
+(import "env" "now" (func $clock_import (result f64)))
 (import "env" "random" (func $random (result f64)))
 ;; SPARQL extensions (EXTENSIONS.md): the host's Math and Intl
 (import "env" "math" (func $math (param i32 f64 f64) (result f64)))
@@ -18,6 +18,19 @@
 (memory (export "memory") 2)
 
 (global $top (mut i32) (i32.const 0))
+
+;; A query clock fault must return through normal native cleanup. The official
+;; host retains its cause and raises it after the export returns. Unbudgeted
+;; callback failures are not caught by that host and gain no recovery promise.
+(func $now_ms (result f64)
+  (local $value f64)
+  (local.set $value (call $clock_import))
+  (if (i32.and (global.get $bu_active)
+        (i32.or (f64.ne (local.get $value) (local.get $value))
+                (f64.eq (f64.abs (local.get $value)) (f64.const inf)))) (then
+    (global.set $bu_stop (i32.const 1))
+    (return (f64.const 0))))
+  (local.get $value))
 
 ;; The size class of an n-byte request.
 (func $class (param $n i32) (result i32)

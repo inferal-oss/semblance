@@ -17,7 +17,8 @@ unsafe extern "C" {
 
 /// Milliseconds since the Unix epoch.
 pub fn now() -> f64 {
-    unsafe { host_now() }
+    let value = unsafe { host_now() };
+    if !value.is_finite() && crate::budget::invalid_query_clock() { 0.0 } else { value }
 }
 
 /// Uniform in [0, 1).

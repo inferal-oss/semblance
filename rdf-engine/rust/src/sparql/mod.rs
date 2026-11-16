@@ -8,6 +8,7 @@ pub mod expr;
 pub mod ext;
 pub mod md5;
 pub mod num;
+pub mod numeric;
 pub mod parse;
 pub mod regex;
 pub mod sha;

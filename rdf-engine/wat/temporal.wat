@@ -93,7 +93,7 @@
   (if (global.get $d_sec_len) (then
     (global.set $nsc (i32.const 0))
     (global.set $ni (i64.const 0))
-    (if (i32.eqz (call $parse_num (global.get $d_sec) (global.get $d_sec_len) (i32.const 2))) (then (return (i32.const 0))))
+    (if (i32.eqz (call $parse_temporal_num (global.get $d_sec) (global.get $d_sec_len) (i32.const 2))) (then (return (i32.const 0))))
     (local.set $s (call $to_micro (global.get $ni) (global.get $nsc)))))
   (if (i32.or (i64.ge_s (local.get $s) (i64.const 60000000))
               (i32.gt_u (global.get $d_day) (call $days_in (global.get $d_year) (global.get $d_month)))) (then (return (i32.const 0))))
@@ -158,7 +158,7 @@
         (local.set $any (i32.const 1))
         (global.set $nsc (i32.const 0))
         (global.set $ni (i64.const 0))
-        (br_if $bad (i32.eqz (call $parse_num (local.get $p) (i32.sub (local.get $q) (local.get $p)) (select (i32.const 2) (i32.const 1) (local.get $dot)))))
+        (br_if $bad (i32.eqz (call $parse_temporal_num (local.get $p) (i32.sub (local.get $q) (local.get $p)) (select (i32.const 2) (i32.const 1) (local.get $dot)))))
         ;; months, or microseconds, per unit; each part well within an i64
         (local.set $u (i64.load (i32.add (@words64 0 12 1 86400000000 3600000000 60000000 1000000) (i32.shl (local.get $rank) (i32.const 3)))))
         (br_if $bad (f64.ge (f64.mul (global.get $nf) (f64.convert_i64_u (local.get $u))) (f64.const 1e18)))
