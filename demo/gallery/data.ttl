@@ -109,7 +109,7 @@ ui:dt-change-2 rdfs:label "Money component" ; ui:stage ui:StageReview ; ui:by "G
 ui:dt-change-3 rdfs:label "Board lanes" ; ui:stage ui:StageReview ; ui:by "Alan Kay" ; ui:order 3 .
 ui:dt-change-4 rdfs:label "Board keyboard moves" ; ui:stage ui:StageBuild ; ui:by "Barbara Liskov" ; ui:order 4 ;
     ui:changePage "/docs/components/" ; ui:changeDetail ui:dt-change-4-detail .
-ui:dt-change-4-detail a c:Text ; c:label "Arrow keys move a focused card between lanes." .
+ui:dt-change-4-detail a c:Text ; sty:textStyle sty:Caption ; c:label "Arrow keys move a focused card between lanes." .
 ui:dt-board-pipeline a c:Board ; c:label "Release pipeline" ;
     c:property ui:stage ; c:cardTitle rdfs:label ; c:cardPerson ui:by ; c:cardOrder ui:order ;
     c:cardHref ui:changePage ; c:cardContent ui:changeDetail ; c:cardLocked ui:released ;
