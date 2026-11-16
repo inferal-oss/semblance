@@ -460,9 +460,12 @@ TypeScript, so the same code runs in Node, Deno and workers.
   Oxigraph), compile; it allows WebAssembly, not `eval`.
 - `style-src 'self'`: the compiled stylesheet and each live example's are constructed stylesheets
   (`adoptedStyleSheets`), which it allows; a stylesheet inline in the document, and the styles a
-  server writes into a prerendered live example, by hash. `style-src-attr 'unsafe-inline'`: the DOM
-  patcher writes `style` attributes with `setAttribute`, each of which, under the policy, passed the
-  CSS check first. Writing them through the CSSOM, so this line can go, is #157.
+  server writes into a prerendered live example, by hash. `style-src-attr 'unsafe-inline'`: the `style`
+  attributes in server-rendered HTML, each of which, under the policy, passed the CSS check first. The
+  DOM patcher itself sets a `style` through the CSSOM (`style.cssText`, #157), which the policy does not
+  restrict (checked in Chrome under `style-src 'self'` alone: `test/fixtures/csp`); a page whose HTML is
+  not prerendered can leave this line out. The live DOM keeps the browser's parse of a declaration
+  block; `toHTML` keeps the graph's text.
 - `img-src`, `media-src`: `data:` and `blob:` are the resource schemes the policy allows (`blob:` is
   also what picked and dropped files are previewed from). List the origins images may come from,
   rather than `https:`, if authored graphs should not load from anywhere.
