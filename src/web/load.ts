@@ -1,46 +1,50 @@
-import type * as Ox from 'oxigraph'
-import { hasEngine, startEngine } from './engine.ts'
-import { engineStore } from '../../rdf-engine/host/store.ts'
 import { layoutKinds, provideLayoutModule, type LayoutKind } from '../layout/engine.ts'
 import { ONTOLOGY_FILES } from '../ontology.ts'
-import { hybridStore } from '../store/hybrid.ts'
-import { n3Store } from '../store/n3.ts'
-import { oxigraphStore } from '../store/oxigraph.ts'
 import type { GraphStore } from '../store/types.ts'
+import { createStore, initStore, type StoreKind, type StoreOptions } from './stores.ts'
 
-/** `wat` and `rust` are Semblance's own engines (rdf-engine/): "Semblance WASM" and "Semblance Rust". */
-export type StoreKind = 'wat' | 'rust' | 'oxigraph' | 'n3' | 'hybrid'
+export { COMPILE_ON_RUN, createStore, hasStore, initStore, type StoreKind, type StoreOptions } from './stores.ts'
 
 // The vendored RDF/HTML vocabulary is only read at build time (scripts/gen-rdfhtml-vocab.ts).
-const sources = import.meta.glob(['../../ontology/**/*.ttl', '!../../ontology/vendor/**'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+// Each file is a chunk of its own, fetched when asked for (loadOntology): a page loads the files it
+// needs first, the rest after.
+const sourceLoaders = import.meta.glob(['../../ontology/**/*.ttl', '!../../ontology/vendor/**', '!../../ontology/changes/**', '!../../ontology/versions.ttl', '!../../ontology/terms.ttl'], { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>
+const sources: Record<string, string> = {}
 
+/** The framework's ontology files by name (`ontology/<file>`), in load order. */
+export const ONTOLOGY_NAMES = ONTOLOGY_FILES.map((f) => 'ontology/' + f)
 
-let ox: typeof Ox | undefined
-const engines: Partial<Record<'rust' | 'wat', WebAssembly.Module>> = {}
+/**
+ * Fetch the ontology files named (`ontology/<file>`; every one when none are named), for
+ * ontologyText and the stores made after. initWeb fetches all of them unless told not to.
+ */
+export async function loadOntology(names: Iterable<string> = ONTOLOGY_NAMES): Promise<void> {
+  await Promise.all(
+    [...names].map(async (name) => {
+      const key = '../../' + name
+      if (sources[key] !== undefined) return
+      const load = sourceLoaders[key]
+      // Vite's glob is fixed when the dev server starts: a file added since is not in it.
+      if (!load) throw new Error(`Ontology file missing from the bundle: ${name} (restart the dev server after adding files)`)
+      sources[key] = await load()
+    }),
+  )
+}
 
-/** Whether this build includes the engine behind a store kind. */
-export function hasStore(kind: StoreKind): boolean {
-  return kind === 'rust' || kind === 'wat' ? hasEngine(kind) : true
+/** An ontology file's text, once fetched (loadOntology). */
+export function ontologyText(name: string): string | undefined {
+  return sources['../../' + name]
 }
 
 /**
- * Load what a store kind needs, and nothing else: Oxigraph's WASM (about 4 MB) only
- * for the Oxigraph and Hybrid stores, an engine build only for its own store.
- * Must be awaited before creating that kind of store.
+ * Load what a store kind needs (initStore) and the framework's ontology. Must be awaited before
+ * creating that kind of store.
  */
-export async function initWeb(kind: StoreKind): Promise<void> {
-  if (kind === 'oxigraph' || kind === 'hybrid') {
-    if (ox) return
-    // wasm-bindgen locates web_bg.wasm via new URL(..., import.meta.url), which Vite
-    // serves as its own file and inlines in the single-file build.
-    const web = await import('oxigraph/web.js')
-    await web.default()
-    ox = web as unknown as typeof Ox
-  } else if (kind === 'rust' || kind === 'wat') {
-    if (engines[kind]) return
-    // The engine builds are fetched only for the store in use (a host may have started it already).
-    engines[kind] = await startEngine(kind)
-  }
+export async function initWeb(kind: StoreKind, opts: { ontology?: boolean } = {}): Promise<void> {
+  // The whole ontology, unless the host loads what a page needs itself (ontology: false).
+  const ontology = opts.ontology === false ? undefined : loadOntology()
+  await initStore(kind)
+  await ontology
 }
 
 // The layout solver's WASM twins (layout-solver/build.ts), fetched only when initLayout is called.
@@ -64,35 +68,9 @@ export async function initLayout(): Promise<LayoutKind[]> {
   return layoutKinds()
 }
 
-/** Store options (benchmark configurations choose them; the defaults are the site's). */
-export interface StoreOptions {
-  /**
-   * Semblance's engines: run prepared SPARQL queries compiled to WebAssembly (rdf-engine/ABI.md):
-   * true compiles a query on its second run, 'idle' the most-run ones in idle time.
-   */
-  compiled?: boolean | 'idle'
-  /** Semblance's engines: the time zone sx:formatDateTime uses when its options name none (default: the host's). */
-  timeZone?: string
-}
-
-/** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
-export const COMPILE_ON_RUN = 2
-
-export function createStore(kind: StoreKind, options: StoreOptions = {}): GraphStore {
-  if (kind === 'rust' || kind === 'wat') {
-    const module = engines[kind]
-    if (!module) throw new Error(`initWeb('${kind}') must be awaited first`)
-    return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : 0, timeZone: options.timeZone })
-  }
-  if (kind === 'n3') return n3Store()
-  if (!ox) throw new Error(`initWeb('${kind}') must be awaited first`)
-  return kind === 'oxigraph' ? oxigraphStore(ox) : hybridStore(ox)
-}
-
 export function ontologySources(): string[] {
   const missing = ONTOLOGY_FILES.filter((f) => sources['../../ontology/' + f] === undefined)
-  // Vite's eager glob is fixed when the dev server starts: a file added since is not in it.
-  if (missing.length) throw new Error(`Ontology files missing from the bundle: ${missing.join(', ')} (restart the dev server after adding files)`)
+  if (missing.length) throw new Error(`Ontology files not loaded: ${missing.join(', ')} (await initWeb(kind) or loadOntology() first)`)
   return ONTOLOGY_FILES.map((f) => sources['../../ontology/' + f]!)
 }
 
@@ -104,5 +82,26 @@ export function loadStore(kind: StoreKind, ...data: string[]): GraphStore {
 export function loadStoreWith(kind: StoreKind, options: StoreOptions, ...data: string[]): GraphStore {
   const store = createStore(kind, options)
   for (const ttl of [...ontologySources(), ...data]) store.loadTurtle(ttl)
+  return store
+}
+
+/** A store with only some of the framework's ontology files (by name, fetched: loadOntology) and the given app data. */
+export function loadStoreOf(kind: StoreKind, options: StoreOptions, ontology: Iterable<string>, ...data: string[]): GraphStore {
+  const store = createStore(kind, options)
+  const wanted = new Set(ontology)
+  for (const name of ONTOLOGY_NAMES) {
+    if (!wanted.has(name)) continue
+    const text = ontologyText(name)
+    if (text === undefined) throw new Error(`Ontology file not loaded: ${name} (await loadOntology first)`)
+    store.loadTurtle(text)
+  }
+  for (const ttl of data) store.loadTurtle(ttl)
+  return store
+}
+
+/** A store with `ontology` (the app's subset of the framework's ontology, built beforehand: src/subset.ts) in place of the whole, and the given app data. */
+export function loadStoreWithOntology(kind: StoreKind, options: StoreOptions, ontology: string, ...data: string[]): GraphStore {
+  const store = createStore(kind, options)
+  for (const ttl of [ontology, ...data]) store.loadTurtle(ttl)
   return store
 }

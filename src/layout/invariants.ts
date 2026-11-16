@@ -1,15 +1,20 @@
-// The layout invariants (ontology/layers/constraints.ttl) over a measured page: read the declarations
-// with SPARQL, instantiate them over a box tree for the function checker (check.ts), turn the tree
-// into rendered-state triples (rnd:) for the SPARQL checker (lc:Checker), and say what a finding means.
+// The layout invariants (ontology/layers/constraints.ttl) over a page's geometry: read the declarations
+// with SPARQL, instantiate them over a box tree for the function checker (check.ts), and say what a
+// finding means. The geometry is the rendered state (rnd:, with rnd:Layout) of a live store, read
+// into a box tree (fromRendered) for the function checker and queried as it is by the SPARQL checker
+// (lc:Checker, checkSparql), or a recorded page (measure.ts), turned into the same triples (toTurtle).
+import type { Quad_Graph } from '@rdfjs/types'
 import type { GraphStore } from '../store/types.ts'
 import { packBoxes, Rel, type Box, type Finding, type Invariant } from './check.ts'
 import { checkLayout } from './engine.ts'
-import type { MeasuredNode, MeasuredPage } from './measure.ts'
+import { pagePath, type MeasuredNode, type MeasuredPage } from './measure.ts'
 
 export const LC = 'https://semblance.dev/ns/layout-constraints#'
 export const RND = 'https://semblance.dev/ns/rendered#'
 const C = 'https://semblance.dev/ns/component#'
 const POS = 'https://semblance.dev/ns/position#'
+const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+const RENDERED = 'urn:semblance:rendered'
 
 export const PREFIXES = `PREFIX lc: <${LC}>
 PREFIX rnd: <${RND}>
@@ -21,13 +26,15 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 `
 
-const RELATIONS: Record<string, Rel | 'page' | 'content'> = {
+const RELATIONS: Record<string, Rel | 'page' | 'content' | 'middle'> = {
   SameBlockSize: Rel.SameBlockSize,
   SameInlineSize: Rel.SameInlineSize,
   SameTop: Rel.SameTop,
   SameBottom: Rel.SameBottom,
+  SameMiddle: 'middle',
   FitsInline: Rel.FitsInline,
   FitsWithin: Rel.FitsWithin,
+  NoOverlap: Rel.NoOverlap,
   NoPageOverflow: 'page',
   ContentFits: 'content',
 }
@@ -35,9 +42,9 @@ const RELATIONS: Record<string, Rel | 'page' | 'content'> = {
 export interface Declaration {
   iri: string
   label: string
-  relation: Rel | 'page' | 'content'
+  relation: Rel | 'page' | 'content' | 'middle'
   over: string[]
-  members: 'EachChild' | 'Parts' | 'Descendants' | ''
+  members: 'EachChild' | 'EachChildAtPart' | 'Parts' | 'Descendants' | ''
   part: string
   tolerance: number
 }
@@ -51,6 +58,8 @@ export interface Declarations {
   directTypes: Map<string, string[]>
   /** the component classes lc:Field includes */
   fields: Set<string>
+  /** the component classes lc:Docked includes: chrome that lc:NoOverlap does not compare */
+  docked: Set<string>
 }
 
 const local = (iri: string) => iri.slice(iri.lastIndexOf('#') + 1)
@@ -96,7 +105,8 @@ export function readDeclarations(store: GraphStore): Declarations {
     if (!d.includes(cls)) directTypes.set(slug, [...d, cls])
   }
   const fields = new Set(store.select(PREFIXES + `SELECT ?k WHERE { lc:Field lc:includes ?k }`, g).map((r) => r.get('k')!.value))
-  return { invariants: [...byIri.values()], typesOf, directTypes, fields }
+  const docked = new Set(store.select(PREFIXES + `SELECT ?k WHERE { lc:Docked lc:includes ?k }`, g).map((r) => r.get('k')!.value))
+  return { invariants: [...byIri.values()], typesOf, directTypes, fields, docked }
 }
 
 /** One invariant over one group: what a finding's `invariant` index refers to. */
@@ -106,6 +116,8 @@ export interface Instance {
   scope: number
   /** for lc:ContentFits: the member whose own content is checked */
   member?: number
+  /** for lc:SameMiddle: the node each box compared stands for (a box of its middle line) */
+  origin?: Map<number, number>
 }
 
 /** The children (components) of each node, in document order. */
@@ -121,6 +133,14 @@ function isFieldRow(nodes: readonly MeasuredNode[], i: number, kids: number[][],
   if (nodes[i].direction !== 'row' && nodes[i].layout !== 'field-row') return false
   const fields = kids[i].filter((k) => (d.directTypes.get(nodes[k].slug) ?? []).some((c) => d.fields.has(c)))
   return fields.length >= 2
+}
+
+const isField = (n: MeasuredNode, d: Declarations) => (d.directTypes.get(n.slug) ?? []).some((c) => d.fields.has(c))
+
+/** A row whose fields take its tracks (a field row, a row of a list) with something beside a field (lc:FieldBeside). */
+function isFieldBeside(nodes: readonly MeasuredNode[], i: number, kids: number[][], d: Declarations): boolean {
+  if (nodes[i].layout !== 'field-row' && nodes[i].layout !== 'subgrid') return false
+  return kids[i].some((k) => isField(nodes[k], d)) && kids[i].some((k) => !isField(nodes[k], d))
 }
 
 /** Whether node `i` has `ancestor` above it; with `noScrollerBetween`, through no scrolling node. */
@@ -144,8 +164,11 @@ export function instantiate(page: MeasuredPage, d: Declarations): { boxes: Box[]
   const instances: Instance[] = []
   // the first part of each role per component
   const firstPart = new Map<string, number>()
+  // the components that name parts
+  const withParts = new Set<number>()
   nodes.forEach((n, i) => {
     if (n.part && !firstPart.has(n.parent + ' ' + n.part)) firstPart.set(n.parent + ' ' + n.part, i)
+    if (n.part) withParts.add(n.parent)
   })
   for (const decl of d.invariants) {
     if (decl.relation === 'page') {
@@ -157,7 +180,10 @@ export function instantiate(page: MeasuredPage, d: Declarations): { boxes: Box[]
     nodes.forEach((n, i) => {
       if (n.part) return
       const types = d.typesOf.get(n.slug)
-      const inScope = (types && [...types].some((t) => over.has(t))) || (over.has(LC + 'FieldRow') && isFieldRow(nodes, i, kids, d))
+      const inScope =
+        (types && [...types].some((t) => over.has(t))) ||
+        (over.has(LC + 'FieldRow') && isFieldRow(nodes, i, kids, d)) ||
+        (over.has(LC + 'FieldBeside') && isFieldBeside(nodes, i, kids, d))
       if (!inScope) return
       let members: number[] = []
       // the line of a row a member is on (a child of the scope, or a part of one), 0 elsewhere
@@ -167,6 +193,10 @@ export function instantiate(page: MeasuredPage, d: Declarations): { boxes: Box[]
       }
       if (decl.members === 'EachChild')
         members = decl.part ? kids[i].map((k) => firstPart.get(k + ' ' + decl.part) ?? -1).filter((m) => m >= 0) : kids[i]
+      // a child's part; a child that names no parts, itself
+      if (decl.members === 'EachChildAtPart') members = kids[i].flatMap((k) => (firstPart.has(k + ' ' + decl.part) ? [firstPart.get(k + ' ' + decl.part)!] : withParts.has(k) ? [] : [k]))
+      // chrome docked to an edge overlaps what scrolls under it by design
+      if (decl.relation === Rel.NoOverlap) members = members.filter((m) => !(d.directTypes.get(nodes[m].slug) ?? []).some((c) => d.docked.has(c)))
       else if (decl.members === 'Parts') members = nodes.flatMap((m, j) => (m.part === decl.part && within(nodes, j, i, false) ? [j] : []))
       else if (decl.members === 'Descendants') {
         if (n.scrolls) return
@@ -194,6 +224,19 @@ export function instantiate(page: MeasuredPage, d: Declarations): { boxes: Box[]
       for (const m of members) lines.set(lineOf(m), [...(lines.get(lineOf(m)) ?? []), m])
       for (const group of lines.values()) {
         if (group.length < 2) continue
+        if (decl.relation === 'middle') {
+          // each member's middle line, a box of no height: their tops agree when the middles do
+          const origin = new Map<number, number>()
+          const middles = group.map((m) => {
+            const b = boxes[m]
+            const at = boxes.push({ x: b.x, y: b.y + b.height / 2, width: b.width, height: 0 }) - 1
+            origin.set(at, m)
+            return at
+          })
+          invariants.push({ rel: Rel.SameTop, members: middles, tolerance: decl.tolerance })
+          instances.push({ declaration: decl, scope: i, origin })
+          continue
+        }
         invariants.push({ rel: decl.relation as Rel, members: group, tolerance: decl.tolerance })
         instances.push({ declaration: decl, scope: i })
       }
@@ -214,12 +257,15 @@ export function checkMeasured(page: MeasuredPage, d: Declarations): PageFinding[
 export function checkInstantiated(boxes: Box[], invariants: Invariant[], instances: Instance[]): PageFinding[] {
   const program: number[] = []
   for (const inv of invariants) program.push(inv.rel, Math.round(inv.tolerance * 100), inv.members.length, ...inv.members)
-  return checkLayout(packBoxes(boxes), Int32Array.from(program)).map((f) => ({ ...f, member: instances[f.invariant].member ?? f.member, instance: instances[f.invariant] }))
+  return checkLayout(packBoxes(boxes), Int32Array.from(program)).map((f) => {
+    const instance = instances[f.invariant]
+    return { ...f, member: instance.member ?? instance.origin?.get(f.member) ?? f.member, instance }
+  })
 }
 
 /** A finding in words: the invariant, where, and by how much. */
 export function describe(page: MeasuredPage, f: PageFinding): string {
-  const at = `${page.url.split('#')[1]} at ${page.width}px${page.theme ? ' in ' + page.theme : ''}${page.lang && page.lang !== 'en' ? ' (' + page.lang + ')' : ''}${page.dir === 'rtl' ? ' (rtl)' : ''}`
+  const at = `${pagePath(page)} at ${page.width}px${page.theme ? ' in ' + page.theme : ''}${page.lang && page.lang !== 'en' ? ' (' + page.lang + ')' : ''}${page.dir === 'rtl' ? ' (rtl)' : ''}`
   const name = (i: number) => {
     const n = page.nodes[i]
     if (!n) return 'the page'
@@ -259,6 +305,7 @@ export function toTurtle(page: MeasuredPage, d: Declarations): string {
       const c = [`${comp(i)} a sem:Component`, ...(d.directTypes.get(n.slug) ?? []).map((cls) => `a <${cls}>`)]
       if (n.direction === 'row') c.push('pos:direction pos:Row')
       if (n.layout === 'field-row') c.push('pos:layout pos:FieldRow')
+      if (n.layout === 'subgrid') c.push('pos:layout pos:Subgrid')
       if (kids[i].length) c.push(`c:children ( ${kids[i].map(comp).join(' ')} )`)
       lines.push(c.join(' ; ') + ' .')
     }
@@ -266,6 +313,65 @@ export function toTurtle(page: MeasuredPage, d: Declarations): string {
   })
   lines.push(`<urn:semblance:rendered:viewport> a rnd:Viewport ; rnd:width ${num(page.width)} ; rnd:scrollWidth ${num(page.scrollWidth)} .`)
   return lines.join('\n')
+}
+
+/** The node index of a component or state IRI in a page made by toTurtle (-1: none). */
+export function fixtureNode(iri: string | undefined): number {
+  return iri?.startsWith('urn:fixture:c') ? Number(iri.slice(13)) : iri?.startsWith('urn:semblance:rendered:n') ? Number(iri.slice(24)) : -1
+}
+
+/**
+ * The rendered state of a live store (the urn:semblance:rendered graph, written with rnd:Layout) as
+ * a box tree, for the function checker: a node per state with a box, its slug from its component's
+ * class, a part's role and order, and for each component what the graph says of it (pos:direction,
+ * pos:layout). `components` and `states` give each node's component (or part) IRI and its state's, to read findings by.
+ */
+export function fromRendered(store: GraphStore, d: Declarations): { page: MeasuredPage; components: string[]; states: string[] } {
+  const f = store.factory
+  const g = f.namedNode(RENDERED)
+  const nn = (iri: string) => f.namedNode(iri)
+  const one = (s: string, p: string, graph: Quad_Graph | null = g) => store.match(nn(s), nn(p), null, graph)[0]?.object.value
+  const slugOf = new Map<string, string>()
+  for (const [slug, classes] of d.directTypes) for (const c of classes) slugOf.set(c, slug)
+  const states = store
+    .match(null, nn(RND + 'x'), null, g)
+    .map((q) => q.subject.value)
+    .filter((s) => one(s, RND + 'of'))
+  // parts after components, each component's parts of a role in their order
+  const index = (s: string) => Number(one(s, LC + 'index') ?? -1)
+  states.sort((a, b) => index(a) - index(b) || (a < b ? -1 : a > b ? 1 : 0))
+  const at = new Map(states.map((s, i) => [s, i]))
+  const components: string[] = []
+  const nodes: MeasuredNode[] = states.map((s) => {
+    const of = one(s, RND + 'of')!
+    components.push(of)
+    const role = one(s, LC + 'role')
+    const parentState = one(s, RND + 'parent')
+    const parent = parentState !== undefined ? (at.get(parentState) ?? -1) : -1
+    const num = (p: string) => Number(one(s, RND + p))
+    const node: MeasuredNode = { slug: '', parent, x: num('x'), y: num('y'), width: num('width'), height: num('height') }
+    if (role) node.part = local(role)
+    else {
+      const types = store.match(nn(of), nn(RDF_TYPE), null).map((q) => q.object.value)
+      node.slug = types.map((t) => slugOf.get(t)).find((x) => x !== undefined) ?? ''
+      if (store.match(nn(of), nn(POS + 'direction'), nn(POS + 'Row')).length) node.direction = 'row'
+      if (store.match(nn(of), nn(POS + 'layout'), nn(POS + 'FieldRow')).length) node.layout = 'field-row'
+      if (store.match(nn(of), nn(POS + 'layout'), nn(POS + 'Subgrid')).length) node.layout = 'subgrid'
+    }
+    if (one(s, RND + 'scrolls') === 'true') node.scrolls = true
+    const line = one(s, RND + 'line')
+    if (line !== undefined) node.line = Number(line)
+    const sw = one(s, RND + 'scrollWidth')
+    const cw = one(s, RND + 'clientWidth')
+    if (sw !== undefined && cw !== undefined && Number(sw) > Number(cw)) node.overflowsBy = Number(sw) - Number(cw)
+    return node
+  })
+  // a part's slug is its component's
+  for (const n of nodes) if (n.part && n.parent >= 0) n.slug = nodes[n.parent]!.slug
+  const vp = 'urn:semblance:rendered:viewport'
+  const width = Number(one(vp, RND + 'width') ?? 0)
+  const page: MeasuredPage = { url: '', width, height: Number(one(vp, RND + 'height') ?? 0), theme: '', dir: '', scrollWidth: Number(one(vp, RND + 'scrollWidth') ?? width), nodes }
+  return { page, components, states }
 }
 
 /** A SPARQL finding: the invariant, the group's node (-1: the page), the member (-1 for a group), by. */
@@ -276,17 +382,36 @@ export interface SparqlFinding {
   by: number
 }
 
-/** The SPARQL checker (lc:Checker's lc:select, its derivations first) over a store holding the ontology and a page's triples. */
-export function checkSparql(store: GraphStore): SparqlFinding[] {
-  const g = [store.factory.defaultGraph()]
-  for (const r of store.select(PREFIXES + `SELECT ?q WHERE { ?cls lc:derive ?q }`, g)) for (const q of store.construct(PREFIXES + r.get('q')!.value, g)) store.add(q)
-  const fragments = new Map(store.select(PREFIXES + `SELECT ?f ?s WHERE { ?f lc:sparql ?s }`, g).map((r) => [local(r.get('f')!.value), r.get('s')!.value]))
-  const query = store.select(PREFIXES + `SELECT ?q WHERE { lc:Checker lc:select ?q }`, g)[0].get('q')!.value.replace(/%(\w+)%/g, (_, n) => fragments.get(n)!)
-  const nodeOf = (iri: string | undefined) => (iri?.startsWith('urn:fixture:c') ? Number(iri.slice(13)) : iri?.startsWith('urn:semblance:rendered:n') ? Number(iri.slice(24)) : -1)
-  return store.select(PREFIXES + query, g).map((r) => ({
-    invariant: r.get('inv')!.value,
-    scope: nodeOf(r.get('scope')?.value),
-    member: nodeOf(r.get('member')?.value),
-    by: Number(r.get('by')!.value),
-  }))
+/**
+ * The SPARQL checker (lc:Checker's lc:select, its derivations first) over a store holding the
+ * ontology, the app's graph and its rendered state: a live store (the rendered graph is read with the
+ * default graph), or a page's triples (toTurtle) in the default graph. What the derivations type
+ * (lc:FieldRow) goes into a graph of its own for the query and is taken out after it, so a live
+ * store is left as it was. `nodeOf` names a finding's scope and member (a component's or a state's IRI);
+ * `graphs` are read besides the default and the rendered graph: a live store's projections
+ * (urn:semblance:derived:<name>), where the components rules mint (a shape form's fields) are typed.
+ */
+export function checkSparql(store: GraphStore, nodeOf: (iri: string | undefined) => number = fixtureNode, graphs: string[] = []): SparqlFinding[] {
+  const f = store.factory
+  const data = [f.defaultGraph(), f.namedNode(RENDERED), ...graphs.map((g) => f.namedNode(g))]
+  const derived = f.namedNode('urn:semblance:layout-constraints')
+  const g = [...data, derived]
+  const added = store
+    .select(PREFIXES + `SELECT ?q WHERE { ?cls lc:derive ?q }`, data)
+    .flatMap((r) => store.construct(PREFIXES + r.get('q')!.value, data))
+    .map((q) => f.quad(q.subject, q.predicate, q.object, derived))
+    .filter((q) => !store.has(q))
+  for (const q of added) store.add(q)
+  try {
+    const fragments = new Map(store.select(PREFIXES + `SELECT ?f ?s WHERE { ?f lc:sparql ?s }`, data).map((r) => [local(r.get('f')!.value), r.get('s')!.value]))
+    const query = store.select(PREFIXES + `SELECT ?q WHERE { lc:Checker lc:select ?q }`, data)[0].get('q')!.value.replace(/%(\w+)%/g, (_, n) => fragments.get(n)!)
+    return store.select(PREFIXES + query, g).map((r) => ({
+      invariant: r.get('inv')!.value,
+      scope: nodeOf(r.get('scope')?.value),
+      member: nodeOf(r.get('member')?.value),
+      by: Number(r.get('by')!.value),
+    }))
+  } finally {
+    for (const q of added) store.delete(q)
+  }
 }

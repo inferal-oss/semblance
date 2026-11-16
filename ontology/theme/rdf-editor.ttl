@@ -144,7 +144,7 @@
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
 # A term's label, when it says more than its name.
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-note" ;
-    sty:declares [ sty:property "color" ; sty:token tok:faint ] ,
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font-size" ; sty:token tok:text-xs ] ,
                  [ sty:property "flex" ; sty:raw "0 1000 auto" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,

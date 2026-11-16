@@ -318,7 +318,7 @@ WHERE {
 
 # --- how it works ---------------------------------------------------------------------------------
 
-ui:ex-reader-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-reader-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-reader-w1 ui:ex-reader-w2 ui:ex-reader-w3 ui:ex-reader-w4 ui:ex-reader-w6 ui:ex-reader-w5 ) .
 

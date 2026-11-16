@@ -17,6 +17,24 @@ property works on it (`c:external`, the spoken new-tab hint, `c:currentPage true
 one link around the component; the text rendering gives the address after the content. Keep
 buttons and other links outside that card.
 
+`c:Board` can link a card's title and show more than its built-in tag and
+person. Set `c:cardHref` to the property holding each item's address and
+`c:cardContent` to the property holding a component to show between the
+title and move controls. A card without an address keeps a plain title; a
+card without content keeps the compact layout. Set `c:cardLocked` to a
+boolean property to prevent moving selected items. This also removes their
+move controls and drag handle; other cards on the board still move.
+
+```turtle
+ex:board a c:Board ; c:property ex:stage ; c:cardTitle rdfs:label ;
+    c:cardHref ex:page ; c:cardContent ex:details ; c:cardLocked ex:locked ;
+    c:card ex:one, ex:two .
+ex:one ex:stage ex:Open ; rdfs:label "First task" ;
+    ex:page "/tasks/one" ; ex:details ex:oneDetails .
+ex:oneDetails a c:Text ; c:label "Due Friday" .
+ex:two ex:stage ex:Open ; rdfs:label "Blocked task" ; ex:locked true .
+```
+
 `c:GanttChart` draws dated tasks from a maintained `sem:View` (also an `iv:View` with
 `iv:materialize iv:Graph`, so its rows are graph data the SPARQL rules read). Each row may bind
 `?task`, `?label`, `?start`, `?end`, `?baselineStart`, `?baselineEnd`, `?uncertainty` (the latest it
@@ -35,6 +53,34 @@ SELECT ?task ?label ?start ?end WHERE {
   ?task ex:start ?start ; ex:end ?end ; rdfs:label ?label
 } ORDER BY ?start""" .
 ex:plan a c:GanttChart ; c:label "Plan" ; c:view ex:planView .
+```
+
+Series charts draw a maintained view's rows in long form, a value (`c:valueVariable`) of a series
+(`c:seriesVariable`, optional) for a category (`c:categoryVariable`): `c:AreaChart`, `c:ColumnChart`
+(grouped, or `c:stacked true`), `c:ScatterChart` (an x, `c:xVariable`; bubbles with
+`c:sizeVariable`), `c:PieChart` and `c:DonutChart`, `c:Histogram` (bins of `c:valueVariable`, about
+`c:binCount`), `c:BoxPlot` (medians, quartiles and ranges), `c:Sparkline` (word-sized, for tiles
+and table cells), and the faceted kinds: `c:BarChart` (horizontal stacked bars with totals, small multiples
+by `c:facetVariable`) and `c:Heatmap` (series down, categories across, a cell per pair on a log ramp,
+`c:flagVariable` outlining some), and `c:LineChart` (log values against numeric categories, log-log with
+`c:logScale`, a `c:referenceLine "linear"`). A legend series with `c:axis c:SecondaryAxis` gets a second scale (`c:secondaryUnit`);
+`c:annotation` draws a `c:Threshold` (`c:at`) or a `c:MarkedRange` (`c:fromValue`, `c:toValue`); a
+legend item is a toggle that hides or shows its series (`c:hiddenSeries`). They share their parts: a
+plan mints the series (the legend's items, `c:legend` to name and order them), the categories and a
+point per series and category; a layout adds stack bases, the value scale (steps of 1, 2 or 5 × 10ⁿ)
+and its ticks. The frame writes the scale as custom properties and each point its own values, so the
+theme places the marks: a changed row re-renders its points, not the chart. A point is a list item
+with its value in words and a tooltip; Tab reaches the chart and the arrow keys move between points.
+As text, a series chart is its name and its points' words; bar charts and heatmaps write a line per
+row (`c:saysRows`). A table column with `c:format "component"` holds the component its value names in
+each cell, e.g. a row's sparkline.
+
+```turtle
+ex:sales a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """PREFIX ex: <https://example.org/>
+SELECT ?month ?channel ?amount WHERE { ?s ex:month ?month ; ex:channel ?channel ; ex:amount ?amount ; ex:at ?at }
+ORDER BY ?at""" .
+ex:chart a c:ColumnChart ; c:label "Sales" ; c:view ex:sales ; c:categoryVariable "month" ;
+  c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ; c:stacked true .
 ```
 
 `c:RdfEditor` shows an RDF document as structure, and edits it when `c:editable true`. The document
@@ -77,6 +123,29 @@ page's "Editing a dataset" shows all of it.
 ex:editor a c:RdfEditor ; c:label "Library" ; c:entry ex:book , ex:author ; c:editable true ; c:arrows c:ArrowsCurrent .
 ex:changes a c:RdfEditor ; c:label "What changed" ; c:entry ex:book , ex:author ; c:diff true .
 ex:undo a c:Button , beh:Undoer ; c:label "Undo" .
+```
+
+For large documents, set `c:entryPageSize` to render only one page of
+top-level resources. Set `c:page` on the editor to change pages. Page numbers
+start at 1 and resources sort by IRI. Keep the document's `c:entry` statements
+in the graph when changing pages. A page change costs the rows of the page, not
+the size of the document. Links jump only to resources of the page, and arrows
+join rows of the page. The editor has no pager of its own yet (#526): the
+application writes `c:page`.
+
+A `c:BlockEditor` shows a document of blocks (`c:of` a `blk:Document`): a tree in DoCo and the
+Pattern Ontology, where containers hold blocks (`po:contains`) in a chain (`co:nextItem`)
+and a text block's text is its `rdf:value` with standoff marks (`blk:Strong`, `blk:Link`, … each an
+`oa:TextPositionSelector` with `oa:start` and `oa:end`). Every block type is a class that is also a
+component: a text block class that names its element (`blk:element rdfhtml:Aside`) is rendered by the
+shared rendering, any other brings its own. Documents render as semantic HTML and, in the Text
+modality, as Markdown. [Block documents](BLOCKS.md) has the model and the design of the editor.
+
+```turtle
+ex:notes a c:BlockEditor ; c:label "Notes" ; c:of ex:doc .
+ex:doc a blk:Document ; po:contains ex:h , ex:p .
+ex:h a blk:Heading1 ; rdf:value "Plans" ; co:nextItem ex:p .
+ex:p a blk:Paragraph ; rdf:value "Ship it." ; blk:mark [ a blk:Strong ; oa:start 0 ; oa:end 4 ] .
 ```
 
 ## SPARQL first; functions are the escape hatch
@@ -138,6 +207,30 @@ chooses a graph value rather than a page.
 Capabilities are mixin classes: an instance that is also `c:Draggable`, `c:Flippable` or
 `dnd:Draggable` gets that behaviour without its component knowing.
 
+## Host-owned table cells
+
+`c:Table` normally writes each SELECT value as text. Set `c:slotPrefix` on a `c:Column`
+when an application needs to mount an interactive control in that column's cells:
+
+```turtle
+ex:actions a c:Column ;
+    c:label "Actions" ;
+    c:variable "name" ;
+    c:slotPrefix "action-" ;
+    c:slotVariable "id" ;
+    c:sortable false .
+```
+
+Each row must bind `?id` to a unique, stable value. The cell becomes a host slot named
+`action-` plus that value, which `DomRenderer.slot(name)` can find: the same host-owned slot
+(`sem:slot`) as a `c:HostSlot` or a foreign island's mount ([FOREIGN.md](FOREIGN.md)), so the
+patcher never touches what the host puts there. Semblance keeps the cell and its mounted content
+when rows sort. A row with no bound value has an empty cell and no
+slot. If `c:slotVariable` is absent, the slot key comes from `c:variable`. A host cell can
+still sort by `c:variable`, independent of its slot key. Set `c:sortable false` for an
+action column; otherwise column headers sort by default.
+Text projection leaves host-owned cells empty because the host controls their content.
+
 ## Writing a rendering rule
 
 A rendering rule runs once per instance (`$this`) and constructs RDF/HTML
@@ -152,7 +245,7 @@ A rendering rule runs once per instance (`$this`) and constructs RDF/HTML
 - **Identity.** Mint every node from the focus: `BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)`.
   Never blank nodes. A minted IRI is stable across re-evaluation, so the DOM node is reused, and
   it doubles as the element's `id` for `label for`, `aria-labelledby` and `aria-describedby`.
-- **Order.** Siblings are ordered with `ord:immediatelyPrecedes` (or `ord:precedes`); an
+- **Order.** Siblings are ordered with `co:nextItem` (or `ord:precedes`); an
   ambiguous order is an error. Member-wise siblings carry `sem:orderKey` and are sorted instead.
 - **Optional parts.** Bind an optional node to `?none` (unbound) when its data is missing:
   `BIND(IF(BOUND(?icon), IRI(CONCAT(STR($this), "/~icon")), ?none) AS ?iconNode)`. Unbound
@@ -175,17 +268,52 @@ Each (rule, focus) pair owns its output; the engine diffs outputs and patches on
 A pair is dirty when the focus's own triples change, and also:
 
 - `sem:follows c:of` — when the triples of the node the focus points at through `c:of` change
-  (for components that show another node's data);
+  (for components that show another node's data). A function rule's pair whose last evaluation
+  read only through the context's trace (no `ctx.untraced`, no pattern without an IRI subject, no
+  query it does not `follow`) is re-run by those reads alone: a followed node's change re-runs it
+  only if it read that predicate there. The declaration still stands for its SPARQL twin and for
+  pairs that read untraced;
 - `sem:watches c:value` — narrows it: only these predicates make the focus dirty. It applies to
   the followed nodes' triples as well as the focus's own: a rule with both `sem:follows` and
   `sem:watches` must list every predicate of the followed node it reads (the workbench's result
   views watch only their query's text and run count, so the runtime's figures on that query
   node do not re-run them). A function rule's traced reads are not filtered: what it reads
-  through the context re-runs it either way;
+  through the context re-runs it either way. A SPARQL rule without `sem:watches` watches the
+  predicates its query names; a variable predicate it reads is watched as its focus names it -
+  `$this c:property ?p . ?target ?p ?v` watches, per focus, the property that focus's
+  `c:property` names (also along a path from the focus, among IRIs a `BIND`/`VALUES` chooses, or
+  any predicate with a property, as `?p sty:hookAttribute ?name`). A variable predicate that can
+  be unbound or anything where it is read makes the rule watch everything;
+- `sem:watchesAnywhere key:shortcut` — a change to a triple with that predicate anywhere in the
+  graph makes each focus of the rendering dirty: for a list of everything of a kind (every
+  shortcut, every shape result), which reaches what it lists from no path of its focus. Keep its
+  foci few: every such change re-runs them all;
+- `sem:watchesStatements true` — the focus is a property and the rule reads the statements made
+  with it on any node (`?s $this ?o`: `nav:Containment`, whose foci are the containment
+  properties): adding or removing one makes that focus dirty;
+- `sem:watchesManyValued l10n:pickedAs` — the rule reads, on any node, the statements made with
+  each predicate that has that property, and says something only about a node with two values or
+  more of one (`l10n:Terms`, on texts with translations): a change in the input to such a node's
+  values makes each focus dirty, and a text with one value replaced by another does not. A host
+  that takes an addition in slices brackets them with `Runtime.arriving`, so the rule runs once;
+- `sem:follows ( c:of [ sem:inverseVia ( c:inTree c:parentProperty ) ] )` — a path whose last
+  step goes against a predicate named in the data: a triple `?child ?p ?node` makes dirty the
+  foci that reach `?node` along the path's other steps and name `?p` along the given one (a tree's
+  item hears the children pointing at its node through its tree's `c:parentProperty`). A
+  `[ sem:inverse p ]` step does the same for a fixed `p`;
 - `sem:requires c:icon` — the rule is skipped for a focus without that property;
 - `sem:inputOnly true` — derived triples (other rules' output) do not re-trigger it;
 - `sem:forEach c:item` — the rendering is member-wise: evaluated once per (focus, member), so
   adding or re-sorting one item touches only that item.
+
+A graph loaded after start (`runtime.load(turtle)`, or any change that adds or removes a
+`sem:Rule`, a `sem:Rendering` or a triple about one) brings its rules into the running engine as
+enabling a layer does: they are evaluated for every focus they apply to, in their stratum, and the
+bus answers its reactions; the site's pages load the graphs they need first this way and the rest
+in idle time (docs/SSR.md, "Bytes"). A rule need not declare what only a late graph states, like a
+class's slug: when they have all arrived (`runtime.arriving(false)`, or `runtime.reread()` after
+`runtime.load`) what was evaluated before is evaluated again, once. So a rule must say the same when
+evaluated again: it cannot go by its own output (`FILTER NOT EXISTS` on what it writes).
 
 Strata only run upward: a rule that a higher stratum's output would make dirty again throws
 "Stratification violation". A rule at a low stratum (say -15) targeting a component onto which a
@@ -266,6 +394,10 @@ ex:window a c:Toggle ; c:controls ex:chartCard ; c:property fs:fullViewport ; ke
 ex:full a c:Toggle ; c:controls ex:chartCard ; c:property fs:fullscreen ; key:shortcut "f" .
 ```
 
+Give a card `c:href` to link its title while keeping the rest of the card and its actions
+independent. A resolved `nav:href` takes precedence when the navigation layer provides one.
+The text rendering includes the destination after the title.
+
 Put the toggles inside what they show, so they are still there. The fullscreen effect
 (`Fullscreen`, below) asks the browser for full screen in the same task as the click or key press
 (browsers want the person's activation); where it cannot (a sandbox, a refusal, no activation), it
@@ -285,6 +417,10 @@ Two kinds of SHACL, both data:
   derives `c:error` (which fields render) and disables buttons whose `val:requires` fields are
   invalid. Messages are `sh:message`, language-tagged.
 
+A shape describes; it does not guard. A trusted projection still renders what a shape flags (a
+`c:Link` whose `c:href` is `javascript:`); keeping that out of a graph you do not trust is the
+safety policy's job ([SAFETY.md](SAFETY.md)).
+
 ## Styling
 
 `sty:StyleRule`s compile into cascade layers (tokens, hooks, components, variants, intents).
@@ -300,7 +436,16 @@ component defers to a hook it should not override with a `sty:state` such as
 `:not([data-sem-direction])` (as `c:Surface` does). Two layouts make parts line up across siblings:
 
 - **Rows that share columns.** A container declares its column tracks (a `pos:Layout` with
-  `grid-template-columns`) and each row says `pos:layout pos:Subgrid`.
+  `grid-template-columns`) and each row says `pos:layout pos:Subgrid`. A field in such a row (a
+  class with `pos:rowParts`: a text field, a choice, a date) lines up part by part as in a row of
+  fields (`pos:FieldRow`): it takes the row's own tracks (label, control, help, error) and the
+  row's other cells, a tag or a unit or a button, sit in the control track, centred on the control
+  rather than on the label and control together (#518). A field's parts go in their tracks by role
+  (`data-sem-part`), so a field without a label still has its control in the control track. In a
+  `pos:FieldRow` a child that is not a field goes in a cell of its own (`c:Stack` mints it), which
+  takes a line's four tracks as a field does and holds it in the control track, so on a phone, where
+  the row wraps, a button sits beside the control of the line it lands on and never under another
+  item (#522). Style such an item as `[data-sem-layout=field-row] > :not([data-sem-c]) > …`.
 - **Columns whose parts line up.** A container says `pos:layout pos:AlignedColumns` (or is any grid
   of columns, such as a `c:Grid`, that says it): each child with parts takes its rows from it
   (`pos:rows pos:RowSubgrid`) and spans one row per part (`pos:rowSpan`). Both are derived, before the
@@ -317,6 +462,27 @@ component defers to a hook it should not override with a `sty:state` such as
 Labels are language-tagged literals (`c:label "Save"@en , "Зберегти"@uk`); the localization layer
 picks the viewer's language into `l10n:label`, which rules read before `c:label`. Untagged
 literals are the fallback. RTL languages flip the page.
+
+Numbers are written in the viewer's locale: the engine states it on the viewer as
+`l10n:formatLocale` (its first language the host's `Intl` knows, else `en-US`), and a SPARQL rule
+passes it to `sx:formatNumber` (`rdf-engine/EXTENSIONS.md`), with `sem:needsExtension sx:Locale`
+on the rule; its function twin calls `formatLocale(ctx.languages)` for the same tag:
+
+```sparql
+?viewer l10n:formatLocale ?locale .
+BIND(sx:formatNumber(xsd:double(STR(?value)), ?locale, "maximumFractionDigits=2") AS ?shown)
+```
+
+A number shown or written to an attribute as it is takes its canonical text, not the store's:
+`STR` of `"1.50"^^xsd:decimal` is `1.50` on a store that keeps the lexical form and `1.5` on one that
+keeps the value (Oxigraph). Cast it, `IF(isNumeric(?v), xsd:string(?v), STR(?v))`, and call
+`numberText` (`src/rdf.ts`) in the function twin; `test/number-text.test.ts` renders them on every store.
+
+Lists in the viewer's collation are placed by order keys: `sx:sortKey(?label, ?locale)` (case
+folded, accents stripped) as a `sem:orderKey`, since a CONSTRUCT cannot rank rows by
+`localeCompare`; the function twin computes the same key (`sortKey` from
+`rdf-engine/host/intl.ts`) instead of sorting, and rows are keyed by what they show, not by their
+position.
 
 ## Outlines
 
@@ -351,12 +517,12 @@ components and shown only where there is no `ol:label`: an island is named by wh
 
 ## Integrating with your app
 
-`mount` (from `@inferal-oss/semblance/web`) is the short way. The pieces it wires, for when you
+`mount` (from `@semblance-dev/semblance/web`) is the short way. The pieces it wires, for when you
 need them yourself:
 
 ```ts
-import { compileStyles, EventBus, MOD, Runtime } from '@inferal-oss/semblance'
-import { DomRenderer, initWeb, loadStore } from '@inferal-oss/semblance/web'
+import { compileStyles, EventBus, MOD, Runtime } from '@semblance-dev/semblance'
+import { DomRenderer, initWeb, loadStore } from '@semblance-dev/semblance/web'
 
 await initWeb('wat')
 const store = loadStore('wat', components, app)       // Semblance's ontology + yours
@@ -379,21 +545,44 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
 - **Embedding.** Mount several roots into several elements of an existing page; or place an
   unstyled `c:HostSlot` inside a layout, name it with `c:slot`, and mount existing application
   content into `renderer.slot(name)`. Use `c:ProjectionView` for a styled inspection surface.
-- **Server-side.** `loadStore` from `@inferal-oss/semblance/node`, project, `toHTML` / `toText`.
+- **Server-side.** `loadStore` from `@semblance-dev/semblance/node`, project, `toHTML` / `toText`.
+- **Serving the stylesheet yourself.** `mount` compiles the theme from the graph and adopts it, which
+  restyles the page once it runs. To have the styles from the first paint, compile them ahead
+  (`compileStyles(store)` over the same ontology, theme and app graphs, or the `semblance.css` that
+  `semblance build` writes) and link them with the `data-sem-styles` attribute:
+  `<link rel="stylesheet" href="/semblance.css" data-sem-styles>`. A document with a
+  `[data-sem-styles]` element is taken as styled: `mount` compiles and adopts nothing, and `unmount`
+  leaves the stylesheet in place. (Server-rendered pages get the attribute from `renderDocument`.)
+  Recompile it whenever those graphs change, since nothing checks that it matches them.
 - **Remembering state.** `per:Policy` nodes say what to keep where; attach `Persistence` with
   storage backends before the first projection ([PERSISTENCE.md](../PERSISTENCE.md)).
 - **The address.** `nav:Location` and `nav:Dimension`s say which state lives in the URL;
   attach `Navigation` and links can point at resources (`c:to`) instead of addresses.
+- **Menu destinations.** A `c:MenuItem` with `c:href` or resolved `nav:href` renders an anchor
+  with `role="menuitem"`. An item without a destination renders a button. `c:disabled true`
+  keeps a destination item as a disabled button, so it cannot navigate. The menu's choice
+  reaction still closes it when an enabled item is chosen.
 - **Things due later, the clipboard.** Attach a `Scheduler` (`beh:dueAt` becomes a `beh:Due`
   event) and a `Clipboard` (a `clip:Request` is written with `navigator.clipboard`, or a stand-in
   you pass, e.g. in tests); both report back as events on the bus.
+- **Graphs you do not trust.** A graph from a person, a page or a model goes in `mount`'s
+  `authored`, not `graphs`: the projection and the stylesheet then render under the `safe:Authored`
+  policy, read from your own graphs, and what it refuses is reported to `onRefused`. Wiring by hand,
+  pass `policy: authoredPolicy(trustedStore)` to `runtime.project` and `compileStyles`. How it works,
+  extending the policy and a Content Security Policy to go with it: [SAFETY.md](SAFETY.md).
+- **Text diffs.** A `c:DiffView` names an ordered `c:items` list of `c:DiffLine`s. Each line has
+  `c:value` with no leading diff sign and `c:diffKind` set to `c:DiffAdded`, `c:DiffRemoved`, or
+  `c:DiffContext`. The view supplies the sign, theme colors, and a text projection. It is for
+  source text and other ordered lines; `c:RdfEditor` has its own statement diff mode.
 - **Files.** A `c:FileDrop` asks for the system picker (a `file:Pick`) and receives files dropped on
   its zone; `Files` (`src/files.ts`) performs both and reports each file as events, offered to the
   drop so its shape decides (`file:Added`, `file:Refusal`). It uploads each accepted file at once when
   the drop says where: `file:uploadTo` (an HTTP POST of a form with the file; `send` replaces it) or
   `file:handler`, the name of a handler you give it, which reports progress and is aborted when the
   file is removed. File contents never enter the graph: read them with `files.fileOf(fileIri)`.
-  `mount` attaches it (options: `files: { handlers, send, picker }`, or `false`); wiring by hand,
+  An upload goes only to the page's own origin or one the host lists (`uploadOrigins`); elsewhere it
+  fails with the reason ([SAFETY.md](SAFETY.md)).
+  `mount` attaches it (options: `files: { handlers, send, picker, uploadOrigins }`, or `false`); wiring by hand,
   `new Files(bus, { handlers, onHandled: () => renderer.flush() }).attach(renderer)`. Tests pass a
   stand-in `picker` and handlers (`test/harness.ts`).
 
@@ -447,17 +636,22 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   ```
 - **Connectors.** A `c:Connector` (an arrow `c:from` one component `c:to` another) is drawn by a
   host effect that measures its ends: `mount` attaches it; wiring by hand, call
-  `attachConnectors(element)` (`@inferal-oss/semblance/web`). It does nothing while the page has no
+  `attachConnectors(element)` (`@semblance-dev/semblance/web`). It does nothing while the page has no
   connector, at most one frame's work per frame otherwise, and never writes geometry into the graph.
 - **Swiped tracks.** A gallery's carousel and a lightbox scroll on snap points (`data-sem-snap`): a
   host effect brings the item the graph calls current (`data-sem-current`) into view and reports
   where a swipe came to rest as an unrecorded `c:Snapped` event. `mount` attaches it; by hand,
-  `attachSnaps(element)` (`@inferal-oss/semblance/web`).
+  `attachSnaps(element)` (`@semblance-dev/semblance/web`).
 - **Rendered state.** What the page knows about a component and the graph does not (where it is,
   whether it is on screen or overlaps another, focus, hover, scroll, open) is written to the graph
   for the components that ask (`rnd:observes`); see [Rendered state](#rendered-state) below.
 - **Idle work.** Call `runtime.warm(ms)` in idle time so hidden views are ready before they are
-  shown; `sem:warm sem:Eager | sem:OnIntent` says which.
+  shown; `sem:warm sem:Eager | sem:OnIntent` says which. A step costs about its budget, not the
+  whole of what it set off: what it leaves waits for the next, whole components at a time. Once the
+  page is quiet, `anticipate(runtime)` (`src/intent.ts`) prepares what choices would show, with no
+  pointing first (a tap): `sem:anticipates true` on a choice prepares every option (a site's
+  sections), `sem:anticipatesNear n` the options up to `n` places from the chosen one while the
+  choice is shown, following it (a section's own pages); the nearest go first, across choices.
 - **Live examples.** `c:LiveExample` shows Turtle (code editors, `c:CodeEditor` with `c:language
   "turtle"`) beside what it renders, each in a sandbox of its own: attach `Sandboxes`
   (`src/sandbox.ts`) with a store loader and call `sync()` after each flush. It mounts a sandbox in an
@@ -490,6 +684,79 @@ A body can also be a `c:HostSlot`. Put the existing application's rich content i
 slot through `renderer.slot(name)`. Stable message and body IRIs let the renderer retain that
 content, including drafts and focus, when other messages are inserted. Keep those IRIs stable
 when updating the graph with `runtime.apply`.
+
+### Byte layouts
+
+`c:ByteLayout` draws ordered binary fields in Screen and lists them with offsets and sizes in
+Text. Supply one caption and one label per field. The field indices are consecutive integers
+starting at 0. Fields and brackets are IRIs: each is drawn member-wise (`sem:forEach`), so a change
+to one field re-renders that field alone. Marks can be blank nodes.
+
+```turtle
+ex:header a c:ByteLayout ; c:label "Record header" ; c:byteExtent 6 ;
+    c:byteLayoutStyle c:ByteRuler ;
+    c:byteField ex:length , ex:identifier ;
+    c:byteSpan ex:header-span .
+ex:length c:byteIndex 0 ; c:label "Length" ; c:byteOffset 0 ;
+    c:byteLength 2 ; c:byteEncoding "uint16 LE" .
+ex:identifier c:byteIndex 1 ; c:label "Identifier" ; c:byteOffset 2 ;
+    c:byteLength 4 ; c:byteEmphasis true ;
+    c:byteMark [ c:byteOffset 3 ; c:byteLength 2 ] .
+ex:header-span c:firstByteIndex 0 ; c:lastByteIndex 1 ; c:label "Header" .
+```
+
+With `c:byteExtent`, fields use proportional widths and each field needs an offset and length
+inside the extent. Omit the extent for a schematic with equal-width fields. In a schematic,
+omit a field's length to show it as variable and use `c:byteSizeLabel` to describe its size.
+Marks use the same offset origin as their enclosing field. Span indices are inclusive.
+`c:byteAxisLabel` optionally names the offset origin. Choose `c:ByteRuler` (default),
+`c:ByteRecord` (separate rounded fields), or `c:ByteOutline` (monochrome outlines).
+The gallery uses `c:Segmented` to change the style in RDF.
+
+The diagram is a figure named by its caption; its fields are a list whose items are named by their
+Text line (`@4 · ChunkSize · uint32 LE · 4 B`, the unit from `c:BytesPhrase` in the viewer's
+language). Offsets run left to right in every language, as in a hex dump: in a right-to-left page the
+diagram is not mirrored, and when it is wider than its column it scrolls from byte 0.
+
+### Description list values
+
+Explicit `c:DescriptionList` items can supply a component through `c:content`, including a link,
+another description list, an interactive control or a `c:HostSlot`:
+
+```turtle
+ex:facts a c:DescriptionList ; c:items ( ex:review ) .
+ex:review c:label "Review" ; c:value "Review summary" ; c:content ex:body .
+ex:body a c:Stack ; c:children ( ex:note ex:approved ) .
+ex:note a c:Text ; c:label "Check the attached item." .
+ex:approved a c:ToggleSwitch ; c:label "Approved" ; c:checked false .
+```
+
+Screen prefers the component value, as a message body does. Text uses `c:value` as a summary when it is present; omit
+the summary to render the component in Text too, including its current control state. Existing
+text values, field and entry modes, units and locale formatting keep their behavior.
+
+Keep item and content IRIs stable when changing the list. A host slot inside a value then keeps
+its DOM and drafts when another item is inserted or the list is reordered.
+
+### Overlays that wait for a step
+
+An overlay (`c:Dialog`, `c:Drawer`, and the other `c:Overlay` kinds) is open while `c:open` is
+true. Its own ✕ and its scrim close it through one reaction for every kind, `c:OverlayClose`, and
+Escape clicks the ✕ of the last open overlay. When a step must be done before the panel goes (a
+value shown once, a choice that cannot be skipped), say `c:dismissible false`: the reaction then
+leaves it open, and a dialog or a drawer renders no ✕ (so Escape has nothing to press, and does not
+reach what is under it) and a scrim that does not close it. Its title, description, focus and Text
+rendering stay as they are. Give it an action that closes it, a button that `c:closes` it, or set
+`c:open false` from the host once the step is done:
+
+```turtle
+ui:recovery a c:Dialog ; c:label "Save your recovery code" ; c:dismissible false ;
+    c:content ui:code ; c:actions ( ui:saved ) .
+ui:saved a c:Button ; c:label "I have saved it" ; c:closes ui:recovery .
+```
+
+`c:dismissible` is a fact like any other, so it can change while the overlay is open (true once the
+step is done, say), and the ✕ comes back.
 
 ### Rendered state
 

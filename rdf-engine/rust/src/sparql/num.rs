@@ -195,6 +195,40 @@ pub fn write_double(out: &mut Vec<u8>, d: f64, float: bool) {
     }
 }
 
+/// The canonical text of a valid integer or decimal lexical form (white space trimmed): no "+",
+/// no leading zeros, every digit of the whole part, the fraction cut at 18 digits (a decimal's
+/// precision) without trailing zeros or a bare point, "-0" as "0". As WAT's $num_text.
+pub fn write_lexical(out: &mut Vec<u8>, s: &[u8]) {
+    let (neg, d) = match s.first() {
+        Some(b'-') => (true, &s[1..]),
+        Some(b'+') => (false, &s[1..]),
+        _ => (false, s),
+    };
+    let (int, frac) = match d.iter().position(|&c| c == b'.') {
+        Some(i) => (&d[..i], &d[i + 1..]),
+        None => (d, &b""[..]),
+    };
+    let int = &int[int.iter().position(|&c| c != b'0').unwrap_or(int.len())..];
+    let frac = &frac[..frac.len().min(18)];
+    let frac = &frac[..frac.iter().rposition(|&c| c != b'0').map_or(0, |i| i + 1)];
+    if int.is_empty() && frac.is_empty() {
+        out.push(b'0');
+        return;
+    }
+    if neg {
+        out.push(b'-');
+    }
+    if int.is_empty() {
+        out.push(b'0');
+    } else {
+        out.extend_from_slice(int);
+    }
+    if !frac.is_empty() {
+        out.push(b'.');
+        out.extend_from_slice(frac);
+    }
+}
+
 pub fn write_num(out: &mut Vec<u8>, n: Num) {
     match n {
         Num::Int(i) => write_int(out, i),
@@ -291,9 +325,16 @@ pub fn round(n: Num) -> Num {
     match n {
         Num::Int(_) => n,
         Num::Dec(d) => Num::Dec(floor_dec(d + SCALE / 2)),
-        Num::Float(f) => Num::Float(libm_floor(f as f64 + 0.5) as f32),
-        Num::Double(d) => Num::Double(if d.is_finite() { libm_floor(d + 0.5) } else { d }),
+        Num::Float(f) => Num::Float(round_half_up(f as f64) as f32),
+        Num::Double(d) => Num::Double(round_half_up(d)),
     }
+}
+
+/// Not floor(x + 0.5), which rounds 0.49999999999999994 to 1: x - floor(x) is
+/// exact where it matters. The sign is kept (Oxigraph: -0.5 -> -0).
+fn round_half_up(x: f64) -> f64 {
+    let y = libm_floor(x);
+    (if x - y >= 0.5 { y + 1.0 } else { y }).copysign(x)
 }
 
 fn floor_dec(d: i128) -> i128 {

@@ -16,7 +16,9 @@
 #
 # An overlay's state is one fact, c:open. It changes only through reactions: the
 # overlay's own ✕ and scrim (rendered elements marked c:closes), a popover's
-# trigger (c:toggles), and any c:Button that c:opens or c:closes it. The
+# trigger (c:toggles), and any c:Button that c:opens or c:closes it. An overlay
+# that is c:dismissible false ignores its own ✕ and scrim (and so Escape): only
+# a c:closes button, or the graph, closes it. The
 # vocabulary for c:open / c:closes / c:toggles is declared with the feedback
 # components (feedback.ttl), which share it.
 #
@@ -29,6 +31,12 @@ c:Overlay a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "A component shown on demand, over the page (c:open). Closing it is one reaction for every kind."@en .
 
+c:dismissible a owl:DatatypeProperty ; rdfs:domain c:Overlay ; rdfs:range xsd:boolean ;
+    rdfs:comment """Whether the overlay closes by its own ✕, its scrim and Escape (true, the default). False keeps it
+open until a required step is done: c:OverlayClose ignores it, and a dialog or a drawer renders neither the ✕
+(nor so its Escape shortcut) nor a scrim that closes. A c:Button that c:closes it, or the graph setting c:open
+false, still closes it, so give it such an action."""@en .
+
 c:opens a owl:ObjectProperty ; rdfs:range c:Overlay ;
     rdfs:comment "The overlay this button (or keyboard command, key:Command) opens: sets its c:open true. A button also says so to assistive technology (aria-controls, aria-expanded, aria-haspopup)."@en .
 
@@ -38,9 +46,10 @@ c:Dialog a owl:Class ;
     rdfs:subClassOf c:Overlay ;
     rdfs:comment """A modal panel over a scrim: title (c:label), description (c:help), content
 (c:content) and actions (c:actions, typically buttons that c:closes it). role=dialog, aria-modal,
-labelled by its title and described by its description. The ✕ and a click on the scrim close it.
-Opened, it takes the focus to the first control of its content, else to its first action (a
-confirmation lists the safe one first); closed, it gives the focus back to what had it.
+labelled by its title and described by its description. The ✕, Escape and a click on the scrim close
+it, unless it is c:dismissible false: then it has no ✕ and only its actions close it. Opened, it
+takes the focus to the first control of its content, else to its first action (a confirmation lists
+the safe one first); closed, it gives the focus back to what had it.
 Closed (the default) it renders an empty hidden root: its content is not evaluated."""@en ;
     sem:slug "dialog" .
 c:DialogRendering a sem:Rendering ; sem:targets c:Dialog ; sem:stratum 0 .
@@ -102,7 +111,9 @@ WHERE {
     BIND(BOUND(?anyAction) AS ?hasActions)
     BIND(IRI(CONCAT(STR($this), "/~scrim")) AS ?scrim)
     BIND(IRI(CONCAT(STR($this), "/~scrim-aria-hidden")) AS ?scrimHidden)
-    BIND($this AS ?closed)
+    # Not dismissible: no ✕ (so no Escape shortcut), and a scrim that does not close it.
+    BIND(NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") } AS ?dismissible)
+    BIND(IF(?dismissible, $this, ?none) AS ?closed)
     BIND(IRI(CONCAT(STR($this), "/~panel")) AS ?panel)
     BIND(IRI(CONCAT(STR($this), "/~panel-role")) AS ?role)
     BIND(IRI(CONCAT(STR($this), "/~panel-aria-modal")) AS ?modal)
@@ -113,10 +124,10 @@ WHERE {
     BIND(IF(BOUND(?title), IRI(CONCAT(STR($this), "/~title")), ?none) AS ?titleEl)
     BIND(IF(BOUND(?title), IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
     BIND(CONCAT(STR($this), "/~title") AS ?titleId)
-    BIND(IRI(CONCAT(STR($this), "/~close")) AS ?close)
-    BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
-    BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
-    BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close")), ?none) AS ?close)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-text")), ?none) AS ?closeText)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-aria-label")), ?none) AS ?closeLabel)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-data-sem-escape")), ?none) AS ?escape)
     OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
   OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
   OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
@@ -254,7 +265,9 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~root-data-side")) AS ?dataSide)
     BIND(IRI(CONCAT(STR($this), "/~scrim")) AS ?scrim)
     BIND(IRI(CONCAT(STR($this), "/~scrim-aria-hidden")) AS ?scrimHidden)
-    BIND($this AS ?closed)
+    # Not dismissible: no ✕ (so no Escape shortcut), and a scrim that does not close it.
+    BIND(NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") } AS ?dismissible)
+    BIND(IF(?dismissible, $this, ?none) AS ?closed)
     BIND(IRI(CONCAT(STR($this), "/~panel")) AS ?panel)
     BIND(IRI(CONCAT(STR($this), "/~panel-role")) AS ?role)
     BIND(IRI(CONCAT(STR($this), "/~panel-aria-modal")) AS ?modal)
@@ -265,10 +278,10 @@ WHERE {
     BIND(IF(BOUND(?title), IRI(CONCAT(STR($this), "/~title")), ?none) AS ?titleEl)
     BIND(IF(BOUND(?title), IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
     BIND(CONCAT(STR($this), "/~title") AS ?titleId)
-    BIND(IRI(CONCAT(STR($this), "/~close")) AS ?close)
-    BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
-    BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
-    BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close")), ?none) AS ?close)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-text")), ?none) AS ?closeText)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-aria-label")), ?none) AS ?closeLabel)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-data-sem-escape")), ?none) AS ?escape)
     OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
   OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
   OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
@@ -441,11 +454,12 @@ WHERE {
 
 # --- behaviour -------------------------------------------------------------------------------------
 
+# Its own ✕ and scrim close an overlay, whatever its kind, unless it is c:dismissible false.
 c:OverlayClose a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Overlay ;
-    beh:deletes """CONSTRUCT { $this c:open ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . $this c:open ?old }""" ;
-    beh:inserts """CONSTRUCT { $this c:open false } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this }""" ;
+    beh:deletes """CONSTRUCT { $this c:open ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . $this c:open ?old FILTER NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") } }""" ;
+    beh:inserts """CONSTRUCT { $this c:open false } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this FILTER NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") } }""" ;
     sem:function "overlay:close" .
 
 c:PopoverToggle a beh:Reaction ;

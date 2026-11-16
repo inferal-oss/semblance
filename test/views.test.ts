@@ -183,7 +183,8 @@ describe('maintained views in the app', () => {
       h.runtime.apply({ remove: store.match(policy, f.namedNode(LDES.amount), null), add: [f.quad(policy, f.namedNode(LDES.amount), f.literal('25', f.namedNode(NS.xsd + 'integer')))] })
       // Strict from here on: every tick is checked against the store's own SPARQL from scratch (function views against their SPARQL).
       h.runtime.views.strict = true
-      expect(h.runtime.views.all().filter((v) => v.strategy !== 'incremental').map((v) => v.iri)).toEqual([])
+      // (Queries a result view runs on request, c:QueryRuns, are not maintained: they stay as of their run.)
+      expect(h.runtime.views.all().filter((v) => v.strategy === 'recompute').map((v) => v.iri)).toEqual([])
       const button = (text: string) => [...document.querySelectorAll('button, [role=tab]')].find((b) => b.textContent!.trim() === text) as HTMLElement
       const field = () => document.querySelector('[data-sem-c=text-field] input') as HTMLInputElement
       fire(button('Activity'), 'click')

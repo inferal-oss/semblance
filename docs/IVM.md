@@ -7,7 +7,8 @@ document is the design: what a maintained view is, how it is declared and inspec
 the rule engine, the operator set and each operator's incremental form, time and windows, correctness,
 cost, and the phased plan. The decisions taken are at the end; what was built, and where it differs
 from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of phase 2), §23 (phase 4),
-§24 (phase 5) and §25 (phase 3).
+§24 (phase 5), §25 (phase 3), §26 (runs on request), §27 (views over what rules and the runtime
+derive) and §28 (views on their own, without the framework: [VIEWS.md](VIEWS.md)).
 
 ## Status
 
@@ -19,7 +20,7 @@ from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of pha
 | **Phase 1, aggregates over streams.** A recognizer (behind `ViewCompiler`) for aggregates over LDES members (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `DISTINCT`, as SELECT or CONSTRUCT); member partitions cached until the member retires or changes; incremental `GROUP BY`; a sink writing to `urn:semblance:views`, an input graph of every projection; function views as twins; anything else falls back to recompute with its reason (`iv:fallback`). | `src/view/recognize.ts`, `runtime.ts`, `aggregate.ts`, `functions.ts`, `ontology/layers/view.ttl` | e32a8bf |
 | **What uses it.** The Activity tool (`c:StreamStats`) and count badges (`c:CountBadge`) read maintained views instead of aggregating the change log: a todo toggle with Activity shown costs the same at a log bound of 200 or 2,000 (1.0 ms with function rules, 4-6 ms with SPARQL rules; before, 8.3 / 52.4 ms and 10.9 / 284.6 ms). `test/view-cost.test.ts` requires equal work counters at both bounds. | `ontology/components/stream-stats.ttl`, `toolbar.ttl` | e32a8bf |
 | **Sliding windows** (ahead of phase 4, because the example needs one): `iv:SlidingWindow` with `iv:range` and `iv:timeBy`, one timer for the next expiry, on an injectable clock shared with the event bus. | `src/view/runtime.ts` | e32a8bf |
-| **Demand.** `iv:whileShown` (a component or a class): a hidden view does nothing per tick and is rebuilt when shown. | `src/runtime.ts` (`views.shown`) | e32a8bf |
+| **Demand.** `iv:whileShown` (a component or a class, its subclasses' instances included): a hidden view does nothing per tick and is rebuilt when shown. | `src/runtime.ts` (`views.shown`) | e32a8bf |
 | **Observability.** Each view's plan as data (`iv:operator`, `iv:kind`, `iv:algebra`), with PROV-O; figures (`iv:stateRows`, `iv:lastRows`, `iv:lastMs`, …) for `iv:measured` views; a per-tick log of each view (`iv:deltaLog`, members `iv:Delta`: what came in, which groups changed, rows of work); a correctness check against a from-scratch run (`iv:matches`, `iv:resultRows`, `iv:checkedTick`); view rows in the status bar. | `src/view/runtime.ts`, `ontology/layers/view.ttl` | e32a8bf, a050a46 |
 | **The "Maintained views" example** (since replaced by the Warehouse example, below): a dashboard of three measured views (two windowed), with each step, a ✓ check per view, work against a re-run's work, the window draining on the clock. Its machinery - `iv:deltaLog`, `iv:matches`, `iv:measured` figures - stays, documented on the Docs page and readable in the workbench. | (removed) | d59e856, a050a46 |
 | **Phase 2, the operators** (§21): a SPARQL parser in place of the recognizer; partitions by any key (an LDES member, the subjects of the body) evaluated on the store with the key bound; exact dependencies from the body's patterns - delta queries over the store's indexes, so **joins outside the member**, **OPTIONAL**, **EXISTS / NOT EXISTS**, **MINUS**, **UNION** and **VALUES** inside a partition are maintained, and a change reaches exactly the partitions (or the slice of a cross product) it can affect; **DISTINCT** with counts; GROUP BY with arithmetic over aggregates and **HAVING**; UNION of subqueries; **top-k** over an ordered multiset (`ORDER BY … LIMIT / OFFSET`); **parameters** (`iv:parameter`; a LIMIT-only change retunes in place); a view per instance (`iv:targets`) or per node naming it (`iv:perReferrer`; an instance that comes or goes is defined or dropped alone); views over views (`iv:reads`); SELECT rows materialized as a W3C result set (`iv:materialize iv:Graph`, `rs:index` for ORDER BY); tuple order keys in `compareKeys`. Strict operator laws per shape, on Oxigraph and WAT. | `src/view/sparql.ts`, `deps.ts`, `compile.ts`, `runtime.ts`, `ordered.ts`, `rows.ts`, `src/render/order-key.ts`, `test/view-laws.test.ts` | 42d77a1 |
@@ -32,7 +33,9 @@ from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of pha
 | **Phase 4, time** (§23): tumbling windows (`iv:TumblingWindow`, `iv:size`, `iv:keep`, a bucket column `iv:bucketVariable`) and count windows (`iv:CountWindow`, `ldes:amount`) beside sliding ones, every window an edge over the stream's members ordered by time, moved at the cost of the members it flips; event time (`iv:clock iv:EventTime`, `iv:lateness`): the watermark is the greatest timestamp less the lateness, no timer, numeric timestamps as well as dates - the network inspector counts the last five seconds of `net:Capture` that way; the oracle writes each window out as SPARQL. | `src/view/window.ts`, `compile.ts`, `runtime.ts`, `ontology/layers/view.ttl`, `demo/gallery/_network.ttl`, `test/view-time.test.ts` | |
 | **Changes as a stream**: `ViewHandle.since(tick)` and `keepHistory`; replicas (`src/view/replica.ts`: messages, catch-up, a reset after a redefinition, BroadcastChannel adapters); `iv:recordsChanges` puts the triples on a delta log's members; **undo** over the change log (`beh:undoable` reactions record their effective change as `rdf:Statement`s on the member, `beh:Undoer` / `beh:UndoLatest` applies the opposite of the latest one that still applies), in the Kanban example. | `src/view/runtime.ts`, `replica.ts`, `src/behaviour/events.ts`, `undo.ts`, `ontology/layers/behaviour.ttl`, `test/view-delta.test.ts`, `test/ex-kanban.test.ts` | |
 | **Phase 3, views and rules together** (§25): **exact dependencies for SPARQL rules** from their own patterns (the view compiler's dependencies, `$this` the partition key), replacing `sem:follows` / `sem:watches` / `sem:readsMinted` behind an engine option (`exactDependencies`); probes walk sibling groups and prune by partly bound patterns (views gain too); `ctx.rows(view)` for function rules; **persistence policies as views** (dirty from their view, a write stores the change: one change of a 2,000-triple policy writes three triples); **`iv:strategy iv:Incremental` for rules** (a hosted view per rule, partitioned by `$this`, feeding each focus's output). | `src/engine/exact.ts`, `engine.ts`, `context.ts`, `rules.ts`, `src/view/deps.ts`, `runtime.ts`, `src/persistence.ts`, `test/engine.test.ts`, `test/persistence-cost.test.ts`, `test/rules-incremental.test.ts` | |
+| **Views over what rules and the runtime derive** (§27): `iv:reads <rendering>` reads the first projection's derived graph, stepped in rounds after the projections until nothing more changes; figures written in idle time step the views that read the views graph. A sheet's formulas are views per cell, `c:QueryFormula` is gone, and the dashboard's progress, the warehouse's cost lines and the workbench's Plan summary are views over figures (#147). | `src/view/runtime.ts`, `src/runtime.ts`, `src/recalculation.ts`, `ontology/components/formula.ttl`, `sheet.ttl`, `test/ex-sheet.test.ts`, `test/view-derived.test.ts` | |
 | **The workbench on views**: Follow updates (the Live switch) types the query as an `iv:View` (`c:FollowAsView`; `iv:materialize iv:ResultSet`, `iv:strategy iv:Auto`, measured), the table reads its maintained rows (followed at the next frame), and a **Plan** tab shows its strategy or fallback, the last change's work against a re-run, the from-scratch check and its operators. Recomputed views re-run only for changes their patterns see. | `ontology/components/workbench.ttl`, `src/components/workbench.ts`, `demo/gallery/_workbench.ttl`, `test/follow-updates.test.ts` | |
+| **Views on their own** (§28, [VIEWS.md](VIEWS.md)): `@semblance-dev/semblance/views`, a store of a built-in kind and a `ViewRuntime` over it with no ontology and no projection; `apply` / `write` / `load` / `transaction` as ticks (sharing `applyEffective` and `Consolidation` with `Runtime`); `followSource` over the remote protocol; `ViewHandle.orderedRows`; `useView` / `useRows` in `semblance-react`. A change costs the same over 1 000 or 50 000 statements and over 50 or 2 000 todos; the views page fetches 487 KiB of JavaScript before it is live against `mount`'s 1 962 KiB. | `src/views/`, `src/view/input.ts`, `src/web/engine-store.ts`, `src/web/stores.ts`, `src/node/stores.ts`, `packages/react/src/views.ts`, `examples/views/`, `test/views-*.test.ts`, `test/react-views.test.ts` | |
 
 Related, outside the view runtime: the SPARQL workbench's **Follow updates** (5559be4) re-runs a
 query when a triple it reads changes, by tracing the query's patterns; it is recompute with exact
@@ -47,7 +50,7 @@ dependencies, the workbench "Live switch" of phase 4 without a circuit.
 
 | phase | what | replaces or enables |
 |---|---|---|
-| 2, the rest | SPARQL renderings of charts and tables over the result-set rows (with the SPARQL coverage work); the rdf-engine's parser behind `ViewCompiler` once main has its algebra (its ABI is v1: no algebra export) | no function-only chart; one algebra |
+| 2, the rest | the rdf-engine's parser behind `ViewCompiler` once main has its algebra (its ABI is v1: no algebra export) | one algebra |
 | 3, the rest | exact dependencies as the engine's default, once the full suite passes with `SEMBLANCE_EXACT_DEPS=1` and their probes are cheaper (compiled per pattern, or in the engine, phase 6); then `sem:follows` / `sem:watches` / `sem:readsMinted` deleted from SPARQL rules | one way to say what a rule reads |
 | 6: into the engine | the operators in Rust inside rdf-engine (ABI v2), the TypeScript runtime as the reference | only if profiling shows the JS runtime or the boundary dominating |
 
@@ -1452,6 +1455,14 @@ What exists (`src/view/`):
   partition is the body evaluated on the store with its key bound (`VALUES` then `LATERAL`), so
   everything inside a partition - joins outside the member, OPTIONAL, UNION, MINUS, EXISTS,
   VALUES, BIND, FILTER - is the store's own SPARQL. Rows are cached (as interned ids) per partition.
+- **Scans** (`compile.ts`, `iv:Scan`). A body of one triple pattern under DISTINCT over its variables
+  has no partitions: each triple that comes or goes counts for its row, which is in while some triple
+  gives it, so a change evaluates nothing, however many triples the pattern reads
+  (`SELECT DISTINCT ?term WHERE { ?s ?term ?o }`, the editor's term index). The store is read at start,
+  at a rebuild and when a parameter changes the pattern; nothing writes a term into query text, so any
+  IRI the data holds will do. This counts on every write reaching the tick's change: an event's own
+  triples go through the change log's write too. (`iv:partitionBy`, `iv:over`, a window or `iv:reads`
+  keep the partitions.)
 - **Exact dependencies** (`deps.ts`), the delta queries of §6.2 and the correlated restriction of
   §6.4 in one mechanism. Every triple pattern of the body is a dependency, with the patterns it
   occurs with in a solution (its group and the groups around it; a subquery's own variables
@@ -1485,7 +1496,11 @@ What exists (`src/view/`):
   graph (`iv:property` of `iv:from`, or the `?value` of `iv:select`; `iv:default`), re-resolved
   when a triple its own patterns read changes; when only LIMIT / OFFSET change, the top-k moves its
   window without evaluating a partition. **Views over views** (`iv:reads`): step after the views
-  they read, see what those wrote this tick, read the views graph.
+  they read, see what those wrote this tick, read the views graph. A view without it reads the input
+  graphs alone: one whose pattern another view's template fits on a named subject or object (a
+  Stat's figure over a CONSTRUCT view's `ex:log ex:events ?n`) never sees that output, so the
+  runtime warns once per pair (`ViewRuntime.unread`); a `c:valueQuery` that is no `iv:View` at all
+  breaks `sem:ComponentShape` (#427).
 - **Order keys** (`src/render/order-key.ts`): tuple keys (§6.6), U+0001-separated components, `n`
   number or `s` string, `-` for descending; `compareKeys` compares them component by component.
 - **Tests**: `test/view-laws.test.ts` (the operator-law generator: a stream whose members point
@@ -1509,7 +1524,9 @@ What uses it:
   (no retention: it is a ledger), all incremental - `wh:Stock` (SUM per item, joined outside the member to
   the item's name, minimum and supplier), `wh:Reorder` (the same with HAVING and `?minimum - SUM(…)`),
   `wh:BestSellers` (a one-hour sliding window, GROUP BY, top five), and three figures. Its tables, chart,
-  stats and alert read their rows; each tile's cost line reads `iv:lastRows` and `iv:inputRows`.
+  stats and alert read their rows; each tile's cost line reads `iv:lastRows` and `iv:inputRows`. A sale
+  asks the stock view's row first (`wh:Enough`, which reactions read in the derived graph), so what is
+  not on the shelf is not sold; `wh:Stock` alone is not `iv:whileShown`, as a rush goes on from any page.
   `test/ex-warehouse.test.ts` drives it on WAT, strict, and measures a sale over 200 and 2,000 earlier
   movements: 22 view rows, 6 partitions, 31 rule runs, 16 SPARQL rows, 52 DOM operations, no rebuild,
   identical at both sizes (the stock tile: "4 rows of work; a recount would read 217" / "… 2017"). The
@@ -1518,14 +1535,17 @@ What uses it:
   `c:Stat` (`c:valueQuery` without `$this`), chips' `c:countQuery` read a maintained SELECT's rows
   when its `sem:View` is a materialized `iv:View`. The dashboard's ten queries are views over its
   cube (`iv:reads dx:Cube`); the activity example's views over the change log (the per-minute one
-  reads `NOW()` and stays a SELECT); the performance page's four `perf:View`s. The bar chart, the
-  finding list and formulas are plain SPARQL over those rows (`c:BarChartRendering-sparql`,
-  `c:FindingListRendering-sparql`, `c:Formula-sparql`; #1): a row's value of `?v` read by its IRI
+  reads `NOW()` and stays a SELECT); the performance page's four `perf:View`s. Every chart, the
+  finding list and formulas are plain SPARQL over those rows (`c:SeriesPlan-sparql` for the series
+  charts, the bar chart, heatmap and line chart among them since #384, `c:FindingListRendering-sparql`,
+  `c:Formula-sparql`; #1): a row's value of `?v` read by its IRI
   `<row>-v`, `rs:index` (else the row's node) as the order, with function twins that read the same
-  rows and render the same HTML (`test/charts-sparql.test.ts`). A formula whose query reads `$this`
+  rows and render the same HTML (`test/charts-sparql.test.ts`); so are the heatmap, the line chart
+  (`test/heatmap-linechart-sparql.test.ts`), the Gantt chart (`test/gantt.test.ts`), tables (`c:TableRuns`),
+  stats and chips' counts, and the charts' Text modality, a line per row (`c:RowChartText`,
+  `test/chart-text.test.ts`): no chart or table over a view's rows renders through a function rule alone. A formula whose query reads `$this`
   is a view per component that asks it (`iv:perReferrer c:valueQuery`). A query over what rules or
-  the runtime derive (a sheet's formulas, a view's figures) is not a view yet (#147) and is run by
-  `c:QueryFormula`, a function.
+  the runtime derive (a sheet's formulas, a view's figures) is a view too since #147 (§27).
 
 Measured (Node, `test/grid-cost.test.ts`, the network inspector sorted by duration, the earlier
 visit's samples hidden; a response for an old entry inside the window, then one outside it):
@@ -1654,6 +1674,9 @@ What exists (`src/view/window.ts`, `replica.ts`, `runtime.ts`, `src/behaviour/un
   the opposite of the latest recorded change that is not undone and still applies: every triple it
   added is still there and none it removed is back. A change that later ones overlapped is skipped
   rather than forced; the undone member is state on the log (`beh:undone`), forgotten when retired.
+  `beh:RedoLatest` applies again the change undone last. A new undoable change, once recorded, forgets
+  the undone members and their recorded changes (the redo stack), so Redo offers only what was undone
+  since; the bus does it where it records the change, for SPARQL and function rules alike.
 - **The workbench.** Follow updates also makes the query a view (`c:FollowAsView`): its rows as a
   result set, `iv:materialize iv:ResultSet` (a CONSTRUCT typed into the workbench never writes its
   triples to the views graph, which every projection reads), `iv:strategy iv:Auto` (a fallback is
@@ -1700,7 +1723,8 @@ Where this differs from the design:
   variables count as certainly bound.
 - **Correlated subqueries and LATERAL**: inside a LATERAL, a subquery with LIMIT that projects a variable
   its left side certainly binds is evaluated per binding: a change reaches the bindings it joins to, not
-  every partition (an uncorrelated LIMIT still is global). OPTIONAL, aggregates and paths under LATERAL
+  every partition (an uncorrelated LIMIT still is global). What the left side certainly binds counts its
+  BINDs that cannot fail, in its UNIONs too (`{ ?s sh:property ?ps } UNION { BIND(?s AS ?ps) }`). OPTIONAL, aggregates and paths under LATERAL
   are the store's evaluation of a partition, with their patterns' dependencies.
 - **When a partition is a join** (`substitutionChanges`, `compile.ts`): binding the key with VALUES and
   LATERAL substitutes it everywhere, which differs from SPARQL's bottom-up evaluation where a part reads
@@ -1719,7 +1743,9 @@ Where this differs from the design:
   while the pairs are few; closures and `?` of sequences step through the sequence; negated property sets
   keep forward and inverse members apart (`!^p`, `!(p|^q)`). `p*` and `p?` hold of every node of the
   graph with itself, so a triple bringing a node in is their input - unless another pattern of the
-  solution already holds that node (`?m v:kind/rdfs:subClassOf* ?c`).
+  solution already holds that node (`?m v:kind/rdfs:subClassOf* ?c`). An alternative of paths that are
+  not single steps (`(a|a/rdfs:subClassOf+)`, what an EXISTS writes for `a/rdfs:subClassOf*`, #451) is
+  the UNION of its paths, as SPARQL evaluates it: a change is a step of one branch, walked from there.
 - **Blank nodes**: a batch with a key VALUES cannot hold (a blank node) evaluates every partition; a
   derived subquery's rows with one leave the subquery to the store; expressions over rows with one bind
   it as an IRI of its own and map it back.
@@ -1777,9 +1803,25 @@ What exists (`src/engine/exact.ts`, `engine.ts`, `src/view/deps.ts`, `runtime.ts
   the change binds the key itself: `sty:HookAttributes` (`$this ?p ?v . ?p sty:hookAttribute ?name`) no
   longer re-runs for every triple about its focus. Walking through the groups beside a pattern (a sibling
   OPTIONAL or UNION branch) was tried and dropped: a solution need not match them, so a walk through one
-  can miss it (the performance page's matrix lost a new configuration's rows). So `dep:Facets` (a LATERAL
-  after a LATERAL of UNIONs) still reaches "every focus" from its last pattern; `sem:requires` makes that
-  cheap.
+  can miss it (the performance page's matrix lost a new configuration's rows). A group the solution
+  cannot do without is different (#309): a required UNION whose every branch binds the variable, or a
+  required subquery, is walked through all of its branches, and leads somewhere only if all of them do.
+- **What a change on an unrelated node reaches** (#309). Of the 262 rules of the todo app, 100 answered
+  "every focus" for some predicate on a subject they do not reach; `test/deps-walk.test.ts` holds the
+  count down. A rule's focus is substituted into its text, so it is a constant in every group: a
+  subquery shares it whether it projects it or not, and a window (LIMIT) with the focus among its own
+  patterns moves for that focus alone. A LATERAL's left side binds what it certainly bound. And a BIND
+  says what its variable can be: a variable, a constant, or an IRI minted from a head and a separator
+  (`IRI(CONCAT(STR(?x), "/~label"))`, walked back by cutting at the separator). A value outside those
+  (and outside a VALUES list) is in no solution. A BIND's constant is read by every row without a source,
+  so a change on it is global. A value read from an OPTIONAL before the BIND says that OPTIONAL matched,
+  so it is walked through. Two things stop a narrower answer, by design: a BIND that can fail leaves its
+  variable unbound to match any node (an unbound variable, an ordering, arithmetic), and a variable read
+  in a nested group without LATERAL, whose new match can stop outer rows being compatible.
+  A view reads the constants of its expressions the same way, and the same holds of it: a BIND that can
+  leave its variable unbound before an OPTIONAL over it reaches every partition, and in fact joins each
+  such row to every match. So it says what it is otherwise, as the grid's window views do
+  (`COALESCE(IF($sortVia = c:none, ?m, ?hop), c:none)`), and a response costs one partition (#319).
 - **The measure.** `engine.test.ts`: the from-scratch test passes with exact dependencies (every step,
   screen and text, against a fresh projection), and "re-renders only what changed" is tightened in its
   exact twin: a todo's `ex:priority` changing re-runs one rule (the list's member placement), not two.
@@ -1819,6 +1861,106 @@ Where this differs from the design: exact dependencies are an option, not yet th
 rules as views are opt-in per rule and must read only input graphs (views step before projections);
 persistence policies are views when they opt in; persistence keeps one blob per policy plus chunks, not
 per-triple keys (the backends have no key listing).
+
+## 26. Runs on request, as built
+
+A query a person runs and reads (the workbench's, a result table's) is a view too, but not a
+maintained one (`src/view/runs.ts`, `runtime.ts`, `ontology/layers/view.ttl`):
+
+- **`iv:strategy iv:OnRequest`**: no circuit. The view is evaluated when defined, when a triple about
+  its query changes (its text, `c:runCount`), when a parameter's value changes and when it is shown
+  again (while hidden it is suspended); a change to the data does not run it. Strict mode does not
+  compare it with a from-scratch run: it is meant to stay as of its run.
+- **`iv:materialize iv:ResultSet`** writes whatever the query gives as a result set: a SELECT's rows,
+  a CONSTRUCT's triples as rows (`?subject ?predicate ?object`, `iv:triples`), an ASK's answer
+  (`rs:boolean`) or the error a run ended in (`iv:error`), with the columns in order (`iv:column`), the
+  row count (`iv:rowCount`) and every row's position (`rs:index`, ORDER BY's, else a stable one by its
+  values; a row the result has n times is n rows). A maintained view (one that follows updates) writes
+  the same, from its output, at the host's next refresh (`Runtime.refresh`, `ViewRuntime.flushPending`):
+  it is maintained every tick, but a busy graph rewrites its rows, and re-renders what reads them, once a
+  frame - or at once when a node that shows it is shown again. With `iv:writeEach iv:Tick` it is written
+  in the tick that changed it instead, as an `iv:Graph` view's rows are (a table beside the totals it
+  lists agrees with them). A blank node's label is written beside it (`iv:label`).
+- **A run reads everything a rule's query would**: the input graphs, the views graph (other views'
+  output: `rnd:overlaps`) and the derived graph of the projection that shows it (`derivedFor`). It is
+  never stepped by a change, so this cannot feed back; a maintained view reads what rules derive when
+  it says so (§27).
+- **`iv:perQuery <property>`**: a template whose instances are the queries nodes name by the property
+  (of `iv:referrerClass`), each at the query's own IRI, so the nodes that show one query share one run;
+  each node says which view runs it (`iv:run`, in the views graph). A query that is an `iv:View` of its
+  own (a followed workbench query) keeps its own annotations; `iv:followedBy <property>` makes an
+  instance `iv:Auto` while a node naming it says the property true; `iv:bindsBy` gives a node that binds
+  a variable a view of its own, `<node>/~run`, the variable an `iv:parameter`. An instance is maintained
+  while one of the nodes naming it is shown.
+- **What uses it**: every `c:QueryResultView`'s query (`c:QueryRuns` in `ontology/components/workbench.ttl`).
+  The result table renders the result set in SPARQL (`c:ResultTableRendering-sparql`, and
+  `c:ResultTableAsText-sparql` as text), byte for byte as its function twins, which read the same rows
+  (`test/result-table-sparql.test.ts`, Oxigraph and WAT, after each step); the graph and Turtle views
+  read it too, so no rendering runs a query held in the data.
+
+## 27. Views over what rules and the runtime derive, as built
+
+A maintained view reads the input graphs; with `iv:reads` it also reads (`src/view/runtime.ts`,
+`src/runtime.ts`, `ontology/layers/view.ttl`):
+
+- **Other views and what the runtime writes about them** (`iv:reads <view>`): their output, their
+  plan and strategy (`iv:strategy`, `iv:fallback`, `iv:operator`) and the figures of measured views
+  (`iv:lastRows`, `iv:inputRows`, `iv:stateRows`, `iv:matches`, …), all in the views graph. It steps
+  after the views it reads in a tick and sees what they wrote; the figures are written in idle time
+  (`Runtime.warm`, `ViewRuntime.figures`), a write to the views graph like any other, and step the
+  views that read the views graph. A view never sees the figures about itself (they change because it
+  stepped, so it would step at every idle slice); figures are written after the tick they describe, so
+  a view over figures is one step behind them by construction, never in a cycle with them.
+- **What rules derive** (`iv:reads <rendering>`, a `sem:Rendering`): the derived graph of the first
+  projection (`ViewRuntime.derivedGraph`). Rules read views (the views graph is an input of every
+  projection), so views over rules over views is a cycle of graphs - not, for data that has none, of
+  values. The runtime runs it as **rounds** (`Runtime.rounds`): after the projections have taken a
+  change, what the first one derived that such a view can read (the predicates of its patterns, and a
+  template's referrer property: `ViewRuntime.readsDerived`) steps those views, and their change goes to
+  the projections again, until nothing more changes. A round costs what it changes, like a tick; there
+  are as many as the longest chain of views over rules over views. A cycle in the data (two formulas
+  reading each other) stops after 64 rounds with a warning, as the engine settles its own fixpoints.
+  A template that reads what rules derive (`iv:perReferrer`, `iv:targets`) also takes its referrers
+  or instances from there. Rounds run wherever the projections take a change: a tick, a refresh, idle
+  warming, a preload, a resumed or continued stall.
+- **Everything** (`iv:reads iv:Everything`): what a rule's query reads - the input graphs, every view's
+  output (the view steps after every view that does not read everything too) and what rules derive (as
+  `iv:reads <rendering>`, in rounds). For a query held in data that a component shows, whatever it
+  matches: every table's run (`c:TableRuns`, `ontology/components/data.ttl`, also `iv:writeEach iv:Tick`)
+  reads a section's rendered place and the view that marks the one being read (the reader), the
+  derived and the input alike, as the table's function rule's own SELECT did.
+- **What uses it**: the formula layer has one rendering, `c:Formula` (the first row of a maintained
+  view); `c:QueryFormula`, which ran the queries that were not views, is gone (#147). A sheet's
+  formulas (`c:SumFormula` …, `ontology/components/sheet.ttl`) are views per cell
+  (`iv:perReferrer c:valueQuery`) reading what `c:SheetFormula` derives (a cell's query and inputs)
+  and the values `c:Formula` gives other formula cells (`iv:reads c:SheetFormula , c:Formula`): a
+  change to a cell reaches exactly the formulas that read it, then theirs, round by round. The
+  recalculation trace hears the views runtime step them (`ViewRuntime.onStep`). The dashboard's
+  progress (`dx:qWork`, `iv:reads dx:Cube`), the warehouse's cost lines (`wh:qCost`, a view per line
+  reading its views' figures) and the workbench's Plan tab (`ui:qPlanSummary`, `iv:reads
+  ui:currentQuery`) are views over figures.
+
+## 28. Views on their own, as built
+
+The views do not need the rest of the framework. `@semblance-dev/semblance/views` (`src/views/`) is a
+store of a built-in kind (`openStore`; `wat` by default) with no ontology loaded, and a started
+`ViewRuntime` over it (`createViews`, `openViews`), with no rule engine and no projection. Views are
+hosted from code (`host`, `select`, `construct`), as `Runtime.views.host` hosts them in a mounted
+app. Changes come in as ticks: `apply` (the default graph), `write` (a named graph the views read),
+`load`, `transaction` (one consolidated tick) and `advance` (a tick with no input). They are applied
+and consolidated by the same code as `Runtime`'s (`src/view/input.ts`). `followSource`
+(`src/views/remote.ts`) follows a store's stream (docs/REMOTE.md) into views, read-only. It replaces
+the patterns' part on a snapshot by the same function the remote-sources effect uses (`heldOf`).
+
+Two additions came with it. `ViewHandle.orderedRows()` gives a SELECT's rows in ORDER BY order.
+`rows()` keeps no order, and a reader outside the graph has no `rs:index` to sort by. The browser's
+stores are split so that a page needing only the engine (`src/web/engine-store.ts`) carries no
+other kind's code: the N3 store's stream polyfills alone were 100 KiB.
+
+`semblance-react`'s `useView` / `useRows` (`packages/react/src/views.ts`) read a view over
+`useSyncExternalStore`, with one source per view. Its snapshot changes only when that view does,
+and the server snapshot is the same. The guide, the measurements and the cost table are in
+[VIEWS.md](VIEWS.md).
 
 ## Decisions
 

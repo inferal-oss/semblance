@@ -56,6 +56,12 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
                  [ sty:property "background" ; sty:raw "radial-gradient(circle at 1px 1px, var(--sem-border) 1px, transparent 0) 0 0 / 16px 16px, var(--sem-surface-sunken)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
+# On a phone a specimen, its stage, a card and a surface inside it each keep 24px on both sides,
+# which leaves a third of the screen to what they show: there each container takes one step less.
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-4 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-3 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage > *" ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] .
@@ -92,10 +98,10 @@
                  [ sty:property "color" ; sty:token tok:muted ] .
 
 # --- elevations (sty:Flat and sty:Raised are in theme/default.ttl) ---
-sty:Overlay a sty:Elevation ; rdfs:label "Overlay"@en ; sem:slug "overlay" ; sem:order 3 ;
+sty:Overlay a sty:Elevation ; rdfs:label "Overlay"@en , "Накладка"@uk , "Overlay"@de , "طبقة عائمة"@ar ; sem:slug "overlay" ; sem:order 3 ;
     rdfs:comment "Floats above the page: menus, popovers, dialogs."@en .
-sty:Flat rdfs:label "Flat"@en ; sem:order 1 .
-sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
+sty:Flat rdfs:label "Flat"@en , "Плоска"@uk , "Flach"@de , "مسطحة"@ar ; sem:order 1 .
+sty:Raised rdfs:label "Raised"@en , "Піднята"@uk , "Erhöht"@de , "مرتفعة"@ar ; sem:order 2 .
 
 # --- surface ---
 # Direction, gap and inset are the position layer's; the surface only fills them in
@@ -116,6 +122,8 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
     sty:declares [ sty:property "gap" ; sty:token tok:space-3 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-inset])" ;
     sty:declares [ sty:property "padding" ; sty:token tok:space-5 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-inset])" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-4 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state "[data-sem-tone]" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--tone-soft)" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--tone-border)" ] .
@@ -207,9 +215,11 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 # Its container is at least as tall as the viewport and pushes the bar to its end,
 # so the bar sits at the bottom of the window on short pages too; on long pages it
 # sticks to the bottom (above a taskbar docked there: --sem-dock-bottom, windows.ttl) while the
-# content scrolls under it.
+# content scrolls under it. What sticks to the top (pos:StickToTop) ends above it (--sem-sticky-bottom:
+# its least height and its border).
 [] a sty:StyleRule ; sty:part ":has(> [data-sem-c=status-bar])" ;
-    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+    sty:declares [ sty:property "--sem-sticky-bottom" ; sty:raw "41px" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-direction" ; sty:raw "column" ] ,
                  [ sty:property "min-height" ; sty:raw "100dvh" ] .
 [] a sty:StyleRule ; sty:appliesTo c:StatusBar ;
@@ -349,37 +359,66 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
     sty:declares [ sty:property "flex-basis" ; sty:raw "100%" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] .
 
-# --- fields side by side (pos:FieldRow) ------------------------------------------------------------
-# Each field's parts sit in the row's tracks: label, control, help, error. A field's own gap would put
-# space under the tracks it leaves empty (no help, no error), so in a row the parts are spaced by
-# their own margins instead: an empty track is no taller than nothing. Popups (a date's month grid, a
-# time list) are out of the flow and take no track.
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span]" ;
+# --- fields side by side (pos:FieldRow), and fields in a row of a list (pos:Subgrid) -----------------
+# Each field's parts sit in the row's tracks: label, control, help, error. A part goes in its track by
+# its role (data-sem-part): a field without a label leaves the label track empty (an empty first
+# item), so its control is in the control track like every other field's. A field's own gap would
+# put space under the tracks it leaves empty (no help, no error), so in a row the parts are spaced
+# by their own margins instead: the label's below it, help and errors above them; an empty track is
+# no taller than nothing, and the control track is the control alone. Popups (a date's month grid,
+# a time list) are out of the flow and take no track. A row of a list (pos:Subgrid) does this only
+# when it holds a field (#518).
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span]" ;
     sty:declares [ sty:property "row-gap" ; sty:raw "0" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span] > :not(:first-child, [role=dialog], [role=listbox])" ;
-    sty:declares [ sty:property "margin-block-start" ; sty:token tok:space-2 ] .
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span]:not(:has(> [data-sem-part=field-label]))::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] .
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span] > [data-sem-part=field-label]" ;
+    sty:declares [ sty:property "margin-block-end" ; sty:token tok:space-2 ] .
+# The control track is as tall as the tallest thing in it (a toolbar whose buttons wrap): a
+# single-line control is centred in it, as what sits beside it is, so they stay on one line.
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span] > [data-sem-part=single-line-control]" ;
+    sty:declares [ sty:property "align-self" ; sty:raw "center" ] .
 # Help and errors wrap to their column: they never size it, so an error that appears does not move
 # the columns.
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span] > :nth-child(n+3):not([role=dialog], [role=listbox])" ;
-    sty:declares [ sty:property "contain" ; sty:raw "inline-size" ] .
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span] > :not([data-sem-part=field-label]) ~ :not([role=dialog], [role=listbox])" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:token tok:space-2 ] ,
+                 [ sty:property "contain" ; sty:raw "inline-size" ] .
+# Every child of a field row takes one line's four tracks, label, control, help, error: a field by its
+# parts (a choice, with two, leaves help and error empty), anything else in a cell of its own (c:Stack
+# mints it). So whatever comes next starts a line of its own or the next column of this one, never the
+# help and error tracks under something shorter (#522).
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> *" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "span 4" ] .
 # What is not a field (a button acting on the fields, a switch, a segmented control) sits beside the
-# controls, at its own width, centred on their row: a shorter control (a switch) lines up on their
-# middle, one of the control height on their edges.
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-row-span])" ;
+# controls, at its own width, centred on their track: a shorter control (a switch) lines up on their
+# middle, one of the control height on their edges, and a taller one makes the track as tall as it is.
+# Its cell (no component of its own) is a subgrid of the line, with nothing in the label track; at
+# least as wide as the item, so a button keeps its one line while the fields beside it narrow.
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-c])" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "row-gap" ; sty:raw "0" ] .
+# A cell whose item is hidden (an idle progress bar) takes no column, as the item would not.
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-c]):has(> [hidden])" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-c]) > *" ;
     sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
                  [ sty:property "justify-self" ; sty:raw "start" ] ,
-                 [ sty:property "align-self" ; sty:raw "center" ] ,
-                 [ sty:property "margin-block-start" ; sty:token tok:space-2 ] .
-# On a phone the fields wrap, two or one to a line (each line with rows of its own).
+                 [ sty:property "align-self" ; sty:raw "center" ] .
+# In a row of a list the other cells (a tag, a unit, a status) keep the column they are in: placed
+# column by column, a cell in the control track does not take the field's column first.
+[] a sty:StyleRule ; sty:when pos:Subgrid ; sty:state ":has(> [data-sem-row-span])" ;
+    sty:declares [ sty:property "grid-auto-flow" ; sty:raw "column" ] .
+[] a sty:StyleRule ; sty:when pos:Subgrid ; sty:state ":has(> [data-sem-row-span])" ; sty:part "> :not([data-sem-row-span])" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
+                 [ sty:property "align-self" ; sty:raw "center" ] .
+# On a phone the fields wrap, two or one to a line (each line with tracks of its own). Every child
+# takes a whole line's tracks, so a button lands beside the control of the line it is on, or starts
+# a line of its own.
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "grid-auto-flow" ; sty:raw "row" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 9rem), 1fr))" ] .
-# Placed as it comes, a button may start in a line's label row: it takes that row and the control
-# row and sits at their foot, beside the controls of the line it lands in.
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ; sty:part "> :not([data-sem-row-span])" ;
-    sty:declares [ sty:property "grid-row" ; sty:raw "span 2" ] ,
-                 [ sty:property "align-self" ; sty:raw "end" ] .
-# Lines of wrapped fields are spaced by the margin under each field (the tracks have no gap).
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ; sty:part "> [data-sem-row-span]:not(:last-child)" ;
+# Lines are spaced by the margin under each child (the tracks have no gap).
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ; sty:part "> :not(:last-child)" ;
     sty:declares [ sty:property "margin-block-end" ; sty:token tok:space-3 ] .

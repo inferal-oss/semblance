@@ -48,6 +48,15 @@ pub fn execute(u: &Update, dict: &mut Dict, store: &mut Store) -> Result<(), &'s
             log.undo();
             return Err(e);
         }
+        // A SERVICE in a WHERE that failed (not SILENT) fails the update.
+        if crate::fetch::f().error.is_some() {
+            log.undo();
+            return Err("SERVICE failed");
+        }
+    }
+    // Waiting for the host: undone; it runs the update again with the answers.
+    if crate::fetch::f().waiting {
+        log.undo();
     }
     Ok(())
 }
@@ -107,9 +116,22 @@ fn apply(op: &UpdateOp, dict: &mut Dict, log: &mut Log, base: &[u8]) -> Result<(
             removes.into_iter().for_each(|q| log.remove(q));
             adds.into_iter().for_each(|q| log.add(q));
         }
-        UpdateOp::Load { silent } => {
-            if !silent {
-                return Err("LOAD is not supported");
+        UpdateOp::Load { silent, iri, graph } => {
+            // Not answered yet: the update waits (abi.rs undoes it and returns -3).
+            if let Some(i) = crate::fetch::load(*iri) {
+                let r = &crate::fetch::f().reqs[i];
+                if r.state == crate::fetch::ANSWERED {
+                    for t in r.answer.chunks_exact(3) {
+                        log.add([t[0], t[1], t[2], *graph]);
+                    }
+                } else if !silent {
+                    let mut why = b"LOAD <".to_vec();
+                    why.extend_from_slice(dict.value(*iri));
+                    why.extend_from_slice(b">: ");
+                    why.extend_from_slice(&r.why);
+                    crate::fetch::fail(why);
+                    return Err("LOAD failed");
+                }
             }
         }
         UpdateOp::Clear { target } => {

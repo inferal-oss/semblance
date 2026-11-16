@@ -12,7 +12,11 @@ c:Stack a owl:Class ;
 c:children a owl:ObjectProperty ; rdfs:domain c:Stack ; rdfs:range rdf:List ;
     rdfs:comment "Ordered child components."@en .
 
-# The children in list order: consecutive list cells are ord:immediatelyPrecedes edges.
+# The children in list order: consecutive list cells are ord:immediatelyPrecedes edges. In a row of
+# fields (pos:FieldRow) a child that is not a field (no pos:rowParts: a button, a toolbar, a switch)
+# goes in a cell of its own, <stack>/~cell-<child>, which takes the row's tracks as a field does and
+# puts it in the control track: wrapped on a phone, it is beside the control of the line it is on
+# and never under another item (#522).
 c:StackRendering a sem:Rendering ;
     sem:targets c:Stack ;
     sem:stratum 0 .
@@ -25,11 +29,25 @@ c:StackRendering-sparql a sem:Rule ;
     sem:implements c:StackRendering ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?child .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?slot .
+  ?cell a rdfhtml:Div ; rdfhtml:hasChild ?child .
   ?a ord:immediatelyPrecedes ?b .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Stack .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  {} UNION { $this c:children/rdf:rest*/rdf:first ?child FILTER(isIRI(?child)) } UNION { $this c:children/rdf:rest* ?pairCell . ?pairCell rdf:first ?a ; rdf:rest/rdf:first ?b FILTER(isIRI(?a) && isIRI(?b)) }
+  {} UNION {
+    $this c:children/rdf:rest*/rdf:first ?slot FILTER(isIRI(?slot))
+    FILTER(NOT EXISTS { $this pos:layout pos:FieldRow } || EXISTS { ?slot (a|a/rdfs:subClassOf+) ?class . ?class pos:rowParts ?parts })
+  } UNION {
+    $this pos:layout pos:FieldRow ; c:children/rdf:rest*/rdf:first ?child FILTER(isIRI(?child))
+    FILTER NOT EXISTS { ?child (a|a/rdfs:subClassOf+) ?class . ?class pos:rowParts ?parts }
+    BIND(IRI(CONCAT(STR($this), "/~cell-", ENCODE_FOR_URI(STR(?child)))) AS ?cell)
+    BIND(?cell AS ?slot)
+  } UNION {
+    $this c:children/rdf:rest* ?pairCell . ?pairCell rdf:first ?x ; rdf:rest/rdf:first ?y FILTER(isIRI(?x) && isIRI(?y))
+    BIND(EXISTS { $this pos:layout pos:FieldRow } AS ?cells)
+    BIND(IF(?cells && NOT EXISTS { ?x (a|a/rdfs:subClassOf+) ?cx . ?cx pos:rowParts ?px }, IRI(CONCAT(STR($this), "/~cell-", ENCODE_FOR_URI(STR(?x)))), ?x) AS ?a)
+    BIND(IF(?cells && NOT EXISTS { ?y (a|a/rdfs:subClassOf+) ?cy . ?cy pos:rowParts ?py }, IRI(CONCAT(STR($this), "/~cell-", ENCODE_FOR_URI(STR(?y)))), ?y) AS ?b)
+  }
 }""" .

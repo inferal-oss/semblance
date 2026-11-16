@@ -1,0 +1,34 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:drop-refused-state a chg:Change ;
+    rdfs:label "A refused drop marks its draggable data-sem-drop-refused"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/405> ;
+    chg:motivation """Two layers wrote one attribute for two things. The safety layer marks an element its policy
+refused with data-sem-refused (an empty sem-refused element naming what it was), and the drag-and-drop layer
+marked a draggable whose drop was refused (dnd:refusedBy) with the same attribute. The drag-and-drop theme shook
+every element carrying it, so a policy-refused element played the refused-drop animation, and a test, the
+inspector or a host script looking for data-sem-refused could not tell a refused drop from a refused element.""" ;
+    chg:substance """A dnd:Draggable with dnd:refusedBy now renders its root with data-sem-drop-refused (empty), in
+place of data-sem-refused; the SPARQL rule (dnd:Handle) and its function twin render the same. The theme shakes
+[data-sem-gesture=drag][data-sem-drop-refused], a draggable only, so the rule can never match an element the
+safety layer marked. data-sem-refused now means one thing: the safety layer's mark of a refused element. The
+safe:Authored policy lists data-sem-drop-refused among the framework's hooks and no longer lists
+data-sem-refused, so an authored graph cannot write the marker itself.
+
+No migration: the attribute is projection output, derived from dnd:refusedBy, which is unchanged; no graph a
+consumer writes states it.""" ;
+    chg:forwardGuide """Nothing to move in the graph. A stylesheet, test or host script that read data-sem-refused
+on a draggable to see a refused drop reads data-sem-drop-refused instead. One that read data-sem-refused for
+the safety layer's refused elements keeps it, and no longer sees refused drops among them.""" ;
+    chg:backwardGuide """Nothing to move in the graph. Going back, a refused drop marks its draggable
+data-sem-refused again, the theme shakes every element with it (policy-refused ones included), and an authored
+graph may write data-sem-refused; anything reading data-sem-drop-refused reads data-sem-refused.""" ;
+    chg:affects dnd:Draggable .

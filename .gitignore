@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 dist/
 dist-single/
 .DS_Store
@@ -9,3 +9,7 @@ rdf-engine/rust/target/
 .test-full/
 layout-solver/build/
 layout-solver/rust/target/
+lib/
+packages/*/lib/
+packages/*/LICENSE-APACHE
+packages/*/LICENSE-MIT

@@ -6,6 +6,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { H, MOD, NS, VAL, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { el, marked, md5 } from './data.ts'
+import { maintainedRows } from '../view/rows.ts'
 import { compact } from './reference.ts'
 import { named, rdfList, RDFS_LABEL, str, text } from './util.ts'
 
@@ -129,6 +130,25 @@ const editor: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** The editor's property for the resources it shows rows of: c:rdfPageEntry when it is paged (c:entryPageSize), else c:entry. */
+const shownEntry = (ctx: RuleContext, editor: Term) => (ctx.match(editor, C + 'entryPageSize', null).length > 0 ? C + 'rdfPageEntry' : C_ENTRY)
+
+/** Read the bounded, ordered view. Stores without SPARQL slice their entry list. */
+const page: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const entries = ctx.sparql
+    ? (maintainedRows(ctx, o.node('view-RdfEditorEntryWindow')) ?? []).map(row => row.get('entry')).filter(named)
+    : (() => {
+      const size = Math.max(0, Number(ctx.object(focus, C + 'entryPageSize')?.value) || 0)
+      const start = Math.max(0, (Number(ctx.object(focus, C + 'page')?.value) || 1) - 1) * size
+      return ctx.objects(focus, C_ENTRY).filter(named)
+        .sort((a, b) => a.value < b.value ? -1 : a.value > b.value ? 1 : 0)
+        .slice(start, start + size)
+    })()
+  for (const term of entries) o.t(focus, C + 'rdfPageEntry', term)
+  return o.quads
+}
+
 /** One resource of the document: its row, placed in the tree by its IRI. */
 const entry: FnRule = (ctx, focus, member) => {
   if (!member || !named(member)) return []
@@ -204,7 +224,7 @@ const arrows: FnRule = (ctx, focus) => {
   if (mode !== C + 'ArrowsOn' && mode !== C + 'ArrowsCurrent') return []
   const o = ctx.out(focus)
   const current = ctx.object(focus, C_CURRENT)
-  const entries = ctx.objects(focus, C_ENTRY).filter(named)
+  const entries = ctx.objects(focus, shownEntry(ctx, focus)).filter(named)
   const isEntry = new Set(entries.map((e) => e.value))
   const layer = o.node('arrows')
   for (const s of entries) {
@@ -563,6 +583,11 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   }
 }
 
+/** The drag layer's state a projection derives on a node (where it takes drops, what is offered to it), not its data. */
+const DRAG_STATE = new Set(['members', 'orderBy', 'zone', 'offered', 'hovered', 'lifted', 'refusedBy'].map((p) => NS.dnd + p))
+/** What renderings write about a node (its placement in the rendered output, its drag state), never the data a document says. */
+const RENDERED = (p: string) => p.startsWith(H.ns) || p.startsWith(NS.ord) || p === SEM.orderKey || p === SEM.renders || DRAG_STATE.has(p)
+
 /** The rows under an open term: its list's members, its predicates, the reifiers of its statement. */
 function children(ctx: RuleContext, o: Out, focus: NamedNode, f: TermFacts): NamedNode[] {
   if (!f.open) return []
@@ -590,7 +615,7 @@ function children(ctx: RuleContext, o: Out, focus: NamedNode, f: TermFacts): Nam
     const seen = new Set<string>()
     for (const q of ctx.match(f.t, null, null)) {
       const p = q.predicate
-      if (seen.has(p.value) || (p.value === RDF_REIFIES && f.reifier)) continue
+      if (seen.has(p.value) || (p.value === RDF_REIFIES && f.reifier) || RENDERED(p.value)) continue
       seen.add(p.value)
       const child = o.node('p-' + key12(p.value))
       common(child, C_RDF_PROPERTY, predicateKey(ctx, p))
@@ -626,7 +651,8 @@ const term: FnRule = (ctx, focus) => {
   const shown = shownTerm
   const badge = f.reifier ? phrase(ctx, 'RdfAboutPhrase') : f.lit && f.lang !== '' ? '@' + f.lang : f.named !== undefined && f.lit ? f.compactName : undefined
   const note = t.termType === 'NamedNode' && !f.blank ? saysMore(text(ctx, t, RDFS_LABEL), t.value) : undefined
-  const jumps = f.depth > 0 && t.termType === 'NamedNode' && !f.blank && ctx.untraced(() => ctx.match(f.editor, C_ENTRY, t).length > 0)
+  // A resource of the document (of its page, when it is paged), read untraced: the SPARQL rule declares no dependency on it.
+  const jumps = f.depth > 0 && t.termType === 'NamedNode' && !f.blank && ctx.untraced(() => ctx.match(f.editor, shownEntry(ctx, f.editor), t).length > 0)
   const goes = !jumps && f.vocab
   const link = jumps ? 'resource' : goes ? 'term' : undefined
   const description = f.reifier ? phrase(ctx, 'RdfReifierPhrase') : f.list ? phrase(ctx, 'RdfListPhrase').replace('{n}', String(f.count)) : f.blank ? phrase(ctx, 'RdfNestedPhrase') : undefined
@@ -1397,6 +1423,7 @@ export const functions: Record<string, FnRule> = {
   'rdf-editor:diff-removed-predicates': diffRemovedPredicates,
   'rdf-editor': editor,
   'rdf-editor:entry': entry,
+  'rdf-editor:page': page,
   'rdf-editor:listing': listing,
   'rdf-editor:arrows': arrows,
   'rdf-editor:status': status,

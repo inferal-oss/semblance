@@ -99,6 +99,16 @@
 (func (export "result_ptr") (result i32) (global.get $res))
 
 ;; Make room for n result bytes; the previous results are not kept.
+;; At least n bytes in the result buffer, its first `keep` bytes kept.
+(func $res_grow (param $n i32) (param $keep i32)
+  (local $cap i32)
+  (if (i32.gt_u (local.get $n) (global.get $res_cap)) (then
+    (local.set $cap (call $class_size (call $class (local.get $n))))
+    (if (global.get $res_cap)
+      (then (global.set $res (call $realloc (global.get $res) (global.get $res_cap) (local.get $n) (local.get $keep))))
+      (else (global.set $res (call $alloc (local.get $n)))))
+    (global.set $res_cap (local.get $cap)))))
+
 (func $res_reserve (param $n i32)
   (if (i32.gt_u (local.get $n) (global.get $res_cap)) (then
     (if (global.get $res_cap) (then (call $free (global.get $res) (global.get $res_cap))))

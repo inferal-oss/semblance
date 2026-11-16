@@ -1,15 +1,19 @@
 // Function rules for general view components and the tooltip layer.
-import type { NamedNode, Quad, Term } from '@rdfjs/types'
+import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
-import { MINT_SEPARATOR, owningFocus } from '../rdf.ts'
-import { HtmlIndex } from '../render/html-index.ts'
-import { toIndentedHTML } from '../render/serialize.ts'
-import { tokenizeSparql } from '../sparql-tokens.ts'
-import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
+import { owningFocus } from '../rdf.ts'
+import { matchTokens } from '../sparql-tokens.ts'
+import type { Token } from '../turtle.ts'
+import { section, topNode } from './turtle.ts'
+import { componentOf, shownNode } from './markup.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
-import { labelOf as textLabelOf, text, declaredPrefixes, fnv, named, rdfList, str } from './util.ts'
+import { labelOf as textLabelOf, text, named, rdfList, str } from './util.ts'
 import { md5Key } from './data.ts'
+import { formatNumber } from '../../rdf-engine/host/intl.ts'
+
+const SH_PREFIX = NS.sh + 'prefix'
+const SH_NAMESPACE = NS.sh + 'namespace'
 
 const C_GRAPH_MARK = NS.c + 'GraphMark'
 const C_ACTIVE = NS.c + 'active'
@@ -44,14 +48,18 @@ const card: FnRule = (ctx, focus) => {
   const label = text(ctx, focus, C.label)
   const badge = text(ctx, focus, C.badge)
   const note = text(ctx, focus, C.note)
+  const href = (ctx.object(focus, NAV_HREF) ?? ctx.object(focus, C_HREF))?.value
   const content = ctx.object(focus, C.content)
   const actions = rdfList(ctx, ctx.object(focus, C.actions)).filter(named)
   if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `── ${label ?? ''} ──`)]), ...(named(content) ? [content] : [])]))
+    o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `── ${label ?? ''} ──${href !== undefined ? ` <${href}>` : ''}`)]), ...(named(content) ? [content] : [])]))
     return o.quads
   }
   const head: NamedNode[] = []
-  if (label) head.push(o.el('title', 'H2', {}, [o.text('title-text', label)]))
+  if (label) {
+    const title = o.text('title-text', label)
+    head.push(o.el('title', 'H2', {}, [href !== undefined ? o.el('title-link', 'A', { href }, [title]) : title]))
+  }
   if (badge) head.push(o.el('badge', 'Span', { class: 'sem-badge' }, [o.text('badge-text', badge)]))
   if (actions.length) head.push(o.el('actions', 'Div', { class: 'sem-actions' }, actions))
   if (note) head.push(o.el('note', 'P', {}, [o.text('note-text', note)]))
@@ -152,10 +160,28 @@ const emblem: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** An IRI as prefix:local when a declared prefix fits, else its last segments. */
+/**
+ * An IRI as prefix:local by the longest declared namespace it starts with (sh:prefix; the least prefix
+ * of equals), the local part percent-decoded, else its last 46 characters: as c:MetricsRendering-sparql.
+ */
 function compact(ctx: RuleContext, iri: string): string {
-  for (const [p, ns] of Object.entries(declaredPrefixes(ctx))) if (iri.startsWith(ns)) return `${p}:${decodeURIComponent(iri.slice(ns.length))}`
-  return iri.length > 48 ? '…' + iri.slice(-46) : iri
+  const declared = ctx.memo('metrics:declarations', () =>
+    ctx.untraced(() =>
+      ctx.match(null, SH_PREFIX, null).flatMap((q) => ctx.objects(q.subject, SH_NAMESPACE).map((ns) => ({ prefix: q.object.value, ns: ns.value }))),
+    ),
+  )
+  let best: { prefix: string; ns: string } | undefined
+  for (const d of declared)
+    if (iri.startsWith(d.ns) && (!best || d.ns.length > best.ns.length || (d.ns.length === best.ns.length && d.prefix < best.prefix))) best = d
+  if (best) {
+    const local = iri.slice(best.ns.length)
+    let decoded = local
+    try {
+      decoded = decodeURIComponent(local)
+    } catch {}
+    return `${best.prefix}:${decoded}`
+  }
+  return [...iri].length > 48 ? '…' + [...iri].slice(-46).join('') : iri
 }
 
 // --- Metrics and Toggle --------------------------------------------------------------------
@@ -163,19 +189,20 @@ function compact(ctx: RuleContext, iri: string): string {
 const metrics: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const of = ctx.object(focus, C.of)
-  const fields = rdfList(ctx, ctx.object(focus, C.fields)).filter(named)
+  const fields = rdfList(ctx, ctx.object(focus, C.fields))
   if (!of) return []
   const chips = fields.flatMap((p, i) => {
+    if (!named(p)) return []
     const v = ctx.object(of, p)
     if (!v) return []
     const unit = text(ctx, p, C.unit)
     const value =
       v.termType === 'NamedNode'
         ? compact(ctx, v.value)
-        : v.termType === 'Literal' && /^-?\d+(\.\d+)?$/.test(v.value) && v.value.includes('.')
-          ? Number(v.value).toFixed(2)
+        : v.termType === 'Literal' && /^-?\d+\.\d+$/.test(v.value)
+          ? formatNumber(Number(v.value), 'en-US', 'minimumFractionDigits=2;maximumFractionDigits=2;useGrouping=false')
           : v.value
-    const label = text(ctx, p, RDFS_LABEL)
+    const label = text(ctx, p, RDFS_LABEL) || undefined
     // Presentation is declared on the property: c:emphasis, c:hideLabel.
     const emphasis = str(ctx.object(p, C.emphasis)) === 'true'
     const showLabel = label && str(ctx.object(p, C.hideLabel)) !== 'true'
@@ -183,10 +210,13 @@ const metrics: FnRule = (ctx, focus) => {
       o.el(`m${i}-v`, 'B', {}, [o.text(`m${i}-v-text`, unit ? `${value} ${unit}` : value)]),
       ...(showLabel ? [o.text(`m${i}-l`, label)] : []),
     ])
+    o.t(chip, SEM.orderKey, ctx.f.literal(String(i), ctx.nn(NS.xsd + 'integer')))
     if (label) o.tip(chip, label)
     return [chip]
   })
-  o.renders(o.el('root', 'Div', { hidden: chips.length ? undefined : '' }, chips))
+  const root = o.el('root', 'Div', { hidden: chips.length ? undefined : '' })
+  for (const chip of chips) o.t(root, H.hasChild, chip)
+  o.renders(root)
   return o.quads
 }
 
@@ -207,114 +237,101 @@ const toggle: FnRule = (ctx, focus) => {
 
 // --- Query views -----------------------------------------------------------------------------
 
-/**
- * Turtle tokens as RDF/HTML nodes. Nodes are keyed by the content of their line
- * (and position in it), not by their position in the document: when results
- * shift, unchanged lines keep their nodes and only what changed is written.
- */
-function turtleNodes(o: ReturnType<RuleContext['out']>, tokens: ReturnType<typeof turtleTokens>): NamedNode[] {
-  const lines: (typeof tokens)[] = [[]]
-  for (const t of tokens) {
-    lines[lines.length - 1]!.push(t)
-    if (t.kind === 'space' && t.text.includes('\n')) lines.push([])
-  }
-  const seen = new Map<string, number>()
-  const nodes: NamedNode[] = []
-  for (const line of lines) {
-    const text = line.map((t) => t.text).join('')
-    const n = seen.get(text) ?? 0
-    seen.set(text, n + 1)
-    const key = `${fnv(text)}${n ? '-' + n : ''}`
-    // Whitespace and punctuation merge into plain text runs; only colored tokens get spans.
-    let plain = ''
-    let j = 0
-    const flushPlain = () => {
-      if (plain) nodes.push(o.text(`l${key}-${j++}`, plain))
-      plain = ''
-    }
-    for (const t of line) {
-      if (t.kind === 'space' || t.kind === 'punct') {
-        plain += t.text
-        continue
-      }
-      flushPlain()
-      const id = `l${key}-${j++}`
-      nodes.push(o.el(id + 's', 'Span', { class: 'ttl-' + t.kind }, [o.text(id, t.text)]))
-    }
-    flushPlain()
-  }
-  return nodes
+/** A query view's queries in their list's order, each with its run (c:QueryViewRuns: iv:runOf it), if any. */
+function viewRuns(ctx: RuleContext, focus: NamedNode): { q: NamedNode; run?: Term }[] {
+  const runs = ctx.objects(focus, NS.iv + 'run')
+  return rdfList(ctx, ctx.object(focus, C.queries))
+    .filter(named)
+    .map((q) => ({ q, run: runs.find((r) => ctx.object(r, NS.iv + 'runOf')?.equals(q)) }))
 }
 
+const RS = NS.rs
+/** A run's rows as triples: (subject, predicate, object) of each solution. */
+function runTriples(ctx: RuleContext, run: Term): [Term, NamedNode, Term][] {
+  const out: [Term, NamedNode, Term][] = []
+  for (const r of ctx.objects(run, RS + 'solution')) {
+    const value = (v: string) => ctx.object(ctx.nn(r.value + '-' + v), RS + 'value')
+    const [s, p, o] = [value('subject'), value('predicate'), value('object')]
+    if (s && named(p) && o) out.push([s, p, o])
+  }
+  return out
+}
+
+/** Its element: the tokens' (turtle.ts) when its runs have triples, else a sentence. */
 const queryview: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const queries = rdfList(ctx, ctx.object(focus, C.queries)).filter(named)
-  const variable = str(ctx.object(focus, C.bindVariable))
-  const from = ctx.object(focus, C.bindFrom)
-  const property = ctx.object(focus, C.bindProperty)
-  const value = from && property ? ctx.object(from, property) : undefined
   const message = (text: string) => {
     o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text)]))
     return o.quads
   }
   if (!ctx.sparql) return message('This view runs SPARQL; choose a store with SPARQL (Semblance WASM, Semblance Rust, Oxigraph or Hybrid).')
+  const variable = str(ctx.object(focus, C.bindVariable))
+  const from = ctx.object(focus, C.bindFrom)
+  const property = ctx.object(focus, C.bindProperty)
+  const value = from && property ? ctx.object(from, property) : undefined
   if (variable && !named(value)) return message(text(ctx, focus, C.emptyText) ?? 'Nothing selected.')
-  const sections: TurtleSection[] = []
-  for (const q of queries) {
-    let query = str(ctx.object(q, SEM.construct)) ?? ''
-    if (variable && named(value)) query = query.replaceAll('$' + variable, `<${value.value}>`)
-    let quads: Quad[]
-    try {
-      quads = ctx.construct(query)
-    } catch (e) {
-      return message(`Query ${labelOf(ctx, q)} failed: ${(e as Error).message}`)
-    }
-    const orderBy = ctx.object(q, SEM.orderBy)
-    if (orderBy) {
-      const rank = new Map(quads.filter((x) => x.predicate.value === orderBy.value).map((x) => [x.subject.value, Number(x.object.value)]))
-      const sign = str(ctx.object(q, SEM.descending)) === 'true' ? -1 : 1
-      const order = (s: string) => (rank.has(s) ? rank.get(s)! * sign : -Infinity * sign)
-      quads = [...quads].sort((a, b) => order(a.subject.value) - order(b.subject.value))
-    }
-    if (quads.length) sections.push({ title: text(ctx, q, RDFS_LABEL), quads })
+  const runs = viewRuns(ctx, focus)
+  for (const { q, run } of runs) {
+    const error = run && ctx.object(run, NS.iv + 'error')
+    if (error) return message(`Query ${text(ctx, q, RDFS_LABEL) ?? q.value.replace(/^.*[#/]/, '')} failed: ${error.value}`)
   }
-  if (!sections.length) return message(text(ctx, focus, C.emptyText) ?? 'No results.')
-  const nodes = turtleNodes(o, turtleTokens(sections, declaredPrefixes(ctx), str(ctx.object(focus, C.baseIri))))
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, nodes))
+  if (!ctx.objects(focus, NS.iv + 'run').some((r) => ctx.objects(r, RS + 'solution').length)) return message(text(ctx, focus, C.emptyText) ?? 'No results.')
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }))
   return o.quads
 }
 
-/** The triples of a rendered element's subtree that the HTML index reads (no provenance, no input). */
-function renderedSubtree(ctx: RuleContext, start: NamedNode): Quad[] {
-  const html = (iri: string) => iri.startsWith(H.ns) || iri.startsWith(NS.svg) || iri.startsWith(NS.ord)
-  const keep = (q: Quad) => html(q.predicate.value) || q.predicate.value === SEM.renders || q.predicate.value === SEM.orderKey || q.predicate.value === SEM.slot || (q.predicate.value === RDF_TYPE && html(q.object.value))
-  const out: Quad[] = []
-  const seen = new Set<string>()
-  const queue: Term[] = [start]
-  while (queue.length) {
-    const n = queue.pop()!
-    if (seen.has(n.value)) continue
-    seen.add(n.value)
-    // A child that is a component stands for its rendered root.
-    for (const q of ctx.match(null, SEM.renders, n)) out.push(q), queue.push(q.subject)
-    for (const q of ctx.match(n, null, null)) {
-      if (!keep(q)) continue
-      out.push(q)
-      if ((q.predicate.value === H.hasChild || q.predicate.value === H.attribute) && named(q.object)) queue.push(q.object)
+/**
+ * What a query view prints: a section per query (by its place in the list, under its label) with the
+ * subjects of its run, by the query's sem:orderBy values, then IRI.
+ */
+const queryviewTurtle: FnRule = (ctx, focus) => {
+  const runs = viewRuns(ctx, focus)
+  // Nothing while it says something instead: a failed query, a bound variable without a value.
+  if (ctx.objects(focus, NS.iv + 'run').some((r) => ctx.object(r, NS.iv + 'error'))) return []
+  const from = ctx.object(focus, C.bindFrom)
+  const property = ctx.object(focus, C.bindProperty)
+  if (str(ctx.object(focus, C.bindVariable)) && !(from && property && named(ctx.object(from, property)))) return []
+  const o = ctx.out(focus)
+  const pointed = new Set(ctx.objects(focus, NS.iv + 'run').flatMap((r) => runTriples(ctx, r).flatMap(([, , x]) => (x.termType === 'BlankNode' ? [x.value] : []))))
+  runs.forEach(({ q, run }, i) => {
+    if (!run || ctx.object(run, NS.iv + 'error')) return
+    section(ctx, o, i, text(ctx, q, RDFS_LABEL))
+    const triples = runTriples(ctx, run)
+    const orderBy = ctx.object(q, SEM.orderBy)
+    const descending = str(ctx.object(q, SEM.descending)) === 'true'
+    const subjects = new Map<string, Term>()
+    for (const [s] of triples) if (!(s.termType === 'BlankNode' && pointed.has(s.value))) subjects.set(s.termType + s.value, s)
+    for (const s of subjects.values()) {
+      let rank: { missing: number; value: number; lexical?: string } | undefined
+      if (orderBy) {
+        const values = triples.filter(([x, p, v]) => x.equals(s) && p.equals(orderBy) && v.termType === 'Literal' && isNumericLiteral(v)).map(([, , v]) => v)
+        const least = values.sort((a, b) => Number(a.value) - Number(b.value))[0]
+        rank = least ? { missing: descending ? 0 : 1, value: 0, lexical: (descending ? '-n' : 'n') + least.value } : { missing: descending ? 1 : 0, value: 0 }
+      }
+      topNode(ctx, o, i, s, { rows: run, rank })
     }
-  }
-  return out
+  })
+  return o.quads
 }
 
-/** Source text as lines of tokens of the Turtle highlighter's kinds (Turtle and SPARQL share their lexical forms). */
-function sourceLines(text: string): { kind: Token['kind']; text: string }[][] {
+const NUMERIC = new Set(['integer', 'decimal', 'double', 'float', 'long', 'int', 'short', 'byte', 'nonNegativeInteger', 'positiveInteger', 'negativeInteger', 'nonPositiveInteger', 'unsignedLong', 'unsignedInt', 'unsignedShort', 'unsignedByte'].map((t) => NS.xsd + t))
+const isNumericLiteral = (v: Term) => v.termType === 'Literal' && NUMERIC.has(v.datatype.value)
+
+/**
+ * Source text as lines of tokens of the Turtle highlighter's kinds (Turtle and SPARQL share their
+ * lexical forms), each with where it starts (in code points, as c:SourceViewRendering-sparql keys
+ * them). A token over several lines (a long string) is cut at the line breaks, each piece keeping
+ * its kind.
+ */
+function sourceLines(text: string): { kind: Token['kind']; text: string; start: number }[][] {
   const kinds = { keyword: 'keyword', var: 'pname', string: 'literal', pname: 'pname', iri: 'iri', number: 'number', comment: 'comment', text: 'punct' } as const
-  const lines: { kind: Token['kind']; text: string }[][] = [[]]
-  for (const t of tokenizeSparql(text)) {
-    // A token over several lines (a long string) is cut at the line breaks, each piece keeping its kind.
+  const lines: { kind: Token['kind']; text: string; start: number }[][] = [[]]
+  for (const t of matchTokens(text)) {
+    let at = t.start
     t.text.split('\n').forEach((piece, i) => {
-      if (i > 0) lines.push([])
-      if (piece) lines[lines.length - 1]!.push({ kind: kinds[t.kind], text: piece })
+      if (i > 0) lines.push([]), at++
+      if (piece) lines[lines.length - 1]!.push({ kind: kinds[t.kind], text: piece, start: at })
+      at += [...piece].length
     })
   }
   return lines
@@ -344,12 +361,12 @@ const sourceView: FnRule = (ctx, focus) => {
     const toggles = o.el('fullscreen-toggles', 'Span', { class: 'sem-fullscreen-toggles' }, fullscreenToggles(ctx, o, focus))
     o.t(head, H.hasChild, toggles).t(pathEl, NS.ord + 'precedes', toggles)
   }
-  const lines = sourceLines(body.replace(/\s+$/, ''))
+  const lines = sourceLines(body.replace(/[ \t\n\r]+$/, ''))
   const number = (n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'integer'))
   const rows = lines.map((tokens, i) => {
     const key = `L${i + 1}`
     // Plain runs are text; colored tokens are spans. The line break belongs to the line it ends.
-    const parts = tokens.map((t, j) => (t.kind === 'punct' || t.kind === 'space' ? o.text(`${key}-${j}`, t.text) : o.el(`${key}-${j}s`, 'Span', { class: 'ttl-' + t.kind }, [o.text(`${key}-${j}`, t.text)])))
+    const parts = tokens.map((t) => (t.kind === 'punct' || t.kind === 'space' ? o.text(`${key}-${t.start}`, t.text) : o.el(`${key}-${t.start}`, 'Span', { class: 'ttl-' + t.kind }, [o.text(`${key}-${t.start}-text`, t.text)])))
     if (i < lines.length - 1) parts.push(o.text(`${key}-nl`, '\n'))
     const row = o.el(key, 'Span', { class: 'sem-line' }, parts)
     o.t(row, NS.c + 'line', number(i + 1))
@@ -359,47 +376,10 @@ const sourceView: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** HTML as tokens of the Turtle highlighter's kinds: tag names, attribute names, values; text plain. */
-function htmlTokens(markup: string): Token[] {
-  const out: Token[] = []
-  const t = (kind: Token['kind'], text: string) => text && out.push({ kind, text })
-  let i = 0
-  while (i < markup.length) {
-    if (markup[i] === '\n') {
-      const m = /^\n */.exec(markup.slice(i))![0]
-      t('space', m)
-      i += m.length
-    } else if (markup[i] === '<') {
-      const open = /^<\/?([A-Za-z][\w-]*)/.exec(markup.slice(i))
-      if (!open) {
-        t('punct', '<')
-        i++
-        continue
-      }
-      t('punct', open[0].slice(0, open[0].length - open[1]!.length))
-      t('keyword', open[1]!)
-      i += open[0].length
-      // Attributes up to the end of the tag.
-      for (let m; (m = /^(\s+)([^\s=>/]+)(?:(=)("[^"]*"))?/.exec(markup.slice(i))); i += m[0].length) {
-        t('punct', m[1]!)
-        t('pname', m[2]!)
-        if (m[3]) t('punct', m[3]), t('literal', m[4]!)
-      }
-      const close = /^\s*\/?>/.exec(markup.slice(i))?.[0] ?? ''
-      t('punct', close)
-      i += close.length || 1
-    } else {
-      const text = /^[^<\n]+/.exec(markup.slice(i))![0]
-      t('punct', text)
-      i += text.length
-    }
-  }
-  return out
-}
-
 /**
- * The bound element without its RDF/HTML encoding, while c:active: the component that rendered it
- * (the IRI before the node's first /~), as Turtle, and the HTML the element becomes.
+ * The bound element without its RDF/HTML encoding, while c:active: hidden while off, a sentence when
+ * bound to nothing, else the element the Turtle printer (the component, turtle.ts) and the markup
+ * blocks (the HTML, markup.ts) put their tokens in.
  */
 const elementMarkup: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
@@ -407,33 +387,21 @@ const elementMarkup: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', { hidden: '' }))
     return o.quads
   }
-  const from = ctx.object(focus, C.bindFrom)
-  const property = ctx.object(focus, C.bindProperty)
-  const node = from && property ? ctx.object(from, property) : undefined
-  if (!named(node)) {
+  if (!shownNode(ctx, focus)) {
     o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text(ctx, focus, C.emptyText) ?? 'Nothing selected.')]))
     return o.quads
   }
-  const at = node.value.indexOf(MINT_SEPARATOR)
-  const component = ctx.nn(at < 0 ? node.value : node.value.slice(0, at))
-  const seen = new Set<string>()
-  const own = ctx.match(component, null, null).filter((q) => {
-    const key = q.predicate.value + ' ' + q.object.value + ' ' + (q.object.termType === 'Literal' ? q.object.language + q.object.datatype.value : '')
-    if (q.predicate.value.startsWith(NS.prov) || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-  // Without the mark the inspector itself puts on what it inspects (c:Highlight).
-  const index = new HtmlIndex(() => {})
-  const quads = renderedSubtree(ctx, node)
-  const marks = new Set(quads.filter((q) => q.predicate.value === H.attributeName && q.object.value === 'data-sem-highlighted').map((q) => q.subject.value))
-  index.apply({ add: quads.filter((q) => !marks.has(q.subject.value) && !marks.has(q.object.value)), remove: [] })
-  const markup = toIndentedHTML(index, node.value)
-  const tokens: Token[] = [
-    ...(own.length ? turtleTokens([{ title: 'the component', quads: own }], declaredPrefixes(ctx), str(ctx.object(focus, C.baseIri))) : []),
-    ...(markup ? [...(own.length ? [{ kind: 'space' as const, text: '\n\n' }] : []), { kind: 'comment' as const, text: '# the element as HTML' }, { kind: 'space' as const, text: '\n' }, ...htmlTokens(markup)] : []),
-  ]
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle sem-markup' }, turtleNodes(o, tokens)))
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle sem-markup' }))
+  return o.quads
+}
+
+/** What an element markup prints as Turtle: the component that rendered the node, under "# the component". */
+const elementMarkupTurtle: FnRule = (ctx, focus) => {
+  const node = shownNode(ctx, focus)
+  if (!node) return []
+  const o = ctx.out(focus)
+  section(ctx, o, 0, 'the component')
+  topNode(ctx, o, 0, componentOf(ctx, node))
   return o.quads
 }
 
@@ -518,12 +486,22 @@ const streammembers: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** The element the Turtle printer puts the node's tokens in (turtle.ttl). */
 const triplesview: FnRule = (ctx, focus) => {
-  const subject = ctx.object(focus, C.of)
-  if (!named(subject)) return []
-  const quads = ctx.match(subject, null, null)
+  if (!ctx.objects(focus, C.of).some(named)) return []
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, turtleNodes(o, turtleTokens([{ quads }], declaredPrefixes(ctx), undefined, false))))
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }))
+  return o.quads
+}
+
+/** What a triples view prints: each node it is of at the top of its one section. */
+const triplesviewTurtle: FnRule = (ctx, focus) => {
+  // Every node it is of (an editor's clipboard prints several), each at the top of its one section.
+  const subjects = ctx.objects(focus, C.of).filter(named)
+  if (!subjects.length) return []
+  const o = ctx.out(focus)
+  for (const subject of subjects) topNode(ctx, o, 0, subject)
+  section(ctx, o, 0)
   return o.quads
 }
 
@@ -534,10 +512,15 @@ const switchCases: FnRule = (ctx, focus) => {
   const property = ctx.object(focus, C.property)
   const current = target && property ? ctx.object(target, property)?.value : undefined
   const o = ctx.out(focus)
+  // A hidden case holds its content only while the switch's retention policy or the case keeps it.
+  const every = ctx.object(focus, C.caseRetention)?.value === C.KeepEveryCase
   const cases = rdfList(ctx, ctx.object(focus, C.cases)).map((c, i) => {
     const content = ctx.object(c, C.content)
     const on = ctx.object(c, C.when)?.value === current
-    return o.el(`case-${i}`, 'Div', { hidden: on ? undefined : '' }, named(content) ? [content] : [])
+    const holds = on || every || ctx.object(c, C.keptHidden)?.value === 'true'
+    const el = o.el(`case-${i}`, 'Div', { hidden: on ? undefined : '' }, holds && named(content) ? [content] : [])
+    if (!holds && named(content)) o.t(el, SEM.setsAside, content)
+    return el
   })
   o.renders(o.el('root', 'Div', {}, cases))
   return o.quads
@@ -557,6 +540,7 @@ export const viewFunctions: Record<string, FnRule> = {
   graphmark,
   emblem,
   'element-markup': elementMarkup,
+  'element-markup:turtle': elementMarkupTurtle,
   'source-view': sourceView,
   metrics,
   toggle,
@@ -567,4 +551,6 @@ export const viewFunctions: Record<string, FnRule> = {
   hostslot,
   streammembers,
   triplesview,
+  'triplesview:turtle': triplesviewTurtle,
+  'queryview:turtle': queryviewTurtle,
 }

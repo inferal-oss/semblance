@@ -255,7 +255,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:TermAlignment ; sty:part ".sem-strength[data-sem-strength=equivalent]" ;
     sty:declares [ sty:property "background" ; sty:token tok:success-9 ] ,
                  [ sty:property "border-color" ; sty:raw "transparent" ] ,
-                 [ sty:property "color" ; sty:raw "white" ] .
+                 [ sty:property "color" ; sty:token tok:on-status ] .
 [] a sty:StyleRule ; sty:appliesTo c:TermAlignment ; sty:part ".sem-strength:is([data-sem-strength=narrower], [data-sem-strength=broader])" ;
     sty:declares [ sty:property "background" ; sty:token tok:info-3 ] ,
                  [ sty:property "border-color" ; sty:token tok:info-6 ] ,

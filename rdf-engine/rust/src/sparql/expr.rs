@@ -605,6 +605,16 @@ impl Ctx<'_> {
             return Err(());
         }
         let s = trim(&l.value);
+        // An integer or decimal is written from its lexical form, as WAT's $num_text: a valid one
+        // too wide for i128 or 18 fractional digits has a canonical text, though no native value.
+        if classify(&local) == Dt::String && matches!(src, Dt::Integer | Dt::Decimal) {
+            if !self.valid_numeric(v) {
+                return Err(());
+            }
+            let mut out = Vec::new();
+            num::write_lexical(&mut out, s);
+            return Ok(Val::Str(out, None));
+        }
         let n = self.num(v);
         let numeric_source = matches!(src, Dt::Integer | Dt::Decimal | Dt::Float | Dt::Double);
         if numeric_source && n.is_none() {
@@ -792,7 +802,7 @@ impl Ctx<'_> {
                 _ => {
                     self.str_check(&v[0])?;
                     let (s, l) = self.str_view(&v[0]);
-                    if l.is_some() {
+                    if l.is_some() || !iri::valid(s) {
                         return Err(());
                     }
                     let mut out = Vec::new();

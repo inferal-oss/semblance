@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
 import { loadStore } from '../src/node/load.ts'
-import { loadSite, renderSite } from '../src/node/site.ts'
-import { Navigation } from '../src/navigation.ts'
+import { loadSite, namedGraphs, renderSite } from '../src/node/site.ts'
+import { Navigation, setBase } from '../src/navigation.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toHTML } from '../src/render/serialize.ts'
@@ -12,7 +12,7 @@ import { exampleSpec, Sandboxes } from '../src/sandbox.ts'
 import { renderDocument } from '../src/server/document.ts'
 import { graphLanguages, renderToString } from '../src/server/render.ts'
 import type { GraphStore } from '../src/store/types.ts'
-import { takeOver } from '../src/web/takeover.ts'
+import { replayKept, takeOver } from '../src/web/takeover.ts'
 import { prepareSite, ROOT, siteLayers } from '../demo/site.ts'
 
 // Live examples rendered on the server (#220, docs/SSR.md): each one shown has its sandbox built at
@@ -29,8 +29,9 @@ const site = () => loadSite(new URL('semblance.config.ts', root).pathname)
 /** The site's client up to its first render, as demo/main.ts runs it (empty storage). */
 async function siteClient(url: string) {
   const s = await site()
-  const store = loadStore('wat', ...(await s.graphs()))
+  const store = loadStore('wat', ...Object.values(await namedGraphs(s)))
   s.setup?.(store, { single: false })
+  setBase(store, '/')
   const u = new URL(url, 'https://semblance.test/')
   await new Navigation(store, { root: ROOT, location: { pathname: u.pathname, search: u.search, hash: u.hash }, history: { pushState() {}, replaceState() {} }, events: new EventTarget(), links: new EventTarget() }).restore()
   prepareSite(store, { kind: 'wat', prefer: 'sparql', compile: 'off' })
@@ -40,9 +41,11 @@ async function siteClient(url: string) {
 }
 
 /** The client's live examples over `host` (its renderer's), built at once (the site defers them until seen). */
-function liveExamples(client: Awaited<ReturnType<typeof siteClient>>, renderer: DomRenderer) {
+function liveExamples(client: Awaited<ReturnType<typeof siteClient>>, renderer: DomRenderer, defer?: (slot: Element, build: () => void) => void, pace?: (mount: () => void) => void) {
   const sandboxes = new Sandboxes(client.runtime, client.screen, {
     renderer,
+    defer,
+    pace,
     shown: (c) => client.screen.index.isShown(c, new Set([renderer.rootFocus])),
     flush: () => flush(),
     load,
@@ -82,8 +85,9 @@ describe('live examples rendered on the server', () => {
 
   it('builds one sandbox per example shown, and lets each go once serialized', async () => {
     const s = await site()
-    const store = loadStore('wat', ...(await s.graphs()))
+    const store = loadStore('wat', ...Object.values(await namedGraphs(s)))
     s.setup?.(store, { single: false })
+    setBase(store, '/')
     const loaded: GraphStore[] = []
     const disposed = new Set<GraphStore>()
     const counted = (...t: string[]) => {
@@ -96,7 +100,8 @@ describe('live examples rendered on the server', () => {
     const r = await renderToString({ store, root: ROOT, url: '/docs/start/', prepare: s.prepare, layers: s.layers?.(store), styles: false, sandboxes: { load: counted } })
     const shown = (r.html.match(/<div data-sem-sandbox="ssr-\d+"/g) ?? []).length
     expect(shown).toBeGreaterThanOrEqual(3)
-    expect(loaded.length).toBe(shown)
+    // One store per example, and one of the ontology alone that the policy is read from.
+    expect(loaded.length).toBe(shown + 1)
     expect(loaded.every((st) => disposed.has(st))).toBe(true)
     r.runtime.dispose()
   })
@@ -137,6 +142,70 @@ describe('live examples rendered on the server', () => {
     sandboxes.dispose()
     server.runtime.dispose()
     client.runtime.dispose()
+  })
+
+  it("keeps what is done in the home page's todo before its sandbox runs, and does it then (#263)", async () => {
+    const server = await renderSite(await site(), '/')
+    const { host, window } = parsed(renderDocument(TEMPLATE, server, { stylesheet: { href: '/semblance.css' } }))
+    // The example's rendering is a region of its own to take over, after the page.
+    const served = host.querySelector('[data-sem-sandbox^="ssr-"]')!
+    expect(served.hasAttribute('data-sem-ssr')).toBe(true)
+    // The visitor ticks a todo, types one and adds it while the client loads (the capture script keeps each event).
+    const screen = host.querySelector('.sem-live-screen')!
+    const box = [...screen.querySelectorAll('li')].find((li) => li.textContent!.includes('Sketch'))!.querySelector('input')!
+    const field = screen.querySelector('input[type=text]') as HTMLInputElement
+    const add = [...screen.querySelectorAll('button')].find((b) => b.textContent === 'Add')!
+    const kept = (target: Element, type: string) => {
+      const e = new window.Event(type, { bubbles: true })
+      Object.defineProperty(e, 'target', { value: target })
+      return e
+    }
+    // Live form state, apart from the attributes as in a browser (linkedom's setters write the attributes).
+    Object.defineProperty(box, 'checked', { value: true, writable: true, configurable: true })
+    Object.defineProperty(field, 'value', { value: 'Ship it', writable: true, configurable: true })
+    let stopped = 0
+    const g = globalThis as { __semblanceKept?: { events: Event[]; stop(): void } }
+    g.__semblanceKept = { events: [kept(box, 'change'), kept(field, 'input'), kept(add, 'click')], stop: () => void stopped++ }
+    try {
+      // The page is taken over and replays what it kept: none of it is the page's, so all of it stays kept.
+      const client = await siteClient('/')
+      const renderer = new DomRenderer(client.screen.index, host, ROOT)
+      const page = takeOver(renderer)
+      expect(page.mismatches).toBe(0)
+      let build: (() => void) | undefined
+      let mount: (() => void) | undefined
+      const { sandboxes, flush } = liveExamples(client, renderer, (_slot, b) => void (build = b), (m) => void (mount = m))
+      flush()
+      expect(page.replay()).toBe(0)
+      expect(g.__semblanceKept?.events.length).toBe(3)
+      expect(stopped).toBe(0)
+      // The sandbox runs (in the site, once its graphs are here and it is seen): it takes its region over and does what was kept.
+      expect(build).toBeDefined()
+      build!()
+      // Built, and mounted in a task of its own (the site's pace): until then the region is the server's, and what was done stays kept.
+      expect(mount).toBeDefined()
+      expect(served.hasAttribute('data-sem-ssr')).toBe(true)
+      expect(g.__semblanceKept?.events.length).toBe(3)
+      expect(host.querySelector('[data-sem-c=live-example]')!.getAttribute('data-sem-state')).toBe('pending')
+      mount!()
+      expect(host.querySelector('[data-sem-c=live-example]')!.getAttribute('data-sem-state')).toBe('live')
+      expect(served.hasAttribute('data-sem-ssr')).toBe(false)
+      expect(g.__semblanceKept).toBeUndefined()
+      expect(stopped).toBe(1)
+      const text = host.querySelector('.sem-live-text')!.textContent!
+      expect(text).toContain('[x] Sketch the style layer')
+      expect(text).toContain('Ship it')
+      const f = client.store.factory
+      const sb = client.store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(NS.c + 'LiveExample')).map((q) => sandboxes.sandboxOf(q.subject.value)).find(Boolean)!
+      expect(sb.store.match(null, sb.store.factory.namedNode(NS.rdfs + 'label'), sb.store.factory.literal('Ship it'), sb.store.factory.defaultGraph()).length).toBe(1)
+      expect(host.querySelector('.sem-live-data [data-sem-change=added]')).not.toBeNull()
+      expect(replayKept(host)).toBe(0) // once
+      sandboxes.dispose()
+      client.runtime.dispose()
+    } finally {
+      g.__semblanceKept = undefined
+      server.runtime.dispose()
+    }
   })
 
   it.each(['/', '/docs/start/', '/docs/recipes/', '/ar/docs/styling/', '/uk/docs/views/'])('on %s, renders each pane as the client renders it', async (url) => {

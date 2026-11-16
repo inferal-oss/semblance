@@ -1,0 +1,24 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:diff-view a chg:Change ;
+    rdfs:label "A text diff view: c:DiffView over c:DiffLines"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/244> ;
+    chg:motivation """Apps showing changes to source or other ordered text had to build the signs, colours and
+accessible descriptions of a diff themselves; c:RdfEditor's statement diff is for RDF statements only.""" ;
+    chg:substance """New components. A c:DiffView renders its c:items, an RDF list of c:DiffLines, in order, as a
+role=list named by its c:label (or c:DiffViewPhrase, "Text changes"). A c:DiffLine renders its c:value, without a
+diff sign, in a code element after an aria-hidden sign (+, - or a space) chosen by its c:diffKind: c:DiffAdded,
+c:DiffRemoved or c:DiffContext (the default); its accessible name is the kind's label and the text, and
+data-sem-change (added, removed, context) carries the theme's colours. In Text each line is its sign and its
+text.""" ;
+    chg:forwardGuide """Nothing to move: the terms are new.""" ;
+    chg:backwardGuide """Going back, c:DiffView, c:DiffLine, c:diffKind and the c:DiffKind individuals are gone:
+remove them, or show the lines another way (a c:Code block).""" ;
+    chg:affects c:DiffView , c:DiffLine .

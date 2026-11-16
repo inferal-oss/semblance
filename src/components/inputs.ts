@@ -2,7 +2,7 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
-import { BEH, C, MOD, NS, RDF_TYPE, RDFS_RANGE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN } from '../ns.ts'
+import { BEH, C, LC, MOD, NS, RDF_TYPE, RDFS_RANGE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { mint } from '../rdf.ts'
 import type { Delta } from '../rdf.ts'
 import { flip, hitToggles } from './actions.ts'
@@ -96,8 +96,10 @@ const textArea: FnRule = (ctx, focus) => {
     },
     [o.text('input-text', value)],
   )
+  const labelEl = label !== undefined ? o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)]) : undefined
+  if (labelEl) o.t(labelEl, LC.role, ctx.nn(LC.FieldLabel))
   const parts = [
-    ...(label !== undefined ? [o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)])] : []),
+    ...(labelEl ? [labelEl] : []),
     input,
     ...describe(ctx, o, focus, input),
   ]
@@ -304,7 +306,9 @@ const field: FnRule = (ctx, focus) => {
   const parts: NamedNode[] = []
   if (label !== undefined) {
     const forId = content && part ? mint(content.value, part) : undefined
-    parts.push(o.el('label', forId ? 'Label' : 'Div', { id: labelId, for: forId, class: 'sem-field-label' }, [o.text('label-text', label)]))
+    const labelEl = o.el('label', forId ? 'Label' : 'Div', { id: labelId, for: forId, class: 'sem-field-label' }, [o.text('label-text', label)])
+    o.t(labelEl, LC.role, ctx.nn(LC.FieldLabel))
+    parts.push(labelEl)
   }
   parts.push(...inner)
   // Decorate the content's labelable part (or its root) unless it already carries its own.

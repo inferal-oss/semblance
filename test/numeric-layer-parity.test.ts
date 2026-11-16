@@ -61,11 +61,12 @@ function storedShapeOracle(kind: typeof stores[number], store: GraphStore, entry
 }
 
 describe.each(stores)('%s numeric layer twins', kind => {
-  it('rejects nonfinite numeric field input in plain and controlled branches, preserving finite wide input', () => {
+  // A field's text must be in the datatype's lexical form (#337): no exponent, no special values.
+  it('rejects nonfinite and non-lexical numeric field input in plain and controlled branches, preserving finite wide input', () => {
     const cases: { id: string; datatype: string; lexical: string; invalid: boolean }[] = []
     for (const datatype of ['integer', 'decimal']) {
-      for (const lexical of ['NaN', 'INF', '+INF', '-INF', 'Infinity', '1e999999', '-1e999999', '0x10', '\u00a01', '1\u00a0', '1\u00a00']) cases.push({ id: 'field-' + cases.length, datatype, lexical, invalid: true })
-      for (const lexical of ['-0', '1e2', '9'.repeat(100), ' \t1\r\n ']) cases.push({ id: 'field-' + cases.length, datatype, lexical, invalid: false })
+      for (const lexical of ['NaN', 'INF', '+INF', '-INF', 'Infinity', '1e2', '1e999999', '-1e999999', '0x10', '\u00a01', '1\u00a0', '1\u00a00']) cases.push({ id: 'field-' + cases.length, datatype, lexical, invalid: true })
+      for (const lexical of ['-0', '9'.repeat(100), ' \t1\r\n ']) cases.push({ id: 'field-' + cases.length, datatype, lexical, invalid: false })
       cases.push({ id: 'field-' + cases.length, datatype, lexical: '0.' + '0'.repeat(80) + '1', invalid: datatype === 'integer' })
     }
     const roots: string[] = []

@@ -446,7 +446,8 @@
       (if (i32.eqz (call $concat_parts (local.get $a) (local.get $row))) (then
         (global.set $base_p (i32.load offset=108 (global.get $q)))
         (global.set $base_n (i32.load offset=112 (global.get $q)))
-        (local.set $x (call $iri_ref (call $xb_ptr) (call $xb_n)))))
+        (if (call $iri_valid (call $xb_ptr) (call $xb_n))
+          (then (local.set $x (call $iri_ref (call $xb_ptr) (call $xb_n)))))))
       (call $xb_close (local.get $p))
       (return (local.get $x))))))
   (if (i32.and (i32.eq (local.get $f) (i32.const F_CAST)) (i32.eq (local.get $argc) (i32.const 1))) (then
@@ -541,6 +542,7 @@
   (if (i32.or (i32.eq (local.get $f) (i32.const F_IRI)) (i32.eq (local.get $f) (i32.const F_URI))) (then
     (if (i32.eq (call $kind (local.get $a)) (i32.const 1)) (then (return (local.get $a))))
     (if (i32.eqz (call $is_plain (local.get $a))) (then (return (i32.const 0))))
+    (if (i32.eqz (call $iri_valid (call $tval (local.get $a)) (call $tlen (local.get $a)))) (then (return (i32.const 0))))
     (global.set $base_p (i32.load offset=108 (global.get $q)))
     (global.set $base_n (i32.load offset=112 (global.get $q)))
     (return (call $iri_ref (call $tval (local.get $a)) (call $tlen (local.get $a))))))

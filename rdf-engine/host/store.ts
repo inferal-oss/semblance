@@ -4,8 +4,9 @@
 // factories are looked up by value. In idle time (`maintain`) the engine frees
 // terms nothing uses any more; the adapter then forgets their ids.
 import type { DefaultGraph, Literal, NamedNode, Quad, Term } from '@rdfjs/types'
-import type { Factory, GraphStore } from '../../src/store/types.ts'
+import type { Factory, GraphStore, QueryAnswer } from '../../src/store/types.ts'
 import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } from './engine.ts'
+import { narrowPolicy, withFetching, type FetchPolicy } from './fetching.ts'
 
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
 
@@ -83,6 +84,8 @@ export type EngineStore = GraphStore & {
   setDeadline(at: number | undefined): void
   /** A step budget for each query, as setDeadline (undefined: unlimited). */
   setFuel(steps: number | undefined): void
+  update: NonNullable<GraphStore['update']>
+  setFetchPolicy: NonNullable<GraphStore['setFetchPolicy']>
   /** The engine itself and term ids, for measurements that bypass the adapter. */
   engine: Engine
   idOf(t: Term): number
@@ -98,7 +101,12 @@ export interface EngineStoreOptions {
   compile?: number | 'idle'
   /** The time zone `sx:formatDateTime` uses when its options name none (default: the host's own). */
   timeZone?: string
+  /** What `query` and `update` may fetch for SERVICE and LOAD (docs/FETCHING.md; default: nothing). setFetchPolicy replaces it. */
+  fetchPolicy?: FetchPolicy
 }
+
+/** The host's policy as it is now: later changes to the object it gave do not reach the store. */
+const snapshot = (p: FetchPolicy | undefined): FetchPolicy => (p ? { ...p, endpoints: { ...p.endpoints }, documents: { ...p.documents } } : {})
 
 /** Called with every engine store made (benchmarks use it to watch queries). */
 export const engineStoreHooks: { created?: (store: EngineStore) => void } = {}
@@ -313,6 +321,79 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     liveAfterCollect = e.termCount()
   }
 
+  // --- SERVICE and LOAD (ABI.md, "Optional: fetching") ---------------------------------
+
+  /** Fetching operations in flight: the engine's request table is theirs, and nothing is collected. */
+  let fetchingOps = 0
+  let deadline: number | undefined
+  /** Fetching operations run one at a time: they share the engine's request table. */
+  let queue: Promise<unknown> = Promise.resolve()
+  /** A synchronous call (a rule's, a view's) that would fetch is refused, and fetches nothing. */
+  function sync<T>(f: () => T): T {
+    try {
+      return f()
+    } catch (err) {
+      if (!(err instanceof EngineError && err.waiting)) throw err
+      if (!fetchingOps) e.fetchClear()
+      throw new Error('SERVICE and LOAD reach the network: only store.query and store.update run them (docs/FETCHING.md); rules, views and reactions cannot')
+    }
+  }
+  function selectRows(query: string, graphs: Term[], r = prepare(query).run(graphIds(graphs))) {
+    // An ASK answers true or false, as Oxigraph's query does.
+    if (r.form === Form.Ask) return r.value as never
+    if (r.form !== Form.Select) throw new Error('not a SELECT query')
+    const out: Map<string, Term>[] = []
+    const width = r.vars.length
+    if (!width) return Array.from({ length: r.count }, () => new Map<string, Term>())
+    for (let i = 0; i < r.rows.length; i += width) {
+      const m = new Map<string, Term>()
+      for (let k = 0; k < width; k++) if (r.rows[i + k]) m.set(r.vars[k]!, termOf(r.rows[i + k]!))
+      out.push(m)
+    }
+    return out
+  }
+  /** The host's fetch policy: what `query` and `update` may reach. */
+  let fetchPolicy = snapshot(options.fetchPolicy)
+  /**
+   * `attempt` with every SERVICE and LOAD answered under the store's policy (narrowed by the call's,
+   * as it is now: a replacement after the call does not change it), after the operations before it.
+   */
+  function fetchingOp<T>(call: FetchPolicy | undefined, attempt: () => T): Promise<T> {
+    if (!sparql) return Promise.reject(new Error(`The ${kind} store has no SPARQL engine yet`))
+    let policy: FetchPolicy
+    try {
+      policy = narrowPolicy(fetchPolicy, call)
+    } catch (err) {
+      return Promise.reject(err)
+    }
+    const op = queue.then(async () => {
+      fetchingOps++
+      const round = () => {
+        // Each round within the operation's deadline, then the store's own again.
+        e.setDeadline(policy.deadline ?? deadline)
+        try {
+          return attempt()
+        } finally {
+          e.setDeadline(deadline)
+        }
+      }
+      try {
+        // A build without fetching answers what needs nothing fetched, and refuses the rest.
+        return e.fetches ? await withFetching(e, policy, round) : sync(round)
+      } finally {
+        fetchingOps--
+      }
+    })
+    queue = op.catch(() => {})
+    return op
+  }
+  /** A query's answer, by its form. */
+  function answer(query: string, graphs: Term[]): QueryAnswer {
+    const r = prepare(query).run(graphIds(graphs))
+    if (r.form === Form.Construct || r.form === Form.Describe) return triplesOf(r)
+    return selectRows(query, graphs, r)
+  }
+
   const factory: Factory = {
     namedNode,
     literal: literal as Factory['literal'],
@@ -325,6 +406,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     factory,
     sparql,
     extensions: e.extensions,
+    timeZone: options.timeZone,
     crossGraphMatch: true,
     add(q) {
       e.add(idOf(q.subject, true), idOf(q.predicate, true), idOf(q.object, true), idOf(q.graph, true))
@@ -355,19 +437,32 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       for (let i = 0, k = 0; i < r.length; i += 4, k++) out[k] = quad(termOf(r[i]!), termOf(r[i + 1]!), termOf(r[i + 2]!), termOf(r[i + 3]!))
       return out
     },
+    matchBatch(patterns) {
+      // One crossing for the patterns whose bound terms the engine knows (any other matches nothing).
+      const ids: number[] = []
+      const asked: number[] = []
+      patterns.forEach(([s, p, o, g], i) => {
+        const a = s ? known(s) : 0
+        const b = p ? known(p) : 0
+        const c = o ? known(o) : 0
+        const d = g ? known(g) : 0
+        if ((s && !a) || (p && !b) || (o && !c) || (g && !d)) return
+        ids.push(a, b, c, d)
+        asked.push(i)
+      })
+      const out: Quad[][] = patterns.map(() => [])
+      if (!asked.length) return out
+      const found = e.matchBatch(ids)
+      asked.forEach((i, k) => {
+        const r = found[k]!
+        const qs: Quad[] = (out[i] = new Array(r.length / 4))
+        for (let j = 0, n = 0; j < r.length; j += 4, n++) qs[n] = quad(termOf(r[j]!), termOf(r[j + 1]!), termOf(r[j + 2]!), termOf(r[j + 3]!))
+      })
+      return out
+    },
     select(query, graphs) {
       if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet`)
-      const r = prepare(query).run(graphIds(graphs as Term[]))
-      if (r.form !== Form.Select) throw new Error('not a SELECT query')
-      const out: Map<string, Term>[] = []
-      const width = r.vars.length
-      if (!width) return Array.from({ length: r.count }, () => new Map<string, Term>())
-      for (let i = 0; i < r.rows.length; i += width) {
-        const m = new Map<string, Term>()
-        for (let k = 0; k < width; k++) if (r.rows[i + k]) m.set(r.vars[k]!, termOf(r.rows[i + k]!))
-        out.push(m)
-      }
-      return out
+      return sync(() => selectRows(query, graphs as Term[]))
     },
     constructFor(query, variable, values, graphs) {
       const q = prepare(query)
@@ -379,18 +474,74 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       if (!ids.length) return []
       q.bindValues(variable, ids)
       try {
-        return triplesOf(q.run(graphIds(graphs as Term[])))
+        return sync(() => triplesOf(q.run(graphIds(graphs as Term[]))))
       } finally {
         q.bindValues(variable, [])
       }
     },
     construct(query, graphs) {
       if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet; use function rules (prefer: "function")`)
-      return triplesOf(prepare(query).run(graphIds(graphs as Term[])))
+      return sync(() => triplesOf(prepare(query).run(graphIds(graphs as Term[]))))
+    },
+    query(query, opts = {}) {
+      return fetchingOp(opts.policy, () => answer(query, (opts.graphs ?? []) as Term[])) as never
+    },
+    update(text, opts = {}) {
+      return fetchingOp(opts.policy, () => {
+        e.update(text)
+        // IRIs it added may be ones looked up as unknown before.
+        unknown.clear()
+      })
+    },
+    setFetchPolicy(policy) {
+      fetchPolicy = snapshot(policy)
     },
     loadTurtle(text) {
       unknown.clear()
       e.load(Format.Turtle, text)
+    },
+    loadJelly(bytes, graph) {
+      unknown.clear()
+      return e.loadBytes(Format.Jelly, bytes, graph ? idOf(graph, true) : DEFAULT_GRAPH)
+    },
+    jellyReader(graph) {
+      const r = e.jellyReader(graph ? idOf(graph, true) : DEFAULT_GRAPH)
+      return {
+        frame(bytes) {
+          unknown.clear()
+          return r.add(bytes)
+        },
+        end: () => (r.finish(), r.release()),
+      }
+    },
+    *jellyFrames(graph, options = {}) {
+      const g = graph ? idOf(graph, false) : 0
+      // The ids are read at once (the store holds them anyway); the frames are written a batch at a time.
+      const ids = graph && !g ? new Uint32Array(0) : e.match(0, 0, 0, g)
+      const w = e.jellyWriter({ ...options, physical: 2 })
+      const step = 4 * (options.frameRows ?? 4096)
+      try {
+        for (let i = 0; i < ids.length; i += step) {
+          const out = w.write(ids.subarray(i, i + step))
+          if (out.length) yield out
+        }
+        yield w.flush()
+      } finally {
+        w.release()
+      }
+    },
+    dumpJelly(graph, options = {}) {
+      const g = graph ? idOf(graph, false) : 0
+      const w = e.jellyWriter({ ...options, physical: 2 })
+      try {
+        const parts = [graph && !g ? new Uint8Array(0) : w.write(e.match(0, 0, 0, g)), w.flush()]
+        const out = new Uint8Array(parts[0]!.length + parts[1]!.length)
+        out.set(parts[0]!)
+        out.set(parts[1]!, parts[0]!.length)
+        return out
+      } finally {
+        w.release()
+      }
     },
     termCount: () => e.termCount(),
     size: () => e.quadCount(),
@@ -404,14 +555,15 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       unknown.clear()
       e.dispose()
     },
-    setDeadline: (at) => e.setDeadline(at),
+    setDeadline: (at) => e.setDeadline((deadline = at)),
     setFuel: (steps) => e.setFuel(steps),
     engine: e,
     idOf: (t) => idOf(t, false),
     maintain(budgetMs) {
       const t0 = performance.now()
       // Collect once the dictionary has grown by half since the last collection.
-      if (e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
+      // Not while a fetch is in flight: its answers' terms are in the engine's request table.
+      if (!fetchingOps && e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
       // What time is left compiles the queries that have run most (compiled: 'idle').
       return e.compileIdle(budgetMs - (performance.now() - t0))
     },

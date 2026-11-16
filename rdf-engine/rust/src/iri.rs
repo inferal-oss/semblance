@@ -1,4 +1,4 @@
-//! Relative IRI resolution (RFC 3986, section 5.2).
+//! Relative IRI resolution (RFC 3986, section 5.2), and what an IRI may be.
 
 use alloc::vec::Vec;
 
@@ -122,4 +122,119 @@ pub fn resolve(base: &[u8], r: &[u8], out: &mut Vec<u8>) {
         out.push(b'#');
         out.extend_from_slice(f);
     }
+}
+
+/// The bytes IRIREF excludes: controls, space, `<>"{}|^`\`.
+pub fn bad_char(c: u8) -> bool {
+    c <= 0x20 || b"<>\"{}|^`\\".contains(&c)
+}
+
+/// The bytes [`valid`] looks at beyond the excluded ones: `# % / : ? [ ]`.
+pub fn special(c: u8) -> bool {
+    b"#%/:?[]".contains(&c)
+}
+
+/// Whether `s`, an IRI reference as written (escapes decoded, not resolved),
+/// is one the engine accepts: no byte IRIREF excludes, and the cheap parts of
+/// RFC 3987 the IRIREF grammar leaves out: '%' starts two hex digits; a
+/// reference without a scheme has no ':' in its first segment; one '#' at
+/// most; an authority is [userinfo '@'] host [':' digits] where the host may
+/// be an IP literal in '[' ']', and brackets appear nowhere else. The store
+/// API, the Turtle family, SPARQL and `IRI()` all hold IRIs to this, so the
+/// store never holds an IRI that query text cannot write (#311).
+pub fn valid(s: &[u8]) -> bool {
+    if s.iter().any(|&c| bad_char(c)) {
+        return false;
+    }
+    let e = s.len();
+    let scheme = scheme_len(s);
+    let mut seg = scheme == 0; // in the first segment of a scheme-less reference
+    let auth = if scheme > 0 { scheme + 1 } else { 0 };
+    let mut auth_end = auth;
+    if s[auth..].starts_with(b"//") {
+        seg = false;
+        let mut i = auth + 2;
+        let mut h = i;
+        let (mut lit, mut close, mut colon) = (false, None, None);
+        while i < e && !b"/?#".contains(&s[i]) {
+            match s[i] {
+                b'@' => {
+                    // that was userinfo: the host starts after it
+                    if lit || close.is_some() {
+                        return false;
+                    }
+                    h = i + 1;
+                    colon = None;
+                }
+                b'[' => {
+                    if i != h {
+                        return false;
+                    }
+                    lit = true;
+                }
+                b']' => {
+                    if !lit {
+                        return false;
+                    }
+                    lit = false;
+                    close = Some(i + 1);
+                }
+                b':' if !lit && colon.is_none() => colon = Some(i),
+                _ => {}
+            }
+            i += 1;
+        }
+        auth_end = i;
+        if lit {
+            return false;
+        }
+        // after an IP literal comes the end of the authority or the port
+        if close.is_some_and(|c| c != auth_end && Some(c) != colon) {
+            return false;
+        }
+        if colon.is_some_and(|c| !s[c + 1..auth_end].iter().all(u8::is_ascii_digit)) {
+            return false;
+        }
+    }
+    let mut frag = false;
+    for (i, &c) in s.iter().enumerate().skip(auth) {
+        if !special(c) {
+            continue;
+        }
+        match c {
+            b'%' => {
+                if i + 2 >= e || !s[i + 1].is_ascii_hexdigit() || !s[i + 2].is_ascii_hexdigit() {
+                    return false;
+                }
+            }
+            b'#' => {
+                if frag {
+                    return false;
+                }
+                frag = true;
+            }
+            b':' if seg => return false,
+            b'[' | b']' if i >= auth_end => return false,
+            _ => {}
+        }
+        seg = seg && !b"/?#".contains(&c);
+    }
+    true
+}
+
+/// The length of the scheme of `s` (ALPHA *(ALPHA / DIGIT / "+" / "-" / ".")
+/// then ':'), or 0.
+fn scheme_len(s: &[u8]) -> usize {
+    match s.first() {
+        Some(c) if c.is_ascii_alphabetic() => {}
+        _ => return 0,
+    }
+    for (i, &c) in s.iter().enumerate().skip(1) {
+        match c {
+            b':' => return i,
+            c if c.is_ascii_alphanumeric() || b"+-.".contains(&c) => {}
+            _ => return 0,
+        }
+    }
+    0
 }

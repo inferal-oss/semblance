@@ -20,8 +20,8 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
-ui:gallery-data-intro a c:Heading ; c:label "Data" .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-area ui:dt-columns ui:dt-scatter ui:dt-pie ui:dt-histogram ui:dt-sparkline ui:dt-boxplot ui:dt-axes ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+ui:gallery-data-intro a c:Heading ; c:label "Data" , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
 
@@ -48,7 +48,7 @@ ui:dt-table-component a c:Table ; c:label "Component classes" ; c:query ui:q-com
     c:sortColumn ui:dt-col-renderings ; c:sortDescending true ;
     c:emptyText "No component classes found." .
 ui:dt-table a c:Flippable ; c:front ui:dt-table-spec .
-ui:dt-table-spec a c:Specimen ; c:demonstrates c:Table ; c:label "Table" ;
+ui:dt-table-spec a c:Specimen ; c:demonstrates c:Table ; c:label "Table" , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar ;
     c:help "Rows from a SPARQL SELECT over this project's ontology: every component class, what it extends, and how many renderings and reactions it has. Click a header to sort (again to reverse); the sort is graph state on the table." ;
     c:children ( ui:dt-table-component ) .
 
@@ -63,7 +63,7 @@ ui:dt-stat-runs a c:Stat ; c:label "Rule runs per toggle" ; c:value 3 ; c:delta 
 ui:dt-stat-bundle a c:Stat ; c:label "Single-file build" ; c:value 6.1 ; c:unit "MB" ;
     c:delta 4.2 ; c:deltaUnit "%" ; c:lowerIsBetter true ; c:help "dist-single/semblance.html" .
 ui:dt-stats a c:Flippable ; c:front ui:dt-stats-spec .
-ui:dt-stats-spec a c:Specimen ; c:demonstrates c:Stat ; c:label "Stat" ;
+ui:dt-stats-spec a c:Specimen ; c:demonstrates c:Stat ; c:label "Stat" , "Показник"@uk , "Kennzahl"@de , "إحصائية"@ar ;
     c:help "A key figure with its unit and a signed change. The trend is toned good or bad; c:lowerIsBetter flips which, for costs like latency or size." ;
     c:children ( ui:dt-stat-toggle ui:dt-stat-members ui:dt-stat-runs ui:dt-stat-bundle ) .
 
@@ -81,7 +81,7 @@ SELECT ?value ?tone WHERE {
 ui:dt-formula-classes a c:Stat ; c:label "Component classes" ; c:valueQuery ui:q-component-count ; c:help "COUNT over the ontology." .
 ui:dt-formula-quiet a c:Stat ; c:label "Without reactions" ; c:valueQuery ui:q-reactionless ; c:help "Toned by the query (?tone)." .
 ui:dt-formula a c:Flippable ; c:front ui:dt-formula-spec .
-ui:dt-formula-spec a c:Specimen ; c:demonstrates c:Stat ; c:label "Formula (c:valueQuery)" ;
+ui:dt-formula-spec a c:Specimen ; c:demonstrates c:Stat ; c:label "Formula (c:valueQuery)" , "Формула (c:valueQuery)"@uk , "Formel (c:valueQuery)"@de , "صيغة (c:valueQuery)"@ar ;
     c:help "Any component's value may be a SELECT: the first row's ?value becomes its c:value, and ?tone its tone. It re-runs when its c:dataset changes; these count this project's own component classes." ;
     c:children ( ui:dt-formula-classes ui:dt-formula-quiet ) .
 
@@ -92,7 +92,7 @@ ui:dt-money-uah a c:Money ; c:value 52990 ; c:currency "UAH" .
 ui:dt-money-usd a c:Money ; c:value 19.99 ; c:currency "USD" .
 ui:dt-money-jpy a c:Money ; c:value 4800 ; c:currency "JPY" .
 ui:dt-money a c:Flippable ; c:front ui:dt-money-spec .
-ui:dt-money-spec a c:Specimen ; c:demonstrates c:Money ; c:label "Money" ;
+ui:dt-money-spec a c:Specimen ; c:demonstrates c:Money ; c:label "Money" , "Гроші"@uk , "Geld"@de , "المال"@ar ;
     c:help "An amount and an ISO 4217 currency, formatted for the viewer's locale: switch the language in the display settings and the grouping, decimals and symbol follow. The <data> element keeps the machine-readable amount." ;
     c:children ( ui:dt-money-eur ui:dt-money-uah ui:dt-money-usd ui:dt-money-jpy ) .
 
@@ -104,16 +104,19 @@ ui:StageReview a ui:Stage ; rdfs:label "Review" ; sem:order 2 .
 ui:StageShipped a ui:Stage ; rdfs:label "Shipped" ; sem:order 3 .
 ui:ReviewLimit a sh:NodeShape ; sh:targetNode ui:StageReview ;
     sh:property [ sh:path [ sh:inversePath ui:stage ] ; sh:maxCount 2 ] .
-ui:dt-change-1 rdfs:label "Formula rule" ; ui:stage ui:StageShipped ; ui:by "Ada Lovelace" ; ui:order 1 .
+ui:dt-change-1 rdfs:label "Formula rule" ; ui:stage ui:StageShipped ; ui:by "Ada Lovelace" ; ui:order 1 ; ui:released true .
 ui:dt-change-2 rdfs:label "Money component" ; ui:stage ui:StageReview ; ui:by "Grace Hopper" ; ui:order 2 .
 ui:dt-change-3 rdfs:label "Board lanes" ; ui:stage ui:StageReview ; ui:by "Alan Kay" ; ui:order 3 .
-ui:dt-change-4 rdfs:label "Board keyboard moves" ; ui:stage ui:StageBuild ; ui:by "Barbara Liskov" ; ui:order 4 .
+ui:dt-change-4 rdfs:label "Board keyboard moves" ; ui:stage ui:StageBuild ; ui:by "Barbara Liskov" ; ui:order 4 ;
+    ui:changePage "/docs/components/" ; ui:changeDetail ui:dt-change-4-detail .
+ui:dt-change-4-detail a c:Text ; sty:textStyle sty:Caption ; c:label "Arrow keys move a focused card between lanes." .
 ui:dt-board-pipeline a c:Board ; c:label "Release pipeline" ;
     c:property ui:stage ; c:cardTitle rdfs:label ; c:cardPerson ui:by ; c:cardOrder ui:order ;
+    c:cardHref ui:changePage ; c:cardContent ui:changeDetail ; c:cardLocked ui:released ;
     c:card ui:dt-change-1 , ui:dt-change-2 , ui:dt-change-3 , ui:dt-change-4 .
 ui:dt-board a c:Flippable ; c:front ui:dt-board-spec .
-ui:dt-board-spec a c:Specimen ; c:demonstrates c:Board , c:BoardCard ; c:label "Board" ;
-    c:help "Items in lanes: the lanes are the range of c:property (here ui:stage), each item goes where its value points. Move a card with its arrows, or focus it and use ← →. Review is limited to two by a SHACL shape (sh:maxCount on the inverse path), so a third is refused." ;
+ui:dt-board-spec a c:Specimen ; c:demonstrates c:Board , c:BoardCard ; c:label "Board" , "Дошка"@uk , "Board"@de , "لوحة"@ar ;
+    c:help "Items in lanes: the lanes are the range of c:property (here ui:stage), each item goes where its value points. Move a card with its arrows, or focus it and use ← →. Review is limited to two by a SHACL shape (sh:maxCount on the inverse path), so a third is refused. c:cardHref links a card's title (Board keyboard moves), c:cardContent shows a component between its title and its person, and c:cardLocked keeps a card where it is (Formula rule, released: no move controls, no dragging, the keys do nothing)." ;
     c:children ( ui:dt-board-pipeline ) .
 
 # --- Tree: the component class hierarchy ----------------------------------------------------------
@@ -130,7 +133,7 @@ ui:dt-tree-classes a c:Tree ; c:label "Component classes" ;
 ui:dt-tree-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:dt-tree-crumbs ui:dt-tree-classes ) .
 ui:dt-tree a c:Flippable ; c:front ui:dt-tree-spec .
-ui:dt-tree-spec a c:Specimen ; c:demonstrates c:Tree ; c:label "Tree" ;
+ui:dt-tree-spec a c:Specimen ; c:demonstrates c:Tree ; c:label "Tree" , "Дерево"@uk , "Baum"@de , "شجرة"@ar ;
     c:help "Every component class in the project, under sem:Component: a node's children are the classes that are rdfs:subClassOf it. The twisty opens a node (c:expandedNode on the tree); a label selects it, and the breadcrumbs above follow the selection and navigate back up." ;
     c:children ( ui:dt-tree-col ) .
 
@@ -142,10 +145,23 @@ ui:dt-dl-item-strata c:label "Strata" ; c:value "0 components · 10 a11y · 20 s
 ui:dt-dl-item-log c:label "Change log" ; c:value "LDES, latest 200 members" .
 ui:dt-dl-item-ids c:label "Identity" ; c:value "<focus>/~<local>, never blank nodes" .
 ui:dt-dl-explicit a c:DescriptionList ; c:items ( ui:dt-dl-item-store ui:dt-dl-item-strata ui:dt-dl-item-log ui:dt-dl-item-ids ) .
+ui:dt-dl-components a c:DescriptionList ; c:items ( ui:dt-dl-review ui:dt-dl-resource ) .
+ui:dt-dl-review c:label "Review"@en , "Перевірка"@uk , "Prüfung"@de , "مراجعة"@ar ; c:content ui:dt-dl-review-body .
+ui:dt-dl-review-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:dt-dl-review-text ui:dt-dl-approved ) .
+ui:dt-dl-review-text a c:Text ; c:label "Components can be values too."@en ,
+    "Компоненти також можуть бути значеннями."@uk , "Auch Komponenten können Werte sein."@de ,
+    "يمكن أن تكون المكونات قيمًا أيضًا."@ar .
+ui:dt-dl-approved a c:ToggleSwitch ; c:checked false ; c:label "Approved"@en ,
+    "Схвалено"@uk , "Genehmigt"@de , "تمت الموافقة"@ar .
+ui:dt-dl-resource c:label "Resource"@en , "Ресурс"@uk , "Ressource"@de , "المورد"@ar ;
+    c:value "Framework home" ; c:content ui:dt-dl-home .
+ui:dt-dl-home a c:Link ; c:href "https://semblance.dev/" ;
+    c:label "Open framework home"@en , "Відкрити головну сторінку"@uk , "Startseite öffnen"@de , "افتح الصفحة الرئيسية"@ar .
 ui:dt-dl a c:Flippable ; c:front ui:dt-dl-spec .
-ui:dt-dl-spec a c:Specimen ; c:demonstrates c:DescriptionList ; c:label "Description list" ;
-    c:help "Key / value pairs: the values of chosen properties on a node (here the class c:Table itself), or explicit items." ;
-    c:children ( ui:dt-dl-class ui:dt-dl-explicit ) .
+ui:dt-dl-spec a c:Specimen ; c:demonstrates c:DescriptionList ; c:label "Description list" , "Список описів"@uk , "Beschreibungsliste"@de , "قائمة أوصاف"@ar ;
+    c:help "Key / value pairs: the values of chosen properties on a node (here the class c:Table itself), or explicit items. An item can supply c:content for a component value, including links, nested lists and controls. Screen shows the component; Text uses a c:value summary when given, or the component otherwise." ;
+    c:children ( ui:dt-dl-class ui:dt-dl-explicit ui:dt-dl-components ) .
 
 # --- Avatar and AvatarGroup -----------------------------------------------------------------------
 
@@ -164,7 +180,7 @@ ui:dt-av-7 a c:Avatar ; c:label "Barbara Liskov" .
 ui:dt-av-group a c:AvatarGroup ; c:label "Reviewers" ; c:max 4 ;
     c:children ( ui:dt-av-1 ui:dt-av-2 ui:dt-av-3 ui:dt-av-4 ui:dt-av-5 ui:dt-av-6 ui:dt-av-7 ) .
 ui:dt-avatars a c:Flippable ; c:front ui:dt-avatars-spec .
-ui:dt-avatars-spec a c:Specimen ; c:demonstrates c:Avatar , c:AvatarGroup ; c:label "Avatar" ;
+ui:dt-avatars-spec a c:Specimen ; c:demonstrates c:Avatar , c:AvatarGroup ; c:label "Avatar" , "Аватар"@uk , "Avatar"@de , "صورة رمزية"@ar ;
     c:help "Initials on a hue derived from the label (the same name always gets the same color), or an image; sized by sty:size. A group overlaps them and counts the rest past c:max." ;
     c:children ( ui:dt-av-ada ui:dt-av-tim ui:dt-av-grace ui:dt-av-image ui:dt-av-group ) .
 
@@ -191,7 +207,7 @@ ui:dt-photos a c:Gallery ; c:label "Places" ; c:galleryLayout c:PileLayout ; c:l
 ui:dt-lightbox a c:Lightbox ; c:of ui:dt-photos .
 ui:dt-layout a c:Segmented ; c:controls ui:dt-photos ; c:property c:galleryLayout .
 ui:dt-gallery a c:Flippable ; c:front ui:dt-gallery-spec .
-ui:dt-gallery-spec a c:Specimen ; c:demonstrates c:Gallery ; c:label "Gallery" ;
+ui:dt-gallery-spec a c:Specimen ; c:demonstrates c:Gallery ; c:label "Gallery" , "Галерея"@uk , "Galerie"@de , "معرض"@ar ;
     c:help "Images in a layout (c:galleryLayout), switched live here by a segmented control over the property: a carousel (swipe, scroll, arrows or a dot per image), a grid that fits its columns to the width, or a pile of prints - hover or focus one and it straightens and lifts while the others fan out. With a c:lightbox, every image opens it." ;
     c:children ( ui:dt-layout ui:dt-photos ) .
 
@@ -217,7 +233,7 @@ ui:dt-msg-review-toggle a c:ToggleSwitch ; c:checked false ; c:label "Reviewed"@
 ui:dt-messages-thread a c:MessageList ; c:label "A thread" ; c:viewer ui:dt-msg-ada ;
     c:item ui:dt-msg-1 , ui:dt-msg-2 , ui:dt-msg-3 , ui:dt-msg-4 .
 ui:dt-messages a c:Flippable ; c:front ui:dt-messages-spec .
-ui:dt-messages-spec a c:Specimen ; c:demonstrates c:MessageList , c:Message ; c:label "Message list" ;
+ui:dt-messages-spec a c:Specimen ; c:demonstrates c:MessageList , c:Message ; c:label "Message list" , "Список повідомлень"@uk , "Nachrichtenliste"@de , "قائمة الرسائل"@ar ;
     c:help "Messages as data: as:Note nodes with as:attributedTo and as:published, the thread's c:item. Each becomes a minted c:Message - the author's avatar, name and time - in order of publication; c:viewer's own are at the end. A note can use as:content for text or c:content for a component body, including interactive controls. When both are present, Screen shows the component and Text uses the summary. The list is a log (role=log), and a prv:sensitive note is hidden in private mode. The Chat example is built on it." ;
     c:children ( ui:dt-messages-thread ) .
 
@@ -247,16 +263,231 @@ SELECT ?task ?label ?start ?end ?baselineStart ?baselineEnd ?uncertainty ?depend
 ORDER BY ?start ?task""" .
 ui:dt-gantt-chart a c:GanttChart ; c:label "Release plan" ; c:view ui:dt-gantt-view .
 ui:dt-gantt a c:Flippable ; c:front ui:dt-gantt-spec .
-ui:dt-gantt-spec a c:Specimen ; c:demonstrates c:GanttChart ; c:label "Gantt chart" ;
+ui:dt-gantt-spec a c:Specimen ; c:demonstrates c:GanttChart ; c:label "Gantt chart" , "Діаграма Ґанта"@uk , "Gantt-Diagramm"@de , "مخطط غانت"@ar ;
     c:help "Dated tasks from a maintained view (iv:View, iv:materialize iv:Graph): bars, a baseline (dashed), the latest end (a whisker), a milestone, and lead lines from predecessors, on a scale of months that scrolls. Each task says its dates in words, for a screen reader and the Text modality. In a right-to-left language, time runs right to left." ;
     c:children ( ui:dt-gantt-chart ) .
+
+# --- Series charts: an area chart and a stacked one, over a maintained view ---------------------------
+
+ui:dt-area-prefixes sh:declare [ sh:prefix "ui" ; sh:namespace "https://semblance.dev/demo#"^^xsd:anyURI ] .
+ui:dt-sale-jan-web ui:saleMonth "Jan" ; ui:saleAt 1 ; ui:saleChannel "Web" ; ui:saleAmount 42 .
+ui:dt-sale-jan-store ui:saleMonth "Jan" ; ui:saleAt 1 ; ui:saleChannel "Store" ; ui:saleAmount 30 .
+ui:dt-sale-jan-partner ui:saleMonth "Jan" ; ui:saleAt 1 ; ui:saleChannel "Partner" ; ui:saleAmount 8 .
+ui:dt-sale-feb-web ui:saleMonth "Feb" ; ui:saleAt 2 ; ui:saleChannel "Web" ; ui:saleAmount 48 .
+ui:dt-sale-feb-store ui:saleMonth "Feb" ; ui:saleAt 2 ; ui:saleChannel "Store" ; ui:saleAmount 28 .
+ui:dt-sale-feb-partner ui:saleMonth "Feb" ; ui:saleAt 2 ; ui:saleChannel "Partner" ; ui:saleAmount 12 .
+ui:dt-sale-mar-web ui:saleMonth "Mar" ; ui:saleAt 3 ; ui:saleChannel "Web" ; ui:saleAmount 61 .
+ui:dt-sale-mar-store ui:saleMonth "Mar" ; ui:saleAt 3 ; ui:saleChannel "Store" ; ui:saleAmount 33 .
+ui:dt-sale-mar-partner ui:saleMonth "Mar" ; ui:saleAt 3 ; ui:saleChannel "Partner" ; ui:saleAmount 10 .
+ui:dt-sale-apr-web ui:saleMonth "Apr" ; ui:saleAt 4 ; ui:saleChannel "Web" ; ui:saleAmount 58 .
+ui:dt-sale-apr-store ui:saleMonth "Apr" ; ui:saleAt 4 ; ui:saleChannel "Store" ; ui:saleAmount 35 .
+ui:dt-sale-apr-partner ui:saleMonth "Apr" ; ui:saleAt 4 ; ui:saleChannel "Partner" ; ui:saleAmount 15 .
+ui:dt-sale-may-web ui:saleMonth "May" ; ui:saleAt 5 ; ui:saleChannel "Web" ; ui:saleAmount 72 .
+ui:dt-sale-may-store ui:saleMonth "May" ; ui:saleAt 5 ; ui:saleChannel "Store" ; ui:saleAmount 31 .
+ui:dt-sale-may-partner ui:saleMonth "May" ; ui:saleAt 5 ; ui:saleChannel "Partner" ; ui:saleAmount 18 .
+ui:dt-sale-jun-web ui:saleMonth "Jun" ; ui:saleAt 6 ; ui:saleChannel "Web" ; ui:saleAmount 80 .
+ui:dt-sale-jun-store ui:saleMonth "Jun" ; ui:saleAt 6 ; ui:saleChannel "Store" ; ui:saleAmount 38 .
+ui:dt-sale-jun-partner ui:saleMonth "Jun" ; ui:saleAt 6 ; ui:saleChannel "Partner" ; ui:saleAmount 17 .
+ui:dt-sales-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Sales by month" ; sem:select """
+SELECT ?month ?channel ?amount WHERE { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel ?channel ; ui:saleAmount ?amount }
+ORDER BY ?at ?channel""" .
+ui:dt-sales-web a c:series ; c:key "Web" ; rdfs:label "Online" , "Онлайн"@uk , "Online"@de , "عبر الإنترنت"@ar .
+ui:dt-sales-store a c:series ; c:key "Store" ; rdfs:label "In store" , "У магазині"@uk , "Im Laden"@de , "في المتجر"@ar .
+ui:dt-sales-partner a c:series ; c:key "Partner" ; rdfs:label "Partners" , "Партнери"@uk , "Partner"@de , "الشركاء"@ar .
+ui:dt-area-chart a c:AreaChart ; c:label "Sales" ; c:view ui:dt-sales-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ;
+    c:legend ( ui:dt-sales-web ui:dt-sales-store ui:dt-sales-partner ) .
+ui:dt-area-stacked a c:AreaChart ; c:label "Sales, stacked" ; c:view ui:dt-sales-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ;
+    c:stacked true ; c:legend ( ui:dt-sales-web ui:dt-sales-store ui:dt-sales-partner ) .
+ui:dt-area a c:Flippable ; c:front ui:dt-area-spec .
+ui:dt-area-spec a c:Specimen ; c:demonstrates c:AreaChart ; c:label "Area chart" , "Діаграма з областями"@uk , "Flächendiagramm"@de , "مخطط مساحي"@ar ;
+    c:help "Values of each series across the categories of a maintained view (iv:View, iv:materialize iv:Graph): a line and the area under it; with c:stacked true each series starts where the earlier ones end. The value axis is on nice steps. Each point is a list item with its value in words: Tab reaches the chart, the arrow keys move between points and show each one's value. A changed row re-renders its points alone. In a right-to-left language the categories run right to left." ;
+    c:children ( ui:dt-area-chart ui:dt-area-stacked ) .
+
+ui:dt-columns-grouped a c:ColumnChart ; c:label "Sales by channel" ; c:view ui:dt-sales-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ;
+    c:legend ( ui:dt-sales-web ui:dt-sales-store ui:dt-sales-partner ) .
+ui:dt-columns-stacked a c:ColumnChart ; c:label "Sales, stacked" ; c:view ui:dt-sales-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ;
+    c:stacked true ; c:legend ( ui:dt-sales-web ui:dt-sales-store ui:dt-sales-partner ) .
+ui:dt-columns a c:Flippable ; c:front ui:dt-columns-spec .
+ui:dt-columns-spec a c:Specimen ; c:demonstrates c:ColumnChart ; c:label "Column chart" , "Стовпчикова діаграма"@uk , "Säulendiagramm"@de , "مخطط أعمدة"@ar ;
+    c:help "A bar per series and category of a maintained view: grouped side by side, or with c:stacked true one bar per category with the series on each other. It shares the area chart's parts - the value axis, the legend, the points as list items you move between with the arrow keys - and draws its points as bars. A legend item is a toggle: click it to hide its series, again to show it." ;
+    c:children ( ui:dt-columns-grouped ui:dt-columns-stacked ) .
+
+ui:dt-city-0 ui:cityName "Kyiv" ; ui:cityRegion "Center" ; ui:cityArea 839 ; ui:cityPeople 2.95 ; ui:cityAge 1482 .
+ui:dt-city-1 ui:cityName "Kharkiv" ; ui:cityRegion "East" ; ui:cityArea 350 ; ui:cityPeople 1.42 ; ui:cityAge 370 .
+ui:dt-city-2 ui:cityName "Odesa" ; ui:cityRegion "South" ; ui:cityArea 236 ; ui:cityPeople 1.01 ; ui:cityAge 230 .
+ui:dt-city-3 ui:cityName "Dnipro" ; ui:cityRegion "East" ; ui:cityArea 409 ; ui:cityPeople 0.97 ; ui:cityAge 250 .
+ui:dt-city-4 ui:cityName "Lviv" ; ui:cityRegion "West" ; ui:cityArea 182 ; ui:cityPeople 0.72 ; ui:cityAge 770 .
+ui:dt-city-5 ui:cityName "Zaporizhzhia" ; ui:cityRegion "South" ; ui:cityArea 331 ; ui:cityPeople 0.71 ; ui:cityAge 250 .
+ui:dt-city-6 ui:cityName "Vinnytsia" ; ui:cityRegion "Center" ; ui:cityArea 113 ; ui:cityPeople 0.37 ; ui:cityAge 660 .
+ui:dt-city-7 ui:cityName "Chernivtsi" ; ui:cityRegion "West" ; ui:cityArea 153 ; ui:cityPeople 0.26 ; ui:cityAge 620 .
+ui:dt-city-8 ui:cityName "Poltava" ; ui:cityRegion "Center" ; ui:cityArea 103 ; ui:cityPeople 0.28 ; ui:cityAge 1125 .
+ui:dt-city-9 ui:cityName "Uzhhorod" ; ui:cityRegion "West" ; ui:cityArea 40 ; ui:cityPeople 0.11 ; ui:cityAge 1130 .
+ui:dt-cities-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Cities" ; sem:select """
+SELECT ?city ?region ?area ?people ?age WHERE { ?c ui:cityName ?city ; ui:cityRegion ?region ; ui:cityArea ?area ; ui:cityPeople ?people ; ui:cityAge ?age }
+ORDER BY DESC(?people)""" .
+ui:dt-scatter-chart a c:ScatterChart ; c:label "Cities by area and people" ; c:view ui:dt-cities-view ; c:categoryVariable "city" ; c:seriesVariable "region" ;
+    c:xVariable "area" ; c:valueVariable "people" ; c:unit "M" ; c:xLabel "area, km²" , "площа, км²"@uk , "Fläche, km²"@de , "المساحة، كم²"@ar .
+ui:dt-bubble-chart a c:ScatterChart ; c:label "Cities by age" ; c:view ui:dt-cities-view ; c:categoryVariable "city" ; c:seriesVariable "region" ;
+    c:xVariable "area" ; c:valueVariable "people" ; c:unit "M" ; c:sizeVariable "age" ;
+    c:xLabel "area, km²" , "площа, км²"@uk , "Fläche, km²"@de , "المساحة، كم²"@ar ; c:sizeLabel "years" , "років"@uk , "Jahre"@de , "سنة"@ar .
+ui:dt-scatter a c:Flippable ; c:front ui:dt-scatter-spec .
+ui:dt-scatter-spec a c:Specimen ; c:demonstrates c:ScatterChart ; c:label "Scatter and bubble chart" , "Точкова й бульбашкова діаграма"@uk , "Streu- und Blasendiagramm"@de , "مخطط مبعثر وفقاعي"@ar ;
+    c:help "A point per row label (c:categoryVariable) at its x (c:xVariable) and value, a color per series; the scales need not start at zero. With c:sizeVariable each bubble's area grows with its size. A point says its x and size in words, named by c:xLabel and c:sizeLabel." ;
+    c:children ( ui:dt-scatter-chart ui:dt-bubble-chart ) .
+
+ui:dt-pie-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Sales by channel" ; sem:select """
+SELECT ?channel (SUM(?amount) AS ?total) WHERE { ?s ui:saleChannel ?channel ; ui:saleAmount ?amount } GROUP BY ?channel ORDER BY DESC(?total)""" .
+ui:dt-pie-chart a c:PieChart ; c:label "Sales by channel" ; c:view ui:dt-pie-view ; c:categoryVariable "channel" ; c:valueVariable "total" ; c:unit "k€" .
+ui:dt-donut-chart a c:DonutChart ; c:label "Sales by channel" ; c:view ui:dt-pie-view ; c:categoryVariable "channel" ; c:valueVariable "total" ; c:unit "k€" .
+ui:dt-pie a c:Flippable ; c:front ui:dt-pie-spec .
+ui:dt-pie-spec a c:Specimen ; c:demonstrates c:PieChart , c:DonutChart ; c:label "Pie and donut chart" , "Кругова й кільцева діаграма"@uk , "Kreis- und Ringdiagramm"@de , "مخطط دائري وحلقي"@ar ;
+    c:help "Each category's share of the whole, from a maintained view: a slice in its color, a key of the categories. A slice says its value and share; the arrow keys move between slices. A donut (c:DonutChart) shows the total in its hole. Right to left, the slices run counter-clockwise." ;
+    c:children ( ui:dt-pie-chart ui:dt-donut-chart ) .
+
+ui:dt-req-0 ui:requestMs 225 ; ui:requestRoute "/page" .
+ui:dt-req-1 ui:requestMs 271 ; ui:requestRoute "/api" .
+ui:dt-req-2 ui:requestMs 226 ; ui:requestRoute "/api" .
+ui:dt-req-3 ui:requestMs 221 ; ui:requestRoute "/page" .
+ui:dt-req-4 ui:requestMs 184 ; ui:requestRoute "/api" .
+ui:dt-req-5 ui:requestMs 227 ; ui:requestRoute "/api" .
+ui:dt-req-6 ui:requestMs 307 ; ui:requestRoute "/page" .
+ui:dt-req-7 ui:requestMs 265 ; ui:requestRoute "/api" .
+ui:dt-req-8 ui:requestMs 302 ; ui:requestRoute "/api" .
+ui:dt-req-9 ui:requestMs 255 ; ui:requestRoute "/page" .
+ui:dt-req-10 ui:requestMs 264 ; ui:requestRoute "/api" .
+ui:dt-req-11 ui:requestMs 251 ; ui:requestRoute "/api" .
+ui:dt-req-12 ui:requestMs 140 ; ui:requestRoute "/page" .
+ui:dt-req-13 ui:requestMs 291 ; ui:requestRoute "/api" .
+ui:dt-req-14 ui:requestMs 270 ; ui:requestRoute "/api" .
+ui:dt-req-15 ui:requestMs 270 ; ui:requestRoute "/page" .
+ui:dt-req-16 ui:requestMs 139 ; ui:requestRoute "/api" .
+ui:dt-req-17 ui:requestMs 135 ; ui:requestRoute "/api" .
+ui:dt-req-18 ui:requestMs 187 ; ui:requestRoute "/page" .
+ui:dt-req-19 ui:requestMs 212 ; ui:requestRoute "/api" .
+ui:dt-req-20 ui:requestMs 258 ; ui:requestRoute "/api" .
+ui:dt-req-21 ui:requestMs 237 ; ui:requestRoute "/page" .
+ui:dt-req-22 ui:requestMs 271 ; ui:requestRoute "/api" .
+ui:dt-req-23 ui:requestMs 201 ; ui:requestRoute "/api" .
+ui:dt-req-24 ui:requestMs 259 ; ui:requestRoute "/page" .
+ui:dt-req-25 ui:requestMs 264 ; ui:requestRoute "/api" .
+ui:dt-req-26 ui:requestMs 200 ; ui:requestRoute "/api" .
+ui:dt-req-27 ui:requestMs 343 ; ui:requestRoute "/page" .
+ui:dt-req-28 ui:requestMs 273 ; ui:requestRoute "/api" .
+ui:dt-req-29 ui:requestMs 312 ; ui:requestRoute "/api" .
+ui:dt-req-30 ui:requestMs 203 ; ui:requestRoute "/page" .
+ui:dt-req-31 ui:requestMs 196 ; ui:requestRoute "/api" .
+ui:dt-req-32 ui:requestMs 219 ; ui:requestRoute "/api" .
+ui:dt-req-33 ui:requestMs 234 ; ui:requestRoute "/page" .
+ui:dt-req-34 ui:requestMs 278 ; ui:requestRoute "/api" .
+ui:dt-req-35 ui:requestMs 255 ; ui:requestRoute "/api" .
+ui:dt-req-36 ui:requestMs 213 ; ui:requestRoute "/page" .
+ui:dt-req-37 ui:requestMs 183 ; ui:requestRoute "/api" .
+ui:dt-req-38 ui:requestMs 209 ; ui:requestRoute "/api" .
+ui:dt-req-39 ui:requestMs 313 ; ui:requestRoute "/page" .
+ui:dt-req-40 ui:requestMs 192 ; ui:requestRoute "/api" .
+ui:dt-req-41 ui:requestMs 255 ; ui:requestRoute "/api" .
+ui:dt-req-42 ui:requestMs 266 ; ui:requestRoute "/page" .
+ui:dt-req-43 ui:requestMs 151 ; ui:requestRoute "/api" .
+ui:dt-req-44 ui:requestMs 243 ; ui:requestRoute "/api" .
+ui:dt-req-45 ui:requestMs 318 ; ui:requestRoute "/page" .
+ui:dt-req-46 ui:requestMs 119 ; ui:requestRoute "/api" .
+ui:dt-req-47 ui:requestMs 221 ; ui:requestRoute "/api" .
+ui:dt-req-48 ui:requestMs 234 ; ui:requestRoute "/page" .
+ui:dt-req-49 ui:requestMs 191 ; ui:requestRoute "/api" .
+ui:dt-req-50 ui:requestMs 270 ; ui:requestRoute "/api" .
+ui:dt-req-51 ui:requestMs 236 ; ui:requestRoute "/page" .
+ui:dt-req-52 ui:requestMs 152 ; ui:requestRoute "/api" .
+ui:dt-req-53 ui:requestMs 290 ; ui:requestRoute "/api" .
+ui:dt-req-54 ui:requestMs 280 ; ui:requestRoute "/page" .
+ui:dt-req-55 ui:requestMs 297 ; ui:requestRoute "/api" .
+ui:dt-req-56 ui:requestMs 326 ; ui:requestRoute "/api" .
+ui:dt-req-57 ui:requestMs 262 ; ui:requestRoute "/page" .
+ui:dt-req-58 ui:requestMs 247 ; ui:requestRoute "/api" .
+ui:dt-req-59 ui:requestMs 162 ; ui:requestRoute "/api" .
+ui:dt-req-60 ui:requestMs 445 ; ui:requestRoute "/page" .
+ui:dt-req-61 ui:requestMs 396 ; ui:requestRoute "/api" .
+ui:dt-req-62 ui:requestMs 402 ; ui:requestRoute "/api" .
+ui:dt-req-63 ui:requestMs 369 ; ui:requestRoute "/page" .
+ui:dt-req-64 ui:requestMs 381 ; ui:requestRoute "/api" .
+ui:dt-req-65 ui:requestMs 399 ; ui:requestRoute "/api" .
+ui:dt-req-66 ui:requestMs 472 ; ui:requestRoute "/page" .
+ui:dt-req-67 ui:requestMs 339 ; ui:requestRoute "/api" .
+ui:dt-req-68 ui:requestMs 362 ; ui:requestRoute "/api" .
+ui:dt-req-69 ui:requestMs 430 ; ui:requestRoute "/page" .
+ui:dt-req-70 ui:requestMs 478 ; ui:requestRoute "/api" .
+ui:dt-req-71 ui:requestMs 443 ; ui:requestRoute "/api" .
+ui:dt-req-72 ui:requestMs 344 ; ui:requestRoute "/page" .
+ui:dt-req-73 ui:requestMs 319 ; ui:requestRoute "/api" .
+ui:dt-req-74 ui:requestMs 434 ; ui:requestRoute "/api" .
+ui:dt-requests-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Response times" ; sem:select """
+SELECT ?ms ?route WHERE { ?r ui:requestMs ?ms ; ui:requestRoute ?route }""" .
+ui:dt-histogram-chart a c:Histogram ; c:label "Response times" ; c:view ui:dt-requests-view ; c:valueVariable "ms" ; c:unit "ms" ; c:binCount 12 .
+ui:dt-histogram-routes a c:Histogram ; c:label "Response times by route" ; c:view ui:dt-requests-view ; c:valueVariable "ms" ; c:seriesVariable "route" ; c:unit "ms" ; c:stacked true .
+ui:dt-histogram a c:Flippable ; c:front ui:dt-histogram-spec .
+ui:dt-histogram-spec a c:Specimen ; c:demonstrates c:Histogram ; c:label "Histogram" , "Гістограма"@uk , "Histogramm"@de , "مدرج تكراري"@ar ;
+    c:help "How a view's values are distributed: the values fall in bins of nice bounds (about c:binCount of them), each a column as tall as its count. With a series variable the series share a bin, side by side or stacked. A bin says its bounds and count, on screen and as text." ;
+    c:children ( ui:dt-histogram-chart ui:dt-histogram-routes ) .
+
+ui:dt-trend-web-view a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """
+SELECT ?month ?amount WHERE { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel "Web" ; ui:saleAmount ?amount } ORDER BY ?at""" .
+ui:dt-trend-web a c:Sparkline ; c:label "Web by month" ; c:view ui:dt-trend-web-view ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "k€" .
+ui:dt-sales-web ui:trend ui:dt-trend-web .
+ui:dt-trend-store-view a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """
+SELECT ?month ?amount WHERE { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel "Store" ; ui:saleAmount ?amount } ORDER BY ?at""" .
+ui:dt-trend-store a c:Sparkline ; c:label "Store by month" ; c:view ui:dt-trend-store-view ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "k€" .
+ui:dt-sales-store ui:trend ui:dt-trend-store .
+ui:dt-trend-partner-view a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """
+SELECT ?month ?amount WHERE { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel "Partner" ; ui:saleAmount ?amount } ORDER BY ?at""" .
+ui:dt-trend-partner a c:Sparkline ; c:label "Partner by month" ; c:view ui:dt-trend-partner-view ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "k€" .
+ui:dt-sales-partner ui:trend ui:dt-trend-partner .
+ui:dt-channels-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Channels" ; sem:select """
+SELECT ?channel (SUM(?amount) AS ?total) ?trend WHERE {
+  ?channel c:key ?key ; ui:trend ?trend .
+  ?s ui:saleChannel ?key ; ui:saleAmount ?amount
+} GROUP BY ?channel ?trend ORDER BY DESC(?total)""" .
+ui:dt-channels-table a c:Table ; c:label "Channels" ; c:query ui:dt-channels-view ; c:tableColumns ( ui:dt-channels-col-name ui:dt-channels-col-total ui:dt-channels-col-trend ) .
+ui:dt-channels-col-name a c:Column ; c:variable "channel" ; c:label "Channel" , "Канал"@uk , "Kanal"@de , "القناة"@ar .
+ui:dt-channels-col-total a c:Column ; c:variable "total" ; c:label "Total" , "Разом"@uk , "Summe"@de , "المجموع"@ar ; c:align "end" ; c:format "number" ; c:unit "k€" .
+ui:dt-channels-col-trend a c:Column ; c:variable "trend" ; c:label "Trend" , "Динаміка"@uk , "Verlauf"@de , "الاتجاه"@ar ; c:format "component" ; c:sortable false .
+ui:dt-spark-stat a c:Stat ; c:label "Online sales, June" ; c:value 80 ; c:unit "k€" ; c:delta 11 ; c:deltaUnit "%" .
+ui:dt-spark-tile-line a c:Sparkline ; c:label "Online sales by month" ; c:view ui:dt-trend-web-view ; c:categoryVariable "month" ; c:valueVariable "amount" ; c:unit "k€" .
+ui:dt-spark-tile-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:dt-spark-stat ui:dt-spark-tile-line ) .
+ui:dt-spark-tile a c:Card ; c:label "Tile" ; c:content ui:dt-spark-tile-body .
+ui:dt-sparkline a c:Flippable ; c:front ui:dt-sparkline-spec .
+ui:dt-sparkline-spec a c:Specimen ; c:demonstrates c:Sparkline ; c:label "Sparkline" , "Спарклайн"@uk , "Sparkline"@de , "خط بياني مصغّر"@ar ;
+    c:help "A word-sized line of a view's values, no axes, its last point marked: in a tile under its figure, or in a table's cells, where a column with c:format \"component\" holds the component each row names. Its points are list items with their words, as any chart's." ;
+    c:children ( ui:dt-channels-table ui:dt-spark-tile ) .
+
+ui:dt-boxplot-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Response times by hour" ; sem:select """
+SELECT ?route ?ms ?r WHERE { ?r ui:requestMs ?ms ; ui:requestRoute ?route }""" .
+ui:dt-boxplot-chart a c:BoxPlot ; c:label "Response times by route" ; c:view ui:dt-boxplot-view ; c:categoryVariable "route" ; c:valueVariable "ms" ; c:unit "ms" .
+ui:dt-boxplot a c:Flippable ; c:front ui:dt-boxplot-spec .
+ui:dt-boxplot-spec a c:Specimen ; c:demonstrates c:BoxPlot ; c:label "Box plot" , "Коробкова діаграма"@uk , "Boxplot"@de , "مخطط صندوقي"@ar ;
+    c:help "How each category's values spread: a box from the first to the third quartile, a line at the median, whiskers to the least and greatest value; with a series variable, a box per series side by side. A box says its median, quartiles and range in the viewer's language." ;
+    c:children ( ui:dt-boxplot-chart ) .
+
+ui:dt-axes-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Sales and partner share" ; sem:select """
+SELECT ?month ?channel ?amount WHERE {
+  { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleAmount ?amount . BIND("Total" AS ?channel) }
+  UNION { ?s ui:saleMonth ?month ; ui:saleAt ?at ; ui:saleChannel "Partner" ; ui:saleAmount ?amount . BIND("Partner" AS ?channel) }
+} ORDER BY ?at""" .
+ui:dt-axes-total a c:series ; c:key "Total" ; rdfs:label "All sales" , "Усі продажі"@uk , "Alle Verkäufe"@de , "كل المبيعات"@ar .
+ui:dt-axes-partner a c:series ; c:key "Partner" ; c:axis c:SecondaryAxis ; rdfs:label "Partners (right axis)" , "Партнери (права вісь)"@uk , "Partner (rechte Achse)"@de , "الشركاء (المحور الثاني)"@ar .
+ui:dt-axes-budget a c:Threshold ; c:at 140 ; rdfs:label "Target" , "Ціль"@uk , "Ziel"@de , "الهدف"@ar .
+ui:dt-axes-season a c:MarkedRange ; c:fromValue 60 ; c:toValue 90 ; rdfs:label "Usual" , "Звично"@uk , "Üblich"@de , "المعتاد"@ar .
+ui:dt-axes-chart a c:AreaChart ; c:label "Sales and partners" ; c:view ui:dt-axes-view ; c:categoryVariable "month" ; c:seriesVariable "channel" ; c:valueVariable "amount" ;
+    c:unit "k€" ; c:secondaryUnit "k€" ; c:legend ( ui:dt-axes-total ui:dt-axes-partner ) ; c:annotation ui:dt-axes-budget , ui:dt-axes-season .
+ui:dt-axes a c:Flippable ; c:front ui:dt-axes-spec .
+ui:dt-axes-spec a c:Specimen ; c:demonstrates c:Threshold , c:MarkedRange , c:Axis ; c:label "Dual axes and annotations" , "Дві осі й позначки"@uk , "Zwei Achsen und Markierungen"@de , "محوران وتعليقات"@ar ;
+    c:help "A legend's series with c:axis c:SecondaryAxis is scaled on its own, its ticks at the plot's inline end, its values in c:secondaryUnit. c:annotation draws a c:Threshold (a dashed line at c:at) or a c:MarkedRange (a band from c:fromValue to c:toValue), named by its label, on screen and as text; the value scale keeps them in view." ;
+    c:children ( ui:dt-axes-chart ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 
 ui:dt-timeline-log a c:Timeline ; c:label "Recent events" ; c:of beh:ChangeLog ; c:limit 6 ;
     c:emptyText "No events yet: sort the table or open the tree, and they appear here." .
 ui:dt-timeline a c:Flippable ; c:front ui:dt-timeline-spec .
-ui:dt-timeline-spec a c:Specimen ; c:demonstrates c:Timeline , c:TimelineItem ; c:label "Timeline" ;
+ui:dt-timeline-spec a c:Specimen ; c:demonstrates c:Timeline , c:TimelineItem ; c:label "Timeline" , "Часова шкала"@uk , "Zeitleiste"@de , "خط زمني"@ar ;
     c:help "The newest members of the change-log LDES, read from its head (beh:latest, then beh:previous): what happened, to which component, when, and the size of the change. Members are immutable, so each is rendered once." ;
     c:children ( ui:dt-timeline-log ) .
 
@@ -265,6 +496,6 @@ ui:dt-timeline-spec a c:Specimen ; c:demonstrates c:Timeline , c:TimelineItem ; 
 ui:dt-legend-kinds a c:Legend ; c:label "Activity kinds" ; c:of net:Kind .
 ui:dt-legend-statuses a c:Legend ; c:label "Statuses" ; c:items ( net:Pending net:Complete net:Failed net:Open net:Closed ) .
 ui:dt-legend a c:Flippable ; c:front ui:dt-legend-spec .
-ui:dt-legend-spec a c:Specimen ; c:demonstrates c:Legend ; c:label "Legend" ;
+ui:dt-legend-spec a c:Specimen ; c:demonstrates c:Legend ; c:label "Legend" , "Легенда"@uk , "Legende"@de , "مفتاح الرسم"@ar ;
     c:help "Swatches and labels for categories: the instances of a class by sem:order (network activity kinds, each drawn in its c:swatch series color), or an explicit list (statuses, which are states and so carry a sty:tone instead)." ;
     c:children ( ui:dt-legend-kinds ui:dt-legend-statuses ) .

@@ -30,12 +30,13 @@
 // uploads already in the graph when it attaches (a restored session) are stale: not performed.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { EventBus, Handled } from './behaviour/events.ts'
-import { receptionOf } from './layers/dragdrop.ts'
+import { receptionOf, zoneTarget } from './layers/dragdrop.ts'
 import { arrivalOf } from './components/upload.ts'
 import { decodeThumbnail, type FileStoreBackend, indexedDbFileStore, PREVIEW_SIZE, type Thumbnailer } from './file-store.ts'
 import { DND, FILE, FILES_GRAPH, NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
-import { mint, owningFocus, type Delta } from './rdf.ts'
+import { mint, type Delta } from './rdf.ts'
 import type { DomRenderer } from './render/dom.ts'
+import type { GraphStore } from './store/types.ts'
 
 const XSD_DATETIME = NS.xsd + 'dateTime'
 const XSD_ANYURI = NS.xsd + 'anyURI'
@@ -84,6 +85,12 @@ export interface FilesOptions {
   handlers?: Record<string, Uploader>
   /** How a target's file:uploadTo is sent (by default an XMLHttpRequest POST of a form whose field "file" is the file). */
   send?: Uploader
+  /**
+   * The origins a file:uploadTo may name ("https://uploads.example.com"), besides the page's own:
+   * the graph says where, the host says where may be. An address elsewhere fails the upload, with
+   * the reason. The page's own origin is always allowed; "*" allows any (a host that trusts its graph).
+   */
+  uploadOrigins?: readonly string[]
   /** At least this many milliseconds between two progress events of one upload (default 100). */
   progressEvery?: number
   /** Where kept files go (file:keepIn): IndexedDB by default where there is one; null: nothing can be kept. */
@@ -94,6 +101,12 @@ export interface FilesOptions {
   urls?: { create(contents: Blob | FileLike): string | undefined; revoke(url: string): void }
   /** After each event a reaction handled (e.g. to patch the DOM). */
   onHandled?: (h: Handled) => void
+  /**
+   * Where a target's file:handler and file:uploadTo are read: the trusted graphs when the page
+   * renders authored content (mount's `trusted`), so an author cannot pick a handler or an address;
+   * the runtime's store otherwise.
+   */
+  trusted?: GraphStore
 }
 
 interface Zone {
@@ -489,10 +502,12 @@ export class Files {
     const nn = (iri: string) => f.namedNode(iri)
     const target = store.match(null, nn(FILE.file), file, f.defaultGraph())[0]?.subject
     if (target?.termType !== 'NamedNode') return
-    const read = (s: Term, p: string) => store.match(s as NamedNode, nn(p), null, f.defaultGraph())[0]?.object.value
+    const said = this.opts.trusted ?? store
+    const read = (s: Term, p: string) => said.match(s as NamedNode, nn(p), null, f.defaultGraph())[0]?.object.value
     const contents = this.fileOf(file.value)
     const handler = read(target, FILE.handler)
     const url = read(target, FILE.uploadTo)
+    const refused = url !== undefined && handler === undefined ? uploadRefused(url, this.opts.uploadOrigins) : undefined
     const uploader = handler !== undefined ? this.opts.handlers?.[handler] : url !== undefined ? (this.opts.send ?? xhrSend) : undefined
     const controller = new AbortController()
     this.uploads.set(file.value, controller)
@@ -515,6 +530,7 @@ export class Files {
     // Started after the change that asked has been applied: its reports are events of their own.
     const sent = Promise.resolve().then(() => {
       if (!contents) throw new Error('This file is no longer available in this page.')
+      if (refused) throw new Error(refused)
       if (!uploader) throw new Error(handler !== undefined ? `No upload handler is named “${handler}”.` : 'Nowhere to upload it to.')
       return uploader(contents, { drop: target.value, file: file.value, url, onProgress, signal: controller.signal })
     })
@@ -540,13 +556,15 @@ export class Files {
 
   /** The zone of a target that takes files (a file:Receiver: one with a reaction to file:Arrive) an event is over. */
   private zoneOf(renderer: DomRenderer, at: EventTarget | null): Zone | undefined {
-    const el = (at as Element | null)?.closest?.('[data-sem-drop-zone]')
-    if (!el || !renderer.host.contains(el) || el.closest('[hidden], [inert]')) return undefined
-    const key = renderer.keyOf(el)
-    if (!key) return undefined
-    const drop = owningFocus(key)
-    if (!this.bus.reactionsFor(FILE.Arrive, drop).length) return undefined
-    return { drop, receptacle: el.getAttribute('data-sem-drop-zone')! }
+    // The nearest zone that takes files (a zone that only takes dragged blocks is passed over).
+    for (let el = (at as Element | null)?.closest?.('[data-sem-drop-zone]'); el; el = el.parentElement?.closest('[data-sem-drop-zone]')) {
+      if (!renderer.host.contains(el) || el.closest('[hidden], [inert]')) return undefined
+      const key = renderer.keyOf(el)
+      if (!key) continue
+      const drop = zoneTarget(this.bus.runtime.store, this.bus.projection.engine.graph, key)
+      if (this.bus.reactionsFor(FILE.Arrive, drop).length) return { drop, receptacle: el.getAttribute('data-sem-drop-zone')! }
+    }
+    return undefined
   }
 
   /** Whether a zone refuses the drag in progress, and why (its reception). */
@@ -618,18 +636,46 @@ export class Files {
       end()
       this.receive(zone.drop, files, zone.receptacle)
     }
+    // Files pasted where a target takes them arrive as if dropped there (its refusals still apply).
+    const paste = (e: Event) => {
+      const files = [...((e as ClipboardEvent).clipboardData?.files ?? [])]
+      if (!files.length) return
+      const zone = this.zoneOf(renderer, e.target)
+      if (!zone) return
+      e.preventDefault()
+      this.receive(zone.drop, files, zone.receptacle)
+    }
     doc.addEventListener('dragenter', enter)
     doc.addEventListener('dragover', over)
     doc.addEventListener('dragleave', leave)
     doc.addEventListener('drop', drop)
+    doc.addEventListener('paste', paste)
     return () => {
       doc.removeEventListener('dragenter', enter)
       doc.removeEventListener('dragover', over)
       doc.removeEventListener('dragleave', leave)
       doc.removeEventListener('drop', drop)
+      doc.removeEventListener('paste', paste)
       end()
     }
   }
+}
+
+/**
+ * Why a file:uploadTo is refused, or undefined: it resolves (against the page) to the page's own
+ * origin or one the host allows, over http or https.
+ */
+export function uploadRefused(url: string, allowed: readonly string[] = []): string | undefined {
+  const page = (globalThis as { location?: { href?: string; origin?: string } }).location
+  let target: URL
+  try {
+    target = new URL(url, page?.href ?? 'http://localhost/')
+  } catch {
+    return `“${url}” is not an address to upload to.`
+  }
+  if (target.protocol !== 'https:' && target.protocol !== 'http:') return `Files are not uploaded to ${target.protocol} addresses.`
+  if (allowed.includes('*') || target.origin === (page?.origin ?? 'http://localhost') || allowed.includes(target.origin)) return undefined
+  return `Files are not uploaded to ${target.origin}: this page does not allow it.`
 }
 
 /** A file:uploadTo: an XMLHttpRequest POST of a form whose field "file" is the file, with its upload's progress. */

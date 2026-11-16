@@ -12,12 +12,13 @@
 # (sh:targetClass) saying what a well-formed instance looks like (ontology/
 # shapes/components.ttl). The layer validates each component declared in the
 # graph against the shapes of its classes and their superclasses, before
-# anything renders, and records standard SHACL results in the derived graph:
+# anything renders, as the strata below the components leave it (a c:value against the c:max a
+# formula derives, both from the same change), and records standard SHACL results in the derived graph:
 #   <result> a sh:ValidationResult ; sh:focusNode <component> ; sh:resultPath <p> ;
 #            sh:resultMessage "…" ; sh:sourceShape <shape> ; sh:resultSeverity sh:Violation .
 # A component with violations is outlined, with the messages as its tooltip,
 # and c:ShapeReport lists every result. Supported constraints, in property shapes
-# (sh:property) whose sh:path is a property: sh:minCount, sh:maxCount, sh:datatype,
+# (sh:property) whose sh:path is a property: sh:minCount, sh:maxCount, sh:uniqueLang, sh:datatype,
 # sh:class, sh:nodeKind, sh:in, sh:minInclusive, sh:maxInclusive, sh:minLength,
 # sh:maxLength, sh:pattern, sh:lessThanOrEquals. On the node shape: sh:or, a list of
 # property shapes the focus must conform to one of. Each alternative is read as needing
@@ -35,8 +36,9 @@ val:violation a owl:ObjectProperty ; rdfs:range sh:ValidationResult ;
 val:Shapes a sem:Rendering ;
     sem:targets sem:Component ;
     sem:layer val:ShapesLayer ;
-    sem:stratum -9 ;
-    sem:inputOnly true .
+    sem:stratum -1 ;
+    sem:inputOnly true ;
+    sem:watchesAnywhere sh:targetClass .
 val:Shapes-fn a sem:Rule ; sem:implements val:Shapes ; sem:function "shapes:validate" .
 # Each constraint of each property shape of the focus's classes (shapes.ts checkProperty):
 # counts, then one test per value, then pairs with another property; then each sh:or of
@@ -61,7 +63,7 @@ WHERE {
   {
     ?shape sh:property ?ps .
     ?ps sh:path ?path ; ?constraint ?param .
-    FILTER(isIRI(?path) && ?constraint IN (sh:minCount, sh:maxCount, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
+    FILTER(isIRI(?path) && ?constraint IN (sh:minCount, sh:maxCount, sh:uniqueLang, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
                                            sh:maxInclusive, sh:minLength, sh:maxLength, sh:pattern, sh:lessThanOrEquals))
   } UNION {
     # The node shape's own constraint: about the focus, with no path.
@@ -86,7 +88,13 @@ WHERE {
       FILTER(IF(?constraint = sh:minCount, COALESCE(?n, 0) < ?bound, COALESCE(?n, 0) > ?bound))
       BIND(IF(?constraint = sh:minCount, CONCAT("at least ", STR(?param), " values"), CONCAT("at most ", STR(?param), " values")) AS ?fallback)
     } UNION {
-      FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:lessThanOrEquals, sh:or))
+      # Two values in one language: one result per language, as SHACL says (untagged values are not in one).
+      FILTER(?constraint = sh:uniqueLang && STR(?param) = "true")
+      ?focus ?path ?inLanguage , ?alsoInLanguage .
+      FILTER(LANG(?inLanguage) != "" && ?inLanguage != ?alsoInLanguage && LCASE(LANG(?inLanguage)) = LCASE(LANG(?alsoInLanguage)))
+      BIND(CONCAT("more than one value in \\"", LCASE(LANG(?inLanguage)), "\\"") AS ?fallback)
+    } UNION {
+      FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:uniqueLang, sh:lessThanOrEquals, sh:or))
       ?focus ?path ?value .
       OPTIONAL { FILTER(?constraint = sh:pattern) ?ps sh:flags ?flags }
       # Validate the stored term's XML lexical space independently of a backend's
@@ -123,7 +131,7 @@ WHERE {
                   && (COALESCE(DATATYPE(?value), sh:none) = ?param
                   || (?param IN (xsd:integer, xsd:decimal, xsd:double, xsd:float) && DATATYPE(?value) IN (xsd:integer, xsd:decimal, xsd:double, xsd:float)
                       && (?param != xsd:integer || COALESCE("-INF"^^xsd:double < xsd:double(STR(?value)) && xsd:double(STR(?value)) < "INF"^^xsd:double && xsd:double(STR(?value)) = FLOOR(xsd:double(STR(?value))), false))))),
-             IF(?constraint = sh:class, NOT EXISTS { ?value a/rdfs:subClassOf* ?param },
+             IF(?constraint = sh:class, NOT EXISTS { ?value (a|a/rdfs:subClassOf+) ?param },
              IF(?constraint = sh:nodeKind, (?param = sh:IRI && !isIRI(?value)) || (?param = sh:Literal && !isLiteral(?value)),
              IF(?constraint = sh:in, NOT EXISTS { ?param rdf:rest*/rdf:first ?value },
              isLiteral(?value) && IF(?constraint = sh:minInclusive, !COALESCE(xsd:double(STR(?value)) >= xsd:double(STR(?param)), false),
@@ -158,7 +166,7 @@ WHERE {
         { ?member sh:path ?memberPath FILTER(isIRI(?memberPath)) ?focus ?memberPath ?held }
         UNION { ?member sh:path/sh:inversePath ?inverse FILTER(isIRI(?inverse)) ?held ?inverse ?focus }
         OPTIONAL { ?member sh:qualifiedValueShape/sh:class ?qualifiedClass }
-        FILTER(!BOUND(?qualifiedClass) || EXISTS { ?held a/rdfs:subClassOf* ?qualifiedClass })
+        FILTER(!BOUND(?qualifiedClass) || EXISTS { ?held (a|a/rdfs:subClassOf+) ?qualifiedClass })
       } GROUP BY ?param ?focus } }
       FILTER(COALESCE(?holding, 0) = 0)
       BIND(?focus AS ?value)
@@ -182,8 +190,9 @@ val:EntryShapes a sem:Rendering ;
     sem:targets sem:Component ;
     sem:forEach c:entry ;
     sem:requires c:validated ;
-    sem:stratum -9 ;
-    sem:inputOnly true .
+    sem:stratum -1 ;
+    sem:inputOnly true ;
+    sem:watchesAnywhere sh:targetClass .
 val:EntryShapes-fn a sem:Rule ; sem:implements val:EntryShapes ; sem:function "shapes:validate" .
 val:EntryShapes-sparql a sem:Rule ; sem:implements val:EntryShapes ; sem:constructFrom val:Shapes-sparql .
 c:validated a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
@@ -226,8 +235,100 @@ c:ShapeReport a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Every SHACL result the shapes layer recorded, by component."@en ;
     sem:slug "shape-report" .
+# Every result the shapes layer recorded, wherever it is (sem:watchesAnywhere), by component, then
+# message, in the viewer's collation: an order key from sx:sortKey, which the function twin
+# computes alike.
 c:ShapeReportRendering a sem:Rendering ; sem:targets c:ShapeReport ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Locale (sx:collated): results are listed in collation order of their components and messages (localeCompare). They come from anywhere in the graph, so its SPARQL rule will also follow the results (val:violation) it lists." ;
-    sem:needsExtension sx:Locale .
+    sem:watchesAnywhere sh:focusNode , sh:resultMessage , sh:resultPath .
 c:ShapeReportRendering-fn a sem:Rule ; sem:implements c:ShapeReportRendering ; sem:function "shape-report" .
+c:ShapeReportRendering-sparql-screen a sem:Rule ;
+    sem:implements c:ShapeReportRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootType ; sem:renders $this ; rdfhtml:class ?okClass ; rdfhtml:hasChild ?ok , ?row ; rdfhtml:attribute ?aria .
+  ?ok a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?aria a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?ariaLabel .
+  ?row a rdfhtml:Li ; sem:orderKey ?order ; rdfhtml:hasChild ?what , ?pathEl , ?msgEl .
+  ?what a rdfhtml:Strong ; rdfhtml:hasChild ?whatText ; ord:immediatelyPrecedes ?pathEl .
+  ?whatText a rdfhtml:Text ; rdfhtml:data ?whatData .
+  ?pathEl a rdfhtml:Code ; rdfhtml:hasChild ?pathText ; ord:immediatelyPrecedes ?msgEl .
+  ?pathText a rdfhtml:Text ; rdfhtml:data ?pathData .
+  ?msgEl a rdfhtml:Span ; rdfhtml:hasChild ?msgText .
+  ?msgText a rdfhtml:Text ; rdfhtml:data ?message .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ShapeReport .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(EXISTS { ?anyResult a sh:ValidationResult ; sh:focusNode ?anyNode FILTER(isIRI(?anyNode)) } AS ?some)
+  # Its label and its empty text in the viewer's language, else the one value.
+  OPTIONAL { $this l10n:label ?pickedLabel }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel)) $this c:label ?onlyLabel FILTER(isLiteral(?onlyLabel)) }
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?pickedEmpty }
+  OPTIONAL { FILTER(!BOUND(?pickedEmpty)) $this c:emptyText ?onlyEmpty FILTER(isLiteral(?onlyEmpty)) }
+  BIND(IF(?some, rdfhtml:Ul, rdfhtml:P) AS ?rootType)
+  BIND(IF(?some, ?none, "sem-ok") AS ?okClass)
+  BIND(IF(?some, ?none, IRI(CONCAT(STR($this), "/~ok"))) AS ?ok)
+  BIND(IF(?some, ?none, COALESCE(STR(?pickedEmpty), STR(?onlyEmpty), "Every component conforms to its shapes.")) AS ?emptyText)
+  BIND(IF(?some, IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?aria)
+  BIND(COALESCE(STR(?pickedLabel), STR(?onlyLabel), "Shape violations") AS ?ariaLabel)
+  OPTIONAL {
+    ?result a sh:ValidationResult ; sh:focusNode ?node . FILTER(isIRI(?node))
+    ?viewer l10n:formatLocale ?locale .
+    OPTIONAL { ?result sh:resultMessage ?messageValue }
+    OPTIONAL { ?result sh:resultPath ?path }
+    BIND(COALESCE(STR(?messageValue), "") AS ?message)
+    BIND(REPLACE(STR(?node), "^.*[#/]", "") AS ?local)
+    # By component, then message, in the viewer's collation (an order key: case folded, accents stripped).
+    BIND(CONCAT("\\u0001s", sx:sortKey(STR(?node), ?locale), "\\u0001s", sx:sortKey(?message, ?locale)) AS ?order)
+    BIND(SUBSTR(MD5(STR(?result)), 1, 8) AS ?key)
+    # Its component's class (the first of its types by IRI), by its label as util.labelOf reads it.
+    OPTIONAL {
+      ?node a ?type . FILTER(isIRI(?type))
+      FILTER NOT EXISTS { ?node a ?earlier FILTER(isIRI(?earlier) && STR(?earlier) < STR(?type)) }
+      OPTIONAL { ?typeAt l10n:of ?type ; l10n:label ?typeTwin }
+      OPTIONAL { FILTER(!BOUND(?typeTwin)) ?type c:label ?typeOnly FILTER(isLiteral(?typeOnly)) }
+      OPTIONAL { FILTER(!BOUND(?typeTwin) && !BOUND(?typeOnly)) ?typeNameAt l10n:of ?type ; l10n:name ?typeName }
+      OPTIONAL { FILTER(!BOUND(?typeTwin) && !BOUND(?typeOnly) && !BOUND(?typeName)) ?type rdfs:label ?typeRdfs FILTER(isLiteral(?typeRdfs)) }
+    }
+    BIND(IF(BOUND(?type), COALESCE(STR(?typeTwin), STR(?typeOnly), STR(?typeName), STR(?typeRdfs), REPLACE(STR(?type), "^.*[#/]", "")), "") AS ?typeLabel)
+    BIND(CONCAT(?typeLabel, " ", ?local) AS ?whatData)
+    BIND(IF(BOUND(?path), REPLACE(STR(?path), "^.*[#/]", "c:"), "") AS ?pathData)
+    BIND(CONCAT(STR($this), "/~r", ?key) AS ?r)
+    BIND(IRI(?r) AS ?row)
+    BIND(IRI(CONCAT(?r, "-what")) AS ?what)
+    BIND(IRI(CONCAT(?r, "-what-text")) AS ?whatText)
+    BIND(IRI(CONCAT(?r, "-path")) AS ?pathEl)
+    BIND(IRI(CONCAT(?r, "-path-text")) AS ?pathText)
+    BIND(IRI(CONCAT(?r, "-msg")) AS ?msgEl)
+    BIND(IRI(CONCAT(?r, "-msg-text")) AS ?msgText)
+  }
+}""" .
+c:ShapeReportRendering-sparql-text a sem:Rule ;
+    sem:implements c:ShapeReportRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?lineData ; sem:orderKey ?order .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ShapeReport .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    ?result a sh:ValidationResult ; sh:focusNode ?node . FILTER(isIRI(?node))
+    ?viewer l10n:formatLocale ?locale .
+    OPTIONAL { ?result sh:resultMessage ?messageValue }
+    OPTIONAL { ?result sh:resultPath ?path }
+    BIND(COALESCE(STR(?messageValue), "") AS ?message)
+    BIND(REPLACE(STR(?node), "^.*[#/]", "") AS ?local)
+    # By component, then message, in the viewer's collation (an order key: case folded, accents stripped).
+    BIND(CONCAT("\\u0001s", sx:sortKey(STR(?node), ?locale), "\\u0001s", sx:sortKey(?message, ?locale)) AS ?order)
+    BIND(SUBSTR(MD5(STR(?result)), 1, 8) AS ?key)
+    BIND(CONCAT("✕ ", ?local, " — ", ?message, "\\n") AS ?lineData)
+    BIND(IRI(CONCAT(STR($this), "/~l", ?key)) AS ?line)
+  }
+}""" .
 

@@ -1,6 +1,7 @@
 //! The exports of `../ABI.md`. Wire types are i32; ids and counts are u32.
 
 use crate::dict::{self, Dict, Key, lowercase};
+use crate::jelly;
 use crate::lex;
 use crate::sparql;
 use crate::ntriples;
@@ -17,8 +18,14 @@ struct Prepared {
     cq: Option<alloc::boxed::Box<Cq>>,
 }
 
+enum Jelly {
+    Reader(jelly::Reader),
+    Writer(jelly::Writer),
+}
+
 struct State {
     queries: Vec<Option<Prepared>>,
+    jelly: Vec<Option<Jelly>>,
     dict: Dict,
     store: Store,
     input: Vec<u8>,
@@ -38,6 +45,7 @@ fn st() -> &'static mut State {
     unsafe {
         (*STATE.0.get()).get_or_insert_with(|| State {
             queries: Vec::new(),
+            jelly: Vec::new(),
             dict: Dict::new(),
             store: Store::default(),
             input: Vec::new(),
@@ -90,7 +98,7 @@ fn args<const N: usize>(input: &[u8], lens: [u32; N]) -> [&[u8]; N] {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn abi_version() -> i32 {
-    2
+    4
 }
 
 /// The SPARQL extension groups implemented (EXTENSIONS.md, "Capabilities").
@@ -135,7 +143,11 @@ fn lang_key<'a>(input: &'a [u8], scratch: &'a mut Vec<u8>, len: u32, lang_len: u
 #[unsafe(no_mangle)]
 pub extern "C" fn intern_iri(len: u32) -> u32 {
     let s = st();
-    s.dict.intern(Key::iri(&s.input[..len as usize]))
+    let v = &s.input[..len as usize];
+    if !crate::iri::valid(v) {
+        return fail(b"bad IRI") as u32;
+    }
+    s.dict.intern(Key::iri(v))
 }
 
 #[unsafe(no_mangle)]
@@ -279,6 +291,27 @@ pub extern "C" fn match_(s: u32, p: u32, o: u32, g: u32) -> i32 {
     (st.result.len() / 4) as i32
 }
 
+/// Several patterns at once: `n` patterns of 4 ids in the input buffer; the result buffer gets
+/// `n` counts, then each pattern's quads in order. Returns the number of quads.
+#[unsafe(no_mangle)]
+pub extern "C" fn match_batch(n: u32) -> i32 {
+    let s = st();
+    let n = n as usize;
+    if s.input.len() < n * 16 {
+        return fail(b"input buffer too short");
+    }
+    s.result.clear();
+    s.result.resize(n, 0);
+    for i in 0..n {
+        let w = |k: usize| u32::from_le_bytes([s.input[k], s.input[k + 1], s.input[k + 2], s.input[k + 3]]);
+        let pat = [w(i * 16), w(i * 16 + 4), w(i * 16 + 8), w(i * 16 + 12)];
+        let before = s.result.len();
+        s.store.scan(pat, &mut s.result);
+        s.result[i] = ((s.result.len() - before) / 4) as u32;
+    }
+    ((s.result.len() - n) / 4) as i32
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn apply(removes: u32, adds: u32) -> i32 {
     let s = st();
@@ -312,6 +345,12 @@ pub extern "C" fn load(format: u32, text_len: u32, base_len: u32, graph: u32) ->
     let parsed = match format {
         1 | 2 => ntriples::parse(text, format == 2, graph, &mut s.dict, &mut quads),
         3 | 4 => turtle::parse(text, format == 4, base, graph, &mut s.dict, &mut quads),
+        5 => {
+            if let Err(e) = jelly_stream(text, graph, &mut s.dict, &mut quads) {
+                return fail(e.as_bytes());
+            }
+            Ok(())
+        }
         _ => return fail(b"unknown format"),
     };
     if let Err(e) = parsed {
@@ -329,6 +368,13 @@ pub extern "C" fn collect() -> i32 {
     let mut alive = alloc::vec![false; s.dict.capacity()];
     let dict = &s.dict;
     s.store.each(|q| q.iter().for_each(|&id| dict.mark(id, &mut alive)));
+    for j in s.jelly.iter_mut().flatten() {
+        let mut mark = |id| dict.mark(id, &mut alive);
+        match j {
+            Jelly::Reader(r) => r.held(&mut mark),
+            Jelly::Writer(w) => w.held(&mut mark),
+        }
+    }
     for p in s.queries.iter().flatten() {
         sparql::query_terms(&p.query, &mut |id| dict.mark(id, &mut alive));
         p.binds.iter().flat_map(|(_, v)| v).for_each(|&id| dict.mark(id, &mut alive));
@@ -429,14 +475,32 @@ pub extern "C" fn set_fuel(steps: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn run(h: u32, graphs: u32) -> i32 {
     crate::budget::start();
+    crate::fetch::start();
     let n = run_query(h, graphs);
     if crate::budget::finish() {
         st().result.clear();
         fail(b"interrupted");
         return -2;
     }
+    fetched(n)
+}
+
+/// A run's or update's value once its fetches are accounted for (ABI.md, "Optional: fetching").
+fn fetched(n: i32) -> i32 {
+    let f = crate::fetch::f();
+    if let Some(why) = f.error.take() {
+        st().result.clear();
+        return fail(&why);
+    }
+    if f.waiting {
+        st().result.clear();
+        fail(WAITING);
+        return -3;
+    }
     n
 }
+
+const WAITING: &[u8] = b"waiting: SERVICE or LOAD needs the host to fetch (rdf-engine/ABI.md, fetching)";
 
 fn run_query(h: u32, graphs: u32) -> i32 {
     let s = st();
@@ -503,10 +567,97 @@ pub extern "C" fn update(text_len: u32, base_len: u32) -> i32 {
         Ok(u) => u,
         Err(e) => return fail_at(e),
     };
+    crate::fetch::start();
     match sparql::update::execute(&u, &mut s.dict, &mut s.store) {
-        Ok(()) => 0,
-        Err(msg) => fail(msg.as_bytes()),
+        Ok(()) => fetched(0),
+        Err(msg) => {
+            let r = fetched(0);
+            if r < 0 { r } else { fail(msg.as_bytes()) }
+        }
     }
+}
+
+// --- fetching (ABI.md, "Optional: fetching") ---------------------------------------
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_count() -> u32 {
+    crate::fetch::f().reqs.len() as u32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_request(i: u32) -> i32 {
+    let Some(r) = crate::fetch::f().reqs.get(i as usize) else { return fail(b"no such request") };
+    let s = st();
+    s.result.clear();
+    s.result.extend_from_slice(&[r.state, r.kind, r.target, r.names.len() as u32, r.asked as u32]);
+    s.result.extend_from_slice(&r.rows);
+    r.nrows as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_text_ptr(i: u32) -> *const u8 {
+    crate::fetch::f().reqs.get(i as usize).map_or(core::ptr::null(), |r| r.text.as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_text_len(i: u32) -> u32 {
+    crate::fetch::f().reqs.get(i as usize).map_or(0, |r| r.text.len() as u32)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_var_ptr(i: u32, j: u32) -> *const u8 {
+    crate::fetch::f().reqs.get(i as usize).and_then(|r| r.names.get(j as usize)).map_or(core::ptr::null(), |n| n.as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_var_len(i: u32, j: u32) -> u32 {
+    crate::fetch::f().reqs.get(i as usize).and_then(|r| r.names.get(j as usize)).map_or(0, |n| n.len() as u32)
+}
+
+/// Every id an answer gives must be a live term, and a LOAD triple a valid one:
+/// an answer is the host's, but its terms come from elsewhere.
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_answer(i: u32, n: u32) -> i32 {
+    let s = st();
+    let Some(r) = crate::fetch::f().reqs.get_mut(i as usize) else { return fail(b"no such request") };
+    let w = crate::fetch::answer_width(r);
+    let Some(len) = (n as usize).checked_mul(w * 4).filter(|&l| l <= s.input.len()) else { return fail(b"answer larger than the input buffer") };
+    let ids: Vec<u32> = s.input[..len].chunks_exact(4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+    let kind = |id: u32| s.dict.term(id).map_or(dict::FREE, |t| t.kind);
+    if r.kind == crate::fetch::LOAD {
+        for t in ids.chunks_exact(3) {
+            let (sk, pk, ok) = (kind(t[0]), kind(t[1]), kind(t[2]));
+            if !(sk == dict::IRI || sk == dict::BNODE || sk == dict::TRIPLE) || pk != dict::IRI || !(ok == dict::IRI || ok == dict::BNODE || ok == dict::LITERAL || ok == dict::TRIPLE) {
+                return fail(b"an answer triple is not a valid triple");
+            }
+        }
+    } else if ids.iter().any(|&id| id != 0 && (kind(id) == dict::FREE || id == dict::DEFAULT_GRAPH_ID)) {
+        return fail(b"an answer holds an id that is not a term");
+    }
+    r.answer = ids;
+    r.nanswer = n;
+    r.state = crate::fetch::ANSWERED;
+    0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_fail(i: u32, len: u32) -> i32 {
+    let s = st();
+    let Some(r) = crate::fetch::f().reqs.get_mut(i as usize) else { return fail(b"no such request") };
+    if len as usize > s.input.len() {
+        return fail(b"message larger than the input buffer");
+    }
+    r.why = s.input[..len as usize].to_vec();
+    r.answer.clear();
+    r.nanswer = 0;
+    r.state = crate::fetch::FAILED;
+    0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fetch_clear() -> i32 {
+    crate::fetch::clear();
+    0
 }
 
 /// Every combination of bound values.
@@ -891,6 +1042,9 @@ pub extern "C" fn cq_strterm(p: u32, n: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn cq_iri(p: u32, n: u32) -> u32 {
     let r = run_state();
+    if !crate::iri::valid(bytes_at(p, n)) {
+        return 0;
+    }
     let mut out = Vec::new();
     crate::iri::resolve(r.ctx.base, bytes_at(p, n), &mut out);
     r.ctx.dict.intern(Key::iri(&out))
@@ -1013,4 +1167,161 @@ pub extern "C" fn cq_end() -> i32 {
         return (r.count > 0) as i32;
     }
     r.count as i32
+}
+
+// --- Jelly (ABI.md "Jelly", JELLY.md) ------------------------------------------
+
+/// A whole stream (delimited frames, or one bare frame) into `out`.
+fn jelly_stream(b: &[u8], graph: u32, dict: &mut Dict, out: &mut Vec<Quad>) -> jelly::R<()> {
+    let mut r = jelly::Reader::new(if graph == 0 { dict::DEFAULT_GRAPH_ID } else { graph });
+    // A bare frame starts with its options row: 0x0A, a length, 0x0A.
+    if b.len() >= 3 && b[0] == 0x0a && b[2] == 0x0a {
+        return r.frame(b, dict, out);
+    }
+    let mut i = 0;
+    while i < b.len() {
+        let (mut n, mut shift) = (0u64, 0);
+        loop {
+            if i >= b.len() || shift > 63 {
+                return Err("truncated frame length");
+            }
+            let c = b[i];
+            i += 1;
+            n |= ((c & 0x7f) as u64) << shift;
+            if c < 0x80 {
+                break;
+            }
+            shift += 7;
+        }
+        if n > (b.len() - i) as u64 {
+            return Err("truncated frame");
+        }
+        let end = i + n as usize;
+        r.frame(&b[i..end], dict, out)?;
+        i = end;
+    }
+    Ok(())
+}
+
+fn jelly_handle(j: Jelly) -> i32 {
+    let s = st();
+    match s.jelly.iter().position(Option::is_none) {
+        Some(i) => {
+            s.jelly[i] = Some(j);
+            i as i32 + 1
+        }
+        None => {
+            s.jelly.push(Some(j));
+            s.jelly.len() as i32
+        }
+    }
+}
+
+fn jelly_at(h: u32) -> Option<&'static mut Jelly> {
+    st().jelly.get_mut((h as usize).wrapping_sub(1))?.as_mut()
+}
+
+/// `n` bytes to the result buffer.
+fn result_bytes(b: &[u8]) -> i32 {
+    let r = &mut st().result;
+    r.clear();
+    r.resize(b.len().div_ceil(4), 0);
+    unsafe { core::ptr::copy_nonoverlapping(b.as_ptr(), r.as_mut_ptr() as *mut u8, b.len()) };
+    b.len() as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_reader(graph: u32) -> i32 {
+    jelly_handle(Jelly::Reader(jelly::Reader::new(if graph == 0 { dict::DEFAULT_GRAPH_ID } else { graph })))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_frame(h: u32, len: u32, mode: u32) -> i32 {
+    let s = st();
+    let Some(Jelly::Reader(r)) = jelly_at(h) else { return fail(b"not a Jelly reader") };
+    if r.failed {
+        return fail(b"the stream failed earlier");
+    }
+    let mut out = Vec::new();
+    if let Err(e) = r.frame(&s.input[..len as usize], &mut s.dict, &mut out) {
+        r.failed = true;
+        r.ends.clear();
+        return fail(e.as_bytes());
+    }
+    if mode & 1 != 0 {
+        for &q in &out {
+            s.store.add(q);
+        }
+    }
+    if mode & 2 != 0 {
+        s.result.clear();
+        s.result.extend(out.iter().flatten());
+    }
+    out.len() as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_ends(h: u32) -> i32 {
+    let s = st();
+    let Some(Jelly::Reader(r)) = jelly_at(h) else { return fail(b"not a Jelly reader") };
+    s.result.clear();
+    s.result.extend_from_slice(&r.ends);
+    r.ends.len() as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_finish(h: u32) -> i32 {
+    let Some(Jelly::Reader(r)) = jelly_at(h) else { return fail(b"not a Jelly reader") };
+    r.finish() as i32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_writer(physical: u32, stream_type: u32, rdf_version: u32, max_names: u32, max_prefixes: u32, max_datatypes: u32, frame_rows: u32) -> i32 {
+    match jelly::Writer::new(physical, stream_type, rdf_version, [max_names, max_prefixes, max_datatypes], frame_rows) {
+        Ok(w) => jelly_handle(Jelly::Writer(w)),
+        Err(e) => fail(e.as_bytes()),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_write(h: u32, count: u32) -> i32 {
+    let s = st();
+    let Some(Jelly::Writer(w)) = jelly_at(h) else { return fail(b"not a Jelly writer") };
+    if s.input.len() < count as usize * 16 {
+        return fail(b"input buffer too short");
+    }
+    w.out.clear();
+    for i in 0..count as usize {
+        let at = |k: usize| u32::from_le_bytes([s.input[k], s.input[k + 1], s.input[k + 2], s.input[k + 3]]);
+        let q = [at(i * 16), at(i * 16 + 4), at(i * 16 + 8), at(i * 16 + 12)];
+        if let Err(e) = w.add(q, &s.dict) {
+            return fail(e.as_bytes());
+        }
+    }
+    result_bytes(&w.out)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_message(h: u32) -> i32 {
+    let Some(Jelly::Writer(w)) = jelly_at(h) else { return fail(b"not a Jelly writer") };
+    match w.end_message() {
+        Ok(()) => 0,
+        Err(e) => fail(e.as_bytes()),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_flush(h: u32) -> i32 {
+    let s = st();
+    let Some(Jelly::Writer(w)) = jelly_at(h) else { return fail(b"not a Jelly writer") };
+    w.out.clear();
+    w.flush(&s.dict);
+    result_bytes(&w.out)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jelly_release(h: u32) {
+    if let Some(j) = st().jelly.get_mut((h as usize).wrapping_sub(1)) {
+        *j = None;
+    }
 }

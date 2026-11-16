@@ -6,7 +6,8 @@ import { HtmlIndex } from '../src/render/html-index.ts'
 
 const prefix = `@prefix ui: <https://example.org/ui#> .
 @prefix h: <https://ia2.dev/spec/rdf-html#> .
-@prefix sem: <https://semblance.dev/ns/core#> .`
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .`
 const parse = (text: string) => new Parser().parse(prefix + text)
 
 function mount(graph: string, nativeMoves: boolean) {
@@ -88,6 +89,22 @@ ui:slot a h:Div ; sem:slot "page" .`, true)
     } finally { app.dispose() }
   })
 
+  it("inserts an ordered list's items rather than moving them, so the browser numbers them afresh", () => {
+    const app = mount(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:slot, ui:ol, ui:ul .
+ui:slot a h:Div ; sem:slot "page" .
+ui:ol a h:Ol ; h:hasChild ui:o1, ui:o2 . ui:o1 a h:Li . ui:o2 a h:Li . ui:o1 ord:immediatelyPrecedes ui:o2 .
+ui:ul a h:Ul ; h:hasChild ui:u1, ui:u2 . ui:u1 a h:Li . ui:u2 a h:Li . ui:u1 ord:immediatelyPrecedes ui:u2 .`, true)
+    try {
+      const [o1, o2] = [...app.host.querySelectorAll('ol > li')]
+      const [u1, u2] = [...app.host.querySelectorAll('ul > li')]
+      app.apply('ui:o1 ord:immediatelyPrecedes ui:o2 . ui:u1 ord:immediatelyPrecedes ui:u2 .', 'ui:o2 ord:immediatelyPrecedes ui:o1 . ui:u2 ord:immediatelyPrecedes ui:u1 .')
+      expect([...app.host.querySelectorAll('ol > li')]).toEqual([o2, o1])
+      expect([...app.host.querySelectorAll('ul > li')]).toEqual([u2, u1])
+      expect(app.moves.some((n) => n === o1 || n === o2)).toBe(false)
+      expect(app.moves.some((n) => n === u1 || n === u2)).toBe(true)
+    } finally { app.dispose() }
+  })
+
   it('builds a new subtree detached and attaches it whole', () => {
     const app = mount(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:slot .
 ui:slot a h:Div ; sem:slot "page" .`, true)
@@ -108,5 +125,40 @@ ui:slot a h:Div ; sem:slot "page" .`, true)
       insert.insertBefore = original
       app.dispose()
     }
+  })
+  describe('a graph that nests a node in itself', () => {
+    const render = (graph: string) => {
+      const { document } = parseHTML('<!doctype html><html><body><main></main></body></html>')
+      const host = document.querySelector('main')!
+      const errors: string[] = []
+      const index = new HtmlIndex((e) => errors.push(e.message))
+      const renderer = new DomRenderer(index, host, 'https://example.org/ui#workspace')
+      index.apply({ add: parse(graph), remove: [] })
+      renderer.flush()
+      return { host, errors, index, renderer }
+    }
+
+    it('a child ordered next to its own parent: reported, the node stays out of its children, the rest is drawn', () => {
+      const { host, errors } = render(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:item , ui:after .
+ui:item a h:Li ; sem:orderKey 0 ; h:hasChild ui:num .
+ui:after a h:P ; sem:orderKey 1 .
+ui:num a h:Span ; ord:immediatelyPrecedes ui:item .`)
+      expect(errors.join()).toContain('its own parent')
+      expect(host.querySelector('li > span')).toBeTruthy()
+      expect(host.querySelector('section > p')).toBeTruthy()
+    })
+
+    it('two nodes in each other: reported, the patch goes on', () => {
+      const { host, errors, index, renderer } = render(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:a , ui:after .
+ui:a a h:Div ; sem:orderKey 0 ; h:hasChild ui:b .
+ui:b a h:Div ; h:hasChild ui:a .
+ui:after a h:P ; sem:orderKey 1 .`)
+      expect(errors.join()).toContain('inside itself')
+      expect(host.querySelector('section > p')).toBeTruthy()
+      // Later changes still arrive.
+      index.apply({ add: parse('ui:root h:hasChild ui:more . ui:more a h:H2 ; sem:orderKey 2 .'), remove: [] })
+      renderer.flush()
+      expect(host.querySelector('section > h2')).toBeTruthy()
+    })
   })
 })

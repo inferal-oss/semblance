@@ -328,6 +328,28 @@ describe('the command palette goes to places', () => {
     expect(p.fact('palette', NS.nav + 'goTo')).toEqual([])
     expect(p.log(1)).toEqual([[NS.nav + 'Navigate', UI + 'location']])
   })
+
+  it('leaves the focus with the page on a place: nothing on the new page takes it, or scrolls to itself', async () => {
+    const t = tab()
+    const h = await mountNavigating({ ...t, schedule: (run) => queueMicrotask(run), frame: () => {} })
+    const p = drive(h as unknown as Shell)
+    const pulled: unknown[] = []
+    const focus = h.window.HTMLElement.prototype.focus
+    h.window.HTMLElement.prototype.focus = function (this: HTMLElement, o?: FocusOptions) {
+      if (!o?.preventScroll) pulled.push(this.className)
+      return focus.call(this, o)
+    }
+    p.open()
+    p.type('checkout')
+    pulled.length = 0
+    p.press('Enter')
+    await new Promise((r) => setTimeout(r, 0))
+    h.shell.flush()
+    expect(t.location.pathname).toBe('/examples/checkout/')
+    expect(pulled).toEqual([])
+    expect(h.document.activeElement).toBe(h.document.body)
+    h.window.HTMLElement.prototype.focus = focus
+  })
 })
 
 describe('the gallery palette', () => {
@@ -359,8 +381,9 @@ describe('the gallery palette', () => {
 })
 
 describe('the command palette renders the same with SPARQL rules as with functions', () => {
-  it('after every step', () => {
-    const shells = (['sparql', 'function'] as const).map((prefer) => drive(mountShell(5, 'oxigraph', prefer)))
+  // On wat its texts layer is SPARQL too (sx:sortKey, sx:chars); Oxigraph runs the function twin either way.
+  it.each(['oxigraph', 'wat'] as const)('after every step (%s)', (kind) => {
+    const shells = (['sparql', 'function'] as const).map((prefer) => drive(mountShell(5, kind, prefer)))
     const same = (step: string) => {
       const [a, b] = shells.map((p) => p.document.getElementById('app')!.innerHTML)
       expect(a, `after ${step}: SPARQL and function renderings differ`).toBe(b)
@@ -380,6 +403,12 @@ describe('the command palette renders the same with SPARQL rules as with functio
     all((p) => p.open(), 'reopening, with a recent run')
     all((p) => p.press('ArrowUp'), 'Up')
     all((p) => p.press('Escape'), 'Escape')
+    for (const languages of [['uk'], ['ar'], ['de']]) {
+      all((p) => (p.screen.engine.reconfigure({ languages }), p.shell.flush()), languages.join())
+      all((p) => p.open(), `opening in ${languages.join()}`)
+      all((p) => p.type('ре'), `typing in ${languages.join()}`)
+      all((p) => p.press('Escape'), `closing in ${languages.join()}`)
+    }
   })
 })
 
@@ -419,4 +448,110 @@ describe('the command palette shape', () => {
     const messages = h.store.match(null, f.namedNode(SH + 'resultMessage'), null).map((q) => q.object.value)
     expect(messages).toContain('How many recent runs a palette keeps is a number, 0 or more (c:recentLimit).')
   })
+})
+
+/** Search metadata is input on an entry, separate from its displayed name. */
+function metadata(p: ReturnType<typeof drive>, value?: string) {
+  const f = p.store.factory, subject = f.namedNode(UI + 'toolsToggle'), predicate = f.namedNode(C + 'keywords')
+  p.runtime.apply({ remove: p.store.match(subject, predicate, null, f.defaultGraph()), add: value === undefined ? [] : [f.quad(subject, predicate, f.literal(value))] })
+  p.shell.flush()
+}
+
+function disabled(p: ReturnType<typeof drive>, value?: boolean) {
+  const f = p.store.factory, subject = f.namedNode(UI + 'toolsToggle'), predicate = f.namedNode(C + 'disabled')
+  p.runtime.apply({ remove: p.store.match(subject, predicate, null, f.defaultGraph()), add: value === undefined ? [] : [f.quad(subject, predicate, f.literal(String(value), f.namedNode(NS.xsd + 'boolean')))] })
+  p.shell.flush()
+}
+
+describe.each(['wat', 'oxigraph'] as const)('palette search metadata (%s)', (kind) => {
+  it('matches metadata only without displaying or falsely highlighting it, and follows updates/removal', () => {
+    const p = drive(mountShell(5, kind))
+    metadata(p, 'Complete-ID-abc123 Café compiler')
+    p.open()
+    const textRuns = () => ['PaletteTexts-fn', 'PaletteTexts-sparql'].reduce((n, r) => n + (p.screen.engine.stats.byRule.get(C + r)?.runs ?? 0), 0)
+    const beforeTyping = textRuns()
+    p.type('cafe compiler')
+    expect(textRuns()).toBe(beforeTyping)
+    expect(p.sections()).toEqual([{ heading: 'Actions', options: ['*Tools'] }])
+    expect(p.option('Tools').querySelector('mark')).toBe(null)
+    expect(p.option('Tools').textContent).not.toContain('abc123')
+    expect(p.input().getAttribute('aria-activedescendant')).toBe(p.option('Tools').id)
+    const before = p.fact('palette', C + 'entries')
+    metadata(p, 'Replacement-identifier')
+    expect(textRuns()).toBeGreaterThan(beforeTyping)
+    expect(p.sections()).toEqual([])
+    p.type('replacement-identifier')
+    expect(p.sections()).toEqual([{ heading: 'Actions', options: ['*Tools'] }])
+    expect(p.fact('palette', C + 'entries')).toEqual(before)
+    metadata(p)
+    expect(p.sections()).toEqual([])
+    p.type('tools')
+    // The site also has a place named Tools; removing metadata preserves both
+    // ordinary label matches, with the action still highlighted first.
+    expect(p.sections()).toContainEqual({ heading: 'Actions', options: ['*Tools'] })
+    expect(p.option('Tools').querySelector('mark')?.textContent).toBe('Tools')
+  })
+
+  it('excludes disabled entries and restores them when re-enabled without replaying a selection', () => {
+    const p = drive(mountShell(5, kind))
+    metadata(p, 'Exact-host-identity')
+    p.open()
+    p.type('exact-host')
+    disabled(p, true)
+    expect(p.sections()).toEqual([])
+    expect(p.press('Enter')).toBe(false)
+    expect(p.fact('tools', C + 'open')).toEqual(['true'])
+    disabled(p, false)
+    expect(p.sections()).toEqual([{ heading: 'Actions', options: ['*Tools'] }])
+    // Removing an entry's metadata does not select it or perform its effect.
+    metadata(p)
+    expect(p.fact('tools', C + 'open')).toEqual(['true'])
+    expect(p.sections()).toEqual([])
+  })
+
+  it('indexes metadata up to 32768 Unicode code points', () => {
+    const p = drive(mountShell(5, kind)), f = p.store.factory
+    const exact = '😀'.repeat(32768)
+    metadata(p, exact)
+    p.open()
+    p.type('😀')
+    expect(p.sections()).toEqual([{ heading: 'Actions', options: ['*Tools'] }])
+    expect(p.option('Tools').textContent).not.toContain('😀')
+    metadata(p, exact + 'suffix-outside-bound')
+    p.type('suffix-outside-bound')
+    expect(p.sections()).toEqual([])
+    expect(p.store.match(null, f.namedNode(C + 'searchKey'), null).some(q => q.object.value === 'tools\n' + exact)).toBe(true)
+  })
+
+  it('bounds indexed metadata and ignores a keyword that is not a literal', () => {
+    const p = drive(mountShell(5, kind))
+    metadata(p, 'a'.repeat(32768) + 'suffix-outside-bound')
+    p.open()
+    p.type('suffix-outside-bound')
+    expect(p.sections()).toEqual([])
+    const f = p.store.factory
+    const keys = p.store.match(null, f.namedNode(C + 'searchKey'), null).map(q => q.object.value)
+    expect(keys.some(value => value === 'tools\n' + 'a'.repeat(32768))).toBe(true)
+    expect(keys.some(value => value.includes('suffix-outside-bound'))).toBe(false)
+    const subject = f.namedNode(UI + 'toolsToggle'), predicate = f.namedNode(C + 'keywords')
+    p.runtime.apply({ remove: p.store.match(subject, predicate, null, f.defaultGraph()), add: [f.quad(subject, predicate, f.namedNode(UI + 'not-a-literal'))] })
+    p.shell.flush()
+    p.type('not-a-literal')
+    expect(p.sections()).toEqual([])
+  })
+})
+
+it('keeps search metadata matching and updates byte-identical across projection implementations', () => {
+  const shells = (['sparql', 'function'] as const).map(prefer => drive(mountShell(5, 'oxigraph', prefer)))
+  const all = (act: (p: (typeof shells)[number]) => void) => {
+    for (const p of shells) act(p)
+    expect(shells[0]!.document.getElementById('app')!.innerHTML).toBe(shells[1]!.document.getElementById('app')!.innerHTML)
+  }
+  all(p => metadata(p, 'Hidden-ID-123'))
+  all(p => { p.open(); p.type('hidden-id') })
+  all(p => metadata(p, 'Changed-ID-456'))
+  all(p => p.type('changed-id'))
+  all(p => disabled(p, true))
+  all(p => disabled(p, false))
+  all(p => metadata(p))
 })

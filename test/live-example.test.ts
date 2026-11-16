@@ -8,7 +8,7 @@ import { DEFAULT_LAYERS, MOD, NS } from '../src/ns.ts'
 import { memoryBackend, Persistence } from '../src/persistence.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
-import { buildSandbox, completeSource, Sandboxes, type SandboxSource } from '../src/sandbox.ts'
+import { buildSandbox, completeSource, prerenderSandboxes, Sandboxes, type SandboxSource } from '../src/sandbox.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { implementationGaps } from './implementations.ts'
 
@@ -172,14 +172,14 @@ describe('a live example (c:LiveExample)', () => {
   it('resets the sources as written, and the sandbox with them', () => {
     const h = host()
     const original = h.value(UI + 'gs-page-app', C + 'original')!
-    h.type('gs-page-app', original.replace('Have another', 'Not now'))
+    h.type('gs-page-app', original.replace('Hello, Semblance', 'Hello, again'))
     h.sandboxes.settle()
-    expect(h.preview('gs-page').querySelector('button')!.textContent).toBe('Not now')
+    expect(h.preview('gs-page').querySelector('h1')!.textContent).toBe('Hello, again')
     h.fire(h.button('gs-page', 'Reset'), 'click')
     expect(h.value(UI + 'gs-page-app', C + 'value')).toBeUndefined()
     expect((h.document.getElementById(`${UI}gs-page-app/~input`) as HTMLTextAreaElement).value).toBe(original)
     h.sandboxes.settle()
-    expect(h.preview('gs-page').querySelector('button')!.textContent).toBe('Have another')
+    expect(h.preview('gs-page').querySelector('h1')!.textContent).toBe('Hello, Semblance')
     expect(h.button('gs-page', 'Reset').disabled).toBe(true)
   })
 
@@ -226,7 +226,8 @@ describe('a live example (c:LiveExample)', () => {
     expect(h.copied).toHaveLength(1)
     expect(h.copied[0]).toMatch(/^@prefix /)
     expect(h.copied[0]).toContain('@prefix c: <https://semblance.dev/ns/component#> .')
-    expect(h.copied[0]).toContain('@prefix sty: ')
+    expect(h.copied[0]).toContain('@prefix pos: ')
+    expect(h.copied[0]).not.toContain('@prefix sty: ')
     expect(h.copied[0]).not.toContain('@prefix sh: ')
     expect(h.copied[0]).toContain('ex:cups a ex:Tally')
     expect(h.button('gs-tally', 'Copy')).toBeDefined()
@@ -240,7 +241,7 @@ describe('a live example (c:LiveExample)', () => {
     const h = host()
     const persistence = new Persistence(h.store, backends, { delayMs: 60_000 })
     persistence.attach(h.runtime)
-    const edited = h.value(UI + 'gs-page-app', C + 'original')!.replace('Have another', 'Remembered')
+    const edited = h.value(UI + 'gs-page-app', C + 'original')!.replace('Hello, Semblance', 'Remembered')
     h.type('gs-page-app', edited)
     await persistence.flush()
     const store = loadStore('wat', docs)
@@ -248,7 +249,7 @@ describe('a live example (c:LiveExample)', () => {
     const again = host({ store })
     again.sandboxes.settle()
     expect(again.value(UI + 'gs-page-app', C + 'value')).toBe(edited)
-    expect(again.preview('gs-page').querySelector('button')!.textContent).toBe('Remembered')
+    expect(again.preview('gs-page').querySelector('h1')!.textContent).toBe('Remembered')
     expect(again.button('gs-page', 'Reset').disabled).toBe(false)
   })
 
@@ -334,7 +335,9 @@ describe('the live examples of the site', () => {
   for (const ex of examples) {
     it(`${ex.iri.replace(UI, 'ui:')} parses and renders, with no problems, on Semblance WASM with SPARQL`, () => {
       const b = buildSandbox(ex.sources, ex.root, { load: (...t) => loadStore('wat', ...t), prefer: 'sparql', withText: ex.withText, languages: ['en'] })
-      expect(b.problems).toEqual([])
+      // The Safe authoring docs' example is there to be refused (test/safety.test.ts checks what): warnings only.
+      if (ex.iri === UI + 'sa-live') expect(b.problems.filter((p) => p.severity !== 'warning')).toEqual([])
+      else expect(b.problems).toEqual([])
       expect(b.sandbox!.screen.index.resolve(ex.root)).toBeDefined()
       for (const s of ex.sources) expect(() => new Parser().parse(completeSource(s.text))).not.toThrow()
     })
@@ -512,5 +515,82 @@ describe('a live example with its data (c:dataPreview): the todo of the home pag
       step(b)
       same()
     }
+  })
+})
+
+// A live example with a simulated store (c:storeSource, src/simulated-store.ts): the Remote data
+// page's todos live in store.ttl, which the sandbox binds its src:Source to, in-process.
+describe('a live example with a simulated store', () => {
+  const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms))
+  const remote = () => {
+    const h = host({ root: UI + 'doc-remote', section: 'DocRemote' })
+    const labels = () => [...h.preview('re-live').querySelectorAll('[data-sem-c=list] label')].map((l) => l.textContent)
+    const badge = () => h.preview('re-live').querySelector('[data-sem-c=badge]')!.textContent
+    const storeText = () => h.value(UI + 're-live-store', C + 'value') ?? h.value(UI + 're-live-store', C + 'original')!
+    const add = (label: string) => {
+      const input = h.preview('re-live').querySelector('[data-sem-c=text-field] input') as HTMLInputElement
+      input.value = label
+      h.fire(input, 'input')
+      h.fire([...h.preview('re-live').querySelectorAll('button')].find((b) => b.textContent === 'Add')!, 'click')
+    }
+    return { h, labels, badge, storeText, add }
+  }
+
+  it('loads its part of the store before it is first shown, and says it is live', () => {
+    const t = remote()
+    expect(t.labels()).toEqual(['Write the ontology', 'Sketch the styles', 'Wire up behaviour'])
+    expect(t.badge()).toBe('Live')
+    // The store's text is not the sandbox's: its shapes are not in the example's graph.
+    const sandbox = t.h.sandboxes.sandboxOf(UI + 're-live')!
+    const f = sandbox.store.factory
+    expect(sandbox.store.match(f.namedNode('https://example.org/shared#TodoShape'), null, null)).toHaveLength(0)
+    expect(t.h.value(UI + 're-live', C + 'sandboxState')).toBe(C + 'SandboxLive')
+  })
+
+  it('takes an edit of the store as a delta, without building the example again', async () => {
+    const t = remote()
+    const builds = t.h.sandboxes.builds
+    t.h.fire(t.h.document.getElementById(`${UI}re-live/~tab-1`)!, 'click')
+    t.h.type('re-live-store', t.storeText().replace('"Sketch the styles"', '"Sketch the theme"'))
+    await settle(400)
+    expect(t.labels()).toEqual(['Write the ontology', 'Sketch the theme', 'Wire up behaviour'])
+    expect(t.h.sandboxes.builds).toBe(builds)
+    // Text that does not parse leaves the store as it is, and says where.
+    t.h.type('re-live-store', t.storeText() + '\nex:broken')
+    await settle(400)
+    expect(t.labels()).toEqual(['Write the ontology', 'Sketch the theme', 'Wire up behaviour'])
+    expect(t.h.example('re-live').querySelector('.sem-live-message')!.textContent).toBeTruthy()
+  })
+
+  it('writes the page’s changes to the store, whose text then shows them', async () => {
+    const t = remote()
+    t.add('Ship it')
+    await settle(5)
+    expect(t.labels()).toContain('Ship it')
+    expect(t.storeText()).toContain('rdfs:label "Ship it"')
+    expect(t.storeText()).toContain('sh:maxLength 24')
+    expect(t.badge()).toBe('Live')
+  })
+
+  it('puts back a write the store refuses, and the badge says why', async () => {
+    const t = remote()
+    const before = t.storeText()
+    t.add('A todo far longer than the store takes')
+    await settle(5)
+    expect(t.labels()).toEqual(['Write the ontology', 'Sketch the styles', 'Wire up behaviour'])
+    expect(t.badge()).toBe('A todo is at most 24 characters.')
+    expect(t.storeText()).toBe(before)
+  })
+
+  it('renders the loaded store on the server', () => {
+    const store = loadStore('wat', docs)
+    const f = store.factory
+    store.add(f.quad(f.namedNode(UI + 'app'), f.namedNode(UI + 'docSection'), f.namedNode(UI + 'DocRemote')))
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, layers: DEFAULT_LAYERS, name: 'screen', roots: [UI + 'doc-remote'] })
+    const slots = prerenderSandboxes(runtime, screen, { load: (...t) => loadStore('wat', ...t), roots: [UI + 'doc-remote'] })
+    const html = slots.get(UI + 're-live')!
+    expect(html).toContain('Wire up behaviour')
+    expect(html).toContain('Live')
   })
 })

@@ -23,6 +23,8 @@ export const enum Rel {
   FitsInline = 6,
   /** each member lies within the first member on both axes */
   FitsWithin = 7,
+  /** no member overlaps another (each that does is reported, by the most it overlaps one: the overlap's smaller extent) */
+  NoOverlap = 8,
 }
 
 export interface Box {
@@ -104,6 +106,21 @@ export function checkPacked(boxes: Float64Array, program: Int32Array): Finding[]
         }
       }
       if (hi - lo > tolerance) findings.push({ invariant: inv, member: worst, by: hi - lo })
+      continue
+    }
+    if (rel === Rel.NoOverlap) {
+      for (let k = 0; k < n; k++) {
+        const i = program[m + k]
+        let over = 0
+        for (let j = 0; j < n; j++) {
+          if (j === k) continue
+          const o = program[m + j]
+          const across = Math.min(end(boxes, i), end(boxes, o)) - Math.max(start(boxes, i), start(boxes, o))
+          const down = Math.min(bottom(boxes, i), bottom(boxes, o)) - Math.max(top(boxes, i), top(boxes, o))
+          over = Math.max(over, Math.min(across, down))
+        }
+        if (over > tolerance) findings.push({ invariant: inv, member: i, by: over })
+      }
       continue
     }
     const c = program[m]

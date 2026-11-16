@@ -758,13 +758,13 @@ WHERE {
   } UNION {
     # The hosted toasts, each placed after the one before it (or after the last listed one).
     $this a c:ToastRegion .
-    $this c:hosts ?toast FILTER(isIRI(?toast)) FILTER NOT EXISTS { ?listedCell rdf:first ?toast . $this c:toasts/rdf:rest* ?listedCell }
+    $this c:hosts ?toast FILTER(isIRI(?toast)) FILTER NOT EXISTS { ?listedCell rdf:first ?toast . $this (c:toasts|c:toasts/rdf:rest+) ?listedCell }
     BIND($this AS ?region)
     LATERAL {
       OPTIONAL {
         SELECT ?a ?toast ?region WHERE {
           ?region c:hosts ?a FILTER(isIRI(?a) && STR(?a) < STR(?toast))
-          FILTER NOT EXISTS { ?listedCell rdf:first ?a . ?region c:toasts/rdf:rest* ?listedCell }
+          FILTER NOT EXISTS { ?listedCell rdf:first ?a . ?region (c:toasts|c:toasts/rdf:rest+) ?listedCell }
         } ORDER BY DESC(STR(?a)) LIMIT 1
       }
     }
@@ -797,13 +797,13 @@ WHERE {
   } UNION {
     # The hosted toasts, each placed after the one before it (or after the last listed one).
     $this a c:ToastRegion .
-    $this c:hosts ?toast FILTER(isIRI(?toast)) FILTER NOT EXISTS { ?listedCell rdf:first ?toast . $this c:toasts/rdf:rest* ?listedCell }
+    $this c:hosts ?toast FILTER(isIRI(?toast)) FILTER NOT EXISTS { ?listedCell rdf:first ?toast . $this (c:toasts|c:toasts/rdf:rest+) ?listedCell }
     BIND($this AS ?region)
     LATERAL {
       OPTIONAL {
         SELECT ?a ?toast ?region WHERE {
           ?region c:hosts ?a FILTER(isIRI(?a) && STR(?a) < STR(?toast))
-          FILTER NOT EXISTS { ?listedCell rdf:first ?a . ?region c:toasts/rdf:rest* ?listedCell }
+          FILTER NOT EXISTS { ?listedCell rdf:first ?a . ?region (c:toasts|c:toasts/rdf:rest+) ?listedCell }
         } ORDER BY DESC(STR(?a)) LIMIT 1
       }
     }
@@ -816,9 +816,10 @@ WHERE {
 }""" .
 
 # Dismissing a toast closes it (c:OverlayClose, overlays.ttl); a hosted toast also leaves its
-# region, so a region fed by a stream of announcements does not grow.
+# region, so a region fed by a stream of announcements does not grow. A toast that is
+# c:dismissible false stays, as c:OverlayClose leaves it open.
 c:ToastUnhost a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Toast ;
-    beh:deletes """CONSTRUCT { ?region c:hosts $this } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . ?region c:hosts $this }""" ;
+    beh:deletes """CONSTRUCT { ?region c:hosts $this } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . ?region c:hosts $this FILTER NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") } }""" ;
     sem:function "toast:unhost" .

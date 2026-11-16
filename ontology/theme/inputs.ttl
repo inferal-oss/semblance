@@ -166,7 +166,7 @@
     sty:declares [ sty:property "outline" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RadioGroup ; sty:part ".sem-radio > input:checked" ;
     sty:declares [ sty:property "border-color" ; sty:raw "var(--tone-solid, var(--sem-accent-9))" ] ,
-                 [ sty:property "background" ; sty:raw "radial-gradient(circle, var(--tone-on-solid, #ffffff) 0 28%, var(--tone-solid, var(--sem-accent-9)) 32%)" ] .
+                 [ sty:property "background" ; sty:raw "radial-gradient(circle, var(--tone-on-solid, var(--sem-accent-contrast)) 0 28%, var(--tone-solid, var(--sem-accent-9)) 32%)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RadioGroup ; sty:part ".sem-option-text" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,

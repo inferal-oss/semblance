@@ -23,12 +23,12 @@
 # is, is remembered for the tab like the tools window.
 
 ui:gallery-windows a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-windows-intro ui:gallery-windows-lede ui:wn-windows ui:wn-grid ui:wn-state ui:wn-dock ui:wn-stack ui:wn-taskbar ui:wn-palette ui:wn-fullscreen ) .
-ui:gallery-windows-intro a c:Heading ; c:label "Windows" .
+    c:children ( ui:gallery-windows-intro ui:gallery-windows-lede ui:wn-windows ui:wn-grid ui:wn-state ui:wn-dock ui:wn-dock-resize ui:wn-stack ui:wn-taskbar ui:wn-palette ui:wn-fullscreen ) .
+ui:gallery-windows-intro a c:Heading ; c:label "Windows" , "Вікна"@uk , "Fenster"@de , "النوافذ"@ar .
 ui:gallery-windows-lede a c:Text ;
-    c:label "A window is not one behaviour but several. Each capability is a mixin class with its own reactions (c:Draggable, c:Resizable, c:Raisable, c:Minimizable, c:Maximizable, c:Dockable); c:Window has them all, c:Palette only some, and a frame's title bar shows the controls of the capabilities its instance has. Window state is two hookable axes, so the theme styles each value once and any control that sets a property can drive it." .
+    c:label "A window is not one behaviour but several. Each capability is a mixin class with its own reactions (c:Draggable, c:Resizable, c:Raisable, c:Minimizable, c:Maximizable, c:Dockable, c:DockResizable); c:Window has all but the last, c:Palette only some, and a frame's title bar shows the controls of the capabilities its instance has. Window state is two hookable axes, so the theme styles each value once and any control that sets a property can drive it." .
 
-ui:desktop c:hosts ui:win-checklist , ui:win-log , ui:win-activity , ui:win-display , ui:taskbar .
+ui:desktop c:hosts ui:win-checklist , ui:win-log , ui:win-activity , ui:win-display , ui:win-side , ui:taskbar .
 ui:desktop c:tileLayout c:DesktopFloatingLayout .
 ui:taskbar a c:Taskbar , c:Draggable , c:Dockable ; c:of ui:desktop .
 # Where the frames are and whether they overlap, as the Query tool's samples show (rnd:Overlap).
@@ -36,6 +36,7 @@ ui:win-checklist rnd:observesSelf rnd:Overlap , rnd:Visibility .
 ui:win-log rnd:observesSelf rnd:Overlap , rnd:Visibility .
 ui:win-activity rnd:observesSelf rnd:Overlap , rnd:Visibility .
 ui:win-display rnd:observesSelf rnd:Overlap , rnd:Visibility .
+ui:win-side rnd:observesSelf rnd:Overlap , rnd:Visibility .
 ui:taskbar rnd:observesSelf rnd:Overlap , rnd:Visibility .
 ui:rememberTaskbar a per:Policy ; per:scope per:Session ;
     rdfs:label "Where the taskbar is" , "Де панель вікон"@uk , "Wo die Fensterleiste ist"@de , "مكان شريط النوافذ"@ar ;
@@ -77,13 +78,29 @@ ui:win-display-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
 ui:win-display-theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
 ui:win-display-contrast a c:Segmented ; c:controls ui:shell ; c:property sty:contrast .
 
+# A window that opts into c:DockResizable: docked, the edge opposite the one it is on sizes it.
+ui:win-side a c:Window , c:DockResizable ; c:open false ;
+    c:title "Side panel" , "Бічна панель"@uk , "Seitenleiste"@de , "لوحة جانبية"@ar ;
+    c:x 200 ; c:y 160 ; c:width 360 ; c:height 300 ; c:minSize 240 ; c:maxSize 720 ;
+    c:windowState c:Normal ; c:attachedTo c:EndEdge ;
+    c:body ui:win-side-body .
+ui:win-side-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:win-side-text ui:win-side-edge ) .
+ui:win-side-text a c:Text ;
+    c:label "Drag the edge opposite the one I am docked to, or focus it and use the arrow keys, Home and End." ,
+        "Перетягніть край навпроти того, до якого мене прикріплено, або сфокусуйтеся на ньому й скористайтеся стрілками, Home і End."@uk ,
+        "Ziehen Sie den Rand gegenüber dem, an dem ich angedockt bin, oder fokussieren Sie ihn und nutzen Sie die Pfeiltasten, Pos1 und Ende."@de ,
+        "اسحب الحافة المقابلة لتلك التي أنا مثبتة عليها، أو ركّز عليها واستخدم مفاتيح الأسهم وHome وEnd."@ar .
+ui:win-side-edge a c:Segmented ; c:controls ui:win-side ; c:property c:attachedTo ;
+    c:label "Attached to" , "Прикріплено до"@uk , "Angedockt an"@de , "مثبتة على"@ar .
+
 # --- specimens -----------------------------------------------------------------------------------------
 
 ui:wn-open-checklist a c:Button ; c:label "Checklist" ; c:icon "☑" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:win-checklist .
 ui:wn-open-log a c:Button ; c:label "Change log" ; c:icon "≡" ; sty:emphasis sty:Outline ; c:opens ui:win-log .
 ui:wn-open-activity a c:Button ; c:label "Activity" ; c:icon "▤" ; sty:emphasis sty:Outline ; c:opens ui:win-activity .
 ui:wn-windows a c:Flippable ; c:front ui:wn-windows-spec .
-ui:wn-windows-spec a c:Specimen ; c:demonstrates c:Window ; c:label "Window" ;
+ui:wn-windows-spec a c:Specimen ; c:demonstrates c:Window ; c:label "Window" , "Вікно"@uk , "Fenster"@de , "نافذة"@ar ;
     c:help "Three windows on the desktop, closed until a button c:opens them (c:Window is a c:Overlay: c:open, c:opens, c:closes). Opening one also restores it if it was minimized and brings it to the front. The title bar shows minimize, maximize and close because a c:Window is c:Minimizable and c:Maximizable; a window detached from a tab adds a control that returns it there." ;
     c:children ( ui:wn-open-checklist ui:wn-open-log ui:wn-open-activity ) .
 
@@ -114,26 +131,39 @@ ui:wn-open-checklist-grid a c:Button ; c:label "Open checklist" ; c:opens ui:win
 ui:wn-open-log-grid a c:Button ; c:label "Open change log" ; c:opens ui:win-log .
 ui:wn-open-activity-grid a c:Button ; c:label "Open activity" ; c:opens ui:win-activity .
 ui:wn-grid a c:Flippable ; c:front ui:wn-grid-spec .
-ui:wn-grid-spec a c:Specimen ; c:demonstrates c:Desktop , c:DesktopLayout ; c:label "Tile desktop windows" ;
+ui:wn-grid-spec a c:Specimen ; c:demonstrates c:Desktop , c:DesktopLayout ; c:label "Tile desktop windows" , "Вікна плиткою"@uk , "Fenster kacheln"@de , "ترتيب النوافذ شبكيًا"@ar ;
     c:help "Open windows, then set the desktop to Grid. Normal floating windows fill a responsive grid; their saved positions and sizes remain in the graph. Set Floating to return them to the same geometry. The grid takes c:Grid's parameters: as many columns as fit at c:minWidth, at most c:columns." ;
     c:children ( ui:wn-grid-controls ) .
 
 ui:wn-state-control a c:Segmented ; c:label "Checklist" ; c:controls ui:win-checklist ; c:property c:windowState .
 ui:wn-state a c:Flippable ; c:front ui:wn-state-spec .
-ui:wn-state-spec a c:Specimen ; c:demonstrates c:Window , c:WindowState ; c:label "Window state" ;
+ui:wn-state-spec a c:Specimen ; c:demonstrates c:Window , c:WindowState ; c:label "Window state" , "Стан вікна"@uk , "Fensterzustand"@de , "حالة النافذة"@ar ;
     c:help "c:windowState is one fact on the window: c:Normal, c:Minimized or c:Maximized. The title bar's controls set it (c:minimizes, c:maximizes, c:restores), and so does this segmented control, whose options are the individuals of the property's range. It is hooked (data-sem-window-state), so the theme styles each state once for every frame. A minimized window keeps its parts under a hidden root: its content is parked, not dropped, and the taskbar brings it back." ;
     c:children ( ui:wn-open-checklist-2 ui:wn-state-control ) .
 ui:wn-open-checklist-2 a c:Button ; c:label "Open the checklist" ; sty:emphasis sty:Soft ; sty:tone sty:Accent ; c:opens ui:win-checklist .
 
 ui:wn-dock-control a c:Segmented ; c:label "Checklist" ; c:controls ui:win-checklist ; c:property c:attachedTo .
 ui:wn-dock a c:Flippable ; c:front ui:wn-dock-spec .
-ui:wn-dock-spec a c:Specimen ; c:demonstrates c:Dockable , c:Edge ; c:label "Attached to an edge" ;
+ui:wn-dock-spec a c:Specimen ; c:demonstrates c:Dockable , c:Edge ; c:label "Attached to an edge" , "Прикріплене до краю"@uk , "An einem Rand angedockt"@de , "مثبتة عند حافة"@ar ;
     c:help "A c:Dockable frame c:attachedTo an edge fills it: a side panel at the start or end, a bar at the top or bottom. Drag a window and release the pointer within 24px of an edge (c:Dockable c:snapDistance 24) to snap it there; drag it away, or press ◳, to float it again where it was. Edges are logical, so start and end follow the writing direction. The axis is orthogonal to the window state: maximize a docked window and restore it, and it is docked again." ;
     c:children ( ui:wn-open-checklist-3 ui:wn-dock-control ) .
 ui:wn-open-checklist-3 a c:Button ; c:label "Open the checklist" ; sty:emphasis sty:Soft ; sty:tone sty:Accent ; c:opens ui:win-checklist .
 
+ui:wn-open-side a c:Button ; sty:emphasis sty:Soft ; sty:tone sty:Accent ; c:opens ui:win-side ;
+    c:label "Open the side panel" , "Відкрити бічну панель"@uk , "Seitenleiste öffnen"@de , "فتح اللوحة الجانبية"@ar .
+ui:wn-dock-resize-control a c:Segmented ; c:controls ui:win-side ; c:property c:attachedTo ;
+    c:label "Side panel" , "Бічна панель"@uk , "Seitenleiste"@de , "لوحة جانبية"@ar .
+ui:wn-dock-resize a c:Flippable ; c:front ui:wn-dock-resize-spec .
+ui:wn-dock-resize-spec a c:Specimen ; c:demonstrates c:DockResizable ;
+    c:label "Resized when docked" , "Зміна розміру, коли прикріплене"@uk , "Angedockt in der Größe ändern"@de , "تغيير الحجم عند التثبيت"@ar ;
+    c:help "A frame that is also c:DockResizable (`a c:Window , c:DockResizable`) has a size handle on the edge opposite the one it is docked to: on the end, its start edge; on the top, its bottom edge. Drag it, or focus it and use the arrow keys, Home and End; one beh:Size event sets c:width or c:height, within c:minSize, c:maxSize and the room there is. It is optional: the other windows here keep the size the graph gives them. Edges are logical, so in Arabic the handle of a frame docked at the start is on its left. Float it, and it keeps that size." ,
+        "Рамка, що також є c:DockResizable (`a c:Window , c:DockResizable`), має ручку розміру на краю навпроти того, до якого її прикріплено: на кінці — початковий край, угорі — нижній. Перетягніть її або сфокусуйтеся на ній і скористайтеся стрілками, Home і End; одна подія beh:Size задає c:width або c:height у межах c:minSize, c:maxSize і наявного місця. Це необов'язково: решта вікон тут лишаються такого розміру, як у графі. Краї логічні, тож арабською ручка рамки, прикріпленої на початку, зліва. Відкріпіть її, і вона збереже цей розмір."@uk ,
+        "Ein Rahmen, der auch c:DockResizable ist (`a c:Window , c:DockResizable`), hat am Rand gegenüber seiner Andockkante einen Griff für die Größe: am Ende seinen Anfangsrand, oben seinen unteren Rand. Ziehen Sie ihn, oder fokussieren Sie ihn und nutzen Sie die Pfeiltasten, Pos1 und Ende; ein beh:Size-Ereignis setzt c:width oder c:height, innerhalb von c:minSize, c:maxSize und dem verfügbaren Platz. Das ist optional: Die anderen Fenster hier behalten die Größe aus dem Graphen. Kanten sind logisch, auf Arabisch liegt der Griff eines am Anfang angedockten Rahmens also links. Lösen Sie ihn, und er behält diese Größe."@de ,
+        "الإطار الذي هو أيضًا c:DockResizable (`a c:Window , c:DockResizable`) له مقبض حجم على الحافة المقابلة لحافة تثبيته: عند النهاية حافة البداية، وفي الأعلى الحافة السفلية. اسحبه، أو ركّز عليه واستخدم مفاتيح الأسهم وHome وEnd؛ حدث beh:Size واحد يضبط c:width أو c:height ضمن c:minSize وc:maxSize والمساحة المتاحة. هذا اختياري: تبقى النوافذ الأخرى هنا بالحجم الذي يحدده الرسم البياني. الحواف منطقية، ففي العربية يكون مقبض الإطار المثبت عند البداية على يساره. فك تثبيته فيحتفظ بهذا الحجم."@ar ;
+    c:children ( ui:wn-open-side ui:wn-dock-resize-control ) .
+
 ui:wn-stack a c:Flippable ; c:front ui:wn-stack-spec .
-ui:wn-stack-spec a c:Specimen ; c:demonstrates c:Raisable , c:PointerDown ; c:label "Stacking" ;
+ui:wn-stack-spec a c:Specimen ; c:demonstrates c:Raisable , c:PointerDown ; c:label "Stacking" , "Накладання"@uk , "Stapelung"@de , "التراكب"@ar ;
     c:help "Which window is in front is graph state too. Pressing anywhere in a c:Raisable frame (a c:PointerDown event) makes it its desktop's c:topmost and gives it a c:z one higher than any other there; the desktop puts its frames in one stacking layer ordered by c:z, below its dialogs and toasts. Open two windows and click the one behind." ;
     c:children ( ui:wn-open-log-2 ui:wn-open-activity-2 ) .
 ui:wn-open-log-2 a c:Button ; c:label "Change log" ; c:icon "≡" ; sty:emphasis sty:Outline ; c:opens ui:win-log .
@@ -141,13 +171,13 @@ ui:wn-open-activity-2 a c:Button ; c:label "Activity" ; c:icon "▤" ; sty:empha
 
 ui:wn-taskbar-inline a c:Taskbar ; c:of ui:desktop ; c:label "Windows on the desktop" .
 ui:wn-taskbar a c:Flippable ; c:front ui:wn-taskbar-spec .
-ui:wn-taskbar-spec a c:Specimen ; c:demonstrates c:Taskbar ; c:label "Taskbar" ;
+ui:wn-taskbar-spec a c:Specimen ; c:demonstrates c:Taskbar ; c:label "Taskbar" , "Панель завдань"@uk , "Taskleiste"@de , "شريط المهام"@ar ;
     c:help "A c:Taskbar lists the open frames of a desktop (c:of), each with its state's symbol. Activating an entry restores a minimized frame, brings another to the front, or minimizes the one already in front: three reactions that all see the state before the click. The desktop hosts one, so minimized windows (including those detached from the Playground's tabs) can always be found; that one is also c:Draggable and c:Dockable, so its grip (or the arrow keys) moves it, and thrown at an edge it docks there and the page keeps that edge clear. This is a second instance of the same component, neither, so it stays in the page." ;
     c:children ( ui:wn-taskbar-inline ) .
 
 ui:wn-open-display a c:Button ; c:label "Display palette" ; c:icon "◐" ; sty:emphasis sty:Outline ; c:opens ui:win-display .
 ui:wn-palette a c:Flippable ; c:front ui:wn-palette-spec .
-ui:wn-palette-spec a c:Specimen ; c:demonstrates c:Palette , c:Resizable ; c:label "Palette" ;
+ui:wn-palette-spec a c:Specimen ; c:demonstrates c:Palette , c:Resizable ; c:label "Palette" , "Палітра"@uk , "Palette"@de , "لوحة أدوات"@ar ;
     c:help "A c:Palette is a c:Frame that is c:Dockable but not c:Minimizable or c:Maximizable: a slim strip with only a close control. This one is also c:Resizable (`a c:Palette, c:Resizable`), so it has a grip. The same rendering serves both frames; capabilities are classes, so an instance adds one by saying so." ;
     c:children ( ui:wn-open-display ) .
 

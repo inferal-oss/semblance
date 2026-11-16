@@ -72,11 +72,63 @@
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:BottomEdge ; sty:state ":not([data-sem-window-state=\"maximized\"])" ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "max-height" ; sty:raw "50dvh" ] .
 
+# --- c:DockResizable: the free edge of a docked frame is a size handle --------------------------------------------
+# Inside the frame, which clips what stands out of it, and in logical terms, so it follows the
+# writing direction. The bounds are the graph's (c:minSize, c:maxSize), so the frame's own floor is
+# lifted; the room there is stays the theme's (max-width, max-height above). A short pill says it
+# can be taken, where no pointer hovers to show it.
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state ":has(> .sem-dock-handle)" ;
+    sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "0" ] ,
+                 [ sty:property "grid-template-rows" ; sty:raw "auto minmax(0, 1fr)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part "> .sem-dock-handle" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "place-items" ; sty:raw "center" ] ,
+                 [ sty:property "touch-action" ; sty:raw "none" ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:StartEdge ; sty:part "> .sem-dock-handle" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "0" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "0" ] ,
+                 [ sty:property "inline-size" ; sty:raw "var(--sem-dock-handle, 8px)" ] ,
+                 [ sty:property "cursor" ; sty:raw "col-resize" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:EndEdge ; sty:part "> .sem-dock-handle" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "0" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "inline-size" ; sty:raw "var(--sem-dock-handle, 8px)" ] ,
+                 [ sty:property "cursor" ; sty:raw "col-resize" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:TopEdge ; sty:part "> .sem-dock-handle" ;
+    sty:declares [ sty:property "inset-inline" ; sty:raw "0" ] ,
+                 [ sty:property "inset-block-end" ; sty:raw "0" ] ,
+                 [ sty:property "block-size" ; sty:raw "var(--sem-dock-handle, 8px)" ] ,
+                 [ sty:property "cursor" ; sty:raw "row-resize" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:BottomEdge ; sty:part "> .sem-dock-handle" ;
+    sty:declares [ sty:property "inset-inline" ; sty:raw "0" ] ,
+                 [ sty:property "inset-block-start" ; sty:raw "0" ] ,
+                 [ sty:property "block-size" ; sty:raw "var(--sem-dock-handle, 8px)" ] ,
+                 [ sty:property "cursor" ; sty:raw "row-resize" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part "> .sem-dock-handle::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-border-strong)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state ":is([data-sem-edge=start], [data-sem-edge=end])" ; sty:part "> .sem-dock-handle::after" ;
+    sty:declares [ sty:property "inline-size" ; sty:raw "3px" ] ,
+                 [ sty:property "block-size" ; sty:raw "28px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state ":is([data-sem-edge=top], [data-sem-edge=bottom])" ; sty:part "> .sem-dock-handle::after" ;
+    sty:declares [ sty:property "inline-size" ; sty:raw "28px" ] ,
+                 [ sty:property "block-size" ; sty:raw "3px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part "> .sem-dock-handle:is(:hover, :focus-visible)" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-accent) 45%, transparent)" ] .
+# A finger needs more of it than a pointer does.
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state ":has(> .sem-dock-handle)" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "--sem-dock-handle" ; sty:raw "16px" ] .
+
 # --- palette: a slim title strip, as tall as its content ------------------------------------------------------
 
 [] a sty:StyleRule ; sty:appliesTo c:Palette ;
     sty:declares [ sty:property "grid-template-rows" ; sty:raw "auto auto" ] ,
-                 [ sty:property "min-width" ; sty:raw "180px" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(180px, 100%)" ] ,
                  [ sty:property "min-height" ; sty:raw "0" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-md ] .
 [] a sty:StyleRule ; sty:appliesTo c:Palette ; sty:part ".sem-window-bar" ;
@@ -343,7 +395,7 @@
     sty:declares [ sty:property "opacity" ; sty:raw "0.5" ] ,
                  [ sty:property "outline-color" ; sty:raw "var(--sem-border-strong)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state "[data-sem-ghost][data-sem-tear=back]" ; sty:part ".sem-tear-cue" ;
-    sty:declares [ sty:property "color" ; sty:token tok:faint ] .
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[role=tablist][data-sem-gathering]" ;
     sty:declares [ sty:property "outline" ; sty:raw "2px dashed var(--sem-accent-9)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "-3px" ] ,
@@ -363,7 +415,7 @@
                  [ sty:property "padding" ; sty:raw "8px 12px" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
                  [ sty:property "background" ; sty:token tok:accent-9 ] ,
-                 [ sty:property "color" ; sty:raw "white" ] ,
+                 [ sty:property "color" ; sty:token tok:accent-contrast ] ,
                  [ sty:property "font" ; sty:raw "600 var(--sem-text-xs)/1.35 var(--sem-font)" ] ,
                  [ sty:property "text-align" ; sty:raw "center" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,

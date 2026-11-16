@@ -14,19 +14,24 @@ you type, with its reactions running. Docs → Recipes has more small examples; 
 
 ## Install
 
-> The package is not published yet. Until it is, use a checkout of this repository (`npm install`,
-> then `npm run engine:build`) or `npm pack` it and install the tarball.
-
 ```bash
-npm install @inferal-oss/semblance
+npm install @semblance-dev/semblance
 npm install --save-dev vite
 ```
 
-Semblance ships TypeScript sources, its ontologies (Turtle) and its WebAssembly engines, and is
-built by your bundler. Today that bundler is [Vite](https://vite.dev): the package finds its
-ontology files and engine builds with `import.meta.glob`, which Vite resolves. Tell Vite not to
-pre-bundle it (pre-bundling would skip those imports and break Oxigraph's WASM loader), but to
-pre-bundle its Turtle parser, N3, which is CommonJS underneath:
+The package is compiled JavaScript with its type declarations and its ontologies (Turtle). Its
+default store, Semblance's own SPARQL engine, comes with it: `@semblance-dev/rdf-engine-wat`, a
+dependency. The engine's other build, `@semblance-dev/rdf-engine-rust` (the same results, a larger
+file), is an optional peer: install it only to use the `rust` store. The versions, and what changed in
+each, are in the [changelog](../CHANGELOG.md) (0.x: a minor version may break;
+[RELEASING.md](RELEASING.md)); to try work on `main` before it is released, `npm run pack:check --
+--keep` in a checkout leaves the four tarballs to install.
+
+In the browser the package is built into your app by your bundler. Today that bundler is
+[Vite](https://vite.dev): the package finds its ontology files with `import.meta.glob`, and each
+engine package its WebAssembly with `new URL(…, import.meta.url)`, which Vite resolves. Tell Vite not
+to pre-bundle them (pre-bundling would skip those imports and break Oxigraph's WASM loader), but to
+pre-bundle the Turtle parser, N3, which is CommonJS underneath:
 
 ```ts
 // vite.config.ts
@@ -34,10 +39,20 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   optimizeDeps: {
-    exclude: ['@inferal-oss/semblance', 'oxigraph'],
-    include: ['@inferal-oss/semblance > n3'],
+    exclude: ['@semblance-dev/semblance', '@semblance-dev/rdf-engine-wat', '@semblance-dev/rdf-engine-rust', 'oxigraph'],
+    include: ['@semblance-dev/semblance > n3'],
   },
 })
+```
+
+A page has the wat engine. To offer the rust one too, install it and add it before the first store
+(`mount`, `initWeb`, `openStore`); it becomes a chunk of its own, fetched only when a store of its
+kind is made. In Node it is used once it is installed.
+
+```ts
+import { addEngine } from '@semblance-dev/semblance/web'
+
+addEngine('rust', () => import('@semblance-dev/rdf-engine-rust'))
 ```
 
 ## A page
@@ -47,15 +62,13 @@ The whole interface is data. Put it in a Turtle file:
 ```turtle
 # app.ttl
 @prefix c: <https://semblance.dev/ns/component#> .
-@prefix sty: <https://semblance.dev/ns/style#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix ex: <https://example.org/hello#> .
 
 ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ;
-    c:children ( ex:title ex:drink ) .
+    c:children ( ex:title ) .
 ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
-ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .
 ```
 
 and mount it:
@@ -68,7 +81,7 @@ and mount it:
 
 ```ts
 // main.ts
-import { mount } from '@inferal-oss/semblance/web'
+import { mount } from '@semblance-dev/semblance/web'
 import app from './app.ttl?raw'
 
 await mount(document.getElementById('app')!, { root: 'https://example.org/hello#page', graphs: [app] })
@@ -143,7 +156,7 @@ Use it like any other component, and load its file before the app:
 
 ```turtle
 ex:cups a ex:Tally ; c:label "Coffee today" ; c:value 0 ; ex:unit "cups" .
-ex:page c:children ( ex:title ex:cups ex:drink ) .
+ex:page c:children ( ex:title ex:cups ) .
 ```
 
 ```ts
@@ -171,13 +184,19 @@ reactions, layers, performance and testing, and when (rarely) to write a rule as
 ## State and reactions
 
 The tally's value is a triple, and so is every component's state: a text field's `c:value`, a checkbox's `c:checked`, a page
-switch's property of your app node. Events change it through reactions: a click on the button should add a cup. A reaction names the
+switch's property of your app node. Events change it through reactions: a click on a button should add a cup. The button comes
+with what it does, so add both: the button on the page, and a reaction for its click. A reaction names the
 event class and its source, and says what to delete and what to insert, as `CONSTRUCT`s over
 `$this` (the component) and `$event` (the event, with `beh:value`, `beh:checked`, `beh:node`):
 
 ```turtle
+@prefix sty: <https://semblance.dev/ns/style#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 
+ex:page c:children ( ex:title ex:cups ex:drink ) .
+ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .
+
+# What a click on the button means: one more cup. Delete the old value, insert the new one.
 ex:Drink a beh:Reaction ;
     beh:when beh:Click ; beh:source ex:drink ;
     beh:deletes """PREFIX ex: <https://example.org/hello#>
@@ -246,8 +265,8 @@ viewer's language (an untagged source label plus `@uk`, `@de`, `@ar` translation
 The same graph renders to HTML or text without a DOM:
 
 ```ts
-import { MOD, Runtime, toHTML } from '@inferal-oss/semblance'
-import { loadStore } from '@inferal-oss/semblance/node'
+import { MOD, Runtime, toHTML } from '@semblance-dev/semblance'
+import { loadStore } from '@semblance-dev/semblance/node'
 
 const store = loadStore('wat', tally, app)
 const screen = new Runtime(store).project({ modality: MOD.Screen, roots: [page] })
@@ -258,6 +277,30 @@ To serve an app already rendered, describe it once as a site (`semblance.config.
 `examples/hello`). Then `npx semblance build` renders every address of it into the build, each a
 page the browser paints before any script runs, and `npx semblance serve` renders per request.
 `mount()` takes the rendered page over without rendering it again. See [SSR.md](SSR.md).
+
+An app needs only part of Semblance's ontology: the components it uses, with their rules, styles
+and shapes. Say `subset: true` in its site description, and pass the Vite plugin's module to
+`mount`; the app then ships that part rather than all of it (examples/hello: 171 KiB rather than
+704, and a stylesheet a tenth the size). See [SUBSET.md](SUBSET.md).
+
+```ts
+import ontology from 'virtual:semblance/ontology'
+await mount(element, { root: 'https://example.org/hello#page', graphs: [tally, app], ontology })
+```
+
+## Graphs you do not trust
+
+A graph written by a visitor or a model renders under a policy: pass it as `authored`, and it may
+use the framework's components and your own, but not run script, embed another document or load
+styles and images from elsewhere on its own. What is refused is left out and reported.
+
+```ts
+await mount(element, { root, graphs: [app], authored: [fromTheModel], onRefused: (e) => console.warn(e.message) })
+```
+
+[SAFETY.md](SAFETY.md) (and [Safe authoring](https://semblance.dev/docs/safety/) on the site, with a live
+example) has what is allowed, how the check works, how to extend the policy, and a
+Content Security Policy for the page.
 
 ## Stores
 
@@ -270,5 +313,7 @@ Rust) are there too; `n3` has no SPARQL and runs only function rules. Choose wit
 - [Building components](COMPONENTS.md): rules, reactions, layers, integrating with your app.
 - [PERSISTENCE.md](../PERSISTENCE.md): remembering state (`per:Policy`).
 - [IVM.md](IVM.md): maintained views over streams.
+- [SAFETY.md](SAFETY.md): rendering graphs you do not trust, and a Content Security Policy.
+- [MIGRATIONS.md](MIGRATIONS.md): moving your Turtle across framework versions, forward and back.
 - The site, <https://semblance.dev>, is itself a Semblance app (`demo/app.ttl`); its Tools
   (⌘.) show the graph, the rules behind any element, the change log and a SPARQL workbench.

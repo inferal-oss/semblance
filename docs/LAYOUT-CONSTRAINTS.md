@@ -38,28 +38,37 @@ lc:fieldRowControlsShareTops a lc:Invariant ;
     lc:members lc:EachChild ; lc:part lc:SingleLineControl ; lc:tolerance 1.0 .
 ```
 
-- **Relations** (`lc:Relation`): `SameBlockSize`, `SameInlineSize`, `SameTop`, `SameBottom`
-  (groups: spread = max − min > tolerance), `FitsInline`, `FitsWithin` (containment),
+- **Relations** (`lc:Relation`): `SameBlockSize`, `SameInlineSize`, `SameTop`, `SameBottom`,
+  `SameMiddle` (groups: spread = max − min > tolerance; a middle is `y + height / 2`), `FitsInline`, `FitsWithin` (containment),
   `ContentFits` (an element's own scroll width against its client width), `NoPageOverflow`.
   Borrowed from Galen's relational predicates (with tolerances) and ReDeCheck's failure taxonomy
   (protrusion, viewport protrusion, collision, wrapping).
 - **Scope** `lc:over`: a class; each instance is one group or one container. Classes may be
   **derived** from layout vocabulary that already promises the invariant: `lc:FieldRow` is
-  "a `pos:direction pos:Row` with two `lc:Field`s or more" (a SPARQL `lc:derive` CONSTRUCT).
+  "a `pos:direction pos:Row` with two `lc:Field`s or more" (a SPARQL `lc:derive` CONSTRUCT), and
+  `lc:FieldBeside` "a `pos:FieldRow` or `pos:Subgrid` row with a field and something that is not
+  one" (#518).
   `pos:AlignedColumns` (part N of each column on one line) is the next derivation.
 - **Members** `lc:members`: `lc:EachChild` (one per child: its first `lc:part`, or its root),
-  `lc:Parts` (every part of a role inside), `lc:Descendants` (every component inside, but not
+  `lc:EachChildAtPart` (one per child: its first `lc:part`; a child that names no parts, a tag or
+  a button, itself; one that names others but not that one is left out), `lc:Parts` (every part of a role inside), `lc:Descendants` (every component inside, but not
   inside a scroller between).
-- **Parts** `lc:Role` with `lc:selector`, and `lc:pick [ lc:atWidth sty:CompactWidth ;
-  lc:selector … ]` where a width class moves the part (a Choice's control is its pill when wide,
-  its select on a phone, where the caption goes above it). Selectors are the spike's stand-in:
-  the real design marks the part on the component's RDF/HTML (its minted `<focus>/~control`
-  node carries `lc:role lc:SingleLineControl`), so the component author says which element is
-  the control and the rendered-state effect measures exactly those nodes.
+- **Parts** `lc:Role`: a component's renderings say which node they mint is which part, on the
+  node itself (`<field>/~input lc:role lc:SingleLineControl`, `<field>/~label lc:role
+  lc:FieldLabel`, a nav list's option buttons `lc:NavItem`), in both twins. A part that has its
+  role at one width only says so (`lc:atWidth`): an inline Choice's pill is its control where it is
+  wide (`sty:RegularWidth`), its select on a phone (`sty:CompactWidth`), where the caption goes
+  above it. The layer (`lc:PartHooks`, over the `lc:WithParts` mixin) marks the elements
+  `data-sem-part="single-line-control"` and `data-sem-part-at="compact-width"`, so the
+  rendered-state effect, a recording in a browser and a server-rendered page all find exactly
+  those elements (#193; the spike guessed them with CSS selectors). Which element is the control
+  is the component's call: a date field's control is its row, the outlined box that holds the
+  input and its button, not the input inside.
 - **Lines**: a group in a row that wraps is compared line by line (`rnd:line`, which the host
   measures), so fields that wrap on a phone don't count as misaligned.
 - Declared invariants in the spike: `formControlsShareHeight` (#34), `fieldRowControlsShareTops`
-  and `…ShareHeight` (#57), `navItemsFit` and `navItemsShowTheirText` (#53),
+  and `…ShareHeight` (#57), `besideFieldOnItsControl` (#518: a tag, a unit or a button beside a
+  field is centred on its control, not on the field's label and control together), `navItemsFit` and `navItemsShowTheirText` (#53),
   `contentStaysInCards` (cards and specimens), `pageFits`.
 
 Where invariants are declared: on **components** (a nav list's items fit it), on **layers**
@@ -68,19 +77,33 @@ on an **app** for its own pages.
 
 ## Geometry: the input
 
-The checker reads rendered state as triples (#35, PR #100's `rnd:` layer, still open):
+The checker reads rendered state as triples (the `rnd:` layer, ontology/layers/rendered.ttl):
 `?box rnd:of ?component ; rnd:x ; rnd:y ; rnd:width ; rnd:height`, in the
-`urn:semblance:rendered` graph. The spike needs three additions to `rnd:`:
+`urn:semblance:rendered` graph. A component asks for what the checker needs with
+`rnd:observes rnd:Layout` (#192), for itself and everything shown inside it:
 
-1. **part boxes**: `rnd:` measures component roots; the invariants compare controls and labels
-   inside them (`lc:role`, `lc:index`);
-2. **`rnd:parent`**, the box of the nearest observed component (PR #100 has `rnd:within`, every
-   ancestor; the checker needs the nearest one for children);
-3. **`rnd:scrollWidth`/`rnd:clientWidth` for any element** whose content overflows, and
-   `rnd:line` for children of a wrapping row.
+1. **part boxes**: a state per part its components name (`lc:role`, shown as `data-sem-part`,
+   #193), `rnd:of` the part's node, with its `lc:role`, its `lc:index` (its order among its
+   component's parts of that role) and `rnd:parent` its component's state. A part named at one
+   width class only (`lc:atWidth`) is measured while the viewport is in it;
+2. **`rnd:parent`**, the nearest observed component (`rnd:within` lists every one);
+3. **`rnd:scrolls`** where a component clips its inline overflow, and otherwise
+   **`rnd:scrollWidth`/`rnd:clientWidth`** where its content is wider (a part's always);
+   **`rnd:line`** for the children of a row (`pos:direction pos:Row`, `pos:layout
+   pos:FieldRow`); the viewport's `rnd:scrollWidth`, the document's width;
+4. **hundredths of a pixel** (`xsd:decimal`; other aspects keep whole pixels), so a 0.5 px
+   tolerance can be checked and #34's 3.5 px survives;
+5. **layout boxes, before transforms** (`src/layout/box.ts`): a theme that tilts a card (Doodle)
+   moves no box in it. The bounding box of a rotated element drifts along it (0.23 px per nav
+   item in Doodle's tilted list), its layout box does not.
 
-Precision: PR #100 rounds to whole px; the checker wants 0.01 px (a 0.5 px tolerance cannot be
-checked on rounded values). Quantize the *stored* values only for churn, or keep two decimals.
+`checkSparql` runs `lc:Checker` over a live store: the rendered graph with the app's graph and
+its projections' (where the components rules mint, a shape form's fields, are typed), what the
+derivations type in a graph of its own that is taken out after the query. `fromRendered` reads
+the same rendered graph into the box tree the function checker takes, and `test/layout-live.test.ts`
+keeps the twins in agreement there. `scripts/layout-check.ts --source rnd` records a page from its
+own rendered state (what the shell renders); in Chromium it gives the same box tree as the DOM
+recorder (`--source dom`, the default, which also measures any older checkout).
 
 ## The checker
 
@@ -142,7 +165,7 @@ Box trees were measured in Chromium (the cached headless shell, driven over the 
 | bug | before the fix | after |
 |---|---|---|
 | #34 controls of one form at different heights (999e2af → 19ae80a) | "A form's single-line controls are one height": the Role select is 4.5 px off in Classic and Cupertino, the date 3.5 px in Semblance | clean |
-| #57 checkout code + phone (main → PR #125) | "Fields side by side line up": the Code pill's top is 27.5 px from the Phone input's, in Semblance, Doodle and RTL | clean in Semblance and RTL, at 1280 and 375 px (the row wraps on a phone and is checked line by line); Doodle shows 1.1 px, its tilted card (see below) |
+| #57 checkout code + phone (main → PR #125) | "Fields side by side line up": the Code pill's top is 27.5 px from the Phone input's, in Semblance, Doodle and RTL | clean in Semblance, Doodle and RTL, at 1280 and 375 px (the row wraps on a phone and is checked line by line) |
 | #53 nav items out of their list (08b62ec → 27d4e65) | "Navigation items fit their list": every item is 9.3 px out at 375 px. No label on the site was long enough, so both checkouts were measured with one label lengthened, the way the issue's own theme test does it | clean |
 | 320 px (70de219 → 71686f3) | Inspection: the dock panel is 43 px out of its specimen, and the page is 19 px too wide | page fits |
 | 375 px (a050a46 → a5fc6b7) | Themes / Data / Type pages are 164–663 px too wide | page fits. Also caught: progress bars 8 px out of their specimens, the `c:Progress` 260 px minimum that 71686f3 fixed a day later |
@@ -204,7 +227,7 @@ Reading the numbers:
 ## Recommendation
 
 1. **Adopt the checker and the `lc:` vocabulary.** It is cheap, needs no new math, explains its findings, and has already found a live bug. Run it in CI on `main` across 320/375/768/1280 × the 10 themes × en/uk/de/ar (RTL included), failing on *new* findings, with a baseline that links known ones to their issues.
-2. **Declare parts in RDF/HTML, not selectors.** The spike's `lc:selector` guesses which element is "the control". A component should say so on its minted node (`<focus>/~control lc:role lc:SingleLineControl`), so `rnd:` measures exactly those nodes.
+2. **Declare parts in RDF/HTML, not selectors.** The spike's `lc:selector` guessed which element is "the control". A component says so on its minted node (`<focus>/~control lc:role lc:SingleLineControl`), so `rnd:` measures exactly those nodes (done in #193).
 3. **Solve and check in WASM by default, TypeScript as the backup.** `initLayout()` (the node and web loaders) compiles the builds present, and `createLayoutSolver()` / `checkLayout()` take the first of WAT, Rust and TypeScript that instantiates. The solver stays off by default for pages, for the cross-container cases only, and writes tokens through the style layer's hooks and nothing else. With Dantzig's rule and a column index its build is milliseconds even at 500 fields. All three twins stay under the parity tests.
 4. **Don't adopt Yoga or Taffy** (200–900 KB that re-implement the browser), and don't route layout through a solver (GSS).
 
@@ -224,8 +247,8 @@ Reading the numbers:
 a loaded machine the update after "Continue to shipping" outran the watchdog's turn budget, the page
 waited behind "The page is busy", and no field was measured, so the check passed with nothing to
 check. `scripts/layout-check.ts` now resumes suspended updates. Re-recorded on `main`, the row is clean
-in Semblance and RTL, and in Doodle it is 1.1 px off: Doodle tilts its card, and rotated boxes drift
-about 0.55 px per field along a row. The checker measures transformed boxes; #192 should measure
-layout boxes (or in the container's frame) so a theme's tilt is not a misalignment. #125 also
+in Semblance and RTL; Doodle first read 1.1 px off, as it tilts its card and rotated boxes drift
+about 0.55 px per field along a row. Both recorders and `rnd:Layout` measure layout boxes since
+#192, so a theme's tilt is not a misalignment: re-recorded so (#256), Doodle is clean too. #125 also
 changed the field anatomy: `lc:FieldRow` now covers `pos:FieldRow`, and a Choice with its label
 above is a label (its span) and a control (its select) like any field.

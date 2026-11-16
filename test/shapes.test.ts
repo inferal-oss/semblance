@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { MOD, NS, SEM, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
-import { Runtime } from '../src/runtime.ts'
-import { mountShell } from './harness.ts'
+import { parseTurtle, Runtime } from '../src/runtime.ts'
+import { followDelta, readLocations, routesOf } from '../src/navigation.ts'
+import { sliceAddition } from '../src/slices.ts'
+import { mountShell, mountSite } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const SH = 'http://www.w3.org/ns/shacl#'
@@ -114,6 +116,83 @@ describe('component shapes: a c:Field labels its content (sh:or with an inverse 
   })
 })
 
+// A shape asks for what its component accepts: a link's destination is c:to or c:href, a tab's panel
+// c:content or c:slot. A tab is not a component: it is checked as an entry of a validated one.
+const destinations = `
+@prefix c: <${C}> .
+@prefix sem: <${NS.sem}> .
+@prefix ui: <${UI}> .
+ui:root a c:Stack ; c:validated true ; c:entry ui:tab-content , ui:tab-slot , ui:tab-neither , ui:tab-both ;
+    c:children ( ui:to ui:href ui:both ui:card ui:neither ui:script ui:scriptTo ui:toText ) .
+ui:to a c:Link ; c:label "To" ; c:to sem:Component .
+ui:href a c:Link ; c:label "Href" ; c:href "/docs/" .
+ui:both a c:Link ; c:label "Both" ; c:to sem:Component ; c:href "/reference/" .
+ui:card a c:LinkedCard ; c:to sem:Component ; c:content ui:cardBody .
+ui:cardBody a c:Text ; c:label "Card" .
+ui:neither a c:Link ; c:label "Nowhere" .
+ui:script a c:Link ; c:label "Script" ; c:href "javascript:alert(1)" .
+ui:scriptTo a c:Link ; c:label "Script too" ; c:to sem:Component ; c:href "data:text/html,x" .
+ui:toText a c:Link ; c:label "Text" ; c:to "not a resource" .
+ui:tab-content a c:Tab ; c:label "Content" ; c:content ui:cardBody .
+ui:tab-slot a c:Tab ; c:label "Slot" ; c:slot "editor" .
+ui:tab-neither a c:Tab ; c:label "Empty" .
+ui:tab-both a c:Tab ; c:label "Twice" ; c:content ui:cardBody , ui:to ; c:slot "editor" .
+`
+
+describe('a shape asks for what its component accepts', () => {
+  const check = (kind: StoreKind, prefer: 'sparql' | 'function') => {
+    const store = loadStore(kind, destinations)
+    const runtime = new Runtime(store)
+    runtime.project({ modality: MOD.Screen, layers: [VAL.ShapesLayer], prefer, name: 'screen', roots: [UI + 'root'] }, (e) => {
+      throw e
+    })
+    const f = store.factory
+    return (id: string) => store.match(null, f.namedNode(SH + 'focusNode'), f.namedNode(UI + id)).map((q) => store.match(q.subject, f.namedNode(SH + 'resultMessage'), null)[0]!.object.value)
+  }
+  for (const [kind, prefer] of runs) {
+    it(`takes a link's c:to or c:href, a tab's c:content or c:slot (${kind}, ${prefer})`, () => {
+      const messages = check(kind, prefer)
+      for (const id of ['to', 'href', 'both', 'card', 'tab-content', 'tab-slot']) expect(messages(id), id).toEqual([])
+      expect(messages('neither')).toEqual(['A link needs a destination: a resource (c:to) or an address (c:href).'])
+      // Whichever else a link has, an address it has is still checked.
+      for (const id of ['script', 'scriptTo']) expect(messages(id), id).toEqual(["A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)."])
+      expect(messages('toText')).toEqual(["A link's c:to is one resource: an IRI."])
+      expect(messages('tab-neither')).toEqual(['A tab shows a component (c:content) or a host-owned slot (c:slot).'])
+      expect(messages('tab-both')).toEqual(['content: one value only'])
+    })
+  }
+})
+
+// The specimen on the Layers page that shows what a violation looks like.
+const ON_PURPOSE = new Set(['badLink', 'badProgress', 'badBadge'].map((id) => `${UI}${id}/~root`))
+
+describe('the site conforms to the component shapes', () => {
+  it('marks nothing on any page, but for the specimen that shows a violation', () => {
+    const h = mountSite('wat')
+    const f = h.store.factory
+    const r = { f, match: (s: never, p: string | null, o: never) => h.store.match(s, p ? f.namedNode(p) : null, o, f.defaultGraph()) }
+    const location = readLocations(r).find((l) => l.iri === UI + 'location')!
+    // Every page in its first language (the marks do not depend on the language), and a sample of
+    // the Reference's terms: one rendering, thousands of pages.
+    const pages = routesOf(r, location).filter((p) => !/^\/(uk|de|ar)\//.test(p)).filter((p, i) => !p.startsWith('/reference/') || i % 100 === 0)
+    expect(pages.length).toBeGreaterThan(40)
+    const marked: string[] = []
+    const shown = new Set<string>()
+    for (const page of pages) {
+      h.runtime.apply(followDelta(r, location, page))
+      h.shell.flush()
+      for (const el of h.document.querySelectorAll('[data-sem-shape-invalid]')) {
+        const key = h.shell.keyOf(el)!
+        if (ON_PURPOSE.has(key)) shown.add(key)
+        else marked.push(`${page}: ${key}: ${el.getAttribute('data-sem-tooltip')}`)
+      }
+    }
+    expect(marked).toEqual([])
+    // The walk did reach the marked specimen, so a mark would have been seen.
+    expect(shown).toEqual(ON_PURPOSE)
+  }, 300_000)
+})
+
 describe('the Inputs gallery conforms to the component shapes', () => {
   for (const prefer of ['sparql', 'function'] as const) {
     it(`flags nothing, the Field specimen's label-less slider included (${prefer})`, () => {
@@ -127,6 +206,126 @@ describe('the Inputs gallery conforms to the component shapes', () => {
       expect(h.shell.nodeOf(UI + 'inp-f-level-input/~root')).toBeTruthy()
       expect(h.store.match(null, f.namedNode(SH + 'focusNode'), null).map((q) => q.object.value)).toEqual([])
       expect(h.document.querySelectorAll('[data-sem-shape-invalid]')).toHaveLength(0)
+    })
+  }
+})
+
+// A shape compares what the strata below the components leave: a formula's c:value and c:max (#334).
+describe('component shapes: what a formula derives', () => {
+  const VIEWS = `
+@prefix sem: <${NS.sem}> .
+@prefix iv: <${NS.iv}> .
+@prefix c: <${C}> .
+@prefix ui: <${UI}> .
+ui:doc ui:done 1 ; ui:total 5 .
+ui:Both a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """SELECT ?value ?max WHERE { <${UI}doc> <${UI}done> ?value ; <${UI}total> ?max }""" .
+ui:Total a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """SELECT ?max WHERE { <${UI}doc> <${UI}total> ?max }""" .
+ui:page a c:Stack ; c:children ( ui:progress ui:slider ) .
+ui:progress a c:Progress ; c:valueQuery ui:Both .
+ui:slider a c:Slider ; c:label "Step" ; c:min 0 ; c:value 1 ; c:valueQuery ui:Total .
+`
+  function mount(kind: StoreKind, prefer: 'sparql' | 'function') {
+    const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+    const store = loadStore(kind, VIEWS)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, layers: [VAL.ShapesLayer, SEM.TooltipLayer], prefer, name: 'screen', roots: [UI + 'page'] }, (e) => {
+      throw e
+    })
+    const dom = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'page')
+    dom.flush()
+    const f = store.factory
+    const int = (n: number) => f.literal(String(n), f.namedNode(NS.xsd + 'integer'))
+    const set = (changes: [string, string, number][]) => {
+      runtime.apply({
+        remove: changes.flatMap(([s, p]) => store.match(f.namedNode(UI + s), f.namedNode(p), null, f.defaultGraph())),
+        add: changes.map(([s, p, n]) => f.quad(f.namedNode(UI + s), f.namedNode(p), int(n))),
+      })
+      dom.flush()
+    }
+    const app = document.getElementById('app')!
+    const invalid = (id: string) => ([...document.querySelectorAll('*')].find((e) => dom.keyOf(e) === `${UI}${id}/~root`) as HTMLElement).getAttribute('data-sem-tooltip')
+    return { set, invalid, html: () => app.innerHTML }
+  }
+
+  for (const [kind, prefer] of runs) {
+    it(`compares a value with the maximum of the same change (${kind}, ${prefer})`, () => {
+      const h = mount(kind, prefer)
+      expect([h.invalid('progress'), h.invalid('slider')]).toEqual([null, null])
+      // The value and the maximum go up together, as an edit moves a slider that follows the latest.
+      for (let n = 6; n <= 8; n++) {
+        h.set([['slider', C + 'value', n], ['doc', UI + 'total', n], ['doc', UI + 'done', n]])
+        expect([h.invalid('progress'), h.invalid('slider')]).toEqual([null, null])
+      }
+      // Past the maximum, for what the same change says it is; then fine again.
+      h.set([['slider', C + 'value', 9], ['doc', UI + 'done', 9]])
+      expect(h.invalid('slider')).toBe('Shape violation: value: more than max (8)')
+      expect(h.invalid('progress')).toContain("can't exceed")
+      h.set([['doc', UI + 'total', 9]])
+      expect([h.invalid('progress'), h.invalid('slider')]).toEqual([null, null])
+    })
+  }
+
+  it('renders the same with SPARQL and with function rules at every step', () => {
+    const [a, b] = [mount('wat', 'sparql'), mount('wat', 'function')]
+    expect(a.html()).toBe(b.html())
+    for (const step of [
+      [['slider', C + 'value', 6], ['doc', UI + 'total', 6]],
+      [['slider', C + 'value', 7], ['doc', UI + 'done', 7]],
+      [['doc', UI + 'total', 7]],
+    ] as [string, string, number][][]) {
+      a.set(step)
+      b.set(step)
+      expect(a.html()).toBe(b.html())
+    }
+  })
+})
+
+// A page's later graphs bring shapes after the rule first ran (src/slices.ts): shown components are judged by them at once.
+describe('component shapes: shapes that arrive later', () => {
+  const LATE = `
+@prefix sh: <${SH}> .
+@prefix c: <${C}> .
+@prefix ui: <${UI}> .
+ui:NeedsLevelShape a sh:PropertyShape ; sh:path ui:level ; sh:minCount 1 .
+ui:LateShape a sh:NodeShape ; sh:targetClass c:Slider ; sh:or ( ui:NeedsLevelShape ) ; sh:message "A slider says its level." .
+`
+  for (const [kind, prefer] of runs) {
+    it(`judges what is shown, and what changes after (${kind}, ${prefer})`, () => {
+      const h = validate(kind, prefer)
+      const f = h.store.factory
+      expect(h.root('sl-own').hasAttribute('data-sem-shape-invalid')).toBe(false)
+      const { rules, rest } = sliceAddition(parseTurtle(LATE, f), 1)
+      expect(rest).toEqual([])
+      h.runtime.apply({ add: rules, remove: [] })
+      h.dom.flush()
+      expect(h.root('sl-own').getAttribute('data-sem-tooltip')).toContain('A slider says its level.')
+      h.runtime.apply({ remove: [], add: [f.quad(f.namedNode(UI + 'sl-own'), f.namedNode(UI + 'level'), f.literal('3'))] })
+      h.dom.flush()
+      expect(h.root('sl-own').hasAttribute('data-sem-shape-invalid')).toBe(false)
+    })
+  }
+})
+
+describe('shape string lengths count Unicode code points like SPARQL STRLEN', () => {
+  for (const [kind, prefer] of runs) {
+    it(`checks exact, minimum and maximum supplementary-character lengths (${kind}, ${prefer})`, () => {
+      const source = `@prefix ui: <${UI}> . @prefix c: <${C}> . @prefix sh: <${SH}> .
+ui:root a c:Button ; c:label "Text length" ; ui:text "😀😀" .
+ui:TextLengthShape a sh:NodeShape ; sh:targetClass c:Button ;
+  sh:property [ sh:path ui:text ; sh:minLength 2 ; sh:maxLength 2 ] .`
+      const store = loadStore(kind, source), runtime = new Runtime(store)
+      runtime.project({ modality: MOD.Screen, layers: [VAL.ShapesLayer], prefer, roots: [UI + 'root'] }, e => { throw e })
+      const f = store.factory, subject = f.namedNode(UI + 'root'), property = f.namedNode(UI + 'text')
+      const results = () => store.match(null, f.namedNode(SH + 'focusNode'), subject)
+        .flatMap(q => store.match(q.subject, f.namedNode(SH + 'resultMessage'), null)).map(q => q.object.value)
+      const set = (value: string) => runtime.apply({ remove: store.match(subject, property, null, f.defaultGraph()), add: [f.quad(subject, property, f.literal(value))] })
+      expect(results()).toEqual([])
+      set('😀')
+      expect(results()).toEqual(['text: at least 2 characters'])
+      set('😀😀😀')
+      expect(results()).toEqual(['text: at most 2 characters'])
+      set('A😀')
+      expect(results()).toEqual([])
     })
   }
 })

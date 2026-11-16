@@ -76,7 +76,7 @@ again; a button that removes it (cancels its upload). c:of the file, c:itemOf th
 c:itemOf a owl:ObjectProperty ; rdfs:domain c:FileItem ; rdfs:range c:FileDrop ;
     rdfs:comment "On a c:FileItem: the c:FileDrop whose list it is in."@en .
 
-# Words the drop and its list are made of (said in the viewer's language by c:FileDropTexts; {name}
+# Words the drop and its list are made of (said in the viewer's language by c:FileDropTexts and c:FileItemTexts; {name}
 # is the file's name).
 c:FileDropPrompt a c:Phrase ;
     rdfs:label "Drop files here, or choose them"@en , "Перетягніть файли сюди або виберіть їх"@uk ,
@@ -113,14 +113,83 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~zone")) AS ?zone)
 }""" .
 
-# The words, in the viewer's language, and the files' sizes and progress in its locale.
+# The words, in the viewer's language: the prompt and the help.
 c:FileDropTexts a sem:Rendering ;
     sem:targets c:FileDrop ;
     sem:stratum -20 ;
-    sem:inputOnly true ;
-    sem:functionOnly "awaits sx:Locale (sx:formatNumber): it writes the sizes and percentages in the viewer's locale (Intl.NumberFormat)." ;
-    sem:needsExtension sx:Locale .
+    sem:inputOnly true .
 c:FileDropTexts-fn a sem:Rule ; sem:implements c:FileDropTexts ; sem:function "upload:texts" .
+# Phrases are read as their l10n:Terms twins (else their one label).
+c:FileDropTexts-sparql a sem:Rule ;
+    sem:implements c:FileDropTexts ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?label }
+WHERE {
+  $this a/rdfs:subClassOf* c:FileDrop .
+  BIND(IF(EXISTS { $this val:validates ?shape . ?shape sh:maxCount ?max FILTER(STR(?max) = "1") }, c:FileDropPromptOne, c:FileDropPrompt) AS ?prompt)
+  OPTIONAL { ?promptAt l10n:of ?prompt ; l10n:name ?promptPicked }
+  OPTIONAL { FILTER(!BOUND(?promptPicked)) ?prompt rdfs:label ?promptOnly FILTER(isLiteral(?promptOnly)) }
+  OPTIONAL { ?helpAt l10n:of $this ; l10n:help ?helpPicked }
+  OPTIONAL { FILTER(!BOUND(?helpPicked)) $this c:help ?helpOnly FILTER(isLiteral(?helpOnly)) }
+  VALUES ?kind { "prompt" "help" }
+  BIND(IF(?kind = "prompt", COALESCE(STR(?promptPicked), STR(?promptOnly), ""), STR(COALESCE(?helpPicked, ?helpOnly))) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~l10n-", ?kind)) AS ?node)
+}""" .
+
+# A listed file's words, under its item (c:FileDropItems mints the items before this, at stratum
+# -10): its size and progress in the viewer's locale, its state's name and its buttons' labels in its
+# language. Per item, following its file, so a file's progress re-runs that item's texts only. Sizes
+# and progress are written by sx:formatNumber in the viewer's l10n:formatLocale: a size in the
+# largest decimal unit it reaches, bytes written out ("12 bytes"), larger units short ("1.2 MB").
+c:FileItemTexts a sem:Rendering ;
+    sem:targets c:FileItem ;
+    sem:stratum -5 ;
+    sem:follows c:of ;
+    sem:watches rdf:type , c:of , file:name , file:size , file:loaded , file:state .
+c:FileItemTexts-fn a sem:Rule ; sem:implements c:FileItemTexts ; sem:function "upload:item-texts" .
+c:FileItemTexts-sparql a sem:Rule ;
+    sem:implements c:FileItemTexts ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?label }
+WHERE {
+  $this a c:FileItem ; c:of ?file . FILTER(isIRI(?file))
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?file file:name ?fileName }
+  BIND(COALESCE(STR(?fileName), REPLACE(STR(?file), "^.*[#/]", "")) AS ?name)
+  OPTIONAL { ?file file:size ?size }
+  BIND(xsd:double(STR(?size)) AS ?bytes)
+  OPTIONAL { ?file file:state ?declaredState }
+  BIND(COALESCE(?declaredState, file:Ready) AS ?state)
+  BIND(?state = file:Uploading AS ?uploading)
+  # The size.
+  BIND(IF(?bytes >= 1.0e9, "gigabyte", IF(?bytes >= 1.0e6, "megabyte", IF(?bytes >= 1.0e3, "kilobyte", "byte"))) AS ?unit)
+  BIND(IF(?bytes >= 1.0e9, 1.0e9, IF(?bytes >= 1.0e6, 1.0e6, IF(?bytes >= 1.0e3, 1.0e3, 1.0e0))) AS ?factor)
+  BIND(sx:formatNumber(?bytes / ?factor, ?locale, CONCAT("style=unit;unit=", ?unit, IF(?unit = "byte", ";unitDisplay=long;maximumFractionDigits=0", ";unitDisplay=short;maximumFractionDigits=1"))) AS ?sizeText)
+  # The state's name.
+  OPTIONAL { ?stateAt l10n:of ?state ; l10n:name ?statePicked }
+  OPTIONAL { FILTER(!BOUND(?statePicked)) ?state rdfs:label ?stateOnly FILTER(isLiteral(?stateOnly)) }
+  BIND(STR(COALESCE(?statePicked, ?stateOnly)) AS ?stateText)
+  # How far it is uploaded (a share of its size, 0 when the size is unknown).
+  OPTIONAL { ?file file:loaded ?loadedValue }
+  BIND(COALESCE(xsd:double(STR(?loadedValue)), 0.0e0) AS ?loaded)
+  BIND(COALESCE(IF(?bytes > 0, IF(?loaded / ?bytes > 1, 1.0e0, IF(?loaded / ?bytes < 0, 0.0e0, ?loaded / ?bytes)), 0.0e0), 0.0e0) AS ?share)
+  BIND(sx:formatNumber(?share, ?locale, "style=percent;maximumFractionDigits=0") AS ?progressText)
+  # The buttons' labels, with the file's name.
+  BIND(IF(?uploading, c:CancelUploadPhrase, c:RemoveFilePhrase) AS ?remove)
+  OPTIONAL { ?removeAt l10n:of ?remove ; l10n:name ?removePicked }
+  OPTIONAL { FILTER(!BOUND(?removePicked)) ?remove rdfs:label ?removeOnly FILTER(isLiteral(?removeOnly)) }
+  BIND(COALESCE(STR(?removePicked), STR(?removeOnly), "") AS ?removeSaid)
+  OPTIONAL { ?retryAt l10n:of c:RetryUploadPhrase ; l10n:name ?retryPicked }
+  OPTIONAL { FILTER(!BOUND(?retryPicked)) c:RetryUploadPhrase rdfs:label ?retryOnly FILTER(isLiteral(?retryOnly)) }
+  BIND(COALESCE(STR(?retryPicked), STR(?retryOnly), "") AS ?retrySaid)
+  BIND(IF(CONTAINS(?removeSaid, "{name}"), CONCAT(STRBEFORE(?removeSaid, "{name}"), ?name, STRAFTER(?removeSaid, "{name}")), ?removeSaid) AS ?removeText)
+  BIND(IF(CONTAINS(?retrySaid, "{name}"), CONCAT(STRBEFORE(?retrySaid, "{name}"), ?name, STRAFTER(?retrySaid, "{name}")), ?retrySaid) AS ?retryText)
+  VALUES ?kind { "size" "state" "progress" "remove" "retry" }
+  BIND(IF(?kind = "size", ?sizeText, IF(?kind = "state", ?stateText, IF(?kind = "progress", IF(?uploading, ?progressText, ?none),
+    IF(?kind = "remove", ?removeText, IF(?state = file:Failed, ?retryText, ?none))))) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~l10n-", ?kind)) AS ?node)
+}""" .
 
 # --- rendering ------------------------------------------------------------------------------------------
 # The zone (a button: glyph, label, prompt), the help and the error that describe it, and the list.
@@ -232,9 +301,12 @@ WHERE {
 # A c:FileItem for each file the drop lists - the values of its property (whichever drop took them
 # in; with file:listsHeld false, only the files it took in), and the files it refused - in the
 # order they arrived (sem:order).
+# Before the components (stratum -10), so each item's texts (c:FileItemTexts, -5) are written before
+# the item renders. It reads only the input (the drop's files, its property's values).
 c:FileDropItems a sem:Rendering ;
     sem:targets c:FileDrop ;
-    sem:stratum 0 ;
+    sem:stratum -10 ;
+    sem:inputOnly true ;
     sem:follows c:controls .
 c:FileDropItems-fn a sem:Rule ; sem:implements c:FileDropItems ; sem:function "upload:items" .
 c:FileDropItems-sparql a sem:Rule ;
@@ -256,7 +328,7 @@ WHERE {
 }""" .
 
 # A file: its kind, name, size and state (and why, if it was refused or failed), a progress bar
-# while it is uploaded, and its buttons. The words come from c:FileDropTexts, minted under the item.
+# while it is uploaded, and its buttons. The words come from c:FileItemTexts, minted under the item.
 c:FileItemRendering a sem:Rendering ;
     sem:targets c:FileItem ;
     sem:stratum 0 ;

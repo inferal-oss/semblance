@@ -1,19 +1,15 @@
 // Money (ontology/components/money.ttl): an amount in a currency, in the viewer's locale.
 import type { FnRule, RuleContext } from '../engine/context.ts'
+import { formatLocale } from '../engine/context.ts'
 import { L10N, MOD, NS } from '../ns.ts'
+import { numberText } from '../rdf.ts'
 import { str } from './util.ts'
 
 const VALUE = NS.c + 'value'
 const CURRENCY = NS.c + 'currency'
 
-/** The viewer's first language that Intl knows, else en-US. */
-function locale(ctx: RuleContext): string {
-  try {
-    return Intl.NumberFormat.supportedLocalesOf(ctx.languages)[0] ?? 'en-US'
-  } catch {
-    return 'en-US'
-  }
-}
+/** The viewer's first language that Intl knows, else en-US (the viewer's l10n:formatLocale). */
+const locale = (ctx: RuleContext) => formatLocale(ctx.languages)
 
 /** The amount in the viewer's locale, written on <money>/~l10n-amount (read by both renderings). */
 const moneyTexts: FnRule = (ctx, focus) => {
@@ -39,9 +35,10 @@ const money: FnRule = (ctx, focus) => {
   if (!value) return []
   const o = ctx.out(focus)
   const code = str(ctx.object(focus, CURRENCY))
-  const shown = str(ctx.object(o.node('l10n-amount'), L10N.label)) ?? `${code !== undefined ? code + ' ' : ''}${value.value}`
+  const amount = numberText(value)
+  const shown = str(ctx.object(o.node('l10n-amount'), L10N.label)) ?? `${code !== undefined ? code + ' ' : ''}${amount}`
   if (ctx.modality === MOD.Text) o.renders(o.el('root', 'Span', {}, [o.text('text', shown)]))
-  else o.renders(o.el('root', 'Data', { value: value.value }, [o.text('text', shown)]))
+  else o.renders(o.el('root', 'Data', { value: amount }, [o.text('text', shown)]))
   return o.quads
 }
 

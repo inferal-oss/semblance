@@ -1,5 +1,5 @@
-// Measuring a rendered page into a box tree: every component root (data-sem-c) and, inside each,
-// the parts the constraints layer names by role (lc:selector), with border boxes in document px.
+// Measuring a rendered page into a box tree: every component root (data-sem-c) and the parts
+// components name by role (lc:role, shown as data-sem-part), with border boxes in document px.
 // This is what a rendered-state effect (#35, rnd:) would write for the components and parts that
 // invariants mention; scripts/layout-check.ts runs it in a real browser to record fixtures.
 //
@@ -42,16 +42,20 @@ export interface MeasuredPage {
   nodes: MeasuredNode[]
 }
 
-/** Part roles to selectors; a media condition picks another selector where a width class moves the part. */
-export type PartSelectors = Record<string, { selector: string; media?: string }[]>
+/** What part hooks mean (from the ontology): role slugs to role local names, width class slugs to media conditions. */
+export interface PartHooks {
+  roles: Record<string, string>
+  widths: Record<string, string>
+}
 
-export function measurePage(parts: PartSelectors): MeasuredPage {
+/** `boxOf` gives an element's box relative to the viewport: as laid out, before transforms (src/layout/box.ts), by default its bounding box. */
+export function measurePage(parts: PartHooks, boxOf: (el: Element) => { x: number; y: number; width: number; height: number } = (el) => el.getBoundingClientRect()): MeasuredPage {
   const nodes: MeasuredNode[] = []
   const indexOf = new Map<Element, number>()
   const round = (n: number) => Math.round(n * 100) / 100
   const box = (el: Element) => {
-    const r = el.getBoundingClientRect()
-    return { x: round(r.left + scrollX), y: round(r.top + scrollY), width: round(r.width), height: round(r.height) }
+    const r = boxOf(el)
+    return { x: round(r.x + scrollX), y: round(r.y + scrollY), width: round(r.width), height: round(r.height) }
   }
   const visible = (el: Element) => {
     const r = el.getBoundingClientRect()
@@ -96,17 +100,17 @@ export function measurePage(parts: PartSelectors): MeasuredPage {
       k.line = line
     }
   })
-  for (const [role, picks] of Object.entries(parts)) {
-    const selector = (picks.find((p) => p.media && matchMedia(p.media).matches) ?? picks.find((p) => !p.media))!.selector
-    for (const el of Array.from(document.querySelectorAll(selector))) {
-      if (!visible(el)) continue
-      const owner = indexOf.has(el) ? indexOf.get(el)! : nearest(el)
-      if (owner < 0) continue
-      const text = (el.textContent ?? '').trim().slice(0, 40)
-      const node: MeasuredNode = { slug: nodes[owner].slug, part: role, parent: owner, ...box(el), ...(text ? { text } : {}) }
-      overflow(el, node)
-      nodes.push(node)
-    }
+  // a part belongs to the component that named it: its own root, or the nearest one above it
+  for (const el of Array.from(document.querySelectorAll('[data-sem-part]'))) {
+    const role = parts.roles[el.getAttribute('data-sem-part')!]
+    const at = el.getAttribute('data-sem-part-at')
+    if (!role || (at !== null && !(parts.widths[at] && matchMedia(parts.widths[at]).matches)) || !visible(el)) continue
+    const owner = indexOf.has(el) ? indexOf.get(el)! : nearest(el)
+    if (owner < 0) continue
+    const text = (el.textContent ?? '').trim().slice(0, 40)
+    const node: MeasuredNode = { slug: nodes[owner].slug, part: role, parent: owner, ...box(el), ...(text ? { text } : {}) }
+    overflow(el, node)
+    nodes.push(node)
   }
   const root = document.querySelector('[data-sem-theme]')
   return {
@@ -118,4 +122,12 @@ export function measurePage(parts: PartSelectors): MeasuredPage {
     scrollWidth: document.scrollingElement!.scrollWidth,
     nodes,
   }
+}
+
+/** The page a measurement is of: its hash route, or (the site routes by path) its path without a language prefix. */
+export function pagePath(page: MeasuredPage): string {
+  const url = new URL(page.url)
+  if (url.hash.length > 1) return url.hash.slice(1)
+  const path = url.pathname.replace(/^\/+|\/+$/g, '')
+  return page.lang && path.startsWith(page.lang + '/') ? path.slice(page.lang.length + 1) : path
 }

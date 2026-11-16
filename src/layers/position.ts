@@ -4,11 +4,11 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, POS, RDF_TYPE, RDFS_SUBCLASS } from '../ns.ts'
 import { nodes } from '../components/util.ts'
 
-/** The children of a pos:AlignedColumns container, and the fields of a pos:FieldRow, take their rows from it. */
+/** The children of a pos:AlignedColumns container, and the fields of a pos:FieldRow or a pos:Subgrid row, take their rows from it. */
 const alignedColumns: FnRule = (ctx, focus) => {
   const layouts = ctx.objects(focus, POS.layout).map((l) => l.value)
   const aligned = layouts.includes(POS.AlignedColumns)
-  if (!aligned && !layouts.includes(POS.FieldRow)) return []
+  if (!aligned && !layouts.includes(POS.FieldRow) && !layouts.includes(POS.Subgrid)) return []
   const o = ctx.out(focus)
   for (const column of nodes(ctx, ctx.object(focus, C.children)))
     if (aligned || declaredParts(ctx, column) !== undefined) o.t(column, POS.rows, ctx.nn(POS.RowSubgrid))
@@ -16,7 +16,7 @@ const alignedColumns: FnRule = (ctx, focus) => {
 }
 
 /** The most parts any class of `focus` declares (pos:rowParts), if one does. */
-const declaredParts = (ctx: RuleContext, focus: Parameters<RuleContext['objects']>[0]) => {
+export const declaredParts = (ctx: RuleContext, focus: Parameters<RuleContext['objects']>[0]) => {
   let declared: number | undefined
   const seen = new Set<string>()
   const classes = ctx.objects(focus, RDF_TYPE)

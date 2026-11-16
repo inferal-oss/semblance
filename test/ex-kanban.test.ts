@@ -1,5 +1,6 @@
 // The kanban example (demo/gallery/_ex-kanban.ttl) on a c:Board, driven through events on the site.
 import { describe, expect, it } from 'vitest'
+import { NS } from '../src/ns.ts'
 import { mountSite } from './harness.ts'
 import { fakeLayout } from './drag-layout.ts'
 
@@ -172,6 +173,34 @@ describe('the kanban example', () => {
     expect(column('c6')).toEqual(['done'])
   })
 
+  for (const prefer of ['sparql', 'function'] as const)
+  it(`redoes what was undone, until a new change is made (${prefer})`, () => {
+    const { click, control, column, lanes, button, store } = kanban(prefer)
+    const undone = () => store.match(store.factory.namedNode(NS.beh + 'ChangeLog'), store.factory.namedNode(NS.beh + 'undone'), null)
+    const before = lanes()
+    click(control('Toast overlaps the dock', 'Move to Doing'))
+    const moved = lanes()
+    // Undo, undo again (nothing more), redo, redo again (nothing more): nothing changed in between.
+    click(button('Undo'))
+    click(button('Undo'))
+    expect(lanes()).toEqual(before)
+    click(button('Redo'))
+    expect(lanes()).toEqual(moved)
+    expect(lanes().Doing.cards).toContain('Toast overlaps the dock')
+    click(button('Redo'))
+    expect(lanes()).toEqual(moved)
+    // Undone, then another card moves: the move undone before it is no longer there to redo.
+    click(button('Undo'))
+    expect(column('c6')).toEqual(['done'])
+    expect(undone()).toHaveLength(1)
+    click(control('Write the persistence guide', 'Move to Doing'))
+    expect(undone()).toHaveLength(0)
+    click(button('Redo'))
+    expect(column('c6')).toEqual(['done'])
+    expect(column('c3')).toEqual(['doing'])
+    expect(lanes().Done.cards).toContain('Toast overlaps the dock')
+  })
+
   it('gives a new card the assignee and tag picked in the add row, a new tag included', () => {
     const h = kanban()
     const combo = (n: number) => h.root().querySelectorAll('[data-sem-c=combobox] .sem-ta-field > input')[n] as HTMLInputElement
@@ -243,7 +272,7 @@ describe('the kanban example', () => {
     drag('Crash when pasting an empty query', 1, 0)
     expect(column('c2')).toEqual(['todo'])
     expect(toasts()).toContain('Doing holds at most three cards.')
-    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-refused')).toBe(true)
+    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-drop-refused')).toBe(true)
     expect(bus.recent(1)[0]!.some((q) => q.predicate.value.endsWith('handledBy') && q.object.value === KB + 'DropCard')).toBe(false)
     // Reordering within the full column is still fine (it adds no card).
     drag('Bump Oxigraph', 1, 0)
@@ -251,7 +280,7 @@ describe('the kanban example', () => {
     click(control('Bump Oxigraph', 'Move to Done'))
     drag('Crash when pasting an empty query', 1, 0)
     expect(column('c2')).toEqual(['doing'])
-    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-refused')).toBe(false)
+    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-drop-refused')).toBe(false)
   })
 
   it('carries a card by keyboard: Space, the arrows, Enter - and the arrows are the board\'s again after', () => {

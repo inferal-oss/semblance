@@ -25,8 +25,8 @@ real links to pages of their own.
 | Per request, in Node (or anything with the Fetch API's `Request`/`Response`) | `createHandler`, `listen`, `semblance serve` |
 | The client's side: adopt, skip the stylesheet, replay | `mount()` (automatic), `takeOver` (`src/web/takeover.ts`) |
 
-`@inferal-oss/semblance/server` is platform-neutral: it renders a store that you load (Deno and
-workers pass the engine's WebAssembly module themselves). `@inferal-oss/semblance/node` adds
+`@semblance-dev/semblance/server` is platform-neutral: it renders a store that you load (Deno and
+workers pass the engine's WebAssembly module themselves). `@semblance-dev/semblance/node` adds
 loading, the static build, the request handler and the Vite plugin.
 
 ## A site
@@ -34,7 +34,7 @@ loading, the static build, the request handler and the Vite plugin.
 ```ts
 // semblance.config.ts
 import { readFileSync } from 'node:fs'
-import { defineSite } from '@inferal-oss/semblance/node'
+import { defineSite } from '@semblance-dev/semblance/node'
 
 const read = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8')
 
@@ -64,7 +64,7 @@ npx semblance build --single   # one self-contained file, rendered too
 Or add the plugin to your Vite config:
 
 ```ts
-import { semblance } from '@inferal-oss/semblance/node'
+import { semblance } from '@semblance-dev/semblance/node'
 export default defineConfig({ plugins: [semblance({ config: 'semblance.config.ts' })] })
 ```
 
@@ -102,6 +102,17 @@ target stays in the fragment: `/components/inputs/#inp-codes-spec`. The Referenc
 path too (`/reference/c:Window/`); it is shown in place (`nav:rendersInPlace`), so the build
 renders a language's terms one after another in one runtime rather than each from a fresh store.
 
+Relative URLs in the data resolve against `nav:base` too, not against the page's own path: an
+image's `c:image "photos/harbour.jpg"` is `/photos/harbour.jpg` on `/examples/photos/` and every
+other page, `/docs/app/photos/harbour.jpg` under a base path. The HTML index writes every relative
+`href`, `src`, `poster`, `action`, `formaction` and `cite` after the base (`resolveUrl`,
+`src/render/html-index.ts`), so the server's HTML, the client's DOM and the live examples'
+sandboxes (which take their site's base) agree, and a rule and its function twin still render the
+URL as the data has it. URLs with a scheme, from the root, or within the document (`#…`, `?…`) are
+left as written. A one-file build has no base (`nav:base` is absent): its URLs resolve against the
+file itself. A `<base href>` in the document was the alternative; it would send in-page links
+(`#main`) and the navigation effect's relative addresses to the base's page instead.
+
 A link that keeps where we are reads a value its focus cannot reach (the language is a property of
 the app, not of the link). Its rendering says so with `sem:readsLocation`. Each link's
 destination also states which dimensions it kept (`nav:keeps`), and the engine re-runs it only
@@ -115,7 +126,7 @@ npx semblance serve --assets dist --port 3000
 ```
 
 ```ts
-import { createHandler, listen, loadSite } from '@inferal-oss/semblance/node'
+import { createHandler, listen, loadSite } from '@semblance-dev/semblance/node'
 const site = await loadSite('semblance.config.ts')
 await listen(createHandler({ site, assets: 'dist' }), 3000)
 ```
@@ -126,17 +137,53 @@ the request from a fresh store. The status is 404 when no location names the add
 is one self-contained document. `createHandler` returns `(Request) => Promise<Response>`, so it
 also serves from Deno, Bun or a worker.
 
-Rendering per request costs one load of the graph and one first projection. That is about 0.3 s
-for semblance.dev's whole graph and a few milliseconds for a small app. A site that large is better
-built beforehand. Forking a warm runtime would make per-request rendering of large graphs cheap;
-that belongs to the engine (#9).
+Rendering per request from a fresh store costs one load of the graph and one first projection:
+about 0.3 to 0.5 s for semblance.dev's whole graph, and 0.1 s for examples/hello. With `warm: true`
+the handler renders from runtimes loaded once, one per language, and moves one to each request's
+address instead (`siteRenderer`, `warmRenderer` in `src/server/warm.ts`; #383):
+
+```ts
+await listen(createHandler({ site, assets: 'dist', warm: true }), 3000)
+```
+
+A move is one change: back from what the last address read into the graph, then what this one
+reads, as the client reads its URL before its first projection (`addressDelta`, which
+`Navigation.restore` uses too). The page is serialized without the components placed under a
+hidden element (`shownOnly`): a section an earlier request showed is not on a page a fresh store
+renders. A live example's rendering is kept by its sources and languages, since they do not change
+on a server. Requests are rendered one at a time; a render that fails drops the runtimes. A test
+renders the site's addresses in an order that crosses pages, sections, languages, a Reference term
+and a 404, warm and from a fresh store, and finds them the same (`test/warm.test.ts`).
+
+On semblance.dev, the first request in a language costs what a fresh store costs; after that, an
+address costs what it changes: 50 to 300 ms the first time a page is shown (its rules run), 7 to
+10 ms when it is shown again, where a fresh store took 300 to 500 ms each time. The handler does not
+call `prepare` per request, so a site's `prepare` must not depend on the address.
+
+## Authored content and a Content Security Policy
+
+A graph you do not trust renders on the server under the same policy as in the browser: pass
+`policy: authoredPolicy(trustedStore)` to `renderToString` or `renderToStream`, read from a store
+without the author's graph. The HTML is the browser's, refused nodes included, so the take-over
+matches. A site's own graphs are trusted; its live examples are rendered authored (below).
+
+Its rules are bounded as in the browser: a projection over the policy's work budgets (time, rule
+evaluations, output) is stopped and rendered as far as it got, reported through `onRefused`, and
+`Rendered.exceeded` says why ([SAFETY.md](SAFETY.md#work-budgets)).
+
+A rendered document carries inline scripts (the platform mark, the event capture, and the
+first-paint script of what the visitor chose) and, by default, an inline stylesheet.
+`renderDocument(template, rendered, { csp: true })`, or a site's `csp` (which the static build and
+`semblance serve` pass on), puts the recommended Content Security Policy first in its `<head>`, with
+the hashes of exactly those scripts and styles, and Trusted Types required:
+[SAFETY.md](SAFETY.md#content-security-policy). `contentSecurityPolicy(opts)` gives it as a header.
 
 ## What the visitor's settings do before scripts run
 
 - **Colour scheme and reduced motion** follow the system in CSS (`light-dark()`,
   `sty:underMedia "(prefers-reduced-motion: reduce)"`), so the HTML is right without a script.
 - **The language** is part of the path, so each language's page is rendered as it is.
-- **Remembered choices** (a theme picked this session, the inspector open) are restored by the
+- **Remembered choices** (a theme picked on this device, the inspector open in this tab) are restored by the
   client. What differs from the page as rendered is patched at takeover, like any change.
 
 ## Taking over
@@ -161,22 +208,64 @@ shown, built and disposed while the page renders (`prerenderSandboxes`). The pag
 example before any script runs. Its frame says `data-sem-state="pending"` until the client's
 sandbox runs.
 
+An example's sources are authored content ([SAFETY.md](SAFETY.md)): its projections and its
+styles are rendered under the `safe:Authored` policy, read from the site's store, and what the
+policy refuses is listed among its warnings, on the server as in the browser.
+
 A build that fails writes its problem to the page's graph, as the browser's host does. The frame
 then shows it (`broken`), and the panes stay empty. A styled example (one that declares its own
 `sty:` rules) carries its scoped styles in a `<style>` beside its rendering.
 
 The client still builds a sandbox when its slot comes near the view (`Sandboxes`' `defer`), not
-during the first moments. The first sandbox of a slot the server rendered takes its elements
+during the first moments, once the whole ontology's text has arrived (the site's own graph need not
+have taken in the rest yet), and mounts it in a task of its own (`pace`). The home page's todo is
+live 0.3 s after the page is interactive on a laptop, 0.9 s with the CPU slowed 4× (it was 5 to 6 s,
+and 8 s, while it waited for the site to take in every graph, its clicks held all that time and then
+replayed together: two clicks on a checkbox undid each other). The first sandbox of a slot the server rendered takes its elements
 over (`DomRenderer.adopt`, `Sandboxes.adopted`) rather than replacing them: its first projection
 is the server's, so no node is created, and nothing flashes or moves. Its own stylesheet replaces
 the server's `<style>`. The frame then reads `live`. A source edit remembered from earlier in the
-session differs from what the server rendered, so it is patched, like any change. A click on a
-pre-rendered example before its sandbox runs does nothing.
+session differs from what the server rendered, so it is patched, like any change. The server marks
+each example's rendering `data-sem-ssr`, a region of its own to take over: what is done there before
+its sandbox runs (a todo ticked, one typed and added) is kept and happens once the sandbox has
+taken the region over, never on a control that changes while the graph does not.
 
-`CAPTURE_SCRIPT` sits right after the mount element. It keeps clicks (on anything but a link)
-and submits, holding them back, and it keeps `input` and `change` while letting them happen (what
-was typed stays in the field). After takeover, `replay()` dispatches each kept event again on its
-element.
+`PLATFORM_SCRIPT` (`src/web/platform.ts`) sits in the head, ahead of the stylesheet: it marks
+`<html data-sem-platform="apple">` on macOS, iOS and iPadOS before the first paint, so the key
+hints show `⌘K` rather than `Ctrl+K` from the start. A page the client renders itself is marked
+when it mounts (`markPlatform`), alike. Either way a hint's box holds both spellings and is as wide
+as the wider one, so nothing moves when the platform is marked, late or never.
+
+`STICKY_TOP_SCRIPT` (`src/web/sticky-top.ts`) sits in the head too: it finds the app bar as the
+parser adds it and follows its size, setting `--sem-sticky-top` (the bar's height and 12px when it
+sticks), so a side column that sticks to the top (`pos:StickToTop`) is laid out below the bar in
+the first paint, not at the stylesheet's fallback for a bar of two rows and then moved. A ResizeObserver
+reports before the frame is painted. Once the document is parsed the client follows the bar
+(`attachStickyTop`, which `mount` attaches), as it does on a page it renders itself.
+
+The script `rememberedScript` makes (`src/web/remembered.ts`) sits ahead of the template's first
+stylesheet, and puts back what the visitor chose before the first paint: colours are `light-dark()`
+pairs and themes are attributes over one stylesheet, so nothing needs rendering twice, only the
+switches have to be right. What it reads comes from the graph (`src/server/remembered.ts`): every
+`per:Policy` with a `per:subject`, in a scope with a `per:webStorage`, over a hooked property
+(`sty:hookAttribute`) of the document (`documentAttributes` carries its hook) or of the mounted root.
+It sets the document's switch and the `<meta name="color-scheme">` the empty page is coloured by at
+once, then the root's and those of the controls bound to the properties
+(`data-sem-remembered`, `per:RememberedChooser`) as the parser reaches them, in a mutation observer's
+callback, which runs before the browser can paint what was added. It reads the store the policy's scope names
+(`per:webStorage`), the same one the client restores from: the site keeps how it looks in
+`localStorage` (`per:Device`), so a new tab, a reload and a deep link are painted in it as well. The client's first projection is
+then what is on the page: `adopt` finds no mismatch and nothing is rewritten. A policy in IndexedDB
+(`per:Database`), a `per:construct` policy or one over another node's hook is restored by the client,
+as before.
+
+`CAPTURE_SCRIPT` sits right before the mount element, so it runs before any of the HTML it keeps
+events for has arrived. It keeps clicks (on anything but a link) and submits, holding them back,
+and it keeps `input` and `change` while letting them happen (what was typed stays in the field); no
+listener sees a kept event. After takeover, `replay()` dispatches
+each kept event again on its element, except those in a region still marked `data-sem-ssr` (a live
+example): they stay kept until that region's own takeover (`replayKept(region)`). The script stops
+keeping once no region is left.
 
 ## Making the first moments cheap
 
@@ -208,12 +297,57 @@ announcements.
 
 ## Bytes
 
-The client still loads the whole ontology and every example's graph before it is interactive.
-That is most of a phone's wait, since the page itself paints from the HTML. The Vite plugin bundles
-the framework's ontology without its comments and indentation: the same triples, 846 to 735 KiB
-gzipped. The examples' own Turtle is kept as written, because the site shows it as their source.
+A page needs part of the site's graphs to render, and a client that waits for all of them is
+interactive late: the ontology and every example's graph are most of a phone's wait, since the page
+itself paints from the HTML. So each page names the graphs its client needs first, and the client
+loads those, takes the page over, and loads the rest in idle time (`Site.pageGraphs`,
+`src/server/page-graphs.ts`).
 
-Loading graphs per page would have the client project a page from part of the graph. A page that
-links to a resource in another page's graph (a docs page linking to a specimen) would then render
-differently from the server until that graph arrived. Doing it without breaking parity needs a
-build-time manifest of what each page needs, checked page by page. That is the next step.
+- **The build finds them.** After rendering a page, it renders it again with function rules,
+  whose reads are traced: a graph is needed when it states a triple the page read (a subject and
+  predicate some rule read for something it renders), describes a rule with output, a node with
+  output or a class of one. Reads made for the viewer (every term's label in its languages, kept
+  whether or not a page shows it) are not counted.
+- **The build checks them.** The page rendered from only those graphs must be the page rendered
+  from all of them, byte for byte; otherwise it names none, and its client loads everything. A page
+  rendered in place after another (a Reference term) names none either.
+- **The page names them** in `<meta name="semblance-graphs">`: `ontology/<file>` for the
+  framework's files, the site's own names (`demo/gallery/inputs.ttl`) for the rest. Each graph is
+  a chunk of its own in the client build; with the plugin's `preload`, the page preloads those it
+  names.
+- **The client loads the rest** once it is interactive (`sem:ready`), in idle time: fetched, read
+  as many files per idle period as fit in it, then taken in through the runtime in several changes
+  (`sliceAddition`, `src/slices.ts`): what defines rules first, as one change (the engine reads its
+  rules again once), then the rest a slice per idle period, each slice whole descriptions (a subject
+  with every blank node it reaches). Their rules join the running engine and are evaluated for what
+  is shown, their reactions the bus, their remembered state is restored
+  (`Persistence.restoreAdded`). Once the last has arrived (`runtime.arriving(false)`), what was
+  evaluated before may have read what they add without declaring it (a class's slug), so it is
+  evaluated again (`runtime.reread()`), a few foci of a rule at a time in idle time (`warm`), what is
+  hidden when it is shown; a run on request and a window are defined again. A page reached by a click, before or after
+  they arrive, is the page loaded directly (`test/deferred-graphs.test.ts`).
+- **A page reached before they arrive gets its own first.** The build writes what each page names
+  in one file beside the pages (`semblance-graphs.json`, `PAGE_GRAPHS_INDEX`: each distinct set of
+  graphs as bits, and each page's set). Once the visitor moves to another page, the client reads the
+  files that page names first, and `arrive` takes their triples in as one change, before another
+  idle period; the rest follows a slice per idle period as before. All of it at once was a task of
+  a second after such a click, 4.3 to 4.8 s at 4× CPU (#420); now the longest is under 200 ms, about
+  0.7 s at 4×. A page the index does not name (one rendered in place, a Reference term) gets the
+  rest a few slices per task, without waiting for idle periods. The index is 10 KB, 2 KB gzipped. The live examples build once the ontology's text is fetched (they
+  need the whole ontology, in stores of their own). A test takes pages over with only their graphs
+  and loads the rest, sliced, without a change (`test/ssr.test.ts`). Every engine reads each rule's
+  query once (what it watches, whether its output is attributable), so a sandbox or a reload of the
+  rules does not parse again what the page's engine parsed.
+
+On semblance.dev a page names about 80 of the site's 189 graphs: 60% of the bytes. The shell reads
+much of the rest itself (the taskbar lists every window, the theme menu every theme, the command
+palette every command). On a throttled phone (Slow 4G, CPU slowed 4×, HTTP/2), the landing page is
+interactive at 9.1 s instead of 9.8 s, an example's page at 9.3 s instead of 10.1 s, with the
+first paint unchanged (1.8 s): it sends 1,085 KiB instead of 1,252 before it is interactive. The
+rest follows in idle time, in slices (it was one task of about 2 s there, 0.4 s on a laptop). With preloads, the graphs arrive earlier (interactive at 8.4 s) but
+share the network with the stylesheet: the first paint waited until 4.5 s. Finer pieces than whole
+files (a theme's name apart from its styles) would leave more for later.
+
+The Vite plugin bundles the framework's ontology without its comments and indentation: the same
+triples, 846 to 735 KiB gzipped. The examples' own Turtle is kept as written, because the site
+shows it as their source.

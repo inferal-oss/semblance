@@ -10,7 +10,10 @@ Box trees of real pages, measured in Chromium's headless shell by `scripts/layou
 | 320-before / 320-after | 70de219 / 71686f3 | a progress bar and a docked panel wider than a 320px screen |
 | 375-before / 375-after | a050a46 / a5fc6b7 | gallery pages 443-1038px wide at 375px |
 | 57-main / 57-after | 879f31a (main) / main with PR #125 merged (re-recorded 2026-10-27, resuming the watchdog's suspended update) | #57: the checkout's code and phone fields not lining up |
-| today | 879f31a (main) | main at 320px |
+| 233-before | cbb976c (main) | #233: a card's header actions wider than the card at 320px |
+| 518-before / 518-after | 444f040 (main) / the branch of #518 | #518: the budget sheet's tags centred on the whole field (label and input), not on its input |
+| 522-before / 522-after | 9a87249 (main) / the branch of #522 | #522: on a phone, items beside wrapped fields under another item in a field's help tracks (Kanban, performance), or off a control's middle (Doodle's Add on the Foreign example) |
+| today | main with #193 (parts by lc:role): the 320px gallery pages, the shape form (four themes, 1280 and 375px, Arabic), the navigation page (German, Arabic); the windows page and the dashboard recorded on cbb976c with #233 | main, measured by the parts its components name |
 
 Re-record one with, for example:
 

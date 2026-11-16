@@ -38,6 +38,28 @@ sem:DebugLayer a sem:Layer ;
 sem:slug a owl:DatatypeProperty ;
     rdfs:comment "Short machine name used in generated attribute values and CSS."@en .
 
+# --- Versions --------------------------------------------------------------
+# Each component is versioned on its own (ontology/versions.ttl, generated): a change to what the
+# ontology says about it is a version step, which says what accounts for it. The terms a consumer
+# states or reads are listed (ontology/terms.ttl); one that goes is retired, and never defined again.
+# AGENTS.md, "When a component changes".
+
+sem:version a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "A component's version: stepped whenever what the ontology says about it changes."@en .
+sem:closure a owl:DatatypeProperty ;
+    rdfs:comment "A hash of what the ontology says about a component at its sem:version."@en .
+sem:changedBy a owl:ObjectProperty ;
+    rdfs:comment "The chg:Change that explains a component's last version step."@en .
+sem:internal a owl:DatatypeProperty ;
+    rdfs:comment "Why a component's last version step needs no chg:Change: nothing a consumer would notice changed."@en .
+sem:writtenAgainst a owl:DatatypeProperty ;
+    rdfs:comment "The framework release a project's Turtle is written against (semblance.lock.ttl, written by semblance migrate)."@en .
+sem:Term a owl:Class ; rdfs:comment "A name a consumer states or reads: a class, a property, an individual."@en .
+sem:RetiredTerm a owl:Class ; rdfs:comment "A term a chg:Change removed. It is never defined again."@en .
+
+sem:readsWholeOntology a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:boolean ;
+    rdfs:comment "True on a component class whose instances read the whole ontology (the Reference's tree and term pages): an app that reaches it ships all of it, not the subset of what it uses (src/subset.ts)."@en .
+
 # --- Rules -----------------------------------------------------------------
 
 sem:Rendering a owl:Class ;
@@ -71,10 +93,28 @@ A step [ sem:zeroOrMore p ] is any number of p steps: tabs read their list's mem
 ( c:tabs [ sem:zeroOrMore rdf:rest ] rdf:first )."""@en .
 sem:zeroOrMore a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment "In a sem:follows path: any number (zero included) of steps along this predicate."@en .
+sem:watchesStatements a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """On a rendering whose focus is a property (a nav:ContainmentProperty), true when it reads the statements
+made with that property on any node (`?s $this ?o`): adding or removing one (a graph loaded later, a component placed in
+another) makes that focus dirty."""@en .
+sem:watchesManyValued a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment """On a rendering that reads, on any node, the statements made with each predicate that has this property, and says
+something only about a node with two values or more of one (l10n:Terms and l10n:pickedAs: a text with translations): a change
+in the input to such a node's values, a graph loaded later among them, makes each of its foci dirty. A change to a node with one
+value does not, so editing a text costs nothing here. The rule is evaluated over the whole graph: an addition that arrives in
+slices (Runtime.arriving) evaluates it once, after the last."""@en .
 sem:inverse a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment "In a sem:follows path: a step against this predicate (from a class to its instances: [ sem:inverse rdf:type ])."@en .
+sem:inverseVia a owl:ObjectProperty ;
+    rdfs:comment """In a sem:follows path, as its last step: a step against the predicate the focus names along this path
+(an RDF list of predicates), a predicate in the data rather than in the rule. A tree's item hears the children
+pointing at its node through the tree's parent property: ( c:of [ sem:inverseVia ( c:inTree c:parentProperty ) ] )."""@en .
 sem:watches a owl:ObjectProperty ;
     rdfs:comment "Restricts the predicates (on the focus and on followed nodes) whose changes make the focus dirty. Absent means all."@en .
+sem:watchesAnywhere a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment """On a rendering that reads a predicate on any node, not only on its focus and the nodes it follows (a list of
+every key:shortcut, of every recorded val:violation): a change to a triple with this predicate, wherever it is, makes
+each of its foci dirty. For a few foci (a list or two on a page), since every such change re-runs them all."""@en .
 
 # A function rule may run a query held in the data and follow it (RuleContext.select / construct
 # with { follow: true }): it then depends on the triples the query reads - its triple patterns,
@@ -112,6 +152,11 @@ member the rule reads (a list's c:sortBy names the key it reads on each item).""
 
 sem:renders a owl:ObjectProperty ;
     rdfs:comment "Links the RDF/HTML root node produced for a component instance to that instance. By convention the root is <focus>/~root."@en .
+sem:setsAside a owl:ObjectProperty ;
+    rdfs:comment """On an RDF/HTML element: a component it would hold were it shown, kept out of the document meanwhile (a
+hidden c:Switch case's content, c:caseRetention). The component is not placed there, so it is not shown and
+none of its elements are in the document; but what it inherits from the rendered tree (sem:warm), and what
+a choice that would show it prepares (sem:OnIntent, sem:anticipates), reach it through this element."""@en .
 
 # --- Warmth: what may be evaluated before it is shown -------------------------------
 # Projections evaluate only what is shown (demand). In idle time the host may
@@ -134,11 +179,34 @@ sem:OnIntent a sem:Warmth ; rdfs:label "on intent"@en ;
 or focusing, a control that would show them (a navigation item, a tab). By the time they
 click, it is rendered."""@en .
 
+sem:anticipates a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """On a choice (a navigation item's control, tabs): once the page is quiet, what each of its
+options would show is evaluated in idle time, an option at a time, as when it is pointed at (where its
+warmth allows: sem:OnIntent, sem:Eager), and kept. A first click shows it at once, and so does a tap,
+which no pointing comes before. Only what the option would show: an inner switch's other cases stay
+parked. For the few choices a visitor is likely to make next, such as a site's sections. On a control
+with no options (a toggle of a window's c:open), what it opens (sem:OpenPreview), one step away."""@en .
+sem:anticipatesNear a owl:DatatypeProperty ; rdfs:range xsd:nonNegativeInteger ;
+    rdfs:comment """On a choice (a section's own list of pages, tabs): once the page is quiet, while the choice is
+shown, what the options up to this many places either side of the chosen one would show is evaluated in
+idle time, as sem:anticipates does for every option, nearest first (at each distance the next before
+the previous; places are the order the choice shows its options in). It follows the choice: what moves
+out of reach is no longer kept, so its views stop being maintained. For a choice with many options,
+of which the ones next to the current one are the likely next (#436). Across choices: first each
+choice's next option (the one after the chosen); then the options near what these choices have chosen,
+by distance; then the options of the sem:anticipates choices around them (the other sections), by
+distance. A first visit comes soon after the page is quiet, when two or three pages can be ready:
+the next of each list and the pages near the current one. A choice inside
+something that opens (tabs in a window) is planned again as it is shown or hidden."""@en .
+
 # What a control would show, when it is pointed at: intent previews. Each is a
 # SELECT with $control (the component the pointed element belongs to) and
 # $option (what the element c:selects) that returns ?content - the hidden
-# component that choosing it would show. The host runs them on hover / focus
-# and evaluates that content ahead of the click (where its warmth allows).
+# component that choosing it would show. A preview that does not read $option is
+# for a control with no options (a toggle, a button that opens something): it is
+# asked of the component the innermost pointed element belongs to. The host runs
+# them on hover / focus and evaluates that content ahead of the click (where its
+# warmth allows).
 sem:IntentPreview a owl:Class ;
     rdfs:comment "A query from a pointed-at choice ($control, $option) to the ?content it would show."@en .
 
@@ -153,6 +221,16 @@ sem:SwitchPreview a sem:IntentPreview ;
 sem:TabPreview a sem:IntentPreview ;
     rdfs:label "a tab's content"@en ;
     sem:select """SELECT DISTINCT ?content WHERE { $option a c:Tab ; c:content ?content }""" .
+# A control with no options: what it opens (a toggle of a window's c:open, a button that c:opens an
+# overlay). Without $option, it is asked of the control the pointed element belongs to (#434).
+sem:OpenPreview a sem:IntentPreview ;
+    rdfs:label "what a control opens"@en ;
+    rdfs:comment "A control that opens a frame or an overlay (c:Toggle on its c:open, c:opens): its body or content."@en ;
+    sem:select """SELECT DISTINCT ?content WHERE {
+  { $control c:controls ?opened ; c:property c:open } UNION { $control c:opens ?opened }
+  { ?opened c:body ?content } UNION { ?opened c:content ?content }
+  FILTER(isIRI(?content))
+}""" .
 
 sem:prefixName a owl:DatatypeProperty ;
     rdfs:comment """A prefix the engine knows (the framework's; the graph's own are sh:declare): each engine states

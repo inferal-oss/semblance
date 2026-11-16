@@ -7,10 +7,20 @@
 
 # Tooltip layer. Rules annotate the nodes they render with `sem:tooltip`
 # (an annotation, not markup); this layer projects the annotations:
-#   - HTML elements get data-sem-tooltip (shown by the theme on hover/focus)
-#     and aria-description, so the text is also announced;
+#   - HTML elements get data-sem-tooltip and aria-description, so the text is also announced;
 #   - SVG marks get an svg:Title child (the platform tooltip for SVG).
-# With the layer off, annotations stay in the graph and nothing is shown.
+# With the layer off, annotations stay in the graph and nothing is shown. Other modalities show
+# nothing either: a tooltip is about pointing at something on a screen.
+#
+# Where the text appears is the page's business. Inside a browser host the tooltip effect
+# (src/web/tooltips.ts, attached with the anchored panels) shows it on one surface of its own,
+# .sem-tooltip, an anchored panel in the top layer (layers/position.ttl): no overflow clips it and
+# it stays above windows and overlays, within the viewport, following scrolling and resizing. Hover
+# and keyboard focus show it, Escape dismisses it, and on touch a long press shows it (a tap, on
+# what a tap does nothing else to). Which tooltip is showing is the browser's state, as :hover is:
+# no event, no triple. While the surface is not available (a server-rendered page or region before
+# its takeover, a host without the effect, which marks its host data-sem-tooltips) the ::after
+# below shows the same text in the same look, clipped as anything in the flow is.
 
 sem:TooltipLayer a sem:Layer ;
     rdfs:label "tooltips"@en ;
@@ -67,14 +77,24 @@ tok:tooltip-fg a sty:Token ; sty:scale sty:Color ; sem:slug "tooltip-fg" ; sty:v
 [] a sty:StyleRule ; sty:appliesTo sem:Component ; sty:part "[data-sem-tooltip]" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] .
 
-[] a sty:StyleRule ; sty:appliesTo sem:Component ; sty:part "[data-sem-tooltip]:is(:hover, :focus-visible)::after" ;
+# In the flow, for what the effect has not taken over.
+[] a sty:StyleRule ; sty:appliesTo sem:Component ; sty:part ":where(:not([data-sem-tooltips] *), [data-sem-tooltips] [data-sem-ssr] *)[data-sem-tooltip]:is(:hover, :focus-visible)::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-tooltip)" ] ,
                  [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "z-index" ; sty:raw "60" ] ,
                  [ sty:property "left" ; sty:raw "50%" ] ,
                  [ sty:property "bottom" ; sty:raw "calc(100% + 8px)" ] ,
-                 [ sty:property "transform" ; sty:raw "translateX(-50%)" ] ,
-                 [ sty:property "width" ; sty:raw "max-content" ] ,
+                 [ sty:property "transform" ; sty:raw "translateX(-50%)" ] .
+
+# On the surface: fixed already where popovers are missing. A theme re-values the tokens.
+[] a sty:StyleRule ; sty:part ".sem-tooltip" ;
+    sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
+                 [ sty:property "z-index" ; sty:raw "1000" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] .
+
+# The look, wherever the text is.
+[] a sty:StyleRule ; sty:part ".sem-tooltip, :where(:not([data-sem-tooltips] *), [data-sem-tooltips] [data-sem-ssr] *)[data-sem-tooltip]:is(:hover, :focus-visible)::after" ;
+    sty:declares [ sty:property "width" ; sty:raw "max-content" ] ,
                  [ sty:property "max-width" ; sty:raw "320px" ] ,
                  [ sty:property "padding" ; sty:raw "6px 9px" ] ,
                  [ sty:property "border-radius" ; sty:raw "8px" ] ,

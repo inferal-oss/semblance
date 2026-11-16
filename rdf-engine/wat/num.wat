@@ -40,7 +40,7 @@
 ;; whether it is valid.
 (func $parse_temporal_num (param $p i32) (param $n i32) (param $t i32) (result i32)
   (local $e i32) (local $neg i32) (local $c i32) (local $digits i32) (local $dot i32) (local $exp i32) (local $eneg i32)
-  (local $m i64) (local $nd i32) (local $drop i32) (local $f f64)
+  (local $m i64) (local $nd i32) (local $drop i32) (local $f f64) (local $sticky i32) (local $ms i32) (local $me i32)
   (local.set $e (i32.add (local.get $p) (local.get $n)))
   (if (i32.ge_u (local.get $t) (i32.const 3)) (then
     (if (i32.or (call $same (local.get $p) (local.get $n) (@str "INF") (i32.const 0)) (call $same (local.get $p) (local.get $n) (@str "+INF") (i32.const 0)))
@@ -52,6 +52,8 @@
     (if (i32.or (i32.eq (local.get $c) (i32.const '+')) (i32.eq (local.get $c) (i32.const '-'))) (then
       (local.set $neg (i32.eq (local.get $c) (i32.const '-')))
       (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
+  (local.set $ms (local.get $p))
+  (local.set $me (local.get $e))
   (block $bad
     (loop $chars
       (if (i32.lt_u (local.get $p) (local.get $e)) (then
@@ -65,7 +67,8 @@
                 (local.set $m (i64.add (i64.mul (local.get $m) (i64.const 10)) (i64.extend_i32_u (i32.sub (local.get $c) (i32.const '0')))))
                 (if (local.get $dot) (then (global.set $nsc (i32.add (global.get $nsc) (i32.const 1))))))
               (else
-                ;; digits beyond what an i64 holds: scale only
+                ;; digits beyond what an i64 holds: scale only, and whether any was not 0
+                (if (i32.ne (local.get $c) (i32.const '0')) (then (local.set $sticky (i32.const 1))))
                 (if (i32.eqz (local.get $dot)) (then (local.set $drop (i32.add (local.get $drop) (i32.const 1)))))))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $chars)))
@@ -75,6 +78,7 @@
           (br $chars)))
         (br_if $bad (i32.or (i32.lt_u (local.get $t) (i32.const 3)) (i32.ne (i32.or (local.get $c) (i32.const 0x20)) (i32.const 'e'))))
         ;; exponent
+        (local.set $me (local.get $p))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (if (i32.lt_u (local.get $p) (local.get $e)) (then
           (local.set $c (i32.load8_u (local.get $p)))
@@ -91,9 +95,13 @@
             (br $edigits))))
         (if (local.get $eneg) (then (local.set $exp (i32.sub (i32.const 0) (local.get $exp))))))))
     (br_if $bad (i32.eqz (local.get $digits)))
-    (if (local.get $neg) (then (local.set $m (i64.sub (i64.const 0) (local.get $m)))))
+    ;; past 18 digits, all of them are read again for an exact comparison
+    (if (local.get $sticky) (then (global.set $rd_ms (local.get $ms)) (global.set $rd_me (local.get $me)) (global.set $rd_exp (local.get $exp))))
+    (local.set $f (call $read_double (local.get $m) (i32.sub (i32.add (local.get $exp) (local.get $drop)) (global.get $nsc)) (local.get $sticky)))
+    (if (local.get $neg) (then
+      (local.set $m (i64.sub (i64.const 0) (local.get $m)))
+      (local.set $f (f64.neg (local.get $f)))))
     (global.set $ni (local.get $m))
-    (local.set $f (call $scale10 (f64.convert_i64_s (local.get $m)) (i32.sub (i32.add (local.get $exp) (local.get $drop)) (global.get $nsc))))
     (if (i32.eq (local.get $t) (i32.const 3)) (then (local.set $f (f64.promote_f32 (f32.demote_f64 (local.get $f))))))
     ;; the integer mantissa has no -0: "-0", "-0.0e0" keep their sign
     (if (i32.and (local.get $neg) (f64.eq (local.get $f) (f64.const 0))) (then (local.set $f (f64.const -0))))
@@ -132,6 +140,133 @@
   (if (i32.ne (call $kind (local.get $id)) (i32.const 3)) (then (return (i32.const 0))))
   (if (i32.eqz (local.tee $family (call $nu_family (call $tdt (local.get $id))))) (then (return (i32.const 0))))
   (call $nu_validate (call $tval (local.get $id)) (call $tlen (local.get $id)) (local.get $family)))
+
+;; m * 10^k as a double (m >= 0; sticky: digits that were not 0 were dropped
+;; after m, all of them in [$rd_ms, $rd_me) times 10^$rd_exp), rounded once, ties to even, as Oxigraph reads it: scale10's
+;; estimate (exact when m <= 2^53 and |k| <= 22: both factors exact), else moved
+;; an ulp at a time until x lies between the midpoints to its neighbours, each
+;; compared with m * 10^k exactly ($scaled). ("999.4999999999999": m, above
+;; 2^53, rounds before the division, and the estimate is 999.5.)
+(func $read_double (param $m i64) (param $k i32) (param $sticky i32) (result f64)
+  (local $f f64) (local $bits i64) (local $be i32) (local $fm i64) (local $q i32) (local $c i32) (local $odd i32)
+  (local.set $f (call $scale10 (f64.convert_i64_u (local.get $m)) (local.get $k)))
+  (if (i64.eqz (local.get $m)) (then (return (local.get $f))))
+  (if (i32.and (i32.eqz (local.get $sticky))
+               (i32.and (i64.le_u (local.get $m) (i64.const 0x20000000000000)) (i32.le_u (i32.add (local.get $k) (i32.const 22)) (i32.const 44))))
+    (then (return (local.get $f))))
+  ;; m < 10^18: beyond these, x is above the largest double or below half the smallest
+  (if (i32.gt_s (local.get $k) (i32.const 310)) (then (return (f64.const inf))))
+  (if (i32.lt_s (local.get $k) (i32.const -342)) (then (return (f64.const 0))))
+  (if (f64.eq (local.get $f) (f64.const inf)) (then (local.set $f (f64.reinterpret_i64 (i64.const 0x7fefffffffffffff)))))
+  (if (f64.eq (local.get $f) (f64.const 0)) (then (local.set $f (f64.reinterpret_i64 (i64.const 1)))))
+  (loop $adjust
+    (local.set $bits (i64.reinterpret_f64 (local.get $f)))
+    (local.set $be (i32.wrap_i64 (i64.shr_u (local.get $bits) (i64.const 52))))
+    (local.set $fm (i64.and (local.get $bits) (i64.const 0xfffffffffffff)))
+    (if (local.get $be)
+      (then (local.set $fm (i64.or (local.get $fm) (i64.const 0x10000000000000))) (local.set $q (i32.sub (local.get $be) (i32.const 1075))))
+      (else (local.set $q (i32.const -1074))))
+    (local.set $odd (i32.wrap_i64 (i64.and (local.get $fm) (i64.const 1))))
+    ;; past the midpoint to the next double up (on it: to the even one)
+    (local.set $c (call $cmp_mid (i64.add (i64.shl (local.get $fm) (i64.const 1)) (i64.const 1)) (i32.sub (local.get $q) (i32.const 1)) (local.get $m) (local.get $k) (local.get $sticky)))
+    (if (i32.or (i32.gt_s (local.get $c) (i32.const 0)) (i32.and (i32.eqz (local.get $c)) (local.get $odd))) (then
+      (if (i64.eq (local.get $bits) (i64.const 0x7fefffffffffffff)) (then (return (f64.const inf))))
+      (local.set $f (f64.reinterpret_i64 (i64.add (local.get $bits) (i64.const 1))))
+      (br $adjust)))
+    ;; before the one to the next down (half as far below a power of two)
+    (local.set $c
+      (if (result i32) (i32.and (i64.eq (local.get $fm) (i64.const 0x10000000000000)) (i32.gt_u (local.get $be) (i32.const 1)))
+        (then (call $cmp_mid (i64.sub (i64.shl (local.get $fm) (i64.const 2)) (i64.const 1)) (i32.sub (local.get $q) (i32.const 2)) (local.get $m) (local.get $k) (local.get $sticky)))
+        (else (call $cmp_mid (i64.sub (i64.shl (local.get $fm) (i64.const 1)) (i64.const 1)) (i32.sub (local.get $q) (i32.const 1)) (local.get $m) (local.get $k) (local.get $sticky)))))
+    (if (i32.or (i32.lt_s (local.get $c) (i32.const 0)) (i32.and (i32.eqz (local.get $c)) (local.get $odd))) (then
+      (if (i64.eq (local.get $bits) (i64.const 1)) (then (return (f64.const 0))))
+      (local.set $f (f64.reinterpret_i64 (i64.sub (local.get $bits) (i64.const 1))))
+      (br $adjust))))
+  (local.get $f))
+
+;; m * 10^k (with the digits dropped after m when sticky) against a * 2^b: -1, 0 or 1.
+;; Scaled by 10^-k, the midpoint is near m, so its whole part fits $sc_f.
+(func $cmp_mid (param $a i64) (param $b i32) (param $m i64) (param $k i32) (param $sticky i32) (result i32)
+  (call $scaled (local.get $a) (local.get $b) (i32.sub (i32.const 0) (local.get $k)))
+  (if (i64.ne (local.get $m) (global.get $sc_f)) (then (return (select (i32.const 1) (i32.const -1) (i64.gt_u (local.get $m) (global.get $sc_f))))))
+  (if (i32.eqz (local.get $sticky)) (then (return (i32.sub (i32.const 0) (global.get $sc_s)))))
+  ;; the same 18 digits, both with more: all of them
+  (if (global.get $sc_s) (then (return (call $cmp_mid_long (local.get $a) (local.get $b)))))
+  (i32.const 1))
+
+;; The digits [$rd_ms, $rd_me) (a point among them) times 10^$rd_exp against
+;; a * 2^b, exactly: D * 5^E * 2^E against a * 2^b as big integers, E the last
+;; digit's exponent, with the 2s they share taken out. A midpoint has at most
+;; 767 significant digits, so past 780 the rest only tell whether D is larger.
+(@define RD_LIMBS 96)
+(global $rd_ms (mut i32) (i32.const 0))
+(global $rd_me (mut i32) (i32.const 0))
+(global $rd_exp (mut i32) (i32.const 0))
+(global $rd_l (mut i32) (i32.const 0))
+(global $rd_r (mut i32) (i32.const 0))
+(func $cmp_mid_long (param $a i64) (param $b i32) (result i32)
+  (local $p i32) (local $c i32) (local $nd i32) (local $e10 i32) (local $dot i32) (local $more i32)
+  (local $chunk i32) (local $mul i32) (local $tl i32) (local $tr i32) (local $i i32) (local $x i32) (local $y i32)
+  (if (i32.eqz (global.get $rd_l)) (then
+    (global.set $rd_l (call $alloc (i32.const 384)))
+    (global.set $rd_r (call $alloc (i32.const 384)))))
+  (memory.fill (global.get $rd_l) (i32.const 0) (i32.const 384))
+  (memory.fill (global.get $rd_r) (i32.const 0) (i32.const 384))
+  (global.set $bn_n (i32.const RD_LIMBS))
+  (local.set $e10 (global.get $rd_exp))
+  (local.set $mul (i32.const 1))
+  (local.set $p (global.get $rd_ms))
+  (loop $digits
+    (if (i32.lt_u (local.get $p) (global.get $rd_me)) (then
+      (local.set $c (i32.load8_u (local.get $p)))
+      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+      (if (i32.eq (local.get $c) (i32.const '.')) (then (local.set $dot (i32.const 1)) (br $digits)))
+      (local.set $c (i32.sub (local.get $c) (i32.const '0')))
+      (if (i32.lt_u (local.get $nd) (i32.const 780))
+        (then
+          (if (i32.or (local.get $nd) (local.get $c)) (then (local.set $nd (i32.add (local.get $nd) (i32.const 1)))))
+          (if (local.get $dot) (then (local.set $e10 (i32.sub (local.get $e10) (i32.const 1)))))
+          ;; nine digits at a time into D
+          (local.set $chunk (i32.add (i32.mul (local.get $chunk) (i32.const 10)) (local.get $c)))
+          (local.set $mul (i32.mul (local.get $mul) (i32.const 10)))
+          (if (i32.eq (local.get $mul) (i32.const 1000000000)) (then
+            (call $bn_muladd (global.get $rd_l) (local.get $mul) (local.get $chunk))
+            (local.set $chunk (i32.const 0)) (local.set $mul (i32.const 1)))))
+        (else
+          (if (local.get $c) (then (local.set $more (i32.const 1))))
+          (if (i32.eqz (local.get $dot)) (then (local.set $e10 (i32.add (local.get $e10) (i32.const 1)))))))
+      (br $digits))))
+  (call $bn_muladd (global.get $rd_l) (local.get $mul) (local.get $chunk))
+  (i64.store (global.get $rd_r) (local.get $a))
+  ;; D * 5^E * 2^E against a * 2^b
+  (if (i32.ge_s (local.get $e10) (i32.const 0))
+    (then (drop (call $bn_pow5 (global.get $rd_l) (local.get $e10) (i32.const 0))) (local.set $tl (local.get $e10)))
+    (else (drop (call $bn_pow5 (global.get $rd_r) (i32.sub (i32.const 0) (local.get $e10)) (i32.const 0))) (local.set $tr (i32.sub (i32.const 0) (local.get $e10)))))
+  (local.set $tr (i32.add (local.get $tr) (local.get $b)))
+  (local.set $i (select (local.get $tl) (local.get $tr) (i32.lt_s (local.get $tl) (local.get $tr))))
+  (drop (call $bn_shift (global.get $rd_l) (i32.sub (local.get $tl) (local.get $i))))
+  (drop (call $bn_shift (global.get $rd_r) (i32.sub (local.get $tr) (local.get $i))))
+  (global.set $bn_n (i32.const BN_LIMBS))
+  (local.set $i (i32.const RD_LIMBS))
+  (loop $limbs
+    (if (local.get $i) (then
+      (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+      (local.set $x (i32.load (i32.add (global.get $rd_l) (i32.shl (local.get $i) (i32.const 2)))))
+      (local.set $y (i32.load (i32.add (global.get $rd_r) (i32.shl (local.get $i) (i32.const 2)))))
+      (if (i32.ne (local.get $x) (local.get $y)) (then (return (select (i32.const 1) (i32.const -1) (i32.gt_u (local.get $x) (local.get $y))))))
+      (br $limbs))))
+  (local.get $more))
+
+;; b = b * m + c.
+(func $bn_muladd (param $b i32) (param $m i32) (param $c i32)
+  (local $i i32) (local $at i32) (local $v i64)
+  (local.set $v (i64.extend_i32_u (local.get $c)))
+  (loop $limbs
+    (local.set $at (i32.add (local.get $b) (i32.shl (local.get $i) (i32.const 2))))
+    (local.set $v (i64.add (i64.mul (i64.load32_u (local.get $at)) (i64.extend_i32_u (local.get $m))) (local.get $v)))
+    (i32.store (local.get $at) (i32.wrap_i64 (local.get $v)))
+    (local.set $v (i64.shr_u (local.get $v) (i64.const 32)))
+    (br_if $limbs (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1))) (global.get $bn_n)))))
 
 ;; The numeric type of term id (0: not a valid number), its value in $ni/$nsc/$nf.
 ;; A literal's parse is kept in a table its record (+24) points into (index + 1).
@@ -312,6 +447,7 @@
 ;; (or the other neighbour) is tested against L and U in that scale.
 
 (@define BN_LIMBS 40)
+(global $bn_n (mut i32) (i32.const BN_LIMBS))  ;; limbs the bn_ functions work on
 (global $bn (mut i32) (i32.const 0))
 (global $sc_f (mut i64) (i64.const 0))   ;; floor of a * 2^b * 10^K
 (global $sc_s (mut i32) (i32.const 0))   ;; and whether a fraction was dropped
@@ -323,13 +459,13 @@
     (local.set $c (i64.add (i64.mul (i64.load32_u (local.get $at)) (i64.extend_i32_u (local.get $m))) (local.get $c)))
     (i32.store (local.get $at) (i32.wrap_i64 (local.get $c)))
     (local.set $c (i64.shr_u (local.get $c) (i64.const 32)))
-    (br_if $limbs (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1))) (i32.const BN_LIMBS)))))
+    (br_if $limbs (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1))) (global.get $bn_n)))))
 
 ;; Divide by d; whether there was a remainder.
 (func $bn_div (param $b i32) (param $d i32) (result i32)
   (local $i i32) (local $r i64) (local $at i32) (local $d64 i64)
   (local.set $d64 (i64.extend_i32_u (local.get $d)))
-  (local.set $i (i32.const BN_LIMBS))
+  (local.set $i (global.get $bn_n))
   (loop $limbs
     (if (local.get $i) (then
       (local.set $i (i32.sub (local.get $i) (i32.const 1)))
@@ -366,7 +502,7 @@
     (then
       (local.set $w (i32.shr_u (local.get $s) (i32.const 5)))
       (local.set $r (i32.and (local.get $s) (i32.const 31)))
-      (local.set $i (i32.const BN_LIMBS))
+      (local.set $i (global.get $bn_n))
       (loop $limbs
         (if (local.get $i) (then
           (local.set $i (i32.sub (local.get $i) (i32.const 1)))
@@ -386,21 +522,21 @@
       (local.set $r (i32.and (local.get $s) (i32.const 31)))
       ;; what falls off
       (loop $low
-        (if (i32.and (i32.lt_u (local.get $j) (local.get $w)) (i32.lt_u (local.get $j) (i32.const BN_LIMBS))) (then
+        (if (i32.and (i32.lt_u (local.get $j) (local.get $w)) (i32.lt_u (local.get $j) (global.get $bn_n))) (then
           (local.set $lost (i32.or (local.get $lost) (i32.ne (i32.load (i32.add (local.get $b) (i32.shl (local.get $j) (i32.const 2)))) (i32.const 0))))
           (local.set $j (i32.add (local.get $j) (i32.const 1)))
           (br $low))))
-      (if (i32.lt_u (local.get $w) (i32.const BN_LIMBS)) (then
+      (if (i32.lt_u (local.get $w) (global.get $bn_n)) (then
         (local.set $lost (i32.or (local.get $lost)
           (i32.ne (i32.and (i32.load (i32.add (local.get $b) (i32.shl (local.get $w) (i32.const 2)))) (i32.sub (i32.shl (i32.const 1) (local.get $r)) (i32.const 1))) (i32.const 0))))))
       (local.set $i (i32.const 0))
       (loop $limbs
-        (if (i32.lt_u (local.get $i) (i32.const BN_LIMBS)) (then
+        (if (i32.lt_u (local.get $i) (global.get $bn_n)) (then
           (local.set $j (i32.add (local.get $i) (local.get $w)))
           (local.set $v (i64.const 0))
-          (if (i32.lt_u (local.get $j) (i32.const BN_LIMBS)) (then
+          (if (i32.lt_u (local.get $j) (global.get $bn_n)) (then
             (local.set $v (i64.shr_u (i64.load32_u (i32.add (local.get $b) (i32.shl (local.get $j) (i32.const 2)))) (i64.extend_i32_u (local.get $r))))
-            (if (i32.lt_u (i32.add (local.get $j) (i32.const 1)) (i32.const BN_LIMBS)) (then
+            (if (i32.lt_u (i32.add (local.get $j) (i32.const 1)) (global.get $bn_n)) (then
               (local.set $v (i64.or (local.get $v)
                 (i64.shl (i64.load32_u (i32.add (local.get $b) (i32.shl (i32.add (local.get $j) (i32.const 1)) (i32.const 2))))
                          (i64.extend_i32_u (i32.sub (i32.const 32) (local.get $r))))))))))
@@ -672,7 +808,7 @@
 
 ;; ABS, CEIL, FLOOR, ROUND (round half up).
 (func $round (param $f i32) (param $a i32) (result i32)
-  (local $t i32) (local $m i64) (local $s i32) (local $p i64) (local $q i64) (local $x f64) (local $dt i32)
+  (local $t i32) (local $m i64) (local $s i32) (local $p i64) (local $q i64) (local $x f64) (local $dt i32) (local $y f64)
   (if (i32.eqz (local.tee $t (call $num (local.get $a)))) (then (return (i32.const 0))))
   (if (i32.eq (local.get $t) (i32.const 1)) (then
     (if (i32.and (i32.eq (local.get $f) (i32.const F_ABS)) (i64.lt_s (global.get $ni) (i64.const 0)))
@@ -697,10 +833,55 @@
     (if (result f64) (i32.eq (local.get $f) (i32.const F_ABS)) (then (f64.abs (local.get $x)))
     (else (if (result f64) (i32.eq (local.get $f) (i32.const F_CEIL)) (then (f64.ceil (local.get $x)))
     (else (if (result f64) (i32.eq (local.get $f) (i32.const F_FLOOR)) (then (f64.floor (local.get $x)))
-    (else (f64.floor (f64.add (local.get $x) (f64.const 0.5))))))))))
+    ;; not floor(x + 0.5), which rounds 0.49999999999999994 to 1: x - floor(x) is
+    ;; exact where it matters; the sign is kept (Oxigraph: -0.5 -> -0)
+    (else (f64.copysign
+      (select (f64.add (local.tee $y (f64.floor (local.get $x))) (f64.const 1)) (local.get $y) (f64.ge (f64.sub (local.get $x) (local.get $y)) (f64.const 0.5)))
+      (local.get $x)))))))))
   (call $dbl_term (local.get $x) (call $tdt (local.get $a))))
 
 ;; --- casts -----------------------------------------------------------------------
+
+;; The canonical text of a valid integer or decimal lexical form [p, p+n),
+;; written from its digits, since $parse_num holds only an i64 and 18 fractional digits: no "+", no
+;; leading zeros, the fraction cut at 18 digits (a decimal's precision, as on
+;; Oxigraph) without trailing zeros or a bare point, "-0" as "0".
+(func $num_text (param $p i32) (param $n i32) (result i32)
+  (local $e i32) (local $neg i32) (local $dot i32) (local $fe i32) (local $len i32) (local $buf i32) (local $w i32) (local $r i32) (local $c i32)
+  (local.set $e (i32.add (local.get $p) (local.get $n)))
+  ;; without the XML white space around it, which $nu_validate accepts
+  (loop $lead (if (i32.and (i32.lt_u (local.get $p) (local.get $e)) (call $nu_space (i32.load8_u (local.get $p)))) (then
+    (local.set $p (i32.add (local.get $p) (i32.const 1))) (br $lead))))
+  (loop $tail (if (i32.and (i32.lt_u (local.get $p) (local.get $e)) (call $nu_space (i32.load8_u (i32.sub (local.get $e) (i32.const 1))))) (then
+    (local.set $e (i32.sub (local.get $e) (i32.const 1))) (br $tail))))
+  (if (i32.lt_u (local.get $p) (local.get $e)) (then
+    (local.set $c (i32.load8_u (local.get $p)))
+    (if (i32.or (i32.eq (local.get $c) (i32.const '+')) (i32.eq (local.get $c) (i32.const '-'))) (then
+      (local.set $neg (i32.eq (local.get $c) (i32.const '-')))
+      (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
+  (loop $zeros (if (i32.and (i32.lt_u (local.get $p) (local.get $e)) (i32.eq (i32.load8_u (local.get $p)) (i32.const '0'))) (then
+    (local.set $p (i32.add (local.get $p) (i32.const 1))) (br $zeros))))
+  (local.set $dot (local.get $p))
+  (loop $whole (if (i32.and (i32.lt_u (local.get $dot) (local.get $e)) (i32.ne (i32.load8_u (local.get $dot)) (i32.const '.'))) (then
+    (local.set $dot (i32.add (local.get $dot) (i32.const 1))) (br $whole))))
+  ;; the fraction: at most 18 digits, then without trailing zeros (and its point when none is left)
+  (local.set $fe (select (local.get $e) (i32.add (local.get $dot) (i32.const 19)) (i32.lt_u (i32.sub (local.get $e) (local.get $dot)) (i32.const 19))))
+  (if (i32.lt_u (local.get $dot) (local.get $e)) (then
+    (loop $trail (if (i32.and (i32.gt_u (local.get $fe) (i32.add (local.get $dot) (i32.const 1))) (i32.eq (i32.load8_u (i32.sub (local.get $fe) (i32.const 1))) (i32.const '0'))) (then
+      (local.set $fe (i32.sub (local.get $fe) (i32.const 1))) (br $trail))))
+    (if (i32.eq (local.get $fe) (i32.add (local.get $dot) (i32.const 1))) (then (local.set $fe (local.get $dot))))))
+  (if (i32.eq (local.get $p) (local.get $fe)) (then (return (call $simple (@str "0")))))
+  ;; "-", a "0" before a point, the digits
+  (local.set $len (i32.add (i32.sub (local.get $fe) (local.get $p)) (i32.const 2)))
+  (local.set $buf (select (global.get $nbuf) (call $alloc (local.get $len)) (i32.le_u (local.get $len) (i32.const 400))))
+  (local.set $w (local.get $buf))
+  (if (local.get $neg) (then (i32.store8 (local.get $w) (i32.const '-')) (local.set $w (i32.add (local.get $w) (i32.const 1)))))
+  (if (i32.eq (local.get $p) (local.get $dot)) (then (i32.store8 (local.get $w) (i32.const '0')) (local.set $w (i32.add (local.get $w) (i32.const 1)))))
+  (memory.copy (local.get $w) (local.get $p) (i32.sub (local.get $fe) (local.get $p)))
+  (local.set $w (i32.add (local.get $w) (i32.sub (local.get $fe) (local.get $p))))
+  (local.set $r (call $simple (local.get $buf) (i32.sub (local.get $w) (local.get $buf))))
+  (if (i32.ne (local.get $buf) (global.get $nbuf)) (then (call $free (local.get $buf) (local.get $len))))
+  (local.get $r))
 
 (func $cast (param $v i32) (param $dt i32) (result i32)
   (local $tc i32) (local $k i32) (local $t i32) (local $p i32) (local $n i32) (local $b i32) (local $family i32) (local $sc i32) (local $m i64)
@@ -715,9 +896,13 @@
     ;; the value cast to its own datatype ("1.0"^^xsd:decimal -> "1", "0"^^xsd:boolean -> "false")
     (if (i32.eq (local.get $k) (i32.const 3)) (then
       (local.set $t (call $tdt (local.get $v)))
-      ;; an ill-formed number ("abc"^^xsd:integer) cannot be cast
-      (if (i32.and (i32.le_u (i32.sub (call $dtc (local.get $t)) (i32.const C_INTEGER)) (i32.const 3)) (i32.eqz (call $num (local.get $v))))
+      ;; an ill-formed number ("abc"^^xsd:integer, "128"^^xsd:byte) cannot be cast; a valid one
+      ;; too wide for $num's i64 and 18 fractional digits can
+      (if (i32.and (i32.le_u (i32.sub (call $dtc (local.get $t)) (i32.const C_INTEGER)) (i32.const 3)) (i32.eqz (call $numeric_valid (local.get $v))))
         (then (return (i32.const 0))))
+      ;; an integer or decimal from its lexical form, every digit of it kept
+      (if (i32.le_u (i32.sub (call $dtc (local.get $t)) (i32.const C_INTEGER)) (i32.const 1))
+        (then (return (call $num_text (call $tval (local.get $v)) (call $tlen (local.get $v))))))
       (if (i32.or (i32.or (call $tkind (local.get $t)) (i32.eq (call $dtc (local.get $t)) (i32.const C_BOOLEAN))) (call $num (local.get $v))) (then
         ;; an ill-formed one ("maybe"^^xsd:boolean) cannot be cast
         (if (i32.eqz (local.tee $v (call $cast (local.get $v) (local.get $t)))) (then (return (i32.const 0))))))))

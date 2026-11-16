@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
-import { NS } from '../src/ns.ts'
-import { type Backend, memoryBackend, Persistence } from '../src/persistence.ts'
+import { describe, expect, it, vi } from 'vitest'
+import { MOD, NS } from '../src/ns.ts'
+import { toText } from '../src/render/serialize.ts'
+import { type Backend, memoryBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { mountRemembering } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -83,13 +84,13 @@ describe('persistence (per:Policy)', () => {
 
   it('restores a remembered subject that is not an IRI (a blank node)', async () => {
     const storage = browser()
-    const nt = `_:run <${NS.c}recentOf> <${UI}palette> .\n_:run <${NS.rdfs}label> "Blank" .\n<${UI}knownRun> <${NS.c}recentOf> <${UI}palette> .\n`
+    const nt = `_:run <${NS.c}recentOf> <${UI}palette> .\n_:run <${NS.c}entryFor> <${UI}blankItem> .\n<${UI}knownRun> <${NS.c}recentOf> <${UI}palette> .\n`
     await storage[PER + 'Device']!.set('semblance:' + UI + 'rememberPalette', JSON.stringify({ version: '1', savedAt: Date.now(), nt }))
     const a = await mountRemembering(storage)
     const f = a.store.factory
     expect(a.persistence.restored(UI + 'rememberPalette')).toBe(true)
     expect(a.store.match(f.namedNode(UI + 'knownRun'), f.namedNode(NS.c + 'recentOf'), f.namedNode(UI + 'palette'))).toHaveLength(1)
-    expect(a.store.match(null, f.namedNode(NS.rdfs + 'label'), f.literal('Blank'))).toHaveLength(1)
+    expect(a.store.match(null, f.namedNode(NS.c + 'entryFor'), f.namedNode(UI + 'blankItem'))).toHaveLength(1)
   })
 
   it('stopped, it drops a write waiting for its delay: none runs against a store released since', async () => {
@@ -104,5 +105,120 @@ describe('persistence (per:Policy)', () => {
     a.store.dispose?.()
     await new Promise((r) => setTimeout(r, 60))
     expect(await storage[PER + 'Session']!.get('semblance:' + UI + 'rememberInspector')).toBeUndefined()
+  })
+})
+
+/**
+ * One device's localStorage, seen from several tabs: a write in one fires a `storage` event in each
+ * of the others (not in itself), with that tab's own storage as its area, as a browser does.
+ */
+function device() {
+  const m = new Map<string, string>()
+  const tabs: { storage: Storage; events: EventTarget }[] = []
+  return () => {
+    const events = new EventTarget()
+    const changed = (key: string) => {
+      for (const t of tabs) if (t.events !== events) t.events.dispatchEvent(Object.assign(new Event('storage'), { key, storageArea: t.storage }))
+    }
+    const storage = {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => (m.set(k, v), changed(k)),
+      removeItem: (k: string) => (m.delete(k), changed(k)),
+    } as unknown as Storage
+    tabs.push({ storage, events })
+    return { [PER + 'Session']: memoryBackend(), [PER + 'Device']: webStorageBackend(storage, events), [PER + 'Database']: memoryBackend() }
+  }
+}
+
+describe('across tabs (per:acrossTabs, #361)', () => {
+  it('an open tab follows how another one looks, without writing it back; private mode stays with its tab', async () => {
+    const tab = device()
+    const a = await mountRemembering(tab())
+    const b = await mountRemembering(tab())
+    await b.persistence.flush() // what a tab writes once, at the start
+    type Tab = typeof a
+    const at = (h: Tab, s: string, p: string) => h.store.match(h.store.factory.namedNode(s), h.store.factory.namedNode(p), null, h.store.factory.defaultGraph())[0]?.object.value
+    const put = (h: Tab, s: string, p: string, o: string) => {
+      const f = h.store.factory
+      h.runtime.apply({ remove: h.store.match(f.namedNode(s), f.namedNode(p), null, f.defaultGraph()), add: [f.quad(f.namedNode(s), f.namedNode(p), f.namedNode(o))] })
+    }
+    put(a, UI + 'shell', NS.sty + 'theme', NS.sty + 'Classic')
+    put(a, UI + 'app', NS.sty + 'colorScheme', NS.sty + 'Dark')
+    put(a, UI + 'shell', NS.prv + 'privacy', NS.prv + 'Private')
+    await a.persistence.flush()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(at(b, UI + 'shell', NS.sty + 'theme')).toBe(NS.sty + 'Classic')
+    expect(at(b, UI + 'app', NS.sty + 'colorScheme')).toBe(NS.sty + 'Dark')
+    b.shell.flush()
+    expect(b.document.querySelector('[data-sem-theme]')!.getAttribute('data-sem-theme')).toBe('classic')
+    expect(at(b, UI + 'shell', NS.prv + 'privacy')).toBe(NS.prv + 'Conceal')
+    // Followed, not written again (no echo back to the first tab).
+    const writes = b.persistence.writes.entries
+    await b.persistence.flush()
+    expect(b.store.match(null, b.store.factory.namedNode(NS.rdf + 'type'), b.store.factory.namedNode(PER + 'Restore')).length).toBeGreaterThan(0)
+    expect(b.persistence.writes.entries).toBe(writes)
+    // A tab opened afterwards opens in it.
+    const c = await mountRemembering(tab())
+    expect(at(c, UI + 'shell', NS.sty + 'theme')).toBe(NS.sty + 'Classic')
+    expect(at(c, UI + 'shell', NS.prv + 'privacy')).toBe(NS.prv + 'Conceal')
+    // A policy not across tabs is not followed: the open tab keeps its own until it is reloaded.
+    const f = b.store.factory
+    b.runtime.apply({ remove: b.store.match(f.namedNode(UI + 'rememberColorScheme'), f.namedNode(PER + 'acrossTabs'), null), add: [] })
+    put(a, UI + 'app', NS.sty + 'colorScheme', NS.sty + 'Light')
+    await a.persistence.flush()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(at(b, UI + 'app', NS.sty + 'colorScheme')).toBe(NS.sty + 'Dark')
+    expect(at(c, UI + 'app', NS.sty + 'colorScheme')).toBe(NS.sty + 'Light')
+  })
+})
+
+// The list of policies (#7): in the viewer's collation, sizes by sx:formatNumber and the last write's clock
+// time by sx:formatDateTime, its status in the viewer's language, the same from the SPARQL rules as from
+// their function twin, on screen and as text; on wat (Oxigraph has no sx: functions, so it runs the twin).
+describe('the list of policies, SPARQL and function rules alike (wat)', () => {
+  it('renders the same as policies are written, switched off and forgotten, in every language', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-24T13:05:09Z'))
+    try {
+      const sites = await Promise.all((['sparql', 'function'] as const).map(async (prefer) => {
+        const h = await mountRemembering(browser(), undefined, [], 'wat', prefer)
+        const f = h.store.factory
+        const app = f.namedNode(UI + 'app')
+        const group = f.namedNode(UI + 'galleryGroup')
+        h.showPage('Components')
+        h.runtime.apply({ remove: h.store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupLayers'))] })
+        h.shell.flush()
+        return { ...h, text: h.runtime.project({ modality: MOD.Text, prefer, name: 'text-policies', roots: [UI + 'policies'] }) }
+      }))
+      const rules = (sites[0]!.screen.engine as unknown as { rules: { slot: string; kind: string }[] }).rules
+      expect(rules.find((r) => r.slot === NS.c + 'PolicyListRendering')?.kind).toBe('sparql')
+      const list = (h: (typeof sites)[number]) => h.document.querySelector('[data-sem-c=policy-list]')!
+      const same = (what: string) => {
+        const [a, b] = sites.map((h) => list(h).outerHTML)
+        expect(a, what).toBe(b)
+        const [ta, tb] = sites.map((h) => toText(h.text.index, UI + 'policies'))
+        expect(ta, what).toBe(tb)
+      }
+      same('at start')
+      expect(list(sites[0]!).querySelectorAll('li').length).toBeGreaterThan(3)
+      for (const h of sites) pressZ(h)
+      for (const h of sites) await h.persistence.flush()
+      for (const h of sites) h.shell.flush()
+      same('written')
+      expect(list(sites[0]!).textContent).toContain('saved')
+      for (const languages of [['uk'], ['de'], ['ar'], ['en']]) {
+        for (const h of sites) for (const p of [h.screen, h.text]) p.engine.reconfigure({ languages })
+        for (const h of sites) h.shell.flush()
+        same(languages.join())
+      }
+      for (const act of ['[role=switch][aria-checked=true]', '.sem-forget:not([disabled])']) {
+        for (const h of sites) h.fire(list(h).querySelector(act)!, 'click')
+        for (const h of sites) await h.persistence.flush()
+        for (const h of sites) h.shell.flush()
+        same(act)
+      }
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
