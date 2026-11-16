@@ -296,6 +296,8 @@ describe('structural themes', () => {
         if (layer !== 'sem.variants' || !sel.includes(guard(slug))) continue
         for (const s of splitSelectors(sel)) if (s.includes(guard(slug))) expect(s, s).toMatch(new RegExp(`^\\[data-sem-theme="${slug}"\\][ :]`))
       }
+      // and each selector of the theme's own rules is guarded against a nested theme
+      for (const [, sel] of inside(slug)) for (const s of splitSelectors(sel)) expect(s, s).toContain(guard(slug))
     }
     // rules that must beat an intent rule scope themselves with a state, in the intents layer
     for (const slug of STRUCTURAL) {
