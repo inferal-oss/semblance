@@ -1674,6 +1674,9 @@ What exists (`src/view/window.ts`, `replica.ts`, `runtime.ts`, `src/behaviour/un
   the opposite of the latest recorded change that is not undone and still applies: every triple it
   added is still there and none it removed is back. A change that later ones overlapped is skipped
   rather than forced; the undone member is state on the log (`beh:undone`), forgotten when retired.
+  `beh:RedoLatest` applies again the change undone last. A new undoable change, once recorded, forgets
+  the undone members and their recorded changes (the redo stack), so Redo offers only what was undone
+  since; the bus does it where it records the change, for SPARQL and function rules alike.
 - **The workbench.** Follow updates also makes the query a view (`c:FollowAsView`): its rows as a
   result set, `iv:materialize iv:ResultSet` (a CONSTRUCT typed into the workbench never writes its
   triples to the views graph, which every projection reads), `iv:strategy iv:Auto` (a fallback is
