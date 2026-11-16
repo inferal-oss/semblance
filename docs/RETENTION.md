@@ -1,9 +1,9 @@
 # Bounded memory and retention
 
-**Status: a draft for discussion. Nothing here is implemented.** It surveys everything in Semblance
-that grows with time, use or history (measured on `main` at 4727466), sorts it into what may be
-dropped and what may not, and proposes one way to bound it. Implementation waits for the design to
-be agreed.
+**Status: design agreed (§6), being built (§7).** This document surveys everything in Semblance that
+grows with time, use or history (measured on `main` at 4727466), sorts it into what may be dropped and
+what may not, and sets out how it is bounded. As the pieces land it becomes the guide to retention:
+§8 is how an app uses it.
 
 The goal, in one line: **memory is bounded and retention is not forever, but a person never finds
 their data silently gone.**
@@ -298,7 +298,84 @@ Derived state is evicted, not asked about:
   reflog entries, 30 for unreachable ones, and two weeks for loose objects. Reachable means owned and
   is never pruned. Expiry is for history, with time to change one's mind.
 
-## 6. Recommendation
+## 6. Decisions
+
+Agreed on 2026-11-16. Where a decision changes §5, it wins.
+
+| question | decided |
+|---|---|
+| Vocabulary | A `ret:` layer. Retention policies are the main mechanism, and the app states them. |
+| Asking | **Callbacks are the last line of defence.** Policies decide first, then reactions to `ret:Pressure`. Only what neither settles reaches the host's `onRetention`, and what history must be asked about is asked that way. |
+| Undo | It stays on the change log, with a **bigger bound**. A second policy keeps the members that recorded an undoable change longer than the rest (§6.1). |
+| Memory | The app can set a **maximum memory** (`ret:MemoryBudget`, `ret:maxBytes`). The runtime measures what it can: the engines' wasm memory everywhere, and the JS heap where the browser reports it (Chromium's `performance.memory`, and `performance.measureUserAgentSpecificMemory()` when cross-origin isolated). |
+| Derived budget | The renderings' budget is part of that memory budget. **Both projections, screen and text, share it.** |
+| Offload | **What leaves memory can go to browser storage** (IndexedDB) and comes back **live**, into the graph, when something reaches for it. That covers history past a horizon, undo past it, and cold graphs. Dropping is for what is rebuildable. |
+| Archives | They load back into the live graph, not just into a viewer. |
+| Stale storage | Keys of policies no longer declared are **swept**, once every graph the app declares has loaded. |
+| Horizons | Crossing a person-facing horizon **is announced** (`ann:`), once per crossing, not per item. |
+| Server | The warm runtime runs maintenance between requests **and** is recycled after a number of requests or distinct terms. |
+| Tooling | A **Memory tool** beside the inspector. It shows usage by class and graph, budgets, horizons and offloaded stores. It **controls pressure**: you can simulate a level, evict now, offload now and set the maximum. Tests drive pressure the same way. |
+
+### 6.1 Undo on the log, with a bigger bound
+
+The change log keeps two policies, and a member is kept while either keeps it (LDES semantics):
+
+```turtle
+beh:ChangeLogView ldes:retentionPolicy beh:ChangeLogRetention , beh:UndoRetention .
+beh:ChangeLogRetention a beh:LatestMembersPolicy ; ldes:amount 200 .
+# Members that recorded an undoable change (beh:asserted / beh:retracted) are kept longer.
+beh:UndoRetention a ret:Latest ; ldes:amount 1000 ; ret:members beh:UndoableMemberShape ;
+    ret:onExpiry ret:Offload .
+```
+
+`ret:members` narrows a policy to the members that conform to a shape. The views that aggregate the
+log keep their constant cost, because a retirement is a −1 delta whichever policy let the member go.
+Undo past 1,000 steps loads the offloaded members back, live, so in practice undo is bounded by
+storage, not memory. When storage refuses, the horizon is announced and a disabled Undo says where
+history starts.
+
+### 6.2 Offload, and loading back
+
+`ret:Offload` is an exit (`ret:onExpiry`). It does three things:
+
+1. **Writes before it removes.** What leaves goes to an IndexedDB store of the app (a `per:Database`
+   scope) as Jelly frames, keyed by the retained thing and a range (sequence numbers for a stream,
+   a graph name for a cold graph). The triples leave the store only after that write succeeds. A
+   refused write is `ret:Pressure` (§6.3), never a silent drop.
+2. **Records what it offloaded.** `ret:Horizon` gains `ret:offloaded` (a count) and the ranges
+   held. Views read them, so a log view can say "1,240 older events in this browser · Show".
+3. **Loads back on demand.** A `ret:Recall` request names a range, written by a reaction (Show,
+   Undo past the horizon, a navigation to a cold graph's page) or by the host. The effect reads the
+   frames and applies them as an ordinary input delta. The recalled members are subject to the same
+   policies, so recalling does not unbound memory: something colder is offloaded to make room.
+
+Cold graphs are the same mechanism, applied to graphs instead of stream members. A graph not shown
+for a while, under pressure, is offloaded (owned graphs) or unloaded (graphs the app can fetch
+again: its own Turtle) and comes back when a page that needs it is shown.
+
+### 6.3 Memory budget and pressure
+
+`ret:MemoryBudget` on the app (or a `mount` option, for the host) sets `ret:maxBytes`. A pressure
+effect samples what it can measure in idle time, at most once a second:
+
+- the engines' wasm memory;
+- the JS heap, where reported;
+- an estimate from triple counts per graph where nothing else is reported.
+
+It writes a level (`ret:Normal`, `ret:Elevated`, `ret:Critical`) and the figures into
+`urn:semblance:retention`. Each level is answered in a fixed order, cheapest and safest first:
+
+1. evict derived state, least recently shown first (both projections; never what is shown,
+   `sem:warm sem:Eager` or `c:keptHidden`);
+2. compact the engines when live state is well below their high-water mark;
+3. offload history and cold graphs to browser storage;
+4. raise `ret:Pressure` on what is still over, for reactions to answer;
+5. call `onRetention`, and announce what it decided.
+
+Owned data is never dropped at any step. It can only be offloaded, and it is marked unsaved when it
+cannot be.
+
+## 6.4 The earlier recommendation, in order of risk
 
 The phases below are in order of risk, and the first does not wait on the design.
 
@@ -326,7 +403,18 @@ The phases below are in order of risk, and the first does not wait on the design
    - Add `ret:Pressure`, `onRetention` and a prompt component.
    - Handle owned-data pressure end to end.
 
-## 7. Open questions
+## 7. Plan
+
+Tracked in #530, linked from the Plan (#8). The engine's part,
+compaction by re-instantiation, is on the engine tracker (#9).
+
+## 8. Using retention
+
+*Filled in as the pieces land: declaring a policy, offloading and recalling, setting a memory
+budget, answering pressure in a reaction or in `onRetention`, the Memory tool, and testing an app
+under pressure.*
+
+## Appendix: the questions as they were asked
 
 1. **Undo.** Should it get its own history per document (recommended), or stay on the change log with
    a larger bound, so that unrecorded and non-undoable events stop taking its slots? Should undo history
