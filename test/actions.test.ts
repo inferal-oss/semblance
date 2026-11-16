@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
+import { trackFocus } from './focus.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -116,6 +117,27 @@ describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('actions components (%
     expect(root('act-menu-log')!.textContent).toContain('Deleted')
   })
 
+  it('opened from its trigger, a menu takes the focus to its first item, and gives it back on a choice or Escape', () => {
+    const { root, fire, document, window } = actions()
+    trackFocus(window, document)
+    const menu = root('act-menu-actions')!
+    const trigger = menu.querySelector('button')!
+    trigger.focus()
+    fire(trigger, 'click')
+    const items = () => [...menu.querySelectorAll('[role=menuitem]')]
+    expect(document.activeElement).toBe(items()[0])
+    fire(items()[0]!, 'click')
+    expect(menu.querySelector('[role=menu]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    fire(trigger, 'click')
+    expect(document.activeElement).toBe(items()[0])
+    const esc = new window.Event('keydown', { bubbles: true })
+    Object.defineProperty(esc, 'key', { value: 'Escape' })
+    document.activeElement!.dispatchEvent(esc)
+    expect(menu.querySelector('[role=menu]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
+
   it('closes the menu when the trigger is clicked again, and not from elsewhere', () => {
     const { root, fire, value } = actions()
     const menu = root('act-menu-new')!
@@ -128,6 +150,31 @@ describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('actions components (%
     fire(trigger.querySelector('.sem-label')!, 'click')
     expect(value('act-menu-new', C + 'open')).toEqual(['false'])
     expect(menu.hasAttribute('data-open')).toBe(false)
+  })
+
+  it('renders destination items as links and disabled destinations as buttons', () => {
+    const { root, fire, value, runtime, window } = actions()
+    const menu = root('act-menu-links')!
+    fire(menu.querySelector('button')!, 'click')
+    const guide = root('act-mi-guide')!
+    expect(guide.localName).toBe('a')
+    expect(guide.getAttribute('href')).toBe('/docs/components/')
+    expect(guide.getAttribute('role')).toBe('menuitem')
+    const disabled = root('act-mi-disabled-guide')!
+    expect(disabled.localName).toBe('button')
+    expect(disabled.hasAttribute('disabled')).toBe(true)
+    const text = runtime.project({ modality: MOD.Text, name: 'text-linked-menu', roots: [UI + 'act-menu-links'] })
+    expect(toText(text.index, UI + 'act-mi-guide')).toBe('  › Component guide </docs/components/>')
+    expect(toText(text.index, UI + 'act-mi-disabled-guide')).toBe('  › Unavailable guide')
+    fire(guide, 'click')
+    expect(value('act-menu-links', C + 'open')).toEqual(['false'])
+    expect(menu.querySelector('[role=menu]')).toBeNull()
+    fire(menu.querySelector('button')!, 'click')
+    const space = new window.Event('keydown', { bubbles: true, cancelable: true })
+    Object.defineProperty(space, 'key', { value: ' ' })
+    root('act-mi-guide')!.dispatchEvent(space)
+    expect(space.defaultPrevented).toBe(true)
+    expect(value('act-menu-links', C + 'open')).toEqual(['false'])
   })
 
   it('closes with Escape through the keyboard layer', () => {

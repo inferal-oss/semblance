@@ -75,12 +75,19 @@ export function bytesLabel(n: number): string {
 /** Whether a text looks like JSON (an object or an array): the JSON representation is offered then. */
 export const looksLikeJson = (s: string) => /^\s*[[{]/.test(s)
 
-// --- JsonTree: parsing (function only) -------------------------------------------------------------
+// --- JsonTree: parsing ----------------------------------------------------------------------------
 
 type JsonType = 'object' | 'array' | 'string' | 'number' | 'boolean' | 'null'
 const typeOf = (v: unknown): JsonType => (v === null ? 'null' : Array.isArray(v) ? 'array' : (typeof v as JsonType))
 /** A key as a JSON Pointer reference token (RFC 6901). */
 const pointer = (key: string) => key.replace(/~/g, '~0').replace(/\//g, '~1')
+/** Whether a member name is an array index, which JavaScript lists first, by number. */
+const arrayIndex = (key: string) => /^(0|[1-9]\d{0,9})$/.test(key) && Number(key) <= 4294967294
+/**
+ * A member's order key: an array index's number, else 2^32 - 1 plus its position (the SPARQL
+ * rule's position is sx:json's ?index in the source, which gives the same order).
+ */
+const memberKey = (key: string, position: number) => (arrayIndex(key) ? Number(key) : 4294967295 + position)
 
 /**
  * Parses the payload and mints one c:JsonNode per value shown: the root, and the children of
@@ -119,7 +126,7 @@ const jsonTree: FnRule = (ctx, focus) => {
       const entries: [string, unknown][] = type === 'array' ? (v as unknown[]).map((x, i) => [String(i), x]) : Object.entries(v as object)
       const open = !collapsed.has(path) && (expanded.has(path) || depth < openDepth)
       o.t(node, C_JSON_COUNT, int(entries.length)).t(node, C_EXPANDED, ctx.f.literal(String(open), ctx.nn(XSD_BOOLEAN)))
-      if (open) entries.forEach(([k, x], i) => visit(x, `${path}/${pointer(k)}`, k, depth + 1, i, node))
+      if (open) entries.forEach(([k, x], i) => visit(x, `${path}/${pointer(k)}`, k, depth + 1, memberKey(k, i), node))
     } else o.t(node, C_JSON_VALUE, JSON.stringify(v))
     return node
   }

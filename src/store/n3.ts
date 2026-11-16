@@ -1,5 +1,6 @@
 import { DataFactory, Parser, Store } from 'n3'
 import type { Quad } from '@rdfjs/types'
+import { dumpJellyOf, jellyFramesOf, jellyReaderInto, readJellyInto } from '../jelly/store.ts'
 import type { Factory, GraphStore } from './types.ts'
 
 /** N3.js adapter: fast JS-native matching, no SPARQL (function rules only). */
@@ -19,7 +20,12 @@ export function n3Store(): GraphStore {
     construct() {
       throw new Error('The N3.js store has no SPARQL engine; use function rules (prefer: "function")')
     },
+    query: () => Promise.reject(new Error('The N3.js store has no SPARQL engine')),
     loadTurtle: (text) => store.addQuads(new Parser().parse(text)),
+    loadJelly: (bytes, graph) => readJellyInto((q) => void store.addQuad(q as never), bytes, graph),
+    dumpJelly: (graph, options) => dumpJellyOf(store.getQuads(null, null, null, (graph ?? null) as never) as unknown as Quad[], options),
+    jellyReader: (graph) => jellyReaderInto((q) => void store.addQuad(q as never), graph),
+    jellyFrames: (graph, options) => jellyFramesOf(store.match(null, null, null, (graph ?? null) as never) as unknown as Iterable<Quad>, options),
   }
 }
 

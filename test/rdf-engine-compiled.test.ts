@@ -47,6 +47,13 @@ const QUERIES = [
   // right sides run per left row with the bindings the interpreter passes in (the rest hidden)
   'SELECT ?a ?n ?m WHERE { ?a a :R . { ?a :next ?n FILTER(STR(?a) < STR(?n)) } UNION { { SELECT (MIN(?s) AS ?m) WHERE { ?x :slug ?s } } ?a :slug ?m } }',
   'SELECT ?a ?o ?n WHERE { ?a :slug ?s OPTIONAL { { ?a :order ?o FILTER(STRSTARTS(?s, "s-1")) } UNION { { SELECT ?n WHERE { ?n a :R } } FILTER(?n = ?a) } } }',
+  // a UNION joined branch by branch: ?d passed into the branch that can take it, though the other's
+  // subquery projects it; a filter after the UNION waits for it; no left row, no right side (#190)
+  'SELECT ?a ?d ?k WHERE { ?a a :R ; :next ?d . { ?d :slug ?k } UNION { SELECT ?d (COUNT(?z) AS ?k) WHERE { ?d a :R . ?z a :R } GROUP BY ?d } }',
+  'SELECT ?a ?h ?c WHERE { ?a a :R . { VALUES ?h { 1 2 3 } ?a :next ?n } UNION { SELECT ?a (COUNT(?s) AS ?c) WHERE { ?a :slug ?s } GROUP BY ?a } FILTER(!BOUND(?h) || ?h < 3) }',
+  'SELECT ?x ?y WHERE { ?x a :Missing . { ?x :next ?y } UNION { SELECT ?y WHERE { ?y a :R } } }',
+  // a group of a subquery and a filter, joined: the filter waits for the subquery's rows
+  'SELECT ?a ?k WHERE { ?a a :R . { { SELECT (COUNT(?b) AS ?k) WHERE { ?b a :R } } FILTER(?k > 1) } }',
   // a BIND onto a variable the joined row binds keeps the row only when they agree
   'SELECT ?a ?b ?c WHERE { ?a :next ?b BIND(STR(?b) AS ?c) { BIND(:c AS ?b) } }',
   // a typed expression in the rest after an OPTIONAL (a function of its own, the stack top its

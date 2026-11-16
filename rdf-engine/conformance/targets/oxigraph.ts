@@ -49,4 +49,9 @@ export const oxigraph: Target = {
     store.update(text, { base_iri: base })
     return store.match().map(quadRow)
   },
+  // Oxigraph's JS build has no HTTP client: LOAD SILENT does nothing and LOAD fails, which is what
+  // the update tests ask of a document that cannot be loaded. It has no SERVICE (queryFetching).
+  async updateFetching(dataset, text, base) {
+    return this.update(dataset, text, base)
+  },
 }

@@ -7,16 +7,19 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 
 # Sheets: cells are resources, formulas are queries, and the graph keeps them up to date.
 #
 # A c:Sheet places its cells (c:cell, each a c:SheetCell with a c:row and a c:column, both
 # numbers; columns are lettered A, B, C…). A cell either holds a value (c:value, which the reader
-# edits) or computes one: c:valueQuery names a SELECT (a sem:View) whose ?value is the cell's, and
+# edits) or computes one: c:valueQuery names a SELECT (a maintained iv:View) whose ?value is the cell's, and
 # c:dataset names the cells it reads - or says its formula as people write it (c:formulaText
-# "=SUM(B2:B5)"), which c:SheetFormula reads into both. The formula layer (ontology/components/formula.ttl) runs
-# the query and follows c:dataset, so a change re-runs exactly the cells that read it, and those
-# that read them - the dependency graph is the data's own. Selecting a cell shows its formula and
+# "=SUM(B2:B5)"), which c:SheetFormula reads into both. Each formula is a maintained view, one per
+# cell (iv:perReferrer c:valueQuery), over the cells it reads - their values as given, or as their
+# own formulas give them (iv:reads c:Formula) - and the formula layer (ontology/components/formula.ttl)
+# writes its value on the cell; so a change reaches exactly the cells that read it, and those that
+# read them - the dependency graph is the data's own. Selecting a cell shows its formula and
 # draws its dependencies: arrows from the cells it reads, and to the cells that read it. With
 # c:traceRecalculation, the host writes which formulas the last change re-ran (c:recalculated), and
 # the sheet marks them. Typing a formula into a cell and committing it makes it a formula cell
@@ -210,8 +213,9 @@ CONSTRUCT {
         rdfhtml:attribute ?kindAttr , ?numericAttr .
   ?kindAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue ?kind .
   ?numericAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-numeric" ; rdfhtml:attributeValue "true" .
-  ?content a ?element ; rdfhtml:type ?type ; rdfhtml:value ?inputValue ; rdfhtml:hasChild ?outText ; rdfhtml:attribute ?nameAttr .
+  ?content a ?element ; rdfhtml:type ?type ; rdfhtml:value ?inputValue ; rdfhtml:hasChild ?outText ; rdfhtml:attribute ?nameAttr , ?selectAttr .
   ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?name .
+  ?selectAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-select-on-focus" ; rdfhtml:attributeValue "" .
   ?outText a rdfhtml:Text ; rdfhtml:data ?outData .
 }
 WHERE {
@@ -221,12 +225,14 @@ WHERE {
   BIND(EXISTS { $this c:valueQuery ?q } AS ?formula)
   BIND(IF(?formula, "formula", "value") AS ?kind)
   OPTIONAL { $this c:value ?v0 }
-  BIND(STR(?v0) AS ?v)
+  BIND(IF(isNumeric(?v0), xsd:string(?v0), STR(?v0)) AS ?v)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~content")) AS ?content)
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-kind")) AS ?kindAttr)
   BIND(IF(COALESCE(REGEX(?v, "^-?[0-9]+([.][0-9]+)?$"), false), IRI(CONCAT(STR($this), "/~root-data-sem-numeric")), ?none) AS ?numericAttr)
   BIND(IRI(CONCAT(STR($this), "/~content-aria-label")) AS ?nameAttr)
+  # However a value cell takes the focus, its text is selected, so that typing replaces it.
+  BIND(IF(?formula, ?none, IRI(CONCAT(STR($this), "/~content-data-sem-select-on-focus"))) AS ?selectAttr)
   BIND(IF(?formula, rdfhtml:Output, rdfhtml:Input) AS ?element)
   BIND(IF(?formula, ?none, "text") AS ?type)
   BIND(IF(?formula, ?none, ?v) AS ?inputValue)
@@ -244,7 +250,8 @@ WHERE {
 
 c:SheetFunction a owl:Class ; rdfs:subClassOf sem:View ;
     rdfs:comment """A query a sheet's formula text names: a function over a range (c:functionName, "=SUM(B2:B5)") or an
-operator between two cells (c:operator, "=B2*C2"). $this is the cell; its inputs are its c:dataset."""@en .
+operator between two cells (c:operator, "=B2*C2"). $this is the cell; its inputs are its c:dataset. Each is a maintained
+view per cell that names it (iv:perReferrer c:valueQuery), reading what c:SheetFormula and c:Formula derive (iv:reads)."""@en .
 c:functionName a owl:DatatypeProperty ; rdfs:domain c:SheetFunction ;
     rdfs:comment "How a formula names the function, in capitals (\"SUM\")."@en .
 c:operator a owl:DatatypeProperty ; rdfs:domain c:SheetFunction ;
@@ -258,21 +265,29 @@ c:addsRowTo a owl:ObjectProperty ; rdfs:range c:Sheet ;
 c:addsColumnTo a owl:ObjectProperty ; rdfs:range c:Sheet ;
     rdfs:comment "On a sheet's control: the sheet activating it adds a column to (c:AddSheetColumn)."@en .
 
-c:SumFormula a c:SheetFunction , sem:View ; c:functionName "SUM" ; rdfs:label "the sum of a range"@en ;
+c:SumFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:functionName "SUM" ; rdfs:label "the sum of a range"@en ;
     sem:select """SELECT (SUM(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
-c:AverageFormula a c:SheetFunction , sem:View ; c:functionName "AVERAGE" ; rdfs:label "the average of a range (to hundredths)"@en ;
+c:AverageFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:functionName "AVERAGE" ; rdfs:label "the average of a range (to hundredths)"@en ;
     sem:select """SELECT ((ROUND(AVG(xsd:decimal(?v)) * 100) / 100) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
-c:MinFormula a c:SheetFunction , sem:View ; c:functionName "MIN" ; rdfs:label "the least of a range"@en ;
+c:MinFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:functionName "MIN" ; rdfs:label "the least of a range"@en ;
     sem:select """SELECT (MIN(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
-c:MaxFormula a c:SheetFunction , sem:View ; c:functionName "MAX" ; rdfs:label "the greatest of a range"@en ;
+c:MaxFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:functionName "MAX" ; rdfs:label "the greatest of a range"@en ;
     sem:select """SELECT (MAX(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
-c:AddFormula a c:SheetFunction , sem:View ; c:operator "+" ; rdfs:label "one cell plus another"@en ;
+c:AddFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:operator "+" ; rdfs:label "one cell plus another"@en ;
     sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b BIND(xsd:decimal(?a) + xsd:decimal(?b) AS ?value) }""" .
-c:SubtractFormula a c:SheetFunction , sem:View ; c:operator "-" ; rdfs:label "one cell minus another"@en ;
+c:SubtractFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:operator "-" ; rdfs:label "one cell minus another"@en ;
     sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b BIND(xsd:decimal(?a) - xsd:decimal(?b) AS ?value) }""" .
-c:MultiplyFormula a c:SheetFunction , sem:View ; c:operator "*" ; rdfs:label "one cell times another"@en ;
+c:MultiplyFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:operator "*" ; rdfs:label "one cell times another"@en ;
     sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b BIND(xsd:decimal(?a) * xsd:decimal(?b) AS ?value) }""" .
-c:DivideFormula a c:SheetFunction , sem:View ; c:operator "/" ; rdfs:label "one cell over another (to four places)"@en ;
+c:DivideFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:operator "/" ; rdfs:label "one cell over another (to four places)"@en ;
     sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b FILTER(xsd:decimal(?b) != 0) BIND(ROUND(xsd:decimal(?a) / xsd:decimal(?b) * 10000) / 10000 AS ?value) }""" .
 
 # For the whole sheet at once, before anything that reads a cell's inputs (its grid, its arrows, its
@@ -384,9 +399,10 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~bar-text")) AS ?barText)
     OPTIONAL { ?sel c:row ?sr ; c:column ?sc }
     OPTIONAL { ?sel c:formulaText ?ft }
-    OPTIONAL { ?sel c:value ?sv }
+    OPTIONAL { ?sel c:value ?sv0 }
+    BIND(IF(isNumeric(?sv0), xsd:string(?sv0), STR(?sv0)) AS ?sv)
     BIND(IF(?selected, CONCAT(SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?sc, 1), STR(?sr), "  ",
-         IF(BOUND(?ft), CONCAT(STR(?ft), "  →  ", COALESCE(STR(?sv), "…")), COALESCE(STR(?sv), ""))),
+         IF(BOUND(?ft), CONCAT(STR(?ft), "  →  ", COALESCE(?sv, "…")), COALESCE(?sv, ""))),
          "Select a cell to see its formula, what it reads and what reads it.") AS ?barData)
   } UNION {
     # The range selected, summed up; else how much the last change re-ran.
@@ -397,7 +413,7 @@ WHERE {
     OPTIONAL { SELECT (COUNT(?x) AS ?span) (MIN(?xr) AS ?r0) (MAX(?xr) AS ?r1) (MIN(?xc) AS ?c0) (MAX(?xc) AS ?c1) WHERE { $this c:selects ?x . ?x c:row ?xr ; c:column ?xc } }
     OPTIONAL { SELECT (COUNT(?fv) AS ?filled) WHERE { $this c:selects ?fx . ?fx c:value ?fv } }
     OPTIONAL { SELECT (COUNT(?d) AS ?numbers) (SUM(?d) AS ?sum) ((ROUND(AVG(?d) * 100) / 100) AS ?mean) WHERE {
-      $this c:selects ?dx . ?dx c:value ?dv FILTER(REGEX(STR(?dv), "^-?[0-9]+([.][0-9]+)?$")) BIND(xsd:decimal(STR(?dv)) AS ?d)
+      $this c:selects ?dx . ?dx c:value ?dv0 BIND(IF(isNumeric(?dv0), xsd:string(?dv0), STR(?dv0)) AS ?dv) FILTER(REGEX(?dv, "^-?[0-9]+([.][0-9]+)?$")) BIND(xsd:decimal(?dv) AS ?d)
     } }
     BIND(CONCAT(SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?c0, 1), STR(?r0), ":", SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?c1, 1), STR(?r1)) AS ?rangeName)
     BIND(IF(COALESCE(?span, 0) > 1,
@@ -471,6 +487,28 @@ WHERE {
   BIND(IF(REGEX(?v, "^-?[0-9]+([.][0-9]+)?$"), STRDT(?v, xsd:decimal), ?v) AS ?new)
 }""" ;
     sem:function "sheet:edit" .
+
+# What a value cell holds as it takes the focus, or as an edit is committed (Enter, or leaving it), is
+# kept (c:valueOnEntry) for Escape to put back: typing changes c:value at once, and the bar and
+# the formulas follow it. An empty cell keeps nothing, and Escape empties it again.
+c:valueOnEntry a owl:DatatypeProperty ; rdfs:domain c:SheetCell ; beh:viewState true ;
+    rdfs:comment "State on a value cell: what Escape puts back, its c:value when it took the focus or an edit was last committed."@en .
+c:RememberSheetCell a beh:Reaction ;
+    rdfs:label "Remember a cell's value"@en ;
+    beh:when beh:Focus , beh:Change ;
+    beh:sourceClass c:SheetCell ;
+    beh:deletes """CONSTRUCT { $this c:valueOnEntry ?old } WHERE { $this c:valueOnEntry ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:valueOnEntry ?v } WHERE { FILTER NOT EXISTS { $this c:valueQuery ?q } $this c:value ?v }""" ;
+    sem:function "sheet:remember" .
+c:SheetEscapeKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "escape" ;
+    rdfs:comment "Escape in a sheet's cell: puts back what it held (c:valueOnEntry)."@en .
+c:RestoreSheetCell a beh:Reaction ;
+    rdfs:label "Put a cell's value back"@en ;
+    beh:when c:SheetEscapeKey ;
+    beh:sourceClass c:SheetCell ;
+    beh:deletes """CONSTRUCT { $this c:value ?old } WHERE { FILTER NOT EXISTS { $this c:valueQuery ?q } $this c:value ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?kept } WHERE { FILTER NOT EXISTS { $this c:valueQuery ?q } $this c:valueOnEntry ?kept }""" ;
+    sem:function "sheet:restore" .
 
 # Clicking or focusing a cell selects it, and only it. With Shift held (beh:modifiers) it does not:
 # the range is extended instead.

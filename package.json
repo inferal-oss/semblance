@@ -1,5 +1,5 @@
 {
-  "name": "@inferal-oss/semblance",
+  "name": "@semblance-dev/semblance",
   "version": "0.1.0",
   "private": true,
   "license": "MIT OR Apache-2.0",
@@ -24,24 +24,46 @@
     "url": "https://github.com/inferal-oss/semblance/issues"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./web": "./src/web/index.ts",
-    "./node": "./src/node/index.ts",
-    "./ontology/*": "./ontology/*",
+    ".": {
+      "types": "./lib/src/index.d.ts",
+      "default": "./lib/src/index.js"
+    },
+    "./web": {
+      "types": "./lib/src/web/index.d.ts",
+      "default": "./lib/src/web/index.js"
+    },
+    "./node": {
+      "types": "./lib/src/node/index.d.ts",
+      "default": "./lib/src/node/index.js"
+    },
+    "./server": {
+      "types": "./lib/src/server/index.d.ts",
+      "default": "./lib/src/server/index.js"
+    },
+    "./views": {
+      "types": "./lib/src/views/web.d.ts",
+      "node": "./lib/src/views/node.js",
+      "default": "./lib/src/views/web.js"
+    },
+    "./virtual": {
+      "types": "./lib/src/virtual.d.ts"
+    },
+    "./migrate": {
+      "types": "./lib/src/migrate/index.d.ts",
+      "default": "./lib/src/migrate/index.js"
+    },
+    "./ontology/*": "./lib/ontology/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "src",
-    "ontology",
-    "rdf-engine/host",
-    "rdf-engine/build/*.wasm",
-    "docs",
-    "README.md",
-    "DESIGN.md",
-    "PERSISTENCE.md",
-    "LICENSE",
+    "lib",
+    "bin/semblance.mjs",
     "LICENSE-APACHE",
     "LICENSE-MIT"
+  ],
+  "workspaces": [
+    "packages/rdf-engine-wat",
+    "packages/rdf-engine-rust"
   ],
   "publishConfig": {
     "access": "public"
@@ -58,33 +80,62 @@
     "build:single": "vite build --mode single && node scripts/name-single.mjs",
     "conformance": "tsx rdf-engine/conformance/run.ts",
     "engine:build": "tsx rdf-engine/build.ts",
+    "layout:build": "tsx layout-solver/build.ts",
     "engine:check": "tsx rdf-engine/host/abi-check.ts",
     "engine:compare": "tsx rdf-engine/compare.ts",
     "engine:sizes": "tsx rdf-engine/sizes.ts",
     "engine:speed": "tsx rdf-engine/host/speed-check.ts",
-    "predev": "npm run engine:build",
-    "prebuild": "npm run engine:build",
-    "pretest": "npm run engine:build",
-    "pretest:full": "npm run engine:build",
-    "prebuild:single": "npm run engine:build",
-    "prepack": "npm run engine:build"
+    "versions": "tsx scripts/versions.ts",
+    "change": "tsx scripts/versions.ts",
+    "predev": "npm run engine:build && npm run layout:build",
+    "prebuild": "npm run engine:build && npm run layout:build",
+    "pretest": "npm run engine:build && npm run layout:build",
+    "pretest:full": "npm run engine:build && npm run layout:build",
+    "prebuild:single": "npm run engine:build && npm run layout:build",
+    "prepack": "npm run engine:build && npm run layout:build && npm run build:package",
+    "serve": "node bin/semblance.mjs serve",
+    "perf:interactions": "tsx scripts/interactions.ts",
+    "build:package": "tsx scripts/build-package.ts",
+    "pack:check": "tsx scripts/pack-check.ts",
+    "release:version": "tsx scripts/release-version.ts"
   },
   "dependencies": {
+    "@rdfjs/types": "^2.0.1",
+    "@semblance-dev/rdf-engine-wat": "0.1.0",
+    "@types/n3": "^1.26.5",
     "n3": "^2.13.12",
-    "oxigraph": "^0.5.13"
+    "oxigraph": "^0.5.13",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@comunica/query-sparql-rdfjs": "^5.4.1",
-    "@rdfjs/types": "^2.0.1",
-    "@types/n3": "^1.26.5",
     "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "binaryen": "^132.0.0",
     "linkedom": "^0.18.14",
-    "tsx": "^4.23.15",
+    "playwright-core": "1.57.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^5.0.5",
     "wabt": "^1.0.39"
+  },
+  "bin": {
+    "semblance": "bin/semblance.mjs"
+  },
+  "peerDependencies": {
+    "@semblance-dev/rdf-engine-rust": "0.1.0",
+    "vite": ">=7"
+  },
+  "peerDependenciesMeta": {
+    "@semblance-dev/rdf-engine-rust": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
   }
 }

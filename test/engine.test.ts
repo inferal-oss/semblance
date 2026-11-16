@@ -5,6 +5,8 @@ import { A11Y, C, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
+import type { FnRule } from '../src/engine/context.ts'
+import { loadRules } from '../src/engine/rules.ts'
 import { ALL_LAYERS, inputQuads, SCREEN_LAYERS, setup, todo } from './helpers.ts'
 
 const page = EX + 'page'
@@ -141,12 +143,12 @@ describe('incremental updates', () => {
     runtime.apply(t.set('t7', NS.rdfs + 'label', 'x'))
     expect(screen.engine.stats.ruleRuns - mid.ruleRuns).toBe(2)
     // A sort-key change re-places that one item (its member-wise list evaluation
-    // reads the key) and, since the SPARQL item rule watches everything on its
-    // data item, re-runs that item too, with no change in its output.
+    // reads the key). The item's rendering reads its data item's predicates as the
+    // list names them (c:itemLabel ...), not the key, so it does not re-run (#153).
     const reorder = { ...screen.engine.stats }
     const added = screen.engine.stats.derivedAdded
     runtime.apply(t.set('t7', 'priority', 1000))
-    expect(screen.engine.stats.ruleRuns - reorder.ruleRuns).toBe(2)
+    expect(screen.engine.stats.ruleRuns - reorder.ruleRuns).toBe(1)
     expect(screen.engine.stats.derivedAdded - added).toBeLessThanOrEqual(2)
   })
 
@@ -164,6 +166,11 @@ describe('incremental updates', () => {
     expect(ran(t.set('t7', NS.rdfs + 'label', 'x'))).toBe(3)
     // The item's rendering never reads ex:priority (its patterns say so): only the list, which places the item by it.
     expect(ran(t.set('t7', 'priority', 1000))).toBe(1)
+    // A block's handle is named by its type: a label reaches it through a class of its block. The block templates
+    // hold two paragraphs: their handles and the dnd:Handle reading each one's name, and the viewer's terms.
+    const f = store.factory
+    const label = f.quad(f.namedNode(NS.blk + 'Paragraph'), f.namedNode(NS.rdfs + 'label'), f.literal('Para', 'en'))
+    expect(ran({ add: [label], remove: [] })).toBe(5)
   })
 })
 
@@ -294,6 +301,90 @@ describe('reconfiguration and layers', () => {
     expect(runs('Any')).toBe(any + 1)
   })
 
+  it('a SPARQL rule whose predicate its focus names watches that predicate of the node it follows (#153)', () => {
+    // Two fields over one node, as a form's are: each reads only the property it names there.
+    const extra = `
+      @prefix sem: <${NS.sem}> . @prefix ex: <urn:w:> .
+      <urn:w:Field> a sem:Rule ; sem:targets ex:Field ; sem:stratum 1 ; sem:follows ex:controls ;
+        sem:construct """CONSTRUCT { $this <urn:w:shows> ?v } WHERE {
+          $this <urn:w:controls> ?target . OPTIONAL { $this <urn:w:property> ?p0 }
+          BIND(COALESCE(?p0, <urn:w:own>) AS ?p) BIND(COALESCE(?target, $this) AS ?node)
+          OPTIONAL { ?node ?p ?v } }""" .
+      ex:a a ex:Field ; ex:controls ex:form ; ex:property ex:one .
+      ex:b a ex:Field ; ex:controls ex:form ; ex:property ex:two .
+      ex:form ex:one "1" ; ex:two "2" .`
+    const store = loadStore('oxigraph', todoApp(1), extra)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen })
+    const f = store.factory
+    const nn = (s: string) => f.namedNode('urn:w:' + s)
+    expect(loadRules(store).find((r) => r.iri === 'urn:w:Field')!.watchesVia).toEqual([['?urn:w:controls', 'urn:w:property']])
+    const runs = () => screen.engine.stats.byRule.get('urn:w:Field')?.runs ?? 0
+    const shows = (s: string) => store.match(nn(s), nn('shows'), null).map((q) => q.object.value)
+    const set = (s: string, p: string, v: string) => runtime.apply({ remove: store.match(nn(s), nn(p), null), add: [f.quad(nn(s), nn(p), f.literal(v))] })
+    expect([shows('a'), shows('b')]).toEqual([['1'], ['2']])
+    const before = runs()
+    // The property one field names re-runs that field only...
+    set('form', 'one', '1!')
+    expect([shows('a'), shows('b')]).toEqual([['1!'], ['2']])
+    expect(runs()).toBe(before + 1)
+    // ...a property neither names re-runs neither...
+    set('form', 'three', '3')
+    expect(runs()).toBe(before + 1)
+    // ...and a field that names another property reads that one from then on.
+    runtime.apply({ remove: store.match(nn('b'), nn('property'), null), add: [f.quad(nn('b'), nn('property'), nn('three'))] })
+    expect(shows('b')).toEqual(['3'])
+    const after = runs()
+    set('form', 'three', '3!')
+    expect(shows('b')).toEqual(['3!'])
+    expect(runs()).toBe(after + 1)
+  })
+
+  it('a function rule that follows a node is re-run there by what it read, traced (#237)', () => {
+    // Two twins of one field: one reads the followed node through the context, the other untraced
+    // (each writes under its focus, so neither re-runs the other).
+    const extra = `
+      @prefix sem: <${NS.sem}> . @prefix ex: <urn:w:> .
+      <urn:w:Traced> a sem:Rule ; sem:targets ex:Field ; sem:stratum 1 ; sem:follows ex:controls ; sem:function "w-traced" .
+      <urn:w:Untraced> a sem:Rule ; sem:targets ex:Field ; sem:stratum 1 ; sem:follows ex:controls ; sem:function "w-untraced" .
+      ex:a a ex:Field ; ex:controls ex:form ; ex:property ex:one .
+      ex:form ex:one "1" ; ex:two "2" .`
+    const store = loadStore('oxigraph', todoApp(1), extra)
+    const f = store.factory
+    const nn = (s: string) => f.namedNode('urn:w:' + s)
+    const shows = (into: string): FnRule => (ctx, focus) => {
+      const read = () => {
+        const node = ctx.object(focus, nn('controls'))
+        const p = ctx.object(focus, nn('property'))
+        return node && p ? ctx.objects(node, p) : []
+      }
+      const values = into === 'shows' ? read() : ctx.untraced(read)
+      return values.map((v) => f.quad(f.namedNode(focus.value + '/~' + into), nn(into), v))
+    }
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, functions: { 'w-traced': shows('shows'), 'w-untraced': shows('sees') } })
+    const runs = (rule: string) => screen.engine.stats.byRule.get('urn:w:' + rule)?.runs ?? 0
+    const out = (p: string) => store.match(nn('a/~' + p), nn(p), null).map((q) => q.object.value)
+    const set = (s: string, p: string, v: string) => runtime.apply({ remove: store.match(nn(s), nn(p), null), add: [f.quad(nn(s), nn(p), f.literal(v))] })
+    expect([out('shows'), out('sees')]).toEqual([['1'], ['1']])
+    const [traced, untraced] = [runs('Traced'), runs('Untraced')]
+    // A predicate it did not read on the followed node re-runs only the twin that read untraced...
+    set('form', 'two', '2!')
+    expect([runs('Traced'), runs('Untraced')]).toEqual([traced, untraced + 1])
+    // ...one it read re-runs both...
+    set('form', 'one', '1!')
+    expect([out('shows'), out('sees')]).toEqual([['1!'], ['1!']])
+    expect([runs('Traced'), runs('Untraced')]).toEqual([traced + 1, untraced + 2])
+    // ...and naming another property on the focus moves its reads there.
+    runtime.apply({ remove: store.match(nn('a'), nn('property'), null), add: [f.quad(nn('a'), nn('property'), nn('two'))] })
+    expect(out('shows')).toEqual(['2!'])
+    set('form', 'one', '1!!')
+    expect(runs('Traced')).toBe(traced + 2)
+    set('form', 'two', '2!!')
+    expect(out('shows')).toEqual(['2!!'])
+    expect(runs('Traced')).toBe(traced + 3)
+  })
+
   it('refuses blank nodes in rule output', () => {
     const extra = `
       @prefix sem: <${NS.sem}> . @prefix c: <${NS.c}> .
@@ -323,6 +414,48 @@ describe('reconfiguration and layers', () => {
 })
 
 describe('bulk attributability', () => {
+  // Foci that are minted IRIs themselves (a block's handle, <container>/~handle-<block>), with a subject minted
+  // from a minted node, and a focus nested under another in one batch, which also writes about that one (#310).
+  const nested = `
+      @prefix sem: <${NS.sem}> . @prefix x: <urn:n:> .
+      <urn:n:Rule> a sem:Rule ; sem:targets x:Part ; sem:stratum 1 ;
+        sem:construct """CONSTRUCT { $this <urn:n:name> ?name . ?root <urn:n:of> $this . ?deep <urn:n:under> ?root . ?inner <urn:n:from> $this } WHERE {
+          $this <urn:n:label> ?name .
+          OPTIONAL { $this <urn:n:holds> ?held }
+          BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+          BIND(IRI(CONCAT(STR(?root), "/~deep")) AS ?deep)
+          BIND(IF(BOUND(?held), IRI(CONCAT(STR($this), "/~inner")), ?none) AS ?inner)
+        }""" .
+      <urn:n:doc/~a> a x:Part ; x:label "a" . <urn:n:doc/~b> a x:Part ; x:label "b" .
+      <urn:n:t> a x:Part ; x:label "t" ; x:holds true . <urn:n:t/~inner> a x:Part ; x:label "inner" .`
+  it.each(['oxigraph', 'wat'] as const)('gives every focus what it derived, whatever its IRI, in %s', (kind) => {
+    const project = (bulkThreshold: number) => {
+      const store = loadStore(kind, todoApp(1), nested)
+      const runtime = new Runtime(store)
+      const screen = runtime.project({ modality: MOD.Screen, prefer: 'sparql', bulkThreshold })
+      const out = () =>
+        store
+          .match(null, null, null, screen.engine.graph)
+          .filter((q) => q.predicate.value.startsWith('urn:n:'))
+          .map((q) => `${q.subject.value} ${q.predicate.value} ${q.object.value}`)
+          .sort()
+      return { store, runtime, screen, out }
+    }
+    const bulk = project(2)
+    const single = project(Infinity)
+    expect(bulk.screen.engine.stats.bulkQueries).toBeGreaterThan(0)
+    expect(single.out()).toContain('urn:n:doc/~a urn:n:name a')
+    expect(single.out()).toContain('urn:n:doc/~a/~root/~deep urn:n:under urn:n:doc/~a/~root')
+    expect(bulk.out()).toEqual(single.out())
+    // What the outer focus wrote about the inner one goes with the outer focus's own next evaluation.
+    for (const h of [bulk, single]) {
+      const f = h.store.factory
+      h.runtime.apply({ remove: h.store.match(f.namedNode('urn:n:t'), f.namedNode('urn:n:holds'), null), add: [] })
+    }
+    expect(single.out()).not.toContain('urn:n:t/~inner urn:n:from urn:n:t')
+    expect(bulk.out()).toEqual(single.out())
+  })
+
   it('evaluates per focus any SPARQL rule whose template writes about nodes not minted from the focus', async () => {
     const { attributable } = await import('../src/engine/rules.ts')
     expect(attributable('CONSTRUCT { ?root sem:renders $this . ?a ord:immediatelyPrecedes ?b } WHERE { BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }')).toBe(false)
@@ -331,5 +464,12 @@ describe('bulk attributability', () => {
         'CONSTRUCT { ?root sem:renders $this ; rdfhtml:hasChild ?icon . ?icon rdfhtml:data "a. b" } WHERE { BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) BIND(IF(BOUND(?x), IRI(CONCAT(STR(?root), "-icon")), ?none) AS ?icon) }',
       ),
     ).toBe(true)
+    // A branch that is a node from the data (a zone another focus minted, #304) is not minted from the focus.
+    const zones = (pick: string) =>
+      `CONSTRUCT { ?zone rdfhtml:attribute ?attr } WHERE { OPTIONAL { $this dnd:zone ?declared } BIND(IF(BOUND(?declared), ${pick}, IRI(CONCAT(STR($this), "/~root"))) AS ?zone) BIND(IRI(CONCAT(STR(?zone), "-a")) AS ?attr) }`
+    expect(attributable(zones('?declared'))).toBe(false)
+    expect(attributable(zones('?none'))).toBe(true)
+    // Quotes inside a single-quoted string do not hide the rest of the query.
+    expect(attributable(`CONSTRUCT { ?root a rdfhtml:Div } WHERE { FILTER(?x != '"') BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }`)).toBe(true)
   })
 })

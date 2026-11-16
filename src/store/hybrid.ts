@@ -1,27 +1,20 @@
-import type { Quad, Term } from '@rdfjs/types'
+import type { Quad } from '@rdfjs/types'
 import type * as Ox from 'oxigraph'
+import { Parser } from 'n3'
 import { n3Store } from './n3.ts'
+import { answerLocally, plainResult } from './oxigraph.ts'
+import { jellyReaderInto, readJellyInto } from '../jelly/store.ts'
 import type { GraphStore } from './types.ts'
 
 /**
  * Oxigraph for SPARQL, an N3.js mirror for pattern matching. Every write goes
  * to both; `match` (the hot path for function rules) never crosses into WASM.
- * CONSTRUCT results are copied into mirror terms.
+ * Query results are copied into the mirror's terms (plainResult).
  */
 export function hybridStore(ox: typeof Ox): GraphStore {
   let sparql = new ox.Store()
   const mirror = n3Store()
   const m = mirror.factory
-  const copy = (t: Ox.Term) =>
-    t.termType === 'NamedNode'
-      ? m.namedNode(t.value)
-      : t.termType === 'Literal'
-        ? m.literal(t.value, t.language || m.namedNode(t.datatype.value))
-        : t.termType === 'DefaultGraph'
-          ? m.defaultGraph()
-          : (t as never)
-  const mirrorQuad = (q: Ox.Quad) =>
-    m.quad(copy(q.subject as Ox.Term), copy(q.predicate as Ox.Term), copy(q.object as Ox.Term), copy(q.graph as Ox.Term))
 
   // Oxigraph keeps deleted quads as dead versions that later lookups walk (see
   // oxigraph.ts). Here the live quads are known in JS (the mirror), so the
@@ -32,6 +25,12 @@ export function hybridStore(ox: typeof Ox): GraphStore {
   let rebuild: { fresh: Ox.Store; todo: Quad[]; next: number } | undefined
   const due = () => deletes > Math.max(REBUILD_MIN, live / 2)
 
+  const add = (q: Quad) => {
+    sparql.add(q as Ox.Quad)
+    rebuild?.fresh.add(q as Ox.Quad)
+    mirror.add(q)
+  }
+
   let disposed = false
   return {
     kind: 'hybrid',
@@ -39,11 +38,7 @@ export function hybridStore(ox: typeof Ox): GraphStore {
     // so the mirror's factory is the cheaper one to hand out.
     factory: m,
     sparql: true,
-    add(q) {
-      sparql.add(q as Ox.Quad)
-      rebuild?.fresh.add(q as Ox.Quad)
-      mirror.add(q)
-    },
+    add,
     delete(q) {
       sparql.delete(q as Ox.Quad)
       rebuild?.fresh.delete(q as Ox.Quad)
@@ -52,12 +47,20 @@ export function hybridStore(ox: typeof Ox): GraphStore {
     },
     has: (q) => mirror.has(q),
     match: (s, p, o, g) => mirror.match(s, p, o, g),
-    select: (query, graphs) => sparql.query(query, { default_graph: graphs as Ox.NamedNode[] }) as unknown as Map<string, Term>[],
-    construct: (query, graphs) => (sparql.query(query, { default_graph: graphs as Ox.NamedNode[] }) as unknown as Ox.Quad[]).map(mirrorQuad),
+    select: (query, graphs) => plainResult(sparql.query(query, { default_graph: graphs as Ox.NamedNode[] })),
+    construct: (query, graphs) => plainResult(sparql.query(query, { default_graph: graphs as Ox.NamedNode[] })),
+    // No update: it would change Oxigraph's copy and not the mirror.
+    query: (query, opts = {}) => answerLocally('hybrid', () => plainResult(sparql.query(query, opts.graphs ? { default_graph: opts.graphs as Ox.NamedNode[] } : {}))),
+    // Parsed once: two parsers would label a blank node two ways, and what a query answers (Oxigraph's
+    // label) would name nothing `match` can find (the mirror's).
     loadTurtle(text) {
-      sparql.load(text, { format: 'text/turtle' })
-      mirror.loadTurtle(text)
+      for (const q of new Parser().parse(text)) add(q as Quad)
     },
+    // Read once, as loadTurtle: one set of blank nodes for both copies.
+    loadJelly: (bytes, graph) => readJellyInto(add, bytes, graph),
+    dumpJelly: (graph, options) => mirror.dumpJelly!(graph, options),
+    jellyReader: (graph) => jellyReaderInto(add, graph),
+    jellyFrames: (graph, options) => mirror.jellyFrames!(graph, options),
     dispose() {
       if (disposed) return
       disposed = true

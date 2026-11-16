@@ -48,12 +48,12 @@
     sty:declares [ sty:property "box-shadow" ; sty:raw "inset -3px 0 0 var(--sem-accent)" ] .
 
 # --- nav list ---
+# Not sticky by itself: what follows it in its column would scroll under it. A layout that wants the
+# column in view says so of the whole column (pos:sticky pos:StickToTop).
 [] a sty:StyleRule ; sty:appliesTo c:NavList ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "padding" ; sty:token tok:space-2 ] ,
-                 [ sty:property "position" ; sty:raw "sticky" ] ,
-                 [ sty:property "top" ; sty:raw "88px" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
@@ -86,14 +86,17 @@
                  [ sty:property "background" ; sty:raw "none" ] .
 
 # Counts after a label (an option's c:countProperty, a link's c:count): a small solid pill at the
-# end of the row (a nav list's option, a c:NavLink).
+# end of the row (a nav list's option, a c:NavLink). No taller than the label: a count arriving does
+# not move the rows below it.
 [] a sty:StyleRule ; sty:appliesTo c:Segmented , c:Link ; sty:part ".sem-count" ;
-    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
+    sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
                  [ sty:property "padding-inline-start" ; sty:token tok:space-2 ] ,
                  [ sty:property "text-decoration" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Segmented , c:Link ; sty:part ".sem-count > [aria-hidden]" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
                  [ sty:property "min-width" ; sty:raw "1.5em" ] ,
+                 [ sty:property "margin-block" ; sty:raw "-1px" ] ,
                  [ sty:property "padding" ; sty:raw "1px 6px" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
                  [ sty:property "background" ; sty:token tok:accent ] ,
@@ -193,7 +196,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Pagination ; sty:part "button[aria-current=page]" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-9 ] ,
                  [ sty:property "border-color" ; sty:token tok:accent-9 ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] ,
+                 [ sty:property "color" ; sty:token tok:accent-contrast ] ,
                  [ sty:property "cursor" ; sty:raw "default" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Pagination ; sty:part "button:disabled" ;
     sty:declares [ sty:property "opacity" ; sty:raw "0.4" ] ,
@@ -201,7 +204,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Pagination ; sty:part ".sem-gap" ;
     sty:declares [ sty:property "min-width" ; sty:raw "20px" ] ,
                  [ sty:property "text-align" ; sty:raw "center" ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] .
 
 # --- stepper ---
@@ -268,7 +271,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Stepper ; sty:part "[data-state=complete] .sem-marker" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-9 ] ,
                  [ sty:property "border-color" ; sty:token tok:accent-9 ] ,
-                 [ sty:property "color" ; sty:raw "#ffffff" ] .
+                 [ sty:property "color" ; sty:token tok:accent-contrast ] .
 [] a sty:StyleRule ; sty:appliesTo c:Stepper ; sty:part "[data-state=current] .sem-marker" ;
     sty:declares [ sty:property "border-color" ; sty:token tok:accent ] ,
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,

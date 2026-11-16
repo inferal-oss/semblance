@@ -8,6 +8,14 @@
 // left). It follows scrolling, resizing and the on-screen keyboard, and hides a panel whose anchor
 // is scrolled out of its container. Browsers without popovers get the same fixed placement.
 // It never writes the graph, and it gives every panel back as it was when it hides or detaches.
+// A panel may prefer the side above its anchor (data-sem-anchor-side="above") and centre on it
+// (data-sem-anchor-align="center"). Such a panel is next to what is in sight of its anchor (a drop
+// zone can be taller than the list it scrolls in), and over it when neither side has room. The
+// tooltip layer's surface (tooltips.ts) and a refused drop's reason (drop-reasons.ts) are such
+// panels: they have no id to name, so they are lifted next to their source directly.
+
+import { attachDropReasons } from './drop-reasons.ts'
+import { attachTooltips } from './tooltips.ts'
 
 const MARGIN = 8
 const GAP = 6
@@ -49,15 +57,22 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
     if (entry) entry.anchor = found as HTMLElement | null
     return found as HTMLElement | null
   }
-  /** Whether a container the anchor scrolls in has scrolled it out of sight. */
-  const clipped = (anchor: HTMLElement, rect: DOMRect) => {
+  /** What the containers the anchor scrolls in leave in sight of it; nothing when they scrolled it out. */
+  const inSight = (anchor: HTMLElement, rect: DOMRect) => {
+    // Not laid out at all (display: none on the way up): there is nothing to be next to.
+    if (!rect.width && !rect.height) return null
+    let { top, bottom, left, right } = rect
     for (let parent = anchor.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
       const style = window.getComputedStyle(parent)
       if (style.overflowX === 'visible' && style.overflowY === 'visible') continue
       const box = parent.getBoundingClientRect()
-      if (rect.bottom <= box.top || rect.top >= box.bottom || rect.right <= box.left || rect.left >= box.right) return true
+      top = Math.max(top, box.top)
+      bottom = Math.min(bottom, box.bottom)
+      left = Math.max(left, box.left)
+      right = Math.min(right, box.right)
+      if (bottom <= top || right <= left) return null
     }
-    return false
+    return { top, bottom, left, right, width: right - left, height: bottom - top }
   }
 
   const position = (popup: HTMLElement, entry: Popup, anchor: HTMLElement) => {
@@ -65,17 +80,20 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
     // The on-screen keyboard shortens the visual viewport, not the layout one.
     const visual = window.visualViewport
     const viewportHeight = visual ? Math.min(document.documentElement.clientHeight, visual.offsetTop + visual.height) : document.documentElement.clientHeight
-    const trigger = anchor.getBoundingClientRect()
+    const rect = anchor.getBoundingClientRect()
     // Content can arrive after the panel opens (a lazy calendar or host-owned body).
     // Measure again so an empty panel can grow. Keep its original anchored width as
     // a minimum: percentage minimums would otherwise resolve against the viewport
     // after the panel moves to the fixed top layer.
     Object.assign(popup.style, { position: 'fixed', inset: 'auto', margin: '0', left: '0', top: '0', visibility: '', ...entry.sizing, minWidth: `${entry.anchoredWidth}px` })
     if (typeof popup.showPopover === 'function' && !popup.matches(':popover-open')) popup.showPopover()
-    if (clipped(anchor, trigger)) {
+    const seen = inSight(anchor, rect)
+    if (!seen) {
       popup.style.visibility = 'hidden'
       return
     }
+    const prefersAbove = popup.getAttribute('data-sem-anchor-side') === 'above'
+    const trigger = prefersAbove ? seen : rect
     const naturalWidth = popup.getBoundingClientRect().width
     const heightLimit = window.getComputedStyle(popup).maxHeight
     const ownMaxHeight = heightLimit?.endsWith('px') ? Number.parseFloat(heightLimit) : Number.NaN
@@ -85,18 +103,23 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
     const height = popup.getBoundingClientRect().height
     const below = Math.max(0, viewportHeight - trigger.bottom - GAP - MARGIN)
     const above = Math.max(0, trigger.top - GAP - MARGIN)
-    const placeAbove = height > below && above > below
-    const space = placeAbove ? above : below
+    const placeAbove = prefersAbove ? height <= above || above > below : height > below && above > below
+    // No room on either side of it (the anchor fills the viewport): over it, at the top of what is in sight.
+    const over = prefersAbove && height > above && height > below
+    const space = over ? Math.max(0, viewportHeight - 2 * MARGIN) : placeAbove ? above : below
     const rtl = window.getComputedStyle(anchor).direction === 'rtl'
-    const left = Math.min(Math.max(MARGIN, rtl ? trigger.right - width : trigger.left), Math.max(MARGIN, viewportWidth - width - MARGIN))
-    const top = placeAbove ? Math.max(MARGIN, trigger.top - Math.min(height, space) - GAP) : trigger.bottom + GAP
+    const start = popup.getAttribute('data-sem-anchor-align') === 'center' ? trigger.left + (trigger.width - width) / 2 : rtl ? trigger.right - width : trigger.left
+    const left = Math.min(Math.max(MARGIN, start), Math.max(MARGIN, viewportWidth - width - MARGIN))
+    const top = over
+      ? Math.max(MARGIN, Math.min(trigger.top, viewportHeight - height - MARGIN))
+      : placeAbove ? Math.max(MARGIN, trigger.top - Math.min(height, space) - GAP) : trigger.bottom + GAP
     Object.assign(popup.style, { left: `${left}px`, top: `${top}px`, maxHeight: `${Number.isFinite(ownMaxHeight) ? Math.min(space, ownMaxHeight) : space}px` })
   }
 
-  const discover = (popup: HTMLElement) => {
+  const discover = (popup: HTMLElement, anchor: HTMLElement | null = null) => {
     if (!ownsNode(popup) || lifted.has(popup) || !shown(popup) || !popup.isConnected) return
     const entry: Popup = {
-      anchor: null, anchoredWidth: popup.getBoundingClientRect().width, style: popup.getAttribute('style'), popover: popup.getAttribute('popover'),
+      anchor, anchoredWidth: popup.getBoundingClientRect().width, style: popup.getAttribute('style'), popover: popup.getAttribute('popover'),
       sizing: { width: popup.style.width, minWidth: popup.style.minWidth, maxWidth: popup.style.maxWidth, maxHeight: popup.style.maxHeight },
     }
     if (!anchorOf(popup, entry)) return
@@ -139,7 +162,16 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
   document.addEventListener('scroll', schedule, true)
   scan(host)
   update()
+  const lift = (panel: HTMLElement, anchor: HTMLElement) => {
+    discover(panel, anchor)
+    const entry = lifted.get(panel)
+    if (entry) position(panel, entry, anchor)
+  }
+  const detachTooltips = attachTooltips(host, ownsNode, lift)
+  const detachDropReasons = attachDropReasons(host, ownsNode, lift)
   return () => {
+    detachDropReasons()
+    detachTooltips()
     observer.disconnect()
     window.removeEventListener('resize', schedule)
     window.visualViewport?.removeEventListener('resize', schedule)

@@ -420,7 +420,7 @@ WHERE { $this a/rdfs:subClassOf* c:Spacer . BIND(IRI(CONCAT(STR($this), "/~root"
 # --- StatusBar: a bar docked to the bottom of its container ---------------------------------------
 
 c:StatusBar a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Foldable ;
     rdfs:comment """A bar that stays at the bottom of its container while the page scrolls under it:
 a caption (c:label) and components (c:children). Its caption is a fold control: c:expanded
 false folds the bar to the caption."""@en ;
@@ -501,7 +501,12 @@ WHERE {
   # Folded, it shows the caption alone.
   {} UNION { FILTER NOT EXISTS { $this c:expanded ?folded FILTER(STR(?folded) = "false") } { $this c:children/rdf:rest*/rdf:first ?child FILTER(isIRI(?child)) } } UNION { FILTER NOT EXISTS { $this c:expanded ?folded FILTER(STR(?folded) = "false") } { $this c:children/rdf:first ?first FILTER(isIRI(?first)) } } UNION { FILTER NOT EXISTS { $this c:expanded ?folded FILTER(STR(?folded) = "false") } { $this c:children/rdf:rest* ?pairCell . ?pairCell rdf:first ?a ; rdf:rest/rdf:first ?b FILTER(isIRI(?a) && isIRI(?b)) } }
 }""" .
-c:StatusBarFold a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:StatusBar ;
+# --- Foldable: a fold control flips c:expanded -------------------------------------------------
+
+c:Foldable a owl:Class ;
+    rdfs:label "Foldable"@en , "Згортається"@uk , "Einklappbar"@de , "قابل للطي"@ar ;
+    rdfs:comment "Mixin: a click on its fold control (a rendered element that c:folds it) flips c:expanded, which is true until set."@en .
+c:Fold a beh:Reaction ; rdfs:label "Fold"@en ; beh:when beh:Click ; beh:sourceClass c:Foldable ;
     beh:deletes """CONSTRUCT { $this c:expanded ?e } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . $this c:expanded ?e }""" ;
     beh:inserts """CONSTRUCT { $this c:expanded ?next } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . OPTIONAL { $this c:expanded ?e } BIND(COALESCE(?e, true) = false AS ?next) }""" ;
     sem:function "status-bar:fold" .

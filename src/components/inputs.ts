@@ -375,15 +375,6 @@ const codeInput: FnRule = (ctx, focus) => {
 
 // --- reactions --------------------------------------------------------------------------------------
 
-const textAreaInput: ReactionFn = ({ runtime, event, target, match, object }) => {
-  const f = runtime.store.factory
-  const value = object(event, BEH.value)
-  return {
-    remove: [...match(target, C.value, null), ...match(target, C.error, null)],
-    add: value ? [f.quad(target, f.namedNode(C.value), value)] : [],
-  }
-}
-
 const checkboxChange: ReactionFn = ({ runtime, event, target, match, object }) => {
   const f = runtime.store.factory
   const checked = object(event, BEH.checked)
@@ -393,15 +384,6 @@ const checkboxChange: ReactionFn = ({ runtime, event, target, match, object }) =
     remove: [...match(node, p, null), ...match(target, C.error, null)],
     add: [f.quad(node as NamedNode, f.namedNode(p), f.literal(checked.value, f.namedNode(XSD_BOOLEAN)))],
   }
-}
-
-const radioGroupSelect: ReactionFn = ({ runtime, event, target, match, object }) => {
-  const f = runtime.store.factory
-  const node = object(target, C.controls)
-  const p = object(target, C.property)
-  const value = object(event, BEH.value)
-  if (!node || !p || !value) return none()
-  return { remove: match(node, p.value, null), add: [f.quad(node as NamedNode, f.namedNode(p.value), f.namedNode(value.value))] }
 }
 
 const toggleSwitchFlip: ReactionFn = (ctx) => {
@@ -444,9 +426,7 @@ export const functions: Record<string, FnRule> = {
 }
 
 export const reactions: Record<string, ReactionFn> = {
-  'inputs:text-area-input': textAreaInput,
   'inputs:checkbox-change': checkboxChange,
-  'inputs:radio-group-select': radioGroupSelect,
   'inputs:toggle-switch-flip': toggleSwitchFlip,
   'inputs:slider-input': sliderInput,
   'inputs:code-input-input': codeInputInput,

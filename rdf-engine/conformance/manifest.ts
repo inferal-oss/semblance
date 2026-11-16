@@ -35,6 +35,8 @@ export interface Test {
   /** An expected-result file, or an expected dataset (update tests). */
   result?: string | { data: string[]; graphData: GraphFile[] }
   approval?: string
+  /** `qt:serviceData`: SERVICE endpoints and the data each holds. */
+  serviceData: { endpoint: string; data: string[] }[]
 }
 
 const FORMATS: Record<string, RdfFormat> = { ttl: 'turtle', nt: 'ntriples', nq: 'nquads', trig: 'trig', rdf: 'rdfxml' }
@@ -117,6 +119,7 @@ function entry(g: Graph, e: T): Test {
     name: v(g.one(e, MF + 'name')) ?? '',
     data: [],
     graphData: [],
+    serviceData: [],
     approval: v(g.one(e, DAWGT + 'approval')) && local(v(g.one(e, DAWGT + 'approval'))!),
   }
   const action = g.one(e, MF + 'action')
@@ -126,6 +129,7 @@ function entry(g: Graph, e: T): Test {
     test.request = v(g.one(action, UT + 'request'))
     test.data = [...g.all(action, QT + 'data'), ...g.all(action, UT + 'data')].map((x) => v(x)!)
     test.graphData = [...graphFiles(g, action, QT + 'graphData'), ...graphFiles(g, action, UT + 'graphData')]
+    test.serviceData = g.all(action, QT + 'serviceData').map((sd) => ({ endpoint: v(g.one(sd, QT + 'endpoint'))!, data: g.all(sd, QT + 'data').map((x) => v(x)!) }))
   }
   const result = g.one(e, MF + 'result')
   if (result?.t === 'iri') test.result = result.v

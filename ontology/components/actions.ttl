@@ -4,6 +4,7 @@
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
+@prefix nav: <https://semblance.dev/ns/navigation#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -148,13 +149,15 @@ c:Menu a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A menu button: a trigger (c:label, optional c:icon) that discloses c:items, a list of
 c:MenuItem. c:open holds whether the menu is shown; clicking the trigger flips it, and Escape
-closes it (the open trigger declares the keyboard layer's escape shortcut). Toned and sized
+closes it (the open trigger declares the keyboard layer's escape shortcut). Opened from the
+trigger, the focus goes to the first item; closed, back to the trigger. Toned and sized
 like a button. Items are only built while the menu is open."""@en ;
     sem:slug "menu" .
 c:MenuItem a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """An entry of a c:Menu: c:label, optional c:icon, optional sty:tone (e.g. sty:Danger for a
-destructive action), c:disabled. Choosing it closes its menu; anything else it does is its own
+destructive action), c:disabled. A destination (c:href or resolved nav:href) renders an anchor with
+role=menuitem; a disabled item remains a disabled button and cannot navigate. Choosing it closes its menu; anything else it does is its own
 beh:Reaction (per instance or per class), applied in the same delta."""@en ;
     sem:slug "menu-item" .
 
@@ -169,7 +172,8 @@ CONSTRUCT {
   ?dataOpen a rdfhtml:Attribute ; rdfhtml:attributeName "data-open" ; rdfhtml:attributeValue "true" .
   ?trigger a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:id ?triggerId ; rdfhtml:disabled ?disabled ; c:toggles $this ;
            rdfhtml:hasChild ?icon, ?labelSpan, ?caret ; ord:immediatelyPrecedes ?popup ;
-           rdfhtml:attribute ?hasPopup, ?expanded, ?controls, ?shortcut, ?shortcutApple, ?shortcutOther .
+           rdfhtml:attribute ?hasPopup, ?expanded, ?controls, ?shortcut, ?shortcutApple, ?shortcutOther, ?triggerFocus .
+  ?triggerFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?hasPopup a rdfhtml:Attribute ; rdfhtml:attributeName "aria-haspopup" ; rdfhtml:attributeValue "menu" .
   ?expanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openValue .
   ?controls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?popupId .
@@ -185,7 +189,8 @@ CONSTRUCT {
   ?caretText a rdfhtml:Text ; rdfhtml:data "▾" .
   ?caretHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?popup a rdfhtml:Div ; rdfhtml:id ?popupId ; rdfhtml:class "sem-menu-popup" ; rdfhtml:hasChild ?item ;
-         rdfhtml:attribute ?popupRole, ?popupLabelledBy, ?popupAnchor .
+         rdfhtml:attribute ?popupRole, ?popupLabelledBy, ?popupAnchor, ?popupFocus .
+  ?popupFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?popupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menu" .
   ?popupAnchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?triggerId .
   ?popupLabelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?triggerId .
@@ -230,6 +235,9 @@ WHERE {
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-role")), ?none) AS ?popupRole)
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-aria-labelledby")), ?none) AS ?popupLabelledBy)
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-data-sem-anchor")), ?none) AS ?popupAnchor)
+    # Opened from the trigger, the focus goes to the first item; closed, back to the trigger.
+    BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-data-sem-takes-focus")), ?none) AS ?popupFocus)
+    BIND(IF(?open, ?none, IRI(CONCAT(STR($this), "/~trigger-data-sem-takes-focus"))) AS ?triggerFocus)
   } UNION {
     # Open: the items, in list order.
     $this a c:Menu .
@@ -289,7 +297,7 @@ c:MenuItemRendering-sparql a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Button ; sem:renders $this ; rdfhtml:type "button" ; rdfhtml:disabled ?disabled ;
+  ?root a ?rootType ; sem:renders $this ; rdfhtml:type ?buttonType ; rdfhtml:href ?linkHref ; rdfhtml:disabled ?disabled ;
         rdfhtml:hasChild ?icon, ?labelSpan ; rdfhtml:attribute ?role, ?ariaDisabled .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menuitem" .
   ?ariaDisabled a rdfhtml:Attribute ; rdfhtml:attributeName "aria-disabled" ; rdfhtml:attributeValue "true" .
@@ -311,6 +319,13 @@ WHERE {
   OPTIONAL { $this c:icon ?iconValue FILTER(STR(?iconValue) != "") }
   BIND(STR(?iconValue) AS ?iconData)
   BIND(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } AS ?isDisabled)
+  OPTIONAL { $this nav:href ?resolvedHref }
+  OPTIONAL { $this c:href ?rawHref }
+  BIND(COALESCE(?resolvedHref, ?rawHref) AS ?href)
+  BIND(BOUND(?href) && !?isDisabled AS ?linked)
+  BIND(IF(?linked, rdfhtml:A, rdfhtml:Button) AS ?rootType)
+  BIND(IF(?linked, ?none, "button") AS ?buttonType)
+  BIND(IF(?linked, STR(?href), ?none) AS ?linkHref)
   BIND(IF(?isDisabled, "", ?none) AS ?disabled)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
@@ -338,7 +353,11 @@ WHERE {
   OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   OPTIONAL { $this c:icon ?iconValue FILTER(STR(?iconValue) != "") }
-  BIND(CONCAT("  › ", COALESCE(CONCAT(STR(?iconValue), " "), ""), ?label) AS ?line)
+  OPTIONAL { $this nav:href ?resolvedHref }
+  OPTIONAL { $this c:href ?rawHref }
+  BIND(COALESCE(?resolvedHref, ?rawHref) AS ?href)
+  BIND(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } AS ?isDisabled)
+  BIND(CONCAT("  › ", COALESCE(CONCAT(STR(?iconValue), " "), ""), ?label, IF(BOUND(?href) && !?isDisabled, CONCAT(" <", STR(?href), ">"), "")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .

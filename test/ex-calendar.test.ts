@@ -290,7 +290,10 @@ describe('moving a meeting costs what it changes', () => {
     }
     const small = measure(0)
     const large = measure(50)
-    expect(large).toEqual(small)
+    // The week's work is the same. The page's may be less with more meetings: the conflicts alert
+    // changes its tone (a style hook) when the move clears the only conflict, not when others remain.
+    expect(large.map(({ weekRuns, weekOps }) => ({ weekRuns, weekOps }))).toEqual(small.map(({ weekRuns, weekOps }) => ({ weekRuns, weekOps })))
+    for (const [i, s] of small.entries()) expect(large[i]!.ruleRuns).toBeLessThanOrEqual(s.ruleRuns)
     // The drop: the week's rule, the entries whose place or marks changed, and the layers over
     // them; the cells' drop marks come and go with the drag (a week's worth, whatever it holds).
     expect(small[2]!.weekRuns).toBeLessThan(30)

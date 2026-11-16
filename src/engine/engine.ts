@@ -1,22 +1,29 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
-import { H, L10N, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
-import { type Delta, mint, owningFocus, quadKey, termKey } from '../rdf.ts'
-import { QueryInterrupted, type GraphStore } from '../store/types.ts'
-import { createContext, type FnRule, LANGUAGE, languageChain, type RuleContext } from './context.ts'
+import { readRetired, type Retired, retiredIn } from '../retired.ts'
+import { H, L10N, NS, PROV, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
+import { type Delta, mint, mintedUnder, owningFocus, quadKey, termKey } from '../rdf.ts'
+import { QueryInterrupted, storeFailure, type GraphStore } from '../store/types.ts'
+import { createContext, type FnRule, formatLocale, LANGUAGE, languageChain, type RuleContext } from './context.ts'
 import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
 import type { Watchdog } from './watchdog.ts'
 import { Parked } from './parked.ts'
 import { ExactIndex } from './exact.ts'
 import type { Lookup } from '../view/deps.ts'
+import { probeLookup } from '../view/lookup.ts'
 
 export interface EngineOptions {
   modality: string
   layers?: Iterable<string>
   prefer?: 'sparql' | 'function'
   functions?: Record<string, FnRule>
-  /** Record PROV-O provenance for every derived node (see ontology/layers/provenance.ttl). */
-  provenance?: boolean
+  /**
+   * Record PROV-O provenance for every derived node (see ontology/layers/provenance.ttl).
+   * 'onDemand': from the first evaluation of a rule that reads it (a rendering whose SPARQL names
+   * the PROV-O namespace: an inspector, a provenance card), for everything derived so far too.
+   * Nothing rendered differs; a first projection that shows no provenance does not pay for it.
+   */
+  provenance?: boolean | 'onDemand'
   /** Evaluate a SPARQL rule once for all dirty foci when at least this many are dirty. */
   bulkThreshold?: number
   /** Distinguishes engines sharing a store; names the derived graph. */
@@ -76,9 +83,9 @@ const warn = (msg: string) => console.warn(`[semblance] ${msg}`)
 const interruption = (e: unknown): boolean => e instanceof QueryInterrupted || (e as { interrupted?: boolean } | undefined)?.interrupted === true
 
 /** A store's error, about a rule; an interruption (the store's deadline) stays one. */
-function ruleError(rule: Rule, e: unknown): Error {
+function ruleError(rule: Rule, e: unknown, store: GraphStore, query: string): Error {
   if (interruption(e)) return e instanceof QueryInterrupted ? e : new QueryInterrupted(`SPARQL rule <${rule.iri}> was interrupted: ${(e as Error).message}`)
-  return new Error(`SPARQL rule <${rule.iri}> failed: ${(e as Error).message}`)
+  return new Error(`SPARQL rule <${rule.iri}> failed: ${storeFailure(store, e, query)}`, { cause: e })
 }
 
 /** Foci of a rule batch a suspended run did not evaluate; `interrupted` when a query was cut off by the store's deadline. */
@@ -92,10 +99,14 @@ interface Leftover {
  * as "focus member" (a space never occurs in an IRI).
  */
 const SEP = ' '
+/** How many foci of a rule one step of a re-read evaluates (Engine.reread). */
+const REREAD_SLICE = 64
 const focusOf = (key: string) => {
   const i = key.indexOf(SEP)
   return i < 0 ? key : key.slice(0, i)
 }
+/** Prefixes a minting focus in Engine.started (not an IRI: a NUL never occurs in one). */
+const MINTER = '\0'
 const memberOf = (key: string) => {
   const i = key.indexOf(SEP)
   return i < 0 ? undefined : key.slice(i + 1)
@@ -116,23 +127,39 @@ const isPlacementOrProvenance = (p: string) => p.startsWith(H.ns) || p.startsWit
 /** A node's value that is an IRI (a scheme), not a blank node's label. */
 const IRI_LIKE = /^[A-Za-z][A-Za-z0-9+.-]*:/
 
+/** Whether two readings of a rule are the same rule (reloadRules keeps it, with its outputs). */
+function sameRule(a: Rule, b: Rule): boolean {
+  return JSON.stringify(a, ruleField) === JSON.stringify(b, ruleField)
+}
+/**
+ * A rule's fields as compared: its query without the prefixes declared before it (a graph that
+ * declares one more prefix changes every query's header, not what any of them selects).
+ */
+const ruleField = (k: string, v: unknown) => (v instanceof Set ? [...v] : k === 'queryParts' && Array.isArray(v) ? [String(v[0]).replace(/^(?:\s*PREFIX\s+[^\n]*\n)*/i, ''), ...v.slice(1)] : v)
+
 export class Engine {
   readonly graph: NamedNode
   /** The PROV-O software agent standing for this projection. */
   readonly agent: NamedNode
   readonly stats: EngineStats = { byRule: new Map(), ruleRuns: 0, queries: 0, bulkQueries: 0, fnCalls: 0, derivedAdded: 0, derivedRemoved: 0 }
-  private readonly allRules: Rule[]
+  private allRules: Rule[]
   private rules: Rule[] = []
   private strata: number[] = []
   private selection: Selection
   private readonly functions: Record<string, FnRule>
-  private readonly provenance: boolean
+  private provenance: boolean
+  /** A rule that reads provenance ran (its IRI), while it was not recorded yet: it is, from the end of the run. */
+  provenanceWanted?: string
+  /** The renderings that read provenance, while it is recorded only on demand. */
+  private provenanceReaders?: Set<string>
+  /** The components that read provenance (sem:readsProvenance on an instance), while it is recorded only on demand. */
+  private provenanceFoci?: Set<string>
   private readonly bulkThreshold: number
   private readonly graphs: Quad_Graph[]
   /** The graphs rules read, and the input graphs among them, by value ('' = the default graph). */
   private readonly graphKeys: ReadonlySet<string>
   private readonly inputGraphKeys: ReadonlySet<string>
-  private readonly supers: (cls: string) => Set<string>
+  private supers!: (cls: string) => Set<string>
   private ctx: RuleContext
 
   private rulesByClass = new Map<string, Rule[]>()
@@ -155,6 +182,20 @@ export class Engine {
   private removedBy = new Map<string, Quad[]>()
   /** Exact dependencies: instances per rule (by (focus, class)), and the rules none of whose foci was evaluated since all were marked. */
   private instancesOf = new Map<Rule, number>()
+  /** sem:watchesAnywhere: predicate -> the rules that read it on any node, and each such rule's foci. */
+  private anywhere = new Map<string, Rule[]>()
+  private anywhereFoci = new Map<Rule, Set<string>>()
+  /** sem:watchesStatements: the rules whose focus is a property whose statements they read anywhere. */
+  private statementWatchers: Rule[] = []
+  /** sem:watchesManyValued: the rules, the predicates each reads (read from the graphs when asked), and those due. */
+  private manyValuedRules: Rule[] = []
+  private manyValuedPredicates?: Map<string, Rule[]>
+  private manyValuedDue = new Set<Rule>()
+  /**
+   * An addition is arriving in slices (Runtime.arriving): what is due over the whole graph
+   * (sem:watchesManyValued) waits for the last, or each slice would evaluate it again.
+   */
+  arriving = false
   private pristine = new Set<Rule>()
   /** Every predicate whose links are indexed: followed alone or on a path. */
   private linkedPredicates = new Set<string>()
@@ -169,6 +210,11 @@ export class Engine {
   private readers = new Map<string, Map<Rule, Map<string, Set<string>>>>()
   /** The inverse, to retract a pair's previous reads: rule -> focus -> subjects. */
   private readsOf = new Map<Rule, Map<string, string[]>>()
+  /**
+   * Function-rule pairs whose last evaluation read only what its trace records (RuleContext.opaque):
+   * their traced reads re-run them, so what they follow (sem:follows) does not.
+   */
+  private traced = new Map<Rule, Set<string>>()
   /** Pairs that follow queries, by rule and focus, and by the predicates they read ('*' = any). */
   private queryFollowers = new Map<Rule, Map<string, Follower>>()
   private queryFollowersByPredicate = new Map<string, Set<Follower>>()
@@ -218,13 +264,62 @@ export class Engine {
   private retyped = new Set<string>()
   /** Whether every parked focus must be checked (the instance index was rebuilt). */
   private retypedAll = false
-  /** While warming, parked work is evaluated regardless of demand. */
+  /** While warming, parked work is evaluated regardless of demand (until the step's budget, see warmsNow). */
   private warming = false
+  /** When the current warming step's budget ends (performance.now()). */
+  private warmUntil = Infinity
+  /**
+   * The foci the current warming step has evaluated a pair of (the ones it picked among them), and
+   * (prefixed with MINTER) the foci that minted them: each is finished whatever the budget, with
+   * what it mints and what was minted beside it, so no component is left half evaluated and no
+   * minted parts half placed (a tree's items: each one's own rendering says where it goes among the
+   * others, and the item over them lists them all).
+   */
+  private started = new Set<string>()
+
+  private startWarming(focus: string) {
+    if (this.started.has(focus)) return
+    this.started.add(focus)
+    const minter = owningFocus(focus)
+    if (minter !== focus) this.started.add(MINTER + minter)
+  }
+
+  /**
+   * Whether an undemanded pair is evaluated now rather than parked: while warming, within the
+   * step's budget, or of a focus the step started, minted under one or beside one. Over the budget,
+   * what the step makes due for other components parks as it would outside warming (as a lazy part
+   * is, whole), and a later step picks it up (#421): a step costs about its budget, not the whole
+   * cascade of what it picked, and what it leaves is what lazy parking leaves - components (with
+   * their minted parts) evaluated or not at all.
+   */
+  private warmsNow(key: string): boolean {
+    if (!this.warming) return false
+    if (performance.now() < this.warmUntil) return true
+    for (let at = focusOf(key); ; ) {
+      if (this.started.has(at)) return true
+      const up = owningFocus(at)
+      if (up === at) return false
+      if (this.started.has(MINTER + up)) return true
+      at = up
+    }
+  }
   /**
    * The turn's time budget (src/engine/watchdog.ts): over it, the rest of a run's pending pairs
    * are held instead of evaluated, until the runtime continues or stops them.
    */
   watchdog?: Watchdog
+  /**
+   * How many derived triples this engine may hold (Infinity by default; an authored projection's
+   * policy sets it, safe:maxDerived). Over it, a watched run stops at its next check, as over the
+   * turn's budget.
+   */
+  maxDerived = Infinity
+  /** Whether the output is over maxDerived (blamed on the turn when it binds). */
+  private overOutput(wd: Watchdog): boolean {
+    return this.stats.derivedAdded - this.stats.derivedRemoved > this.maxDerived && wd.bounded && wd.over('output')
+  }
+  private retired?: Retired
+  private readonly retiredReported = new Set<string>()
   /** Pairs set aside by a suspended run, by stratum: still to evaluate. */
   private held = new Map<number, Map<Rule, Set<string>>>()
   private heldPairs = 0
@@ -243,15 +338,48 @@ export class Engine {
     this.graphKeys = new Set(this.graphs.map((g) => g.value))
     this.inputGraphKeys = new Set(this.graphs.slice(0, -1).map((g) => g.value))
     this.functions = opts.functions ?? {}
-    this.provenance = opts.provenance ?? false
+    this.provenance = opts.provenance === true
     this.bulkThreshold = opts.bulkThreshold ?? 2
     this.exactOn = opts.exactDependencies ?? (typeof process !== 'undefined' && process.env?.SEMBLANCE_EXACT_DEPS === '1')
     this.maintain = opts.maintain
-    this.supers = superclasses(store)
-    this.allRules = loadRules(store)
+    this.allRules = this.readRules(opts.provenance === 'onDemand')
     this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, extensions: store.extensions, languages: opts.languages ?? [] }
     this.ctx = createContext(store, this.graphs, opts.modality, this.selection.languages)
     this.activate(selectRules(this.allRules, this.selection, warn))
+  }
+
+  /**
+   * Read the rules, the class hierarchy and what the rules declare about themselves (where we
+   * are, provenance) from the store: at construction, and again when a delta adds or removes
+   * rules (reloadRules).
+   */
+  private readRules(onDemand: boolean): Rule[] {
+    const f = this.store.factory
+    this.supers = superclasses(this.store)
+    const all = loadRules(this.store)
+    this.locationReaders = new Map(
+      this.store
+        .match(null, f.namedNode(NS.sem + 'readsLocation'), null)
+        .filter((q) => q.object.value === 'true' || q.object.value === NS.nav + 'TopDimensions')
+        .map((q) => [q.subject.value, q.object.value === 'true' ? 'all' : 'top'] as const),
+    )
+    if (onDemand) {
+      // A rendering reads provenance when any of its implementations' queries names PROV-O.
+      // Only what the engine writes (provenanceOf); prov:wasDerivedFrom and the like are the app's own data.
+      const written = /(?:\bprov:|ns\/prov#)(?:wasGeneratedBy|wasInfluencedBy|wasAssociatedWith|qualifiedAssociation|hadPlan|used|Activity|SoftwareAgent|Association)\b/
+      const reads = (r: Rule) => written.test((r.queryParts?.join('$this') ?? '').split('\n').filter((l) => !/^\s*PREFIX\s/i.test(l)).join('\n'))
+      this.provenanceReaders = new Set(all.filter(reads).map((r) => r.slot))
+      // And the renderings that say so (sem:readsProvenance: function-only ones, those running queries the graph holds).
+      // A component can say so too (one that runs queries the graph holds about provenance: an
+      // inspector): from when it is shown.
+      this.provenanceFoci = new Set()
+      for (const q of this.store.match(null, f.namedNode(NS.sem + 'readsProvenance'), null)) {
+        if (q.object.value !== 'true') continue
+        if (this.store.match(q.subject, f.namedNode(RDF_TYPE), f.namedNode(NS.sem + 'Rendering')).length) this.provenanceReaders.add(q.subject.value)
+        else this.provenanceFoci.add(q.subject.value)
+      }
+    }
+    return all
   }
 
   get languages(): readonly string[] {
@@ -317,7 +445,109 @@ export class Engine {
     this.typedIn.clear()
     for (const q of delta.remove) this.propagate(q, -1)
     for (const q of delta.add) this.propagate(q, 1)
+    this.noteManyValued(delta)
+    // A graph loaded (or unloaded) after start that defines rules: they join (or leave) the running engine.
+    if (this.definesRules(delta)) return this.reloadRules()
+    this.locationChanged(delta)
     this.run()
+  }
+
+  /**
+   * Whether a change adds or removes rules or what they read about themselves: a sem:Rule or
+   * sem:Rendering typed, a triple about a rule or the rendering it implements, a subclass link
+   * (which classes a rule applies to), a sem:readsLocation or sem:readsProvenance.
+   */
+  private definesRules(delta: Delta): boolean {
+    if (!delta.add.length && !delta.remove.length) return false
+    let defined = this.ruleSubjects
+    if (!defined) {
+      defined = new Set()
+      for (const r of this.allRules) defined.add(r.iri), defined.add(r.slot)
+      this.ruleSubjects = defined
+    }
+    const RULE = SEM.Rule
+    const RENDERING = NS.sem + 'Rendering'
+    const LOCATION = NS.sem + 'readsLocation'
+    const PROVENANCE = NS.sem + 'readsProvenance'
+    const test = (q: Quad) => {
+      const p = q.predicate.value
+      if (p === RDF_TYPE) return q.object.value === RULE || q.object.value === RENDERING || (defined.has(q.subject.value) && q.graph.termType === 'DefaultGraph')
+      return p === RDFS_SUBCLASS || p === LOCATION || p === PROVENANCE || (defined.has(q.subject.value) && q.graph.termType === 'DefaultGraph')
+    }
+    return delta.add.some(test) || delta.remove.some(test)
+  }
+
+  /** The IRIs of every rule and of the renderings they implement (definesRules), until the rules are read again. */
+  private ruleSubjects?: Set<string>
+
+  /**
+   * Read the rules again (a graph that defines rules was loaded into the store, or unloaded) and
+   * make the running engine what one started with them would be, as enabling a layer does
+   * (reconfigure): a rule whose definition is unchanged keeps its outputs and its place; a new one
+   * (or a changed one) is evaluated for every focus it applies to, in its stratum; a removed one
+   * withdraws its output. The work costs what the rules added or removed, not the app.
+   */
+  private reloadRules(): void {
+    const before = new Map(this.allRules.map((r) => [r.iri, r]))
+    const supersBefore = this.supers
+    const read = this.readRules(this.provenanceReaders !== undefined)
+    // The same rule (by IRI and definition) stays the same object: its outputs and bookkeeping are keyed by it.
+    this.allRules = read.map((r) => {
+      const old = before.get(r.iri)
+      if (!old || !sameRule(old, r)) return r
+      // The same rule, with the prefixes known now.
+      old.queryParts = r.queryParts
+      return old
+    })
+    this.ruleSubjects = undefined
+    this.locationValues = undefined
+    // What function rules memoize about the ontology (ctx.memo: the declared prefixes, a class's
+    // properties) is read afresh, as an engine started with these rules would.
+    this.ctx = createContext(this.store, this.graphs, this.selection.modality, this.selection.languages)
+    this.reconfigure({}, supersBefore)
+  }
+
+  /** The renderings that read where we are (sem:readsLocation), by slot: every dimension, or the top-level ones. */
+  private locationReaders!: Map<string, 'all' | 'top'>
+  /** "subject property" of each nav:Dimension's value: the dimensions it is the value of, and whether one is top-level (no nav:parent). */
+  private locationValues?: Map<string, { dims: string[]; top: boolean }>
+
+  /**
+   * A dimension's value changed (the page, the language): every rendering that reads where we are
+   * (sem:readsLocation: link destinations, which keep the language) is due again for each focus it
+   * has output for. Such a value is a property of a node the focus need not reach.
+   */
+  private locationChanged(delta: Delta) {
+    if (!this.locationReaders.size) return
+    if (delta.add.some((q) => q.predicate.value.startsWith(NS.nav)) || delta.remove.some((q) => q.predicate.value.startsWith(NS.nav))) this.locationValues = undefined
+    const f = this.store.factory
+    if (!this.locationValues) {
+      this.locationValues = new Map()
+      for (const q of this.store.match(null, f.namedNode(NS.nav + 'subject'), null, f.defaultGraph())) {
+        const p = this.store.match(q.subject, f.namedNode(NS.nav + 'property'), null, f.defaultGraph())[0]?.object.value
+        if (!p) continue
+        const top = this.store.match(q.subject, f.namedNode(NS.nav + 'parent'), null, f.defaultGraph()).length === 0
+        const key = q.object.value + ' ' + p
+        const entry = this.locationValues.get(key) ?? { dims: [], top: false }
+        entry.dims.push(q.subject.value)
+        entry.top ||= top
+        this.locationValues.set(key, entry)
+      }
+    }
+    const values = this.locationValues
+    const changed = new Set<string>()
+    for (const q of [...delta.add, ...delta.remove]) for (const d of values.get(q.subject.value + ' ' + q.predicate.value)?.dims ?? []) changed.add(d)
+    if (!changed.size) return
+    const keeps = NS.nav + 'keeps'
+    for (const rule of this.rules) {
+      const reads = this.locationReaders.get(rule.slot)
+      if (!reads) continue
+      for (const [focus, out] of this.outputs.get(rule) ?? []) {
+        // nav:TopDimensions: only the foci whose output says they keep a dimension that changed (nav:keeps).
+        if (reads === 'top' && ![...out.values()].some((q) => q.predicate.value === keeps && changed.has(q.object.value))) continue
+        this.markDirty(rule, focus)
+      }
+    }
   }
 
   /** Whether any undemanded work is parked. */
@@ -332,6 +562,16 @@ export class Engine {
    */
   warm(budgetMs: number, slice = 4, only?: (focus: string) => boolean): boolean {
     if (!this.demand) return false
+    const until = performance.now() + budgetMs
+    while (this.next < this.due.length && performance.now() < until) {
+      const [rule, foci] = this.due[this.next++]!
+      // (Hidden since: it is parked as it is evaluated.)
+      for (const focus of foci) this.markDirty(rule, focus)
+      this.run()
+    }
+    if (this.next < this.due.length) return true
+    this.due = []
+    this.next = 0
     const test = only ?? this.warmable
     // Asked once per focus (many parked pairs share one), afresh after each run, which may move it.
     const known = new Map<string, boolean>()
@@ -342,19 +582,28 @@ export class Engine {
         if (v === undefined) known.set(focus, (v = test(focus)))
         return v
       })
-    const until = performance.now() + budgetMs
     this.warming = true
+    this.warmUntil = until
     try {
       // Mostly nothing parked may be warmed (lazy parts): that costs a look per focus, not per pair.
       while (performance.now() < until && this.hasWarmable(allowed)) {
         let picked = 0
-        for (const [rule, foci] of this.deferred) {
+        this.started.clear()
+        for (const [, foci] of this.deferred) {
           for (const focus of foci) {
+            const owner = focusOf(focus)
             // Lazy parts stay parked until they are shown (or intended: `only`).
-            if (allowed && !allowed(focusOf(focus))) continue
-            this.deferred.delete(rule, focus)
-            this.markDirty(rule, focus)
-            if (++picked >= slice) break
+            if (allowed && !allowed(owner)) continue
+            // A focus is picked whole (every pair parked for it), with the parked foci minted beside
+            // it, so a step that stops at its budget leaves them evaluated, not half.
+            const minter = owningFocus(owner)
+            const foci = [owner]
+            if (minter !== owner) for (const other of this.deferred.foci()) if (other !== owner && owningFocus(other) === minter && (!allowed || allowed(other))) foci.push(other)
+            const pairs = foci.flatMap((x) => this.deferred.take(x))
+            pairs.sort((a, b) => a[2] - b[2] || a[3] - b[3])
+            for (const [r, key] of pairs) this.markDirty(r, key)
+            for (const x of foci) this.startWarming(x)
+            if ((picked += pairs.length) >= slice) break
           }
           if (picked >= slice) break
         }
@@ -363,9 +612,43 @@ export class Engine {
       }
     } finally {
       this.warming = false
+      this.warmUntil = Infinity
+      this.started.clear()
     }
     return this.hasWarmable(allowed)
   }
+
+  /**
+   * The graphs that arrive after start have all arrived (the rest of a page's graphs, #209): what
+   * was evaluated before them read a store that has grown since, and not all it read is what it
+   * declares (a class's slug, a phrase's name in a query). Every pair is due
+   * again, as if started now: what is hidden parked until it is shown, what is shown or always
+   * evaluated in warm(), a few foci of a rule at a time and in stratum order, so no long task. What
+   * did not change costs its evaluation and no patch. It happens once per arrival, not per change.
+   */
+  reread(): void {
+    // (What declares all it reads over the graph, sem:watchesManyValued, has heard it all.)
+    for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!r.manyValued.length) this.markFocus(r, focus)
+    if (!this.demand) return this.run()
+    const due: [Rule, string[]][] = []
+    for (const stratum of [...this.dirty.keys()].sort((a, b) => a - b)) {
+      for (const [rule, foci] of this.dirty.get(stratum)!) {
+        const shown: string[] = []
+        for (const focus of foci) {
+          if (rule.always || this.demand(focusOf(focus))) shown.push(focus)
+          else this.deferred.add(rule, focus)
+        }
+        for (let i = 0; i < shown.length; i += REREAD_SLICE) due.push([rule, shown.slice(i, i + REREAD_SLICE)])
+      }
+    }
+    this.dirty.clear()
+    this.due = due
+    this.next = 0
+  }
+
+  /** What reread() found due and warm() has not evaluated yet (from `next` on). */
+  private due: [Rule, string[]][] = []
+  private next = 0
 
   /** Whether parked work remains that idle time may evaluate. */
   private hasWarmable(allowed = this.warmable): boolean {
@@ -418,9 +701,11 @@ export class Engine {
    * Switch modality, layers or implementation preference. Rules that are no
    * longer selected retract their output; every selected rule is re-evaluated
    * (kept rules may read what the retracted ones produced) and diffing keeps
-   * the resulting delta minimal.
+   * the resulting delta minimal. `supersBefore` is the class hierarchy before the rules were read
+   * again: a kept rule also runs for what a new subclass link made its instance (or unmade), which
+   * no triple about the focus says (a graph that defines a class arriving after its instances, #350).
    */
-  reconfigure(sel: Partial<Selection>): void {
+  reconfigure(sel: Partial<Selection>, supersBefore?: (cls: string) => Set<string>): void {
     // A language change alone re-runs only what picked a text by language (util.text
     // records it as a read of LANGUAGE); everything else stays as it is.
     if (sel.languages && sel.modality === undefined && sel.prefer === undefined && sel.layers === undefined) {
@@ -445,7 +730,7 @@ export class Engine {
     // A rule on its way out is not probed while its output is withdrawn (nor is one about to run for every focus).
     if (this.exact) for (const r of [...this.rules, ...after]) if (!kept.has(r)) this.pristine.add(r)
     for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
-    for (const r of this.rules) if (!kept.has(r)) this.outputs.delete(r), this.memberKeys.delete(r), this.forgetAllFollowing(r)
+    for (const r of this.rules) if (!kept.has(r)) this.retire(r)
     for (const [member, byRule] of [...this.memberReaders]) {
       for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
       if (!byRule.size) this.memberReaders.delete(member)
@@ -454,9 +739,62 @@ export class Engine {
     for (const byRule of this.dirty.values()) for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
     this.activate(after)
     this.reindex()
-    for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r)) this.markFocus(r, focus)
+    for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r) || (supersBefore && !supersBefore(c).has(r.target))) this.markFocus(r, focus)
+    if (supersBefore) for (const r of kept) for (const key of this.outputs.get(r)?.keys() ?? []) if (!this.isInstance(key, r)) this.markDirty(r, key)
     if (this.exact) for (const r of after) if (!kept.has(r)) this.pristine.add(r)
     this.run()
+  }
+
+  /**
+   * A rule leaves the running engine, its output withdrawn: nothing it left may run it again. Work
+   * parked, held or stopped for it and what it read would evaluate it for a focus later, next to the
+   * rule that took its slot (a function rule on a page whose first graphs lacked its SPARQL twin, #332).
+   */
+  private retire(rule: Rule) {
+    this.outputs.delete(rule)
+    this.memberKeys.delete(rule)
+    this.forgetAllFollowing(rule)
+    this.deferred.dropRule(rule)
+    this.due = this.due.filter(([r], i) => r !== rule || i < this.next)
+    for (const byRule of this.held.values()) {
+      this.heldPairs -= byRule.get(rule)?.size ?? 0
+      byRule.delete(rule)
+    }
+    this.stoppedPairs -= this.stopped.get(rule)?.size ?? 0
+    this.stopped.delete(rule)
+    for (const focus of [...(this.readsOf.get(rule)?.keys() ?? [])]) this.forgetReads(rule, focus)
+    this.readsOf.delete(rule)
+    this.traced.delete(rule)
+  }
+
+  /**
+   * What function rules read through their context (traced), by subject: for each focus, the
+   * predicates read ('*': any). With function rules preferred, what a render read of the graph.
+   */
+  *tracedReads(): Iterable<{ subject: string; focus: string; predicates: ReadonlySet<string> }> {
+    for (const [subject, byRule] of this.readers) {
+      const byFocus = new Map<string, Set<string>>()
+      for (const foci of byRule.values()) {
+        for (const [focus, preds] of foci) {
+          const owner = focusOf(focus)
+          let all = byFocus.get(owner)
+          if (!all) byFocus.set(owner, (all = new Set()))
+          for (const p of preds) all.add(p)
+        }
+      }
+      for (const [focus, predicates] of byFocus) yield { subject, focus, predicates }
+    }
+  }
+
+  /** Each rule and focus with output (a member-wise rule's focus, not its members). */
+  *produced(): Iterable<{ rule: Rule; focus: string }> {
+    for (const [rule, byFocus] of this.outputs) {
+      const seen = new Set<string>()
+      for (const [key, out] of byFocus) {
+        const focus = focusOf(key)
+        if (out.size && !seen.has(focus)) seen.add(focus), yield { rule, focus }
+      }
+    }
   }
 
   /** Which rule produced a derived node, and for which focus. */
@@ -488,7 +826,8 @@ export class Engine {
    * State the viewer's languages as graph data, in this engine's derived graph, so SPARQL
    * rules can read them: the agent standing for this projection is the l10n:Viewer, and
    * each language it prefers is an l10n:Preference with its l10n:code and rank (sem:order 1
-   * is the most preferred). Function rules read the same through ctx.languages.
+   * is the most preferred), and its l10n:formatLocale. Function rules read the same through
+   * ctx.languages (and formatLocale).
    */
   private stateViewer() {
     const f = this.store.factory
@@ -499,6 +838,8 @@ export class Engine {
     const languages = languageChain(this.selection.languages ?? [])
     // Always a viewer (its texts are picked even without a preference: untagged, then English).
     put(f.quad(this.agent, nn(RDF_TYPE), nn(L10N.Viewer), g))
+    // The locale its numbers are written in (sx:formatNumber's), as function rules pick it.
+    put(f.quad(this.agent, nn(L10N.formatLocale), f.literal(formatLocale(languages)), g))
     languages.forEach((code, i) => {
       const pref = nn(mint(this.agent.value, 'prefers-' + (i + 1)))
       put(f.quad(this.agent, nn(L10N.prefers), pref, g))
@@ -554,6 +895,11 @@ export class Engine {
       }
     }
     const fed = rules.filter((r) => !this.maintained.has(r))
+    this.anywhere.clear()
+    this.statementWatchers = rules.filter((r) => r.watchesStatements)
+    this.manyValuedRules = rules.filter((r) => r.manyValued.length)
+    this.manyValuedPredicates = undefined
+    for (const r of rules) for (const p of r.anywhere) this.anywhere.set(p, [...(this.anywhere.get(p) ?? []), r])
     this.exact = this.exactOn ? new ExactIndex(this.store.factory, fed) : undefined
     // What a rule with exact dependencies declares is not used: its patterns say what it reads.
     const declaring = this.exact ? fed.filter((r) => !this.exact!.has(r)) : fed
@@ -585,6 +931,7 @@ export class Engine {
     const f = this.store.factory
     this.types.clear()
     this.instancesOf.clear()
+    this.anywhereFoci.clear()
     this.targets.clear()
     this.retypedAll = true
     this.links.clear()
@@ -623,7 +970,7 @@ export class Engine {
   }
 
   private watched(rule: Rule, focus: string, predicate: string): boolean {
-    if (rule.watches) return rule.watches.has(predicate)
+    if (rule.watches) return rule.watches.has(predicate) || (!!rule.watchesVia && this.names(focus, rule.watchesVia, predicate)) || (!!rule.watchesMarked && this.marked(predicate, rule.watchesMarked))
     const fn = rule.kind === 'function' ? this.functions[rule.fn!] : undefined
     return fn?.watches ? fn.watches(this.ctx, this.store.factory.namedNode(focus)).has(predicate) : true
   }
@@ -660,25 +1007,41 @@ export class Engine {
    * graph): one lookup across all graphs where that is as cheap as one (store.crossGraphMatch),
    * else graph by graph.
    */
-  private holds(s: Term, p: Term, o: Term | null, keys: ReadonlySet<string>): boolean {
+  private holds(s: Term | null, p: Term, o: Term | null, keys: ReadonlySet<string>): boolean {
     if (!this.store.crossGraphMatch) return this.graphs.some((g) => keys.has(g.value) && this.store.match(s, p, o, g).length > 0)
     for (const q of this.store.match(s, p, o)) if (keys.has(q.graph.value)) return true
     return false
   }
 
+  /** The matches of a pattern in this projection's graphs: one lookup across them all where that is as cheap as one (store.crossGraphMatch). */
+  private matchAll(s: Term | null, p: Term | null, o: Term | null): Quad[] {
+    if (!this.store.crossGraphMatch) return this.graphs.flatMap((g) => this.store.match(s, p, o, g))
+    return this.store.match(s, p, o).filter((q) => this.graphKeys.has(q.graph.value))
+  }
+
   /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
-  private markFocus(rule: Rule, focus: string) {
-    if (!rule.forEach) return this.markDirty(rule, focus)
+  /**
+   * A rule that follows its way to a changed node (sem:follows): its pairs, but for a function
+   * rule's pairs whose reads were traced, which that node's change re-runs only if they read it.
+   */
+  private markFollower(rule: Rule, focus: string) {
+    const traced = rule.kind === 'function' ? this.traced.get(rule) : undefined
+    if (traced?.size) this.markFocus(rule, focus, (key) => !traced.has(key))
+    else this.markFocus(rule, focus)
+  }
+
+  private markFocus(rule: Rule, focus: string, keep?: (key: string) => boolean) {
+    if (!rule.forEach) return keep && !keep(focus) ? undefined : this.markDirty(rule, focus)
     // Its own writes never re-dirty it: one member's output about the focus (a result it records
     // there) does not re-run the other members.
     if (this.committing?.rule === rule && focusOf(this.committing.focus) === focus) return
     const f = this.store.factory
     for (const g of this.graphs) {
       for (const q of this.store.match(f.namedNode(focus), f.namedNode(rule.forEach), null, g)) {
-        if (q.object.termType === 'NamedNode') this.markDirty(rule, focus + SEP + q.object.value)
+        if (q.object.termType === 'NamedNode' && (!keep || keep(focus + SEP + q.object.value))) this.markDirty(rule, focus + SEP + q.object.value)
       }
     }
-    for (const key of this.memberKeys.get(rule)?.get(focus) ?? []) this.markDirty(rule, key)
+    for (const key of this.memberKeys.get(rule)?.get(focus) ?? []) if (!keep || keep(key)) this.markDirty(rule, key)
   }
 
   /** Whether a member-wise pair's link (`focus forEach member`) still holds. */
@@ -708,6 +1071,13 @@ export class Engine {
         if (!classes.size) this.types.delete(s)
       }
       this.targets.delete(s)
+      for (const r of this.rulesFor(cls)) {
+        if (!r.anywhere.length && !r.manyValued.length) continue
+        let foci = this.anywhereFoci.get(r)
+        if (!foci) this.anywhereFoci.set(r, (foci = new Set()))
+        if (sign > 0) foci.add(s)
+        else if (!this.isInstance(s, r)) foci.delete(s)
+      }
       if (this.deferred.hasFocus(s)) this.retyped.add(s)
     }
     // (List cells are blank nodes: a path may go through them.)
@@ -769,17 +1139,31 @@ export class Engine {
         }
       }
     }
-    const back = this.links.get(s)
+    // Nor a followed node's: where a parent put it is rendered output, not what a rule follows it for
+    // (a description list follows the node it describes, which may be a component placed at stratum 0).
+    const back = isPlacementOrProvenance(p) ? undefined : this.links.get(s)
     if (back) {
+      // Which nodes name the predicate along a rule's paths, found from the predicate (once per path set):
+      // a node many components follow (the app's state, which every page's controls name) costs the few
+      // that name this predicate, not every one that follows it.
+      let named: Map<string[][], Set<string>> | undefined
       for (const [fp, subjects] of back) {
         for (const r of this.followers.get(fp) ?? []) {
-          for (const x of subjects) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+          const byPath = subjects.size > 8 && r.watches && r.watchesVia && !r.watchesMarked && !r.watches.has(p)
+          if (byPath) {
+            named ??= new Map()
+            let namers = named.get(r.watchesVia!)
+            if (!namers) named.set(r.watchesVia!, (namers = this.namers(r.watchesVia!, p)))
+            for (const x of namers) if (subjects.has(x) && this.isInstance(x, r)) this.markFollower(r, x)
+            continue
+          }
+          for (const x of subjects) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
         }
         // Along a path: back from the nodes linking here, one step at a time, to the foci.
         for (const { rule: r, path } of this.pathFollowers.get(fp) ?? []) {
           // The last step was taken (into this node); a repeated last step may also have been taken before.
           const start = path[path.length - 1]!.startsWith('*') ? this.backClosure(subjects, fp) : new Set(subjects)
-          for (const x of this.walkBack(start, path.slice(0, -1))) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+          for (const x of this.walkBack(start, path.slice(0, -1))) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
         }
       }
     }
@@ -787,9 +1171,20 @@ export class Engine {
     // (Rendered output - RDF/HTML structure, placement, provenance - is never what a path follows,
     // and a rule that watches predicates is not walked to for others: this runs for every triple.)
     if (this.inverseFollowers.length && q.subject.termType === 'NamedNode' && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
+      // Followers often share their last step: each lookup from this node is made once.
+      const memo = new Map<string, string[]>()
       for (const { rule: r, path } of this.inverseFollowers) {
-        if (r.watches && !r.watches.has(p)) continue
-        for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+        const last = path[path.length - 1]!
+        if (last.startsWith('^@')) {
+          // Against a predicate named in the data: only one some node names that way, and only to the foci that name it.
+          const via = last.slice(2).split(' ')
+          const f = this.store.factory
+          if (!this.holds(null, f.namedNode(via[via.length - 1]!), q.predicate, this.graphKeys)) continue
+          for (const x of this.walkBack(new Set([s]), [...path.slice(0, -1), '^' + p], sign < 0 ? q : undefined, memo)) if (this.isInstance(x, r) && this.names(x, [via], p)) this.markFocus(r, x)
+          continue
+        }
+        if (r.watches && !r.watchesVia && !r.watchesMarked && !r.watches.has(p)) continue
+        for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined, memo)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
       }
     }
     // Function rules that read this subject (traced) re-run if they read this predicate.
@@ -825,8 +1220,60 @@ export class Engine {
         for (const c of ownerClasses) for (const r of this.mintReadersFor(c)) if (r.stratum > this.current) this.markFocus(r, owner)
       }
     }
+    // Rules that read this predicate on any node (sem:watchesAnywhere): each of their foci.
+    for (const r of this.anywhere.get(p) ?? []) for (const focus of this.anywhereFoci.get(r) ?? []) this.markFocus(r, focus)
+    // Rules that read the statements made with their focus (sem:watchesStatements): that focus,
+    // unless a higher stratum made the statement (which the rule, evaluated before it, never reads).
+    for (const r of this.statementWatchers) if (r.stratum >= this.current && this.isInstance(p, r)) this.markFocus(r, p)
     if (this.exact) this.propagateExact(q)
     if (sign > 0) this.index(q, sign)
+  }
+
+  /**
+   * sem:watchesManyValued: the rules a change in the input makes due, each evaluated once it may
+   * be. A node's values count before and after the change, so a text replaced by another (one
+   * value, then one value) makes nothing due, and neither does what a rule derives.
+   */
+  private noteManyValued(delta: Delta) {
+    if (this.manyValuedRules.length) {
+      const f = this.store.factory
+      const input = this.graphs.filter((g) => this.inputGraphKeys.has(g.value))
+      // A predicate marked, or no longer marked: what the rules read has changed.
+      for (const r of this.manyValuedRules) {
+        if (!delta.add.some((q) => r.manyValued.includes(q.predicate.value)) && !delta.remove.some((q) => r.manyValued.includes(q.predicate.value))) continue
+        this.manyValuedPredicates = undefined
+        this.manyValuedDue.add(r)
+      }
+      if (!this.manyValuedPredicates) {
+        this.manyValuedPredicates = new Map()
+        for (const r of this.manyValuedRules) {
+          for (const m of r.manyValued) {
+            for (const g of input) for (const q of this.store.match(null, f.namedNode(m), null, g)) this.manyValuedPredicates.set(q.subject.value, [...(this.manyValuedPredicates.get(q.subject.value) ?? []), r])
+          }
+        }
+      }
+      // Per node and predicate: how many values the change added, less those it removed.
+      const net = new Map<string, { q: Quad; rules: Rule[]; n: number }>()
+      for (const [qs, w] of [[delta.add, 1], [delta.remove, -1]] as const) {
+        for (const q of qs) {
+          if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'Literal' || !this.inputGraphKeys.has(q.graph.value)) continue
+          const rules = this.manyValuedPredicates.get(q.predicate.value)
+          if (!rules) continue
+          const k = q.subject.value + ' ' + q.predicate.value
+          const e = net.get(k)
+          if (e) e.n += w
+          else net.set(k, { q, rules, n: w })
+        }
+      }
+      for (const { q, rules, n } of net.values()) {
+        if (rules.every((r) => this.manyValuedDue.has(r))) continue
+        const values = new Set(input.flatMap((g) => this.store.match(q.subject, q.predicate, null, g)).filter((v) => v.object.termType === 'Literal').map((v) => v.object.value + '@' + (v.object as { language?: string }).language)).size
+        if (values >= 2 || values - n >= 2) for (const r of rules) this.manyValuedDue.add(r)
+      }
+    }
+    if (this.arriving || !this.manyValuedDue.size) return
+    for (const r of this.manyValuedDue) if (this.manyValuedRules.includes(r)) for (const focus of this.anywhereFoci.get(r) ?? []) this.markFocus(r, focus)
+    this.manyValuedDue.clear()
   }
 
   /** Rules with exact dependencies: the foci a changed triple reaches through their patterns. */
@@ -858,24 +1305,7 @@ export class Engine {
 
   /** Lookups over the graphs rules read, with the batch's removed triples put back (old and new state together). */
   private exactLookup(): Lookup {
-    const removed = this.removedBatch
-    const graphs = this.graphs
-    return (s, p, o, g) => {
-      const out: Quad[] = []
-      const seen = new Set<string>()
-      const put = (x: Quad) => {
-        const k = termKey(x.subject) + ' ' + x.predicate.value + ' ' + termKey(x.object)
-        if (!seen.has(k)) seen.add(k), out.push(x)
-      }
-      // A literal (or a variable's stand-in) never is a subject or a predicate: nothing matches.
-      if ((s && s.termType === 'Literal') || (p && p.termType !== 'NamedNode')) return out
-      for (const graph of g ? [g] : graphs) for (const x of this.store.match(s as never, p as never, o as never, graph as never)) put(x)
-      if (removed.length) {
-        const pool = s ? this.removedBy.get('s' + termKey(s)) : o ? this.removedBy.get('o' + termKey(o)) : p ? this.removedBy.get('p' + p.value) : removed
-        for (const x of pool ?? []) if ((!s || x.subject.equals(s)) && (!p || x.predicate.equals(p)) && (!o || x.object.equals(o)) && (!g || x.graph.equals(g))) put(x)
-      }
-      return out
-    }
+    return probeLookup({ store: this.store, graphs: this.graphs, removed: this.removedBatch, removedBy: this.removedBy, graphMode: 'any' })
   }
 
   private touchFollowers(followers: Set<Follower> | undefined, q: Quad) {
@@ -891,7 +1321,7 @@ export class Engine {
       if (!f.reads.some((r) => matchesRead(r, s, p, q.object))) continue
       if (f.rule.refresh === 'now') {
         if (f.rule.stratum >= this.current) this.markDirty(f.rule, f.focus)
-      } else if (this.demand && !this.warming && !f.rule.always && !this.demand(focus)) {
+      } else if (this.demand && !f.rule.always && !this.demand(focus) && !this.warmsNow(f.focus)) {
         // Not shown: it waits, parked, until it is (no frame needed).
         this.deferred.add(f.rule, f.focus)
         this.retyped.add(focus)
@@ -954,6 +1384,7 @@ export class Engine {
       this.evaluations.clear()
       this.typedIn.clear()
     }
+    this.provenanceIfWanted()
     this.emit()
   }
 
@@ -982,7 +1413,7 @@ export class Engine {
               if (foci.size) this.hold(rule, foci)
               continue
             }
-            if (wd.due()) {
+            if (wd.due() || this.overOutput(wd)) {
               stop = rule
               if (foci.size) this.hold(rule, foci)
               continue
@@ -1008,6 +1439,7 @@ export class Engine {
       this.dirty.clear()
       wd.suspended(this, interrupted)
     }
+    if (!suspended) this.provenanceIfWanted()
     this.emit()
   }
 
@@ -1115,6 +1547,8 @@ export class Engine {
   }
 
   private evaluate(rule: Rule, foci: Set<string>): Leftover | undefined {
+    // Recorded from the end of this run (adding it mid-run would reach rules of strata already done).
+    if (!this.provenance && this.provenanceReaders && (this.provenanceReaders.has(rule.slot) || (this.provenanceFoci!.size && [...foci].some((x) => this.provenanceFoci!.has(focusOf(x)) && this.demand?.(focusOf(x)) !== false)))) this.provenanceWanted = rule.iri
     this.pristine.delete(rule)
     const t = performance.now()
     const wd = this.watchdog
@@ -1139,17 +1573,18 @@ export class Engine {
   private evaluateAll(rule: Rule, foci: Set<string>): Leftover | undefined {
     const wd = this.watchdog
     if (wd) (wd.rule = rule.iri), (wd.focus = foci.values().next().value)
-    if (this.demand && !this.warming && !rule.always) {
+    if (this.demand && !rule.always && (!this.warming || performance.now() >= this.warmUntil)) {
       // Park undemanded foci (retractions always run, so nothing stale stays visible).
       // (Deleting the entry being visited from a Set does not disturb the iteration.)
       for (const focus of foci) {
-        if (this.isInstance(focus, rule) && !this.demand(focusOf(focus))) {
+        if (this.isInstance(focus, rule) && !this.demand(focusOf(focus)) && !this.warmsNow(focus)) {
           this.deferred.add(rule, focus)
           foci.delete(focus)
         } else this.deferred.delete(rule, focus)
       }
       if (!foci.size) return
     }
+    if (this.warming) for (const focus of foci) this.startWarming(focusOf(focus))
     // A rule that requires a property its focus doesn't have (or is not for one it has) has nothing to say about it.
     if (rule.requires.length || rule.unless.length) {
       for (const focus of foci) {
@@ -1224,7 +1659,7 @@ export class Engine {
         continue
       }
       this.commit(rule, focus, quads)
-      if (wd.check()) left = { foci: new Set(), interrupted: false }
+      if (wd.check() || this.overOutput(wd)) left = { foci: new Set(), interrupted: false }
     }
     return left?.foci.size ? left : undefined
   }
@@ -1237,13 +1672,18 @@ export class Engine {
       const reads: ReadPattern[] = []
       this.ctx.trace = trace
       this.ctx.queryReads = reads
+      this.ctx.opaque = false
+      let done = false
       try {
         const f = this.store.factory
         const member = memberOf(focus)
-        return this.functions[rule.fn!]!(this.ctx, f.namedNode(focusOf(focus)), member === undefined ? undefined : f.namedNode(member))
+        const out = this.functions[rule.fn!]!(this.ctx, f.namedNode(focusOf(focus)), member === undefined ? undefined : f.namedNode(member))
+        done = true
+        return out
       } finally {
-        this.ctx.trace = this.ctx.queryReads = undefined
-        this.recordReads(rule, focus, trace)
+        const traced = done && !this.ctx.opaque
+        this.ctx.trace = this.ctx.queryReads = this.ctx.opaque = undefined
+        this.recordReads(rule, focus, trace, traced)
         if (reads.length || this.queryFollowers.has(rule)) this.recordFollowing(rule, focus, reads)
       }
     }
@@ -1251,8 +1691,7 @@ export class Engine {
     const member = memberOf(focus)
     // A member-wise pair: the member is written in place of $member, the focus of $this.
     if (member !== undefined) return this.construct(rule, rule.queryParts!.join('<' + focusOf(focus) + '>').replaceAll('$member', '<' + member + '>'))
-    if (this.store.constructFor) return this.constructFor(rule, [focus])
-    return this.construct(rule, rule.queryParts!.join('<' + focus + '>'))
+    return this.queryOne(rule, focus)
   }
 
   /** Drop a (rule, focus) pair's traced reads. */
@@ -1267,11 +1706,17 @@ export class Engine {
       if (!byRule!.size) this.readers.delete(subject)
     }
     byFocus?.delete(focus)
+    this.traced.get(rule)?.delete(focus)
   }
 
-  /** Replace a (rule, focus) pair's traced reads. */
-  private recordReads(rule: Rule, focus: string, trace: Map<string, Set<string>>) {
+  /** Replace a (rule, focus) pair's traced reads (`traced`: all it read). */
+  private recordReads(rule: Rule, focus: string, trace: Map<string, Set<string>>, traced: boolean) {
     this.forgetReads(rule, focus)
+    if (traced) {
+      let pairs = this.traced.get(rule)
+      if (!pairs) this.traced.set(rule, (pairs = new Set()))
+      pairs.add(focus)
+    }
     let byFocus = this.readsOf.get(rule)
     if (!byFocus) this.readsOf.set(rule, (byFocus = new Map()))
     trace.delete(focusOf(focus)) // the focus's own triples are covered by its self-watch
@@ -1296,23 +1741,17 @@ export class Engine {
   private bulk(rule: Rule, foci: string[]): Map<string, Quad[]> {
     this.stats.bulkQueries++
     const groups = new Map<string, Quad[]>()
-    if (this.store.constructFor) {
-      for (const q of this.constructFor(rule, foci)) {
-        const focus = owningFocus(q.subject.value)
-        let g = groups.get(focus)
-        if (!g) groups.set(focus, (g = []))
-        g.push(q)
-      }
-      return groups
+    // A focus minted under another of the batch goes alone: a triple about it could be its own or the outer focus's.
+    const batch = new Set(foci)
+    const nested = foci.filter((focus) => owningFocus(focus) !== focus && mintedUnder(owningFocus(focus), batch) !== undefined)
+    for (const focus of nested) {
+      batch.delete(focus)
+      this.stats.queries++
+      groups.set(focus, this.queryOne(rule, focus))
     }
-    // Restrict ?this to the dirty foci, at the start of the WHERE clause.
-    const query = rule.queryParts!.join('?this')
-    const template = query.search(/CONSTRUCT\s*\{/i)
-    const where = query.slice(template).search(/WHERE\s*\{/i)
-    const at = where < 0 ? -1 : template + where + query.slice(template + where).indexOf('{') + 1
-    const restricted = at < 0 ? query : `${query.slice(0, at)} VALUES ?this { ${foci.map((x) => `<${x}>`).join(' ')} } ${query.slice(at)}`
-    for (const q of this.construct(rule, restricted)) {
-      const focus = owningFocus(q.subject.value)
+    for (const q of this.queryMany(rule, [...batch])) {
+      const focus = mintedUnder(q.subject.value, batch)
+      if (focus === undefined) continue
       let g = groups.get(focus)
       if (!g) groups.set(focus, (g = []))
       g.push(q)
@@ -1320,12 +1759,28 @@ export class Engine {
     return groups
   }
 
+  private queryOne(rule: Rule, focus: string): Quad[] {
+    if (this.store.constructFor) return this.constructFor(rule, [focus])
+    return this.construct(rule, rule.queryParts!.join('<' + focus + '>'))
+  }
+
+  private queryMany(rule: Rule, foci: string[]): Quad[] {
+    if (this.store.constructFor) return this.constructFor(rule, foci)
+    // Restrict ?this to the dirty foci, at the start of the WHERE clause.
+    const query = rule.queryParts!.join('?this')
+    const template = query.search(/CONSTRUCT\s*\{/i)
+    const where = query.slice(template).search(/WHERE\s*\{/i)
+    const at = where < 0 ? -1 : template + where + query.slice(template + where).indexOf('{') + 1
+    const restricted = at < 0 ? query : `${query.slice(0, at)} VALUES ?this { ${foci.map((x) => `<${x}>`).join(' ')} } ${query.slice(at)}`
+    return this.construct(rule, restricted)
+  }
+
   private constructFor(rule: Rule, foci: string[]): Quad[] {
     const f = this.store.factory
     try {
       return this.store.constructFor!(rule.queryParts!.join('?this'), 'this', foci.map((x) => f.namedNode(x)), this.graphs)
     } catch (e) {
-      throw ruleError(rule, e)
+      throw ruleError(rule, e, this.store, rule.queryParts!.join('?this'))
     }
   }
 
@@ -1333,7 +1788,7 @@ export class Engine {
     try {
       return this.store.construct(query, this.graphs)
     } catch (e) {
-      throw ruleError(rule, e)
+      throw ruleError(rule, e, this.store, query)
     }
   }
 
@@ -1395,8 +1850,11 @@ export class Engine {
   }
 
   /** Back along a path's steps, from the nodes at its end to the nodes at its start. */
-  /** Back along the steps to the nodes they start from; `removed`, a triple just removed, is walked as if still there. */
-  private walkBack(nodes: Set<string>, steps: string[], removed?: Quad): Set<string> {
+  /**
+   * Back along the steps to the nodes they start from; `removed`, a triple just removed, is walked as if still there.
+   * `memo` keeps the store's answers to the steps against a predicate, for walks made while the store stays as it is.
+   */
+  private walkBack(nodes: Set<string>, steps: string[], removed?: Quad, memo?: Map<string, string[]>): Set<string> {
     const f = this.store.factory
     for (let i = steps.length - 1; i >= 0 && nodes.size; i--) {
       const step = steps[i]!
@@ -1411,7 +1869,13 @@ export class Engine {
         for (const n of nodes) {
           // (A list cell on the way is a blank node, never the subject of a named step.)
           if (!IRI_LIKE.test(n)) continue
-          for (const g of this.graphs) for (const q of this.store.match(f.namedNode(n), p, null, g)) if (q.object.termType === 'NamedNode') next.add(q.object.value)
+          const key = n + SEP + p.value
+          let objects = memo?.get(key)
+          if (!objects) {
+            objects = this.matchAll(f.namedNode(n), p, null).flatMap((q) => (q.object.termType === 'NamedNode' ? [q.object.value] : []))
+            memo?.set(key, objects)
+          }
+          for (const o of objects) next.add(o)
           // A link that is going away still led here: what it linked to read it.
           if (removed && removed.subject.value === n && removed.predicate.value === p.value && removed.object.termType === 'NamedNode') next.add(removed.object.value)
         }
@@ -1429,15 +1893,66 @@ export class Engine {
     return out
   }
 
+  /**
+   * Whether the predicate is reached from the focus along one of these paths (Rule.watchesVia; a
+   * step "^p" goes against p, a step "?p" keeps the nodes that have p).
+   */
+  private names(focus: string, via: string[][], predicate: string): boolean {
+    const f = this.store.factory
+    return via.some((path) => {
+      let nodes: Term[] = [f.namedNode(focus)]
+      for (const step of path) {
+        if (step.startsWith('?')) {
+          const p = f.namedNode(step.slice(1))
+          nodes = nodes.filter((n) => n.termType !== 'Literal' && this.graphs.some((g) => this.store.match(n as never, p, null, g).length > 0))
+          continue
+        }
+        const back = step.startsWith('^')
+        const p = f.namedNode(back ? step.slice(1) : step)
+        nodes = nodes.flatMap((n) => this.graphs.flatMap((g) => (back ? this.store.match(null, p, n as never, g).map((q) => q.subject) : n.termType === 'Literal' ? [] : this.store.match(n as never, p, null, g).map((q) => q.object))))
+      }
+      return nodes.some((n) => n.termType === 'NamedNode' && n.value === predicate)
+    })
+  }
+
+  /**
+   * The nodes that name the predicate along one of these paths (as `names` asks of one node): walked
+   * back from the predicate, so it costs the nodes that name it, not every node that might.
+   */
+  private namers(via: string[][], predicate: string): Set<string> {
+    const f = this.store.factory
+    const out = new Set<string>()
+    for (const path of via) {
+      let nodes: Term[] = [f.namedNode(predicate)]
+      for (let i = path.length - 1; i >= 0 && nodes.length; i--) {
+        const step = path[i]!
+        if (step.startsWith('?')) {
+          const p = f.namedNode(step.slice(1))
+          nodes = nodes.filter((n) => n.termType !== 'Literal' && this.graphs.some((g) => this.store.match(n as never, p, null, g).length > 0))
+          continue
+        }
+        const back = step.startsWith('^')
+        const p = f.namedNode(back ? step.slice(1) : step)
+        // Back along a step: to what has it (p), or to what it is had by (^p).
+        nodes = nodes.flatMap((n) => this.graphs.flatMap((g) => (back ? (n.termType === 'Literal' ? [] : this.store.match(n as never, p, null, g).map((q) => q.object)) : this.store.match(null, p, n as never, g).map((q) => q.subject))))
+      }
+      for (const n of nodes) if (n.termType === 'NamedNode') out.add(n.value)
+    }
+    return out
+  }
+
+  /** Whether the predicate has one of these properties (Rule.watchesMarked). */
+  private marked(predicate: string, by: string[]): boolean {
+    const f = this.store.factory
+    const p = f.namedNode(predicate)
+    return by.some((m) => this.graphs.some((g) => this.store.match(p, f.namedNode(m), null, g).length > 0))
+  }
+
   /** Whether a member-wise SPARQL pair reads this predicate of its member (sem:memberWatches). */
   private memberWatched(rule: Rule, key: string, predicate: string): boolean {
     const w = rule.memberWatches
     if (!w || w.predicates.has(predicate)) return true
-    if (!w.via.length) return false
-    const f = this.store.factory
-    const focus = f.namedNode(focusOf(key))
-    const p = f.namedNode(predicate)
-    return w.via.some((via) => this.graphs.some((g) => this.store.match(focus, f.namedNode(via), p, g).length > 0))
+    return this.names(focusOf(key), w.via.map((p) => [p]), predicate)
   }
 
   /** Register (or drop) a member-wise SPARQL pair as a reader of its member. */
@@ -1456,6 +1971,38 @@ export class Engine {
     keys.delete(key)
     if (!keys.size) byRule!.delete(rule)
     if (!byRule!.size) this.memberReaders.delete(member)
+  }
+
+  /**
+   * Start recording provenance now: what was derived so far gets its PROV-O, as if it had been
+   * recorded from the start (each output's activity, from the output it has), and so does all
+   * that follows. Called by an engine whose provenance is 'onDemand'; inside or outside a run.
+   */
+  recordProvenance(): void {
+    if (this.provenance) return
+    this.provenance = true
+    const outside = this.current === -Infinity
+    for (const [rule, byFocus] of this.outputs) {
+      for (const [focus, next] of byFocus) {
+        const quads = [...next.values()]
+        this.committing = { rule, focus }
+        try {
+          for (const p of this.provenanceOf(rule, focus, quads)) {
+            const k = quadKey(p)
+            if (!next.has(k)) next.set(k, p), this.retain(k, p)
+          }
+        } finally {
+          this.committing = undefined
+        }
+      }
+    }
+    if (outside) this.run()
+  }
+
+  /** At the end of a run: start recording provenance, if a rule that reads it ran. */
+  private provenanceIfWanted() {
+    if (this.provenanceWanted === undefined || this.provenance) return
+    this.recordProvenance()
   }
 
   /**
@@ -1503,11 +2050,22 @@ export class Engine {
     return out
   }
 
+  /** A rule that produced a term which has gone: reported once a term, never repaired. A lookup per triple, and none while nothing has retired. */
+  private reportRetired(q: Quad) {
+    this.retired ??= readRetired(this.store)
+    if (!this.retired.terms.size) return
+    const term = retiredIn(q, this.retired)
+    if (!term || this.retiredReported.has(term)) return
+    this.retiredReported.add(term)
+    console.warn(`[semblance] A rule produced ${term}, which has gone${this.retired.renames.has(term) ? `: it is now ${this.retired.renames.get(term)}` : ''}. semblance migrate moves the source.`)
+  }
+
   private retain(key: string, q: Quad) {
     const ref = this.refs.get(key)
     if (ref) return void ref.n++
     const f = this.store.factory
     const stored = q.graph.equals(this.graph) ? q : f.quad(q.subject, q.predicate, q.object, this.graph)
+    this.reportRetired(q)
     this.store.add(stored)
     this.refs.set(key, { q: stored, n: 1 })
     this.stats.derivedAdded++

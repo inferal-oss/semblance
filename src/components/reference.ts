@@ -729,7 +729,8 @@ const termCard: FnRule = (ctx, focus) => {
   const n = {
     properties: ctx.match(null, RDFS + 'domain', t).length,
     renderings: renderings.length,
-    sparql: rules.filter((r) => ctx.match(r, SEM.construct, null).length).length,
+    // A rule that runs another's query (sem:constructFrom) is a SPARQL rule too.
+    sparql: rules.filter((r) => ctx.match(r, SEM.construct, null).length || ctx.objects(r, SEM.constructFrom).some((f) => ctx.match(f, SEM.construct, null).length)).length,
     functions: rules.filter((r) => ctx.match(r, SEM.function, null).length).length,
     reactions: ctx.match(null, BEH.sourceClass, t).length,
   } as Record<string, number>

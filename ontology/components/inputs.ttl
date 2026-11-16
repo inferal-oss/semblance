@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -30,11 +31,12 @@ c:Choice c:labelPart "select" .
 # --- TextArea --------------------------------------------------------------------------------------
 
 c:TextArea a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TextEntry ;
     rdfs:comment """A multi-line text input: c:label, c:value, c:placeholder, c:help, c:error, c:rows (default 3),
 c:disabled. Typing sets c:value (and clears a stale c:error). Without a c:label it renders the
 input alone, to be labelled by a c:Field."""@en ;
     sem:slug "text-area" ;
+    pos:rowParts 4 ;
     c:labelPart "input" .
 c:TextAreaRendering a sem:Rendering ; sem:targets c:TextArea ; sem:stratum 0 .
 c:TextAreaRendering-fn a sem:Rule ; sem:implements c:TextAreaRendering ; sem:function "inputs:text-area" .
@@ -147,12 +149,6 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~line-", STR(?i), "-text")) AS ?lineText)
   BIND(IF(?i < ?breaks && ?i < 99, IRI(CONCAT(STR($this), "/~line-", STR(?i + 1))), ?afterDescribed) AS ?nextLine)
 }""" .
-c:TextAreaInput a beh:Reaction ;
-    beh:when beh:Input ;
-    beh:sourceClass c:TextArea ;
-    beh:deletes """CONSTRUCT { $this c:value ?old ; c:error ?error } WHERE { { $this c:value ?old } UNION { $this c:error ?error } }""" ;
-    beh:inserts """CONSTRUCT { $this c:value ?value } WHERE { $event beh:value ?value }""" ;
-    sem:function "inputs:text-area-input" .
 
 # --- Checkbox --------------------------------------------------------------------------------------
 
@@ -284,7 +280,7 @@ WHERE {
 # --- RadioGroup ------------------------------------------------------------------------------------
 
 c:RadioGroup a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Chooser ;
     rdfs:comment """Sets one property (c:property) of one node (c:controls), like c:Segmented and c:Choice:
 the options are c:options, else the individuals in the property's rdfs:range (ordered by
 sem:order, labelled by rdfs:label, described by rdfs:comment). Native radio inputs, so arrow keys
@@ -478,12 +474,6 @@ WHERE {
   BIND(IF(BOUND(?prev), ?none, ?optLine) AS ?firstLine)
   }
 }""" .
-c:RadioGroupSelect a beh:Reaction ;
-    beh:when beh:Change ;
-    beh:sourceClass c:RadioGroup ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . BIND(IRI(?v) AS ?option) }""" ;
-    sem:function "inputs:radio-group-select" .
 
 # --- ToggleSwitch ------------------------------------------------------------------------------------
 # (c:Switch, in views.ttl, is the case switcher the demo shell is built from.)
@@ -803,7 +793,8 @@ c:Field a owl:Class ;
 (c:error, announced with role=alert). The label points at the content's c:labelPart element,
 or labels the content's root (aria-labelledby) when its class names none; help and error
 describe it (aria-describedby, aria-invalid) unless the content has its own."""@en ;
-    sem:slug "field" .
+    sem:slug "field" ;
+    pos:rowParts 4 .
 c:FieldRendering a sem:Rendering ; sem:targets c:Field ; sem:stratum 0 .
 c:FieldRendering-fn a sem:Rule ; sem:implements c:FieldRendering ; sem:function "inputs:field" .
 # The field decorates its content's elements (label for, aria-describedby, aria-labelledby), so it
@@ -940,16 +931,16 @@ c:characters a owl:DatatypeProperty ; rdfs:domain c:Charset ;
     rdfs:comment "A character class body, as inside [...]: \"0-9\", \"A-Za-z0-9\", \"2-9A-HJ-NP-Z\"."@en .
 c:inputMode a owl:DatatypeProperty ; rdfs:domain c:Charset ;
     rdfs:comment "The virtual keyboard to offer (the inputmode attribute): numeric, text, decimal..."@en .
-c:Digits a c:Charset ; rdfs:label "Digits"@en ; sem:order 1 ; c:characters "0-9" ; c:inputMode "numeric" .
-c:Letters a c:Charset ; rdfs:label "Letters"@en ; sem:order 2 ; c:characters "A-Za-z" ; c:inputMode "text" .
-c:Alphanumeric a c:Charset ; rdfs:label "Letters and digits"@en ; sem:order 3 ; c:characters "A-Za-z0-9" ; c:inputMode "text" .
-c:Hexadecimal a c:Charset ; rdfs:label "Hexadecimal"@en ; sem:order 4 ; c:characters "0-9A-Fa-f" ; c:inputMode "text" .
-c:AnyCharacter a c:Charset ; rdfs:label "Any character but space"@en ; sem:order 5 ; c:characters "\\S" ; c:inputMode "text" .
+c:Digits a c:Charset ; rdfs:label "Digits"@en , "Цифри"@uk , "Ziffern"@de , "أرقام"@ar ; sem:order 1 ; c:characters "0-9" ; c:inputMode "numeric" .
+c:Letters a c:Charset ; rdfs:label "Letters"@en , "Літери"@uk , "Buchstaben"@de , "حروف"@ar ; sem:order 2 ; c:characters "A-Za-z" ; c:inputMode "text" .
+c:Alphanumeric a c:Charset ; rdfs:label "Letters and digits"@en , "Літери й цифри"@uk , "Buchstaben und Ziffern"@de , "حروف وأرقام"@ar ; sem:order 3 ; c:characters "A-Za-z0-9" ; c:inputMode "text" .
+c:Hexadecimal a c:Charset ; rdfs:label "Hexadecimal"@en , "Шістнадцяткові"@uk , "Hexadezimal"@de , "ست عشري"@ar ; sem:order 4 ; c:characters "0-9A-Fa-f" ; c:inputMode "text" .
+c:AnyCharacter a c:Charset ; rdfs:label "Any character but space"@en , "Будь-який символ, крім пробілу"@uk , "Jedes Zeichen außer Leerzeichen"@de , "أي محرف عدا المسافة"@ar ; sem:order 5 ; c:characters "\\S" ; c:inputMode "text" .
 
 c:case a owl:ObjectProperty ; rdfs:range c:Case ; rdfs:comment "Letter case a code is kept in."@en .
 c:Case a owl:Class .
-c:UpperCase a c:Case ; rdfs:label "Upper case"@en ; sem:order 1 .
-c:LowerCase a c:Case ; rdfs:label "Lower case"@en ; sem:order 2 .
+c:UpperCase a c:Case ; rdfs:label "Upper case"@en , "Великі літери"@uk , "Großbuchstaben"@de , "أحرف كبيرة"@ar ; sem:order 1 .
+c:LowerCase a c:Case ; rdfs:label "Lower case"@en , "Малі літери"@uk , "Kleinbuchstaben"@de , "أحرف صغيرة"@ar ; sem:order 2 .
 
 c:cellStyle a owl:ObjectProperty ;
     rdfs:range c:CellStyle ;
@@ -957,10 +948,10 @@ c:cellStyle a owl:ObjectProperty ;
     rdfs:comment "How a code's cells are drawn."@en ;
     sty:hookAttribute "data-sem-cells" .
 c:CellStyle a owl:Class .
-c:Boxes a c:CellStyle ; rdfs:label "Boxes"@en ; sem:slug "boxes" ; sem:order 1 .
-c:Underlined a c:CellStyle ; rdfs:label "Underlined"@en ; sem:slug "underlined" ; sem:order 2 .
-c:Filled a c:CellStyle ; rdfs:label "Filled"@en ; sem:slug "filled" ; sem:order 3 .
-c:Joined a c:CellStyle ; rdfs:label "Joined"@en ; sem:slug "joined" ; sem:order 4 ;
+c:Boxes a c:CellStyle ; rdfs:label "Boxes"@en , "Клітинки"@uk , "Kästchen"@de , "مربعات"@ar ; sem:slug "boxes" ; sem:order 1 .
+c:Underlined a c:CellStyle ; rdfs:label "Underlined"@en , "Підкреслені"@uk , "Unterstrichen"@de , "مسطّرة"@ar ; sem:slug "underlined" ; sem:order 2 .
+c:Filled a c:CellStyle ; rdfs:label "Filled"@en , "Заповнені"@uk , "Gefüllt"@de , "معبأة"@ar ; sem:slug "filled" ; sem:order 3 .
+c:Joined a c:CellStyle ; rdfs:label "Joined"@en , "Зʼєднані"@uk , "Verbunden"@de , "متصلة"@ar ; sem:slug "joined" ; sem:order 4 ;
     rdfs:comment "Cells of a group share borders, like a segmented field."@en .
 
 c:CodeInputRendering a sem:Rendering ; sem:targets c:CodeInput ; sem:stratum 0 .

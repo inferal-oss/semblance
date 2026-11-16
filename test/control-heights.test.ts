@@ -86,7 +86,7 @@ describe('single-line controls share one box', () => {
     .sort()
 
   it('the token and the shared rule are there', () => {
-    expect(css).toMatch(/--sem-control-height: 38px/)
+    expect(css).toMatch(/--sem-control-height: 32px/)
     expect(themes).toEqual(expect.arrayContaining(['semblance', 'paper', 'terminal', 'blueprint', 'sunset', 'cupertino', 'tracker', 'classic', 'doodle', 'fluent']))
   })
 

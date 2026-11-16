@@ -3,8 +3,9 @@ import { type Delta, mint, quadKey } from './rdf.ts'
 import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
+import type { SafetyPolicy } from './safety.ts'
 import type { GraphStore } from './store/types.ts'
-import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, PERF_GRAPH, PERSIST_GRAPH, SEM } from './ns.ts'
+import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, NS, PERF_GRAPH, PERSIST_GRAPH, RENDERED_GRAPH, SEM } from './ns.ts'
 import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
 import { navigationFunctions } from './navigation.ts'
@@ -14,7 +15,20 @@ import { exampleFunctions } from './examples/index.ts'
 import { functions as referenceFunctions } from './components/reference.ts'
 import { VIEW_GRAPH, ViewRuntime } from './view/runtime.ts'
 import { viewFunctions } from './view/functions.ts'
+import { applyEffective, Consolidation } from './view/input.ts'
+import { parseTurtle } from './parse-turtle.ts'
+
+export { parseTurtle }
 import { Watchdog } from './engine/watchdog.ts'
+
+/**
+ * What a projection renders: `roots` (optional) are the instances it is mounted at; `urlBase` is
+ * where relative URLs in what it renders resolve (by default the store's nav:base, see HtmlIndex);
+ * `policy` makes it authored content (src/safety.ts): what the policy refuses is not rendered, and
+ * is reported through the projection's onError. Read it from a trusted store (authoredPolicy), never
+ * from this one.
+ */
+export type ProjectOptions = EngineOptions & { roots?: string[]; urlBase?: string; policy?: SafetyPolicy }
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -59,10 +73,10 @@ export class Runtime {
    */
   readonly watchdog = new Watchdog()
   /** The open transaction: every effective change since it began, by graph and quad (net weight). */
-  private tx?: Map<string, { graph: string | undefined; q: Quad; w: number }>
+  private tx?: Consolidation
 
   constructor(readonly store: GraphStore) {
-    this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH], functions: viewFunctions })
+    this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH], functions: viewFunctions })
     // A window's next expiry: a tick with no input.
     this.views.onTimer = () => {
       this.advance()
@@ -72,6 +86,10 @@ export class Runtime {
     // person last showed intent to see (preload) counts as shown, so its views are ready by the click.
     this.views.shown = (component) => this.projections.some((p) => !p.engine.demand || p.engine.demand(component) || this.intended(p, component))
     this.views.watchdog = this.watchdog
+    // A query run on request reads what the projection showing it derives, as its result view's rule once did.
+    // A followed result set (what a person reads, maintained) writes its rows at the next refresh.
+    this.views.onPending = () => this.queueRefresh()
+    this.views.derivedFor = (components) => (this.projections.find((p) => components.some((c) => !p.engine.demand || p.engine.demand(c))) ?? this.projections[0])?.engine.graph
   }
 
   private readonly timerListeners: (() => void)[] = []
@@ -90,7 +108,7 @@ export class Runtime {
    */
   transaction<T>(fn: () => T): T {
     if (this.tx) return fn()
-    this.tx = new Map()
+    this.tx = new Consolidation()
     try {
       return fn()
     } finally {
@@ -101,15 +119,44 @@ export class Runtime {
   }
 
   private disposed = false
+  private readonly endListeners: (() => void)[] = []
+
+  /** Whether the runtime has ended (end, dispose): it no longer ticks, applies or writes. */
+  get ended(): boolean {
+    return this.disposed
+  }
 
   /**
-   * Let the runtime and its store go: no timer or queued refresh touches the store afterwards,
-   * and the store releases what it holds outside the JavaScript heap (GraphStore.dispose).
+   * Hear once that the runtime ends, before its store is released: host effects that follow it
+   * (persistence's delayed write, a pending report) finish what they can and stop. Returns a
+   * function that stops listening.
+   */
+  onEnd(listener: () => void): () => void {
+    this.endListeners.push(listener)
+    return () => {
+      const i = this.endListeners.indexOf(listener)
+      if (i >= 0) this.endListeners.splice(i, 1)
+    }
+  }
+
+  /**
+   * End the runtime but keep its store: the effects that follow it stop (onEnd), its views'
+   * timers are cancelled, and no tick, refresh, change or event touches the store afterwards.
+   */
+  end(): void {
+    if (this.disposed) return
+    for (const l of this.endListeners.splice(0)) l()
+    this.disposed = true
+    this.views.dispose()
+  }
+
+  /**
+   * Let the runtime and its store go: it ends (end), and the store releases what it holds
+   * outside the JavaScript heap (GraphStore.dispose).
    */
   dispose(): void {
     if (this.disposed) return
-    this.disposed = true
-    this.views.dispose()
+    this.end()
     this.store.dispose?.()
   }
 
@@ -122,27 +169,13 @@ export class Runtime {
     if (!effective.add.length && !effective.remove.length) return
     // Outside a transaction a change is its own tick, exactly as applied.
     if (!this.tx) return this.tick(new Map([[graph, effective]]), effective)
-    for (const [w, qs] of [[-1, effective.remove], [1, effective.add]] as const) {
-      for (const q of qs) {
-        const k = (graph ?? '') + ' ' + quadKey(q)
-        const e = this.tx.get(k)
-        if (e) e.w += w
-        else this.tx.set(k, { graph, q, w })
-      }
-    }
+    this.tx.add(graph, effective)
   }
 
+
   /** A transaction's changes, consolidated: a triple added and removed again is no change. */
-  private flush(tx: Map<string, { graph: string | undefined; q: Quad; w: number }>) {
-    const all: Delta = { add: [], remove: [] }
-    const byGraph = new Map<string | undefined, Delta>()
-    for (const { graph, q, w } of tx.values()) {
-      if (!w) continue
-      let d = byGraph.get(graph)
-      if (!d) byGraph.set(graph, (d = { add: [], remove: [] }))
-      ;(w > 0 ? d.add : d.remove).push(q)
-      ;(w > 0 ? all.add : all.remove).push(q)
-    }
+  private flush(tx: Consolidation) {
+    const { byGraph, all } = tx.result()
     if (all.add.length || all.remove.length) this.tick(byGraph, all)
   }
 
@@ -153,6 +186,7 @@ export class Runtime {
 
   private tickWatched(byGraph: Map<string | undefined, Delta>, input: Delta) {
     if (this.disposed) return
+    if (this.isArriving) this.arrived = true
     const views = this.views.tick(input)
     const all = views.add.length || views.remove.length ? { add: [...input.add, ...views.add], remove: [...input.remove, ...views.remove] } : input
     if (!all.add.length && !all.remove.length) return
@@ -162,12 +196,54 @@ export class Runtime {
     for (const [graph, d] of byGraph) for (const l of this.inputListeners) l(graph, d)
   }
 
-  /** Views suspended while their components were hidden, shown now: rebuilt, and projected. */
-  private resumeViews(): boolean {
-    const resumed = this.views.resume()
-    if (!resumed.add.length && !resumed.remove.length) return false
-    for (const p of this.projections) p.engine.process(resumed), settle(p)
-    return true
+  /**
+   * Views suspended while their components were hidden, shown now: rebuilt, and projected; then the
+   * rounds of views that read what rules derive. Given a deadline (idle time), a view at a time
+   * until it passes. Returns whether any was rebuilt, or some are left to rebuild.
+   */
+  private resumeViews(until?: number): boolean {
+    const resumed = this.views.resume(until)
+    const any = resumed.add.length > 0 || resumed.remove.length > 0
+    if (any) for (const p of this.projections) p.engine.process(resumed), settle(p)
+    this.rounds()
+    return any || this.views.resumeLeft
+  }
+
+  /** What the first projection derived that a view reads (iv:reads <rendering>), since the last round: quad -> net weight. */
+  private derived = new Map<string, { q: Quad; w: number }>()
+
+  private collectDerived(d: Delta) {
+    for (const [w, qs] of [[-1, d.remove], [1, d.add]] as const) {
+      for (const q of qs) {
+        if (!this.views.readsDerived(q)) continue
+        const k = quadKey(q)
+        const e = this.derived.get(k)
+        if (e) e.w += w
+        else this.derived.set(k, { q, w })
+      }
+    }
+  }
+
+  /**
+   * Rounds after the projections: the views that read what a rendering derives step with what the
+   * first projection derived, and the projections take their change, until nothing more changes - as
+   * many rounds as the longest chain of views over rules over views (a sheet's formulas over
+   * formulas). A cycle in the data (two formulas reading each other) stops after MAX_ROUNDS.
+   */
+  private rounds() {
+    for (let i = 0; this.derived.size; i++) {
+      if (i === MAX_ROUNDS) {
+        console.warn(`Views that read what rules derive did not settle after ${MAX_ROUNDS} rounds (a cycle in the data?): ${[...this.derived.values()].slice(0, 3).map((e) => quadKey(e.q)).join('; ')}`)
+        this.derived.clear()
+        return
+      }
+      const d: Delta = { add: [], remove: [] }
+      for (const { q, w } of this.derived.values()) if (w) (w > 0 ? d.add : d.remove).push(q)
+      this.derived.clear()
+      if (!d.add.length && !d.remove.length) return
+      const v = this.views.tick(d)
+      if (v.add.length || v.remove.length) for (const p of this.projections) p.engine.process(v), settle(p)
+    }
   }
 
   /** Hear about every refresh (after the projections are updated): the host flushes its renderers. */
@@ -189,7 +265,13 @@ export class Runtime {
     if (this.disposed) return false
     const t = performance.now()
     let any = false
+    const rows = this.views.flushPending()
+    if (rows.add.length || rows.remove.length) {
+      for (const p of this.projections) p.engine.process(rows), settle(p)
+      any = true
+    }
     for (const p of this.projections) if (p.engine.refresh()) settle(p), (any = true)
+    this.rounds()
     if (!any) return false
     const took = performance.now() - t
     this.refreshAfter = performance.now() + took * (1 / this.refreshShare - 1)
@@ -220,27 +302,51 @@ export class Runtime {
   }
 
   /**
+   * Where the app is served from (nav:base, setBase in src/navigation.ts): relative URLs in its data
+   * resolve there, whatever the page's own path. Absent (an app in one document): they are as given.
+   */
+  urlBase(): string | undefined {
+    const f = this.store.factory
+    const b = this.store.match(null, f.namedNode(NS.nav + 'base'), null, f.defaultGraph())[0]?.object.value
+    return b === undefined ? undefined : b.endsWith('/') ? b : b + '/'
+  }
+
+  /**
    * `roots` (optional) are the instances this projection is mounted at: only
    * what is shown under them is evaluated (see Engine.demand); the rest waits.
    */
-  project(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
+  project(opts: ProjectOptions, onError?: (e: Error) => void): Projection {
     // Views start with the first projection (whose rule preference they share), before it reads the store.
     if (!this.views.isStarted) this.views.start(opts.prefer)
+    // Authored content brings its own rules: its policy's work budgets bind every turn of this
+    // runtime (the tightest of them, when several projections have one).
+    const p = opts.policy
+    if (p) {
+      if (p.budgetMs !== undefined) this.watchdog.budgetMs = Math.min(this.watchdog.budgetMs, p.budgetMs)
+      if (p.maxEvaluations !== undefined) this.watchdog.maxEvaluations = Math.min(this.watchdog.maxEvaluations, p.maxEvaluations)
+    }
     return this.watchdog.turn(() => this.projectWatched(opts, onError))
   }
 
-  private projectWatched(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
+  private projectWatched(opts: ProjectOptions, onError?: (e: Error) => void): Projection {
     const name = opts.name ?? 'main'
     const engine = new Engine(this.store, {
-      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, VIEW_GRAPH],
+      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH, VIEW_GRAPH],
       // A rule maintained as a view (iv:strategy iv:Incremental): one hosted view per rule and projection.
       maintain: (rule, query) => this.views.hostRule(mint(rule.iri, 'view-' + name), query),
       ...opts,
       functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
-    const index = new HtmlIndex(onError)
+    const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase(), opts.policy)
     engine.watchdog = this.watchdog
+    if (opts.policy?.maxDerived !== undefined) engine.maxDerived = opts.policy.maxDerived
+    engine.arriving = this.isArriving
     engine.onChange((d) => index.apply(d))
+    // A view that reads what rules derive (iv:reads <rendering>) reads the first projection's.
+    if (!this.projections.length) {
+      this.views.derivedGraph = engine.graph
+      engine.onChange((d) => this.collectDerived(d))
+    }
     engine.onStale = () => this.queueRefresh()
     if (opts.roots) {
       const roots = new Set(opts.roots)
@@ -293,24 +399,28 @@ export class Runtime {
    * and update the projections that read it.
    */
   write(graph: string, delta: Delta): Delta {
-    const f = this.store.factory
-    const g = f.namedNode(graph)
-    const effective: Delta = { add: [], remove: [] }
-    for (const q of delta.remove) {
-      const e = f.quad(q.subject, q.predicate, q.object, g)
-      if (this.store.has(e)) this.store.delete(e), effective.remove.push(e)
-    }
-    for (const q of delta.add) {
-      const e = f.quad(q.subject, q.predicate, q.object, g)
-      if (!this.store.has(e)) this.store.add(e), effective.add.push(e)
-    }
+    if (this.disposed) return { add: [], remove: [] }
+    const effective = applyEffective(this.store, graph, delta)
     this.changed(graph, effective)
     return effective
   }
 
+
   /** Append to (or retire from) the change log. Callers write complete, immutable members. */
   log(delta: Delta): void {
     this.write(EVENTS_GRAPH, delta)
+  }
+
+  /**
+   * The graphs that arrive after start have arrived (arriving does this): what was evaluated before
+   * them is due again, in warm() (see Engine.reread), and the views that followed none of it.
+   */
+  reread(): void {
+    if (this.disposed) return
+    this.views.reread()
+    this.advance()
+    for (const p of this.projections) p.engine.reread(), settle(p)
+    this.resumeViews()
   }
 
   /** Spend up to `budgetMs` evaluating hidden work (see Engine.warm). Returns whether work remains. */
@@ -322,7 +432,9 @@ export class Runtime {
       more = p.engine.warm(share) || more
       settle(p)
     }
-    this.resumeViews()
+    // (A view at a time once the budget is spent: rebuilding several hidden views is a long task.)
+    this.resumeViews(until)
+    more = this.views.resumeLeft || more
     // Figures of the views that publish them (iv:measured): a write to the views graph.
     const figures = this.views.figures()
     if (figures.add.length || figures.remove.length) this.write(VIEW_GRAPH, figures)
@@ -338,8 +450,18 @@ export class Runtime {
    * the person shows intent to see (see sem:OnIntent) - where their warmth allows it
    * (on intent or eager). Returns whether work remains.
    */
-  preload(contents: ReadonlySet<string>, budgetMs: number): boolean {
-    this.intent = contents
+  preload(contents: ReadonlySet<string>, budgetMs: number, opts: { anticipated?: boolean | string } = {}): boolean {
+    // What idle time anticipates (sem:anticipates) is kept, so its views stay maintained, until what
+    // anticipated it forgets it (sem:anticipatesNear: out of reach); what the person points at
+    // replaces what they pointed at before.
+    if (opts.anticipated !== undefined && opts.anticipated !== false) {
+      const owner = opts.anticipated === true ? '' : opts.anticipated
+      let own = this.anticipatedBy.get(owner)
+      if (!own) this.anticipatedBy.set(owner, (own = new Set()))
+      for (const c of contents) own.add(c), this.anticipated.add(c)
+    } else this.intent = contents
+    this.intentShown.clear()
+    const until = performance.now() + budgetMs
     let more = false
     for (const p of this.projections) {
       const warmth = this.warmth.get(p.engine)
@@ -351,18 +473,56 @@ export class Runtime {
       more = p.engine.warm(budgetMs / this.projections.length, 4, allowed) || more
       settle(p)
     }
-    // Views suspended while hidden (iv:whileShown) whose components this built: rebuilt, and
-    // what they project is evaluated in the next slice.
-    return this.resumeViews() || more
+    // Views suspended while hidden (iv:whileShown) whose components this built: rebuilt (a view at
+    // a time once the budget is spent), and what they project is evaluated in the next slice.
+    return this.resumeViews(until) || more
   }
 
   /** The contents of the last preload: what the person last showed intent to see. */
   private intent?: ReadonlySet<string>
+  /** The contents idle time prepared ahead of any intent (sem:anticipates): all of anticipatedBy's. */
+  private readonly anticipated = new Set<string>()
+  /** Those contents by what anticipated them (a control; '' for preload's `anticipated: true`). */
+  private readonly anticipatedBy = new Map<string, Set<string>>()
 
-  /** Whether a focus is under what the person last showed intent to see, in a projection. */
+  /**
+   * What `owner` anticipated (preload's `anticipated`), but for `keep`, is no longer kept: its
+   * views stop being maintained while hidden, and idle time no longer evaluates under it
+   * (sem:anticipatesNear, when the choice moves). What it evaluated stays, as anything hidden
+   * does, until it changes.
+   */
+  forgetAnticipated(owner: string, keep?: ReadonlySet<string>): void {
+    const own = this.anticipatedBy.get(owner)
+    if (!own) return
+    const before = own.size
+    for (const c of own) if (!keep?.has(c)) own.delete(c)
+    if (own.size === before) return
+    if (!own.size) this.anticipatedBy.delete(owner)
+    this.anticipated.clear()
+    for (const own of this.anticipatedBy.values()) for (const c of own) this.anticipated.add(c)
+    this.intentShown.clear()
+  }
+
+  /** Whether a component is shown in some projection (demanded, or a projection evaluates everything). */
+  shows(focus: string): boolean {
+    return this.projections.some((p) => !p.engine.demand || p.engine.demand(focus))
+  }
+  /** intended() per projection and focus, until the projection's structure or the contents change. */
+  private readonly intentShown = new Map<Projection, { epoch: number; shown: Map<string, boolean> }>()
+
+  /**
+   * Whether a focus would be shown were what the person last showed intent to see shown, or what
+   * idle time anticipated: under those contents, and not hidden below them (an inner switch's
+   * other cases are not what a click would show).
+   */
   private intended(p: Projection, focus: string): boolean {
-    const contents = this.intent
-    return !!contents && p.index.nearest(focus, (key) => (contents.has(key) ? true : undefined)) === true
+    const intent = this.intent
+    if (!intent?.size && !this.anticipated.size) return false
+    let memo = this.intentShown.get(p)
+    if (!memo || memo.epoch !== p.index.visibility) this.intentShown.set(p, (memo = { epoch: p.index.visibility, shown: new Map() }))
+    let v = memo.shown.get(focus)
+    if (v === undefined) memo.shown.set(focus, (v = (!!intent?.size && p.index.shownUnder(focus, intent)) || (this.anticipated.size > 0 && p.index.shownUnder(focus, this.anticipated))))
+    return v
   }
 
   // --- stalls (src/engine/watchdog.ts) ---------------------------------------------------------------
@@ -385,6 +545,7 @@ export class Runtime {
    * turn that was never suspended. Returns whether work is still held.
    */
   continueStall(sliceMs = 50): boolean {
+    if (this.disposed) return false
     const more = this.watchdog.turn(
       () => {
         let more = false
@@ -411,6 +572,7 @@ export class Runtime {
    * Returns how many pairs are out of date.
    */
   stopStall(): number {
+    if (this.disposed) return 0
     for (const p of this.projections) if (p.engine.heldCount) p.engine.stopHeld()
     this.watchdog.resolve()
     for (const l of this.refreshListeners) l()
@@ -419,28 +581,51 @@ export class Runtime {
 
   /** Evaluate what a stopped stall left out of date, as a turn of its own (it may stall again). */
   retryStopped(): void {
+    if (this.disposed) return
     this.watchdog.turn(() => {
       for (const p of this.projections) p.engine.retryStopped(), settle(p)
+      this.rounds()
     })
     for (const l of this.refreshListeners) l()
   }
 
+  /**
+   * Load a Turtle graph into the input (the default graph) after start, as one change: the rules
+   * and renderings it defines join every projection's engine and are evaluated for the foci
+   * already shown, its reactions join the bus, as if it had been loaded before start.
+   */
+  load(turtle: string): Delta {
+    return this.apply({ add: parseTurtle(turtle, this.store.factory), remove: [] })
+  }
+
+  /**
+   * An addition is arriving in slices (sliceAddition), from before its first to after its last: what
+   * is due over the whole graph (sem:watchesManyValued) is evaluated once, when it has all arrived,
+   * not again at each slice. A change applied meanwhile is taken in as usual. What was evaluated
+   * before it arrived is evaluated again, in idle time (reread).
+   */
+  arriving(on: boolean): void {
+    this.isArriving = on
+    for (const p of this.projections) p.engine.arriving = on
+    if (on) return
+    this.watchdog.turn(() => {
+      for (const p of this.projections) p.engine.process({ add: [], remove: [] }), settle(p)
+      this.resumeViews()
+    })
+    if (this.arrived) this.reread()
+    this.arrived = false
+  }
+  private isArriving = false
+  private arrived = false
+
   /** Apply a change to the input graph (default graph) and update every projection. */
   apply(delta: Delta): Delta {
-    const effective: Delta = { add: [], remove: [] }
-    const f = this.store.factory
-    const dg = f.defaultGraph()
-    for (const q of delta.remove) {
-      const g = f.quad(q.subject, q.predicate, q.object, dg)
-      if (this.store.has(g)) this.store.delete(g), effective.remove.push(g)
-    }
-    for (const q of delta.add) {
-      const g = f.quad(q.subject, q.predicate, q.object, dg)
-      if (!this.store.has(g)) this.store.add(g), effective.add.push(g)
-    }
+    if (this.disposed) return { add: [], remove: [] }
+    const effective = applyEffective(this.store, undefined, delta)
     this.changed(undefined, effective)
     return effective
   }
+
 }
 
 /**
@@ -456,5 +641,8 @@ function settle(p: Projection) {
     if (!p.engine.resume()) return
   }
 }
+
+/** At most this many rounds of views over rules per turn (Runtime.rounds). */
+const MAX_ROUNDS = 64
 
 const declaresWarmth = (q: Quad) => q.predicate.value === SEM.warm

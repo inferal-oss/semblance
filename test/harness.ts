@@ -15,12 +15,14 @@ import type { GraphStore } from '../src/store/types.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { A11Y, ANN, FS, KEY, MOD, NS, SEM, ST, STY, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
+import { RenderedState } from '../src/rendered.ts'
 import { Runtime } from '../src/runtime.ts'
+import { FakeLayout } from './rendered-layout.ts'
 
 const UI = 'https://semblance.dev/demo#'
-const appGraph = readFileSync(new URL('../demo/app.ttl', import.meta.url), 'utf8')
+export const appGraph = readFileSync(new URL('../demo/app.ttl', import.meta.url), 'utf8')
 const galleryDir = new URL('../demo/gallery/', import.meta.url)
-const galleryFiles = Object.fromEntries(readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort().map((f) => ['demo/gallery/' + f, readFileSync(new URL(f, galleryDir), 'utf8')]))
+export const galleryFiles = Object.fromEntries(readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort().map((f) => ['demo/gallery/' + f, readFileSync(new URL(f, galleryDir), 'utf8')]))
 const gallery = Object.values(galleryFiles)
 /** As the host does: the examples' own files (and the todo app's graph) as c:SourceText. */
 const sources = (store: GraphStore) => {
@@ -46,6 +48,16 @@ export function mountSite(kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'func
 }
 
 /**
+ * The site without some of its gallery files (by name, `_ex-settings.ttl`): their texts, to load
+ * into the running site later (Runtime.load), as a page that loads its graphs as it needs them does.
+ */
+export function mountSiteWithout(held: string[], kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
+  const keep = Object.entries(galleryFiles).filter(([p]) => !held.some((h) => p.endsWith('/' + h)))
+  const later = held.map((h) => galleryFiles['demo/gallery/' + h]!)
+  return { ...mount(sources(loadStore(kind, todoApp(5), appGraph, ...keep.map(([, t]) => t))), prefer), later }
+}
+
+/**
  * Most tests start where the demo's Playground page was: the todo example shown, with the
  * tools open (written before the first projection, as a restored session would be).
  */
@@ -65,13 +77,14 @@ function workbench(store: GraphStore): GraphStore {
  * The shell with persistence over the given backends, as the host runs it: remembered
  * state is restored before the first projection; `persistence.flush()` writes now.
  */
-export async function mountRemembering(backends: Record<string, Backend>, clock?: Clock) {
-  const store = workbench(sources(loadStore('oxigraph', todoApp(5), appGraph, ...gallery)))
+export async function mountRemembering(backends: Record<string, Backend>, clock?: Clock, held: string[] = [], kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
+  const keep = Object.entries(galleryFiles).filter(([p]) => !held.some((h) => p.endsWith('/' + h)))
+  const store = workbench(sources(loadStore(kind, todoApp(5), appGraph, ...keep.map(([, t]) => t))))
   const persistence = new Persistence(store, backends, { delayMs: 60_000 })
   await persistence.restore()
-  const shell = mount(store, 'sparql', clock)
+  const shell = mount(store, prefer, clock)
   persistence.attach(shell.runtime)
-  return { ...shell, persistence }
+  return { ...shell, persistence, later: held.map((h) => galleryFiles['demo/gallery/' + h]!) }
 }
 
 /**
@@ -196,6 +209,14 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock, 
     onHandled: () => shell.flush(),
   })
   screens.attach()
+  // The rendered state of what asks for it (rnd:observes), measured from a layout the test sets;
+  // frames are the test's: rendered.flush() measures.
+  const layout = new FakeLayout((el) => {
+    const key = shell.keyOf(el)
+    return key === undefined ? undefined : screen.index.focusOf(key)
+  })
+  const rendered = new RenderedState(runtime, shell, { layout, frame: () => {}, onWrite: () => shell.flush() })
+  rendered.attach()
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')
   const value = (p: string) => store.match(app(), store.factory.namedNode(p), null)[0]?.object.value
@@ -216,6 +237,6 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock, 
     set(UI + 'app', UI + 'page', UI + (({ Playground: 'Examples', Performance: 'Docs' } as Record<string, string>)[page] ?? page))
     shell.flush()
   }
-  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, files, picker, uploads, fullscreen, screens, kept, urls, fire, value, showPage }
+  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, files, picker, uploads, fullscreen, screens, kept, urls, layout, rendered, fire, value, showPage }
 }
 
