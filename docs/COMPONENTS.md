@@ -507,6 +507,14 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   unstyled `c:HostSlot` inside a layout, name it with `c:slot`, and mount existing application
   content into `renderer.slot(name)`. Use `c:ProjectionView` for a styled inspection surface.
 - **Server-side.** `loadStore` from `@semblance-dev/semblance/node`, project, `toHTML` / `toText`.
+- **Serving the stylesheet yourself.** `mount` compiles the theme from the graph and adopts it, which
+  restyles the page once it runs. To have the styles from the first paint, compile them ahead
+  (`compileStyles(store)` over the same ontology, theme and app graphs, or the `semblance.css` that
+  `semblance build` writes) and link them with the `data-sem-styles` attribute:
+  `<link rel="stylesheet" href="/semblance.css" data-sem-styles>`. A document with a
+  `[data-sem-styles]` element is taken as styled: `mount` compiles and adopts nothing, and `unmount`
+  leaves the stylesheet in place. (Server-rendered pages get the attribute from `renderDocument`.)
+  Recompile it whenever those graphs change, since nothing checks that it matches them.
 - **Remembering state.** `per:Policy` nodes say what to keep where; attach `Persistence` with
   storage backends before the first projection ([PERSISTENCE.md](../PERSISTENCE.md)).
 - **The address.** `nav:Location` and `nav:Dimension`s say which state lives in the URL;
