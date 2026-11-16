@@ -10,6 +10,6 @@ rdf-engine/rust/target/
 layout-solver/build/
 layout-solver/rust/target/
 lib/
-packages/react/lib/
-packages/react/LICENSE-APACHE
-packages/react/LICENSE-MIT
+packages/*/lib/
+packages/*/LICENSE-APACHE
+packages/*/LICENSE-MIT

@@ -4,6 +4,8 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 import { defineConfig } from 'vitest/config'
 import packageJson from './package.json' with { type: 'json' }
 import reactPackageJson from './packages/react/package.json' with { type: 'json' }
+import rustPackageJson from './packages/rdf-engine-rust/package.json' with { type: 'json' }
+import watPackageJson from './packages/rdf-engine-wat/package.json' with { type: 'json' }
 import { type Manifest, sourceAliases } from './scripts/package-exports.ts'
 import { semblance } from './src/node/vite.ts'
 
@@ -11,6 +13,11 @@ const semblancePackage = packageJson as Manifest
 const reactPackage = reactPackageJson as Manifest
 
 const here = import.meta.dirname
+
+// The engine packages' modules in this repository point at rdf-engine/build/ (npm run engine:build).
+const enginePackages = ([[watPackageJson, 'wat'], [rustPackageJson, 'rust']] as const).flatMap(([manifest, kind]) =>
+  sourceAliases(manifest as Manifest, resolve(here, `packages/rdf-engine-${kind}/src`), { './wasm': resolve(here, `rdf-engine/build/${kind}.wasm`) }),
+)
 
 // /llms.txt, /llms-full.txt and the Markdown pages under /llms/ (scripts/gen-llms.ts), generated
 // from the graph: emitted into the build, and served by the dev server (again after a .ttl changes).
@@ -45,7 +52,7 @@ export default defineConfig(({ command, mode }) => ({
   // The packages in this repository by their names, as an app that installed them imports them.
   // Every entry of their exports maps to its source (scripts/package-exports.ts), never to lib/.
   resolve: {
-    alias: [...sourceAliases(semblancePackage, here), ...sourceAliases(reactPackage, resolve(here, 'packages/react/src'))],
+    alias: [...sourceAliases(semblancePackage, here), ...sourceAliases(reactPackage, resolve(here, 'packages/react/src')), ...enginePackages],
   },
   // The site is served from its domain's root (semblance.dev): its pages are paths (/docs/rules/),
   // so assets are addressed from the root (SEMBLANCE_BASE for another path). The single file

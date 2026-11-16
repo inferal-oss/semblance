@@ -3,16 +3,29 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import * as ox from 'oxigraph'
+import { ABI_VERSION } from '../../rdf-engine/host/engine.ts'
 import { engineStore } from '../../rdf-engine/host/store.ts'
+import * as wat from '../store/engines/wat.ts'
+import { checkedBuild, ENGINE_PACKAGES, type EngineBuild, isMissingPackage } from '../store/engine-build.ts'
 import { hybridStore } from '../store/hybrid.ts'
 import { n3Store } from '../store/n3.ts'
 import { oxigraphStore } from '../store/oxigraph.ts'
 import { configureFetching, type FetchPolicy, type GraphStore } from '../store/types.ts'
 
-/** `rust` and `wat` are the rdf-engine builds (`npm run engine:build`), Node only for now. */
+/** `wat` and `rust` are Semblance's own engines (rdf-engine/), each a package of its own (src/store/engine-build.ts). */
 export type StoreKind = 'oxigraph' | 'n3' | 'hybrid' | 'rust' | 'wat'
 
 const engines = new Map<string, WebAssembly.Module>()
+
+// The wat build is a dependency of the package; the rust build an optional peer, there when the app
+// installed @semblance-dev/rdf-engine-rust.
+const builds: Record<'wat' | 'rust', EngineBuild | undefined> = {
+  wat,
+  rust: await import('../store/engines/rust.ts').catch((e: unknown) => {
+    if (isMissingPackage(e, ENGINE_PACKAGES.rust)) return undefined
+    throw e
+  }),
+}
 
 /** Store options (benchmark configurations choose them; the defaults are the site's). */
 export interface StoreOptions {
@@ -36,7 +49,9 @@ export const COMPILE_ON_RUN = 2
 function engine(kind: 'rust' | 'wat', options: StoreOptions): GraphStore {
   let module = engines.get(kind)
   if (!module) {
-    const path = fileURLToPath(new URL(`../../rdf-engine/build/${kind}.wasm`, import.meta.url))
+    const build = builds[kind]
+    if (!build) throw new Error(`The ${kind} store runs ${ENGINE_PACKAGES[kind]}, which is not installed: npm install ${ENGINE_PACKAGES[kind]}`)
+    const path = fileURLToPath(checkedBuild(kind, build, ABI_VERSION).wasm)
     if (!existsSync(path)) throw new Error(`No ${kind} engine build at ${path}; run \`npm run engine:build\``)
     engines.set(kind, (module = new WebAssembly.Module(readFileSync(path))))
   }

@@ -7,6 +7,7 @@ import type { StoreKind } from '../web/stores.ts'
 import { createViews, type Views, type ViewsOptions } from './views.ts'
 
 export * from './index.ts'
+export { addEngine } from '../web/engine.ts'
 export type { StoreKind, StoreOptions }
 
 /** A store of a built-in kind (default `wat`, Semblance's own engine), empty: no ontology loaded. */
