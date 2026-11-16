@@ -60,7 +60,7 @@ c:ByteCell a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "byte-cell" ;
 c:inLayout a owl:ObjectProperty ; rdfs:domain c:ByteCell ; rdfs:range c:ByteLayout .
 
 # --- the frame ----------------------------------------------------------------------------------
-# Width: 132 units a field, at least 704, plus 18 on each side. The cells read the same numbers.
+# Width: 132 units a field, at least 528 (three fields fit a column of 600px), plus 18 on each side. The cells read the same numbers.
 
 c:ByteLayoutRendering a sem:Rendering ; sem:targets c:ByteLayout ; sem:stratum 0 ;
   sem:watches rdf:type, c:label, l10n:label, c:byteField, c:byteSpan, c:byteLayoutStyle, c:byteAxisLabel .
@@ -90,7 +90,7 @@ WHERE {
   BIND(IF(COALESCE(?style0, c:ByteRuler) = c:ByteRecord, "record",
     IF(COALESCE(?style0, c:ByteRuler) = c:ByteOutline, "outline", "ruler")) AS ?appearance)
   BIND(COALESCE(STR(?axis0), "") AS ?axisLabel)
-  BIND(IF(?count * 132 > 704, ?count * 132, 704) AS ?extent)
+  BIND(IF(?count * 132 > 528, ?count * 132, 528) AS ?extent)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-data-layout-appearance")) AS ?appearanceAttr)
   BIND(IRI(CONCAT(STR($this), "/~plot")) AS ?plot)
@@ -201,7 +201,7 @@ WHERE {
   OPTIONAL { ?unitAt l10n:of c:BytesPhrase ; l10n:name ?unitPicked }
   OPTIONAL { c:BytesPhrase rdfs:label ?unitEn FILTER(LANGMATCHES(LANG(?unitEn), "en")) }
   BIND(STR(COALESCE(?unitPicked, ?unitEn)) AS ?unit)
-  BIND(IF(?count * 132 > 704, ?count * 132, 704) AS ?extent)
+  BIND(IF(?count * 132 > 528, ?count * 132, 528) AS ?extent)
   BIND(STR(?extent + 18) AS ?edge)
   BIND(18 + FLOOR(IF(BOUND(?total), ?extent * ?offset / ?total, ?index * ?extent / ?count)) AS ?x)
   BIND(18 + FLOOR(IF(BOUND(?total), ?extent * (?offset + ?length) / ?total, (?index + 1) * ?extent / ?count)) AS ?end)
@@ -332,7 +332,7 @@ WHERE {
   OPTIONAL { $this c:byteExtent ?total }
   OPTIONAL { ?firstField c:byteOffset ?firstOffset }
   OPTIONAL { ?lastField c:byteOffset ?lastOffset ; c:byteLength ?lastLength }
-  BIND(IF(?count * 132 > 704, ?count * 132, 704) AS ?extent)
+  BIND(IF(?count * 132 > 528, ?count * 132, 528) AS ?extent)
   BIND(18 + FLOOR(IF(BOUND(?total), ?extent * ?firstOffset / ?total, ?first * ?extent / ?count)) AS ?x)
   BIND(18 + FLOOR(IF(BOUND(?total), ?extent * (?lastOffset + ?lastLength) / ?total, (?last + 1) * ?extent / ?count)) AS ?end)
   FILTER(BOUND(?x) && BOUND(?end))

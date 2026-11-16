@@ -15,8 +15,8 @@ const num = (ctx: RuleContext, subject: Term, local: string) => {
 }
 const label = (ctx: RuleContext, node: Term) => text(ctx, node, C('label')) ?? ''
 
-/** 132 units a field, at least 704; 18 on each side. */
-const extentOf = (count: number) => Math.max(704, count * 132)
+/** 132 units a field, at least 528; 18 on each side. */
+const extentOf = (count: number) => Math.max(528, count * 132)
 const fieldsOf = (ctx: RuleContext, layout: Term) => ctx.match(layout, C('byteField'), null).map((q) => q.object)
 /** Where a position (an offset with an extent, else an index) falls on the strip. */
 const point = (extent: number, total: number | undefined, count: number, position: number) =>

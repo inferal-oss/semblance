@@ -93,17 +93,17 @@ describe('ByteLayout', () => {
       expect(first.record).toContain('aria-label="Record header"')
       expect(first.record).toContain('role="list"')
       expect(first.record).toContain('aria-label="@0 · Tag · ASCII · 2 B"')
-      expect(first.record).toContain('width="156"')
+      expect(first.record).toContain('width="117"')
       expect(first.record).toContain('class="used"')
       expect(first.record.match(/class="used"/g)).toHaveLength(1)
       expect(first.record.match(/class="bracket"/g)).toHaveLength(2)
-      expect(first.record).toContain('viewBox="0 0 740 122"')
+      expect(first.record).toContain('viewBox="0 0 564 122"')
       // Fields in their index's order, though stated in another.
       expect([...first.record.matchAll(/class="label"[^>]*>([^<]*)</g)].map((m) => m[1])).toEqual(['Tag', 'Length', 'Payload'])
       expect(first.recordText).toBe('Record header\n@0 · Tag · ASCII · 2 B\n@2 · Length · 3 B\n@5 · Payload · 4 B')
       expect(first.chunkText).toBe('Chunk\nckID · FourCC · 4 B\nckSize · 4 B\nckData · ckSize bytes')
       expect(first.chunk).toContain('class="continuation"')
-      expect(first.chunk).toContain('viewBox="0 0 740 90"')
+      expect(first.chunk).toContain('viewBox="0 0 564 90"')
       expect(first.chunk).not.toContain('class="bracket"')
 
       // The switch, clicked: the style is graph state on the diagram.
@@ -120,13 +120,13 @@ describe('ByteLayout', () => {
       expect(both((m) => m.add([['chunk', 'byteField', m.n('ck-pad')], ['ck-pad', 'byteIndex', m.int(3)], ['ck-pad', 'label', m.f.literal('pad')], ['ck-pad', 'byteLength', m.int(1)]])).chunkText).toBe(
         'Chunk\nckID · FourCC · 4 B\nckSize · 4 B\nckData · ckSize bytes\npad · 1 B',
       )
-      expect(sparql!.seen().chunk).toContain('viewBox="0 0 740 90"')
+      expect(sparql!.seen().chunk).toContain('viewBox="0 0 564 90"')
       const schematic = both((m) => (m.set('record', 'byteExtent', undefined), m.set('payload', 'byteLength', undefined)))
       expect(schematic.record).toContain('class="variable"')
       expect(schematic.recordText).toContain('@4 · Payload · …')
       const unbracketed = both((m) => (m.runtime.apply({ remove: m.store.match(m.n('record'), m.c('byteSpan'), null), add: [] }), m.set('record', 'label', m.f.literal('Header'))))
       expect(unbracketed.record).not.toContain('class="bracket"')
-      expect(unbracketed.record).toContain('viewBox="0 0 740 90"')
+      expect(unbracketed.record).toContain('viewBox="0 0 564 90"')
       sparql!.dispose()
       fn!.dispose()
     }, 120_000)
