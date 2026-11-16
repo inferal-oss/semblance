@@ -25,7 +25,7 @@ Trust is the host's decision, never the graph's: no triple makes a graph trusted
   ```
 
   or give a projection the policy yourself: `runtime.project({ …, policy: authoredPolicy(trusted) })`,
-  `renderToString({ …, policy })`, `compileStyles(store, { policy, onRefused })`.
+  `renderToString({ …, policy, onRefused })`, `compileStyles(store, { policy, onRefused })`.
 
 The policy is read from a **trusted** store: one with the ontology and your own graphs, and not the
 author's, which could add to its lists. `mount` reads it from a store of `graphs` alone, kept apart
@@ -304,8 +304,9 @@ have a script element.` Where they go:
 - **`renderToString`**: to its `onRefused`, by default `console.warn`, from both the projection and
   the stylesheet (and a turn over a work budget); `rendered.projection.index.refusals` has the
   projection's afterwards.
-- **`renderToStream`**: the projection's to `console.error`. It compiles no stylesheet: compile the one
-  it links with `compileStyles(store, { policy, onRefused })`.
+- **`renderToStream`**: the projection's to its `onRefused` (it takes `renderToString`'s options), by
+  default `console.warn`. It compiles no stylesheet: compile the one it links with
+  `compileStyles(store, { policy, onRefused })`.
 - **A live example**: as warnings under its editor, the same on the server and in the browser.
 - **`HtmlIndex.refusals`**: every reason by node, kept while the node exists. Each reason is
   reported once per node.
