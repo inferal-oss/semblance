@@ -1,6 +1,7 @@
 # The demo site on GitHub Pages: the multi-file Vite build (hashed, cacheable assets; the
 # Oxigraph WASM and Semblance's engines as their own files, each fetched only for its store). The single-file build is kept as
-# a downloadable artifact of each run. Tests run alongside and do not hold up the deploy.
+# a downloadable artifact of each run. The full suite does not run here: it is sharded and run locally
+# on main (npm run test:full).
 name: Pages
 
 on:
@@ -52,17 +53,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 26
-          cache: npm
-      - run: npm ci
-      - run: rustup target add wasm32-unknown-unknown
-      - run: npm run engine:build
-      - run: npx vitest run

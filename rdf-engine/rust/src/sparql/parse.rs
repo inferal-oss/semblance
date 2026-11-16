@@ -2,7 +2,7 @@
 
 use super::*;
 use super::{QuadTemplate, Target, Transfer, Update, UpdateOp};
-use crate::dict::{Dict, Key, NONE, RDF_DIR_LANG_STRING, RDF_LANG_STRING};
+use crate::dict::{DEFAULT_GRAPH_ID, Dict, Key, NONE, RDF_DIR_LANG_STRING, RDF_LANG_STRING};
 use crate::iri;
 use crate::lex::{Cur, Res, has_scheme, pn_chars, pn_chars_base, pn_chars_u};
 use crate::idmap::{IdMap, bytes_key};
@@ -50,7 +50,12 @@ struct P<'a, 'd> {
     /// Variables standing for reifiers the query leaves unnamed (`{| |}`, `<< >>`, `~`).
     anon_reifiers: Vec<Var>,
     /// The top-level SELECT was `SELECT *`.
-    top_star: bool,
+    /// Whether the SELECT parsed last was SELECT * (its trailing VALUES are in scope).
+    last_star: bool,
+    /// The BASE and PREFIX declarations so far, as written, one a line: a SERVICE's text starts with them.
+    decls: Vec<u8>,
+    /// A SERVICE pattern was parsed.
+    service: bool,
 }
 
 /// One element of a triples block: a plain triple or a path.
@@ -86,7 +91,9 @@ fn new_parser<'a, 'd>(text: &'a [u8], base: &[u8], dict: &'d mut Dict) -> P<'a, 
         template_bnodes: IdMap::new(),
         in_template: false,
         anon_reifiers: Vec::new(),
-        top_star: false,
+        last_star: false,
+        decls: if base.is_empty() { Vec::new() } else { [&b"BASE <"[..], base, &b">\n"[..]].concat() },
+        service: false,
     }
 }
 
@@ -357,10 +364,23 @@ impl P<'_, '_> {
 
     // --- queries -----------------------------------------------------------------
 
+    /// The text from `start` to here, as a declaration a SERVICE's text repeats.
+    fn decl(&mut self, start: usize) {
+        let mut end = self.c.i;
+        while end > start && self.c.s[end - 1].is_ascii_whitespace() {
+            end -= 1;
+        }
+        self.decls.extend_from_slice(&self.c.s[start..end]);
+        self.decls.push(b'\n');
+    }
+
     fn prologue(&mut self) -> Res<()> {
         loop {
+            self.ws();
+            let decl = self.c.i;
             if self.kw(b"BASE") {
                 self.base = self.iri_string()?;
+                self.decl(decl);
             } else if self.kw(b"PREFIX") {
                 self.ws();
                 let start = self.c.i;
@@ -379,6 +399,7 @@ impl P<'_, '_> {
                 let ns = self.iri_string()?;
                 self.namespaces.push(ns);
                 self.prefixes.set(&bytes_key(&prefix), self.namespaces.len() as u32 - 1);
+                self.decl(decl);
             } else if self.kw(b"VERSION") {
                 self.ws();
                 match self.c.peek() {
@@ -406,6 +427,7 @@ impl P<'_, '_> {
             from: Vec::new(),
             from_named: Vec::new(),
             base: Vec::new(),
+            service: false,
         };
         if self.at_kw(b"SELECT") {
             q.select = self.select(true, &mut q)?;
@@ -477,13 +499,8 @@ impl P<'_, '_> {
         if self.kw(b"VALUES") {
             let values = self.data_block()?;
             pattern_vars(&values, &mut values_vars);
-            if self.top_star {
-                q.select.project = self.visible_in(&q.select.pattern);
-                for v in &values_vars {
-                    if !q.select.project.contains(v) {
-                        q.select.project.push(*v);
-                    }
-                }
+            if q.form == Form::Select && self.last_star {
+                pattern_vars(&values, &mut q.select.project);
             }
             q.select.values = Some(Box::new(values));
         }
@@ -507,6 +524,7 @@ impl P<'_, '_> {
         }
         q.vars = core::mem::take(&mut self.vars);
         q.base = core::mem::take(&mut self.base);
+        q.service = self.service;
         Ok(q)
     }
 
@@ -589,9 +607,7 @@ impl P<'_, '_> {
         s.aggregates = core::mem::take(&mut self.aggs);
         s.aggregates.extend(body.aggregates);
         let _ = first_var;
-        if top {
-            self.top_star = star;
-        }
+        self.last_star = star;
         if star {
             if s.group.is_some() || !s.aggregates.is_empty() {
                 return self.c.err("SELECT * with GROUP BY");
@@ -796,10 +812,15 @@ impl P<'_, '_> {
                 from: Vec::new(),
                 from_named: Vec::new(),
                 base: Vec::new(),
+                service: false,
             };
             let mut s = self.select(false, &mut dummy)?;
             if self.kw(b"VALUES") {
-                s.values = Some(Box::new(self.data_block()?));
+                let values = self.data_block()?;
+                if self.last_star {
+                    pattern_vars(&values, &mut s.project);
+                }
+                s.values = Some(Box::new(values));
             }
             self.expect(b"}", "expected }")?;
             return Ok((Pattern::Sub(Box::new(s)), None));
@@ -826,6 +847,12 @@ impl P<'_, '_> {
                 g = Pattern::Minus(Box::new(g), Box::new(p));
             } else if self.kw(b"LATERAL") {
                 let p = self.group_pattern()?;
+                let (mut bound, mut defined) = (Vec::new(), Vec::new());
+                pattern_vars(&g, &mut bound);
+                defined_vars(&p, &mut defined);
+                if defined.iter().any(|v| bound.contains(v)) {
+                    return self.c.err("LATERAL binds a variable already in scope");
+                }
                 g = Pattern::Lateral(Box::new(g), Box::new(p));
             } else if self.kw(b"BIND") {
                 self.expect(b"(", "expected (")?;
@@ -851,9 +878,27 @@ impl P<'_, '_> {
                 g = join(g, Pattern::Graph(t, Box::new(p)));
             } else if self.kw(b"SERVICE") {
                 let silent = self.kw(b"SILENT");
-                self.var_or_iri()?;
-                self.group_pattern()?;
-                g = join(g, Pattern::Service(silent));
+                let endpoint = self.var_or_iri()?;
+                let local = match endpoint {
+                    Tv::Var(v) => {
+                        let mut bound = Vec::new();
+                        pattern_vars(&g, &mut bound);
+                        bound.contains(&v)
+                    }
+                    _ => true,
+                };
+                self.ws();
+                let start = self.c.i;
+                let p = self.group_pattern()?;
+                let mut text = self.decls.clone();
+                text.extend_from_slice(b"SELECT * WHERE ");
+                text.extend_from_slice(&self.c.s[start..self.c.i]);
+                let mut vars = Vec::new();
+                pattern_vars(&p, &mut vars);
+                vars.retain(|&v| !self.vars[v as usize].starts_with(b"_"));
+                let names = vars.iter().map(|&v| self.vars[v as usize].clone()).collect();
+                self.service = true;
+                g = join(g, Pattern::Service(Box::new(Service { silent, endpoint, local, text, vars, names })));
             } else if self.at(b"{") {
                 let mut p = self.group_pattern()?;
                 while self.kw(b"UNION") {
@@ -2005,7 +2050,8 @@ pub fn pattern_vars(p: &Pattern, out: &mut Vec<Var>) {
         }
     };
     match p {
-        Pattern::Unit | Pattern::Service(_) => {}
+        Pattern::Unit => {}
+        Pattern::Service(sv) => sv.vars.iter().for_each(|v| add(*v, out)),
         Pattern::Bgp(ts) => {
             for t in ts {
                 tv_vars(&t.s, out);
@@ -2029,6 +2075,42 @@ pub fn pattern_vars(p: &Pattern, out: &mut Vec<Var>) {
         Pattern::Values(vs, _) => vs.iter().for_each(|v| add(*v, out)),
         Pattern::Sub(s) => s.project.iter().for_each(|v| add(*v, out)),
         Pattern::Magic(m) => m.ins.iter().chain(&m.outs).for_each(|x| tv_vars(x, out)),
+    }
+}
+
+/// Variables a pattern defines: binds by BIND, VALUES or a subquery's SELECT
+/// expression (an aggregate's too), as LATERAL's scope rule counts them. A
+/// triple's variables and a plain GROUP BY key do not count, nor does a
+/// FILTER's EXISTS.
+fn defined_vars(p: &Pattern, out: &mut Vec<Var>) {
+    match p {
+        Pattern::Unit | Pattern::Service(_) | Pattern::Bgp(_) | Pattern::Magic(_) => {}
+        Pattern::Join(a, b) | Pattern::LeftJoin(a, b, _) | Pattern::Union(a, b) | Pattern::Lateral(a, b) | Pattern::Minus(a, b) => {
+            defined_vars(a, out);
+            defined_vars(b, out);
+        }
+        Pattern::Filter(_, a) | Pattern::Graph(_, a) => defined_vars(a, out),
+        Pattern::Extend(a, v, _) => {
+            defined_vars(a, out);
+            out.push(*v);
+        }
+        Pattern::Values(vs, _) => out.extend(vs),
+        Pattern::Sub(s) => {
+            let mut inner = Vec::new();
+            defined_vars(&s.pattern, &mut inner);
+            inner.extend(s.extend.iter().map(|(v, _)| *v));
+            for (e, v) in s.group.iter().flatten() {
+                match (e, v) {
+                    (Expr::Var(x), Some(v)) if x == v => {}
+                    (_, Some(v)) => inner.push(*v),
+                    _ => {}
+                }
+            }
+            if let Some(vs) = &s.values {
+                defined_vars(vs, &mut inner);
+            }
+            out.extend(s.project.iter().filter(|v| inner.contains(v)));
+        }
     }
 }
 
@@ -2086,12 +2168,13 @@ impl P<'_, '_> {
         self.hidden = 0;
         if self.kw(b"LOAD") {
             let silent = self.kw(b"SILENT");
-            self.iri()?;
+            let iri = self.iri()?;
+            let mut graph = DEFAULT_GRAPH_ID;
             if self.kw(b"INTO") {
                 self.expect_kw(b"GRAPH", "expected GRAPH")?;
-                self.iri()?;
+                graph = self.iri()?;
             }
-            return Ok(UpdateOp::Load { silent });
+            return Ok(UpdateOp::Load { silent, iri, graph });
         }
         for (word, drop) in [(&b"CLEAR"[..], false), (b"DROP", true)] {
             if self.kw(word) {

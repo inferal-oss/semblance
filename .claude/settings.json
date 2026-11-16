@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(scripts/test-queue.sh npx vitest run *)",
+      "Bash(/Volumes/Projects/semblance/scripts/test-queue.sh npx vitest run *)",
+      "Bash(npm test *)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx tsx rdf-engine/host/parse-check.ts *)",
+      "Bash(git fetch *)"
+    ]
+  }
+}

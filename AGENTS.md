@@ -39,13 +39,79 @@ performs the effects of graph state (the address, storage, timers, network captu
    structural ones: Classic, Tracker, Doodle, Cupertino, Fluent), light and dark, at phone width,
    and in an RTL language. Theme rules sit in a later cascade layer than component rules: a
    theme that redeclares a component's general property (a window's inset) overrides it everywhere.
-   Labels come in English, Ukrainian, German and Arabic (`@en`, `@uk`, `@de`, `@ar`).
+   Labels come in English, Ukrainian, German and Arabic (`@en`, `@uk`, `@de`, `@ar`). The rule covers
+   the chrome: the framework's `c:Phrase`s and the options it shows, and the site's pages, groups,
+   example names, specimen titles, shell and inspector (`test/translations.test.ts` lists what is
+   missing). A framework string goes in a `c:Phrase` used by both the SPARQL rule and its twin,
+   never a literal in the rule. Prose stays in English: specimen help, example intros, walkthroughs,
+   the docs and the home page, and the sample content of specimens and examples, since it is written
+   around terms of the ontology and changes with them.
 8. **Accessible by construction.** Use the WAI-ARIA pattern for the widget; ARIA relationships by
    minted IRI; keyboard patterns via `key:navigation`; announcements via `ann:announces`.
 9. **Slugs are global.** `sem:slug` becomes `data-sem-c`; two classes with one slug share styles.
    Prefix slugs outside the framework (`"ex-tally"`).
 10. **New ontology files** go into `ONTOLOGY_FILES` (`src/ontology.ts`) in load order; the dev
     server must be restarted to see a new file (Vite's glob is fixed at start).
+11. **Every component class has a group.** A new `c:` component class gets a `sem:group` in
+    `ontology/components/groups.ttl` (the Reference page lists components by group, and
+    `test/reference.test.ts` fails on any left out). A class that is a part, a key binding or a value
+    rather than a component of its own is listed among that test's shared or part classes instead.
+12. **A component's change is recorded.** Every edit under `ontology/` that alters what the
+    ontology says about a component is a version step with a stated reason (below, "When a component
+    changes"). A consumer's move is written for them: going forward and back returns what was there.
+
+## When a component changes
+
+`ontology/versions.ttl` holds each component's version and a hash of what the ontology says about
+it (its description, its rules, reactions, styles and shapes); `ontology/terms.ttl` lists every
+name a consumer states or reads. Both are generated. After any edit under `ontology/`:
+
+```bash
+npm run versions -- --check
+```
+
+It fails on a hash that does not match, a term that went, a term that came, or a change left
+unfinished, and says what to do. `test/versions.test.ts` and the Versions workflow fail the same
+way, and the workflow also fails a pull request whose component changed without its version going up.
+Every changed component needs one of two decisions, and it is yours to make honestly:
+
+- **A consumer would notice** (a term moved or went, a shape now rejects what it accepted, a
+  rendering's output or a term's meaning changed, the cases `docs/RELEASING.md` calls breaking):
+  write a change.
+  ```bash
+  npm run change -- new <slug> --affects c:Button,c:Choice
+  ```
+  Fill in `ontology/changes/<slug>.ttl`, then `npm run versions -- --bump --change <slug>`.
+- **Nothing a consumer would notice** (a refactor, a comment or label, a style that looks the same):
+  `npm run versions -- --bump --internal "why"`. A removed or renamed term cannot go this way.
+
+Commit `ontology/versions.ttl`, `ontology/terms.ttl` and the change with the work. On a merge
+conflict in the two generated files, take the base branch's and bump again; never edit them by hand.
+They and `ontology/changes/` stay out of `ONTOLOGY_FILES`: they are read by the tooling, not loaded.
+
+**Writing a change.** A `chg:Change` (`ontology/layers/change.ttl`) is what happened, for someone who
+has only this to go on, a person or an agent:
+
+- `chg:motivation`: why. `chg:substance`: what changed, in full, including what the migrations do not
+  express. `chg:forwardGuide` and `chg:backwardGuide`: how to move each way and how to settle by hand
+  what the tool reports. `chg:affects`: every component it steps. `chg:retires`: every term it removes
+  that no `mig:renames` names.
+- `chg:migrations` lists its `mig:Migration`s in order, applied together or not at all. One change is
+  usually several migrations, one per component. A change of meaning or behaviour alone has none.
+- The text helps judgement. The tools decide: write the change so they can check the move.
+
+**Writing a migration** (`ontology/layers/migration.ttl`), `mig:of` a component `mig:from` a version
+`mig:to` the next. **Reversibility comes first:**
+
+- A rename is `mig:renames [ mig:old c:a ; mig:new c:b ]`: it reaches every occurrence and is its own reverse.
+- A change of shape is `mig:forward` and `mig:backward`, each a SPARQL Update (`DELETE`/`INSERT WHERE`),
+  with `mig:example` Turtle before and after, which `test/reversibility.test.ts` runs in both directions.
+  Mint IRIs as `<focus>/~<local>`, as rules do.
+- When several terms converge on one, keep which one each instance was: `mig:discriminator`, written by
+  `mig:forward` and read by `mig:backward`. Plain renames onto one term are not a migration.
+- Only when going back is impossible, say what is lost: `mig:loses`. It is the exception, and it is read
+  by whoever goes back. A `mig:forward` with neither `mig:backward` nor `mig:loses` fails the check.
+- A retired name is never reused.
 
 ## Skills
 
@@ -73,14 +139,26 @@ Code and `.codex/skills/` for Codex; read the file directly if your tool does no
 npm install
 npm run engine:build   # Semblance's own SPARQL engines (WAT and Rust) into rdf-engine/build/
 npm run dev            # the site, http://localhost:5173
-npm test               # the given files (queued; see below)
+npm test               # the given files (queued, when ARM is not available; see below)
 npm run test:full      # the full suite, in queued shards, with one summary
 npx tsc --noEmit       # typecheck
+npm run pack:check     # the npm packages as a consumer gets them (docs/RELEASING.md)
 ```
 
-- **Tests go through the queue: at most two vitest runs at a time, machine-wide, first come first
+- **Heavy work goes through ARM when it is available.** [ARM](https://getarm.org) (Agent Resource
+  Manager) admits work by the machine's live CPU and memory headroom, across every agent and tool.
+  If it is installed and `arm rollout check --cwd . --adapter <codex|claude|generic> --session
+  <your session UUID> --json` lets you coordinate (identify and acknowledge as your ARM
+  instructions say), run tests, engine builds and other resource-intensive commands under an ARM
+  lease, waiting for capacity instead of working around a refusal:
+  `arm run --agent <contact> --cpu 2 --memory 4GiB --ttl 30m --wait --quiet --reason "<what>" -- npx vitest run --maxWorkers=2 <files>`;
+  the full suite with `--cpu 6 --memory 10GiB --ttl 90m … -- npm run test:full` (its shards still
+  pass through the queue below). Read `arm log <run>` when a quiet run fails.
+- **Only when ARM is not available, tests go through the queue**, and tell the operator that
+  installing ARM (<https://getarm.org>) would let agents share the machine by its real capacity.
+  **The queue: at most two vitest runs at a time, machine-wide, first come first
   served, each with at most 2 workers (the queue lowers a larger `--maxWorkers`).** Many concurrent runs have exhausted the machine's memory,
-  and a plain lock starves older waiters. Always run tests as
+  and a plain lock starves older waiters. Without ARM, always run tests as
   `scripts/test-queue.sh npx vitest run --maxWorkers=2 <files>` (`npm test` does this), in the
   foreground; from a worktree whose checkout predates the script, use the main checkout's copy by
   its absolute path. Never call `lockf` on the test lock directly: it jumps the queue. A run that
@@ -115,6 +193,12 @@ npx tsc --noEmit       # typecheck
   (#8) for the framework, site and examples; the engine tracker (#9) for `rdf-engine/`. Tick its
   boxes as the work lands on `main`, and close it when it is pushed. Work in progress that has no
   issue is invisible to the next person - or agent - who picks it up.
+- **Write on GitHub in the project's voice.** Issues, comments, PRs and commits go out under the
+  maintainer's own account, so they never speak of "the user", "the operator" or "I was asked",
+  and never narrate the chat they came from. State the need, the decision or the gate itself:
+  "Wanted: …", "Decided: no Rust port; the probes get faster instead (#137)", "Implementation waits
+  for design approval", "Merges after review in the browser". Write it as a maintainer would in their
+  own tracker: plain, direct, about the software.
 - **Finish an issue by shipping it.** A small issue done in the shared checkout: commit, run the
   affected tests, push `main`, tick and close the issue. A larger one (a subagent's branch, several
   commits, anything a reviewer should see as a whole): push its branch and open a pull request
@@ -122,13 +206,29 @@ npx tsc --noEmit       # typecheck
   merge it once the affected tests pass (the full suite runs on `main` after a batch of merges).
 - Several agents often work at once. Do non-trivial work in your own git worktree
   (`git worktree add <dir> HEAD`, symlink `node_modules`, copy `rdf-engine/build/*.wasm`), and
-  rebase onto `main` before committing.
+  rebase onto `main` before committing. **After every rebase, run `npm run engine:build`**: the
+  engines' ABI changes with engine work (it is 2 since PR #172), and a stale build fails with
+  "engine ABI 1, host expects 2" or odd engine test failures. Never copy `rdf-engine/build` from
+  another checkout without rebuilding.
 - In a shared checkout, stage only your own hunks (`git add -p`, or `git apply --cached` of your
   patch); never `git add -A` / `git commit -a`.
 - Commit at every verified step (typecheck and the relevant tests green) with a message that says
   what changed and why. Push `main` to `origin` (github.com/inferal-oss/semblance) when the
   affected tests pass; GitHub Pages deploys the site from `main` to <https://semblance.dev>.
-- Licence: `MIT OR Apache-2.0`. The npm package is `@inferal-oss/semblance`.
+- **Push what you commit.** Push your branch at every verified commit, not only when opening a PR.
+  A worktree's local commits are invisible to everyone else, and they are lost to the plan when its
+  session ends or is archived (the RDF editor's last four commits once sat unseen that way while the
+  site showed the older editor).
+- **Re-read a shared issue right before editing it.** The plan issues (#8, #9) and their tables are
+  edited by several agents at once; `gh issue edit --body-file` from a copy read earlier undoes their
+  edits. Fetch the body, change it, and write it back in one step; check afterwards that your change
+  and theirs are both there.
+- **Gates are the maintainer's.** Don't merge past a failing review gate (an approvals check), a "stays unmerged until …" condition, or a design-approval wait without the
+  maintainer's go-ahead. When a permission check blocks a merge, a force-push or another action,
+  stop and ask the maintainer in the same session; another agent never does it in your place.
+- Licence: `MIT OR Apache-2.0`. The npm packages are `@semblance-dev/semblance`,
+  `@semblance-dev/semblance-react`, `@semblance-dev/rdf-engine-wat` and `@semblance-dev/rdf-engine-rust`
+  (`docs/RELEASING.md`).
 
 ## Map
 
@@ -144,9 +244,16 @@ npx tsc --noEmit       # typecheck
 | `src/behaviour/` | event bus, reactions, scheduler, clock |
 | `src/view/` | maintained views (IVM, `docs/IVM.md`) |
 | `src/components/`, `src/layers/` | function twins and reaction functions |
-| `src/web/`, `src/node/` | store loading per platform; `mount` |
+| `src/web/`, `src/node/` | store loading per platform; `mount`; taking over server-rendered HTML (`src/web/takeover.ts`) |
+| `src/server/`, `semblance.config.ts` | server-side rendering (`docs/SSR.md`): `renderToString`, documents, sites, a warm runtime per request (`warm.ts`); the static build and the request handler are in `src/node/site.ts`, the Vite plugin in `src/node/vite.ts`, the CLI in `bin/`; Cloudflare Workers in `docs/WORKERS.md`, `examples/workers/` |
+| `src/subset.ts` | the part of the ontology an app uses, shipped in place of the whole (`docs/SUBSET.md`) |
+| `src/jelly/` | RDF Jelly, binary and streaming: the TypeScript codec, and Jelly for stores without an engine (`docs/JELLY.md`; the engines' own are in `rdf-engine/`, `JELLY.md`) |
 | `src/sandbox.ts` | live examples: each in a sandbox of its own (host effect) |
+| `src/migrate/`, `ontology/changes/`, `ontology/versions.ttl`, `ontology/terms.ttl` | versions and their check, changes, `semblance migrate` (`docs/MIGRATIONS.md`); `src/retired.ts` is what a page does with a retired term |
+| `src/safety.ts`, `ontology/layers/safety.ttl` | safe authoring: what an authored graph may render (`docs/SAFETY.md`) |
 | `src/store/` | store adapters (Oxigraph, N3, hybrid); `rdf-engine/` has Semblance's own engines |
 | `demo/` | the site (`app.ttl`, `gallery/`, `main.ts` is the host) |
 | `examples/hello/` | the Getting started example |
 | `test/` | unit, integration, parity, cost and soak tests |
+| `scripts/build-package.ts`, `scripts/pack-check.ts`, `scripts/release-version.ts` | the npm packages: JavaScript and declarations into `lib/` from `exports`, the tarball check, one version for all four (`docs/RELEASING.md`, `CHANGELOG.md`) |
+| `packages/` | `react/` (`@semblance-dev/semblance-react`), `rdf-engine-wat/` and `rdf-engine-rust/` (the engine builds as packages; the core meets them in `src/store/engines/`) |

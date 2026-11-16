@@ -126,6 +126,17 @@ function tasting(prefer: 'sparql' | 'function' = 'sparql') {
 }
 
 describe('the coffee tasting example', () => {
+  it.each(['sparql', 'function'] as const)('opens with the one intro, the one that names the four libraries (%s)', (prefer) => {
+    const h = tasting(prefer)
+    const f = h.store.factory
+    const intro = h.store.match(f.namedNode(UI + 'ex-foreign-intro'), f.namedNode('https://semblance.dev/ns/component#label'), null)
+    expect(intro.map((q) => (q.object as { language: string }).language).sort()).toEqual(['', 'ar', 'de', 'uk'])
+    h.open()
+    const shown = (h.shell.nodeOf(UI + 'ex-foreign-intro/~root') as HTMLElement).textContent!
+    expect(shown).toContain('Four open-source libraries')
+    expect(shown).not.toContain('The stars are')
+  })
+
   it('loads nothing until it is shown, then mounts the chart and the chosen coffee’s rating', async () => {
     const h = tasting()
     expect(h.islands.size).toBe(0)

@@ -98,8 +98,10 @@ const menu: FnRule = (ctx, focus) => {
     o.attr(trigger, 'data-sem-shortcut', 'escape').attr(trigger, 'data-sem-shortcut-apple', 'Esc').attr(trigger, 'data-sem-shortcut-other', 'Esc')
     const popup = o.el('popup', 'Div', { id: popupId, class: 'sem-menu-popup' }, items)
     o.attr(popup, 'role', 'menu').attr(popup, 'aria-labelledby', triggerId).attr(popup, 'data-sem-anchor', triggerId)
+    // Opened from the trigger, the focus goes to the first item; closed, back to the trigger.
+    o.attr(popup, 'data-sem-takes-focus', '')
     parts.push(popup)
-  }
+  } else o.attr(trigger, 'data-sem-takes-focus', '')
   const root = o.el('root', 'Div', {}, parts)
   if (open) o.attr(root, 'data-open', 'true')
   o.renders(root)
@@ -111,14 +113,16 @@ const menuItem: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const label = labelOf(ctx, focus)
   const icon = text(ctx, focus, C.icon)
+  const href = text(ctx, focus, NS.nav + 'href') ?? text(ctx, focus, NS.c + 'href')
+  const disabled = isTrue(ctx.object(focus, C.disabled))
   if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Div', {}, [o.text('label', `  › ${icon ? icon + ' ' : ''}${label}`)]))
+    o.renders(o.el('root', 'Div', {}, [o.text('label', `  › ${icon ? icon + ' ' : ''}${label}${href && !disabled ? ` <${href}>` : ''}`)]))
     return o.quads
   }
-  const disabled = isTrue(ctx.object(focus, C.disabled))
   const icons = glyph(o, 'icon', icon)
   if (icons[0]) o.attr(icons[0], 'aria-hidden', 'true')
-  const root = o.el('root', 'Button', { type: 'button', disabled: disabled ? '' : undefined }, [
+  const linked = href !== undefined && !disabled
+  const root = o.el('root', linked ? 'A' : 'Button', linked ? { href } : { type: 'button', disabled: disabled ? '' : undefined }, [
     ...icons,
     o.el('label', 'Span', { class: 'sem-label' }, [o.text('label-text', label)]),
   ])

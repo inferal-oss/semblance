@@ -106,6 +106,13 @@ export interface Query {
   templateText?: string
 }
 
+/** One operation of a SPARQL Update: DELETE, INSERT, WHERE. */
+export interface UpdateOp {
+  del: Triple[]
+  ins: Triple[]
+  where: Group
+}
+
 export class SparqlSyntaxError extends Error {}
 
 interface Tok {
@@ -304,6 +311,32 @@ class Parser {
       return { text: this.text, form: 'construct', prefixes: this.prefixes, bodyAt, select, template, templateText }
     }
     this.fail('not a SELECT, CONSTRUCT or ASK')
+  }
+
+  /** DELETE { } INSERT { } WHERE { } operations, separated by semicolons (src/migrate/). */
+  update(): { ops: UpdateOp[]; prefixes: Map<string, string> } {
+    const ops: UpdateOp[] = []
+    for (;;) {
+      this.prologue()
+      if (this.done) break
+      let del: Triple[] = []
+      let ins: Triple[] = []
+      if (this.eat('DELETE')) {
+        this.expect('{')
+        del = this.triplesBlock('}')
+        this.expect('}')
+      }
+      if (this.eat('INSERT')) {
+        this.expect('{')
+        ins = this.triplesBlock('}')
+        this.expect('}')
+      }
+      if (!this.eat('WHERE')) this.fail('WHERE')
+      ops.push({ del, ins, where: this.group() })
+      if (!this.eat(';')) break
+    }
+    if (!this.done) this.fail('trailing text')
+    return { ops, prefixes: this.prefixes }
   }
 
   select(): Select {
@@ -730,6 +763,10 @@ class Parser {
 }
 
 /** Parse a query; `prefixes` are known beforehand (the runtime's). */
+export function parseUpdate(text: string, prefixes: Map<string, string> = new Map()): { ops: UpdateOp[]; prefixes: Map<string, string> } {
+  return new Parser(text, tokenize(text), prefixes).update()
+}
+
 export function parseQuery(text: string, prefixes: Map<string, string> = new Map()): Query {
   return new Parser(text, tokenize(text), prefixes).query()
 }

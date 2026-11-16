@@ -223,8 +223,8 @@ describe.each(['sparql', 'function'] as const)('the reference search (wat, %s ru
 })
 
 describe('the reference search and the address', () => {
-  it('a pick changes the address (#reference/c:List), as a step Back returns from', async () => {
-    const entries = [new URL('https://semblance.test/#reference/c:Window')]
+  it('a pick changes the address (/reference/c:List/), as a step Back returns from', async () => {
+    const entries = [new URL('https://semblance.test/reference/c:Window/')]
     let at = 0
     const history = {
       pushes: 0,
@@ -256,7 +256,7 @@ describe('the reference search and the address', () => {
     h.press('Enter')
     await new Promise((r) => setTimeout(r, 0))
     expect(h.subject()).toBe(C + 'List')
-    expect(location.hash).toBe('#reference/c:List')
+    expect(location.pathname + location.hash).toBe('/reference/c:List/')
     expect(history.pushes).toBe(1)
   })
 })
@@ -350,4 +350,23 @@ describe('a keystroke over every term', () => {
         `${typedBeforeMs.toFixed(1)} ms over ${before.terms} terms, ${typedMs.toFixed(1)} ms over ${after.terms}; moving ${movedBeforeMs.toFixed(1)} / ${movedMs.toFixed(1)} ms`,
     )
   }, 600_000)
+})
+
+/**
+ * A pick changes the subject on the node the search controls (ui:app ui:referenceSubject). Its
+ * options come from the tree (c:optionsFrom), not from that property, so their texts are not read
+ * again: the SPARQL rule reads the property only for a typeahead with c:optionsInUse (#379).
+ */
+describe('a pick over every term', () => {
+  it.each(['sparql', 'function'] as const)('does not read every term’s text again (%s rules)', (prefer) => {
+    const h = reference(prefer)
+    const texts = () => [...h.screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(C + 'TypeaheadTexts-')).reduce((n, [, s]) => n + s.runs, 0)
+    const pick = (text: string) => (h.press('/', h.document.body), h.type(text), h.press('Enter'))
+    pick('list')
+    expect(h.subject()).toBe(C + 'List')
+    const before = texts()
+    pick('window')
+    expect(h.subject()).toBe(C + 'Window')
+    expect(texts()).toBe(before)
+  })
 })

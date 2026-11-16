@@ -1,6 +1,8 @@
 @prefix sx: <https://semblance.dev/ns/sparql#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
@@ -313,7 +315,7 @@ c:TabsReceive a beh:Reaction ;
     beh:deletes """CONSTRUCT { $this c:tabs ?empty . ?last rdf:rest rdf:nil . $this c:selected ?old }
 WHERE {
   $event dnd:into $this ; dnd:carrying ?tab . ?tab a c:Tab .
-  FILTER EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?tab FILTER(?src != $this) }
+  FILTER EXISTS { ?src (c:tabs/rdf:first|c:tabs/rdf:rest+/rdf:first) ?tab FILTER(?src != $this) }
   BIND(IF(EXISTS { $this c:tabs rdf:nil }, rdf:nil, ?none) AS ?empty)
   OPTIONAL { $this c:tabs/rdf:rest* ?last . ?last rdf:rest rdf:nil }
   OPTIONAL { $this c:selected ?old }
@@ -321,7 +323,7 @@ WHERE {
     beh:inserts """CONSTRUCT { $this c:tabs ?head . ?last rdf:rest ?cell . ?cell rdf:first ?tab ; rdf:rest rdf:nil . $this c:selected ?tab }
 WHERE {
   $event dnd:into $this ; dnd:carrying ?tab . ?tab a c:Tab .
-  FILTER EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?tab FILTER(?src != $this) }
+  FILTER EXISTS { ?src (c:tabs/rdf:first|c:tabs/rdf:rest+/rdf:first) ?tab FILTER(?src != $this) }
   BIND(IRI(CONCAT(STR($this), "/~cell-", MD5(STR(?tab)))) AS ?cell)
   BIND(IF(EXISTS { $this c:tabs rdf:nil }, ?cell, ?none) AS ?head)
   OPTIONAL { $this c:tabs/rdf:rest* ?last . ?last rdf:rest rdf:nil }
@@ -339,7 +341,7 @@ WHERE {
   $event dnd:carrying ?tab ; dnd:into ?into . ?tab a c:Tab .
   ?src c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?next .
   BIND(EXISTS { ?into c:splitsAt ?edge } AS ?beside)
-  BIND(NOT EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?other FILTER(?other != ?tab) } AS ?only)
+  BIND(NOT EXISTS { ?src (c:tabs/rdf:first|c:tabs/rdf:rest+/rdf:first) ?other FILTER(?other != ?tab) } AS ?only)
   FILTER(IF(?beside, ?src != $this || !?only, ?into = $this && ?src != $this))
   BIND(IF(EXISTS { ?src c:tabs ?cell }, ?cell, ?none) AS ?head)
   BIND(IF(EXISTS { ?src c:selected ?tab }, ?tab, ?none) AS ?selected)
@@ -350,7 +352,7 @@ WHERE {
   $event dnd:carrying ?tab ; dnd:into ?into . ?tab a c:Tab .
   ?src c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?next .
   BIND(EXISTS { ?into c:splitsAt ?edge } AS ?beside)
-  BIND(NOT EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?other FILTER(?other != ?tab) } AS ?only)
+  BIND(NOT EXISTS { ?src (c:tabs/rdf:first|c:tabs/rdf:rest+/rdf:first) ?other FILTER(?other != ?tab) } AS ?only)
   FILTER(IF(?beside, ?src != $this || !?only, ?into = $this && ?src != $this))
   BIND(IF(EXISTS { ?src c:tabs ?cell }, ?next, ?none) AS ?head)
   BIND(IF(?only, c:CloseTile, ?none) AS ?close)
@@ -361,7 +363,7 @@ WHERE {
 # --- Segmented control -------------------------------------------------------------------
 
 c:Segmented a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Chooser , c:Selector ;
     rdfs:comment """Sets one property (c:property) of one node (c:controls). The options are not
 configured: they are the individuals in the property's rdfs:range, ordered by sem:order,
 labelled by rdfs:label and sem:symbol."""@en ;
@@ -387,10 +389,11 @@ c:SegmentedRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?button .
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:hasChild ?button .
+  ?root rdfhtml:attribute ?methodAttr . ?methodAttr a rdfhtml:Attribute ; rdfhtml:attributeName "method" ; rdfhtml:attributeValue "get" .
   ?root rdfhtml:attribute ?roleAttr . ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
   ?root rdfhtml:attribute ?labelAttr . ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
-  ?button a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:hasChild ?symbol, ?name ; c:selects ?opt .
+  ?button a rdfhtml:Button ; rdfhtml:type ?buttonType ; rdfhtml:value ?optValue ; rdfhtml:hasChild ?symbol, ?name ; c:selects ?opt ; lc:role ?item .
   ?button rdfhtml:attribute ?pressedAttr . ?pressedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-pressed" ; rdfhtml:attributeValue ?pressed .
   ?symbol a rdfhtml:Span ; rdfhtml:hasChild ?symbolText ; ord:immediatelyPrecedes ?name .
   ?symbolText a rdfhtml:Text ; rdfhtml:data ?symbolData .
@@ -401,6 +404,8 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Segmented ; c:controls ?target ; c:property ?property .
   BIND($this AS ?self)
+  # A nav list's options are its items (lc:NavItem).
+  BIND(IF(EXISTS { $this a/rdfs:subClassOf* c:NavList }, lc:NavItem, ?none) AS ?item)
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
@@ -424,12 +429,20 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?labelAttr)
+  # Over a place the address's path carries (nav:Path: a site's pages), the options go somewhere:
+  # a form whose buttons submit to the address each sets (c:SegmentedDestination), so they work
+  # before and without scripts; with them, the navigation effect keeps the page and the reaction
+  # sets the value.
+  BIND(EXISTS { ?navDim nav:subject ?target ; nav:property ?property ; nav:carriedBy nav:Path FILTER NOT EXISTS { ?navDim a nav:TargetDimension } } AS ?navigates)
+  BIND(IF(?navigates, rdfhtml:Form, rdfhtml:Div) AS ?rootTag)
+  BIND(IF(?navigates, IRI(CONCAT(STR($this), "/~root-method")), ?none) AS ?methodAttr)
   {
     {} UNION {
       { $this c:options/rdf:rest*/rdf:first ?opt FILTER(isIRI(?opt)) BIND($this AS ?self) }
       UNION
       { FILTER NOT EXISTS { $this c:options ?explicit } $this c:property/rdfs:range ?range . ?opt a ?range FILTER(isIRI(?opt)) BIND($this AS ?self) }
       BIND(CONCAT("opt-", ENCODE_FOR_URI(STR(?opt))) AS ?key)
+      BIND(STR(?opt) AS ?optValue)
       BIND(IRI(CONCAT(STR(?self), "/~", ?key)) AS ?button)
       BIND(IRI(CONCAT(STR(?self), "/~", ?key, "-aria-pressed")) AS ?pressedAttr)
       BIND(IRI(CONCAT(STR(?self), "/~", ?key, "-label")) AS ?name)
@@ -476,6 +489,7 @@ WHERE {
       BIND(IRI(CONCAT(STR(?self), "/~opt-", ENCODE_FOR_URI(STR(?b)))) AS ?after)
     }
   }
+  BIND(IF(?navigates, "submit", "button") AS ?buttonType)
 }""" .
 
 c:SegmentedRendering-sparql-text a sem:Rule ;
@@ -579,9 +593,17 @@ WHERE {
   BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
 }""" .
 
-c:SegmentedSelect a beh:Reaction ;
+# --- Selector: a click selects a value ---------------------------------------------------------
+# A click on an element that c:selects a value writes it as c:property of c:controls: a segmented
+# control's option, a tree's node, a crumb, a term's name. Components opt in by type.
+
+c:Selector a owl:Class ;
+    rdfs:label "Selector"@en , "Вибір"@uk , "Auswahl"@de , "مُحدِّد"@ar ;
+    rdfs:comment "Mixin: a click on a rendered element of it that c:selects a value writes that value as c:property of c:controls, in place of the one there."@en .
+c:Select a beh:Reaction ;
+    rdfs:label "Select"@en ;
     beh:when beh:Click ;
-    beh:sourceClass c:Segmented ;
+    beh:sourceClass c:Selector ;
     beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?option . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
     beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?option . $this c:controls ?target ; c:property ?p }""" ;
     sem:function "segmented:select" .
@@ -594,7 +616,7 @@ c:SegmentedSelect a beh:Reaction ;
 # native select of the same options, showing the current one and opening the platform's own
 # picker. Both are rendered; the theme shows one (hooked: data-sem-compact-as), so focus and
 # screen readers meet only that one. A change of the select writes the property as a click on an
-# option does (c:SegmentedPick).
+# option does (c:Pick, as a c:Chooser).
 
 c:compactAs a owl:ObjectProperty ;
     rdfs:range c:CompactPresentation ;
@@ -602,7 +624,7 @@ c:compactAs a owl:ObjectProperty ;
     sty:hookAttribute "data-sem-compact-as" .
 c:CompactPresentation a owl:Class ;
     rdfs:comment "A way for a component to present itself on a compact screen."@en .
-c:Picker a c:CompactPresentation ; sem:slug "picker" ; rdfs:label "Picker"@en ;
+c:Picker a c:CompactPresentation ; sem:slug "picker" ; rdfs:label "Picker"@en , "Вибір"@uk , "Auswahl"@de , "منتقي"@ar ;
     rdfs:comment "A native select of the options in place of the list: one line, the current option shown."@en .
 
 c:SegmentedPicker a sem:Rendering ;
@@ -711,12 +733,19 @@ WHERE {
     }
   }
 }""" .
-# Choosing in the picker writes the property, as a click on an option does.
-c:SegmentedPick a beh:Reaction ;
+# --- Chooser: a change picks a value -----------------------------------------------------------
+# A change of a native select or a radio (beh:value, an IRI) writes that value as c:property of
+# c:controls: a choice, a radio group, a segmented control's compact picker.
+
+c:Chooser a owl:Class ;
+    rdfs:label "Chooser"@en , "Вибір значення"@uk , "Wertauswahl"@de , "مُختار القيمة"@ar ;
+    rdfs:comment "Mixin: a change of it (beh:value, an IRI) writes that value as c:property of c:controls, in place of the one there, unless it is c:disabled."@en .
+c:Pick a beh:Reaction ;
+    rdfs:label "Pick"@en ;
     beh:when beh:Change ;
-    beh:sourceClass c:Segmented ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . BIND(IRI(?v) AS ?option) }""" ;
+    beh:sourceClass c:Chooser ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old . FILTER NOT EXISTS { $this c:disabled true } }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . FILTER NOT EXISTS { $this c:disabled true } BIND(IRI(?v) AS ?option) }""" ;
     sem:function "choice:select" .
 
 # --- Flippable: any component, with its making on the back ----------------------------------
@@ -742,15 +771,158 @@ kinds of component inside the front, not their count."""@en ;
     sem:slug "source-back" .
 # After the flippable's own source rule (95), so every layer that decorated the front is listed.
 c:SourceBackRendering a sem:Rendering ;
+    sem:readsProvenance true ;
     sem:targets c:SourceBack ;
     sem:modality mod:Screen ;
     sem:layer sem:SourceLayer ;
-    sem:stratum 96 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it splits each rule's SPARQL into colored tokens." ;
-    sem:needsExtension sx:Matches .
+    sem:stratum 96 .
 c:SourceBackRendering-fn a sem:Rule ;
     sem:implements c:SourceBackRendering ;
     sem:function "source-back" .
+# Sections in order by sem:orderKey: the data queries by IRI, then the rules by stratum and IRI (a
+# projection view's by IRI), each keyed by its IRI's MD5; their text in tokens by the shared lexicon.
+c:SourceBackRendering-sparql a sem:Rule ;
+    sem:implements c:SourceBackRendering ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?header , ?empty , ?section .
+  ?header a rdfhtml:Div ; rdfhtml:class "sem-back-header" ; rdfhtml:hasChild ?title ; sem:orderKey "a" .
+  ?title a rdfhtml:Strong ; rdfhtml:hasChild ?titleText .
+  ?titleText a rdfhtml:Text ; rdfhtml:data "How this view is made" .
+  ?empty a rdfhtml:P ; rdfhtml:hasChild ?emptyText ; sem:orderKey "b" .
+  ?emptyText a rdfhtml:Text ; rdfhtml:data "Enable provenance to see the rules behind this view." .
+  ?section a rdfhtml:Section ; rdfhtml:class "sem-rule" ; rdfhtml:hasChild ?sectionTitle , ?sectionMeta , ?sectionCode ; sem:orderKey ?sectionOrder .
+  ?sectionTitle a rdfhtml:H4 ; rdfhtml:hasChild ?sectionTitleText ; ord:immediatelyPrecedes ?sectionMeta .
+  ?sectionTitleText a rdfhtml:Text ; rdfhtml:data ?itemName .
+  ?sectionMeta a rdfhtml:P ; rdfhtml:hasChild ?sectionMetaText ; ord:immediatelyPrecedes ?sectionCode .
+  ?sectionMetaText a rdfhtml:Text ; rdfhtml:data ?meta .
+  ?sectionCode a rdfhtml:Pre ; rdfhtml:class "sem-code" ; rdfhtml:hasChild ?tok , ?tail .
+  ?tok a ?tokElement ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterHead .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+  ?tail a rdfhtml:Text ; rdfhtml:data ?tailText ; ord:immediatelyPrecedes ?afterTail .
+}
+WHERE {
+  $this a c:SourceBack ; c:of ?front . FILTER(isIRI(?front))
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~header")) AS ?header)
+  BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~title-text")) AS ?titleText)
+  LATERAL { OPTIONAL { ?front c:projectionGraph ?projection0 } }
+  # A projection view's rules live in that projection's derived graph (its PROV-O says which).
+  BIND(EXISTS { ?front (^sem:renders/rdfhtml:hasChild+)* ?anyInst .
+    { ?anyInst c:dataQuery|c:view|c:query|c:queries|c:judgementClass ?anyData }
+    UNION { FILTER(!BOUND(?projection0)) ?anyRoot sem:renders ?anyInst ; <http://www.w3.org/ns/prov#wasGeneratedBy>|<http://www.w3.org/ns/prov#wasInfluencedBy> ?anyActivity . ?anyActivity <http://www.w3.org/ns/prov#qualifiedAssociation>/<http://www.w3.org/ns/prov#hadPlan> ?anyPlan }
+    UNION { FILTER(BOUND(?projection0)) GRAPH ?anyGraph { ?anyAssociation <http://www.w3.org/ns/prov#hadPlan> ?anyPlan } FILTER(STR(?anyGraph) = STR(?projection0)) }
+  } AS ?anything)
+  BIND(IF(?anything, ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?empty)
+  BIND(IRI(CONCAT(STR($this), "/~empty-text")) AS ?emptyText)
+  # The queries the front (and every component inside it) shows data from, then the rules that rendered
+  # them: the plans of the activities that generated or decorated their roots.
+  LATERAL { OPTIONAL {
+    {
+      { SELECT DISTINCT ?front ?item WHERE {
+        ?front (^sem:renders/rdfhtml:hasChild+)* ?inst .
+        { ?inst c:dataQuery|c:view|c:query ?item } UNION { ?inst c:queries/rdf:rest*/rdf:first ?item } UNION { ?inst c:judgementClass ?judged . ?item a ?judged }
+      } }
+      BIND("data" AS ?itemKind)
+    } UNION {
+      FILTER(!BOUND(?projection0))
+      { SELECT ?front ?item (MAX(?generatedBy) AS ?generated) WHERE {
+        ?front (^sem:renders/rdfhtml:hasChild+)* ?inst . ?instRoot sem:renders ?inst .
+        { ?instRoot <http://www.w3.org/ns/prov#wasGeneratedBy> ?activity BIND(1 AS ?generatedBy) } UNION { ?instRoot <http://www.w3.org/ns/prov#wasInfluencedBy> ?activity BIND(0 AS ?generatedBy) }
+        ?activity <http://www.w3.org/ns/prov#qualifiedAssociation>/<http://www.w3.org/ns/prov#hadPlan> ?item
+      } GROUP BY ?front ?item }
+      BIND("rule" AS ?itemKind)
+    } UNION {
+      FILTER(BOUND(?projection0))
+      { SELECT DISTINCT ?projection0 ?item WHERE { GRAPH ?graph { ?association <http://www.w3.org/ns/prov#hadPlan> ?item } FILTER(STR(?graph) = STR(?projection0)) } }
+      BIND(1 AS ?generated)
+      BIND("rule" AS ?itemKind)
+    }
+    BIND(?itemKind = "data" AS ?isData)
+    BIND(CONCAT(?itemKind, "-", SUBSTR(MD5(STR(?item)), 1, 8)) AS ?local)
+    BIND(CONCAT(STR($this), "/~", ?local) AS ?k)
+    BIND(IRI(?k) AS ?section)
+    BIND(IRI(CONCAT(?k, "-title")) AS ?sectionTitle)
+    BIND(IRI(CONCAT(?k, "-title-text")) AS ?sectionTitleText)
+    BIND(IRI(CONCAT(?k, "-meta")) AS ?sectionMeta)
+    BIND(IRI(CONCAT(?k, "-meta-text")) AS ?sectionMetaText)
+    BIND(IRI(CONCAT(?k, "-code")) AS ?sectionCode)
+    LATERAL { OPTIONAL { SELECT ?item (MIN(?itemNameKey) AS ?itemNameBest) WHERE {
+        ?itemNameDecl sem:prefixName ?itemNameName ; sem:namespace ?itemNameNs .
+        FILTER(STRSTARTS(STR(?item), STR(?itemNameNs)))
+        BIND(1000000 - STRLEN(STR(?itemNameNs)) AS ?itemNameRank)
+        BIND(CONCAT(STR(?itemNameRank), " ", STR(?itemNameName), " ", STR(?itemNameNs)) AS ?itemNameKey)
+      } GROUP BY ?item } }
+      BIND(STRAFTER(STRAFTER(COALESCE(?itemNameBest, ""), " "), " ") AS ?itemNameNs0)
+      BIND(STRBEFORE(STRAFTER(COALESCE(?itemNameBest, ""), " "), " ") AS ?itemNameName0)
+      BIND(IF(BOUND(?itemNameBest), CONCAT(?itemNameName0, ":", SUBSTR(STR(?item), STRLEN(?itemNameNs0) + 1)), CONCAT("<", STR(?item), ">")) AS ?itemName)
+    # A data query: its text; a rule: its query (or its sem:constructFrom's), else which function it is.
+    LATERAL { OPTIONAL { FILTER(?isData) ?item sem:select ?dataSelect } }
+    LATERAL { OPTIONAL { FILTER(?isData) ?item sem:construct ?dataConstruct } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:construct ?ruleQuery0 } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:constructFrom/sem:construct ?ruleQuery1 } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:function ?ruleFunction } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:stratum ?ownStratum } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:implements/sem:stratum ?slotStratum } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:layer ?ownLayer } }
+    LATERAL { OPTIONAL { FILTER(!?isData) ?item sem:implements/sem:layer ?slotLayer } }
+    BIND(COALESCE(?ownLayer, ?slotLayer) AS ?layer)
+    BIND(COALESCE(STR(?ownStratum), STR(?slotStratum), "0") AS ?stratum)
+    LATERAL { OPTIONAL { SELECT ?layer (MIN(?layerNameKey) AS ?layerNameBest) WHERE {
+        ?layerNameDecl sem:prefixName ?layerNameName ; sem:namespace ?layerNameNs .
+        FILTER(STRSTARTS(STR(?layer), STR(?layerNameNs)))
+        BIND(1000000 - STRLEN(STR(?layerNameNs)) AS ?layerNameRank)
+        BIND(CONCAT(STR(?layerNameRank), " ", STR(?layerNameName), " ", STR(?layerNameNs)) AS ?layerNameKey)
+      } GROUP BY ?layer } }
+      BIND(STRAFTER(STRAFTER(COALESCE(?layerNameBest, ""), " "), " ") AS ?layerNameNs0)
+      BIND(STRBEFORE(STRAFTER(COALESCE(?layerNameBest, ""), " "), " ") AS ?layerNameName0)
+      BIND(IF(BOUND(?layerNameBest), CONCAT(?layerNameName0, ":", SUBSTR(STR(?layer), STRLEN(?layerNameNs0) + 1)), CONCAT("<", STR(?layer), ">")) AS ?layerName)
+    OPTIONAL { { ?item l10n:label ?dataLabelL } UNION { ?dataLabelLAt l10n:of ?item ; l10n:label ?dataLabelL } }
+    OPTIONAL { FILTER(!BOUND(?dataLabelL)) ?item c:label ?dataLabelLOnly FILTER(isLiteral(?dataLabelLOnly)) }
+    OPTIONAL { ?dataLabelNAt l10n:of ?item ; l10n:name ?dataLabelN }
+    OPTIONAL { FILTER(!BOUND(?dataLabelN)) ?item rdfs:label ?dataLabelNOnly FILTER(isLiteral(?dataLabelNOnly)) }
+    BIND(STR(COALESCE(?dataLabelL, ?dataLabelLOnly, ?dataLabelN, ?dataLabelNOnly, REPLACE(STR(?item), "^.*[#/]", ""))) AS ?dataLabel)
+    BIND(IF(?isData, CONCAT("data · ", ?dataLabel),
+      CONCAT(IF(?generated = 1, "renders", "decorates"), " · stratum ", ?stratum, " · ", IF(BOUND(?layer), CONCAT("layer ", ?layerName), "component rule"))) AS ?meta)
+    BIND(IF(?isData, COALESCE(STR(?dataSelect), STR(?dataConstruct), ""),
+      COALESCE(STR(?ruleQuery0), STR(?ruleQuery1), CONCAT("# a function rule: \\"", COALESCE(STR(?ruleFunction), "?"), "\\" (src/components)"))) AS ?code)
+    BIND(xsd:integer(?stratum) AS ?stratumNumber)
+    BIND(IF(?isData, CONCAT("c", STR(?item)), IF(BOUND(?projection0), CONCAT("d", STR(?item)),
+      CONCAT("d", SUBSTR(CONCAT("000000", STR(?stratumNumber)), STRLEN(STR(?stratumNumber)) + 1), STR(?item)))) AS ?sectionOrder)
+    BIND(REPLACE(?code, "^[ \\t\\n\\r]+|[ \\t\\n\\r]+$", "") AS ?src)
+    BIND(STRLEN(?src) AS ?length)
+    BIND(CONCAT(?k, "-") AS ?key)
+    # Its text in colored tokens, by the shared lexicon (c:SparqlLexicon), each keyed by where it starts.
+    LATERAL { OPTIONAL {
+        c:SparqlLexicon c:tokenPattern ?pattern .
+        LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+        BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
+        BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
+        BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+          IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
+          IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
+          IF(BOUND(?g7), IF(false && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
+          IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
+          IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text"))))))))) AS ?kind)
+        BIND(IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m))) AS ?headLen)
+        BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
+        BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
+        BIND(?at + STRLEN(?m) AS ?next)
+        BIND(IRI(CONCAT(?key, STR(?at))) AS ?tok)
+        BIND(IF(?kind = "text", rdfhtml:Text, rdfhtml:Span) AS ?tokElement)
+        BIND(IF(?kind = "text", ?none, CONCAT("tok-", ?kind)) AS ?tokClass)
+        BIND(IF(?kind = "text", ?head, ?none) AS ?plain)
+        BIND(IF(?kind = "text", ?none, IRI(CONCAT(?key, STR(?at), "-text"))) AS ?tokText)
+        BIND(IF(?kind = "text", ?none, ?head) AS ?spanned)
+        BIND(IF(BOUND(?tailText), IRI(CONCAT(?key, STR(?at + ?headLen))), ?none) AS ?tail)
+        BIND(IF(?next <= ?length, IRI(CONCAT(?key, STR(?next))), ?none) AS ?after)
+        BIND(COALESCE(?tail, ?after) AS ?afterHead)
+        BIND(IF(BOUND(?tail), ?after, ?none) AS ?afterTail)
+    } }
+  } }
+}""" .
 
 # The base rendering only wraps the front; the source layer (below) adds the
 # floating flip control, the back face and the flipped state.
@@ -779,6 +951,11 @@ WHERE {
   BIND(IF(EXISTS { $this c:revealed|c:flipped ?shown FILTER(STR(?shown) = "true") }, IRI(CONCAT(STR($this), "/~source")), ?none) AS ?source)
 }""" .
 
+c:FlipSourcePhrase a c:Phrase ; rdfs:label "Source"@en , "Код"@uk , "Quelle"@de , "المصدر"@ar .
+c:FlipViewPhrase a c:Phrase ; rdfs:label "View"@en , "Вигляд"@uk , "Ansicht"@de , "العرض"@ar .
+c:FlipToSourceHint a c:Phrase ; rdfs:label "Show how this view is made"@en , "Показати, як зроблено цей вигляд"@uk , "Zeigen, wie diese Ansicht gemacht ist"@de , "إظهار كيفية بناء هذا العرض"@ar .
+c:FlipToViewHint a c:Phrase ; rdfs:label "Show the view"@en , "Показати вигляд"@uk , "Ansicht zeigen"@de , "إظهار العرض"@ar .
+
 # Stratum 95: after every other layer, so the back lists the layers that decorated the front.
 c:FlippableSource a sem:Rendering ;
     sem:targets c:Flippable ;
@@ -797,20 +974,32 @@ CONSTRUCT {
   ?frontFace rdfhtml:hasChild ?bar ; ord:precedes ?back ; rdfhtml:inert ?frontInert .
   ?bar a rdfhtml:Div ; rdfhtml:class "sem-face-bar" ; rdfhtml:hasChild ?flipFront ; ord:precedes ?front .
   ?flipFront a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-flip" ; rdfhtml:hasChild ?flipFrontText ; c:flips $this .
-  ?flipFront rdfhtml:attribute ?flipFrontLabel . ?flipFrontLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue "Show how this view is made" .
-  ?flipFrontText a rdfhtml:Text ; rdfhtml:data "</> Source" .
+  ?flipFront rdfhtml:attribute ?flipFrontLabel . ?flipFrontLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?toSourceHint .
+  ?flipFrontText a rdfhtml:Text ; rdfhtml:data ?flipFrontData .
   ?faces rdfhtml:hasChild ?back .
   ?back a rdfhtml:Div ; rdfhtml:class "sem-face sem-back" ; rdfhtml:inert ?backInert ; rdfhtml:hasChild ?backBar, ?source .
   ?backBar a rdfhtml:Div ; rdfhtml:class "sem-face-bar" ; rdfhtml:hasChild ?flipBack ; ord:immediatelyPrecedes ?source .
   ?flipBack a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-flip" ; rdfhtml:hasChild ?flipBackText ; c:flips $this .
-  ?flipBack rdfhtml:attribute ?flipBackLabel . ?flipBackLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue "Show the view" .
-  ?flipBackText a rdfhtml:Text ; rdfhtml:data "↺ View" .
+  ?flipBack rdfhtml:attribute ?flipBackLabel . ?flipBackLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?toViewHint .
+  ?flipBackText a rdfhtml:Text ; rdfhtml:data ?flipBackData .
   ?root rdfhtml:attribute ?flippedAttr . ?flippedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-flipped" ; rdfhtml:attributeValue ?flippedValue .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Flippable ; c:front ?front FILTER(isIRI(?front))
   BIND(EXISTS { $this c:flipped ?f FILTER(STR(?f) = "true") } AS ?flipped)
   BIND(?flipped || EXISTS { $this c:revealed ?r FILTER(STR(?r) = "true") } AS ?revealed)
+  OPTIONAL { ?sourceAt l10n:of c:FlipSourcePhrase ; l10n:name ?sourcePick }
+  OPTIONAL { FILTER(!BOUND(?sourcePick)) c:FlipSourcePhrase rdfs:label ?sourceOnly }
+  BIND(CONCAT("</> ", STR(COALESCE(?sourcePick, ?sourceOnly, "Source"))) AS ?flipFrontData)
+  OPTIONAL { ?viewAt l10n:of c:FlipViewPhrase ; l10n:name ?viewPick }
+  OPTIONAL { FILTER(!BOUND(?viewPick)) c:FlipViewPhrase rdfs:label ?viewOnly }
+  BIND(CONCAT("↺ ", STR(COALESCE(?viewPick, ?viewOnly, "View"))) AS ?flipBackData)
+  OPTIONAL { ?toSourceAt l10n:of c:FlipToSourceHint ; l10n:name ?toSourcePick }
+  OPTIONAL { FILTER(!BOUND(?toSourcePick)) c:FlipToSourceHint rdfs:label ?toSourceOnly }
+  BIND(STR(COALESCE(?toSourcePick, ?toSourceOnly, "Show how this view is made")) AS ?toSourceHint)
+  OPTIONAL { ?toViewAt l10n:of c:FlipToViewHint ; l10n:name ?toViewPick }
+  OPTIONAL { FILTER(!BOUND(?toViewPick)) c:FlipToViewHint rdfs:label ?toViewOnly }
+  BIND(STR(COALESCE(?toViewPick, ?toViewOnly, "Show the view")) AS ?toViewHint)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~faces")) AS ?faces)
   BIND(IRI(CONCAT(STR($this), "/~front")) AS ?frontFace)
@@ -845,9 +1034,59 @@ c:options a owl:ObjectProperty ; rdfs:range rdf:List ;
     rdfs:comment "Explicit, ordered options (overrides the property's range)."@en .
 
 c:Choice a owl:Class ;
-    rdfs:subClassOf sem:Component ;
-    rdfs:comment "A dropdown setting a single-valued property."@en ;
-    sem:slug "choice" .
+    rdfs:subClassOf sem:Component , c:Chooser ;
+    rdfs:comment "A dropdown setting a single-valued property: a form field (its caption over the select), or, placed inline (c:labelPlacement c:LabelInline), a compact caption-and-select pill for a toolbar."@en ;
+    sem:slug "choice" ;
+    pos:rowParts 2 .
+
+# Where a field's label goes. Above its control by default, as every field's does, so a choice lines up
+# with the text fields beside it (pos:FieldRow); inline, the caption sits in one outline with the
+# select, a compact setting for a toolbar or an app bar.
+c:labelPlacement a owl:ObjectProperty ;
+    rdfs:range c:LabelPlacement ;
+    rdfs:comment "Where a field's label goes: above its control (the default) or inline beside it, in one outline."@en ;
+    sty:hookAttribute "data-sem-label-placement" .
+c:LabelPlacement a owl:Class .
+c:LabelAbove a c:LabelPlacement ; sem:slug "above" ; sem:order 1 ;
+    rdfs:label "Above"@en , "Згори"@uk , "Darüber"@de , "في الأعلى"@ar .
+c:LabelInline a c:LabelPlacement ; sem:slug "inline" ; sem:order 2 ;
+    rdfs:label "Inline"@en , "В рядку"@uk , "In der Zeile"@de , "في السطر"@ar .
+
+# A choice in a toolbar (among its c:children) or an app bar (among its c:actions or c:moreActions)
+# is a compact setting, not a form field: it is placed inline. Derived before the components, as the
+# style layer's other derivations are, so the hook carries it.
+c:ChoicesInlineInToolbars a sem:Rendering ;
+    rdfs:comment "A c:Choice among a c:Toolbar's children or actions is placed inline (c:labelPlacement c:LabelInline)."@en ;
+    sem:targets c:Toolbar ;
+    sem:layer sty:Layer ;
+    sem:inputOnly true ;
+    sem:stratum -16 .
+c:ChoicesInlineInToolbars-fn a sem:Rule ; sem:implements c:ChoicesInlineInToolbars ; sem:function "choice:inline-in-bars" .
+c:ChoicesInlineInToolbars-sparql a sem:Rule ;
+    sem:implements c:ChoicesInlineInToolbars ;
+    sem:construct """
+CONSTRUCT { ?choice c:labelPlacement c:LabelInline }
+WHERE {
+  { $this c:children/rdf:rest*/rdf:first ?choice } UNION { $this c:actions/rdf:rest*/rdf:first ?choice } UNION { $this c:moreActions/rdf:rest*/rdf:first ?choice }
+  FILTER(isIRI(?choice))
+  ?choice a/rdfs:subClassOf* c:Choice .
+}""" .
+c:ChoicesInlineInAppBars a sem:Rendering ;
+    rdfs:comment "A c:Choice among a c:AppBar's children or actions is placed inline (c:labelPlacement c:LabelInline)."@en ;
+    sem:targets c:AppBar ;
+    sem:layer sty:Layer ;
+    sem:inputOnly true ;
+    sem:stratum -16 .
+c:ChoicesInlineInAppBars-fn a sem:Rule ; sem:implements c:ChoicesInlineInAppBars ; sem:function "choice:inline-in-bars" .
+c:ChoicesInlineInAppBars-sparql a sem:Rule ;
+    sem:implements c:ChoicesInlineInAppBars ;
+    sem:construct """
+CONSTRUCT { ?choice c:labelPlacement c:LabelInline }
+WHERE {
+  { $this c:children/rdf:rest*/rdf:first ?choice } UNION { $this c:actions/rdf:rest*/rdf:first ?choice } UNION { $this c:moreActions/rdf:rest*/rdf:first ?choice }
+  FILTER(isIRI(?choice))
+  ?choice a/rdfs:subClassOf* c:Choice .
+}""" .
 c:ChoiceRendering a sem:Rendering ;
     sem:targets c:Choice ;
     sem:stratum 0 ;
@@ -865,6 +1104,9 @@ CONSTRUCT {
   ?captionEl a rdfhtml:Span ; rdfhtml:hasChild ?captionText ; ord:immediatelyPrecedes ?select .
   ?captionText a rdfhtml:Text ; rdfhtml:data ?caption .
   ?select a rdfhtml:Select ; rdfhtml:id ?selectId ; rdfhtml:disabled ?disabled ; rdfhtml:hasChild ?option .
+  ?pill lc:role lc:SingleLineControl ; lc:atWidth sty:RegularWidth .
+  ?select lc:role lc:SingleLineControl ; lc:atWidth ?compact .
+  ?captionEl lc:role lc:FieldLabel ; lc:atWidth ?compact .
   ?option a rdfhtml:Option ; rdfhtml:value ?optValue ; rdfhtml:selected ?selected ; rdfhtml:hasChild ?optText .
   ?optText a rdfhtml:Text ; rdfhtml:data ?optLabel .
   ?before ord:immediatelyPrecedes ?after .
@@ -898,6 +1140,11 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~select")) AS ?select)
   BIND(STR(?select) AS ?selectId)
   BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
+  # Its parts: the select and the caption above it; placed inline, the pill around both is its
+  # control where it is wide, and on a compact screen the caption goes above the select again.
+  BIND(EXISTS { $this c:labelPlacement c:LabelInline } AS ?inline)
+  BIND(IF(?inline, ?root, ?none) AS ?pill)
+  BIND(IF(?inline, sty:CompactWidth, ?none) AS ?compact)
   {
     {} UNION {
       { $this c:options/rdf:rest*/rdf:first ?opt FILTER(isIRI(?opt)) BIND($this AS ?self) }
@@ -1039,12 +1286,6 @@ WHERE {
   } } }
   BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
 }""" .
-c:ChoiceSelect a beh:Reaction ;
-    beh:when beh:Change ;
-    beh:sourceClass c:Choice ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old . FILTER NOT EXISTS { $this c:disabled true } }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . FILTER NOT EXISTS { $this c:disabled true } BIND(IRI(?v) AS ?option) }""" ;
-    sem:function "choice:select" .
 
 c:Chips a owl:Class ;
     rdfs:subClassOf sem:Component ;
@@ -1071,10 +1312,50 @@ c:ChipsCounts a sem:Rendering ;
     sem:requires c:countQuery ;
     sem:modality mod:Screen ;
     sem:stratum 0 ;
-    sem:follows c:dataset ;
-    sem:functionOnly "awaits sx:Locale (sx:formatNumber): each count is written in the viewer's locale (Intl.NumberFormat). (Its rows, those of a maintained c:countQuery, are in the views graph.)" ;
-    sem:needsExtension sx:Locale .
+    sem:follows c:dataset , ( c:countQuery rs:solution rs:binding ) .
 c:ChipsCounts-fn a sem:Rule ; sem:implements c:ChipsCounts ; sem:function "chips:counts" .
+# The rows of a maintained c:countQuery (iv:materialize iv:Graph), in the views graph; each count
+# written by sx:formatNumber in the viewer's l10n:formatLocale.
+c:ChipsCounts-sparql a sem:Rule ;
+    sem:implements c:ChipsCounts ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?chip rdfhtml:hasChild ?count . ?chipText ord:immediatelyPrecedes ?count .
+  ?count a rdfhtml:Span ; rdfhtml:class ?class ; rdfhtml:hasChild ?figure , ?spokenEl .
+  ?figure ord:immediatelyPrecedes ?spokenEl .
+  ?figure a rdfhtml:Span ; rdfhtml:attribute ?hidden ; rdfhtml:hasChild ?figureText .
+  ?hidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?spokenEl a rdfhtml:Span ; rdfhtml:class "sem-visually-hidden" ; rdfhtml:hasChild ?spokenText .
+  ?spokenText a rdfhtml:Text ; rdfhtml:data ?spoken .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Chips ; c:countQuery ?view .
+  ?view sem:select ?query .
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?labelAt l10n:of $this ; l10n:countLabel ?labelPicked }
+  OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:countLabel ?labelOnly FILTER(isLiteral(?labelOnly)) }
+  BIND(STR(COALESCE(?labelPicked, ?labelOnly)) AS ?countLabel)
+  # A binding is <row>-<variable> (view.ttl).
+  ?view rs:solution ?row .
+  BIND(IRI(CONCAT(STR(?row), "-option")) AS ?optionBinding)
+  BIND(IRI(CONCAT(STR(?row), "-count")) AS ?countBinding)
+  ?optionBinding rs:value ?option . ?countBinding rs:value ?n .
+  BIND(xsd:double(STR(?n)) AS ?number)
+  BIND(COALESCE(sx:formatNumber(?number, ?locale), STR(?n)) AS ?shown)
+  BIND(COALESCE(IF(?number = 0, "sem-count sem-zero", "sem-count"), "sem-count") AS ?class)
+  BIND(CONCAT(", ", ?shown, IF(COALESCE(?countLabel, "") != "", CONCAT(" ", ?countLabel), "")) AS ?spoken)
+  BIND(CONCAT(STR($this), "/~chip-", ENCODE_FOR_URI(STR(?option))) AS ?key)
+  BIND(IRI(?key) AS ?chip)
+  BIND(IRI(CONCAT(?key, "-text")) AS ?chipText)
+  BIND(IRI(CONCAT(?key, "-count")) AS ?count)
+  BIND(IRI(CONCAT(?key, "-count-figure")) AS ?figure)
+  BIND(IRI(CONCAT(?key, "-count-figure-aria-hidden")) AS ?hidden)
+  BIND(IRI(CONCAT(?key, "-count-text")) AS ?figureText)
+  BIND(IRI(CONCAT(?key, "-count-spoken")) AS ?spokenEl)
+  BIND(IRI(CONCAT(?key, "-count-spoken-text")) AS ?spokenText)
+}""" .
 
 c:ChipsRendering-sparql-screen a sem:Rule ;
     sem:implements c:ChipsRendering ;

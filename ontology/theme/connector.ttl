@@ -26,6 +26,9 @@
                  [ sty:property "color" ; sty:raw "inherit" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Connector ; sty:state ":not([data-sem-drawn])" ;
     sty:declares [ sty:property "visibility" ; sty:raw "hidden" ] .
+# An end scrolled away: the line runs to the edge it went past, dotted, toward where it is.
+[] a sty:StyleRule ; sty:appliesTo c:Connector ; sty:state "[data-sem-away]" ; sty:part ".sem-connector-line" ;
+    sty:declares [ sty:property "stroke-dasharray" ; sty:raw "2 4" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Connector ; sty:part ".sem-connector-line" ;
     sty:declares [ sty:property "fill" ; sty:raw "none" ] ,
                  [ sty:property "stroke" ; sty:raw "var(--sem-connector-ink)" ] ,

@@ -68,7 +68,7 @@ describe('the checkout example', () => {
     const how = h.shell.nodeOf(`${UI}ex-checkout-how/~root`) as Element
     expect(h.visible(how) && how.textContent).toContain('How it works')
     expect(how.querySelector('[data-sem-c=mention]')).toBeTruthy()
-    expect(how.textContent).toContain('co:Pricing')
+    expect(how.textContent).toContain('ck:Pricing')
     // − is disabled at one; one more mug crosses the threshold.
     expect(h.button('Remove one Stoneware mug').disabled).toBe(true)
     h.click(h.button('Add one Stoneware mug'))

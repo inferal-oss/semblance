@@ -279,4 +279,9 @@ skos:relatedMatch sem:alignmentStrength sem:Related .
     [ sh:prefix "clip" ; sh:namespace "https://semblance.dev/ns/clipboard#"^^xsd:anyURI ],
     [ sh:prefix "file" ; sh:namespace "https://semblance.dev/ns/file#"^^xsd:anyURI ],
     [ sh:prefix "fs" ; sh:namespace "https://semblance.dev/ns/fullscreen#"^^xsd:anyURI ],
-    [ sh:prefix "perf" ; sh:namespace "https://semblance.dev/ns/perf#"^^xsd:anyURI ] .
+    [ sh:prefix "perf" ; sh:namespace "https://semblance.dev/ns/perf#"^^xsd:anyURI ],
+    [ sh:prefix "blk" ; sh:namespace "https://semblance.dev/ns/block#"^^xsd:anyURI ],
+    [ sh:prefix "po" ; sh:namespace "http://www.essepuntato.it/2008/12/pattern#"^^xsd:anyURI ],
+    [ sh:prefix "doco" ; sh:namespace "http://purl.org/spar/doco/"^^xsd:anyURI ],
+    [ sh:prefix "oa" ; sh:namespace "http://www.w3.org/ns/oa#"^^xsd:anyURI ],
+    [ sh:prefix "co" ; sh:namespace "http://purl.org/co/"^^xsd:anyURI ] .

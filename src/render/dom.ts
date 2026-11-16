@@ -1,19 +1,43 @@
+import { applyInputs, inputValue } from '../foreign.ts'
 import { SVG_NS } from '../ns.ts'
+import { sameDecimal } from '../rdf.ts'
 import type { HtmlIndex } from './html-index.ts'
+import { HOST_ELEMENT, hostedBy, type HostAdapter, type HostMount } from './hosts.ts'
+import { deepActive } from '../web/builtins.ts'
+
+/**
+ * Give an element the focus on the framework's own account, nobody having pressed on it. The browser
+ * leaves a text field it has not edited with its caret before the text, where typing would prepend: it
+ * goes after the text, or, in a field marked data-sem-select-on-focus, around it as Tab does. A caret
+ * the field already has elsewhere stays (a number field has none to read, and keeps what it does).
+ */
+export function takeFocus(el: HTMLElement, options?: FocusOptions) {
+  el.focus?.(options)
+  const field = el as HTMLInputElement
+  if (deepActive(field.ownerDocument) !== field || !field.value || field.selectionStart !== 0 || field.selectionEnd !== 0) return
+  if (field.hasAttribute('data-sem-select-on-focus')) field.select()
+  else field.setSelectionRange(field.value.length, field.value.length)
+}
 
 /**
  * Patches a live DOM subtree from an HtmlIndex. Each RDF/HTML node maps to one
  * DOM node for its whole life (stable IRIs give stable identity), so updates
  * are attribute/text writes and keyed child moves, never re-creation.
  */
+/** Where an element is: each ancestor, nearest first, with what stood next to the way down to it. */
+export type ElementPlace = { at: Element; next: Element | null; previous: Element | null }[]
+
 export class DomRenderer {
   private readonly doc: Document
   private els = new Map<string, Node>()
   private keys = new WeakMap<Node, string>()
   private applied = new Map<string, Map<string, string>>()
-  /** The DOM node rendered for an RDF/HTML node, if it is mounted. */
+  /** What a host library draws, by the node whose <sem-host> element it draws in (src/render/hosts.ts). */
+  private hosted = new Map<string, HostMount>()
+  /** The DOM node rendered for an RDF/HTML node, if it is mounted (a host library's own, where it drew one). */
   nodeOf(key: string): Node | undefined {
-    return this.els.get(key)
+    const drawn = this.hosts?.nodeOf(key)
+    return drawn?.isConnected ? drawn : (this.els.get(key) ?? drawn)
   }
 
   /** Sizes of the renderer's maps, for leak checks. */
@@ -38,13 +62,15 @@ export class DomRenderer {
     readonly index: HtmlIndex,
     readonly host: Element,
     readonly rootFocus: string,
+    /** Draws the nodes a host component library draws (ext:component), each subtree in a <sem-host>. */
+    readonly hosts?: HostAdapter,
   ) {
     this.doc = host.ownerDocument
     this.takeDirty = index.consumer()
   }
 
   keyOf(node: Node): string | undefined {
-    return this.keys.get(node)
+    return this.keys.get(node) ?? this.hosts?.keyOf(node)
   }
 
   /** The element of a host-owned slot (see sem:slot), once rendered. */
@@ -59,10 +85,165 @@ export class DomRenderer {
   /** Whether a DOM node sits inside host-owned slot content. */
   inSlot(node: Node): boolean {
     for (let n: Node | null = node.parentNode; n && n !== this.host; n = n.parentNode) {
-      const k = this.keys.get(n)
+      const k = this.keyOf(n)
       if (k && this.index.nodes.get(k)?.slot !== undefined) return true
     }
     return false
+  }
+
+  /**
+   * Take over the host's server-rendered children (toHTML of an index in the same state; see
+   * src/web/takeover.ts and docs/SSR.md) instead of rendering them again: each index node is paired with the DOM node the HTML
+   * parser made for it, in document order. Adjacent text nodes, which the parser joins, are split
+   * again; an empty one is created. What does not match (another tag, other attributes) is patched
+   * as usual, and counted. Host-owned slots keep their content.
+   */
+  adopt(): { nodes: number; mismatches: number } {
+    this.takeDirty()
+    let nodes = 0
+    let mismatches = 0
+    const take = (k: string, dom: Node | null, parent: Node): Node => {
+      const n = this.index.nodes.get(k)!
+      nodes++
+      if (n.cls === 'Text') {
+        const data = n.data ?? ''
+        if (dom?.nodeType === 3 && data && (dom as Text).data.startsWith(data)) {
+          const t = dom as Text
+          // The rest is the next text node's (as splitText does; not every DOM has it).
+          if (t.data.length > data.length) parent.insertBefore(this.doc.createTextNode(t.data.slice(data.length)), t.nextSibling), (t.data = t.data.slice(0, data.length))
+          this.els.set(k, dom)
+          this.keys.set(dom, k)
+          return dom
+        }
+        if (data) {
+          mismatches++
+          const text = this.element(k)
+          parent.insertBefore(text, dom)
+          return text
+        }
+        // An empty text node: HTML has no way to write one, so it is the parser's shape, not a change.
+        const empty = this.doc.createTextNode('')
+        this.els.set(k, empty)
+        this.keys.set(empty, k)
+        parent.insertBefore(empty, dom)
+        return empty
+      }
+      if (hostedBy(this.index, this.hosts, k) !== undefined) {
+        // What a host library drew on the server: it takes its own markup over (hydration).
+        if (dom?.nodeType !== 1 || (dom as Element).localName !== HOST_ELEMENT) {
+          mismatches++
+          const el = this.element(k)
+          parent.insertBefore(el, dom)
+          return el
+        }
+        this.els.set(k, dom)
+        this.keys.set(dom, k)
+        this.hosted.set(k, this.hosts!.mount(dom as Element, k, true))
+        return dom
+      }
+      const tag = this.index.tagName(k) ?? 'sem-unknown'
+      // Case-blind: an HTML parser may lower an SVG element's name (linearGradient) that a browser keeps.
+      if (dom?.nodeType !== 1 || (dom as Element).localName.toLowerCase() !== tag.toLowerCase()) {
+        mismatches++
+        const el = this.element(k)
+        parent.insertBefore(el, dom)
+        return el
+      }
+      const el = dom as Element
+      this.els.set(k, el)
+      this.keys.set(el, k)
+      const desired = new Map(this.index.attributes(k))
+      const actual = new Map(Array.from(el.attributes, (a) => [a.name, a.value]))
+      this.setApplied(k, actual)
+      if (desired.size !== actual.size || [...desired].some(([name, v]) => actual.get(name) !== v)) mismatches++, this.syncAttrs(k)
+      this.syncProps(k)
+      if (this.index.isVoid(k) || n.slot !== undefined) return el
+      let cursor = el.firstChild
+      for (const slot of this.index.childrenOf(k)) {
+        const r = this.index.resolve(slot)
+        if (!r) continue
+        while (cursor?.nodeType === 8) cursor = cursor.nextSibling
+        cursor = take(r, cursor, el).nextSibling
+      }
+      for (let rest = cursor; rest; ) {
+        const next = rest.nextSibling
+        if (rest.nodeType !== 8) el.removeChild(rest), mismatches++, this.ops++
+        rest = next
+      }
+      return el
+    }
+    // Adjacent text nodes are joined first (a parser may split text at a character reference, which
+    // browsers do not): adopting splits them again where the index has two.
+    this.host.normalize?.()
+    const root = this.index.resolve(this.rootFocus)
+    if (root) take(root, this.host.firstElementChild, this.host)
+    return { nodes, mismatches }
+  }
+
+  /**
+   * Make a subtree the browser changed itself (composition in an editable region: src/behaviour/text.ts)
+   * what the index says again: every text node's data, every element's children, nodes the browser
+   * added removed and nodes it removed put back.
+   */
+  resync(el: Node): void {
+    const top = this.keys.get(el)
+    if (top === undefined) return
+    this.pendingPrune.clear()
+    const walk = (k: string) => {
+      const dom = this.els.get(k)
+      const n = this.index.nodes.get(k)
+      if (!dom || !n) return
+      if (n.cls === 'Text') {
+        const data = n.data ?? ''
+        if ((dom as Text).data !== data) ((dom as Text).data = data), this.ops++
+        return
+      }
+      if (dom.nodeType !== 1 || this.index.isVoid(k) || n.slot !== undefined || this.hosted.has(k)) return
+      this.reconcile(dom, this.desired(k), true)
+      for (const slot of this.index.childrenOf(k)) {
+        const r = this.index.resolve(slot)
+        if (r) walk(r)
+      }
+    }
+    walk(top)
+    this.prune([])
+  }
+
+  /** Keys whose element bears an attribute asked for by `marked`, by attribute name. */
+  private marks = new Map<string, Set<string>>()
+
+  /** What the element of `k` bears now (undefined: it was dropped); kept in `marks` too. */
+  private setApplied(k: string, attrs: Map<string, string> | undefined) {
+    if (attrs) this.applied.set(k, attrs)
+    else this.applied.delete(k)
+    for (const [name, keys] of this.marks) {
+      if (attrs?.has(name)) keys.add(k)
+      else keys.delete(k)
+    }
+  }
+
+  /**
+   * The elements in the document that bear `attribute`, in document order: those this renderer drew
+   * (kept as it patches their attributes, so asking costs what bears it, not the size of the
+   * document, nor what is kept aside while hidden) and those a host library drew. Host effects ask
+   * this instead of searching the document on every event or patch.
+   */
+  marked(attribute: string): Element[] {
+    let keys = this.marks.get(attribute)
+    if (!keys) {
+      this.marks.set(attribute, (keys = new Set()))
+      for (const [k, attrs] of this.applied) if (attrs.has(attribute)) keys.add(k)
+    }
+    const out: Element[] = []
+    for (const k of keys) {
+      const el = this.els.get(k)
+      if (el?.isConnected) out.push(el as Element)
+    }
+    for (const k of this.hosted.keys()) {
+      const container = this.els.get(k) as Element | undefined
+      if (container?.isConnected) out.push(...container.querySelectorAll(`[${attribute}]`))
+    }
+    return out.length > 1 ? out.sort(documentOrder) : out
   }
 
   /** Call `listener` after every patch (host effects that act on what was rendered: islands). */
@@ -75,29 +256,39 @@ export class DomRenderer {
     this.refocused = null
     // A focused node that moves to another parent (a card to another lane) is detached on the
     // way, which blurs it: it gets its focus back once it is in place.
-    const focused = this.doc.activeElement as HTMLElement | null
+    const focused = deepActive(this.doc) as HTMLElement | null
     // Where it was, in case the patch removes it (a list item's remove button).
-    const ancestors: { at: Element; next: Element | null; previous: Element | null }[] = []
-    if (focused && this.host.contains(focused)) {
-      for (let child: Element = focused, a = focused.parentElement; a && a !== this.host.parentElement; child = a, a = a.parentElement) {
-        ancestors.push({ at: a, next: child.nextElementSibling, previous: child.previousElementSibling })
-      }
-    }
+    const ancestors = focused ? this.placeOf(focused) : []
     this.patch()
-    if (focused && focused !== this.doc.activeElement && focused.isConnected && this.host.contains(focused)) focused.focus?.({ preventScroll: true })
+    if (focused && focused !== deepActive(this.doc) && focused.isConnected && this.host.contains(focused)) focused.focus?.({ preventScroll: true })
     else if (focused && !focused.isConnected && ancestors.length) this.refocus(ancestors)
     for (const l of this.patched) l()
   }
 
-  /**
-   * The focused element was removed (with what it belonged to): the focus goes to a control near
-   * where it was - in what followed it (the next item of a list), else what preceded it, in its
-   * nearest remaining ancestor, else in that ancestor (what the list belongs to) - rather than to the
-   * page, so a keyboard user carries on where they were.
-   */
-  private refocus(ancestors: { at: Element; next: Element | null; previous: Element | null }[]) {
-    const active = this.doc.activeElement
+  /** Where an element is, for `focusNear` once it has gone. */
+  placeOf(el: Element): ElementPlace {
+    const ancestors: ElementPlace = []
+    if (!this.host.contains(el)) return ancestors
+    for (let child: Element = el, a = el.parentElement; a && a !== this.host.parentElement; child = a, a = a.parentElement) {
+      ancestors.push({ at: a, next: child.nextElementSibling, previous: child.previousElementSibling })
+    }
+    return ancestors
+  }
+
+  /** The focused element was removed (with what it belonged to), and nothing else has the focus: see `focusNear`. */
+  private refocus(ancestors: ElementPlace) {
+    const active = deepActive(this.doc)
     if (active && active !== this.doc.body && active !== this.doc.documentElement) return
+    this.focusNear(ancestors)
+  }
+
+  /**
+   * An element that had, or is to have, the focus is gone: it goes to a control near where it was - in
+   * what followed it (the next item of a list), else what preceded it, in its nearest remaining
+   * ancestor, else in that ancestor (what the list belongs to) - rather than to the page, so a
+   * keyboard user carries on where they were.
+   */
+  focusNear(ancestors: ElementPlace) {
     const focusable = 'button:not([disabled]), a[href], input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     const first = (within: Element | null, last = false) => {
       if (!within?.isConnected) return undefined
@@ -107,7 +298,7 @@ export class DomRenderer {
     for (const { at, next, previous } of ancestors) {
       if (!at.isConnected) continue
       const target = first(next) ?? first(previous, true) ?? first(at)
-      if (target) return (this.refocused = target), target.focus?.({ preventScroll: true })
+      if (target) return (this.refocused = target), takeFocus(target, { preventScroll: true })
     }
   }
 
@@ -123,7 +314,9 @@ export class DomRenderer {
       // connected until that slot has moved to its new parent.
       retired.push(el)
       this.els.delete(k)
-      this.applied.delete(k)
+      this.setApplied(k, undefined)
+      this.hosted.get(k)?.destroy()
+      this.hosted.delete(k)
     }
     for (const k of d.data) {
       const el = this.els.get(k)
@@ -139,6 +332,7 @@ export class DomRenderer {
       }
     }
     for (const k of d.attrs) if (this.els.has(k)) this.syncAttrs(k)
+    for (const k of d.islands) if (this.els.has(k)) this.syncProps(k)
     for (const k of d.children) if (this.els.has(k)) this.syncChildren(k)
     const root = this.index.resolve(this.rootFocus)
     this.reconcile(this.host, root ? [this.element(root)] : [])
@@ -154,6 +348,8 @@ export class DomRenderer {
     this.reattach(removed)
     this.pendingPrune.clear()
     this.deferred = []
+    // What a host library draws follows the same change: it draws again exactly what changed.
+    this.hosts?.patch()
   }
 
   /** What a reconciled parent no longer has leaves it (collected in `removed`). */
@@ -192,6 +388,14 @@ export class DomRenderer {
     let el = this.els.get(k)
     if (el) return el
     const n = this.index.nodes.get(k)!
+    if (n.cls !== 'Text' && hostedBy(this.index, this.hosts, k) !== undefined) {
+      const container = this.doc.createElement(HOST_ELEMENT)
+      this.ops++
+      this.els.set(k, container)
+      this.keys.set(container, k)
+      this.hosted.set(k, this.hosts!.mount(container, k, false))
+      return container
+    }
     if (n.cls === 'Text') el = this.doc.createTextNode(n.data ?? '')
     else if (this.index.isSvg(k)) el = this.doc.createElementNS(SVG_NS, this.index.tagName(k) ?? 'g')
     else el = this.doc.createElement(this.index.tagName(k) ?? 'sem-unknown')
@@ -200,14 +404,24 @@ export class DomRenderer {
     this.keys.set(el, k)
     if (n.cls !== 'Text') {
       this.syncAttrs(k)
+      this.syncProps(k)
       this.syncChildren(k)
     }
     return el
   }
 
+  /** A custom element's props (ext:input on a node that is not an island's slot), set as properties or attributes (as the index's policy allows them). */
+  private syncProps(k: string) {
+    const n = this.index.nodes.get(k)
+    if (!n?.inputs?.size || n.tag === undefined || this.index.tagName(k) !== n.tag || this.hosted.has(k)) return
+    const el = this.els.get(k) as Element
+    if (el?.nodeType !== 1) return
+    applyInputs(el, [...this.index.islandInputs(k).values()].map((i) => ({ name: i.name, value: inputValue(i.value), as: i.as })))
+  }
+
   private syncAttrs(k: string) {
     const el = this.els.get(k) as Element
-    if (el.nodeType !== 1) return
+    if (el.nodeType !== 1 || this.hosted.has(k)) return
     const desired = new Map(this.index.attributes(k))
     const prev = this.applied.get(k) ?? new Map<string, string>()
     for (const name of prev.keys()) if (!desired.has(name)) el.removeAttribute(name), this.reflect(el, name, undefined), this.ops++
@@ -217,7 +431,7 @@ export class DomRenderer {
       this.reflect(el, name, value)
       this.ops++
     }
-    this.applied.set(k, desired)
+    this.setApplied(k, desired)
   }
 
   /** Keep live form state in line with the graph (attributes only set defaults). */
@@ -225,12 +439,20 @@ export class DomRenderer {
     if (el.localName !== 'input' && el.localName !== 'textarea') return
     const input = el as HTMLInputElement
     if (name === 'checked') input.checked = value !== undefined
-    else if (name === 'value' && input.value !== (value ?? '')) input.value = value ?? ''
+    else if (name === 'value' && input.value !== (value ?? '')) {
+      // The field being typed in keeps "1.0" while the graph's text is "1" (the next key makes it 1.05);
+      // it shows the graph's text when it is left.
+      if (value !== undefined && deepActive(input.ownerDocument) === input && sameDecimal(input.value, value)) {
+        input.addEventListener('blur', () => { input.value = input.getAttribute('value') ?? '' }, { once: true })
+        return
+      }
+      input.value = value ?? ''
+    }
   }
 
   private syncChildren(k: string) {
     const el = this.els.get(k)!
-    if (el.nodeType !== 1 || this.index.isVoid(k) || this.index.nodes.get(k)?.slot !== undefined) return
+    if (el.nodeType !== 1 || this.index.isVoid(k) || this.index.nodes.get(k)?.slot !== undefined || this.hosted.has(k)) return
     this.reconcile(el, this.desired(k))
   }
 
@@ -259,19 +481,49 @@ export class DomRenderer {
     let anchor: Node | null = null
     for (let i = desired.length - 1; i >= 0; i--) {
       const n = desired[i]!
-      if (!stay.has(n)) move(parent, n, anchor), this.ops++
+      if (!stay.has(n)) {
+        // A graph that nests a node in itself (a rule's error) cannot be drawn: what it leaves out
+        // is reported, the rest of the patch still happens.
+        if (n === parent || n.contains(parent)) {
+          this.index.onError(new Error(`<${this.keys.get(n)}> cannot be placed inside itself, under <${this.keys.get(parent)}>`))
+          continue
+        }
+        move(parent, n, anchor), this.ops++
+      }
       anchor = n
     }
   }
 }
 
+/** Document order, for nodes of one document: from where their ancestors part (not every DOM orders compareDocumentPosition). */
+function documentOrder(a: Node, b: Node): number {
+  if (a === b) return 0
+  const up = (n: Node) => {
+    const out: Node[] = []
+    for (let x: Node | null = n; x; x = x.parentNode) out.push(x)
+    return out.reverse()
+  }
+  const pa = up(a)
+  const pb = up(b)
+  let i = 0
+  while (i < pa.length && i < pb.length && pa[i] === pb[i]) i++
+  if (i === pa.length) return -1
+  if (i === pb.length) return 1
+  for (let x = pa[i]!.nextSibling; x; x = x.nextSibling) if (x === pb[i]) return -1
+  return 1
+}
+
 /**
  * Insert `n` before `anchor`: with moveBefore where both are connected, which keeps an iframe's
  * document, the focus and running animations; else (older browsers, detached trees) insertBefore.
+ * An ordered list's item is inserted, not moved: Chrome counts an item moveBefore moves again
+ * without uncounting it, so two items swapped twice read "5. 6.", until the list is laid out anew
+ * (the patch gives a moved node its focus back).
  */
 function move(parent: Node, n: Node, anchor: Node | null) {
   const p = parent as Node & { moveBefore?: (node: Node, child: Node | null) => void }
-  if (p.moveBefore && parent.isConnected && n.isConnected) {
+  const numbered = n.nodeName === 'LI' && (parent.nodeName === 'OL' || n.parentNode?.nodeName === 'OL')
+  if (p.moveBefore && parent.isConnected && n.isConnected && !numbered) {
     try {
       return p.moveBefore(n, anchor)
     } catch {

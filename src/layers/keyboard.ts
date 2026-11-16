@@ -1,8 +1,14 @@
 // The keyboard layer (ontology/layers/keyboard.ttl): shortcuts as data.
 import type { FnRule } from '../engine/context.ts'
-import { KEY, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
+import { formatLocale } from '../engine/context.ts'
+import { sortKey } from '../../rdf-engine/host/intl.ts'
+import { md5Key } from '../components/data.ts'
+import { takeFocus } from '../render/dom.ts'
+import { TUPLE } from '../render/order-key.ts'
+import { H, KEY, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { isTrue, labelOf, str } from '../components/util.ts'
 import { mint } from '../rdf.ts'
+import { deepActive, originOf } from '../web/builtins.ts'
 
 const MODIFIERS = ['mod', 'ctrl', 'alt', 'shift', 'meta']
 
@@ -61,12 +67,12 @@ export function trapTab(e: KeyboardEvent, host: Element): boolean {
   const modal = [...host.querySelectorAll('[aria-modal=true]')].filter((m) => !m.closest('[hidden], [inert]')).at(-1)
   if (!modal) return false
   const parts = ([...modal.querySelectorAll(FOCUSABLE)] as HTMLElement[]).filter((el) => !el.closest('[hidden], [inert]') && (el.getClientRects?.().length ?? 1) > 0)
-  const active = modal.ownerDocument.activeElement
+  const active = deepActive(modal.ownerDocument)
   const first = parts[0] ?? (modal as HTMLElement)
   const last = parts.at(-1) ?? (modal as HTMLElement)
   const to = !modal.contains(active) ? first : e.shiftKey && (active === first || active === modal) ? last : !e.shiftKey && active === last ? first : undefined
   if (!to) return false
-  to.focus()
+  takeFocus(to)
   return true
 }
 
@@ -142,25 +148,38 @@ const hint: FnRule = (ctx, focus) => {
 
 const shortcutList: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const items = ctx
-    .match(null, KEY.shortcut, null)
-    .map((q) => ({ node: q.subject, combo: q.object.value, label: labelOf(ctx, q.subject) }))
-    .sort((a, b) => a.label.localeCompare(b.label))
+  // In the viewer's collation, as an order key (sx:sortKey: case folded, accents stripped), so the
+  // SPARQL rule places the rows the same way; a row is keyed by its node and combination.
+  ctx.readsLanguage()
+  const lang = formatLocale(ctx.languages)
+  const items = ctx.match(null, KEY.shortcut, null).map((q) => {
+    const label = labelOf(ctx, q.subject)
+    return { combo: q.object.value, label, key: md5Key(q.subject.value + ' ' + q.object.value), order: TUPLE + 's' + sortKey(label, lang) }
+  })
   if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Div', {}, items.map((it, i) => o.text('l' + i, `${shortcutLabels(it.combo)[1]}  ${it.label}\n`))))
+    const lines = items.map((it) => o.text('l' + it.key, `${shortcutLabels(it.combo)[1]}  ${it.label}\n`))
+    items.forEach((it, i) => o.t(lines[i]!, SEM.orderKey, it.order))
+    const root = o.el('root', 'Div')
+    for (const line of lines) o.t(root, H.hasChild, line)
+    o.renders(root)
     return o.quads
   }
-  const rows = items.map((it, i) => {
+  const rows = items.map((it) => {
     const [apple, other] = shortcutLabels(it.combo)
-    return o.el('row-' + i, 'Div', {}, [
-      o.el('row-' + i + '-dt', 'Dt', {}, [o.text('row-' + i + '-label', it.label)]),
-      o.el('row-' + i + '-dd', 'Dd', {}, [
-        o.el('row-' + i + '-apple', 'Kbd', { class: 'sem-apple' }, [o.text('row-' + i + '-apple-text', apple)]),
-        o.el('row-' + i + '-other', 'Kbd', { class: 'sem-other' }, [o.text('row-' + i + '-other-text', other)]),
+    const row = 'row-' + it.key
+    const el = o.el(row, 'Div', {}, [
+      o.el(row + '-dt', 'Dt', {}, [o.text(row + '-label', it.label)]),
+      o.el(row + '-dd', 'Dd', {}, [
+        o.el(row + '-apple', 'Kbd', { class: 'sem-apple' }, [o.text(row + '-apple-text', apple)]),
+        o.el(row + '-other', 'Kbd', { class: 'sem-other' }, [o.text(row + '-other-text', other)]),
       ]),
     ])
+    o.t(el, SEM.orderKey, it.order)
+    return el
   })
-  o.renders(o.el('root', 'Dl', {}, rows))
+  const root = o.el('root', 'Dl')
+  for (const row of rows) o.t(root, H.hasChild, row)
+  o.renders(root)
   return o.quads
 }
 
@@ -237,7 +256,7 @@ function focusPart(root: Element, part: HTMLElement | undefined) {
  */
 export function navigate(e: KeyboardEvent): boolean {
   if (!NAV_KEYS.has(e.key) || e.altKey || e.ctrlKey || e.metaKey) return false
-  const target = e.target as HTMLElement | null
+  const target = originOf(e) as HTMLElement | null
   const root = target?.closest?.('[data-sem-nav-items]')
   if (!root || target!.closest('input, textarea, select')) return false
   // A menu button: Down / Up open the menu at its first / last item (the click runs its reaction).

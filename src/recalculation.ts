@@ -1,14 +1,15 @@
 // What a change re-ran, as data: for sheets that ask (c:traceRecalculation true), the host hears
-// the engine evaluate formulas (c:Formula and c:QueryFormula, ontology/components/formula.ttl) and, after each
-// handled event that re-ran some, writes them on the sheet (c:recalculated) with a tick
-// (c:recalculationTick), so the sheet can mark them and count them. Only the engine knows which
-// (rule, focus) pairs it evaluated; this effect turns that into graph state.
+// the views runtime step formulas (a view per cell, ontology/components/sheet.ttl) and the engine
+// evaluate the formula layer (c:Formula, ontology/components/formula.ttl) and, after each handled
+// event that re-ran some, writes them on the sheet (c:recalculated) with a tick
+// (c:recalculationTick), so the sheet can mark them and count them. Only the runtime knows which
+// views it stepped and which (rule, focus) pairs it evaluated; this effect turns that into graph state.
 import type { NamedNode, Quad } from '@rdfjs/types'
 import { NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
 import type { Projection, Runtime } from './runtime.ts'
 
 const C = NS.c
-const FORMULAS = new Set([C + 'Formula', C + 'QueryFormula'])
+const FORMULA = C + 'Formula'
 
 export class RecalculationTrace {
   private ran = new Set<string>()
@@ -18,9 +19,14 @@ export class RecalculationTrace {
     private readonly runtime: Runtime,
     projection: Projection,
   ) {
-    this.stop = projection.engine.onEvaluate((slot, focus) => {
-      if (FORMULAS.has(slot)) this.ran.add(focus)
+    const rules = projection.engine.onEvaluate((slot, focus) => {
+      if (slot === FORMULA) this.ran.add(focus)
     })
+    // A view per cell (iv:perReferrer): its focus is the cell.
+    const views = runtime.views.onStep((v) => {
+      if (v.focus) this.ran.add(v.focus)
+    })
+    this.stop = () => (rules(), views())
   }
 
   /** Write what the formulas re-ran since the last call, on each sheet that traces and has some of them. */

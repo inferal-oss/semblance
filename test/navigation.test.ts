@@ -50,7 +50,7 @@ describe('c:NavLink', () => {
       const home = root('nv-link-home')
       expect(home.localName).toBe('a')
       expect(home.getAttribute('data-sem-c')).toBe('nav-link')
-      expect(home.getAttribute('href')).toBe('#home')
+      expect(home.getAttribute('href')).toBe('/')
       expect(home.getAttribute('aria-current')).toBeNull()
       expect(home.querySelector('[data-sem-c=emblem]')).not.toBeNull()
       // Current only once the address says so (the next test); nothing reports one here.
@@ -169,7 +169,7 @@ describe('c:Breadcrumbs', () => {
     expect(items[0]!.querySelector('.sem-sep')!.getAttribute('aria-hidden')).toBe('true')
     expect(items[3]!.querySelector('.sem-sep')).toBeNull()
     expect([...nav.querySelectorAll('a.sem-crumb')].map((link) => link.getAttribute('href'))).toEqual([
-      '#home', '#components', '#components/navigation',
+      '/', '/components/', '/components/navigation/',
     ])
     // without c:controls the crumbs are links, not graph-selection buttons
     expect(nav.querySelector('button')).toBeNull()

@@ -2,8 +2,12 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { Attrs, FnRule, Out, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
-import { isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
+import { formatLocale } from '../engine/context.ts'
+import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { isTrue, labelOf, named, nodes, num, rdfList, str, text } from './util.ts'
+import { dateOf, formatDateTime, formatNumber as intlNumber, numberOf, sortKey } from '../../rdf-engine/host/intl.ts'
+import { numberText } from '../rdf.ts'
+import { compareKeys, TUPLE } from '../render/order-key.ts'
 import { viewRows } from '../view/rows.ts'
 
 const C_QUERY = NS.c + 'query'
@@ -11,10 +15,19 @@ const C_COLUMNS = NS.c + 'tableColumns'
 const C_VARIABLE = NS.c + 'variable'
 const C_ALIGN = NS.c + 'align'
 const C_FORMAT = NS.c + 'format'
+const C_SLOT_PREFIX = NS.c + 'slotPrefix'
+const C_SLOT_VARIABLE = NS.c + 'slotVariable'
+const C_SORTABLE = NS.c + 'sortable'
 const C_SORT_COLUMN = NS.c + 'sortColumn'
 const C_SORT_DESCENDING = NS.c + 'sortDescending'
 const C_SORTS = NS.c + 'sorts'
 const C_ITEMS = NS.c + 'items'
+const C_PAIR_OF = NS.c + 'pairOf'
+const C_TERM = NS.c + 'term'
+const C_PAIR_ORDER = NS.c + 'pairOrder'
+const C_PAIR_COMPONENT = NS.c + 'pairComponent'
+const C_PIECE_OF = NS.c + 'pieceOf'
+const C_PIECE_TEXT = NS.c + 'pieceText'
 const C_DELTA = NS.c + 'delta'
 const C_DELTA_UNIT = NS.c + 'deltaUnit'
 const C_LOWER_IS_BETTER = NS.c + 'lowerIsBetter'
@@ -24,6 +37,10 @@ const C_PARENT_PROPERTY = NS.c + 'parentProperty'
 const C_EXPANDED = NS.c + 'expandedNode'
 const C_DETAIL_PROPERTY = NS.c + 'detailProperty'
 const C_TOGGLES = NS.c + 'expands'
+const C_TREE_ITEM = NS.c + 'TreeItem'
+const C_IN_TREE = NS.c + 'inTree'
+const C_ITEM_LEVEL = NS.c + 'itemLevel'
+const C_PARENT_ITEM = NS.c + 'parentItem'
 
 /** A short, stable key for an IRI or a value (FNV-1a, base 36). */
 export function hashKey(s: string): string {
@@ -72,47 +89,39 @@ export function md5(s: string): string {
 /** A short, stable key that SPARQL rules compute too: SUBSTR(MD5(STR(?x)), 1, 8). */
 export const md5Key = (s: string): string => md5(s).slice(0, 8)
 
-/** The viewer's first language that Intl knows, else en-US. */
-const locale = (ctx: RuleContext) => ctx.memo('data:locale:' + ctx.languages.join(','), () => {
-  try {
-    return Intl.NumberFormat.supportedLocalesOf(ctx.languages)[0] ?? 'en-US'
-  } catch {
-    return 'en-US'
-  }
-})
+/** The viewer's first language that Intl knows, else en-US (the viewer's l10n:formatLocale). */
+const locale = (ctx: RuleContext) => formatLocale(ctx.languages)
 const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
+const DATED = new Set([NS.xsd + 'dateTime', NS.xsd + 'dateTimeStamp', NS.xsd + 'date'])
 const isNumeric = (t: Term | undefined) => t?.termType === 'Literal' && NUMERIC.test(t.value)
 
-/** A number written for the viewer's locale (grouped; at most `digits` decimals). */
+/** A number written for the viewer's locale as sx:formatNumber writes it (grouped; at most `digits` decimals). */
 function formatNumber(ctx: RuleContext, n: number, digits = 2): string {
-  try {
-    return new Intl.NumberFormat(locale(ctx), { maximumFractionDigits: digits }).format(n)
-  } catch {
-    return String(n)
-  }
+  return intlNumber(n, locale(ctx), `maximumFractionDigits=${digits}`)
 }
 
-/** A value as text: IRIs by their label, numbers grouped, others as they are. */
+/** A value as text, as c:TableRendering-sparql writes it: IRIs by their label, numbers in the viewer's locale, others as they are. */
 function display(ctx: RuleContext, t: Term | undefined, format?: string): string {
   if (!t) return ''
   if (t.termType === 'NamedNode') return labelOf(ctx, t)
   if (t.termType !== 'Literal') return t.value
-  const n = Number(t.value)
+  const n = numberOf(t.value)
   switch (format) {
     case 'number':
-      return Number.isFinite(n) ? formatNumber(ctx, n, 0) : t.value
+      return isNumeric(t) ? formatNumber(ctx, n, 0) : t.value
     case 'decimal':
-      return Number.isFinite(n) ? new Intl.NumberFormat(locale(ctx), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) : t.value
+      return isNumeric(t) ? intlNumber(n, locale(ctx), 'minimumFractionDigits=2;maximumFractionDigits=2') : t.value
     case 'percent':
-      return Number.isFinite(n) ? new Intl.NumberFormat(locale(ctx), { style: 'percent', maximumFractionDigits: 1 }).format(n) : t.value
+      return isNumeric(t) ? intlNumber(n, locale(ctx), 'style=percent;maximumFractionDigits=1') : t.value
     case 'time': {
-      const d = new Date(t.value)
-      return Number.isNaN(d.getTime()) ? t.value : d.toLocaleTimeString(locale(ctx), { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+      // As sx:formatDateTime writes it (in the store's time zone), which reads only dates and date-times.
+      const d = DATED.has(t.datatype.value) ? dateOf(t.value) : undefined
+      return !d || Number.isNaN(d.getTime()) ? t.value : formatDateTime(d, locale(ctx), 'hour=2-digit;minute=2-digit;second=2-digit;hour12=false', ctx.timeZone)
     }
     case 'code':
-      return t.value
+      return numberText(t)
   }
-  return isNumeric(t) && Number.isFinite(n) ? formatNumber(ctx, n) : t.value
+  return isNumeric(t) ? formatNumber(ctx, n) : t.value
 }
 
 /** Find, from the event's node up through its RDF/HTML ancestors, the value of a marker predicate. */
@@ -152,13 +161,19 @@ interface Column {
   align?: string
   format?: string
   unit?: string
+  slotPrefix?: string
+  slotVariable?: string
+  sortable?: boolean
 }
 
 type Row = Map<string, Term>
+/** A row and its key: the run's row node (rs:solution) and its place in the run (rs:index), or for rows of a SELECT run here, its values. */
+type Keyed = { row: Row; id: string; index: number }
 
-function columnsOf(ctx: RuleContext, focus: NamedNode, rows: Row[]): Column[] {
+function columnsOf(ctx: RuleContext, focus: NamedNode, variables: string[]): Column[] {
   const declared = nodes(ctx, ctx.object(focus, C_COLUMNS)).map((node) => {
     const variable = str(ctx.object(node, C_VARIABLE)) ?? labelOf(ctx, node)
+    const sorting = ctx.object(node, C_SORTABLE)
     return {
       node,
       variable,
@@ -166,23 +181,75 @@ function columnsOf(ctx: RuleContext, focus: NamedNode, rows: Row[]): Column[] {
       align: str(ctx.object(node, C_ALIGN)),
       format: str(ctx.object(node, C_FORMAT)),
       unit: text(ctx, node, C.unit),
+      slotPrefix: str(ctx.object(node, C_SLOT_PREFIX)),
+      slotVariable: str(ctx.object(node, C_SLOT_VARIABLE)),
+      sortable: sorting ? isTrue(sorting) : true,
     }
   })
   if (declared.length) return declared
-  // No declared columns: the variables of the first row, in its order.
-  return [...(rows[0]?.keys() ?? [])].map((variable) => ({ node: ctx.nn(focus.value + '#' + variable), variable, label: variable }))
+  // No declared columns: the query's, in their order.
+  return variables.map((variable) => ({ node: ctx.nn(focus.value + '#' + variable), variable, label: variable }))
 }
 
-/** Compare two cells: numerically when both are numbers, else as their displayed text. */
-function compareCells(ctx: RuleContext, a: Term | undefined, b: Term | undefined, format?: string): number {
-  if (!a || !b) return a ? -1 : b ? 1 : 0
-  if (isNumeric(a) && isNumeric(b)) return Number(a.value) - Number(b.value)
-  return display(ctx, a, format).localeCompare(display(ctx, b, format), locale(ctx), { numeric: true, sensitivity: 'base' })
+/**
+ * The rows of the table's query: the run that the table names (iv:run, c:TableRuns), one row per
+ * solution, keyed by its node and placed by its index; without a run (a store with no views
+ * runtime), the SELECT run here, keyed by its values. Undefined when the run failed (its message).
+ */
+function tableRows(ctx: RuleContext, focus: NamedNode, query: Term, select: string): { rows: Keyed[]; variables: string[] } | { error: string } {
+  const run = ctx.object(focus, NS.iv + 'run')
+  if (run && ctx.match(run, RDF_TYPE, NS.rs + 'ResultSet').length) {
+    const error = ctx.object(run, NS.iv + 'error')
+    if (error) return { error: error.value }
+    const variables = ctx
+      .objects(run, NS.iv + 'column')
+      .map((col) => ({ v: str(ctx.object(col, NS.rs + 'variable')) ?? '', i: num(ctx, col, NS.rs + 'index', 0) }))
+      .sort((x, y) => x.i - y.i)
+      .map((c) => c.v)
+    const rows = ctx.objects(run, NS.rs + 'solution').map((r) => {
+      const row: Row = new Map()
+      for (const b of ctx.objects(r, NS.rs + 'binding')) {
+        const v = str(ctx.object(b, NS.rs + 'variable'))
+        const value = ctx.object(b, NS.rs + 'value')
+        if (v && value) row.set(v, value)
+      }
+      return { row, id: 'r-' + md5Key(r.value), index: num(ctx, r, NS.rs + 'index', 0) }
+    })
+    return { rows, variables }
+  }
+  let found: Row[]
+  try {
+    found = viewRows(ctx, query, select)
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+  const seen = new Map<string, number>()
+  const rows = found.map((row, i) => {
+    const base = 'r' + hashKey([...row].map(([k, v]) => `${k}=${v.value}`).join('\u0000'))
+    const n = seen.get(base) ?? 0
+    seen.set(base, n + 1)
+    return { row, id: n ? `${base}-${n}` : base, index: i + 1 }
+  })
+  return { rows, variables: [...(found[0]?.keys() ?? [])] }
+}
+
+/**
+ * A row's order key (sem:orderKey), as the SPARQL rule writes it: by its place in the run, or sorted
+ * by a column, (has a value, the value - a number, else its displayed text's sx:sortKey -, its place in
+ * the run), the first two descending when the sort is.
+ */
+function rowKey(ctx: RuleContext, r: Keyed, sortBy: Column | undefined, descending: boolean): string {
+  if (!sortBy) return String(r.index)
+  const v = r.row.get(sortBy.variable)
+  const d = descending ? '-' : ''
+  const value = !v ? 's' : isNumeric(v) ? 'n' + v.value : 's' + sortKey(display(ctx, v, sortBy.format), locale(ctx))
+  return `${TUPLE}${d}n${v ? 0 : 1}${TUPLE}${d}${value}${TUPLE}n${r.index}`
 }
 
 /**
  * Rows of a SELECT under declared columns. Sorting is graph state (c:sortColumn,
- * c:sortDescending); rows are keyed by their content, so a re-sort only reorders them.
+ * c:sortDescending); rows are keyed by their solution and placed by order keys, so a re-sort only
+ * re-keys them.
  */
 const table: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
@@ -191,43 +258,45 @@ const table: FnRule = (ctx, focus) => {
   const select = named(query) ? str(ctx.object(query, SEM.select)) : undefined
   if (!select) return message(o, 'P', text(ctx, focus, C.emptyText) ?? 'No query.')
   if (!ctx.sparql) return message(o, 'P', 'Tables run SPARQL; choose a store with SPARQL.')
-  let rows: Row[]
-  try {
-    rows = viewRows(ctx, query!, select)
-  } catch (e) {
-    return message(o, 'P', `Query ${labelOf(ctx, query!)} failed: ${(e as Error).message}`)
-  }
-  const columns = columnsOf(ctx, focus, rows)
+  const found = tableRows(ctx, focus, query!, select)
+  if ('error' in found) return message(o, 'P', `Query ${labelOf(ctx, query!)} failed: ${found.error}`)
+  const columns = columnsOf(ctx, focus, found.variables)
   const sortNode = ctx.object(focus, C_SORT_COLUMN)
   const descending = isTrue(ctx.object(focus, C_SORT_DESCENDING))
-  const sortBy = sortNode ? columns.find((c) => c.node.equals(sortNode)) : undefined
-  if (sortBy) {
-    const sign = descending ? -1 : 1
-    rows = rows
-      .map((row, i) => ({ row, i }))
-      .sort((a, b) => sign * compareCells(ctx, a.row.get(sortBy.variable), b.row.get(sortBy.variable), sortBy.format) || a.i - b.i)
-      .map(({ row }) => row)
-  }
+  const sortBy = sortNode ? columns.find((c) => c.sortable !== false && c.node.equals(sortNode)) : undefined
+  ctx.readsLanguage()
+  const rows = found.rows.map((r) => ({ ...r, key: rowKey(ctx, r, sortBy, descending) }))
   const cell = (row: Row, c: Column) => {
+    if (c.slotPrefix !== undefined) return ''
     const v = display(ctx, row.get(c.variable), c.format)
     return v && c.unit ? `${v} ${c.unit}` : v
   }
 
   if (ctx.modality === MOD.Text) {
-    const shown = rows.slice(0, 12)
+    // The first 12 rows in their order fix the widths; they are placed by their order keys in a group.
+    const shown = [...rows].sort((a, b) => compareKeys(a.key, b.key)).slice(0, 12)
     const headers = columns.map((c) => (sortBy === c ? `${c.label} ${descending ? '↓' : '↑'}` : c.label))
-    const widths = columns.map((c, i) => Math.min(28, Math.max(headers[i]!.length, ...shown.map((r) => cell(r, c).length))))
-    const pad = (s: string, i: number) => (columns[i]!.align === 'end' ? s.padStart(widths[i]!) : s.padEnd(widths[i]!))
-    const line = (cells: string[]) => cells.map((s, i) => pad(s.length > widths[i]! ? s.slice(0, widths[i]! - 1) + '…' : s, i)).join('  ').trimEnd()
+    const widths = columns.map((c, i) => Math.min(28, Math.max([...headers[i]!].length, ...shown.map((r) => [...cell(r.row, c)].length))))
+    const fit = (s: string, i: number) => {
+      const chars = [...s]
+      const w = widths[i]!
+      const cut = chars.length > w ? chars.slice(0, w - 1).join('') + '…' : s
+      const pad = ' '.repeat(Math.max(0, w - [...cut].length))
+      return columns[i]!.align === 'end' ? pad + cut : cut + pad
+    }
+    const line = (cells: string[]) => cells.map(fit).join('  ').replace(/[ ]+$/, '')
+    const lineEl = (local: string, data: string) => el(o, `line-${local}`, 'Div', {}, [o.text(`line-${local}-text`, data)])
+    const group = el(o, 'rows', 'Div')
+    for (const r of shown) o.t(group, H.hasChild, o.t(lineEl(r.id, line(columns.map((c) => cell(r.row, c)))), SEM.orderKey, r.key).node(`line-${r.id}`))
     const lines = [
-      ...(caption ? [caption] : []),
-      line(headers),
-      line(widths.map((w) => '─'.repeat(w))),
-      ...shown.map((r) => line(columns.map((c) => cell(r, c)))),
-      ...(rows.length > shown.length ? [`… ${rows.length - shown.length} more`] : []),
-      ...(rows.length ? [] : [text(ctx, focus, C.emptyText) ?? 'No rows.']),
+      ...(caption ? [lineEl('caption', caption)] : []),
+      lineEl('header', line(headers)),
+      lineEl('rule', line(widths.map((w) => '─'.repeat(w)))),
+      ...(rows.length ? [group] : []),
+      ...(rows.length > shown.length ? [lineEl('more', `… ${rows.length - shown.length} more`)] : []),
+      ...(rows.length ? [] : [lineEl('empty', text(ctx, focus, C.emptyText) ?? 'No rows.')]),
     ]
-    o.renders(el(o, 'root', 'Div', {}, lines.map((l, i) => el(o, `line${i}`, 'Div', {}, [o.text(`line${i}-text`, l)]))))
+    o.renders(el(o, 'root', 'Div', {}, lines))
     return o.quads
   }
 
@@ -236,32 +305,38 @@ const table: FnRule = (ctx, focus) => {
     el(o, 'head-row', 'Tr', {}, columns.map((c, ci) => {
       const id = `h${ci}`
       const sorted = sortBy === c
-      const button = el(o, `${id}-sort`, 'Button', { type: 'button', class: 'sem-sort' }, [
-        el(o, `${id}-label`, 'Span', {}, [o.text(`${id}-label-text`, c.label)]),
-        el(o, `${id}-icon`, 'Span', { class: 'sem-sort-icon', 'aria-hidden': 'true' }, [o.text(`${id}-icon-text`, sorted ? (descending ? '↓' : '↑') : '↕')]),
-      ])
-      o.t(button, C_SORTS, c.node)
-      const th = el(o, id, 'Th', { scope: 'col', class: alignClass(c) }, [button])
+      const content = c.sortable === false
+        ? [el(o, `${id}-label`, 'Span', { class: 'sem-head-label' }, [o.text(`${id}-label-text`, c.label)])]
+        : [el(o, `${id}-sort`, 'Button', { type: 'button', class: 'sem-sort' }, [
+            el(o, `${id}-label`, 'Span', {}, [o.text(`${id}-label-text`, c.label)]),
+            el(o, `${id}-icon`, 'Span', { class: 'sem-sort-icon', 'aria-hidden': 'true' }, [o.text(`${id}-icon-text`, sorted ? (descending ? '↓' : '↑') : '↕')]),
+          ])]
+      if (c.sortable !== false) o.t(content[0]!, C_SORTS, c.node)
+      const th = el(o, id, 'Th', { scope: 'col', class: alignClass(c) }, content)
       if (sorted) o.attr(th, 'aria-sort', descending ? 'descending' : 'ascending')
       return th
     })),
   ])
-  const seen = new Map<string, number>()
-  const body = rows.length
-    ? rows.map((row) => {
-        // Keyed by content: the same row keeps its elements wherever it sorts to.
-        const base = 'r' + hashKey(columns.map((c) => row.get(c.variable)?.value ?? '').join('\u0000'))
-        const n = seen.get(base) ?? 0
-        seen.set(base, n + 1)
-        const id = n ? `${base}-${n}` : base
-        return el(o, id, 'Tr', {}, columns.map((c, ci) => {
-          const v = cell(row, c)
-          const content = c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])] : [o.text(`${id}-c${ci}-text`, v)]
-          return el(o, `${id}-c${ci}`, ci === 0 ? 'Th' : 'Td', { scope: ci === 0 ? 'row' : undefined, class: alignClass(c) }, content)
-        }))
-      })
-    : [el(o, 'empty-row', 'Tr', {}, [el(o, 'empty-cell', 'Td', { colSpan: String(Math.max(1, columns.length)), class: 'sem-empty' }, [o.text('empty-text', text(ctx, focus, C.emptyText) ?? 'No rows.')])])]
-  const tableEl = el(o, 'table', 'Table', {}, [head, el(o, 'body', 'Tbody', {}, body)])
+  const body = el(o, 'body', 'Tbody')
+  if (rows.length)
+    for (const { row, id, key } of rows) {
+      const tr = el(o, id, 'Tr', {}, columns.map((c, ci) => {
+        const slotKey = row.get(c.slotVariable ?? c.variable)?.value
+        const slotName = c.slotPrefix !== undefined && slotKey !== undefined ? c.slotPrefix + slotKey : undefined
+        const v = cell(row, c)
+        // A component column's cell holds the component its value names (a sparkline, a badge); else the value as text.
+        const component = c.format === 'component' ? row.get(c.variable) : undefined
+        const content = c.slotPrefix !== undefined ? []
+          : component?.termType === 'NamedNode' ? [component as NamedNode]
+          : c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])] : [o.text(`${id}-c${ci}-text`, v)]
+        const cellEl = el(o, `${id}-c${ci}`, ci === 0 ? 'Th' : 'Td', { scope: ci === 0 ? 'row' : undefined, class: alignClass(c) }, content)
+        if (slotName !== undefined) o.t(cellEl, SEM.slot, slotName)
+        return cellEl
+      }))
+      o.t(tr, SEM.orderKey, key).t(body, H.hasChild, tr)
+    }
+  else o.t(body, H.hasChild, el(o, 'empty-row', 'Tr', {}, [el(o, 'empty-cell', 'Td', { colSpan: String(Math.max(1, columns.length)), class: 'sem-empty' }, [o.text('empty-text', text(ctx, focus, C.emptyText) ?? 'No rows.')])]))
+  const tableEl = el(o, 'table', 'Table', {}, [head, body])
   if (caption) o.attr(tableEl, 'aria-label', caption)
   o.attr(tableEl, 'aria-rowcount', String(rows.length + 1))
   // The root scrolls (the header sticks); a focusable region so keyboards can scroll it.
@@ -300,50 +375,133 @@ function describedNode(ctx: RuleContext, focus: NamedNode): Term | undefined {
   return subject && named(via) ? ctx.object(subject, via) : subject
 }
 
-/** Entries of a node (c:entryProperty values, each a c:keyProperty / c:valueProperty pair), by sem:order. */
-function entriesOf(ctx: RuleContext, focus: NamedNode, of: Term): { key: string; term: string; value: string }[] {
-  const entry = ctx.object(focus, NS.c + 'entryProperty')
-  const keyP = ctx.object(focus, NS.c + 'keyProperty')
-  const valueP = ctx.object(focus, NS.c + 'valueProperty')
-  if (!named(entry) || !named(keyP) || !named(valueP)) return []
-  return ctx
-    .objects(of, entry)
-    .filter(named)
-    .map((e) => ({ e, order: Number(str(ctx.object(e, SEM.order)) ?? NaN), term: display(ctx, ctx.object(e, keyP)) }))
-    .sort((a, b) => (Number.isFinite(a.order) && Number.isFinite(b.order) ? a.order - b.order : 0) || a.term.localeCompare(b.term) || (a.e.value < b.e.value ? -1 : 1))
-    .map(({ e, term }) => ({ key: hashKey(e.value), term, value: display(ctx, ctx.object(e, valueP)) }))
+/** A pair a description list shows: its key, term, order key, and its component or the pieces of its value. */
+interface Pair { key: string; term: string; order: string; component?: NamedNode; pieces: { key: string; text: string; order: string }[] }
+
+/** A term's key, as the SPARQL rule writes it (an IRI as it is; a literal with its language and datatype). */
+const termKey = (t: Term) => (t.termType === 'Literal' ? `${t.value}@${t.language}^${t.datatype.value}` : t.value)
+
+/** The members of an RDF list with their positions (as the SPARQL rule counts the cells before each). */
+function positioned(ctx: RuleContext, head: Term | undefined): { member: NamedNode; at: number }[] {
+  return rdfList(ctx, head).flatMap((member, at) => (named(member) ? [{ member, at }] : []))
+}
+
+/**
+ * c:DescriptionPairs: the pairs a description list shows, as data under it (<list>/~pair-<key>):
+ * explicit c:items, else the entries of the node it describes (c:entryProperty, by sem:order, then
+ * by term in the viewer's collation), else the values of c:fields on it. A field's values are
+ * pieces in the viewer's collation of their texts, each after ", " but the first, and its unit a last piece.
+ */
+function pairsOf(ctx: RuleContext, focus: NamedNode): Pair[] {
+  const of = describedNode(ctx, focus)
+  const lang = formatLocale(ctx.languages)
+  const items = positioned(ctx, ctx.object(focus, C_ITEMS))
+  if (items.length) {
+    return items.map(({ member: item, at }) => {
+      const content = ctx.object(item, C.content)
+      const component = named(content) ? content : undefined
+      const value = ctx.object(item, C.value)
+      const key = md5Key(item.value)
+      return { key, term: labelOf(ctx, item), order: TUPLE + 'n' + at, component,
+        pieces: value !== undefined || !component ? [{ key: key + '-v', text: display(ctx, value), order: TUPLE + 'n0' }] : [] }
+    })
+  }
+  if (!of) return []
+  if (ctx.object(focus, NS.c + 'entryProperty')) {
+    const entry = ctx.object(focus, NS.c + 'entryProperty')
+    const keyP = ctx.object(focus, NS.c + 'keyProperty')
+    const valueP = ctx.object(focus, NS.c + 'valueProperty')
+    if (!named(entry) || !named(keyP) || !named(valueP)) return []
+    return ctx.objects(of, entry).filter(named).map((e) => {
+      const position = str(ctx.object(e, SEM.order))
+      const term = display(ctx, ctx.object(e, keyP))
+      const sorted = TUPLE + 's' + sortKey(term, lang)
+      const key = md5Key(e.value)
+      return { key, term, order: position !== undefined && Number.isFinite(Number(position)) ? TUPLE + 'n0' + TUPLE + 'n' + position + sorted : TUPLE + 'n1' + sorted,
+        pieces: [{ key: key + '-v', text: display(ctx, ctx.object(e, valueP)), order: TUPLE + 'n0' }] }
+    })
+  }
+  return positioned(ctx, ctx.object(focus, C.fields)).flatMap(({ member: p, at }) => {
+    const values = ctx.objects(of, p)
+    if (!values.length) return []
+    const key = md5Key(p.value)
+    const pieces = values
+      .map((v) => {
+        const value = display(ctx, v)
+        const k = key + '-v' + md5Key(termKey(v))
+        return { key: k, value, order: TUPLE + 'n0' + TUPLE + 's' + sortKey(value, lang) + TUPLE + 's' + k }
+      })
+      .sort((x, y) => compareKeys(x.order, y.order))
+      .map((x, i) => ({ key: x.key, text: (i ? ', ' : '') + x.value, order: x.order }))
+    const unit = text(ctx, p, C.unit)
+    if (unit) pieces.push({ key: key + '-unit', text: ' ' + unit, order: TUPLE + 'n1' })
+    return [{ key, term: labelOf(ctx, p), order: TUPLE + 'n' + at, pieces }]
+  })
+}
+
+const descriptionPairs: FnRule = (ctx, focus) => {
+  ctx.readsLanguage()
+  const o = ctx.out(focus)
+  for (const p of pairsOf(ctx, focus)) {
+    const pair = o.node('pair-' + p.key)
+    o.t(pair, C_PAIR_OF, focus).t(pair, C_TERM, p.term).t(pair, C_PAIR_ORDER, p.order)
+    if (p.component) o.t(pair, C_PAIR_COMPONENT, p.component)
+    for (const piece of p.pieces) {
+      const n = o.node('pair-' + piece.key)
+      o.t(n, C_PIECE_OF, pair).t(n, C_PIECE_TEXT, piece.text).t(n, C_PAIR_ORDER, piece.order)
+    }
+  }
+  return o.quads
+}
+
+/** The pairs c:DescriptionPairs wrote under the list. */
+function writtenPairs(ctx: RuleContext, focus: NamedNode) {
+  return ctx.match(null, C_PAIR_OF, focus).map((q) => {
+    const pair = q.subject as NamedNode
+    const key = pair.value.slice(focus.value.length + '/~pair-'.length)
+    const component = ctx.object(pair, C_PAIR_COMPONENT)
+    const pieces = ctx.match(null, C_PIECE_OF, pair).map((pq) => ({ node: pq.subject as NamedNode, text: str(ctx.object(pq.subject, C_PIECE_TEXT)) ?? '', order: str(ctx.object(pq.subject, C_PAIR_ORDER)) ?? '' }))
+    return { key, term: str(ctx.object(pair, C_TERM)) ?? '', order: str(ctx.object(pair, C_PAIR_ORDER)) ?? '', component: named(component) ? component : undefined, pieces }
+  })
 }
 
 const descriptionList: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const of = describedNode(ctx, focus)
-  const items = nodes(ctx, ctx.object(focus, C_ITEMS))
-  const pairs: { key: string; term: string; value: string }[] = items.length
-    ? items.map((item) => ({ key: hashKey(item.value), term: labelOf(ctx, item), value: display(ctx, ctx.object(item, C.value)) }))
-    : of && ctx.object(focus, NS.c + 'entryProperty')
-      ? entriesOf(ctx, focus, of)
-      : of
-      ? nodes(ctx, ctx.object(focus, C.fields)).flatMap((p) => {
-          const values = ctx.objects(of, p)
-          if (!values.length) return []
-          const unit = text(ctx, p, C.unit)
-          const value = values.map((v) => display(ctx, v)).join(', ')
-          return [{ key: hashKey(p.value), term: labelOf(ctx, p), value: unit ? `${value} ${unit}` : value }]
-        })
-      : []
+  const pairs = writtenPairs(ctx, focus)
   if (!pairs.length) return message(o, 'P', text(ctx, focus, C.emptyText) ?? 'Nothing to describe.')
+  const root = o.el('root', ctx.modality === MOD.Text ? 'Div' : 'Dl')
+  // Each piece of a value is a text node of its own, in its order (they read as one text):
+  // <local><what the piece's key adds to its pair's>.
+  const pieces = (p: (typeof pairs)[number], local: string) =>
+    p.pieces.map((piece) => {
+      const n = o.node(local + piece.node.value.slice(focus.value.length + '/~pair-'.length + p.key.length))
+      o.t(n, RDF_TYPE, ctx.nn(H.Text)).t(n, H.data, piece.text).t(n, SEM.orderKey, TUPLE + 'n1' + piece.order)
+      return n
+    })
   if (ctx.modality === MOD.Text) {
-    const width = Math.max(...pairs.map((p) => p.term.length))
-    o.renders(el(o, 'root', 'Div', {}, pairs.map((p) => el(o, `p${p.key}`, 'Div', {}, [o.text(`p${p.key}-text`, `${p.term.padEnd(width)}  ${p.value}`)]))))
+    // Terms padded to the longest (in characters), then the value; without one, the component follows the term.
+    const width = Math.max(...pairs.map((p) => [...p.term].length))
+    for (const p of pairs) {
+      const pair = el(o, `p${p.key}`, 'Div')
+      o.t(pair, SEM.orderKey, p.order).t(root, H.hasChild, pair)
+      const head = o.text(`p${p.key}-text`, `${p.term}${' '.repeat(width - [...p.term].length)}  `)
+      o.t(pair, H.hasChild, head)
+      if (p.pieces.length) {
+        o.t(head, SEM.orderKey, TUPLE + 'n0')
+        for (const n of pieces(p, `p${p.key}-text`)) o.t(pair, H.hasChild, n)
+      } else if (p.component) o.t(pair, H.hasChild, p.component).t(head, NS.ord + 'immediatelyPrecedes', p.component)
+    }
+    o.renders(root)
     return o.quads
   }
-  const groups = pairs.map((p) =>
-    el(o, `p${p.key}`, 'Div', { class: 'sem-pair' }, [
+  for (const p of pairs) {
+    const pair = el(o, `p${p.key}`, 'Div', { class: 'sem-pair' }, [
       el(o, `p${p.key}-dt`, 'Dt', {}, [o.text(`p${p.key}-dt-text`, p.term)]),
-      el(o, `p${p.key}-dd`, 'Dd', {}, [o.text(`p${p.key}-dd-text`, p.value)]),
-    ]),
-  )
-  o.renders(el(o, 'root', 'Dl', {}, groups))
+      el(o, `p${p.key}-dd`, 'Dd', {}, p.component ? [p.component] : pieces(p, `p${p.key}-dd-text`)),
+    ])
+    o.t(pair, SEM.orderKey, p.order).t(root, H.hasChild, pair)
+  }
+  o.renders(root)
   return o.quads
 }
 
@@ -515,85 +673,100 @@ const timelineItem: FnRule = (ctx, focus) => {
 
 /**
  * An expandable hierarchy from c:of: a node's children are the subjects that point at it
- * through c:parentProperty. Open nodes are graph state (c:expandedNode) on the tree.
+ * through c:parentProperty. Open nodes are graph state (c:expandedNode) on the tree. The tree
+ * mints the item of its root; each item renders its node and mints the items of its children
+ * when it is open (keyed by the path to it, so a node under two parents is two items).
  */
 const tree: FnRule = (ctx, focus) => {
   const root = ctx.object(focus, C.of)
   const parent = ctx.object(focus, C_PARENT_PROPERTY)
   if (!named(root) || !named(parent)) return []
   const o = ctx.out(focus)
-  const expanded = new Set(ctx.objects(focus, C_EXPANDED).map((t) => t.value))
-  const detail = ctx.object(focus, C_DETAIL_PROPERTY)
-  const target = ctx.object(focus, C.controls)
-  const property = ctx.object(focus, C.property)
-  const selectable = named(target) && named(property)
-  const selected = selectable ? ctx.object(target, property)?.value : undefined
-  const children = (n: NamedNode) =>
-    ctx
-      .match(null, parent, n)
-      .map((q) => q.subject)
-      .filter(named)
-      .map((t) => ({ t, label: labelOf(ctx, t) }))
-      .sort((a, b) => a.label.localeCompare(b.label, locale(ctx)) || (a.t.value < b.t.value ? -1 : 1))
-  const caption = text(ctx, focus, C.label) ?? labelOf(ctx, root)
-  const dropTarget = ctx.match(focus, NS.rdf + 'type', null).some((q) => q.object.value === NS.dnd + 'DropTarget' || q.object.value === NS.dnd + 'Sortable')
-
+  const item = treeItemOf(ctx, o, 'n' + md5Key(root.value), focus, root, 1)
   if (ctx.modality === MOD.Text) {
-    const lines: string[] = []
-    const walk = (n: NamedNode, label: string, depth: number, path: Set<string>) => {
-      const kids = path.has(n.value) ? [] : children(n)
-      const open = expanded.has(n.value) && kids.length > 0
-      lines.push(`${'  '.repeat(depth)}${kids.length ? (open ? '▾ ' : '▸ ') : '  '}${label}${n.value === selected ? '  ◂' : ''}`)
-      if (open) for (const k of kids) walk(k.t, k.label, depth + 1, new Set([...path, n.value]))
-    }
-    walk(root, labelOf(ctx, root), 0, new Set())
-    o.renders(el(o, 'root', 'Div', {}, lines.map((l, i) => el(o, `line${i}`, 'Div', {}, [o.text(`line${i}-text`, l)]))))
+    o.renders(el(o, 'root', 'Div', {}, [item]))
     return o.quads
   }
-
-  // Elements are keyed by the node's path, so a node under two parents is two items.
-  const item = (n: NamedNode, label: string, level: number, key: string, path: Set<string>): NamedNode => {
-    const id = 'n' + key
-    const kids = path.has(n.value) ? [] : children(n)
-    const open = expanded.has(n.value) && kids.length > 0
-    const rowParts: NamedNode[] = []
-    if (kids.length) {
-      const twisty = el(o, `${id}-twisty`, 'Button', { type: 'button', class: 'sem-twisty' }, [el(o, `${id}-twisty-icon`, 'Span', { 'aria-hidden': 'true' }, [o.text(`${id}-twisty-text`, '▸')])])
-      o.attr(twisty, 'aria-label', `${open ? 'Collapse' : 'Expand'} ${label}`)
-      o.t(twisty, C_TOGGLES, n)
-      rowParts.push(twisty)
-    } else rowParts.push(el(o, `${id}-leaf`, 'Span', { class: 'sem-leaf', 'aria-hidden': 'true' }))
-    const labelEl = selectable
-      ? el(o, `${id}-label`, 'Button', { type: 'button', class: 'sem-label' }, [o.text(`${id}-label-text`, label)])
-      : el(o, `${id}-label`, 'Span', { class: 'sem-label' }, [o.text(`${id}-label-text`, label)])
-    if (selectable) o.t(labelEl, C.selects, n)
-    // Without selection, the label toggles too (a larger hit area than the twisty).
-    else if (kids.length) o.t(labelEl, C_TOGGLES, n)
-    rowParts.push(labelEl)
-    const detailText = named(detail) ? display(ctx, ctx.object(n, detail)) : ''
-    if (detailText) rowParts.push(el(o, `${id}-detail`, 'Code', { class: 'sem-detail' }, [o.text(`${id}-detail-text`, detailText)]))
-    if (kids.length) rowParts.push(el(o, `${id}-count`, 'Span', { class: 'sem-count' }, [o.text(`${id}-count-text`, String(kids.length))]))
-    const row = el(o, `${id}-row`, 'Div', { class: 'sem-row' }, rowParts)
-    // A tree that is a drop target receives into each node: its row is the node's zone.
-    if (dropTarget) o.t(focus, NS.dnd + 'zone', row).t(row, NS.dnd + 'receptacle', n)
-    const parts = [row]
-    if (open) {
-      const inner = new Set([...path, n.value])
-      const group = el(o, `${id}-group`, 'Ul', {}, kids.map((k) => item(k.t, k.label, level + 1, hashKey(key + ' ' + k.t.value), inner)))
-      o.attr(group, 'role', 'group')
-      parts.push(group)
-    }
-    const li = el(o, id, 'Li', { style: `--tree-level: ${level - 1}` }, parts)
-    o.attr(li, 'role', 'treeitem')
-    o.attr(li, 'aria-level', String(level))
-    if (kids.length) o.attr(li, 'aria-expanded', String(open))
-    if (selectable) o.attr(li, 'aria-selected', String(n.value === selected))
-    return li
-  }
-  const list = el(o, 'root', 'Ul', {}, [item(root, labelOf(ctx, root), 1, hashKey(root.value), new Set())])
+  const list = el(o, 'root', 'Ul', {}, [item])
   o.attr(list, 'role', 'tree')
-  o.attr(list, 'aria-label', caption)
+  o.attr(list, 'aria-label', text(ctx, focus, C.label) ?? labelOf(ctx, root))
   o.renders(list)
+  return o.quads
+}
+
+/** Mint the item of a node in a tree, at a level. */
+function treeItemOf(ctx: RuleContext, o: Out, local: string, tree: NamedNode, n: NamedNode, level: number, parentItem?: NamedNode): NamedNode {
+  const item = o.node(local)
+  o.t(item, RDF_TYPE, ctx.nn(C_TREE_ITEM)).t(item, C_IN_TREE, tree).t(item, C.of, n).t(item, C_ITEM_LEVEL, ctx.f.literal(String(level), ctx.nn(XSD_INTEGER)))
+  if (parentItem) o.t(item, C_PARENT_ITEM, parentItem)
+  return item
+}
+
+/**
+ * One node of a tree: its row (a twisty or a leaf, the label, the detail, how many children),
+ * and, when open, the items of its children, placed by their order key (the label in the viewer's
+ * collation, then the IRI). A node already on the path to it has no children here (a cycle).
+ */
+const treeItem: FnRule = (ctx, focus) => {
+  const tree = ctx.object(focus, C_IN_TREE)
+  const n = ctx.object(focus, C.of)
+  if (!named(tree) || !named(n)) return []
+  const parent = ctx.object(tree, C_PARENT_PROPERTY)
+  if (!named(parent)) return []
+  const o = ctx.out(focus)
+  const level = num(ctx, focus, C_ITEM_LEVEL, 1)
+  const path = new Set<string>()
+  for (let a = ctx.object(focus, C_PARENT_ITEM); named(a); a = ctx.object(a, C_PARENT_ITEM)) {
+    const at = ctx.object(a, C.of)
+    if (at) path.add(at.value)
+  }
+  const label = labelOf(ctx, n)
+  o.t(focus, SEM.orderKey, TUPLE + 's' + sortKey(label, formatLocale(ctx.languages)) + TUPLE + 's' + n.value)
+  const kids = path.has(n.value) ? [] : [...new Set(ctx.match(null, parent, n).map((q) => q.subject).filter(named).map((t) => t.value))]
+  const open = kids.length > 0 && ctx.match(tree, C_EXPANDED, n).length > 0
+  const target = ctx.object(tree, C.controls)
+  const property = ctx.object(tree, C.property)
+  const selectable = named(target) && named(property)
+  const selected = selectable && ctx.match(target, property, n).length > 0
+  const children = open ? kids.map((k) => treeItemOf(ctx, o, 'c' + md5Key(k), tree, ctx.f.namedNode(k), level + 1, focus)) : []
+  const group = (tag: string) => {
+    const g = el(o, 'group', tag)
+    for (const c of children) o.t(g, H.hasChild, c)
+    return g
+  }
+  if (ctx.modality === MOD.Text) {
+    const line = `${'  '.repeat(level - 1)}${kids.length ? (open ? '▾ ' : '▸ ') : '  '}${label}${selected ? '  ◂' : ''}`
+    o.renders(el(o, 'root', 'Div', {}, [el(o, 'line', 'Div', {}, [o.text('line-text', line)]), ...(open ? [group('Div')] : [])]))
+    return o.quads
+  }
+  const rowParts: NamedNode[] = []
+  if (kids.length) {
+    const twisty = el(o, 'twisty', 'Button', { type: 'button', class: 'sem-twisty' }, [el(o, 'twisty-icon', 'Span', { 'aria-hidden': 'true' }, [o.text('twisty-text', '▸')])])
+    o.attr(twisty, 'aria-label', `${open ? 'Collapse' : 'Expand'} ${label}`)
+    o.t(twisty, C_TOGGLES, n)
+    rowParts.push(twisty)
+  } else rowParts.push(el(o, 'leaf', 'Span', { class: 'sem-leaf', 'aria-hidden': 'true' }))
+  const labelEl = el(o, 'label', selectable ? 'Button' : 'Span', { type: selectable ? 'button' : undefined, class: 'sem-label' }, [o.text('label-text', label)])
+  if (selectable) o.t(labelEl, C.selects, n)
+  // Without selection, the label toggles too (a larger hit area than the twisty).
+  else if (kids.length) o.t(labelEl, C_TOGGLES, n)
+  rowParts.push(labelEl)
+  const detail = ctx.object(tree, C_DETAIL_PROPERTY)
+  // The least value, if the node has several.
+  const detailValue = named(detail) ? ctx.objects(n, detail).sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0))[0] : undefined
+  const detailText = display(ctx, detailValue)
+  if (detailText) rowParts.push(el(o, 'detail', 'Code', { class: 'sem-detail' }, [o.text('detail-text', detailText)]))
+  if (kids.length) rowParts.push(el(o, 'count', 'Span', { class: 'sem-count' }, [o.text('count-text', String(kids.length))]))
+  const row = el(o, 'row', 'Div', { class: 'sem-row' }, rowParts)
+  // A tree that is a drop target receives into each node: its row is the node's zone.
+  if (ctx.match(tree, RDF_TYPE, null).some((q) => q.object.value === NS.dnd + 'DropTarget' || q.object.value === NS.dnd + 'Sortable')) o.t(tree, NS.dnd + 'zone', row).t(row, NS.dnd + 'receptacle', n)
+  const li = el(o, 'root', 'Li', { style: `--tree-level: ${level - 1}` }, [row, ...(open ? [group('Ul')] : [])])
+  if (open) o.attr(o.node('group'), 'role', 'group')
+  o.attr(li, 'role', 'treeitem')
+  o.attr(li, 'aria-level', String(level))
+  if (kids.length) o.attr(li, 'aria-expanded', String(open))
+  if (selectable) o.attr(li, 'aria-selected', String(selected))
+  o.renders(li)
   return o.quads
 }
 
@@ -609,12 +782,14 @@ const treeToggle: ReactionFn = (ctx) => {
 export const functions: Record<string, FnRule> = {
   'data:table': table,
   'data:description-list': descriptionList,
+  'data:description-pairs': descriptionPairs,
   'data:stat': stat,
   'data:avatar': avatar,
   'data:avatar-group': avatarGroup,
   'data:timeline': timeline,
   'data:timeline-item': timelineItem,
   'data:tree': tree,
+  'data:tree-item': treeItem,
 }
 
 export const reactions: Record<string, ReactionFn> = {

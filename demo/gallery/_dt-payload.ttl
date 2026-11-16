@@ -39,7 +39,7 @@ ui:dt-json-order a c:JsonTree ; c:label "order" ; c:expandDepth 2 ; c:value """{
   ]
 }""" .
 ui:dt-json a c:Flippable ; c:front ui:dt-json-spec .
-ui:dt-json-spec a c:Specimen ; c:demonstrates c:JsonTree ; c:label "JSON tree" ;
+ui:dt-json-spec a c:Specimen ; c:demonstrates c:JsonTree ; c:label "JSON tree" , "Дерево JSON"@uk , "JSON-Baum"@de , "شجرة JSON"@ar ;
     c:help "A JSON payload as a tree: keys in source order, containers with their sizes, values colored by type. Which containers are open is graph state on the tree (JSON Pointers in c:expandedPath and c:collapsedPath, over c:expandDepth); only open containers' members are minted. Arrow keys move through it; Right opens, Left closes." ;
     c:children ( ui:dt-json-order ) .
 
@@ -48,7 +48,7 @@ ui:dt-json-spec a c:Specimen ; c:demonstrates c:JsonTree ; c:label "JSON tree" ;
 ui:dt-hex-greeting a c:HexView ; c:limit 64 ;
     c:value "Hello, Semblance — ünïcödé ✓\nGET /api/orders?limit=20 HTTP/1.1\r\nAccept: application/json\r\n" .
 ui:dt-hex a c:Flippable ; c:front ui:dt-hex-spec .
-ui:dt-hex-spec a c:Specimen ; c:demonstrates c:HexView ; c:label "Hex view" ;
+ui:dt-hex-spec a c:Specimen ; c:demonstrates c:HexView ; c:label "Hex view" , "Шістнадцятковий вигляд"@uk , "Hex-Ansicht"@de , "عرض ست عشري"@ar ;
     c:help "The UTF-8 bytes of a payload, sixteen to a row: offset, hex and printable ASCII. Multi-byte characters take several bytes; c:limit bounds what is shown." ;
     c:children ( ui:dt-hex-greeting ) .
 
@@ -80,7 +80,7 @@ ui:dt-body-picker a c:Segmented ; c:controls ui:dt-body-pick ; c:property ui:pic
 ui:dt-body-bound a c:BodyViewer ; c:bindFrom ui:dt-body-pick ; c:bindProperty ui:pickedSample ;
     c:payloadProperty ui:payloadBody ; c:typeProperty ui:payloadType ; c:emptyText "Pick a sample." .
 ui:dt-body a c:Flippable ; c:front ui:dt-body-spec .
-ui:dt-body-spec a c:Specimen ; c:demonstrates c:BodyViewer ; c:label "Body viewer" ;
+ui:dt-body-spec a c:Specimen ; c:demonstrates c:BodyViewer ; c:label "Body viewer" , "Перегляд вмісту"@uk , "Inhaltsanzeige"@de , "عارض المحتوى"@ar ;
     c:help "One payload as text, hex or a JSON tree; the representation is graph state on the viewer (c:representation), and JSON is offered only for a payload that looks like JSON. The header shows the media type and the size in bytes. The second viewer follows a choice (c:bindFrom / c:bindProperty), as an inspector's follows the selected entry." ;
     c:children ( ui:dt-body-fixed ui:dt-body-picker ui:dt-body-bound ) .
 
@@ -102,6 +102,6 @@ ui:dt-image-picker a c:Segmented ; c:controls ui:dt-image-pick ; c:property ui:p
 ui:dt-image-view a c:ImageView ; c:bindFrom ui:dt-image-pick ; c:bindProperty ui:pickedPicture ;
     c:payloadProperty ui:pictureAddress ; c:altProperty ui:pictureSays ; c:emptyText "Pick a picture." .
 ui:dt-image a c:Flippable ; c:front ui:dt-image-spec .
-ui:dt-image-spec a c:Specimen ; c:demonstrates c:ImageView ; c:label "Image view" ;
+ui:dt-image-spec a c:Specimen ; c:demonstrates c:ImageView ; c:label "Image view" , "Перегляд зображення"@uk , "Bildansicht"@de , "عرض الصورة"@ar ;
     c:help "One image whose address is data - c:payloadProperty of the node it follows (here a choice; in the file explorer, the selected file's file:url) - fitted to its box, with its alt text from c:altProperty." ;
     c:children ( ui:dt-image-picker ui:dt-image-view ) .

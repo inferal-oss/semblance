@@ -95,7 +95,7 @@ WHERE {
 # is the current page (aria-current=page).
 
 c:Breadcrumbs a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """A trail of nodes in a <nav> (c:label names it, default "Breadcrumb"): c:items, or the path
 from the root down to c:of (or to c:property of c:controls) through c:parentProperty. The last is
 aria-current=page. With c:controls and c:property, earlier crumbs select a graph node. Otherwise,
@@ -133,7 +133,7 @@ WHERE {
     { SELECT ?cell (COUNT(?before) AS ?pos) WHERE { $this c:items/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
     BIND(NOT EXISTS { ?cell rdf:rest+ ?later . ?later rdf:first ?laterCrumb FILTER(isIRI(?laterCrumb)) } AS ?last)
   } UNION {
-    FILTER NOT EXISTS { $this c:items/rdf:rest*/rdf:first ?anyItem FILTER(isIRI(?anyItem)) }
+    FILTER NOT EXISTS { $this (c:items/rdf:first|c:items/rdf:rest+/rdf:first) ?anyItem FILTER(isIRI(?anyItem)) }
     $this c:parentProperty ?prop . FILTER(isIRI(?prop))
     OPTIONAL { $this c:of ?of }
     OPTIONAL { $this c:controls ?target ; c:property ?property . FILTER(isIRI(?target) && isIRI(?property)) ?target ?property ?selectedEnd }
@@ -210,7 +210,7 @@ WHERE {
     { SELECT ?cell (COUNT(?before) AS ?pos) WHERE { $this c:items/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
     BIND(NOT EXISTS { ?cell rdf:rest+ ?later . ?later rdf:first ?laterCrumb FILTER(isIRI(?laterCrumb)) } AS ?last)
   } UNION {
-    FILTER NOT EXISTS { $this c:items/rdf:rest*/rdf:first ?anyItem FILTER(isIRI(?anyItem)) }
+    FILTER NOT EXISTS { $this (c:items/rdf:first|c:items/rdf:rest+/rdf:first) ?anyItem FILTER(isIRI(?anyItem)) }
     $this c:parentProperty ?prop . FILTER(isIRI(?prop))
     OPTIONAL { $this c:of ?of }
     OPTIONAL { $this c:controls ?target ; c:property ?property . FILTER(isIRI(?target) && isIRI(?property)) ?target ?property ?selectedEnd }
@@ -294,13 +294,6 @@ WHERE {
     FILTER(!BOUND(?upTo) || ?other = ?upTo || EXISTS { ?otherAt c:stepUp+ ?upToAt })
   }
 }""" .
-
-c:BreadcrumbsSelect a beh:Reaction ;
-    beh:when beh:Click ;
-    beh:sourceClass c:Breadcrumbs ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?node } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .
 
 # --- Pagination ------------------------------------------------------------------------------------
 

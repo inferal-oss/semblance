@@ -24,6 +24,59 @@
         "--strictPort"
       ],
       "port": 5181
+    },
+    {
+      "name": "remote",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "examples/remote/vite.config.ts",
+        "--port",
+        "5186",
+        "--strictPort"
+      ],
+      "port": 5186
+    },
+    {
+      "name": "react",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "examples/react/vite.config.ts",
+        "--port",
+        "5183",
+        "--strictPort"
+      ],
+      "port": 5183
+    },
+    {
+      "name": "react-built",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--config",
+        "examples/react/vite.config.ts",
+        "--port",
+        "5184",
+        "--strictPort"
+      ],
+      "port": 5184
+    },
+    {
+      "name": "views",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "examples/views/vite.config.ts",
+        "--port",
+        "5191",
+        "--strictPort"
+      ],
+      "port": 5191
     }
   ]
 }

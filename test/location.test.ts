@@ -16,6 +16,7 @@ const PER = NS.per
 /** A browser tab's address and history: entries, an index, popstate on Back and Forward, hashchange on a followed link. */
 function tab(start = '/') {
   const entries = [new URL(start, 'https://semblance.test/')]
+  const states: unknown[] = [null]
   let at = 0
   const events = new EventTarget()
   const location = {
@@ -32,13 +33,18 @@ function tab(start = '/') {
   const history = {
     pushes: 0,
     replaces: 0,
-    pushState(_d: unknown, _u: string, url: string) {
+    get state() {
+      return states[at]
+    },
+    pushState(d: unknown, _u: string, url: string) {
       entries.splice(at + 1, Infinity, new URL(url, entries[at]))
+      states.splice(at + 1, Infinity, d)
       at++
       this.pushes++
     },
-    replaceState(_d: unknown, _u: string, url: string) {
+    replaceState(d: unknown, _u: string, url: string) {
       entries[at] = new URL(url, entries[at])
+      states[at] = d
       this.replaces++
     },
   }
@@ -48,6 +54,10 @@ function tab(start = '/') {
     events,
     get address() {
       return location.search + location.hash
+    },
+    /** The whole address: the path too (the site's location has paths). */
+    get url() {
+      return location.pathname + location.search + location.hash
     },
     get length() {
       return entries.length
@@ -60,9 +70,10 @@ function tab(start = '/') {
       at++
       events.dispatchEvent(new Event('popstate'))
     },
-    /** Follow a link or type an address: a new entry, then hashchange (as browsers do). */
+    /** Follow a link or type an address: a new entry, then hashchange (as browsers do for a fragment; the navigation effect takes over links to paths). */
     visit(url: string) {
       entries.splice(at + 1, Infinity, new URL(url, entries[at]))
+      states.splice(at + 1, Infinity, null)
       at++
       events.dispatchEvent(new Event('hashchange'))
     },
@@ -84,30 +95,218 @@ async function site(start = '/', backends?: Record<string, Backend>, extra: Part
   return { ...h, tab: t, set, visible }
 }
 
-describe('navigation: where we are, in the address', () => {
-  it('reads the fragment into the graph before the first projection, and keeps a canonical one', async () => {
-    const s = await site('/#docs/rules')
-    expect(s.value(UI + 'page')).toBe(UI + 'Docs')
-    expect(s.value(UI + 'docSection')).toBe(UI + 'DocRules')
-    expect(s.tab.address).toBe('#docs/rules')
-    expect(s.tab.history.pushes).toBe(0)
+/** A page's scroll position: a person scrolling, and how long the page is now. */
+function scrolled() {
+  const settled: (() => void)[] = []
+  const page = {
+    y: 0,
+    height: 10_000,
+    moves: [] as number[],
+    offset: () => ({ x: 0, y: page.y }),
+    to(at: { x: number; y: number }) {
+      page.y = Math.min(at.y, page.height)
+      page.moves.push(page.y)
+      return page.y === at.y
+    },
+    settled(run: () => void) {
+      settled.push(run)
+      return () => {}
+    },
+    /** A person scrolls there, and it settles. */
+    scroll(y: number) {
+      page.y = y
+      for (const run of settled) run()
+    },
+  }
+  return page
+}
+
+describe('navigation: where a step lands', () => {
+  it('starts another place at its top, by a change of the graph or the address', async () => {
+    const page = scrolled()
+    const s = await site('/docs/rules/', undefined, { scroll: page })
+    page.scroll(800)
+    s.set(UI + 'page', UI + 'Components') // the app bar
+    await tick()
+    expect(s.tab.url).toBe('/components/foundations/')
+    expect(page.y).toBe(0)
+    page.scroll(800)
+    s.set(UI + 'galleryGroup', UI + 'GroupInputs') // a side list
+    await tick()
+    expect(page.y).toBe(0)
+    page.scroll(800)
+    s.tab.visit('/examples/kanban/') // a followed link
+    expect(s.value(UI + 'example')).toBe(UI + 'ExKanban')
+    expect(page.y).toBe(0)
   })
 
-  it('writes the graph to the fragment, nested dimensions after their parent and only in scope', async () => {
-    const s = await site('/')
-    expect(s.tab.address).toBe('#home') // no section: the docs section applies only on the docs
+  it('stays where it is for what shows the same place another way, or does not move it (nav:scroll)', async () => {
+    const page = scrolled()
+    const s = await site('/docs/rules/', undefined, { scroll: page })
+    page.scroll(800)
+    s.set(NS.l10n + 'language', NS.l10n + 'Ukrainian')
+    await tick()
+    expect(s.tab.url).toBe('/uk/docs/rules/')
+    expect(page.y).toBe(800)
+    // The address not changing, a section out of scope changing: not another place either.
+    s.tab.history.replaceState(s.tab.history.state, '', '/uk/docs/rules/')
+    s.set(UI + 'example', UI + 'ExKanban')
+    await tick()
+    expect(page.y).toBe(800)
+    expect(page.moves).toEqual([])
+  })
+
+  it('brings a target into view instead, and goes to the top once a step leaves it', async () => {
+    const page = scrolled()
+    const revealed: string[] = []
+    const s = await site('/docs/rules/', undefined, { scroll: page, reveal: (iri) => (revealed.push(iri), true) })
+    page.scroll(800)
+    s.tab.visit('/components/inputs/#inp-codes-spec')
+    expect(revealed).toEqual([UI + 'inp-codes-spec'])
+    expect(page.moves).toEqual([])
     s.set(UI + 'page', UI + 'Docs')
     await tick()
-    expect(s.tab.address).toBe('#docs/overview')
-    s.set(UI + 'docSection', UI + 'DocLayers')
-    await tick()
-    expect(s.tab.address).toBe('#docs/layers')
+    expect(s.tab.url).toBe('/docs/rules/')
+    expect(page.y).toBe(0)
+  })
+
+  it('returns to where the page was on Back and Forward, at the target or not', async () => {
+    const page = scrolled()
+    const revealed: string[] = []
+    const s = await site('/docs/rules/', undefined, { scroll: page, reveal: (iri) => (revealed.push(iri), true) })
+    page.scroll(800)
     s.set(UI + 'page', UI + 'Components')
     await tick()
-    expect(s.tab.address).toBe('#components/foundations')
+    expect(page.y).toBe(0)
+    page.scroll(350)
+    s.tab.visit('/components/inputs/#inp-codes-spec')
+    revealed.length = 0
+    page.scroll(1200)
+    s.tab.back()
+    expect(s.tab.url).toBe('/components/foundations/')
+    expect(page.y).toBe(350)
+    s.tab.back()
+    expect(s.tab.url).toBe('/docs/rules/')
+    expect(page.y).toBe(800)
+    s.tab.forward()
+    expect(page.y).toBe(350)
+    s.tab.forward()
+    expect(s.tab.url).toBe('/components/inputs/#inp-codes-spec')
+    expect(page.y).toBe(1200)
+    expect(revealed).toEqual([]) // where it was, not back at the target
+  })
+
+  it('remembers the offset the page had before rendering the step cut it short', async () => {
+    const page = scrolled()
+    const s = await site('/docs/rules/', undefined, { scroll: page })
+    page.scroll(800)
+    page.y = 900 // scrolled on, not settled yet
+    s.set(UI + 'page', UI + 'Components') // rendered at once: the page is shorter before the step is written
+    page.y = 300
+    await tick()
+    page.y = 0
+    s.tab.back()
+    expect(page.y).toBe(900)
+  })
+
+  it('waits for a page too short to get back there, stops when another step comes, and remembers nothing on the way', async () => {
+    const page = scrolled()
+    const frames: (() => void)[] = []
+    const s = await site('/docs/rules/', undefined, { scroll: page, frame: (run) => frames.push(run) })
+    page.scroll(800)
+    s.set(UI + 'page', UI + 'Components')
+    await tick()
+    page.height = 100
+    s.tab.back()
+    expect(page.y).toBe(100)
+    page.scroll(100) // the clamp's own scroll event: not where the entry was
+    page.height = 10_000
+    frames.shift()!()
+    expect(page.y).toBe(800)
+    expect(s.tab.history.state).toMatchObject({ semScroll: { y: 800 } })
+    page.height = 100
+    s.tab.forward()
+    s.tab.back()
+    s.set(UI + 'page', UI + 'Home')
+    await tick()
+    page.height = 10_000
+    for (const run of frames.splice(0)) run()
+    expect(page.y).toBe(0)
+  })
+
+  it('keeps the position over a reload, and over the address being spelled in place', async () => {
+    const t = tab('/docs/rules/')
+    const options = { location: t.location, history: t.history, events: t.events }
+    const page = scrolled()
+    await mountNavigating({ ...options, scroll: page })
+    page.scroll(640)
+    expect(t.history.state).toMatchObject({ semScroll: { y: 640 } })
+    t.history.replaceState(t.history.state, '', '/docs/rules/')
+    const reloaded = scrolled()
+    const revealed: string[] = []
+    await mountNavigating({ ...options, scroll: reloaded, reveal: (iri) => (revealed.push(iri), true) })
+    expect(reloaded.y).toBe(640)
+    expect(revealed).toEqual([])
+    expect(t.history.state).toMatchObject({ semScroll: { y: 640 } })
+  })
+
+  it('does not move on a first load, and a new load with a target brings it into view', async () => {
+    const page = scrolled()
+    await site('/docs/rules/', undefined, { scroll: page })
+    expect(page.moves).toEqual([])
+    const target = scrolled()
+    const revealed: string[] = []
+    await site('/components/inputs/#inp-codes-spec', undefined, { scroll: target, reveal: (iri) => (revealed.push(iri), true) })
+    expect(revealed).toEqual([UI + 'inp-codes-spec'])
+    expect(target.moves).toEqual([])
+  })
+
+  it('a link followed to the address already shown is not a step back: its target is brought into view', async () => {
+    const page = scrolled()
+    const revealed: string[] = []
+    const s = await site('/components/inputs/#inp-codes-spec', undefined, { scroll: page, reveal: (iri) => (revealed.push(iri), true) })
+    page.scroll(1200)
+    revealed.length = 0
+    s.navigation.follow()
+    expect(revealed).toEqual([UI + 'inp-codes-spec'])
+    expect(page.moves).toEqual([])
+  })
+})
+
+describe('navigation: where we are, in the address', () => {
+  it('reads the address into the graph before the first projection, and keeps a canonical one (a fragment from before paths too)', async () => {
+    const s = await site('/docs/rules/')
+    expect(s.value(UI + 'page')).toBe(UI + 'Docs')
+    expect(s.value(UI + 'docSection')).toBe(UI + 'DocRules')
+    expect(s.tab.url).toBe('/docs/rules/')
+    expect(s.tab.history.pushes).toBe(0)
+    const old = await site('/#docs/rules')
+    expect(old.value(UI + 'docSection')).toBe(UI + 'DocRules')
+    expect(old.tab.url).toBe('/docs/rules/') // rewritten in place
+    expect(old.tab.history.pushes).toBe(0)
+    const uk = await site('/uk/docs/rules/')
+    expect(uk.value(NS.l10n + 'language')).toBe(NS.l10n + 'Ukrainian')
+    expect(uk.tab.url).toBe('/uk/docs/rules/')
+  })
+
+  it('writes the graph to the address, nested dimensions after their parent and only in scope', async () => {
+    const s = await site('/')
+    expect(s.tab.url).toBe('/') // the home page, in English: nothing to spell; no section: it applies only on the docs
+    s.set(UI + 'page', UI + 'Docs')
+    await tick()
+    expect(s.tab.url).toBe('/docs/overview/')
+    s.set(UI + 'docSection', UI + 'DocLayers')
+    await tick()
+    expect(s.tab.url).toBe('/docs/layers/')
+    s.set(UI + 'page', UI + 'Components')
+    await tick()
+    expect(s.tab.url).toBe('/components/foundations/')
     s.set(UI + 'page', UI + 'Reference')
     await tick()
-    expect(s.tab.address).toBe('#reference/c:Window') // a term, as a prefixed name
+    expect(s.tab.url).toBe('/reference/c:Window/') // a term, as a prefixed name
+    s.set(NS.l10n + 'language', NS.l10n + 'German')
+    await tick()
+    expect(s.tab.url).toBe('/de/reference/c:Window/')
   })
 
   it('makes one step per interaction, through the graph; Back and Forward walk it', async () => {
@@ -117,13 +316,13 @@ describe('navigation: where we are, in the address', () => {
     await tick()
     s.fire([...s.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === 'Performance' && s.visible(b))!, 'click')
     await tick()
-    expect(s.tab.address).toBe('#docs/performance')
+    expect(s.tab.url).toBe('/docs/performance/')
     expect(s.tab.history.pushes).toBe(2)
     expect(s.tab.length).toBe(3)
 
     s.tab.back()
     expect(s.value(UI + 'docSection')).toBe(UI + 'DocOverview')
-    expect(s.tab.address).toBe('#docs/overview')
+    expect(s.tab.url).toBe('/docs/overview/')
     s.tab.back()
     expect(s.value(UI + 'page')).toBe(UI + 'Home')
     s.tab.forward()
@@ -139,7 +338,7 @@ describe('navigation: where we are, in the address', () => {
   })
 
   it('shows where we are in the tools: the address, and each dimension with its value, spelling and carriers', async () => {
-    const s = await site('/#docs/rules')
+    const s = await site('/docs/rules/')
     const f = s.store.factory
     s.runtime.apply({
       remove: [...s.store.match(f.namedNode(UI + 'tools'), f.namedNode(NS.c + 'open'), null), ...s.store.match(f.namedNode(UI + 'views'), f.namedNode(NS.c + 'selected'), null)],
@@ -148,75 +347,78 @@ describe('navigation: where we are, in the address', () => {
     s.shell.flush()
     const table = () => s.shell.nodeOf(UI + 'locationTable/~root') as Element
     const rows = () => [...table().querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('th, td')].map((td) => td.textContent!.trim()))
-    expect(rows()[0]).toEqual(['Page', 'Docs', 'docs', 'The address (#)', 'Makes history'])
-    expect(rows()[1]!.slice(0, 3)).toEqual(['Docs', 'Rules and the engine', 'rules'])
-    expect(rows()[1]![3]!.split(', ').sort()).toEqual(['The address (#)', 'This tab'])
-    expect(rows()[2]!.slice(1, 3)).toEqual(['Todo, two projections', '—']) // the example applies only on the examples
-    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('#docs/rules')
+    expect(rows()[0]!.slice(1, 4)).toEqual(['English', 'en', 'The address (/)']) // the language (the address leaves English unspelled)
+    expect(rows()[1]).toEqual(['Page', 'Docs', 'docs', 'The address (/)', 'Makes history'])
+    expect(rows()[2]!.slice(0, 3)).toEqual(['Docs', 'Rules and the engine', 'rules'])
+    expect(rows()[2]![3]!.split(', ').sort()).toEqual(['The address (/)', 'This tab'])
+    expect(rows()[3]!.slice(1, 3)).toEqual(['Todo, two projections', '—']) // the example applies only on the examples
+    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('/docs/rules/')
     s.set(UI + 'page', UI + 'Examples')
     await tick()
     s.shell.flush()
-    expect(rows()[0]!.slice(1, 3)).toEqual(['Examples', 'examples'])
-    expect(rows()[1]![2]).toBe('—')
-    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('#examples/todo')
+    expect(rows()[1]!.slice(1, 3)).toEqual(['Examples', 'examples'])
+    expect(rows()[2]![2]).toBe('—')
+    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('/examples/todo/')
   })
 
   it('opens deep links where they point', async () => {
-    const perf = await site('/#docs/performance')
+    const perf = await site('/docs/performance/')
     expect([...perf.document.querySelectorAll('[data-sem-c=bar-chart]')].some(perf.visible)).toBe(true)
-    const signin = await site('/#examples/signin')
+    const signin = await site('/examples/signin/')
     expect(signin.value(UI + 'example')).toBe(UI + 'ExSignin')
     expect([...signin.document.querySelectorAll('[data-sem-c=code-input]')].some(signin.visible)).toBe(true)
-    const group = await site('/#components/inputs')
+    const group = await site('/components/inputs/')
     expect(group.value(UI + 'galleryGroup')).toBe(UI + 'GroupInputs')
     // The docs say so, with links to resources in them.
-    const docs = await site('/#docs/navigation')
+    const docs = await site('/docs/navigation/')
     const links = [...docs.document.querySelectorAll('a')].filter(docs.visible).map((a) => a.textContent + ' ' + a.getAttribute('href'))
-    expect(links).toContain('the code input #components/inputs/inp-codes-spec')
-    expect(links).toContain('the SPARQL workbench #workbench')
+    expect(links).toContain('the code input /components/inputs/#inp-codes-spec')
+    expect(links).toContain('the SPARQL workbench /docs/#workbench') // on every page: the page stays
   })
 
   it('ignores what it does not know, safely', async () => {
     for (const [start, page, address] of [
-      ['/#nowhere/at/all', UI + 'Home', '#home'],
-      ['/#docs/nonsense', UI + 'Docs', '#docs/overview'],
-      ['/#docs/rules/extra/segments', UI + 'Docs', '#docs/rules'],
-      ['/#docs/%E0%A4%A', UI + 'Docs', '#docs/overview'],
-      ['/#home/rules', UI + 'Home', '#home'], // the docs section does not apply on the home page
+      ['/#nowhere/at/all', UI + 'Home', '/'],
+      ['/nowhere/at/all/', UI + 'Home', '/'],
+      ['/docs/nonsense/', UI + 'Docs', '/docs/overview/'],
+      ['/docs/rules/extra/segments/', UI + 'Docs', '/docs/rules/'],
+      ['/docs/%E0%A4%A/', UI + 'Docs', '/docs/overview/'],
+      ['/#docs/rules/extra/segments', UI + 'Docs', '/docs/rules/'],
+      ['/home/rules/', UI + 'Home', '/'], // the docs section does not apply on the home page
     ] as const) {
       const s = await site(start)
       expect(s.value(UI + 'page'), start).toBe(page)
-      expect(s.tab.address, start).toBe(address)
+      expect(s.tab.url, start).toBe(address)
     }
     const s = await site('/')
-    s.tab.visit('#examples/no-such-example')
+    s.tab.visit('#examples/no-such-example') // an old link: read whole
     expect(s.value(UI + 'page')).toBe(UI + 'Examples')
     expect(s.value(UI + 'example')).toBe(UI + 'ExTodo')
   })
 
   it('keeps other query parameters (the host’s own) as they are', async () => {
-    const s = await site('/?store=n3&prefer=function#examples/kanban')
+    const s = await site('/examples/kanban/?store=n3&prefer=function')
     expect(s.value(UI + 'example')).toBe(UI + 'ExKanban')
-    s.set(UI + 'page', UI + 'Home')
+    s.set(UI + 'page', UI + 'Docs')
     await tick()
-    expect(s.tab.address).toBe('?store=n3&prefer=function#home')
+    expect(s.tab.url).toBe('/docs/overview/?store=n3&prefer=function')
   })
 
   it('takes the address over storage, and storage over the default (nav:rank)', async () => {
     const backends = storage()
-    const a = await site('/#docs/rules', backends)
+    const a = await site('/docs/rules/', backends)
     await a.persistence!.flush()
     expect(await backends[PER + 'Session']!.get('semblance:' + UI + 'atDocSection')).toContain('DocRules')
     // Remembered once, by the location: the settings policy no longer covers it.
-    expect(await backends[PER + 'Session']!.get('semblance:' + UI + 'rememberSettings')).toBeUndefined()
+    expect(await backends[PER + 'Session']!.get('semblance:' + UI + 'rememberLanguage')).toBeUndefined()
 
-    expect((await site('/#docs/layers', backends)).value(UI + 'docSection')).toBe(UI + 'DocLayers') // the address
-    expect((await site('/#docs', backends)).value(UI + 'docSection')).toBe(UI + 'DocRules') // storage
-    expect((await site('/#docs', storage())).value(UI + 'docSection')).toBe(UI + 'DocOverview') // the default
-    const back = await site('/#home', backends)
+    expect((await site('/docs/layers/', backends)).value(UI + 'docSection')).toBe(UI + 'DocLayers') // the address
+    expect((await site('/docs/', backends)).value(UI + 'docSection')).toBe(UI + 'DocRules') // storage
+    expect((await site('/docs/', storage())).value(UI + 'docSection')).toBe(UI + 'DocOverview') // the default
+    const back = await site('/', backends)
     back.set(UI + 'page', UI + 'Docs')
     await tick()
-    expect(back.tab.address).toBe('#docs/rules') // the page is found where it was left
+    expect(back.tab.url).toBe('/docs/rules/') // the page is found where it was left
   })
 })
 
@@ -309,17 +511,17 @@ describe('navigation: links to resources', () => {
     const loc = readLocations(r).find((l) => l.iri === UI + 'location')!
     const needs = shows(r, loc, s.store.factory.namedNode(UI + 'inp-codes-spec'))!
     expect(Object.fromEntries([...needs].map(([d, v]) => [d.slice(UI.length), v.value.slice(UI.length)]))).toEqual({ atPage: 'Components', atGalleryGroup: 'GroupInputs' })
-    expect(addressOf(r, s.store.factory.namedNode(UI + 'inp-codes-spec'))).toBe('#components/inputs/inp-codes-spec')
+    expect(addressOf(r, s.store.factory.namedNode(UI + 'inp-codes-spec'))).toBe('/components/inputs/#inp-codes-spec')
     expect(addressOf(r, s.store.factory.namedNode(UI + 'DocRules'))).toBe(undefined) // not a component anywhere
     // A whole page (a switch case's content) is shown by the page alone: nothing to bring into view.
-    expect(addressOf(r, s.store.factory.namedNode(UI + 'home'))).toBe('#home')
+    expect(addressOf(r, s.store.factory.namedNode(UI + 'home'))).toBe('/')
   })
 
   it.each(['sparql', 'function'] as const)("the app bar's logo and name link home (%s)", (prefer) => {
     const s = mountSite('wat', prefer)
     const home = s.document.querySelector('[data-sem-c=app-bar] .sem-home')!
     expect(home.tagName).toBe('A')
-    expect(home.getAttribute('href')).toBe('#home')
+    expect(home.getAttribute('href')).toBe('/')
     expect(home.querySelector('[data-sem-c=graph-mark]')).not.toBeNull()
     expect(home.textContent).toContain('Semblance')
     expect(home.querySelector('.sem-byline')).toBeNull() // the sponsor's own link stays outside
@@ -362,11 +564,11 @@ ui:field a c:TextField ; c:label "Field" ; nav:anchor "the-field" .
       reveal: (iri, { smooth }) => (rendered ? (revealed.push({ iri, smooth }), true) : false),
       frame: (run) => frames.push(run),
     })
-    s.tab.visit('#components/inputs/inp-codes-spec')
+    s.tab.visit('/components/inputs/#inp-codes-spec')
     expect(s.value(UI + 'page')).toBe(UI + 'Components')
     expect(s.value(UI + 'galleryGroup')).toBe(UI + 'GroupInputs')
     expect(s.value(NAV + 'target')).toBe(UI + 'inp-codes-spec')
-    expect(s.tab.address).toBe('#components/inputs/inp-codes-spec')
+    expect(s.tab.url).toBe('/components/inputs/#inp-codes-spec')
     expect(s.shell.nodeOf(UI + 'inp-codes-spec/~root')).toBeDefined()
     // It waits for the target to be rendered.
     expect(revealed).toEqual([])
@@ -378,14 +580,14 @@ ui:field a c:TextField ; c:label "Field" ; nav:anchor "the-field" .
     s.set(UI + 'galleryGroup', UI + 'GroupLayout')
     await tick()
     expect(s.value(NAV + 'target')).toBeUndefined()
-    expect(s.tab.address).toBe('#components/layout')
+    expect(s.tab.url).toBe('/components/layout/')
     s.tab.back()
     expect(s.value(NAV + 'target')).toBe(UI + 'inp-codes-spec')
     expect(revealed.length).toBe(2)
   })
 
   it('opens what hides the target: the tools window and the tab it is in, as part of the same step', async () => {
-    const s = await site('/#docs/rules')
+    const s = await site('/docs/rules/')
     const f = s.store.factory
     const o = (subject: string, p: string) => s.store.match(f.namedNode(subject), f.namedNode(p), null)[0]?.object.value
     expect(o(UI + 'tools', NS.c + 'open')).toBe('false')
@@ -394,7 +596,7 @@ ui:field a c:TextField ; c:label "Field" ; nav:anchor "the-field" .
     expect(o(UI + 'tools', NS.c + 'open')).toBe('true')
     expect(o(UI + 'views', NS.c + 'selected')).toBe(UI + 'queryTab')
     expect(s.value(UI + 'page')).toBe(UI + 'Docs') // the tools are on every page: where we are stays
-    expect(s.tab.address).toBe('#docs/rules/workbench')
+    expect(s.tab.url).toBe('/docs/rules/#workbench')
     expect(s.shell.nodeOf(UI + 'workbench/~root')).toBeDefined()
     // One navigation event did it all.
     const navigations = s.store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(NAV + 'Navigate'))
@@ -429,11 +631,11 @@ ui:deep a c:Text .`)
     const revealed: { iri: string; smooth: boolean }[] = []
     const s = await site('/#inp-codes-spec', undefined, { reveal: (iri, { smooth }) => (revealed.push({ iri, smooth }), true) })
     expect(s.value(UI + 'page')).toBe(UI + 'Components')
-    expect(s.tab.address).toBe('#components/inputs/inp-codes-spec')
+    expect(s.tab.url).toBe('/components/inputs/#inp-codes-spec')
     expect(revealed).toEqual([{ iri: UI + 'inp-codes-spec', smooth: true }])
     const f = s.store.factory
     s.runtime.apply({ remove: s.store.match(f.namedNode(UI + 'shell'), f.namedNode(NS.mot + 'preference'), null), add: [f.quad(f.namedNode(UI + 'shell'), f.namedNode(NS.mot + 'preference'), f.namedNode(NS.mot + 'Reduced'))] })
-    s.tab.visit('#components/inputs/inp-text-spec')
+    s.tab.visit('/components/inputs/#inp-text-spec')
     expect(revealed.at(-1)).toEqual({ iri: UI + 'inp-text-spec', smooth: false })
   })
 })

@@ -7,6 +7,7 @@
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix clip: <https://semblance.dev/ns/clipboard#> .
+@prefix rnd: <https://semblance.dev/ns/rendered#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -25,7 +26,8 @@ ui:workbench a c:QueryWorkbench ;
     c:runs ui:currentQuery ;
     c:results ui:queryResults ;
     c:samples ( ui:sampleRenderings ui:sampleReactions ui:sampleLayers ui:sampleChangeLog
-                ui:sampleViolations ui:sampleUndocumented ui:sampleRuleSides ui:sampleViews ui:sampleTabsGraph ui:sampleTodos ) .
+                ui:sampleViolations ui:sampleUndocumented ui:sampleRuleSides ui:sampleViews ui:sampleOverlaps ui:sampleOffscreen
+                ui:sampleRenderedState ui:sampleTabsGraph ui:sampleTodos ) .
 
 ui:queryEditor a c:QueryEditor ;
     c:label "SPARQL query" , "Запит SPARQL"@uk , "SPARQL-Abfrage"@de , "استعلام SPARQL"@ar ;
@@ -88,7 +90,8 @@ ui:queryTurtle a c:ResultTurtle ; c:of ui:currentQuery .
 ui:queryPlanTab a c:Tab ; c:label "Plan" , "План"@uk , "Plan"@de , "الخطة"@ar ; c:content ui:queryPlan .
 ui:queryPlan a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:queryPlanSummary ui:queryPlanTable ) .
 ui:queryPlanSummary a c:Text ; c:valueQuery ui:qPlanSummary ; c:dataset ui:currentQuery .
-ui:qPlanSummary a sem:View ; sem:select """
+# A view over what the runtime writes about the query (iv:reads), stepped when it writes it.
+ui:qPlanSummary a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ui:currentQuery ; sem:select """
 SELECT ?label WHERE {
   BIND(EXISTS { ui:currentQuery a iv:View } AS ?live)
   OPTIONAL { ui:currentQuery iv:strategy ?s FILTER(?s IN (iv:Incremental, iv:Recompute)) }
@@ -103,7 +106,8 @@ SELECT ?label WHERE {
           CONCAT("Maintained incrementally: each change costs what it changes.", ?work, ?check))) AS ?label)
 }""" .
 ui:queryPlanTable a c:ResultTable ; c:of ui:qPlanOperators ; c:followUpdates true .
-ui:qPlanOperators a sem:Query ;
+# What the runtime writes about the query is in the views graph: a view that reads its view (iv:reads).
+ui:qPlanOperators a sem:Query , iv:View ; iv:strategy iv:Auto ; iv:materialize iv:ResultSet ; iv:reads ui:currentQuery ;
     rdfs:label "The query's operators" , "Оператори запиту"@uk , "Die Operatoren der Abfrage"@de , "عوامل الاستعلام"@ar ;
     sem:select """
 SELECT ?step ?operator ?algebra ?key WHERE {
@@ -209,14 +213,14 @@ WHERE {
   OPTIONAL { ?rendering sem:targets ?targets }
   OPTIONAL { ?rendering sem:functionOnly ?why }
   BIND(EXISTS { ?fn sem:implements ?rendering ; sem:function ?name } AS ?hasFunction)
-  BIND(EXISTS { ?q sem:implements ?rendering ; sem:construct ?text } AS ?hasSparql)
+  BIND(EXISTS { ?q sem:implements ?rendering ; sem:construct|sem:constructFrom/sem:construct ?text } AS ?hasSparql)
   # A modality the function covers but no SPARQL rule does (only where SPARQL rules name modalities).
   OPTIONAL {
     FILTER NOT EXISTS { ?rendering sem:modality ?own }
     VALUES ?modality { mod:Screen mod:Text }
-    ?some sem:implements ?rendering ; sem:construct ?someText ; sem:modality ?named .
+    ?some sem:implements ?rendering ; sem:construct|sem:constructFrom/sem:construct ?someText ; sem:modality ?named .
     FILTER NOT EXISTS {
-      ?q2 sem:implements ?rendering ; sem:construct ?text2 .
+      ?q2 sem:implements ?rendering ; sem:construct|sem:constructFrom/sem:construct ?text2 .
       FILTER(NOT EXISTS { ?q2 sem:modality ?m2 } || EXISTS { ?q2 sem:modality ?modality })
     }
   }
@@ -241,6 +245,48 @@ WHERE {
   OPTIONAL { ?view iv:fallback ?fallback }
 }
 ORDER BY ?view""" .
+
+ui:sampleOverlaps a sem:Query ;
+    rdfs:label "Components overlapping each other" , "Компоненти, що перекривають одне одного"@uk , "Komponenten, die einander überlappen"@de , "مكوّنات يتداخل بعضها مع بعض"@ar ;
+    rdfs:comment "Pairs of shown components whose boxes overlap, neither inside the other, with where the first is (the rendered graph: components that ask for rnd:Overlap, here the windows and the toasts on the desktop)."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# Overlap is maintained from the boxes the page measures (rnd:Overlaps, in document pixels).
+# Open two of the gallery's windows over each other, then run this again.
+SELECT ?component ?other ?x ?y ?width ?height
+WHERE {
+  ?a rnd:overlaps ?b ; rnd:of ?component ; rnd:x ?x ; rnd:y ?y ; rnd:width ?width ; rnd:height ?height .
+  ?b rnd:of ?other .
+  FILTER(STR(?component) < STR(?other))
+}
+ORDER BY ?component ?other""" .
+
+ui:sampleOffscreen a sem:Query ;
+    rdfs:label "Components off screen" , "Компоненти поза екраном"@uk , "Komponenten außerhalb des Bildschirms"@de , "مكوّنات خارج الشاشة"@ar ;
+    rdfs:comment "Shown components that ask for rnd:Visibility and are not wholly in the viewport: how much of each is, and where its top is relative to the viewport's (negative: above it)."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# Boxes are in document pixels (fixed ones in the viewport's); the viewport node says how far the page is scrolled.
+SELECT ?component ?ratio ?top ?height
+WHERE {
+  ?viewport a rnd:Viewport ; rnd:scrollTop ?scrolled .
+  ?s rnd:of ?component ; rnd:rendered true ; rnd:ratio ?ratio .
+  FILTER(?ratio < 1)
+  OPTIONAL { ?s rnd:y ?y ; rnd:height ?height }
+  # A fixed box (rnd:fixed) is placed in the viewport already.
+  BIND(IF(EXISTS { ?s rnd:fixed true }, ?y, ?y - ?scrolled) AS ?top)
+}
+ORDER BY ?ratio ?component""" .
+
+ui:sampleRenderedState a sem:Query ;
+    rdfs:label "Focus, pointer and what is open" , "Фокус, вказівник і що відкрито"@uk , "Fokus, Zeiger und was offen ist"@de , "التركيز والمؤشر وما هو مفتوح"@ar ;
+    rdfs:comment "What the page says about the shell's components right now: which holds the focus (and which contain it), which the pointer is over or pressing, which native disclosures are open."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# The rendered graph: one rnd:State per component that has something to say.
+SELECT ?component ?state
+WHERE {
+  VALUES ?state { rnd:focused rnd:focusWithin rnd:focusVisible rnd:hovered rnd:pressed rnd:open rnd:topLayer rnd:animating }
+  ?s rnd:of ?component ; ?state true .
+}
+ORDER BY ?state ?component""" .
 
 ui:sampleTabsGraph a sem:Query ;
     rdfs:label "How c:Tabs is made" , "Як зроблено c:Tabs"@uk , "Wie c:Tabs gemacht ist"@de , "كيف صُنع c:Tabs"@ar ;

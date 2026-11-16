@@ -21,13 +21,15 @@ const NAV = NS.nav
 const C = NS.c
 const SH = NS.sh
 const RDFS_RANGE = NS.rdfs + 'range'
-const URL_CARRIERS = new Set([NAV + 'Fragment', NAV + 'Query'])
+const PATH = NAV + 'Path'
+const FRAGMENT = NAV + 'Fragment'
+const URL_CARRIERS = new Set([PATH, FRAGMENT, NAV + 'Query'])
 const GO_TO = NAV + 'goTo'
 
 // --- the model, read from the graph ----------------------------------------------------------
 
 /** What the model reads through: the store's default graph, or a rule's view. */
-interface Reader {
+export interface Reader {
   f: Factory
   match(s: Term | null, p: string | null, o: Term | null): Quad[]
 }
@@ -44,17 +46,29 @@ export interface Dimension {
   /** Carrier IRIs, best rank first. */
   carriers: string[]
   makesHistory: boolean
+  /** A change of it is another place, which starts at the top (nav:scroll; default: where the path or the fragment spells it). */
+  startsAtTop: boolean
   parent?: string
   when: Term[]
   target: boolean
   /** Its values are terms of the vocabulary (nav:showsTerms): a link to a term no component shows goes here. */
   terms: boolean
+  /** The part of the address that spells it: the path when it is carried there, else the fragment (else none). */
+  spelledIn?: string
+  /** The value the address leaves unspelled (nav:implicit: the language a site is in by default). */
+  implicit?: Term
+  /** Its values are shown one at a time in one place (nav:rendersInPlace): a build renders them in one runtime. */
+  inPlace: boolean
 }
 
 export interface Location {
   iri: string
   root?: string
   dimensions: Dimension[]
+  /** Where its paths start (nav:base), ending with '/'. */
+  base: string
+  /** Whether any dimension is carried by the path (nav:Path): its addresses are paths. */
+  paths: boolean
 }
 
 const one = (r: Reader, s: Term, p: string) => r.match(s, p, null)[0]?.object
@@ -80,6 +94,10 @@ export function readLocations(r: Reader): Location[] {
         const property = one(r, d, NAV + 'property')?.value
         if (subject?.termType !== 'NamedNode' || !property) return []
         const types = r.match(d, RDF_TYPE, null).map((q) => q.object.value)
+        const carriers = r
+          .match(d, NAV + 'carriedBy', null)
+          .map((q) => q.object.value)
+          .sort((a, b) => rank(a) - rank(b))
         return [
           {
             iri: d.value,
@@ -88,19 +106,21 @@ export function readLocations(r: Reader): Location[] {
             key: one(r, d, NAV + 'key')?.value ?? localName(property),
             keyProperty: one(r, d, NAV + 'keyProperty')?.value ?? SEM.slug,
             prefixed: one(r, d, NAV + 'spelling')?.value === NAV + 'PrefixedName',
-            carriers: r
-              .match(d, NAV + 'carriedBy', null)
-              .map((q) => q.object.value)
-              .sort((a, b) => rank(a) - rank(b)),
+            carriers,
             makesHistory: one(r, d, NAV + 'history')?.value !== NAV + 'NoHistory',
+            startsAtTop: startsAtTop(one(r, d, NAV + 'scroll')?.value, types, carriers),
             parent: one(r, d, NAV + 'parent')?.value,
             when: r.match(d, NAV + 'when', null).map((q) => q.object),
             target: types.includes(NAV + 'TargetDimension'),
             terms: one(r, d, NAV + 'showsTerms')?.value === 'true',
+            implicit: one(r, d, NAV + 'implicit'),
+            inPlace: one(r, d, NAV + 'rendersInPlace')?.value === 'true',
           },
         ]
       })
-    return { iri: loc.value, root: one(r, loc, NAV + 'root')?.value, dimensions }
+      .map((d) => ({ ...d, spelledIn: d.target ? (d.carriers.includes(FRAGMENT) ? FRAGMENT : undefined) : d.carriers.includes(PATH) ? PATH : d.carriers.includes(FRAGMENT) ? FRAGMENT : undefined }))
+    const base = one(r, loc, NAV + 'base')?.value ?? '/'
+    return { iri: loc.value, root: one(r, loc, NAV + 'root')?.value, dimensions, base: base.endsWith('/') ? base : base + '/', paths: dimensions.some((d) => d.spelledIn === PATH) }
   })
   return locations.sort((a, b) => a.iri.localeCompare(b.iri))
 }
@@ -158,11 +178,17 @@ function unspell(r: Reader, loc: Location, d: Dimension, text: string): Term | u
   const f = r.f
   const exists = (t: NamedNode) => r.match(t, null, null).length > 0
   if (d.target) {
-    const byAnchor = r.match(null, NAV + 'anchor', f.literal(text))[0]?.subject
-    if (byAnchor?.termType === 'NamedNode') return byAnchor
-    const candidates = text.includes(':') ? [expand(r, text)] : prefixMap(r).map(([, ns]) => ns + text)
+    const byAnchor = least(r.match(null, NAV + 'anchor', f.literal(text)).map((q) => q.subject))
+    if (byAnchor) return byAnchor
+    // In the vocabularies, longest namespace first (then by IRI); one that is shown wins.
+    const expanded = text.includes(':') && expand(r, text)
+    // Each candidate with the longest namespace that makes it.
+    const made = new Map<string, number>()
+    for (const [, ns] of text.includes(':') ? [] : prefixMap(r)) made.set(ns + text, Math.max(made.get(ns + text) ?? 0, ns.length))
+    if (expanded) made.set(expanded, 0)
     // Only text an IRI can end with (an unknown or malformed segment names nothing).
-    const found = /^[\w.~:-]+$/.test(text) ? candidates.filter((c): c is string => !!c).map((c) => f.namedNode(c)).filter(exists) : []
+    const found = /^[\w.~:-]+$/.test(text) ? [...made.keys()].map((c) => f.namedNode(c)).filter(exists) : []
+    found.sort((a, b) => made.get(b.value)! - made.get(a.value)! || (a.value < b.value ? -1 : a.value > b.value ? 1 : 0))
     return found.find((t) => shows(r, loc, t)) ?? found[0]
   }
   const range = one(r, f.namedNode(d.property), RDFS_RANGE)?.value
@@ -173,7 +199,7 @@ function unspell(r: Reader, loc: Location, d: Dimension, text: string): Term | u
   }
   const typed = (t: Term) => !range || r.match(t, RDF_TYPE, f.namedNode(range)).length > 0
   for (const p of d.prefixed ? [] : new Set([d.keyProperty, SEM.slug])) {
-    const hit = r.match(null, p, f.literal(text)).map((q) => q.subject).find(typed)
+    const hit = least(r.match(null, p, f.literal(text)).map((q) => q.subject).filter(typed))
     if (hit) return hit
   }
   const iri = expand(r, text)
@@ -181,6 +207,13 @@ function unspell(r: Reader, loc: Location, d: Dimension, text: string): Term | u
   // A literal-valued dimension without a declared range takes text as it comes.
   const current = one(r, d.subject, d.property)
   return current?.termType === 'Literal' ? f.literal(text) : undefined
+}
+
+/** The least of some terms that are IRIs, by IRI (a choice among equals that does not depend on store order). */
+function least(terms: Term[]): NamedNode | undefined {
+  let out: NamedNode | undefined
+  for (const t of terms) if (t.termType === 'NamedNode' && (!out || t.value < out.value)) out = t
+  return out
 }
 
 function expand(r: Reader, text: string): string | undefined {
@@ -194,7 +227,8 @@ const segment = (s: string) => encodeURIComponent(s).replaceAll('%3A', ':').repl
 
 /** The dimensions a carrier carries, parents before their children, the target last. */
 function ordered(loc: Location, carrier: string): Dimension[] {
-  const carried = loc.dimensions.filter((d) => d.carriers.includes(carrier))
+  // The path and the fragment each spell the dimensions they are the address part of (spelledIn).
+  const carried = loc.dimensions.filter((d) => (carrier === PATH || carrier === FRAGMENT ? d.spelledIn === carrier : d.carriers.includes(carrier)))
   const out: Dimension[] = []
   const visit = (parent: string | undefined) => {
     for (const d of carried) if (!d.target && d.parent === parent && !out.includes(d)) out.push(d), visit(d.iri)
@@ -204,26 +238,36 @@ function ordered(loc: Location, carrier: string): Dimension[] {
   return [...out, ...carried.filter((d) => d.target)]
 }
 
-/** The location as URL text: the fragment (with '#') and the query parameters it sets. */
-export function spellAddress(r: Reader, loc: Location, values: Values): { fragment: string; query: Map<string, string | undefined> } {
-  const parts = ordered(loc, NAV + 'Fragment')
-    .filter((d) => values.has(d.iri) && inScope(r, loc, d, values))
-    .map((d) => segment(spell(r, d, values.get(d.iri)!)))
+/**
+ * The location as URL text: the path (when the location has one: its base and a segment and a
+ * slash per dimension), the fragment (with '#') and the query parameters it sets.
+ */
+export function spellAddress(r: Reader, loc: Location, values: Values): { path: string; fragment: string; query: Map<string, string | undefined> } {
+  const spelled = (carrier: string) =>
+    ordered(loc, carrier)
+      .filter((d) => values.has(d.iri) && !same(d.implicit, values.get(d.iri)) && inScope(r, loc, d, values))
+      .map((d) => segment(spell(r, d, values.get(d.iri)!)))
+  const parts = spelled(FRAGMENT)
   const query = new Map<string, string | undefined>()
   for (const d of ordered(loc, NAV + 'Query')) query.set(d.key, values.has(d.iri) && inScope(r, loc, d, values) ? spell(r, d, values.get(d.iri)!) : undefined)
-  return { fragment: parts.length ? '#' + parts.join('/') : '', query }
+  const path = loc.paths ? loc.base + spelled(PATH).map((p) => p + '/').join('') : ''
+  return { path, fragment: parts.length ? '#' + parts.join('/') : '', query }
 }
 
-/**
- * What a URL says (its query and fragment): values for the dimensions it carries that apply,
- * plus, for a target, the values that show it. Unknown text is ignored: a segment no dimension
- * in scope knows ends the path.
- */
-export function readAddress(r: Reader, loc: Location, address: string): Values {
-  const url = new URL(address || '', 'https://semblance.invalid/')
-  const values: Values = new Map()
-  const segments = url.hash
-    .slice(1)
+/** The location's address as links spell it: the path and the fragment ('#' alone when there is neither). */
+export function linkAddress(spelled: { path: string; fragment: string }): string {
+  return spelled.path + spelled.fragment || '#'
+}
+
+/** The segments of a path under a base (none when it is not under it); a trailing index.html is not one. */
+function pathSegments(pathname: string, base: string): string[] {
+  const path = pathname.replace(/\/index\.html?$/, '/')
+  const under = path === base.slice(0, -1) ? '' : path.startsWith(base) ? path.slice(base.length) : undefined
+  return under === undefined ? [] : decodeSegments(under)
+}
+
+const decodeSegments = (text: string) =>
+  text
     .split('/')
     .filter(Boolean)
     .map((s) => {
@@ -233,29 +277,105 @@ export function readAddress(r: Reader, loc: Location, address: string): Values {
         return s
       }
     })
-  const fragmentDims = ordered(loc, NAV + 'Fragment')
-  for (const text of segments) {
-    const open = fragmentDims.filter((d) => !d.target && !values.has(d.iri) && (!d.parent || values.has(d.parent)) && inScope(r, loc, d, values))
-    const hit = open.map((d) => [d, unspell(r, loc, d, text)] as const).find(([, v]) => v)
-    if (hit) {
-      values.set(hit[0].iri, hit[1]!)
-      continue
+
+/** One segment of an address, and the dimensions that may read it. */
+interface Segment {
+  text: string
+  /** 0: the path, 1: the fragment. A reading stops at the first segment of its part no dimension reads. */
+  part: number
+  dims: Dimension[]
+}
+
+/** The query parameter `key` as a form decodes it ('+' is a space), the first one; null when absent. */
+function queryParam(search: string, key: string): string | null {
+  const decode = (s: string) => {
+    try {
+      return decodeURIComponent(s.replaceAll('+', ' '))
+    } catch {
+      return s.replaceAll('+', ' ')
     }
-    const target = fragmentDims.find((d) => d.target)
-    const v = target && unspell(r, loc, target, text)
-    if (target && v) {
-      values.set(target.iri, v)
-      for (const [dim, val] of shows(r, loc, v) ?? []) values.set(dim, val)
+  }
+  for (const pair of search.replace(/^\?/, '').split('&')) {
+    if (!pair) continue
+    const eq = pair.indexOf('=')
+    if (decode(eq < 0 ? pair : pair.slice(0, eq)) === key) return eq < 0 ? '' : decode(pair.slice(eq + 1))
+  }
+  return null
+}
+
+/**
+ * What a URL says (its path, query and fragment): values for the dimensions it carries that apply,
+ * plus, for a target, the values that show it. Each segment is read by the first dimension (in the
+ * part's order) that knows its text, is not read by an earlier segment, and is opened by earlier
+ * segments (each parent on its way up is known by one of them as a value it applies under). The
+ * first segment of a part nothing reads ends the part; it may name the target. Unknown text is
+ * ignored. The SPARQL twin of this reading is nav:Follow's.
+ */
+export function readAddress(r: Reader, loc: Location, address: string): Values {
+  const url = new URL(address || '', 'https://semblance.invalid/')
+  const fragment = decodeSegments(url.hash.slice(1))
+  const pathDims = ordered(loc, PATH)
+  const fragmentDims = ordered(loc, FRAGMENT)
+  // A fragment that spells what the path carries is an address from before paths (#docs/rules):
+  // it is read whole, path dimensions first, and the path is not.
+  const legacy = fragment.length > 0 && pathDims.some((d) => !d.parent && unspell(r, loc, d, fragment[0]!))
+  const segments: Segment[] = legacy
+    ? fragment.map((text) => ({ text, part: 1, dims: [...pathDims, ...fragmentDims] }))
+    : [...pathSegments(url.pathname, loc.base).map((text) => ({ text, part: 0, dims: pathDims })), ...fragment.map((text) => ({ text, part: 1, dims: fragmentDims }))]
+  const known = new Map<string, Term | undefined>()
+  const knows = (k: number, d: Dimension) => {
+    const at = k + ' ' + d.iri
+    if (!known.has(at)) known.set(at, !d.target && segments[k]!.dims.includes(d) ? unspell(r, loc, d, segments[k]!.text) : undefined)
+    return known.get(at)
+  }
+  const byIri = (iri: string) => loc.dimensions.find((x) => x.iri === iri)
+  // Opened before segment k: each parent on the way up is known by an earlier segment as a value its child applies under.
+  const opened = (k: number, d: Dimension) => {
+    for (let x: Dimension = d, n = 0; x.parent; n++) {
+      const y = byIri(x.parent)
+      if (!y || n > 16) return false
+      const child = x
+      if (!segments.some((_, j) => j < k && child.when.some((w) => same(w, knows(j, y))))) return false
+      x = y
     }
-    break
+    return true
+  }
+  const fresh = (k: number, d: Dimension) => !segments.some((_, j) => j < k && knows(j, d))
+  const values: Values = new Map()
+  const stopped = new Set<number>()
+  segments.forEach((seg, k) => {
+    if (stopped.has(seg.part)) return
+    const d = seg.dims.find((x) => !x.target && knows(k, x) && opened(k, x) && fresh(k, x))
+    if (d) return void values.set(d.iri, knows(k, d)!)
+    stopped.add(seg.part)
+    const target = seg.dims.find((x) => x.target)
+    const v = target && unspell(r, loc, target, seg.text)
+    if (!target || !v) return
+    values.set(target.iri, v)
+    for (const [dim, val] of shows(r, loc, v) ?? []) values.set(dim, val)
+  })
+  // What the address leaves unspelled, it says by leaving it out (/components/ is in English): each
+  // parent on the way up has, read or left out, a value its child applies under.
+  const read = new Map(values)
+  const valueOf = (y: Dimension) => read.get(y.iri) ?? y.implicit
+  for (const d of [...pathDims, ...fragmentDims]) {
+    if (d.target || !d.implicit || read.has(d.iri)) continue
+    let applies = true
+    for (let x: Dimension = d, n = 0; applies && x.parent; n++) {
+      const y = byIri(x.parent)
+      applies = !!y && n <= 16 && x.when.some((w) => same(w, valueOf(y)))
+      if (y) x = y
+    }
+    if (applies) values.set(d.iri, d.implicit)
   }
   for (const d of ordered(loc, NAV + 'Query')) {
-    const text = url.searchParams.get(d.key)
-    const v = text !== null && !values.has(d.iri) ? unspell(r, loc, d, text) : undefined
+    const text = queryParam(url.search, d.key)
+    const v = text !== null && !d.target && !values.has(d.iri) ? unspell(r, loc, d, text) : undefined
     if (v) values.set(d.iri, v)
   }
-  // Values whose dimension does not apply under what was read are dropped.
-  for (const d of loc.dimensions) if (values.has(d.iri) && !d.target && !inScope(r, loc, d, new Map([...currentValues(r, loc), ...values]))) values.delete(d.iri)
+  // Values whose dimension does not apply under what was read (and where we are for the rest) are dropped.
+  const merged = new Map([...currentValues(r, loc), ...values])
+  for (const d of loc.dimensions) if (values.has(d.iri) && !d.target && !inScope(r, loc, d, merged)) values.delete(d.iri)
   return values
 }
 
@@ -367,8 +487,8 @@ export function opening(r: Reader, loc: Location, resource: Term): Delta {
   return delta
 }
 
-/** The fragment of the location that shows `resource`, with it as the target. */
-export function addressOf(r: Reader, resource: Term): string | undefined {
+/** The address (path and fragment) of the location that shows `resource`, with it as the target. */
+export function addressOf(r: Reader, resource: Term, keeps?: Set<string>): string | undefined {
   const locations = readLocations(r)
   for (const loc of locations) {
     const needs = shows(r, loc, resource)
@@ -379,13 +499,13 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
     const whole = !!last && !!one(r, last.parent, C + 'when')
     const target = loc.dimensions.find((d) => d.target && d.carriers.includes(NAV + 'Fragment'))
     if (target && !whole) needs.set(target.iri, resource)
-    return spellAddress(r, loc, needs).fragment || '#'
+    return linkAddress(spellAddress(r, loc, kept(r, loc, needs, keeps)))
   }
   // A term no component shows (a class, a property): the dimension whose values are terms (nav:showsTerms),
   // with the values its parents need (nav:when), e.g. #reference/c:List.
   if (resource.termType !== 'NamedNode' || !isTerm(r, resource)) return undefined
   for (const loc of locations) {
-    const d = loc.dimensions.find((x) => x.terms && x.carriers.includes(NAV + 'Fragment'))
+    const d = loc.dimensions.find((x) => x.terms && x.spelledIn !== undefined)
     if (!d) continue
     const values: Values = new Map([[d.iri, resource]])
     for (let at: Dimension | undefined = d, n = 0; at?.parent && n < 16; n++) {
@@ -393,9 +513,97 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
       if (parent && at.when[0]) values.set(parent.iri, at.when[0])
       at = parent
     }
-    return spellAddress(r, loc, values).fragment || '#'
+    return linkAddress(spellAddress(r, loc, kept(r, loc, values, keeps)))
   }
   return undefined
+}
+
+/**
+ * The values a link needs, and where we are for the rest: the current value of each top-level
+ * path dimension they leave open. Those dimensions go into `keeps`.
+ */
+function kept(r: Reader, loc: Location, values: Values, keeps?: Set<string>): Values {
+  for (const d of loc.dimensions) {
+    if (d.spelledIn !== PATH || d.parent || d.target || values.has(d.iri)) continue
+    const v = one(r, d.subject, d.property)
+    if (!v) continue
+    keeps?.add(d.iri)
+    values.set(d.iri, v)
+  }
+  return values
+}
+
+/**
+ * The pages a build may render one after another in one runtime: an address with the values of
+ * the dimensions shown in place (nav:rendersInPlace) left out. Addresses with the same key differ
+ * only in those.
+ */
+export function inPlaceKey(r: Reader, loc: Location, address: string): string | undefined {
+  const values = readAddress(r, loc, address)
+  const inPlace = loc.dimensions.filter((d) => d.inPlace && values.has(d.iri))
+  if (!inPlace.length) return undefined
+  for (const d of inPlace) values.delete(d.iri)
+  return spellAddress(r, loc, values).path
+}
+
+/**
+ * Where every location's paths start (nav:base): "/", or an app served under a path ("/docs/app/").
+ * Relative URLs in the app's data (an image's "photos/a.jpg") resolve there too, on every page
+ * (Runtime.urlBase): an app without one is a single document, whose URLs resolve against itself.
+ */
+export function setBase(store: GraphStore, base: string): void {
+  const f = store.factory
+  const value = base.endsWith('/') ? base : base + '/'
+  for (const { subject } of store.match(null, f.namedNode(RDF_TYPE), f.namedNode(NAV + 'Location'), f.defaultGraph())) {
+    for (const q of store.match(subject, f.namedNode(NAV + 'base'), null, f.defaultGraph())) store.delete(q)
+    store.add(f.quad(subject, f.namedNode(NAV + 'base'), f.literal(value), f.defaultGraph()))
+  }
+}
+
+/**
+ * Every place a location's path names (nav:Path), as paths: each combination of its path
+ * dimensions' values that applies, and each with its children left out (/docs/ as well as
+ * /docs/rules/). A dimension's values are the c:when of the cases of the switches that follow it,
+ * else the nodes its key spells that its property's range types. What a static build renders.
+ */
+export function routesOf(r: Reader, loc: Location): string[] {
+  const f = r.f
+  const dims = ordered(loc, PATH)
+  const candidates = (d: Dimension): Term[] => {
+    const cases = r
+      .match(null, C + 'controls', d.subject)
+      .map((q) => q.subject)
+      .filter((sw) => one(r, sw, C + 'property')?.value === d.property)
+      .flatMap((sw) => list(r, one(r, sw, C + 'cases')))
+      .flatMap((c) => {
+        const v = one(r, c, C + 'when')
+        return v ? [v as Term] : []
+      })
+    if (cases.length) return [...new Map(cases.map((v) => [v.value, v])).values()]
+    // A dimension of terms (nav:showsTerms): the vocabulary's classes and properties a prefixed name spells.
+    if (d.terms) {
+      const kinds = new Set([NS.owl + 'Class', NS.rdfs + 'Class', NS.rdf + 'Property', NS.owl + 'ObjectProperty', NS.owl + 'DatatypeProperty', NS.owl + 'AnnotationProperty'])
+      const terms = new Map<string, Term>()
+      for (const q of r.match(null, RDF_TYPE, null)) if (q.subject.termType === 'NamedNode' && kinds.has(q.object.value)) terms.set(q.subject.value, q.subject)
+      return [...terms.values()].filter((t) => /^[A-Za-z][\w-]*:[\w-]+$/.test(spell(r, d, t)))
+    }
+    const range = one(r, f.namedNode(d.property), RDFS_RANGE)
+    return r
+      .match(null, d.keyProperty, null)
+      .map((q) => q.subject)
+      .filter((s) => !range || r.match(s, RDF_TYPE, range).length > 0)
+  }
+  const out = new Set<string>()
+  const walk = (i: number, values: Values) => {
+    if (i === dims.length) return void out.add(spellAddress(r, loc, values).path)
+    const d = dims[i]!
+    if (!inScope(r, loc, d, values)) return walk(i + 1, values)
+    // A child dimension may be left out: its parent's page shows its default.
+    if (d.parent) walk(i + 1, values)
+    for (const v of candidates(d)) walk(i + 1, new Map([...values, [d.iri, v]]))
+  }
+  walk(0, new Map())
+  return [...out].sort()
 }
 
 /**
@@ -431,10 +639,69 @@ export function followDelta(r: Reader, loc: Location, address: string): Delta {
   return delta
 }
 
+/**
+ * What reading an address into the graph changes, as the client does before its first projection
+ * (Navigation.restore) and a warm server runtime does to render a request's address: each
+ * dimension the address spells gets its value, unless a carrier before the URL's (storage) has
+ * restored one (`restored`); one it does not spell keeps the graph's. What shows the target (a
+ * tab, an expanded item) is opened. `target`: the resource the address names, to reveal.
+ */
+export function addressDelta(r: Reader, loc: Location, address: string, restored: (dimension: string) => boolean = () => false): { delta: Delta; changed: number; target?: Term } {
+  const read = readAddress(r, loc, address)
+  const f = r.f
+  const delta: Delta = { add: [], remove: [] }
+  let changed = 0
+  for (const d of loc.dimensions) {
+    const next = read.get(d.iri)
+    // The first carrier that has a value wins; none: the graph's own value (the default).
+    const winner = d.carriers.find((c) => (URL_CARRIERS.has(c) ? !!next : restored(d.iri)))
+    if (!winner || !URL_CARRIERS.has(winner)) continue // storage's value is in the graph already
+    const now = r.match(d.subject, d.property, null)
+    if (now.length === 1 && same(now[0]!.object, next)) continue
+    delta.remove.push(...now)
+    delta.add.push(f.quad(d.subject, f.namedNode(d.property), next as Quad['object']))
+    changed++
+  }
+  const dimension = loc.dimensions.find((d) => d.target)
+  const target = dimension && read.get(dimension.iri)
+  if (!target) return { delta, changed }
+  // Opened as the graph is once the dimensions have their values.
+  const open = opening(overlay(r, delta), loc, target)
+  return { delta: compose(delta, open), changed, target }
+}
+
+/** A reader of what `r` reads with `delta` applied. */
+export function overlay(r: Reader, delta: Delta): Reader {
+  const key = (q: Quad) => `${q.subject.value} ${q.predicate.value} ${q.object.termType}:${q.object.value}`
+  const removed = new Set(delta.remove.map(key))
+  const fits = (q: Quad, s: Term | null, p: string | null, o: Term | null) => (!s || q.subject.equals(s)) && (!p || q.predicate.value === p) && (!o || q.object.equals(o))
+  return {
+    f: r.f,
+    match: (s, p, o) => [...r.match(s, p, o).filter((q) => !removed.has(key(q))), ...delta.add.filter((q) => fits(q, s, p, o))],
+  }
+}
+
+/** `a` then `b`, as one change. */
+export function compose(a: Delta, b: Delta): Delta {
+  const key = (q: Quad) => `${q.subject.value} ${q.predicate.value} ${q.object.termType}:${q.object.value}`
+  const bRemoved = new Set(b.remove.map(key))
+  const aAdded = new Set(a.add.map(key))
+  return {
+    remove: [...a.remove, ...b.remove.filter((q) => !aAdded.has(key(q)))],
+    add: [...a.add.filter((q) => !bRemoved.has(key(q))), ...b.add],
+  }
+}
+
 const storeReader = (store: GraphStore): Reader => ({ f: store.factory, match: (s, p, o) => store.match(s, p ? store.factory.namedNode(p) : null, o, store.factory.defaultGraph()) })
 const ruleReader = (ctx: RuleContext): Reader => ({ f: ctx.f, match: (s, p, o) => ctx.match(s, p, o) })
 
 // --- the host effect -----------------------------------------------------------------------------
+
+/** What a change of a dimension does to where the page is scrolled (nav:scroll, else by what spells it). */
+function startsAtTop(scroll: string | undefined, types: string[], carriers: string[]): boolean {
+  if (types.includes(NAV + 'TargetDimension')) return false
+  return scroll ? scroll === NAV + 'StartsAtTop' : carriers.includes(PATH) || carriers.includes(NAV + 'Fragment')
+}
 
 /** The parts of window.location the effect reads. */
 export interface UrlLike {
@@ -443,6 +710,8 @@ export interface UrlLike {
   readonly hash: string
 }
 export interface HistoryLike {
+  /** The current entry's state (where it was scrolled, see Navigation.remember). */
+  readonly state?: unknown
   pushState(data: unknown, unused: string, url: string): void
   replaceState(data: unknown, unused: string, url: string): void
 }
@@ -454,14 +723,71 @@ export interface NavigationOptions {
   history?: HistoryLike
   /** Where popstate and hashchange are heard (default: the window). */
   events?: EventTarget
+  /** Where clicks on links to the location's paths are taken over (default: the document). */
+  links?: EventTarget
   /** The persistence effect, which restores dimensions carried by storage scopes (restore it first). */
   persistence?: { restored(policy: string): boolean }
+  /**
+   * Where the locations are declared (nav:Location, its root, base, paths and dimensions): the
+   * trusted graphs when the page renders authored content (mount's `trusted`), so an author cannot
+   * add a location or reshape one; the store otherwise.
+   */
+  trusted?: GraphStore
   /** Bring a target's rendered root into view; false while it is not rendered yet (see rendererReveal). */
   reveal?: (iri: string, opts: { smooth: boolean }) => boolean
-  /** When to retry a reveal (default: the next animation frame). */
+  /** The page's scroll position: a step to another place starts at the top, a step back in history where it was (see windowScroll). */
+  scroll?: ScrollLike
+  /** When to retry a reveal, or going back to where a page was (default: the next animation frame). */
   frame?: (run: () => void) => void
   /** When to write the URL after a change (default: a microtask, so one interaction is one step). */
   schedule?: (run: () => void) => void
+}
+
+/** Where a page is scrolled. */
+export interface ScrollOffset {
+  x: number
+  y: number
+}
+/** The page's scroll position, as the navigation effect moves and remembers it. */
+export interface ScrollLike {
+  offset(): ScrollOffset
+  /** Go there at once; false while the page is too short to get there. */
+  to(at: ScrollOffset): boolean
+  /** Hear that scrolling has settled, or that the page is being left. */
+  settled(run: () => void): () => void
+}
+
+/** The window's scroll position. A settled scroll is heard once it has been still for a moment. */
+export function windowScroll(win: Window, still = 100): ScrollLike {
+  const offset = () => ({ x: win.scrollX, y: win.scrollY })
+  return {
+    offset,
+    to(at) {
+      win.scrollTo?.({ left: at.x, top: at.y, behavior: 'instant' })
+      const now = offset()
+      return Math.abs(now.x - at.x) <= 1 && Math.abs(now.y - at.y) <= 1
+    },
+    settled(run) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const scrolled = () => {
+        clearTimeout(timer)
+        timer = setTimeout(run, still)
+      }
+      win.addEventListener('scroll', scrolled, { passive: true })
+      win.addEventListener('pagehide', run)
+      return () => {
+        clearTimeout(timer)
+        win.removeEventListener('scroll', scrolled)
+        win.removeEventListener('pagehide', run)
+      }
+    },
+  }
+}
+
+/** The offset a history entry's state remembers. */
+function rememberedOffset(state: unknown): ScrollOffset | undefined {
+  const at = (state as { semScroll?: Partial<ScrollOffset> } | null | undefined)?.semScroll
+  return typeof at?.x === 'number' && typeof at.y === 'number' ? { x: at.x, y: at.y } : undefined
 }
 
 /** The navigation effect for one location of one store. */
@@ -473,20 +799,28 @@ export class Navigation {
   private written?: Values
   private revealing?: string
   private revealer?: NavigationOptions['reveal']
+  private scroll?: ScrollLike
+  /** Going back to a remembered offset, on a page still too short for it. */
+  private returning?: ScrollOffset
+  /** Where the page was when the change being written began. */
+  private leaving?: ScrollOffset
   private model?: Location | null
   private readonly r: Reader
+  /** Where the location is read (opts.trusted, else the store). */
+  private readonly declarations: Reader
 
   constructor(
     readonly store: GraphStore,
     readonly opts: NavigationOptions = {},
   ) {
     this.r = storeReader(store)
+    this.declarations = opts.trusted ? storeReader(opts.trusted) : this.r
   }
 
   /** The location this effect serves (re-read when navigation declarations change). */
   location(): Location | undefined {
     if (this.model === undefined) {
-      const all = readLocations(this.r)
+      const all = readLocations(this.declarations)
       this.model = (this.opts.root ? all.find((l) => l.root === this.opts.root) : all[0]) ?? null
     }
     return this.model ?? undefined
@@ -498,8 +832,9 @@ export class Navigation {
   private get history(): HistoryLike {
     return this.opts.history ?? globalThis.history
   }
+  /** The URL as the location reads it: its query and fragment, after the path when it has one. */
   private address() {
-    return this.url.search + this.url.hash
+    return (this.location()?.paths ? this.url.pathname.replace(/\/index\.html?$/, '/') : '') + this.url.search + this.url.hash
   }
 
   /**
@@ -511,45 +846,50 @@ export class Navigation {
   async restore(): Promise<number> {
     const loc = this.location()
     if (!loc) return 0
-    const read = readAddress(this.r, loc, this.address())
+    const { delta, changed, target } = addressDelta(this.r, loc, this.address(), (d) => !!this.opts.persistence?.restored(d))
+    if (target) this.revealing = target.value
     const f = this.store.factory
-    let n = 0
-    for (const d of loc.dimensions) {
-      const next = read.get(d.iri)
-      // The first carrier that has a value wins; none: the graph's own value (the default).
-      const winner = d.carriers.find((c) => (URL_CARRIERS.has(c) ? !!next : !!this.opts.persistence?.restored(d.iri)))
-      if (!winner || !URL_CARRIERS.has(winner)) continue // storage's value is in the graph already
-      const now = this.store.match(d.subject, f.namedNode(d.property), null, f.defaultGraph())
-      if (now.length === 1 && same(now[0]!.object, next)) continue
-      for (const q of now) this.store.delete(q)
-      this.store.add(f.quad(d.subject, f.namedNode(d.property), next as Quad['object'], f.defaultGraph()))
-      n++
-    }
-    const target = loc.dimensions.find((d) => d.target)
-    if (target && read.has(target.iri)) {
-      this.revealing = read.get(target.iri)!.value
-      const open = opening(this.r, loc, read.get(target.iri)!)
-      for (const q of open.remove) this.store.delete(q)
-      for (const q of open.add) this.store.add(f.quad(q.subject, q.predicate, q.object, f.defaultGraph()))
-    }
-    return n
+    for (const q of delta.remove) this.store.delete(q)
+    for (const q of delta.add) this.store.add(f.quad(q.subject, q.predicate, q.object, f.defaultGraph()))
+    return changed
   }
 
   /** Follow input changes and the URL from now on. With a bus, URL changes are recorded as nav:Navigate events. */
-  attach(runtime: Runtime, opts: { bus?: EventBus; onNavigate?: () => void; reveal?: NavigationOptions['reveal'] } = {}): () => void {
+  attach(runtime: Runtime, opts: { bus?: EventBus; onNavigate?: () => void; reveal?: NavigationOptions['reveal']; scroll?: ScrollLike; links?: EventTarget } = {}): () => void {
     this.runtime = runtime
     this.bus = opts.bus
     this.onNavigate = opts.onNavigate
     this.revealer = opts.reveal ?? this.opts.reveal
+    this.scroll = opts.scroll ?? this.opts.scroll
     this.write(false)
-    if (this.revealing) this.reveal(this.revealing)
+    // A reload comes back to where the entry was (the browser tries too, on the page before it is taken over).
+    const remembered = this.remembered()
+    if (remembered) this.returnTo(remembered)
+    else if (this.revealing) this.reveal(this.revealing)
     const stop = runtime.onInput((graph, delta) => this.changed(graph, delta))
+    const stopScroll = this.scroll?.settled(() => this.remember())
     const events = this.opts.events ?? (globalThis as unknown as EventTarget)
-    const follow = () => this.follow()
+    const follow = () => this.follow(undefined, true)
     events.addEventListener?.('popstate', follow)
     events.addEventListener?.('hashchange', follow)
+    // A location with paths takes over the links that go to its own paths: a step, not a page load.
+    const links = opts.links ?? this.opts.links ?? (globalThis as { document?: EventTarget }).document
+    const click = (e: Event) => this.click(e as MouseEvent)
+    links?.addEventListener?.('click', click)
+    // A chooser's option submits to its address when there is no script (c:SegmentedDestination);
+    // with one, the click's reaction has set the value already: the page stays.
+    const submit = (e: Event) => {
+      const by = (e as SubmitEvent).submitter
+      const action = by?.getAttribute?.('formaction')
+      const loc = this.location()
+      if (loc?.paths && action?.startsWith(loc.base)) e.preventDefault()
+    }
+    links?.addEventListener?.('submit', submit)
     return () => {
       stop()
+      stopScroll?.()
+      links?.removeEventListener?.('click', click)
+      links?.removeEventListener?.('submit', submit)
       events.removeEventListener?.('popstate', follow)
       events.removeEventListener?.('hashchange', follow)
     }
@@ -573,7 +913,25 @@ export class Navigation {
     }
     if (!touched || this.pending) return
     this.pending = true
+    // Where the page is now: rendering what changed may cut it short before the step is written.
+    this.leaving = this.scroll?.offset()
     ;(this.opts.schedule ?? queueMicrotask)(() => this.pending && this.flush())
+  }
+
+  /** A followed link to one of the location's paths: pushed and followed here instead of loaded. */
+  private click(e: MouseEvent) {
+    const loc = this.location()
+    if (!loc?.paths || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
+    if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return
+    const href = a.getAttribute('href')!
+    if (!href.startsWith('/') || href.startsWith('//')) return
+    const path = href.split(/[?#]/)[0]!
+    if (path !== loc.base.slice(0, -1) && !path.startsWith(loc.base)) return
+    e.preventDefault()
+    const next = path + (href.includes('?') ? '?' + href.split('?')[1]!.split('#')[0] : this.url.search) + (href.includes('#') ? href.slice(href.indexOf('#')) : '')
+    if (next !== this.url.pathname + this.url.search + this.url.hash) this.step(next)
+    this.follow()
   }
 
   /** Requests to go somewhere (nav:goTo) not performed yet. */
@@ -595,33 +953,91 @@ export class Navigation {
     if (address === undefined) return
     // Anything the change wrote is spelled first, so the step goes from where it left us.
     if (this.pending) this.flush()
-    const href = this.url.pathname + this.url.search + (address.startsWith('#') ? address : '#' + address)
-    if (href === this.url.pathname + this.url.search + this.url.hash) this.history.replaceState(null, '', href)
-    else this.history.pushState(null, '', href)
+    const hash = address.indexOf('#')
+    const path = hash > 0 ? address.slice(0, hash) : address.startsWith('#') ? this.url.pathname : address
+    const href = path + this.url.search + (hash >= 0 ? address.slice(hash) : '')
+    if (href === this.url.pathname + this.url.search + this.url.hash) this.inPlace(href)
+    else this.step(href)
     this.follow()
   }
 
   /** Write the graph's location to the URL now (if it changed). */
   flush(): void {
     this.pending = false
-    this.write(true)
+    if (this.write(true) && !this.target()) this.toTop()
+  }
+
+  /** A new history entry; the one being left remembers where it was. */
+  private step(href: string) {
+    this.remember(this.leaving)
+    this.history.pushState(null, '', href)
+  }
+
+  /** The address changes in place; the entry keeps what it remembers. */
+  private inPlace(href: string) {
+    this.history.replaceState(this.history.state ?? null, '', href)
+  }
+
+  /** The current entry remembers where the page is scrolled, for Back, Forward and a reload. */
+  private remember(at = this.scroll?.offset()) {
+    if (!at || this.returning) return
+    const was = this.remembered()
+    if (was?.x === at.x && was.y === at.y) return
+    const state = this.history.state
+    this.history.replaceState({ ...(typeof state === 'object' ? state : null), semScroll: at }, '', this.url.pathname + this.url.search + this.url.hash)
+  }
+
+  private remembered() {
+    return this.scroll && rememberedOffset(this.history.state)
+  }
+
+  /** Another place: its top. */
+  private toTop() {
+    this.returning = this.revealing = undefined
+    this.scroll?.to({ x: 0, y: 0 })
+  }
+
+  /** Where the entry was, once the page is long enough to get there (it may still be rendering). */
+  private returnTo(at: ScrollOffset, tries = 120) {
+    const scroll = this.scroll
+    if (!scroll) return
+    this.returning = at
+    this.revealing = undefined
+    const attempt = (left: number) => {
+      if (this.returning !== at) return
+      if (scroll.to(at) || left <= 0) return void (this.returning = undefined)
+      this.nextFrame(() => attempt(left - 1))
+    }
+    attempt(tries)
+  }
+
+  /** The target the location has now, if any. */
+  private target(): Term | undefined {
+    const loc = this.location()
+    const target = loc?.dimensions.find((d) => d.target)
+    return target && currentValues(this.r, loc!).get(target.iri)
+  }
+
+  private nextFrame(run: () => void) {
+    ;(this.opts.frame ?? ((next) => (globalThis.requestAnimationFrame ?? ((cb: () => void) => setTimeout(cb, 16)))(next)))(run)
   }
 
   /** The URL as the graph would spell it now. */
   href(): string | undefined {
     const loc = this.location()
     if (!loc) return undefined
-    const { fragment, query } = spellAddress(this.r, loc, currentValues(this.r, loc))
+    const { path, fragment, query } = spellAddress(this.r, loc, currentValues(this.r, loc))
     const params = new URLSearchParams(this.url.search)
     for (const [k, v] of query) v === undefined ? params.delete(k) : params.set(k, v)
     const search = params.toString()
-    return this.url.pathname + (search ? '?' + search : '') + fragment
+    return (loc.paths ? path : this.url.pathname) + (search ? '?' + search : '') + fragment
   }
 
-  private write(asStep: boolean) {
+  /** Spell the graph's location in the URL. Whether it is at another place than it was (nav:scroll). */
+  private write(asStep: boolean): boolean {
     const loc = this.location()
     const runtime = this.runtime
-    if (!loc || !runtime) return
+    if (!loc || !runtime) return false
     const values = currentValues(this.r, loc)
     // A target applies while the location shows it; moving elsewhere leaves it.
     const stale = loc.dimensions.filter((d) => d.target && values.has(d.iri) && !inScope(this.r, loc, d, values))
@@ -635,12 +1051,19 @@ export class Navigation {
     const next = this.href()!
     const previous = this.written
     this.written = values
-    if (next === this.url.pathname + this.url.search + this.url.hash) return this.report(loc)
+    const moved = !!previous && loc.dimensions.some((d) => d.startsAtTop && !same(previous.get(d.iri), values.get(d.iri)) && inScope(this.r, loc, d, values))
+    if (next === this.url.pathname + this.url.search + this.url.hash) {
+      this.leaving = undefined
+      this.report(loc)
+      return moved
+    }
     const urlDims = loc.dimensions.filter((d) => d.carriers.some((c) => URL_CARRIERS.has(c)))
     const step = asStep && !!previous && urlDims.some((d) => d.makesHistory && !same(previous.get(d.iri), values.get(d.iri)))
-    if (step) this.history.pushState(null, '', next)
-    else this.history.replaceState(null, '', next)
+    if (step) this.step(next)
+    else this.inPlace(next)
+    this.leaving = undefined
     this.report(loc)
+    return moved
   }
 
   /**
@@ -677,19 +1100,24 @@ export class Navigation {
   /**
    * The URL changed outside the graph (Back, Forward, a typed or followed link): write what it
    * says into the graph (a nav:Navigate event when there is a bus), then spell it back in place.
+   * The page lands as a browser's would: where the entry was when it remembers that (Back,
+   * Forward: `traversal`, when the entry may remember); else at the target; else, at another
+   * place, at its top.
    */
-  follow(address = this.address()): void {
+  follow(address = this.address(), traversal = false): void {
     const loc = this.location()
     const runtime = this.runtime
     if (!loc || !runtime) return
     if (this.bus) this.bus.emit(NAV + 'Navigate', loc.iri, { value: address })
     else runtime.apply(followDelta(this.r, loc, address))
     this.pending = false
-    this.write(false)
+    const moved = this.write(false)
     this.onNavigate?.()
-    const target = loc.dimensions.find((d) => d.target)
-    const now = target && currentValues(this.r, loc).get(target.iri)
-    if (now) this.reveal(now.value)
+    const remembered = traversal ? this.remembered() : undefined
+    const now = this.target()
+    if (remembered) this.returnTo(remembered)
+    else if (now) this.reveal(now.value)
+    else if (moved) this.toTop()
   }
 
   /** Bring a target into view once it is rendered (it may be parked until its page shows). */
@@ -700,7 +1128,7 @@ export class Navigation {
     const attempt = (left: number) => {
       if (this.revealing !== iri) return
       if (reveal(iri, { smooth: this.smooth() })) return void (this.revealing = undefined)
-      if (left > 0) (this.opts.frame ?? ((run) => (globalThis.requestAnimationFrame ?? ((cb: () => void) => setTimeout(cb, 16)))(run)))(() => attempt(left - 1))
+      if (left > 0) this.nextFrame(() => attempt(left - 1))
     }
     attempt(tries)
   }
@@ -733,8 +1161,12 @@ export function rendererReveal(renderer: { nodeOf(key: string): Node | undefined
 const linkDestination: FnRule = (ctx, focus) => {
   const to = ctx.object(focus, C + 'to')
   if (to?.termType !== 'NamedNode') return []
-  const href = addressOf(ruleReader(ctx), to)
-  return href === undefined ? [] : ctx.out(focus).t(focus, NAV + 'href', href).quads
+  const keeps = new Set<string>()
+  const href = addressOf(ruleReader(ctx), to, keeps)
+  if (href === undefined) return []
+  const o = ctx.out(focus).t(focus, NAV + 'href', href)
+  for (const d of keeps) o.t(focus, NAV + 'keeps', ctx.nn(d))
+  return o.quads
 }
 
 /**
@@ -744,7 +1176,7 @@ const linkDestination: FnRule = (ctx, focus) => {
 const linkCurrent: FnRule = (ctx, focus) => {
   const address = ctx.object(focus, NAV + 'address')?.value
   if (address === undefined) return []
-  const fragment = address.includes('#') ? address.slice(address.indexOf('#')) : '#'
+  const fragment = currentLink(address)
   const r = ruleReader(ctx)
   const links = [
     ...ctx.match(null, NAV + 'href', ctx.f.literal(fragment)).map((q) => q.subject),
@@ -754,6 +1186,66 @@ const linkCurrent: FnRule = (ctx, focus) => {
   const yes = ctx.f.literal('true', ctx.nn(XSD_BOOLEAN))
   for (const link of new Set(links)) o.t(link, NAV + 'current', yes)
   return o.quads
+}
+
+/**
+ * c:SegmentedDestination: each option of a chooser of a path dimension submits to the address it
+ * sets (formaction), where we are kept for the rest (as the SPARQL rule: one level of nav:parent).
+ */
+const segmentedDestination: FnRule = (ctx, focus) => {
+  const target = ctx.object(focus, C + 'controls')
+  const property = ctx.object(focus, C + 'property')?.value
+  if (!target || !property) return []
+  const r = ruleReader(ctx)
+  for (const loc of readLocations(r)) {
+    const d = loc.dimensions.find((x) => !x.target && x.spelledIn === PATH && same(x.subject, target) && x.property === property)
+    if (!d) continue
+    const o = ctx.out(focus)
+    const current = currentValues(r, loc)
+    for (const q of ctx.match(null, C + 'selects', null)) {
+      if (q.subject.termType !== 'NamedNode' || !q.subject.value.startsWith(focus.value + '/~opt-')) continue
+      const values: Values = new Map([...current, [d.iri, q.object]])
+      const parts = ordered(loc, PATH)
+        .filter((x) => {
+          const v = values.get(x.iri)
+          if (!v || same(x.implicit, v)) return false
+          if (!x.parent) return true
+          return x.when.some((w) => same(w, values.get(x.parent!)))
+        })
+        .map((x) => segment(x === d ? optionKey(r, d, q.object) : spell(r, x, values.get(x.iri)!)) + '/')
+      o.attr(q.subject as NamedNode, 'formaction', loc.base + parts.join(''))
+    }
+    return o.quads
+  }
+  return []
+}
+
+/** An option of a chooser, spelled by its key (nav:keyProperty, else sem:slug, else as it is). */
+function optionKey(r: Reader, d: Dimension, v: Term): string {
+  if (v.termType === 'Literal') return v.value
+  const key = [one(r, v, d.keyProperty), one(r, v, SEM.slug)].find((k) => k?.termType === 'Literal')
+  return key?.value ?? v.value
+}
+
+/** nav:LocationSpelling: each path dimension's current value as the path spells it (nav:currentPart). */
+const locationSpelling: FnRule = (ctx, focus) => {
+  const r = ruleReader(ctx)
+  const loc = readLocations(r).find((l) => l.iri === focus.value)
+  if (!loc) return []
+  const o = ctx.out(focus)
+  const values = currentValues(r, loc)
+  for (const d of loc.dimensions) {
+    const v = values.get(d.iri)
+    if (d.target || d.spelledIn !== PATH || !v || same(d.implicit, v)) continue
+    o.t(ctx.nn(d.iri), NAV + 'currentPart', segment(spell(r, d, v)))
+  }
+  return o.quads
+}
+
+/** The link address of a reported address: a path and its fragment (no query), else the fragment, else '#'. */
+function currentLink(address: string): string {
+  const bare = address.replace(/\?[^#]*/, '')
+  return bare.startsWith('/') ? bare : bare.includes('#') ? bare.slice(bare.indexOf('#')) : '#'
 }
 
 /** nav:Follow: what the URL in the event says, written into the graph. */
@@ -782,5 +1274,5 @@ const containment: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const navigationFunctions: Record<string, FnRule> = { 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent, 'navigation:containment': containment }
+export const navigationFunctions: Record<string, FnRule> = { 'navigation:location-spelling': locationSpelling, 'navigation:segmented-destination': segmentedDestination, 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent, 'navigation:containment': containment }
 export const locationReactions: Record<string, ReactionFn> = { 'navigation:follow': follow }

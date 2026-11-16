@@ -60,6 +60,8 @@ describe('the reference tree', () => {
     expect(h.item(components, 'label')).toBeTruthy()
     expect(h.item(components, 'Window')).toBeUndefined()
     expect(h.item(h.open('Semblance persistence'), 'Policy')).toBeTruthy()
+    // The Safe authoring docs mention the safety layer's terms.
+    expect(h.item(h.open('Semblance safety layer'), 'Policy')).toBeTruthy()
   })
 
   it('opens the branch that holds the selection, and marks its item selected', () => {
@@ -253,7 +255,9 @@ describe('the reference, as components', () => {
     expect(ungrouped, 'component classes without a sem:group (ontology/components/groups.ttl)').toEqual([])
     // Their parts too (events, kinds, words of a language): every class of the component
     // vocabulary is in the group of the component it is part of, but for the few several share.
-    const shared = [NS.c + 'Phrase', NS.c + 'CompactPresentation']
+    // The Turtle printer's (turtle.ttl, markup.ttl): a mixin of the views that print Turtle, and the data it derives.
+    const printer = ['TurtleView', 'TurtleNode', 'TurtleEntry', 'TurtleSection', 'TurtleHead', 'MarkupNode'].map((c) => NS.c + c)
+    const shared = [NS.c + 'Phrase', NS.c + 'CompactPresentation', ...printer]
     const parts = classes.filter((c) => c.startsWith(NS.c) && !shared.includes(c) && !store.getQuads(c, NS.sem + 'group', null, null).length)
     expect(parts, 'classes of the component vocabulary without a sem:group (ontology/components/groups.ttl)').toEqual([])
   })
@@ -306,9 +310,11 @@ describe('the reference, as components', () => {
     // The overview, the tree's own rule, the page switch (it follows ui:app), and what the overview
     // mints anew (its gallery links) with the layers that decorate them; and the search field, which
     // shows the term: its values' texts, its own rule and its (closed, empty) list of matches - not
-    // the texts of the thousand terms it searches.
+    // the texts of the thousand terms it searches; and the page switcher's Reference option, whose
+    // address (its formaction, for a visit without scripts) keeps the term, with the location's
+    // spelling of it.
     expect(which.some((w) => w.startsWith('TypeaheadTexts')), which.join(', ')).toBe(false)
-    expect(ran, which.join(', ')).toBeLessThanOrEqual(27)
+    expect(ran, which.join(', ')).toBeLessThanOrEqual(29)
     // Logged for the report: rule runs and wall time of one selection (Node, linkedom, oxigraph).
     console.log(`reference selection: ${ran} rule runs, ${ms.toFixed(1)} ms`)
   })

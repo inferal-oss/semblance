@@ -43,7 +43,7 @@ c:viewer a owl:ObjectProperty ; rdfs:domain c:MessageList ;
 # The side of a conversation that is one's own: where one's own messages sit, and so where what one
 # writes belongs too (a composer: pos:align c:OwnSide). One notion for both, valued by the theme's
 # own-side token (the inline end by default, so right to left mirrors it).
-c:OwnSide a pos:Alignment ; sem:slug "own" ; rdfs:label "One's own side"@en ;
+c:OwnSide a pos:Alignment ; sem:slug "own" ; rdfs:label "One's own side"@en , "Свій бік"@uk , "Eigene Seite"@de , "جانب المرسِل"@ar ;
     rdfs:comment "The side of a conversation one's own messages take; aligns a group's items there (a composer under the thread)."@en ;
     sty:declares [ sty:property "align-items" ; sty:raw "var(--sem-own-side)" ] .
 

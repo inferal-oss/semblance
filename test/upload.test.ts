@@ -257,8 +257,8 @@ describe('a file drop', () => {
     expect(h.zone('inp-files-attach').getAttribute('data-sem-drop-reason')).toBe('Only files can go here.')
   })
 
-  it('renders the same HTML with SPARQL rules and their function twins, after every step', async () => {
-    const [a, b] = [inputs('oxigraph', 'sparql'), inputs('oxigraph', 'function')]
+  for (const kind of ['oxigraph', 'wat'] as const) it(`renders the same HTML with SPARQL rules and their function twins, after every step (${kind})`, async () => {
+    const [a, b] = [inputs(kind, 'sparql'), inputs(kind, 'function')]
     const same = () => {
       for (const id of ['inp-files-attach', 'inp-files-picture', 'inp-files-off']) expect(b.html(id), id).toBe(a.html(id))
     }
@@ -324,8 +324,8 @@ describe('a file drop', () => {
     })
   }
 
-  it('refuses with the same HTML from SPARQL rules and their function twins in another language, after every step', async () => {
-    const [a, b] = [inputs('oxigraph', 'sparql'), inputs('oxigraph', 'function')]
+  for (const kind of ['oxigraph', 'wat'] as const) it(`refuses with the same HTML from SPARQL rules and their function twins in another language, after every step (${kind})`, async () => {
+    const [a, b] = [inputs(kind, 'sparql'), inputs(kind, 'function')]
     const same = () => {
       for (const id of ['inp-files-attach', 'inp-files-picture']) expect(b.html(id), id).toBe(a.html(id))
     }

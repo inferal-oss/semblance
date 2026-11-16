@@ -22,9 +22,11 @@ export function implementationGaps(files: string[]): { noSparql: string[]; noFun
     const rendering = q.subject
     const rules = store.getQuads(null, SEM + 'implements', rendering, null).map((r) => r.subject)
     const has = (p: string) => rules.some((r) => store.getQuads(r, SEM + p, null, null).length > 0)
+    // A rule that runs another's query (sem:constructFrom) is a SPARQL rule too.
+    const borrows = rules.some((r) => store.getQuads(r, SEM + 'constructFrom', null, null).some((f) => store.getQuads(f.object, SEM + 'construct', null, null).length > 0))
     const name = rendering.value.replace(/^.*[#/]/, '')
     const awaits = (p: string) => store.getQuads(rendering, SEM + p, null, null).length > 0
-    if (!has('construct') && !awaits('needsExtension') && !awaits('awaitsWork')) noSparql.push(name)
+    if (!has('construct') && !borrows && !awaits('needsExtension') && !awaits('awaitsWork')) noSparql.push(name)
     if (!has('function')) noFunction.push(name)
   }
   return { noSparql: noSparql.sort(), noFunction: noFunction.sort() }

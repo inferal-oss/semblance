@@ -2,10 +2,11 @@
 // by a segmented control, and the lightbox, driven through events on the Data and Overlays pages as a
 // person would, with the DOM and the graph checked after each step, and the SPARQL rules and
 // their function twins compared after each step.
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { ManualClock } from '../src/behaviour/clock.ts'
+import { trackFocus } from './focus.ts'
 import { mountShell } from './harness.ts'
 import { implementationGaps } from './implementations.ts'
 
@@ -190,21 +191,105 @@ describe('gallery and lightbox', () => {
   it('gives the focus back to the image that opened it when it closes, though its panel goes away', () => {
     const s = photos()
     s.layout('grid')
-    // linkedom has no focus: a minimal one, which a removed element loses (as a browser's does).
-    let active: Element | null = null
-    Object.defineProperty(s.document, 'activeElement', { configurable: true, get: () => (active?.isConnected ? active : s.document.body) })
-    const proto = s.window.HTMLElement.prototype
-    const own = Object.getOwnPropertyDescriptor(proto, 'focus')
-    Object.defineProperty(proto, 'focus', { configurable: true, writable: true, value(this: Element) { active = this } })
-    onTestFinished(() => void (own ? Object.defineProperty(proto, 'focus', own) : delete (proto as { focus?: unknown }).focus))
+    trackFocus(s.window, s.document)
     const cell = s.part('dt-photos', 'cell-2')
     cell.focus()
     s.click(cell)
-    const panel = s.part('dt-lightbox', 'panel')
-    expect(panel.contains(s.document.activeElement)).toBe(true)
+    // Opened, the focus is on the next arrow.
+    expect(s.document.activeElement).toBe(s.part('dt-lightbox', 'next'))
     s.key('Escape', s.document.activeElement!)
     expect(s.root('dt-lightbox').children).toHaveLength(0)
     expect(s.document.activeElement).toBe(s.part('dt-photos', 'cell-2'))
+    // On the last image (it does not loop) the next arrow is disabled: the previous one has it.
+    const last = s.part('dt-photos', 'cell-6')
+    last.focus()
+    s.click(last)
+    expect(s.part('dt-lightbox', 'next').hasAttribute('disabled')).toBe(true)
+    expect(s.document.activeElement).toBe(s.part('dt-lightbox', 'prev'))
+    s.key('Escape', s.document.activeElement!)
+    expect(s.document.activeElement).toBe(last)
+  })
+
+  describe.each(['sparql', 'function'] as const)('closing on another image (%s)', (prefer) => {
+    /** Each focus's options, in order, on top of a tracked focus. */
+    const scrolls = (s: ReturnType<typeof photos>) => {
+      trackFocus(s.window, s.document)
+      const focus = s.window.HTMLElement.prototype.focus
+      const moved: [Element, boolean][] = []
+      s.window.HTMLElement.prototype.focus = function (this: HTMLElement, o?: FocusOptions) {
+        moved.push([this, !o?.preventScroll])
+        return focus.call(this, o)
+      }
+      return moved
+    }
+
+    it.each([
+      ['carousel', 'slide-2-item', 'slide-4-item'],
+      ['grid', 'cell-2', 'cell-4'],
+      ['pile', 'photo-2', 'photo-4'],
+    ] as const)('in a %s, gives the focus to the image it shows, brought into view, and Enter opens that one', (layout, from, shown) => {
+      const s = photos('GroupData', prefer)
+      s.layout(layout)
+      const moved = scrolls(s)
+      const opener = s.part('dt-photos', from)
+      opener.focus()
+      s.click(opener)
+      expect(s.part('dt-lightbox', 'counter').textContent).toBe('2 / 6')
+      s.key('ArrowRight', s.document.activeElement!)
+      s.key('ArrowRight', s.document.activeElement!)
+      expect(s.fact('dt-photos', 'current')).toEqual(['photo-dunes'])
+      moved.length = 0
+      s.key('Escape', s.document.activeElement!)
+      expect(s.fact('dt-lightbox', 'open')).toEqual(['false'])
+      const item = s.part('dt-photos', shown)
+      expect(s.document.activeElement).toBe(item)
+      expect(moved.at(-1)).toEqual([item, true])
+      // What Enter does there: open what is shown.
+      s.click(s.document.activeElement!)
+      expect(s.fact('dt-lightbox', 'open')).toEqual(['true'])
+      expect(s.part('dt-lightbox', 'counter').textContent).toBe('4 / 6')
+    })
+
+    it('right to left, and by a thumbnail, the ✕ or the scrim too', () => {
+      const s = photos('GroupOverlays', prefer)
+      trackFocus(s.window, s.document)
+      s.document.documentElement.setAttribute('dir', 'rtl')
+      const cells = [...s.root('ov-photos').querySelectorAll<HTMLElement>('.sem-cell')]
+      const open = (cell: HTMLElement) => (cell.focus(), s.click(cell))
+      open(cells[0]!)
+      // Right to left, the left arrow goes on.
+      s.key('ArrowLeft', s.document.activeElement!)
+      s.click(s.part('ov-lightbox', 'close'))
+      expect(s.document.activeElement).toBe(cells[1])
+      open(cells[0]!)
+      s.click(s.part('ov-lightbox', 'thumb-3'))
+      s.click(s.part('ov-lightbox', 'scrim'))
+      expect(s.fact('ov-lightbox', 'open')).toEqual(['false'])
+      expect(s.document.activeElement).toBe(cells[2])
+      s.document.documentElement.removeAttribute('dir')
+    })
+
+    it('opened from elsewhere, it gives the focus back to what opened it, wherever the images went', () => {
+      const s = photos('GroupData', prefer)
+      s.layout('grid')
+      const moved = scrolls(s)
+      const f = s.store.factory
+      const lightbox = f.namedNode(UI + 'dt-lightbox')
+      const open = f.namedNode(C + 'open')
+      const set = (v: boolean) => {
+        s.runtime.apply({ remove: s.store.match(lightbox, open, null), add: [f.quad(lightbox, open, f.literal(String(v), f.namedNode(NS.xsd + 'boolean')))] })
+        s.shell.flush()
+      }
+      const before = s.root('dt-layout').querySelector('button') as HTMLElement
+      before.focus()
+      set(true)
+      s.key('ArrowRight', s.document.activeElement!)
+      moved.length = 0
+      set(false)
+      expect(s.document.activeElement).toBe(before)
+      // It was never seen on this page (linkedom has no screen): nothing scrolls to it.
+      expect(moved.at(-1)).toEqual([before, false])
+    })
   })
 
   it('moves through the images by arrow keys, mirrored in a right-to-left page, and closes with Escape', () => {

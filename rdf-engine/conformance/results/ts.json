@@ -1,0 +1,14 @@
+{
+  "target": "ts",
+  "rdfTests": "bfefa770267ec0e5b6e45764bbca4ee43789ba72",
+  "summary": {
+    "jelly": {
+      "pass": 339,
+      "fail": 0,
+      "skip": 28,
+      "spelling": 0
+    }
+  },
+  "failing": {},
+  "spelling": []
+}

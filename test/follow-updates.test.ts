@@ -30,7 +30,7 @@ const live = (h: Shell) => q(h, '.sem-toolbar [data-sem-c=live-indicator]')
 const rows = (h: Shell) => [...h.document.querySelectorAll('[data-sem-c=query-workbench] [data-sem-c=result-table] tbody tr')].map((tr) => tr.textContent)
 const sample = (h: Shell, label: string) =>
   h.fire([...h.document.querySelectorAll('.sem-sample')].find((b) => b.querySelector('.sem-sample-label')!.textContent === label)!, 'click')
-const runs = (h: Shell, rule = 'ResultTableRendering-fn') => h.screen.engine.stats.byRule.get(C + rule)?.runs ?? 0
+const runs = (h: Shell, rule = 'ResultTableRendering-sparql') => h.screen.engine.stats.byRule.get(C + rule)?.runs ?? 0
 const following = (h: Shell) => h.store.match(h.store.factory.namedNode(UI + 'workbench'), h.store.factory.namedNode(C + 'followUpdates'), null)[0]?.object.value
 /** A frame passes (here: the microtask the runtime schedules its refresh in). */
 const frame = () => new Promise<void>((r) => setTimeout(r, 0))
@@ -83,10 +83,10 @@ describe('following updates as a maintained view (the workbench and IVM)', () =>
     expect(plan(h)!.textContent).toContain('Maintained incrementally')
     expect(planRows(h).some((r) => r.includes('iv:Partition'))).toBe(true)
     expect(planRows(h).some((r) => r.includes('iv:Sink'))).toBe(true)
-    // Off again: a plain query, no view, no plan.
+    // Off again: a query run on request (c:QueryRuns), no plan.
     h.fire(followSwitch(h), 'click')
     expect(isView(h)).toBe(false)
-    expect(h.runtime.views.view(UI + 'currentQuery')).toBeUndefined()
+    expect(h.runtime.views.view(UI + 'currentQuery')!.strategy).toBe('on request')
   })
 
   it('a query the runtime cannot maintain is recomputed, and the plan says why; a CONSTRUCT writes nothing to the views graph', async () => {
@@ -106,7 +106,8 @@ describe('following updates as a maintained view (the workbench and IVM)', () =>
     h.fire(q(h, '.sem-toolbar button')!, 'click')
     expect(h.runtime.views.view(UI + 'currentQuery')).toBeDefined()
     expect(h.store.match(null, h.store.factory.namedNode('urn:test:copied'), null).length).toBe(0)
-    expect(h.store.match(null, null, null, views).length).toBeLessThan(before + 40)
+    // Its five triples are rows of a result set (a dozen triples each), not triples of their own.
+    expect(h.store.match(null, null, null, views).length).toBeLessThan(before + 100)
   })
 })
 

@@ -1,0 +1,192 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+
+# The element markup's HTML (c:ElementMarkup, views.ttl): the rendered element, one element per line,
+# indented by depth, as data first, then tokens colored as the Turtle printer's are. Its blocks sit above
+# the printer's (turtle.ttl), so what they read - rendered elements, the printer's own tokens among
+# them - is settled:
+#
+#   c:ElementMarkupRoot   per element markup: the node shown (the bound node's element: itself, or the
+#                         root that renders it) as a c:MarkupNode, and the "# the element as HTML" line
+#   c:MarkupChildren      per markup node: a node for each child (a component stands for its rendered
+#                         root), its depth and order key - the children's own order keys when they all
+#                         have one, else their place in the order ord: says - and whether its text
+#                         children print on its own line
+#   c:MarkupTokens        per markup node: its lines - the tag and its attributes (by name; the
+#                         inspector's own mark left out), its text (trimmed, on a line of its own unless
+#                         its parent's line has it), the closing tag
+#
+# The function twins (src/components/markup.ts) state the same; a test checks that both render the
+# same, byte for byte.
+
+c:MarkupNode a owl:Class ; rdfs:comment "Derived: a rendered node an element markup prints, with its depth and place."@en .
+c:markupOf a owl:ObjectProperty ; rdfs:comment "Derived: the rendered node (an element or a text node) a c:MarkupNode prints."@en .
+c:markupView a owl:ObjectProperty ; rdfs:comment "Derived: the c:ElementMarkup a c:MarkupNode belongs to."@en .
+c:markupDepth a owl:DatatypeProperty ; rdfs:comment "Derived: a c:MarkupNode's depth, from 0 (two spaces a step)."@en .
+c:markupKey a owl:DatatypeProperty ; rdfs:comment "Derived: a c:MarkupNode's order key: its parent's, then its place among its siblings."@en .
+c:markupUp a owl:ObjectProperty ; rdfs:comment "Derived: the c:MarkupNode a c:MarkupNode is a child of."@en .
+c:markupInline a owl:DatatypeProperty ; rdfs:comment "Derived: an element whose text children print on its own line (all of them text, the line under 100 characters)."@en .
+
+c:ElementMarkupRoot a sem:BuildingBlock ; sem:targets c:ElementMarkup ; sem:stratum 103 ; sem:follows c:bindFrom , ( c:bindFrom ) .
+c:ElementMarkupRoot-fn a sem:Rule ; sem:implements c:ElementMarkupRoot ; sem:function "element-markup:root" .
+c:ElementMarkupRoot-sparql a sem:Rule ;
+    sem:implements c:ElementMarkupRoot ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?node a c:MarkupNode ; c:markupOf ?root ; c:markupView $this ; c:markupDepth 0 ; c:markupKey "\\u0001n3\\u0001n1" .
+  ?into rdfhtml:hasChild ?tok .
+  ?tok a ?element ; rdfhtml:data ?plain ; rdfhtml:class ?class ; rdfhtml:hasChild ?tokText ; sem:orderKey ?key .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ElementMarkup ; c:active ?active FILTER(STR(?active) = "true")
+  $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?bound FILTER(isIRI(?bound))
+  { ?bound a ?bt FILTER(STRSTARTS(STR(?bt), STR(rdfhtml:)) || STRSTARTS(STR(?bt), "http://www.w3.org/2000/svg#") && !sameTerm(?bt, rdfhtml:Attribute)) BIND(?bound AS ?root) }
+  UNION { FILTER NOT EXISTS { ?bound a ?bt2 FILTER(STRSTARTS(STR(?bt2), STR(rdfhtml:)) || STRSTARTS(STR(?bt2), "http://www.w3.org/2000/svg#") && !sameTerm(?bt2, rdfhtml:Attribute)) } ?root sem:renders ?bound }
+  # Nothing for a text node with no text.
+  FILTER(NOT EXISTS { ?root a rdfhtml:Text } || EXISTS { ?root rdfhtml:data ?rd FILTER(REPLACE(STR(?rd), "^[ \\t\\n\\r]+|[ \\t\\n\\r]+$", "") != "") })
+  BIND(IRI(CONCAT(STR($this), "/~mk-", SUBSTR(MD5(STR(?root)), 1, 12))) AS ?node)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?into)
+  BIND(IF(CONTAINS(STR(?bound), "/~"), IRI(STRBEFORE(STR(?bound), "/~")), ?bound) AS ?component)
+  BIND(EXISTS { ?component ?anyP ?anyO FILTER(!STRSTARTS(STR(?anyP), "http://www.w3.org/ns/prov#")) } AS ?own)
+  VALUES (?slot ?text0 ?tokKind) { (0 "\\n\\n" "space") (1 "# the element as HTML" "comment") (2 "\\n" "space") }
+  BIND(IF(?slot = 0 && !?own, ?none, ?text0) AS ?text)
+  FILTER(BOUND(?text))
+  BIND(IRI(CONCAT(STR($this), "/~mc-", STR(?slot))) AS ?tok)
+  BIND(CONCAT("\\u0001n3\\u0001n0\\u0001n", STR(?slot)) AS ?key)
+  BIND(?tokKind = "space" AS ?plainKind)
+  BIND(IF(?plainKind, rdfhtml:Text, rdfhtml:Span) AS ?element)
+  BIND(IF(?plainKind, ?text, ?none) AS ?plain)
+  BIND(IF(?plainKind, ?none, "ttl-comment") AS ?class)
+  BIND(IF(?plainKind, ?none, IRI(CONCAT(STR(?tok), "-x"))) AS ?tokText)
+  BIND(IF(?plainKind, ?none, ?text) AS ?spanned)
+}""" .
+
+c:MarkupChildren a sem:BuildingBlock ; sem:targets c:MarkupNode ; sem:stratum 104 ; sem:always true ;
+    sem:follows c:markupOf , ( c:markupOf rdfhtml:hasChild ) , ( c:markupOf rdfhtml:hasChild [ sem:inverse sem:renders ] ) ;
+    sem:watches rdf:type , c:markupOf , c:markupView , c:markupDepth , c:markupKey , rdfhtml:hasChild , sem:renders , sem:orderKey ,
+      ord:precedes , ord:immediatelyPrecedes , ord:follows , ord:immediatelyFollows .
+c:MarkupChildren-fn a sem:Rule ; sem:implements c:MarkupChildren ; sem:function "markup:children" .
+c:MarkupChildren-sparql a sem:Rule ;
+    sem:implements c:MarkupChildren ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?child a c:MarkupNode ; c:markupOf ?r ; c:markupView ?view ; c:markupDepth ?childDepth ; c:markupKey ?childKey ; c:markupUp $this .
+}
+WHERE {
+  $this a c:MarkupNode ; c:markupOf ?e ; c:markupView ?view ; c:markupDepth ?depth ; c:markupKey ?key .
+  BIND(?depth + 1 AS ?childDepth)
+  BIND(NOT EXISTS { ?e rdfhtml:hasChild ?unkeyed FILTER NOT EXISTS { ?unkeyed sem:orderKey ?anyKey } } AS ?keyed)
+  # Each child slot's place in the order ord: says (how many siblings come before it).
+  { SELECT ?c (COUNT(DISTINCT ?before) AS ?place) WHERE {
+      $this c:markupOf ?pe . ?pe rdfhtml:hasChild ?c .
+      OPTIONAL { ?pe rdfhtml:hasChild ?before . ?before (ord:immediatelyPrecedes|ord:precedes|^ord:immediatelyFollows|^ord:follows)+ ?c }
+    } GROUP BY ?c }
+  { ?c a ?ct FILTER(STRSTARTS(STR(?ct), STR(rdfhtml:)) || STRSTARTS(STR(?ct), "http://www.w3.org/2000/svg#") && !sameTerm(?ct, rdfhtml:Attribute)) BIND(?c AS ?r) }
+  UNION { FILTER NOT EXISTS { ?c a ?ct2 FILTER(STRSTARTS(STR(?ct2), STR(rdfhtml:)) || STRSTARTS(STR(?ct2), "http://www.w3.org/2000/svg#") && !sameTerm(?ct2, rdfhtml:Attribute)) } ?r sem:renders ?c }
+  OPTIONAL { ?c sem:orderKey ?ok0 }
+  BIND(STR(?ok0) AS ?ok)
+  BIND(IF(?keyed, IF(STRSTARTS(?ok, "\\u0001"), SUBSTR(?ok, 2), IF(REGEX(?ok, "^[ \\t\\n\\r]*[+-]?([0-9]+[.]?[0-9]*|[.][0-9]+)([eE][+-]?[0-9]+)?[ \\t\\n\\r]*$"), CONCAT("n", ?ok), CONCAT("s", ?ok))), CONCAT("n", STR(?place))) AS ?place0)
+  BIND(CONCAT(?key, "\\u0001n1\\u0001", ?place0, "\\u0001s\\u0001s", STR(?c)) AS ?childKey)
+  BIND(IRI(CONCAT(STR(?view), "/~mk-", SUBSTR(MD5(STR(?r)), 1, 12))) AS ?child)
+}""" .
+
+c:MarkupTokens a sem:BuildingBlock ; sem:targets c:MarkupNode ; sem:stratum 105 ; sem:always true ;
+    sem:follows c:markupOf , c:markupUp , ( c:markupUp c:markupOf ) , ( [ sem:inverse c:markupUp ] c:markupOf ) .
+c:MarkupTokens-fn a sem:Rule ; sem:implements c:MarkupTokens ; sem:function "markup:tokens" .
+c:MarkupTokens-sparql a sem:Rule ;
+    sem:implements c:MarkupTokens ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  $this c:markupInline ?inlineFlag .
+  ?into rdfhtml:hasChild ?tok .
+  ?tok a ?element ; rdfhtml:data ?plain ; rdfhtml:class ?class ; rdfhtml:hasChild ?tokText ; sem:orderKey ?k .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+}
+WHERE {
+  $this a c:MarkupNode ; c:markupOf ?e ; c:markupView ?view ; c:markupDepth ?depth ; c:markupKey ?K .
+  BIND(IRI(CONCAT(STR(?view), "/~root")) AS ?into)
+  BIND(EXISTS { ?e a rdfhtml:Text } AS ?isText)
+  OPTIONAL { ?e a ?cls FILTER(STRSTARTS(STR(?cls), STR(rdfhtml:)) || STRSTARTS(STR(?cls), "http://www.w3.org/2000/svg#") && !sameTerm(?cls, rdfhtml:Text) && !sameTerm(?cls, rdfhtml:Attribute)) }
+  BIND(IF(STRSTARTS(STR(?cls), STR(rdfhtml:)), LCASE(STRAFTER(STR(?cls), STR(rdfhtml:))),
+       IF(STRAFTER(STR(?cls), "#") = "LinearGradient", "linearGradient", LCASE(STRAFTER(STR(?cls), "#")))) AS ?tag0)
+  BIND(COALESCE(?tag0, "sem-unknown") AS ?tag)
+  BIND(EXISTS { ?e a ?vc FILTER(?vc IN (rdfhtml:Area, rdfhtml:Base, rdfhtml:Br, rdfhtml:Col, rdfhtml:Embed, rdfhtml:Hr, rdfhtml:Img, rdfhtml:Input, rdfhtml:Link, rdfhtml:Meta, rdfhtml:Source, rdfhtml:Track, rdfhtml:Wbr)) } AS ?void)
+  OPTIONAL { ?e rdfhtml:data ?data0 }
+  BIND(STR(COALESCE(?data0, "")) AS ?data)
+  # Its children: how many, whether all are text, their text's length (escaped).
+  { SELECT (COUNT(?ch) AS ?children) (SUM(IF(?chText, 1, 0)) AS ?texts) (SUM(?chLength) AS ?flat) WHERE {
+      ?ch c:markupUp $this ; c:markupOf ?che .
+      BIND(EXISTS { ?che a rdfhtml:Text } AS ?chText)
+      OPTIONAL { ?che rdfhtml:data ?chd }
+      BIND(IF(?chText, STRLEN(REPLACE(REPLACE(REPLACE(STR(COALESCE(?chd, "")), "&", "&amp;"), "<", "&lt;"), ">", "&gt;")), 0) AS ?chLength)
+    } }
+  # Its attributes by name: RDF/HTML's (the least value), else attribute nodes', but the inspector's mark.
+  { SELECT (SUM(1 + STRLEN(?an) + IF(?av = "", 0, 3 + STRLEN(REPLACE(REPLACE(REPLACE(REPLACE(?av, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), '"', '&quot;')))) AS ?attrLength0) WHERE {
+      { SELECT ?an (COALESCE(MIN(?pv), MIN(?nv)) AS ?av) WHERE {
+          $this c:markupOf ?ae .
+          { VALUES (?ap ?an) { (rdfhtml:abbr "abbr") (rdfhtml:accept "accept") (rdfhtml:acceptCharset "accept-charset") (rdfhtml:accessKey "accesskey") (rdfhtml:action "action") (rdfhtml:allow "allow") (rdfhtml:allowFullscreen "allowfullscreen") (rdfhtml:alpha "alpha") (rdfhtml:alt "alt") (rdfhtml:as "as") (rdfhtml:async "async") (rdfhtml:autocapitalize "autocapitalize") (rdfhtml:autocomplete "autocomplete") (rdfhtml:autocorrect "autocorrect") (rdfhtml:autofocus "autofocus") (rdfhtml:autoplay "autoplay") (rdfhtml:blocking "blocking") (rdfhtml:charset "charset") (rdfhtml:checked "checked") (rdfhtml:cite "cite") (rdfhtml:class "class") (rdfhtml:closedBy "closedby") (rdfhtml:colSpan "colspan") (rdfhtml:color "color") (rdfhtml:colorspace "colorspace") (rdfhtml:cols "cols") (rdfhtml:command "command") (rdfhtml:commandfor "commandfor") (rdfhtml:content "content") (rdfhtml:contenteditable "contenteditable") (rdfhtml:controls "controls") (rdfhtml:coords "coords") (rdfhtml:crossorigin "crossorigin") (rdfhtml:dataAttribute "data") (rdfhtml:dateTime "datetime") (rdfhtml:decoding "decoding") (rdfhtml:default "default") (rdfhtml:defer "defer") (rdfhtml:dir "dir") (rdfhtml:dirName "dirname") (rdfhtml:disabled "disabled") (rdfhtml:download "download") (rdfhtml:draggable "draggable") (rdfhtml:enctype "enctype") (rdfhtml:enterkeyhint "enterkeyhint") (rdfhtml:fetchpriority "fetchpriority") (rdfhtml:for "for") (rdfhtml:form "form") (rdfhtml:formAction "formaction") (rdfhtml:formNoValidate "formnovalidate") (rdfhtml:formTarget "formtarget") (rdfhtml:formenctype "formenctype") (rdfhtml:formmethod "formmethod") (rdfhtml:headers "headers") (rdfhtml:headingOffset "headingoffset") (rdfhtml:headingReset "headingreset") (rdfhtml:height "height") (rdfhtml:hidden "hidden") (rdfhtml:high "high") (rdfhtml:href "href") (rdfhtml:hreflang "hreflang") (rdfhtml:httpEquiv "http-equiv") (rdfhtml:id "id") (rdfhtml:imageSizes "imagesizes") (rdfhtml:imageSrcset "imagesrcset") (rdfhtml:inert "inert") (rdfhtml:inputmode "inputmode") (rdfhtml:integrity "integrity") (rdfhtml:is "is") (rdfhtml:isMap "ismap") (rdfhtml:itemid "itemid") (rdfhtml:itemprop "itemprop") (rdfhtml:itemref "itemref") (rdfhtml:itemscope "itemscope") (rdfhtml:itemtype "itemtype") (rdfhtml:kind "kind") (rdfhtml:label "label") (rdfhtml:lang "lang") (rdfhtml:list "list") (rdfhtml:loading "loading") (rdfhtml:loop "loop") (rdfhtml:low "low") (rdfhtml:max "max") (rdfhtml:maxLength "maxlength") (rdfhtml:media "media") (rdfhtml:method "method") (rdfhtml:min "min") (rdfhtml:minLength "minlength") (rdfhtml:multiple "multiple") (rdfhtml:muted "muted") (rdfhtml:name "name") (rdfhtml:noModule "nomodule") (rdfhtml:noValidate "novalidate") (rdfhtml:nonce "nonce") (rdfhtml:open "open") (rdfhtml:optimum "optimum") (rdfhtml:pattern "pattern") (rdfhtml:ping "ping") (rdfhtml:placeholder "placeholder") (rdfhtml:playsInline "playsinline") (rdfhtml:popover "popover") (rdfhtml:popovertarget "popovertarget") (rdfhtml:popovertargetaction "popovertargetaction") (rdfhtml:poster "poster") (rdfhtml:preload "preload") (rdfhtml:readOnly "readonly") (rdfhtml:referrerpolicy "referrerpolicy") (rdfhtml:rel "rel") (rdfhtml:required "required") (rdfhtml:reversed "reversed") (rdfhtml:rowSpan "rowspan") (rdfhtml:rows "rows") (rdfhtml:sandbox "sandbox") (rdfhtml:scope "scope") (rdfhtml:selected "selected") (rdfhtml:shadowRootClonable "shadowrootclonable") (rdfhtml:shadowRootCustomElementRegistry "shadowrootcustomelementregistry") (rdfhtml:shadowRootDelegatesFocus "shadowrootdelegatesfocus") (rdfhtml:shadowRootSerializable "shadowrootserializable") (rdfhtml:shadowrootmode "shadowrootmode") (rdfhtml:shadowrootslotassignment "shadowrootslotassignment") (rdfhtml:shape "shape") (rdfhtml:size "size") (rdfhtml:sizes "sizes") (rdfhtml:slot "slot") (rdfhtml:span "span") (rdfhtml:spellcheck "spellcheck") (rdfhtml:src "src") (rdfhtml:srcdoc "srcdoc") (rdfhtml:srclang "srclang") (rdfhtml:srcset "srcset") (rdfhtml:start "start") (rdfhtml:step "step") (rdfhtml:style "style") (rdfhtml:tabIndex "tabindex") (rdfhtml:target "target") (rdfhtml:title "title") (rdfhtml:translate "translate") (rdfhtml:type "type") (rdfhtml:useMap "usemap") (rdfhtml:value "value") (rdfhtml:width "width") (rdfhtml:wrap "wrap") (rdfhtml:writingSuggestions "writingsuggestions") } ?ae ?ap ?pv0 BIND(STR(?pv0) AS ?pv) }
+          UNION { ?ae rdfhtml:attribute ?anode . ?anode rdfhtml:attributeName ?an0 ; rdfhtml:attributeValue ?nv0 BIND(STR(?an0) AS ?an) BIND(STR(?nv0) AS ?nv) FILTER(?an != "data-sem-highlighted") }
+        } GROUP BY ?an }
+    } }
+  BIND(COALESCE(?attrLength0, 0) AS ?attrLength)
+  BIND(!?isText && !?void && ?children > 0 && ?texts = ?children && 2 * ?depth + 2 + STRLEN(?tag) + ?attrLength + ?flat < 100 AS ?inline)
+  BIND(IF(?inline, true, ?none) AS ?inlineFlag)
+  OPTIONAL { $this c:markupUp ?up }
+  BIND(EXISTS { $this c:markupUp ?up2 . ?up2 c:markupInline true } AS ?inParentLine)
+  BIND(REPLACE(?data, "^[ \\t\\n\\r]+|[ \\t\\n\\r]+$", "") AS ?trimmed)
+  BIND(IF(?depth > 0, CONCAT("\\n", SUBSTR("                                                                                                                        ", 1, 2 * (?depth))), ?none) AS ?lead)
+  LATERAL {
+    {
+      # Text: on its parent's line as it is, else trimmed on a line of its own.
+      FILTER(?isText)
+      VALUES (?slot ?n) { ("a0" "\\u0001n0\\u0001n0") ("a1" "\\u0001n0\\u0001n1") }
+      BIND(IF(?slot = "a0", IF(?inParentLine || ?trimmed = "", ?none, ?lead), IF(?inParentLine, IF(?data = "", ?none, REPLACE(REPLACE(REPLACE(?data, "&", "&amp;"), "<", "&lt;"), ">", "&gt;")), IF(?trimmed = "", ?none, REPLACE(REPLACE(REPLACE(?trimmed, "&", "&amp;"), "<", "&lt;"), ">", "&gt;")))) AS ?text)
+      BIND(IF(?slot = "a0", "space", "punct") AS ?tokKind)
+      BIND(CONCAT(?K, ?n) AS ?k)
+      BIND(IRI(CONCAT(STR($this), "-", ?slot)) AS ?tok)
+    } UNION {
+      # An element's own line: <tag, then >; with no children, </tag> on it; inline, its text and </tag>.
+      FILTER(!?isText)
+      VALUES (?slot ?n) { ("a0" "\\u0001n0\\u0001n0") ("a1" "\\u0001n0\\u0001n1") ("a2" "\\u0001n0\\u0001n2") ("a3" "\\u0001n0\\u0001n4") ("a4" "\\u0001n0\\u0001n5") ("a5" "\\u0001n0\\u0001n6") ("a6" "\\u0001n0\\u0001n7")
+                          ("z0" "\\u0001n2\\u0001n0") ("z1" "\\u0001n2\\u0001n1") ("z2" "\\u0001n2\\u0001n2") ("z3" "\\u0001n2\\u0001n3") }
+      BIND(?children = 0 && !?void AS ?empty)
+      BIND(!?void && !?empty AS ?closes)
+      BIND(IF(?slot = "a0", ?lead, IF(?slot = "a1", "<", IF(?slot = "a2", ?tag, IF(?slot = "a3", ">",
+        IF(?slot = "a4", IF(?empty, "</", ?none), IF(?slot = "a5", IF(?empty, ?tag, ?none), IF(?slot = "a6", IF(?empty, ">", ?none),
+        IF(?slot = "z0", IF(?closes && !?inline, ?lead, ?none), IF(?slot = "z1", IF(?closes, "</", ?none), IF(?slot = "z2", IF(?closes, ?tag, ?none), IF(?closes, ">", ?none))))))))))) AS ?text)
+      BIND(IF(?slot = "a2" || ?slot = "a5" || ?slot = "z2", "keyword", IF(?slot = "a0" || ?slot = "z0", "space", "punct")) AS ?tokKind)
+      BIND(CONCAT(?K, ?n) AS ?k)
+      BIND(IRI(CONCAT(STR($this), "-", ?slot)) AS ?tok)
+    } UNION {
+      # Its attributes: a space, the name, and ="value" unless it is empty.
+      FILTER(!?isText)
+      { SELECT ?an (COALESCE(MIN(?pv), MIN(?nv)) AS ?av) WHERE {
+          $this c:markupOf ?ae .
+          { VALUES (?ap ?an) { (rdfhtml:abbr "abbr") (rdfhtml:accept "accept") (rdfhtml:acceptCharset "accept-charset") (rdfhtml:accessKey "accesskey") (rdfhtml:action "action") (rdfhtml:allow "allow") (rdfhtml:allowFullscreen "allowfullscreen") (rdfhtml:alpha "alpha") (rdfhtml:alt "alt") (rdfhtml:as "as") (rdfhtml:async "async") (rdfhtml:autocapitalize "autocapitalize") (rdfhtml:autocomplete "autocomplete") (rdfhtml:autocorrect "autocorrect") (rdfhtml:autofocus "autofocus") (rdfhtml:autoplay "autoplay") (rdfhtml:blocking "blocking") (rdfhtml:charset "charset") (rdfhtml:checked "checked") (rdfhtml:cite "cite") (rdfhtml:class "class") (rdfhtml:closedBy "closedby") (rdfhtml:colSpan "colspan") (rdfhtml:color "color") (rdfhtml:colorspace "colorspace") (rdfhtml:cols "cols") (rdfhtml:command "command") (rdfhtml:commandfor "commandfor") (rdfhtml:content "content") (rdfhtml:contenteditable "contenteditable") (rdfhtml:controls "controls") (rdfhtml:coords "coords") (rdfhtml:crossorigin "crossorigin") (rdfhtml:dataAttribute "data") (rdfhtml:dateTime "datetime") (rdfhtml:decoding "decoding") (rdfhtml:default "default") (rdfhtml:defer "defer") (rdfhtml:dir "dir") (rdfhtml:dirName "dirname") (rdfhtml:disabled "disabled") (rdfhtml:download "download") (rdfhtml:draggable "draggable") (rdfhtml:enctype "enctype") (rdfhtml:enterkeyhint "enterkeyhint") (rdfhtml:fetchpriority "fetchpriority") (rdfhtml:for "for") (rdfhtml:form "form") (rdfhtml:formAction "formaction") (rdfhtml:formNoValidate "formnovalidate") (rdfhtml:formTarget "formtarget") (rdfhtml:formenctype "formenctype") (rdfhtml:formmethod "formmethod") (rdfhtml:headers "headers") (rdfhtml:headingOffset "headingoffset") (rdfhtml:headingReset "headingreset") (rdfhtml:height "height") (rdfhtml:hidden "hidden") (rdfhtml:high "high") (rdfhtml:href "href") (rdfhtml:hreflang "hreflang") (rdfhtml:httpEquiv "http-equiv") (rdfhtml:id "id") (rdfhtml:imageSizes "imagesizes") (rdfhtml:imageSrcset "imagesrcset") (rdfhtml:inert "inert") (rdfhtml:inputmode "inputmode") (rdfhtml:integrity "integrity") (rdfhtml:is "is") (rdfhtml:isMap "ismap") (rdfhtml:itemid "itemid") (rdfhtml:itemprop "itemprop") (rdfhtml:itemref "itemref") (rdfhtml:itemscope "itemscope") (rdfhtml:itemtype "itemtype") (rdfhtml:kind "kind") (rdfhtml:label "label") (rdfhtml:lang "lang") (rdfhtml:list "list") (rdfhtml:loading "loading") (rdfhtml:loop "loop") (rdfhtml:low "low") (rdfhtml:max "max") (rdfhtml:maxLength "maxlength") (rdfhtml:media "media") (rdfhtml:method "method") (rdfhtml:min "min") (rdfhtml:minLength "minlength") (rdfhtml:multiple "multiple") (rdfhtml:muted "muted") (rdfhtml:name "name") (rdfhtml:noModule "nomodule") (rdfhtml:noValidate "novalidate") (rdfhtml:nonce "nonce") (rdfhtml:open "open") (rdfhtml:optimum "optimum") (rdfhtml:pattern "pattern") (rdfhtml:ping "ping") (rdfhtml:placeholder "placeholder") (rdfhtml:playsInline "playsinline") (rdfhtml:popover "popover") (rdfhtml:popovertarget "popovertarget") (rdfhtml:popovertargetaction "popovertargetaction") (rdfhtml:poster "poster") (rdfhtml:preload "preload") (rdfhtml:readOnly "readonly") (rdfhtml:referrerpolicy "referrerpolicy") (rdfhtml:rel "rel") (rdfhtml:required "required") (rdfhtml:reversed "reversed") (rdfhtml:rowSpan "rowspan") (rdfhtml:rows "rows") (rdfhtml:sandbox "sandbox") (rdfhtml:scope "scope") (rdfhtml:selected "selected") (rdfhtml:shadowRootClonable "shadowrootclonable") (rdfhtml:shadowRootCustomElementRegistry "shadowrootcustomelementregistry") (rdfhtml:shadowRootDelegatesFocus "shadowrootdelegatesfocus") (rdfhtml:shadowRootSerializable "shadowrootserializable") (rdfhtml:shadowrootmode "shadowrootmode") (rdfhtml:shadowrootslotassignment "shadowrootslotassignment") (rdfhtml:shape "shape") (rdfhtml:size "size") (rdfhtml:sizes "sizes") (rdfhtml:slot "slot") (rdfhtml:span "span") (rdfhtml:spellcheck "spellcheck") (rdfhtml:src "src") (rdfhtml:srcdoc "srcdoc") (rdfhtml:srclang "srclang") (rdfhtml:srcset "srcset") (rdfhtml:start "start") (rdfhtml:step "step") (rdfhtml:style "style") (rdfhtml:tabIndex "tabindex") (rdfhtml:target "target") (rdfhtml:title "title") (rdfhtml:translate "translate") (rdfhtml:type "type") (rdfhtml:useMap "usemap") (rdfhtml:value "value") (rdfhtml:width "width") (rdfhtml:wrap "wrap") (rdfhtml:writingSuggestions "writingsuggestions") } ?ae ?ap ?pv0 BIND(STR(?pv0) AS ?pv) }
+          UNION { ?ae rdfhtml:attribute ?anode . ?anode rdfhtml:attributeName ?an0 ; rdfhtml:attributeValue ?nv0 BIND(STR(?an0) AS ?an) BIND(STR(?nv0) AS ?nv) FILTER(?an != "data-sem-highlighted") }
+        } GROUP BY ?an }
+      VALUES (?slot ?n) { ("0" "\\u0001n0") ("1" "\\u0001n1") ("2" "\\u0001n2") ("3" "\\u0001n3") }
+      BIND(IF(?slot = "0", " ", IF(?slot = "1", ?an, IF(?av = "", ?none, IF(?slot = "2", "=", CONCAT('"', REPLACE(REPLACE(REPLACE(REPLACE(?av, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), '"', '&quot;'), '"'))))) AS ?text)
+      BIND(IF(?slot = "1", "pname", IF(?slot = "3", "literal", "punct")) AS ?tokKind)
+      BIND(CONCAT(?K, "\\u0001n0\\u0001n3\\u0001s", ?an, ?n) AS ?k)
+      BIND(IRI(CONCAT(STR($this), "-t", SUBSTR(MD5(?an), 1, 12), "-", ?slot)) AS ?tok)
+    }
+  }
+  FILTER(BOUND(?text))
+  BIND(?tokKind = "space" || ?tokKind = "punct" AS ?plainKind)
+  BIND(IF(?plainKind, rdfhtml:Text, rdfhtml:Span) AS ?element)
+  BIND(IF(?plainKind, ?text, ?none) AS ?plain)
+  BIND(IF(?plainKind, ?none, CONCAT("ttl-", ?tokKind)) AS ?class)
+  BIND(IF(?plainKind, ?none, IRI(CONCAT(STR(?tok), "-x"))) AS ?tokText)
+  BIND(IF(?plainKind, ?none, ?text) AS ?spanned)
+}""" .

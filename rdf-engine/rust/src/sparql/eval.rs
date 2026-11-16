@@ -52,11 +52,14 @@ pub struct Ctx<'a> {
     bnodes: IdMap,
     bnode_row: usize,
     scan: Vec<u32>,
-    /// Per pattern (by address): the variables a join may pass into it.
+    /// Per pattern (by address): the variables a join may pass into it; and
+    /// (by address and 1) what a FILTER reads, when it can be decided early.
     side: IdMap,
     side_list: Vec<Option<Rc<[bool]>>>,
     /// The active graph of the pattern being evaluated (for EXISTS in expressions).
     active: Active,
+    /// The query's bound parameters by variable (`bind`), empty when none.
+    pub params: Vec<u32>,
 }
 
 impl<'a> Ctx<'a> {
@@ -77,6 +80,7 @@ impl<'a> Ctx<'a> {
             side: IdMap::new(),
             side_list: Vec::new(),
             active: Active::Default,
+            params: Vec::new(),
         }
     }
 
@@ -199,21 +203,8 @@ impl<'a> Ctx<'a> {
                 if left.is_empty() {
                     return left;
                 }
-                let Some(safe) = self.sideways(b) else {
-                    let mut out = Vec::new();
-                    for r in &left {
-                        out.extend(self.eval(b, r, active));
-                    }
-                    return out;
-                };
-                if !left.iter().any(|r| useful(r, sub, &safe)) {
-                    let right = self.eval(b, sub, active);
-                    return join_rows(left, &right);
-                }
-                let (mut whole, mut out) = (None, Vec::new());
-                for r in &left {
-                    self.join_one(b, sub, r, &safe, &mut whole, active, &mut out);
-                }
+                let mut out = Vec::new();
+                self.join_right(left, b, sub, active, &mut out);
                 out
             }
             Pattern::LeftJoin(a, b, f) => {
@@ -367,14 +358,70 @@ impl<'a> Ctx<'a> {
                 rows
             }
             Pattern::Magic(m) => self.magic(m, sub),
-            Pattern::Service(silent) => {
-                if *silent {
-                    alloc::vec![sub.to_vec()]
-                } else {
-                    Vec::new()
+            Pattern::Service(sv) => self.service(sv, sub),
+        }
+    }
+
+    /// SERVICE for one solution of its left side (ABI.md, "Optional: fetching"):
+    /// the answer rows compatible with it, merged into it.
+    fn service(&mut self, sv: &Service, sub: &[u32]) -> Vec<Row> {
+        let silent = |why: Vec<u8>| {
+            if sv.silent {
+                alloc::vec![sub.to_vec()]
+            } else {
+                crate::fetch::fail(why);
+                Vec::new()
+            }
+        };
+        let at = match (&sv.endpoint, sv.local) {
+            (Tv::Var(v), false) => self.params.get(*v as usize).copied().filter(|&x| x != NONE),
+            (x, _) => resolve(x, sub),
+        };
+        // No IRI to ask (unbound, a literal, a blank node): no solutions, not an error, so the
+        // result does not depend on whether a FILTER on the endpoint ran before SERVICE or after.
+        let endpoint = match at {
+            Some(id) if self.dict.term(id).is_some_and(|t| t.kind == crate::dict::IRI) => id,
+            _ => return if sv.silent { alloc::vec![sub.to_vec()] } else { Vec::new() },
+        };
+        // Blank nodes and triple terms are not sent: an endpoint cannot match them.
+        let row: Row = sv.vars.iter().map(|&v| {
+            let x = sub[v as usize];
+            match self.dict.term(x) {
+                Some(t) if t.kind == crate::dict::BNODE || t.kind == crate::dict::TRIPLE => NONE,
+                _ => x,
+            }
+        }).collect();
+        let Some(i) = crate::fetch::service(endpoint, &sv.text, &sv.names, &row) else { return Vec::new() };
+        let r = &crate::fetch::f().reqs[i];
+        if r.state == crate::fetch::FAILED {
+            let mut why = b"SERVICE <".to_vec();
+            why.extend_from_slice(self.dict.value(endpoint));
+            why.extend_from_slice(b">: ");
+            why.extend_from_slice(&r.why);
+            return silent(why);
+        }
+        let w = sv.vars.len();
+        let mut out = Vec::new();
+        'rows: for k in 0..r.nanswer as usize {
+            if crate::budget::step() {
+                break;
+            }
+            let mut m = sub.to_vec();
+            for (j, &v) in sv.vars.iter().enumerate() {
+                let x = r.answer[k * w + j];
+                if x == NONE {
+                    continue;
+                }
+                let at = &mut m[v as usize];
+                if *at == NONE {
+                    *at = x;
+                } else if *at != x {
+                    continue 'rows;
                 }
             }
+            out.push(m);
         }
+        out
     }
 
     /// None when `b` is pure (a row may pass it every binding); otherwise, for
@@ -395,7 +442,8 @@ impl<'a> Ctx<'a> {
     /// (no EXISTS) and `a` keeps each one as substituted; cached per pattern.
     fn early(&mut self, p: &Pattern) -> Option<Rc<[bool]>> {
         let Pattern::Filter(f, a) = p else { return None };
-        let key = [p as *const Pattern as usize as u32];
+        // Keyed apart from `sideways`, which caches what a join passes into the same pattern.
+        let key = [p as *const Pattern as usize as u32, 1];
         if let Some(i) = self.side.get(&key) {
             return self.side_list[i as usize].clone();
         }
@@ -406,6 +454,33 @@ impl<'a> Ctx<'a> {
         self.side_list.push(reads.clone());
         self.side.insert(&key, self.side_list.len() as u32 - 1);
         reads
+    }
+
+    /// The rows of `left` joined with `b`, onto `out`. A UNION that is not pure
+    /// is joined branch by branch (as WAT's `$join_union`): each branch is passed
+    /// the bindings it is safe to pass it, which another branch (a subquery
+    /// projecting the variable, say) does not make unsafe.
+    fn join_right(&mut self, left: Vec<Row>, b: &Pattern, sub: &[u32], active: Active, out: &mut Vec<Row>) {
+        if let Pattern::Union(x, y) = b {
+            if !pure(b) {
+                self.join_right(left.clone(), x, sub, active, out);
+                return self.join_right(left, y, sub, active, out);
+            }
+        }
+        let Some(safe) = self.sideways(b) else {
+            for r in &left {
+                out.extend(self.eval(b, r, active));
+            }
+            return;
+        };
+        if !left.iter().any(|r| useful(r, sub, &safe)) {
+            let right = self.eval(b, sub, active);
+            return out.extend(join_rows(left, &right));
+        }
+        let mut whole = None;
+        for r in &left {
+            self.join_one(b, sub, r, &safe, &mut whole, active, out);
+        }
     }
 
     /// Join one left row with `b`: evaluated with the row's safe bindings
@@ -1064,7 +1139,11 @@ fn pattern_vars(p: &Pattern, m: &mut [bool]) {
         }
     }
     match p {
-        Pattern::Unit | Pattern::Service(_) => {}
+        Pattern::Unit => {}
+        Pattern::Service(sv) => {
+            tv(&sv.endpoint, m);
+            sv.vars.iter().for_each(|&v| set(v, m));
+        }
         Pattern::Bgp(ts) => ts.iter().for_each(|t| [&t.s, &t.p, &t.o].iter().for_each(|x| tv(x, m))),
         Pattern::Join(a, b) | Pattern::Union(a, b) | Pattern::Minus(a, b) | Pattern::Lateral(a, b) => {
             pattern_vars(a, m);

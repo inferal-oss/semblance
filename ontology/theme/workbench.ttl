@@ -164,7 +164,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:ResultTable ; sty:part ".sem-lang" ;
     sty:declares [ sty:property "margin-inline-start" ; sty:raw "4px" ] ,
                  [ sty:property "font-size" ; sty:token tok:text-xs ] ,
-                 [ sty:property "color" ; sty:token tok:faint ] .
+                 [ sty:property "color" ; sty:token tok:muted ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:ResultGraph ; sty:part "> .sem-legend" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,

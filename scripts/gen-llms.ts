@@ -1,7 +1,7 @@
 // llms.txt (llmstxt.org) for the site, generated from the graph that runs it: the ontology
 // (ONTOLOGY_FILES) and the site (demo/app.ttl, demo/gallery/*.ttl). Besides /llms.txt and
 // /llms-full.txt it writes one Markdown page per component, layer, doc section and example under
-// /llms/, since the site routes by fragment (#components/...) and a crawler cannot render it.
+// /llms/, which a crawler reads as Markdown (the site's own pages are rendered at build time too).
 // Every page body is Semblance's own text projection of that part of the graph (toText of a
 // mod:Text projection); site routes come from the navigation model (addressOf).
 //
@@ -13,6 +13,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { todoApp } from '../src/examples/todo.ts'
+import { frameworkChanges } from '../src/migrate/index.ts'
 import { addressOf } from '../src/navigation.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { MOD, NS } from '../src/ns.ts'
@@ -30,9 +31,11 @@ const LLMS = 'urn:semblance:llms:'
 
 /** The repository's own guides, linked from the Docs section (they are Markdown already). */
 const GUIDES: [string, string, string][] = [
+  ['Migrations', 'docs/MIGRATIONS.md', 'moving an app across framework versions, forward and back'],
   ['Getting started', 'docs/GETTING-STARTED.md', 'build a small app with a component of its own'],
   ['Building components', 'docs/COMPONENTS.md', 'rules, reactions, layers and integrating with your app'],
   ['Foreign components', 'docs/FOREIGN.md', 'web components and framework components as parts of a Semblance UI'],
+  ['Safe authoring', 'docs/SAFETY.md', 'what a graph from an untrusted author may and may not render'],
   ['Maintained views (IVM)', 'docs/IVM.md', 'incremental view maintenance under SPARQL views'],
   ['Design', 'DESIGN.md', 'the design system: tokens, components, themes'],
   ['Persistence', 'PERSISTENCE.md', 'what is remembered, where, and for how long'],
@@ -119,7 +122,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
   const page = (path: string) => SITE + path
   const route = (t: Term) => {
     const a = addressOf(g.reader, t)
-    return a && a !== '#' ? SITE + a : undefined
+    return a && a !== '#' && a !== '/' ? new URL(a, SITE).href : undefined
   }
   const repo = (path: string) => `${REPO}/blob/main/${path}`
   const firstSentence = (s: string) => {
@@ -270,7 +273,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       '',
       'Every component class is listed by its group (sem:group), with its page, its specimen in the gallery and its entry in the Reference; the layers and the complete examples follow.',
       '',
-      `Every page linked below is Markdown generated from the graph that runs ${SITE}: its body is the site's own text projection of that part of the graph. The site itself routes by fragment (\`#components/...\`), so those links need a browser that runs it.`,
+      `Every page linked below is Markdown generated from the graph that runs ${SITE}: its body is the site's own text projection of that part of the graph. The site itself routes by path (\`/components/...\`); each of its pages is rendered at build time, so those links work without scripts too.`,
     ].join('\n'),
   ]
   const docsSection = [
@@ -314,12 +317,25 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       })
       .join('\n'),
   ]
+  // What changed in the components, for whoever has to move with it (docs/MIGRATIONS.md).
+  const changes = frameworkChanges()
+  out.set(
+    'llms/changes.md',
+    [
+      '# Changes',
+      '> What changed in the components, and how to move with it. `semblance migrate` carries the mechanical part; `semblance migrate --verify` decides whether a move is done.',
+      ...(changes.length
+        ? changes.map((c) => [`## ${c.label}`, c.release ? `Released in ${c.release}.` : 'Unreleased.', `Affects: ${c.affects.join(', ')}.`, `**Why.** ${c.motivation}`, `**What.** ${c.substance}`, `**Forward.** ${c.forwardGuide}`, `**Back.** ${c.backwardGuide}`].join('\n\n'))
+        : ['No changes yet.']),
+    ].join('\n\n') + '\n',
+  )
   const optional = [
     '## Optional',
     [
       `- [Source on GitHub](${REPO}): the framework, the ontologies (ontology/), the site (demo/) and Semblance's own SPARQL engines (rdf-engine/)`,
       `- [README](${repo('README.md')}): the architecture`,
       `- [npm package ${pkg.name}](https://www.npmjs.com/package/${pkg.name}): not published yet`,
+      `- [Changes](${page('llms/changes.md')}): what changed in the components, why, and how to move with it, in both directions`,
       `- [Full listing](${page('llms-full.txt')}): every component with its description, properties and an example, and every doc section as text`,
     ].join('\n'),
   ]

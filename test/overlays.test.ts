@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { NS } from '../src/ns.ts'
+import { trackFocus } from './focus.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -113,6 +114,172 @@ describe('overlay components', () => {
     click(trigger())
     expect(fact('ov-pop-status', 'open')).toBe('false')
     expect(panel().hasAttribute('hidden')).toBe(true)
+  })
+
+  it('an opened dialog takes the focus to the first control of its content, else its first action, and gives it back', () => {
+    const h = showGroup('GroupOverlays')
+    const { root, click, document, window } = h
+    trackFocus(window, document)
+    const escape = () => {
+      const e = new window.Event('keydown', { bubbles: true })
+      Object.defineProperty(e, 'key', { value: 'Escape' })
+      document.activeElement!.dispatchEvent(e)
+    }
+    // A dialog with content: its field (not the ✕ before it).
+    const opener = root('ov-open-dialog')
+    opener.focus()
+    click(opener)
+    expect(document.activeElement).toBe(root('ov-dialog-field').querySelector('input'))
+    escape()
+    expect(h.fact('ov-dialog', 'open')).toBe('false')
+    expect(document.activeElement).toBe(opener)
+    // A confirmation without content: its first action, the safe one.
+    const confirm = root('ov-open-confirm')
+    confirm.focus()
+    click(confirm)
+    expect(document.activeElement).toBe(root('ov-confirm-cancel'))
+    click(root('ov-confirm-cancel'))
+    expect(document.activeElement).toBe(confirm)
+    // A drawer: the first tag of its content; closed by an action, the focus goes back.
+    const drawer = root('ov-open-drawer-end')
+    drawer.focus()
+    click(drawer)
+    expect(document.activeElement).toBe(root('ov-filter-open').querySelector('.sem-tag-toggle'))
+    click(root('ov-drawer-apply'))
+    expect(document.activeElement).toBe(drawer)
+    // A drawer with neither content nor actions: its panel; the ✕ gives the focus back.
+    const outline = root('ov-open-drawer-start')
+    outline.focus()
+    click(outline)
+    expect(document.activeElement).toBe(root('ov-drawer-start').querySelector('.sem-panel'))
+    click(root('ov-drawer-start').querySelector('.sem-close')!)
+    expect(document.activeElement).toBe(outline)
+  })
+
+  it('a dialog opened by the graph, not by an event, still takes the focus and gives it back', () => {
+    const h = showGroup('GroupOverlays')
+    const { root, document, window, runtime, store, shell } = h
+    trackFocus(window, document)
+    const f = store.factory
+    const dialog = f.namedNode(UI + 'ov-confirm')
+    const open = f.namedNode(NS.c + 'open')
+    const set = (v: boolean) => runtime.apply({ remove: store.match(dialog, open, null), add: [f.quad(dialog, open, f.literal(String(v), f.namedNode('http://www.w3.org/2001/XMLSchema#boolean')))] })
+    const before = root('ov-open-dialog')
+    before.focus()
+    set(true)
+    shell.flush()
+    expect(document.activeElement).toBe(root('ov-confirm-cancel'))
+    set(false)
+    shell.flush()
+    expect(document.activeElement).toBe(before)
+  })
+
+  it('a popover opened from its trigger takes the focus to its first control, and gives it back to the trigger', () => {
+    const h = showGroup('GroupOverlays')
+    const { root, click, document, window, store, runtime, shell } = h
+    trackFocus(window, document)
+    // The specimen's panel holds badges only: put a control in it.
+    const f = store.factory
+    const pop = f.namedNode(UI + 'ov-pop-info')
+    const button = f.namedNode(UI + 'ov-pop-info-ok')
+    runtime.apply({ remove: [], add: [f.quad(button, f.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), f.namedNode(NS.c + 'Button')), f.quad(button, f.namedNode(NS.c + 'label'), f.literal('OK')), f.quad(button, f.namedNode(NS.c + 'closes'), pop), f.quad(pop, f.namedNode(NS.c + 'content'), button)] })
+    shell.flush()
+    const trigger = () => root('ov-pop-info').querySelector<HTMLElement>('.sem-trigger')!
+    trigger().focus()
+    click(trigger())
+    expect(h.fact('ov-pop-info', 'open')).toBe('true')
+    expect(document.activeElement).toBe(root('ov-pop-info-ok'))
+    click(root('ov-pop-info-ok'))
+    expect(h.fact('ov-pop-info', 'open')).toBe('false')
+    expect(document.activeElement).toBe(trigger())
+    // Without a control in it, the focus stays on the trigger, and the trigger closes it.
+    const status = () => root('ov-pop-status').querySelector<HTMLElement>('.sem-trigger')!
+    status().focus()
+    click(status())
+    expect(document.activeElement).toBe(status())
+    click(status())
+    expect(document.activeElement).toBe(status())
+  })
+
+  describe('what opened a modal, scrolled away or gone', () => {
+    /** The Overlays page with its dialog, and each focus's options. */
+    const dialog = () => {
+      const h = showGroup('GroupOverlays')
+      const { document, window, runtime, store, shell } = h
+      trackFocus(window, document)
+      const focus = window.HTMLElement.prototype.focus
+      const moved: [Element, boolean][] = []
+      window.HTMLElement.prototype.focus = function (this: HTMLElement, o?: FocusOptions) {
+        moved.push([this, !o?.preventScroll])
+        return focus.call(this, o)
+      }
+      Object.assign(window, { innerWidth: 1000, innerHeight: 800 })
+      const f = store.factory
+      const set = (v: boolean) => {
+        const s = f.namedNode(UI + 'ov-dialog')
+        const p = f.namedNode(NS.c + 'open')
+        runtime.apply({ remove: store.match(s, p, null), add: [f.quad(s, p, f.literal(String(v), f.namedNode('http://www.w3.org/2001/XMLSchema#boolean')))] })
+        shell.flush()
+      }
+      const place = (el: Element, top: number) => {
+        ;(el as unknown as { getBoundingClientRect: () => object }).getBoundingClientRect = () => ({ top, bottom: top + 40, left: 100, right: 300, width: 200, height: 40 })
+      }
+      return { ...h, moved, set, place, f }
+    }
+
+    it('in view when it opened, it comes back into view; out of view then, the page stays', () => {
+      const { root, click, fact, document, moved, set, place } = dialog()
+      const opener = root('ov-open-dialog')
+      place(opener, 300)
+      opener.focus()
+      click(opener)
+      expect(fact('ov-dialog', 'open')).toBe('true')
+      expect(document.activeElement).not.toBe(opener)
+      // The reader scrolls the page under the modal; it closes.
+      place(opener, -600)
+      moved.length = 0
+      set(false)
+      expect(document.activeElement).toBe(opener)
+      expect(moved.at(-1)).toEqual([opener, true])
+      // A focus left off screen, and a shortcut that opens over it: nobody saw it, nothing scrolls.
+      opener.focus()
+      set(true)
+      moved.length = 0
+      set(false)
+      expect(document.activeElement).toBe(opener)
+      expect(moved.at(-1)).toEqual([opener, false])
+    })
+
+    it('the address changed: the page stays where it was asked to be', () => {
+      const { root, click, document, window, moved, set, place } = dialog()
+      const opener = root('ov-open-dialog')
+      place(opener, 300)
+      Object.defineProperty(window, 'location', { configurable: true, value: { href: 'https://semblance.dev/a' } })
+      opener.focus()
+      click(opener)
+      Object.defineProperty(window, 'location', { configurable: true, value: { href: 'https://semblance.dev/b' } })
+      moved.length = 0
+      set(false)
+      expect(document.activeElement).toBe(opener)
+      expect(moved.at(-1)).toEqual([opener, false])
+    })
+
+    it('gone, a control near where it was takes the focus, without scrolling', () => {
+      const { root, click, fact, document, runtime, store, shell, moved, set, f } = dialog()
+      const opener = root('ov-open-dialog')
+      const next = root('ov-open-confirm')
+      opener.focus()
+      click(opener)
+      runtime.apply({ remove: store.match(f.namedNode(UI + 'ov-open-dialog'), null, null), add: [] })
+      shell.flush()
+      expect(opener.isConnected).toBe(false)
+      expect(fact('ov-dialog', 'open')).toBe('true')
+      moved.length = 0
+      set(false)
+      expect(fact('ov-dialog', 'open')).toBe('false')
+      expect(document.activeElement).toBe(next)
+      expect(moved.at(-1)).toEqual([next, false])
+    })
   })
 
   it('every interaction is one recorded event', () => {

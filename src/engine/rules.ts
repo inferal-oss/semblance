@@ -2,6 +2,8 @@ import type { Term } from '@rdfjs/types'
 import { RDF_FIRST, RDF_NIL, RDF_REST, RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
 import { queryReads } from '../sparql-reads.ts'
+import { prefixMap } from '../view/compile.ts'
+import { focusPredicates } from './focus-predicates.ts'
 import type { GraphStore } from '../store/types.ts'
 
 export interface Rule {
@@ -20,7 +22,8 @@ export interface Rule {
   /**
    * Paths of followed predicates (sem:follows given an RDF list): a change on a node reached
    * from the focus along a path, or on any node on the way, makes the focus dirty. A step
-   * "*p" is any number of p steps (sem:zeroOrMore); "^p" is a step against p (sem:inverse).
+   * "*p" is any number of p steps (sem:zeroOrMore); "^p" is a step against p (sem:inverse); a last
+   * step "^@q r" is against the predicate the focus names along q r (sem:inverseVia).
    */
   followPaths: string[][]
   /**
@@ -29,6 +32,30 @@ export interface Rule {
    * is stopped by and follows), when it names them all. Absent: any predicate.
    */
   watches?: Set<string>
+  /**
+   * Paths from the focus to predicates the rule reads too (with `watches`; a step "^p" goes against
+   * p, a step "?p" keeps the nodes that have p): a SPARQL rule whose variable predicates come from its focus (`$this c:property ?p . ?target
+   * ?p ?value`, focus-predicates.ts) watches, per focus, the predicates its focus names there.
+   */
+  watchesVia?: string[][]
+  /** Predicates that have one of these properties are read too (with `watches`): `$this ?p ?v . ?p sty:hookAttribute ?name`. */
+  watchesMarked?: string[]
+  /**
+   * sem:watchesAnywhere: predicates the rule reads on any node (a list of every shortcut, of every
+   * shape result): a change to a triple with one of them makes each of its foci due.
+   */
+  anywhere: string[]
+  /**
+   * sem:watchesStatements: its focus is a property, and the rule reads the statements made with it
+   * on any node (`?s $this ?o`): a change to one makes that focus dirty.
+   */
+  watchesStatements: boolean
+  /**
+   * sem:watchesManyValued: the rule reads, on any node, the statements made with each predicate that
+   * has one of these properties, and says something only about a node with two values or more of
+   * one: a change in the input to such a node's values makes each of its foci due.
+   */
+  manyValued: string[]
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
   /**
@@ -119,6 +146,7 @@ export function loadRules(store: GraphStore): Rule[] {
 
   // Semblance's prefixes, and those the graph declares (sh:prefix / sh:namespace), as reactions have.
   const prefixes = prefixesFor(store)
+  const declarations = prefixLines(prefixes)
   const rules: Rule[] = []
   for (const q of store.match(null, namedNode(RDF_TYPE), namedNode(SEM.Rule))) {
     const r = q.subject
@@ -148,10 +176,20 @@ export function loadRules(store: GraphStore): Rule[] {
         if (!first) continue
         // [ sem:zeroOrMore p ]: any number of p steps (an RDF list's rdf:rest), written "*p".
         // [ sem:inverse p ]: a step against p (from a node to what it is p of), written "^p".
+        // [ sem:inverseVia ( q … ) ]: a step against the predicate the focus names along q …, written "^@q …".
         const star = first.termType === 'NamedNode' ? undefined : one(first, SEM.zeroOrMore)
         const inverse = first.termType === 'NamedNode' ? undefined : one(first, SEM.inverse)
-        path.push(star ? '*' + star.value : inverse ? '^' + inverse.value : first.value)
+        const via = first.termType === 'NamedNode' ? undefined : one(first, SEM.inverseVia)
+        if (via) {
+          const names: string[] = []
+          for (let v: Term | undefined = via; v && v.value !== RDF_NIL; v = one(v, RDF_REST)) {
+            const q = one(v, RDF_FIRST)
+            if (q) names.push(q.value)
+          }
+          path.push('^@' + names.join(' '))
+        } else path.push(star ? '*' + star.value : inverse ? '^' + inverse.value : first.value)
       }
+      if (path.slice(0, -1).some((step) => step.startsWith('^@'))) throw new Error(`Rule <${r.value}>: a [ sem:inverseVia … ] step must be the last of its sem:follows path`)
       // One plain step is a followed predicate; a lone [ sem:inverse p ] or [ sem:zeroOrMore p ] stays a path.
       return path.length === 1 && !/^[*^]/.test(path[0]!) ? path[0]! : path
     })
@@ -170,9 +208,12 @@ export function loadRules(store: GraphStore): Rule[] {
       fn,
       follows: follows.filter((p): p is string => typeof p === 'string'),
       followPaths: follows.filter((p): p is string[] => typeof p !== 'string'),
-      watches: watches.length ? new Set(watches) : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : undefined,
+      ...(watches.length ? { watches: new Set(watches) } : query ? watchedPredicates(declarations, query, [...requires, ...unless, ...follows.flat().filter((p) => !p.startsWith('^@')).map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : {}),
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach,
+      anywhere: getAll(SEM.watchesAnywhere),
+      watchesStatements: get(SEM.watchesStatements)?.value === 'true',
+      manyValued: getAll(SEM.watchesManyValued),
       memberWatches:
         getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
           ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }
@@ -180,7 +221,7 @@ export function loadRules(store: GraphStore): Rule[] {
       inputOnly: get(SEM.inputOnly)?.value === 'true',
       always: get(SEM.always)?.value === 'true',
       // Member-wise output is attributed to (focus, member) pairs, which bulk output cannot be.
-      bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributable(query)),
+      bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributableOnce(query)),
       requires,
       unless,
       // The rule's own: a rendering's sem:needsExtension says what its SPARQL rule awaits.
@@ -193,6 +234,55 @@ export function loadRules(store: GraphStore): Rule[] {
   return rules.sort((a, b) => a.stratum - b.stratum || collator.compare(a.iri, b.iri))
 }
 
+/** A prefix header's declarations: each prefix's line, by its name with the colon. */
+function prefixLines(header: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const line of header.split('\n')) {
+    const m = /^PREFIX\s+([\w-]*:)/i.exec(line)
+    if (m) out.set(m[1]!, line)
+  }
+  return out
+}
+
+/** The prefixes a query may use: every name followed by a colon in it (by query: the same queries are read by every engine). */
+function prefixesUsed(query: string): string[] {
+  let used = usedCache.get(query)
+  if (!used) usedCache.set(query, (used = [...new Set(query.match(/(?<![\w.-])[A-Za-z][\w.-]*:|(?<![\w-]):/g) ?? [])]))
+  return used
+}
+const usedCache = new Map<string, string[]>()
+
+/**
+ * What a query watches (namedPredicates), read once per query: every engine (the page's, each live
+ * example's sandbox, a reload of the rules) reads the same few hundred queries, and parsing them is
+ * most of the cost of starting one. Keyed by the query with the declarations of the prefixes it
+ * uses, so engines whose graphs declare other prefixes share it. The result is shared: it is never
+ * changed.
+ */
+function watchedPredicates(declarations: Map<string, string>, query: string, also: string[]): Pick<Rule, 'watches' | 'watchesVia' | 'watchesMarked'> {
+  const header = prefixesUsed(query).flatMap((name) => declarations.get(name) ?? []).join('\n')
+  const key = header + '\n' + query + '\n\0' + also.join(' ')
+  let read = watchedCache.get(key)
+  if (!read) {
+    // Queries typed into live examples come and go: the caches are let go when they grow past them.
+    if (watchedCache.size >= 4096) watchedCache.clear(), usedCache.clear()
+    watchedCache.set(key, (read = namedPredicates(header + '\n' + query, also)))
+  }
+  return read
+}
+const watchedCache = new Map<string, Pick<Rule, 'watches' | 'watchesVia' | 'watchesMarked'>>()
+
+/** attributable(), once per query (as watchedPredicates). */
+function attributableOnce(query: string): boolean {
+  let yes = attributableCache.get(query)
+  if (yes === undefined) {
+    if (attributableCache.size >= 4096) attributableCache.clear()
+    attributableCache.set(query, (yes = attributable(query)))
+  }
+  return yes
+}
+const attributableCache = new Map<string, boolean>()
+
 /**
  * The predicates a query names in its patterns (with `also`), or undefined when some pattern takes
  * any predicate (a variable, a negated set) or the query cannot be read: a changed triple whose
@@ -200,10 +290,16 @@ export function loadRules(store: GraphStore): Rule[] {
  * A SPARQL rule watches these as a function rule's traced reads would, and is not re-run for the
  * rest of its focus's (or a followed node's) triples.
  */
-function namedPredicates(query: string, also: string[]): Set<string> | undefined {
+export function namedPredicates(query: string, also: string[]): Pick<Rule, 'watches' | 'watchesVia' | 'watchesMarked'> {
   const reads = queryReads(query)
-  if (!reads || reads.some((r) => r.p === undefined)) return undefined
-  return new Set([...reads.map((r) => r.p!), ...also])
+  if (!reads) return {}
+  if (reads.every((r) => r.p !== undefined)) return { watches: new Set([...reads.map((r) => r.p!), ...also]) }
+  // Variable predicates: watched as the focus names them, when that is all they can be.
+  const text = query.replaceAll('$this', '?this')
+  const from = focusPredicates(text, prefixMap(text.slice(0, text.search(/\b(CONSTRUCT|SELECT)\b/i))))
+  if (!from) return {}
+  const watches = new Set([...from.named, ...from.iris, ...also])
+  return { watches, ...(from.via.length && { watchesVia: from.via }), ...(from.marked.size && { watchesMarked: [...from.marked] }) }
 }
 
 /** Whether the store can run a rule: a SPARQL rule needs SPARQL and every extension group it names. */
@@ -274,21 +370,51 @@ export function attributable(query: string): boolean {
   }
   if (end < 0) return false
   // Drop string literals, so their dots and semicolons don't split statements.
-  const template = query.slice(start + 1, end).replace(/"""[\s\S]*?"""|"(?:[^"\\]|\\.)*"/g, '""')
+  const template = query.slice(start + 1, end).replace(STRINGS, '""')
   // Minted from $this, or from a node minted from it (to a fixed point).
   const minted = new Set(['$this', '?this'])
   // A BIND whose expression builds an IRI from a minted node (IRI(CONCAT(STR(?x), ...)),
-  // possibly inside IF / COALESCE) mints too.
-  const binds = [...query.matchAll(/BIND\s*\(([\s\S]*?)\s+AS\s+(\?\w+)\s*\)/gi)]
+  // possibly inside IF / COALESCE) mints too - unless a branch of it is a node from the data
+  // (IF(?zoned, ?declaredZone, IRI(…))): a variable bound elsewhere in the query, not minted.
+  const text = query.replace(STRINGS, '""')
+  const bindings = [...text.matchAll(/BIND\s*\(([\s\S]*?)\s+AS\s+(\?\w+)\s*\)/gi)]
+  // Variables bound outside BIND expressions (a pattern, VALUES) or by a BIND; the rest (?none) stay unbound.
+  const outside = bindings.reduce((t, m) => t.replace(m[0], ' '), text.slice(text.search(/WHERE\s*\{/i)))
+  const bound = (v: string) => bindings.some((m) => m[2] === v) || new RegExp(`[?$]${v.slice(1)}\\b`).test(outside)
+  const binds = bindings
     .filter((m) => /IRI\s*\(/i.test(m[1]!))
-    .map((m) => ({ from: [...m[1]!.matchAll(/STR\s*\(\s*([$?]\w+)\s*\)/gi)].map((x) => x[1]!), to: m[2]! }))
+    .map((m) => ({ from: [...m[1]!.matchAll(/STR\s*\(\s*([$?]\w+)\s*\)/gi)].map((x) => x[1]!), branches: branchVariables(m[1]!), to: m[2]! }))
   for (let grew = true; grew; ) {
     grew = false
-    for (const { from, to } of binds) if (!minted.has(to) && from.length && from.every((v) => minted.has(v))) minted.add(to), (grew = true)
+    for (const { from, branches, to } of binds) {
+      if (minted.has(to) || !from.length || !from.every((v) => minted.has(v))) continue
+      if (branches.every((v) => minted.has(v) || !bound(v))) minted.add(to), (grew = true)
+    }
   }
   const subjects = template
     .split(/\s\.(?=\s|$)/)
     .map((statement) => statement.trim().split(/\s+/)[0])
     .filter((t): t is string => !!t)
   return subjects.every((t) => minted.has(t))
+}
+
+/** SPARQL string literals, long and short, in double or single quotes. */
+const STRINGS = /"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g
+
+/** The variables an expression can evaluate to as they are: itself, or a branch of IF / COALESCE. */
+function branchVariables(expression: string): string[] {
+  const e = expression.trim()
+  if (/^[$?]\w+$/.test(e)) return [e]
+  const call = /^(IF|COALESCE)\s*\(/i.exec(e)
+  if (!call || !e.endsWith(')')) return []
+  const args: string[] = []
+  let depth = 0
+  let from = call[0].length
+  for (let i = from; i < e.length - 1; i++) {
+    if (e[i] === '(') depth++
+    else if (e[i] === ')') depth--
+    else if (e[i] === ',' && depth === 0) args.push(e.slice(from, i)), (from = i + 1)
+  }
+  args.push(e.slice(from, e.length - 1))
+  return (call[1]!.toUpperCase() === 'IF' ? args.slice(1) : args).flatMap(branchVariables)
 }
