@@ -120,6 +120,7 @@ const textFieldScreen: FnRule = (ctx, focus) => {
     id: inputId,
     value: str(ctx.object(focus, C.value)),
     placeholder: text(ctx, focus, C.placeholder),
+    disabled: isTrue(ctx.object(focus, C.disabled)) ? '' : undefined,
   })
   o.t(input, LC.role, ctx.nn(LC.SingleLineControl))
   const parts = [input]

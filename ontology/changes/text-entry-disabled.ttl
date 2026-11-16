@@ -1,0 +1,24 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:text-entry-disabled a chg:Change ;
+    rdfs:label "A disabled text field is disabled, and no text entry takes typing while disabled"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/154> ;
+    chg:motivation """c:TextArea rendered c:disabled on its native control, but c:TextField did not, and the one typing
+reaction of every c:TextEntry (c:TypeText) wrote c:value and cleared c:error whatever c:disabled said, so an input
+event that reached a disabled entry (from a script, or one dispatched by the host) changed it.""" ;
+    chg:substance """A c:TextField with c:disabled true renders its input with the disabled attribute (as c:TextArea
+already did), dimmed with a not-allowed cursor and without the hover border. c:TypeText, in SPARQL and in its
+function twin (textfield:input), writes nothing for a c:TextEntry that is c:disabled: its c:value and c:error stay
+as they are until c:disabled is removed. An entry without c:disabled renders and behaves as before.""" ;
+    chg:forwardGuide """Nothing to move. An app that relied on writing a disabled field through input events sets
+c:value directly instead.""" ;
+    chg:backwardGuide """Nothing to move. Going back, a disabled c:TextField's input is editable again and typing in
+any text entry writes whatever c:disabled says.""" ;
+    chg:affects c:TextField , c:TextEntry .
