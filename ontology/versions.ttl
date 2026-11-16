@@ -204,10 +204,10 @@ c:QueryWorkbench sem:version 2 ; sem:closure "bd506d48cbd5de2d" ; sem:internal "
 c:RadioGroup sem:version 1 ; sem:closure "5cfbedd6dee84039" ; sem:internal "new" .
 c:Raisable sem:version 1 ; sem:closure "88bcf9c2effe9e18" ; sem:internal "new" .
 c:RdfDropRow sem:version 1 ; sem:closure "da73dbbbe08b9a74" ; sem:internal "new" .
-c:RdfEditor sem:version 1 ; sem:closure "30839349a9a152b0" ; sem:internal "new" .
+c:RdfEditor sem:version 2 ; sem:closure "f7d1503fda4621c3" ; sem:changedBy change:rdf-editor-entry-pages .
 c:RdfProperty sem:version 1 ; sem:closure "d82e4eef8f4b6544" ; sem:internal "new" .
 c:RdfRow sem:version 1 ; sem:closure "946cddfa2a66797f" ; sem:internal "new" .
-c:RdfTerm sem:version 1 ; sem:closure "d0f06d8e64d2f81f" ; sem:internal "new" .
+c:RdfTerm sem:version 2 ; sem:closure "089bfcfa1a335f18" ; sem:changedBy change:rdf-editor-entry-pages .
 c:RecentRun sem:version 1 ; sem:closure "de885995fc4d34c0" ; sem:internal "new" .
 c:Resizable sem:version 1 ; sem:closure "d54424795ba2adfc" ; sem:internal "new" .
 c:Restorable sem:version 1 ; sem:closure "2dceab5e1b75cef4" ; sem:internal "new" .

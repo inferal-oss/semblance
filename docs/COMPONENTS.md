@@ -125,6 +125,14 @@ ex:changes a c:RdfEditor ; c:label "What changed" ; c:entry ex:book , ex:author 
 ex:undo a c:Button , beh:Undoer ; c:label "Undo" .
 ```
 
+For large documents, set `c:entryPageSize` to render only one page of
+top-level resources. Set `c:page` on the editor to change pages. Page numbers
+start at 1 and resources sort by IRI. Keep the document's `c:entry` statements
+in the graph when changing pages. A page change costs the rows of the page, not
+the size of the document. Links jump only to resources of the page, and arrows
+join rows of the page. The editor has no pager of its own yet (#526): the
+application writes `c:page`.
+
 A `c:BlockEditor` shows a document of blocks (`c:of` a `blk:Document`): a tree in DoCo and the
 Pattern Ontology, where containers hold blocks (`po:contains`) in a chain (`co:nextItem`)
 and a text block's text is its `rdf:value` with standoff marks (`blk:Strong`, `blk:Link`, … each an

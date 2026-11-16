@@ -1,3 +1,6 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -49,7 +52,8 @@ their objects, with blank nodes, lists and the reifiers of a statement nested un
 any other IRI that has statements of its own opened in place on its twisty. Literals show with their datatype
 or language. An object that is a resource of the document jumps to it (c:current); a class or a property links
 to the Reference. c:arrows draws arrows from links to their resources: off, on (c:ArrowsOn) or for the current
-resource only (c:ArrowsCurrent). c:editable true makes it an editor. c:label names it."""@en ;
+resource only (c:ArrowsCurrent). c:editable true makes it an editor. c:label names it. With c:entryPageSize, only the resources of c:page
+(1-based, in IRI order) get top-level rows. The application sets the page, for example from a pager."""@en ;
     sem:slug "rdf-editor" ;
     key:navigation key:TreeNavigation .
 c:editable a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
@@ -246,8 +250,13 @@ WHERE {
 c:RdfEditorEntries a sem:Rendering ;
     sem:targets c:RdfEditor ;
     sem:stratum 0 ;
-    sem:forEach c:entry ;
-    sem:watches rdf:type , c:editable , c:validated , c:diff , c:expandDepth , c:current .
+    sem:unless c:entryPageSize ; sem:forEach c:entry ;
+    sem:watches rdf:type , c:editable , c:validated , c:diff , c:expandDepth , c:current , c:entryPageSize .
+# Paged (c:entryPageSize): the resources of the page (c:rdfPageEntry, below), member-wise, so a page costs its rows.
+c:RdfEditorPagedEntries a sem:Rendering ;
+    sem:targets c:RdfEditor ; sem:stratum 0 ;
+    sem:requires c:entryPageSize ; sem:forEach c:rdfPageEntry ;
+    sem:watches rdf:type , c:editable , c:validated , c:diff , c:expandDepth , c:current , c:entryPageSize .
 c:RdfEditorEntries-fn a sem:Rule ; sem:implements c:RdfEditorEntries ; sem:function "rdf-editor:entry" .
 c:RdfEditorEntries-sparql a sem:Rule ;
     sem:implements c:RdfEditorEntries ;
@@ -269,6 +278,70 @@ WHERE {
   BIND(IF(EXISTS { $this c:expandDepth ?d0 FILTER(xsd:integer(STR(?d0)) < 1) }, true, ?none) AS ?closed)
   BIND(IRI(CONCAT(STR($this), "/~tree")) AS ?tree)
   BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?key), 1, 12))) AS ?row)
+}""" .
+
+c:RdfEditorPagedEntries-fn a sem:Rule ; sem:implements c:RdfEditorPagedEntries ; sem:function "rdf-editor:entry" .
+c:RdfEditorPagedEntries-sparql a sem:Rule ;
+    sem:implements c:RdfEditorPagedEntries ;
+    sem:construct """
+CONSTRUCT {
+  ?tree rdfhtml:hasChild ?row .
+  ?row a c:RdfTerm , ?dropType ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:startsClosed ?closed ; c:isCurrent ?isCurrent ; c:editable ?editable ; c:validated ?validated ; c:diff ?diffOn ; sem:orderKey ?key .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:RdfEditor .
+  $this c:rdfPageEntry $member . FILTER(isIRI($member))
+  BIND(STR($member) AS ?key)
+  BIND(EXISTS { $this c:editable true } AS ?editable)
+  BIND(EXISTS { $this c:validated true } AS ?validated)
+  BIND(IF(EXISTS { $this c:diff true }, true, ?none) AS ?diffOn)
+  BIND(IF(?editable, c:RdfDropRow, ?none) AS ?dropType)
+  BIND(IF(EXISTS { $this c:current $member }, true, ?none) AS ?isCurrent)
+  # A large document starts closed (c:expandDepth 0): a row per resource until one is opened.
+  BIND(IF(EXISTS { $this c:expandDepth ?d0 FILTER(xsd:integer(STR(?d0)) < 1) }, true, ?none) AS ?closed)
+  BIND(IRI(CONCAT(STR($this), "/~tree")) AS ?tree)
+  BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?key), 1, 12))) AS ?row)
+}""" .
+
+# Page membership changes without replacing the document triples. Only the
+# materialized view's bounded window becomes a source of member-wise row work.
+c:entryPageSize a owl:DatatypeProperty ; rdfs:domain c:RdfEditor ; rdfs:range xsd:integer ;
+    rdfs:comment "Maximum number of top-level resources on a page. Omit to render all top-level resources."@en .
+c:RdfEditorPageShape a sh:NodeShape ; sh:targetClass c:RdfEditor ;
+    sh:property [ sh:path c:entryPageSize ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ],
+                [ sh:path c:page ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ] .
+c:rdfPageEntry a owl:ObjectProperty ; rdfs:domain c:RdfEditor ;
+    rdfs:comment "Derived: a resource in the editor’s current page."@en .
+c:rdfPageLimit a iv:Parameter ; iv:variable "size" ; iv:select """
+SELECT ?value WHERE {
+  OPTIONAL { $this c:entryPageSize ?raw }
+  BIND(COALESCE(xsd:integer(STR(?raw)), 0) AS ?size)
+  BIND(IF(?size > 0, ?size, 0) AS ?value)
+}""" .
+c:rdfPageOffset a iv:Parameter ; iv:variable "offset" ; iv:select """
+SELECT ?value WHERE {
+  OPTIONAL { $this c:entryPageSize ?rawSize }
+  OPTIONAL { $this c:page ?rawPage }
+  BIND(COALESCE(xsd:integer(STR(?rawSize)), 0) AS ?size)
+  BIND(COALESCE(xsd:integer(STR(?rawPage)), 1) AS ?page)
+  BIND(IF(?size > 0 && ?page > 1, ?size * (?page - 1), 0) AS ?value)
+}""" .
+c:RdfEditorEntryWindow a iv:View ; iv:targets c:RdfEditor ; iv:materialize iv:Graph ;
+    iv:parameter c:rdfPageLimit, c:rdfPageOffset ;
+    sem:select """
+SELECT ?entry WHERE { $this c:entry ?entry . FILTER($size > 0 && isIRI(?entry)) }
+ORDER BY STR(?entry) LIMIT $size OFFSET $offset
+""" .
+c:RdfEditorPage a sem:Rendering ; sem:targets c:RdfEditor ; sem:stratum -1 ;
+    sem:requires c:entryPageSize ; sem:readsMinted true ;
+    sem:watches c:entryPageSize, c:page, c:entry, rs:solution, rs:binding, rs:value .
+c:RdfEditorPage-fn a sem:Rule ; sem:implements c:RdfEditorPage ; sem:function "rdf-editor:page" .
+c:RdfEditorPage-sparql a sem:Rule ; sem:implements c:RdfEditorPage ; sem:construct """
+CONSTRUCT { $this c:rdfPageEntry ?entry }
+WHERE {
+  BIND(IRI(CONCAT(STR($this), "/~view-RdfEditorEntryWindow")) AS ?view)
+  ?view rs:solution/rs:binding ?binding .
+  ?binding rs:variable "entry" ; rs:value ?entry .
 }""" .
 
 # What the editor lists (c:lists): its resources, for a typeahead that jumps among them
@@ -300,9 +373,11 @@ WHERE {
   $this a/rdfs:subClassOf* c:RdfEditor ; c:arrows ?mode .
   FILTER(?mode IN (c:ArrowsOn, c:ArrowsCurrent))
   OPTIONAL { $this c:current ?current }
-  $this c:entry ?s . FILTER(isIRI(?s))
+  # The resources with rows: those of the page when the editor is paged.
+  BIND(IF(EXISTS { $this c:entryPageSize ?size }, c:rdfPageEntry, c:entry) AS ?shown)
+  $this ?shown ?s . FILTER(isIRI(?s))
   ?s ?p ?o . FILTER(isIRI(?o) && !sameTerm(?o, ?s))
-  $this c:entry ?o .
+  $this ?shown ?o .
   FILTER(?mode = c:ArrowsOn || (BOUND(?current) && (sameTerm(?s, ?current) || sameTerm(?o, ?current))))
   BIND(IF(BOUND(?current) && (sameTerm(?s, ?current) || sameTerm(?o, ?current)), sty:Solid, ?none) AS ?emphasis)
   BIND(IRI(CONCAT(STR($this), "/~arrows")) AS ?arrows)
@@ -436,7 +511,9 @@ WHERE {
   # Open, it shows its reifiers; and its statements when it nests by nature, or was opened on purpose.
   BIND(?open && ?hasStatements && (?depth = 0 || ?blank || ?list || ?reifier || COALESCE(?own, false)) AS ?nest)
   # A link: to a resource of the document (jump), else to a class or a property (the Reference).
-  BIND(?depth > 0 && isIRI(?t) && !?blank && EXISTS { ?editor c:entry ?t } AS ?jumps)
+  # (A resource with a row: of the page when the editor is paged.)
+  BIND(IF(EXISTS { ?editor c:entryPageSize ?pageSize }, c:rdfPageEntry, c:entry) AS ?shownEntry)
+  BIND(?depth > 0 && isIRI(?t) && !?blank && EXISTS { ?editor ?shownEntry ?t } AS ?jumps)
   BIND(!?jumps && ?vocab AS ?goes)
   BIND(IF(?jumps, ?t, ?none) AS ?jumpsTo)
   BIND(IF(?goes, ?t, ?none) AS ?goesTo)
