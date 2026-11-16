@@ -25,8 +25,8 @@ real links to pages of their own.
 | Per request, in Node (or anything with the Fetch API's `Request`/`Response`) | `createHandler`, `listen`, `semblance serve` |
 | The client's side: adopt, skip the stylesheet, replay | `mount()` (automatic), `takeOver` (`src/web/takeover.ts`) |
 
-`@inferal-oss/semblance/server` is platform-neutral: it renders a store that you load (Deno and
-workers pass the engine's WebAssembly module themselves). `@inferal-oss/semblance/node` adds
+`@semblance-dev/semblance/server` is platform-neutral: it renders a store that you load (Deno and
+workers pass the engine's WebAssembly module themselves). `@semblance-dev/semblance/node` adds
 loading, the static build, the request handler and the Vite plugin.
 
 ## A site
@@ -34,7 +34,7 @@ loading, the static build, the request handler and the Vite plugin.
 ```ts
 // semblance.config.ts
 import { readFileSync } from 'node:fs'
-import { defineSite } from '@inferal-oss/semblance/node'
+import { defineSite } from '@semblance-dev/semblance/node'
 
 const read = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8')
 
@@ -64,7 +64,7 @@ npx semblance build --single   # one self-contained file, rendered too
 Or add the plugin to your Vite config:
 
 ```ts
-import { semblance } from '@inferal-oss/semblance/node'
+import { semblance } from '@semblance-dev/semblance/node'
 export default defineConfig({ plugins: [semblance({ config: 'semblance.config.ts' })] })
 ```
 
@@ -126,7 +126,7 @@ npx semblance serve --assets dist --port 3000
 ```
 
 ```ts
-import { createHandler, listen, loadSite } from '@inferal-oss/semblance/node'
+import { createHandler, listen, loadSite } from '@semblance-dev/semblance/node'
 const site = await loadSite('semblance.config.ts')
 await listen(createHandler({ site, assets: 'dist' }), 3000)
 ```

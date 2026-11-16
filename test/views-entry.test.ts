@@ -1,4 +1,4 @@
-// Maintained views on their own (src/views/, docs/VIEWS.md): the @inferal-oss/semblance/views entry
+// Maintained views on their own (src/views/, docs/VIEWS.md): the @semblance-dev/semblance/views entry
 // over every built-in store that has SPARQL, with no ontology loaded. Changes come in as deltas
 // (apply, write, load, a transaction), each one tick; each view hears its own change, and only it.
 import type { Quad, Term } from '@rdfjs/types'

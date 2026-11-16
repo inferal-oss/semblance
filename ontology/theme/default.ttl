@@ -282,8 +282,12 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input::placeholder" ;
     sty:declares [ sty:property "color" ; sty:token tok:faint ] .
 
-[] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input:hover" ;
+[] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input:not(:disabled):hover" ;
     sty:declares [ sty:property "border-color" ; sty:token tok:faint ] .
+
+[] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input:disabled" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.55" ] ,
+                 [ sty:property "cursor" ; sty:raw "not-allowed" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input:focus" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
@@ -896,6 +900,9 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> .sem-card-body" ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:tokens ( tok:space-4 tok:space-5 ) ] .
+# One step less on a phone, as a specimen's and a surface's inset (layout.ttl).
+[] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> .sem-card-body" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:tokens ( tok:space-3 tok:space-4 ) ] .
 
 # --- app bar and logo -----------------------------------------------------------------------------
 

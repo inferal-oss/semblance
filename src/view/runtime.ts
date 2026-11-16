@@ -10,7 +10,7 @@ import { createContext, type RuleContext } from '../engine/context.ts'
 import { NS, PROV, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
 import { type Delta, mint, owningFocus, parseDuration, quadKey, termKey } from '../rdf.ts'
-import type { GraphStore } from '../store/types.ts'
+import type { GraphStore, MatchPattern } from '../store/types.ts'
 import { accSize, accumulate, compareTerms, type Group, newGroup, result } from './aggregate.ts'
 import { compiler, keyString, prefixMap, sparqlTerm, TREE_MEMBER } from './compile.ts'
 import { Dependencies, type Lookup, type Pat, type Pos } from './deps.ts'
@@ -1633,9 +1633,12 @@ class PartState {
       }
       // A key that had no rows must now match the patterns over the key alone to have any.
       const anchors = p.deps.anchors()
+      const unknown: [string, Term[]][] = []
       for (const [k, key] of candidates) {
-        if (this.partitions.has(k) || key.some((t) => !t) || anchors.every((a) => this.anchored(a, key as Term[]))) touched.set(k, key)
+        if (this.partitions.has(k) || key.some((t) => !t) || !anchors.length) touched.set(k, key)
+        else unknown.push([k, key as Term[]])
       }
+      for (const [k, key] of this.anchoredAll(anchors, unknown)) touched.set(k, key)
       return touched
     }
     // A stream part written as functions: membership, or a triple of the member or of a node minted under it.
@@ -1657,14 +1660,41 @@ class PartState {
     return touched
   }
 
-  private anchored(a: import('./deps.ts').Pat, key: Term[]): boolean {
+  /** A pattern over the key alone, as the store is asked it in graph g. */
+  private anchorPattern(a: import('./deps.ts').Pat, key: Term[], g: Term): MatchPattern {
     const keys = this.part.keys
-    const val = (pos: { v: string } | { t: Term }) => ('t' in pos ? pos.t : key[keys.indexOf(pos.v)])
-    const s = val(a.s)
-    const pp = val(a.p as { v: string } | { t: Term })
-    const o = val(a.o)
-    for (const g of this.rt.datasetFor(this.view)) if (this.rt.store.match((s ?? null) as never, (pp ?? null) as never, (o ?? null) as never, g as never).length) return true
+    const val = (pos: { v: string } | { t: Term }) => ('t' in pos ? pos.t : key[keys.indexOf(pos.v)]) ?? null
+    return [val(a.s), val(a.p as { v: string } | { t: Term }), val(a.o), g]
+  }
+
+  private anchored(a: import('./deps.ts').Pat, key: Term[]): boolean {
+    for (const g of this.rt.datasetFor(this.view)) if (this.rt.store.match(...(this.anchorPattern(a, key, g) as [never, never, never, never])).length) return true
     return false
+  }
+
+  /**
+   * The keys that match every anchor in some graph of the dataset: asked together in one
+   * crossing where the store can (store.matchBatch, #248), else key by key.
+   */
+  private anchoredAll(anchors: readonly import('./deps.ts').Pat[], keys: readonly [string, Term[]][]): [string, Term[]][] {
+    const store = this.rt.store
+    const graphs = this.rt.datasetFor(this.view)
+    if (!store.matchBatch || keys.length * anchors.length * graphs.length < 2) return keys.filter(([, key]) => anchors.every((a) => this.anchored(a, key)))
+    const patterns: MatchPattern[] = []
+    for (const [, key] of keys) for (const a of anchors) for (const g of graphs) patterns.push(this.anchorPattern(a, key, g))
+    const found = store.matchBatch(patterns)
+    let i = 0
+    const out: [string, Term[]][] = []
+    for (const entry of keys) {
+      let all = true
+      for (let j = 0; j < anchors.length; j++) {
+        let some = false
+        for (let n = 0; n < graphs.length; n++, i++) if (found[i]!.length) some = true
+        all &&= some
+      }
+      if (all) out.push(entry)
+    }
+    return out
   }
 
   /** Partitions by one part of their key: position -> term key -> partition keys (keys of more than one variable). */

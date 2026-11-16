@@ -41,6 +41,8 @@ import { reactions as stallReactions } from '../components/stall.ts'
 import { reactions as galleryReactions } from '../components/gallery.ts'
 
 const textFieldInput: ReactionFn = ({ runtime, event, target, match, object }) => {
+  // A disabled entry keeps what it holds (c:TextEntry).
+  if (object(target, C.disabled)?.value === 'true') return { add: [], remove: [] }
   const f = runtime.store.factory
   const value = object(event, BEH.value)
   return {

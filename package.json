@@ -1,5 +1,5 @@
 {
-  "name": "@inferal-oss/semblance",
+  "name": "@semblance-dev/semblance",
   "version": "0.1.0",
   "private": true,
   "license": "MIT OR Apache-2.0",
@@ -53,7 +53,6 @@
       "default": "./lib/src/migrate/index.js"
     },
     "./ontology/*": "./lib/ontology/*",
-    "./wasm/*": "./lib/rdf-engine/build/*",
     "./package.json": "./package.json"
   },
   "files": [
@@ -61,6 +60,10 @@
     "bin/semblance.mjs",
     "LICENSE-APACHE",
     "LICENSE-MIT"
+  ],
+  "workspaces": [
+    "packages/rdf-engine-wat",
+    "packages/rdf-engine-rust"
   ],
   "publishConfig": {
     "access": "public"
@@ -93,10 +96,12 @@
     "serve": "node bin/semblance.mjs serve",
     "perf:interactions": "tsx scripts/interactions.ts",
     "build:package": "tsx scripts/build-package.ts",
-    "pack:check": "tsx scripts/pack-check.ts"
+    "pack:check": "tsx scripts/pack-check.ts",
+    "release:version": "tsx scripts/release-version.ts"
   },
   "dependencies": {
     "@rdfjs/types": "^2.0.1",
+    "@semblance-dev/rdf-engine-wat": "0.1.0",
     "@types/n3": "^1.26.5",
     "n3": "^2.13.12",
     "oxigraph": "^0.5.13",
@@ -119,12 +124,16 @@
     "wabt": "^1.0.39"
   },
   "bin": {
-    "semblance": "./bin/semblance.mjs"
+    "semblance": "bin/semblance.mjs"
   },
   "peerDependencies": {
+    "@semblance-dev/rdf-engine-rust": "0.1.0",
     "vite": ">=7"
   },
   "peerDependenciesMeta": {
+    "@semblance-dev/rdf-engine-rust": {
+      "optional": true
+    },
     "vite": {
       "optional": true
     }

@@ -1,4 +1,4 @@
-# Engine ABI (version 3)
+# Engine ABI (version 4)
 
 The contract every engine build implements: Rust (`rust/`) and hand-written
 WebAssembly (`wat/`). One host adapter (`host/`) drives any of them, so the
@@ -65,6 +65,17 @@ Id `1` is always the default graph.
 | triple term | 4 | subject, predicate, object ids |
 | default graph | 5 | none |
 
+**What an IRI may be.** One rule, wherever an IRI enters: `intern_iri`, every
+`load` format (Jelly included), SPARQL and Update text (an `IRIREF`, or a prefixed
+name whose local part has one of `# % / : ? [ ]`), and `IRI()`/`URI()` (an error,
+so unbound). The reference as written, escapes decoded and before resolution,
+holds none of the characters `IRIREF` excludes (controls, space, `<` `>` `"` `{` `}` `|` `^` `` ` `` `\`),
+and passes the cheap parts of RFC 3987: `%` starts two hex digits; a reference
+without a scheme has no `:` in its first segment; one `#` at most; an authority is
+`[userinfo @] host [: digits]` where the host may be an IP literal in `[` `]`, and
+brackets appear nowhere else. So the store never holds an IRI that query text
+cannot name (Oxigraph refuses these too, and checks more).
+
 Literals keep their lexical form: `"01"^^xsd:integer` and `"1"^^xsd:integer`
 are different terms (Oxigraph canonicalizes them; the W3C tests do not).
 A language-tagged literal has datatype `rdf:langString`, or `rdf:dirLangString`
@@ -73,7 +84,7 @@ scoped to the instance: interning the same label twice gives the same node.
 
 | export | |
 |---|---|
-| `intern_iri(len) -> id` | IRI from the input buffer. Not validated (the host's terms are trusted). |
+| `intern_iri(len) -> id` | IRI from the input buffer; an error (`bad IRI`) for one query text could not write (below). |
 | `intern_bnode(len) -> id` | Blank node with that label. |
 | `fresh_bnode() -> id` | A new blank node. |
 | `intern_literal(len, datatype) -> id` | `datatype` is an IRI id; `0` means `xsd:string`. |
@@ -96,6 +107,7 @@ scoped to the instance: interning the same label twice gives the same node.
 | `remove(s, p, o, g) -> 0 \| 1` | 1 if the quad was present. |
 | `has(s, p, o, g) -> 0 \| 1` | |
 | `match(s, p, o, g) -> n` | Quads matching the pattern (`0` = any; `g = 1` = default graph only, `g = 0` = all graphs), as `n × 4` ids. Order unspecified. |
+| `match_batch(n) -> total` | Several patterns in one call: the input buffer holds `n` patterns of 4 ids each (as `match` takes them). The result buffer gets `n` counts, then each pattern's quads in order, 4 ids each; returns their total. For callers that ask many small lookups at once, such as Semblance's dependency probes (#248). |
 | `apply(removes, adds) -> 0` | Batch: the input buffer holds `removes` quads, then `adds` quads (4 ids each). Removes first. |
 | `quad_count() -> n` | |
 | `load(format, text_len, base_len, graph) -> n` | Parse and add. `format`: 1 N-Triples, 2 N-Quads, 3 Turtle, 4 TriG, 5 Jelly (a whole delimited stream, or one bare frame, of `text_len` bytes; `base_len` is 0; see "Jelly"). Triples go to `graph`; quads keep theirs. Blank node labels are scoped to this document. Returns the number of statements parsed, duplicates included. On a syntax error nothing is added. |
@@ -151,7 +163,7 @@ The writer's choices (IRI split, least-recently-used lookups, runs) are fixed (J
 
 | export | |
 |---|---|
-| `abi_version() -> 3` | Version 2 added the `math` and `intl` imports and `extensions`; version 3 added Jelly (`load` format 5 and the `jelly_*` exports). |
+| `abi_version() -> 4` | Version 2 added the `math` and `intl` imports and `extensions`; version 3 added Jelly (`load` format 5 and the `jelly_*` exports); version 4 added `match_batch`. |
 | `extensions() -> bits` | Optional: the SPARQL extension groups the engine implements (EXTENSIONS.md, "Capabilities"); absent means none. |
 | `input(len) -> ptr` | |
 | `result_ptr() -> ptr` | |

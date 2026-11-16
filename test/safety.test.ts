@@ -226,6 +226,9 @@ ex:evil-token a sty:Token ; sem:slug "evil" ; sty:value "url(https://evil.exampl
     expect(attributeProblem(policy, 'rel', 'next\topener')?.reason).toMatch(/link type opener/)
     expect(attributeProblem(policy, 'DATA-SEM-SANDBOX', '1')).toBeDefined()
     expect(attributeProblem(policy, 'data-sem-c', 'ex-thing')).toBeUndefined()
+    // The refused marker is the safety layer's alone (#405): authored content cannot claim it.
+    expect(attributeProblem(policy, 'data-sem-refused', 'script')).toBeDefined()
+    expect(attributeProblem(policy, 'data-sem-drop-refused', '')).toBeUndefined()
   })
 
   it('use a refused element to smuggle what it holds: a refused element is empty in every modality', () => {

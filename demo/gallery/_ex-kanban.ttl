@@ -89,7 +89,7 @@ kb:TitleShape a sh:PropertyShape ; sh:path kb:title ; sh:minCount 1 ; sh:maxLeng
     sh:message "A title of up to 80 characters." , "Назва до 80 символів."@uk ,
                "Ein Titel mit bis zu 80 Zeichen."@de , "عنوان لا يتجاوز 80 حرفًا."@ar .
 ui:ex-kanban-add-row a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-kanban-new ui:ex-kanban-who ui:ex-kanban-tag ui:ex-kanban-add ui:ex-kanban-undo ) .
+    c:children ( ui:ex-kanban-new ui:ex-kanban-who ui:ex-kanban-tag ui:ex-kanban-add ui:ex-kanban-history ) .
 ui:ex-kanban-new a c:TextField ; c:label "New card" ; c:placeholder "What needs doing?" ; val:validates kb:TitleShape .
 
 # Who and what kind: comboboxes over a draft the new card copies. The assignee is one of the
@@ -106,8 +106,11 @@ ui:ex-kanban-add a c:Button ; c:label "Add to To do" ; sty:tone sty:Accent ; sty
 
 # Undo: the board's changes are undoable reactions, so each event records what it changed on its
 # member of the change log; this button (a beh:Undoer) applies the opposite of the latest one that
-# still applies (ontology/layers/behaviour.ttl, beh:UndoLatest).
+# still applies (ontology/layers/behaviour.ttl, beh:UndoLatest), and Redo (a beh:Redoer) applies again
+# the change undone last, until a new change is made (beh:RedoLatest).
+ui:ex-kanban-history a c:Toolbar ; c:label "History" ; c:children ( ui:ex-kanban-undo ui:ex-kanban-redo ) .
 ui:ex-kanban-undo a c:Button , beh:Undoer ; c:label "Undo" ; sty:emphasis sty:Ghost .
+ui:ex-kanban-redo a c:Button , beh:Redoer ; c:label "Redo" ; sty:emphasis sty:Ghost .
 kb:AddCard beh:undoable true .
 kb:DropCard beh:undoable true .
 c:BoardMove beh:undoable true .

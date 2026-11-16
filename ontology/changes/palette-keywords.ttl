@@ -1,0 +1,26 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:palette-keywords a chg:Change ;
+    rdfs:label "A palette item is found by its c:keywords, and a disabled item is not listed"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/166> ;
+    chg:motivation """A command palette matched only an item's label, so an item could be found by another name, or a
+complete identifier, only by putting it in the label, which then grew long. And an item that was c:disabled was
+listed and could be run.""" ;
+    chg:substance """c:keywords (new): one literal on an item a palette lists. c:PaletteTexts (SPARQL and its twin)
+folds it as it folds the label and appends it to the item's c:searchKey after a line break, so typing any part of
+it finds the item; the label shown and its highlight are the label's alone (a match in the keywords highlights
+nothing). Only the first 32768 characters are indexed; with several values, the least is used; a value that is
+not a literal is ignored. A changed keyword re-runs the texts of an open palette. Items with c:disabled true are
+no longer listed (c:PaletteTexts and c:PaletteOptions). A c:searchKey without keywords is as before.""" ;
+    chg:forwardGuide """Nothing to move. Words appended to labels only to be found by can move to c:keywords. An
+app that listed disabled items on purpose removes c:disabled or lists another item.""" ;
+    chg:backwardGuide """Going back, c:keywords is ignored (remove it, or the items are not found by it), and disabled
+items are listed again.""" ;
+    chg:affects c:CommandPalette .

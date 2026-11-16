@@ -268,6 +268,14 @@ ui:LedgerColumns a pos:Layout ; sem:slug "ledger-columns" ;
                  [ sty:property "column-gap" ; sty:raw "var(--sem-space-4)" ] ,
                  [ sty:property "row-gap" ; sty:raw "var(--sem-space-3)" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] .
+# On a phone three columns leave the names a sliver: each row's name takes the whole row, and its
+# badge and price share two columns on the line below it, still lined up across the rows.
+[] a sty:StyleRule ; sty:when ui:LedgerColumns ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) auto" ] .
+[] a sty:StyleRule ; sty:when ui:LedgerColumns ; sty:atWidth sty:CompactWidth ; sty:part "[data-sem-layout=subgrid]" ;
+    sty:declares [ sty:property "row-gap" ; sty:token tok:space-2 ] .
+[] a sty:StyleRule ; sty:when ui:LedgerColumns ; sty:atWidth sty:CompactWidth ; sty:part "[data-sem-layout=subgrid] > :first-child" ;
+    sty:declares [ sty:property "grid-column" ; sty:raw "1 / -1" ] .
 ui:lyRowsState ui:lyRowShown ui:LyShown .
 ui:LyShown rdfs:label "Shown" .
 

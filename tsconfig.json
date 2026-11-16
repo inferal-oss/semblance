@@ -14,12 +14,14 @@
     "noUncheckedIndexedAccess": false,
     "jsx": "react-jsx",
     "paths": {
-      "@inferal-oss/semblance": ["./src/index.ts"],
-      "@inferal-oss/semblance/views": ["./src/views/web.ts"],
-      "@inferal-oss/semblance/*": ["./src/*/index.ts"],
-      "@inferal-oss/semblance-react": ["./packages/react/src/index.ts"],
-      "@inferal-oss/semblance-react/server": ["./packages/react/src/server.ts"],
-      "@inferal-oss/semblance-react/views": ["./packages/react/src/views.ts"]
+      "@semblance-dev/semblance": ["./src/index.ts"],
+      "@semblance-dev/semblance/views": ["./src/views/web.ts"],
+      "@semblance-dev/semblance/*": ["./src/*/index.ts"],
+      "@semblance-dev/semblance-react": ["./packages/react/src/index.ts"],
+      "@semblance-dev/semblance-react/server": ["./packages/react/src/server.ts"],
+      "@semblance-dev/semblance-react/views": ["./packages/react/src/views.ts"],
+      "@semblance-dev/rdf-engine-wat": ["./packages/rdf-engine-wat/src/index.ts"],
+      "@semblance-dev/rdf-engine-rust": ["./packages/rdf-engine-rust/src/index.ts"]
     }
   },
   "include": ["src", "test", "bench", "demo", "scripts", "rdf-engine", "examples", "packages"]

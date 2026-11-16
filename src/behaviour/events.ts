@@ -394,6 +394,8 @@ export class EventBus {
       const remove = this.expired()
       const head = this.runtime.store.match(this.stream, nn(BEH.latest), null, this.graph)
       const change = this.statements(event, applied, undoable, raisedBy, continues)
+      // That a member was undone is state (the input graph): forgotten there, in the same tick.
+      if (change.undone.length) this.runtime.apply({ add: [], remove: change.undone })
       // Written for the reactions to read; written again here, so the tick's change says so (views read it).
       forget()
       this.runtime.log({
@@ -419,13 +421,14 @@ export class EventBus {
    * beh:retracted (removed). Only what actually changed is recorded. An event that continues an earlier
    * member (beh:continues) records its change on that member, and says so (beh:continued).
    */
-  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode, continues?: NamedNode): Delta {
-    if (!undoable.add.size && !undoable.remove.size) return { add: [], remove: [] }
+  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }, raisedBy?: NamedNode, continues?: NamedNode): Delta & { undone: Quad[] } {
+    if (!undoable.add.size && !undoable.remove.size) return { add: [], remove: [], undone: [] }
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
     const store = this.runtime.store
     const changed = (m: NamedNode) => store.match(m, nn(BEH.asserted), null, this.graph).length + store.match(m, nn(BEH.retracted), null, this.graph).length > 0
-    const undone = (m: NamedNode) => store.match(this.stream, nn(BEH.undone), m, this.graph).length > 0
+    // That a member was undone is state, in the input graph (beh:UndoLatest writes it there).
+    const undone = (m: NamedNode) => store.match(this.stream, nn(BEH.undone), m, f.defaultGraph()).length > 0
     // A raised event's change goes on the member that raised it (when it recorded one) - or on the one
     // that member continued -, as its own statements; one that takes back what that member changed
     // cancels its statement instead. So does a continuing event's, on the member it continues.
@@ -451,7 +454,7 @@ export class EventBus {
           cancelled.push(...store.match(owner, nn(opposite), back, this.graph), ...store.match(back as NamedNode, null, null, this.graph))
           continue
         }
-        const st = nn(`${owner.value}/~change-${tag}${i++}`)
+        const st = nn(`${owner.value}/~change-${tag}${i}`)
         out.push(
           f.quad(owner, nn(p), st),
           f.quad(st, nn(RDF_TYPE), nn(NS.rdf + 'Statement')),
@@ -459,9 +462,29 @@ export class EventBus {
           f.quad(st, nn(NS.rdf + 'predicate'), q.predicate as NamedNode),
           f.quad(st, nn(NS.rdf + 'object'), q.object),
         )
+        i++
       }
     }
-    return { add: out, remove: cancelled }
+    // A change recorded after an undo forgets what was undone (the redo stack): the undone members' recorded
+    // changes go, and that they were undone, so neither Redo nor Undo offers them again. It costs what was
+    // undone, each undone step forgotten once.
+    const forgotten = i || cancelled.length ? this.forgetUndone() : { undone: [], log: [] }
+    return { add: out, remove: [...cancelled, ...forgotten.log], undone: forgotten.undone }
+  }
+
+  /**
+   * What a newly recorded change forgets: that the log's members were undone (beh:undone, in the input
+   * graph) and their recorded changes (in the log's graph).
+   */
+  private forgetUndone(): { undone: Quad[]; log: Quad[] } {
+    const store = this.runtime.store
+    const nn = (iri: string) => this.f.namedNode(iri)
+    const undone = store.match(this.stream, nn(BEH.undone), null, this.f.defaultGraph())
+    const log: Quad[] = []
+    for (const u of undone)
+      for (const p of [BEH.asserted, BEH.retracted])
+        for (const q of store.match(u.object as NamedNode, nn(p), null, this.graph)) log.push(q, ...store.match(q.object as NamedNode, null, null, this.graph))
+    return { undone, log }
   }
 
   /**
@@ -712,6 +735,14 @@ export class EventBus {
       // Keys in slot content are the mounted projection's own (its bus navigates it).
       const origin = originOf(k) as Element | null
       if (origin && renderer.host.contains(origin) && !renderer.inSlot(origin) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
+      // A linked menu item uses an anchor so Enter follows its destination. Menu
+      // keyboard semantics also require Space to choose that same item.
+      if (k.key === ' ' && origin && renderer.host.contains(origin) && !renderer.inSlot(origin) &&
+        origin?.matches?.('a[role="menuitem"]')) {
+        k.preventDefault()
+        ;(origin as HTMLElement).click()
+        return
+      }
       // Tab stays inside an open modal overlay.
       if (modals.tab(k)) return k.preventDefault()
       const combo = comboOf(k, apple)

@@ -131,7 +131,13 @@ interface Alias extends Value {
  * A triple lookup over the view's dataset (and the tick's removed triples): the union default
  * graph, or with `g` the view's named graphs (`g` one, null any), quads with their graph.
  */
-export type Lookup = (s: Term | null, p: Term | null, o: Term | null, g?: Term | null) => Quad[]
+export type Lookup = ((s: Term | null, p: Term | null, o: Term | null, g?: Term | null) => Quad[]) & {
+  /** Ask these lookups now, together (one crossing where the store can; lookup.ts), for the calls that follow. */
+  prefetch?: (patterns: readonly LookupPattern[]) => void
+}
+
+/** A lookup's arguments, for `Lookup.prefetch`. */
+export type LookupPattern = readonly [s: Term | null, p: Term | null, o: Term | null, g?: Term | null]
 
 export class Dependencies {
   readonly patterns: Pat[] = []
@@ -408,6 +414,8 @@ export class Dependencies {
     let rows = [start]
     for (const e of plan.needed) {
       const next: Map<string, Term>[] = []
+      // A step extends all its rows by one pattern: their lookups go to the store together.
+      if (e.pat && rows.length > 1 && lookup.prefetch) lookup.prefetch(this.asks(e.pat, rows))
       for (const r of rows) {
         if (e.pat) {
           for (const x of this.extend(e.pat, r, lookup)) next.push(x)
@@ -444,7 +452,9 @@ export class Dependencies {
         if (next.length > 50_000) return 'global'
       }
       rows = []
-      for (const r of next.length > 1 ? dedupe(next) : next) if (this.holds(plan, r, lookup)) rows.push(r)
+      const extended = next.length > 1 ? dedupe(next) : next
+      if (extended.length > 1 && lookup.prefetch) lookup.prefetch(extended.flatMap((r) => this.checks(plan, r).filter((x) => x !== false)))
+      for (const r of extended) if (this.holds(plan, r, lookup)) rows.push(r)
       if (!rows.length) return []
     }
     if (plan.unreachable) return rows.length ? 'global' : []
@@ -483,6 +493,16 @@ export class Dependencies {
       const t = r.get(v)
       if (t && !admits(t)) return false
     }
+    for (const x of this.checks(plan, r)) {
+      if (x === false) return false
+      if (!lookup(...x).length) return false
+    }
+    return true
+  }
+
+  /** The lookups `holds` makes for a row, in order (false: a check that fails without one). */
+  private checks(plan: WalkPlan, r: Map<string, Term>): (LookupPattern | false)[] {
+    const out: (LookupPattern | false)[] = []
     next: for (const { x, blocked } of plan.checks) {
       // (Only with what may leave its scope for x's: a variable an inner group may leave unbound is no constraint.)
       for (const v of blocked) if (r.has(v)) continue next
@@ -490,7 +510,10 @@ export class Dependencies {
       const pp = 't' in (x.p as Pos) ? (x.p as { t: Term }).t : r.get((x.p as { v: string }).v)
       const o = 't' in x.o ? x.o.t : r.get(x.o.v)
       // No triple has a literal subject (and the store would refuse to look).
-      if (s && s.termType === 'Literal') return false
+      if (s && s.termType === 'Literal') {
+        out.push(false)
+        return out
+      }
       if (!s || !pp || !o) {
         // With a part unbound, it still needs some triple that agrees with what is bound (a
         // semi-join): unless nothing of it is bound by the row, which would say nothing about the row.
@@ -499,10 +522,9 @@ export class Dependencies {
         if ((!s && !o) || !patVars(x).some((v) => r.has(v))) continue
         if (pp && pp.termType !== 'NamedNode') continue
       }
-      const found = x.g ? lookup(s ?? null, pp ?? null, o ?? null, ('t' in x.g ? x.g.t : r.get(x.g.v)) ?? null) : lookup(s ?? null, pp ?? null, o ?? null)
-      if (!found.length) return false
+      out.push(x.g ? [s ?? null, pp ?? null, o ?? null, ('t' in x.g ? x.g.t : r.get(x.g.v)) ?? null] : [s ?? null, pp ?? null, o ?? null])
     }
-    return true
+    return out
   }
 
   private plans = new Map<Pat | Scope, Map<string, WalkPlan>>()
@@ -720,6 +742,20 @@ export class Dependencies {
     n = { around: [...inner].filter((x) => !('path' in x.p)), aliases, joins, optionals, byVar }
     byWithin.set(within, n)
     return n
+  }
+
+  /** The lookups `extend` makes for these rows (not along a path), to ask them at once. */
+  private asks(x: Pat, rows: readonly Map<string, Term>[]): LookupPattern[] {
+    if ('path' in x.p) return []
+    const out: LookupPattern[] = []
+    for (const r of rows) {
+      const s = valueIn(r, x.s) ?? null
+      const o = valueIn(r, x.o) ?? null
+      const p = valueIn(r, x.p) ?? null
+      if (!s && !o && !p) continue
+      out.push(x.g ? [s, p, o, valueIn(r, x.g) ?? null] : [s, p, o])
+    }
+    return out
   }
 
   /** Rows extended by one pattern, looked up with what the row binds. */

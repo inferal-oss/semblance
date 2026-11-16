@@ -1,4 +1,4 @@
-// @inferal-oss/semblance-react: React as the library that draws Semblance's hosted components
+// @semblance-dev/semblance-react: React as the library that draws Semblance's hosted components
 // (docs/HOSTED.md). Semblance keeps the data, the state and the behaviour: the graph, the rules that
 // project it, the reactions to events. React draws: a class bound to a host component
 // (`c:Button rdfs:subClassOf ext:Hosted ; ext:component "Button"`) is drawn by the React component
@@ -9,8 +9,8 @@
 // one are React's elements too, so hosted components nested in the graph are nested in React's tree
 // (context and composition work). Every element React draws is registered with its key, so the
 // event bus, focus handling and every reaction see a hosted component as they see any other.
-import type { HostAdapter, HostContext, HostMount, HostRenderer, HtmlIndex, OutputBinding } from '@inferal-oss/semblance'
-import { emitOutput, hostedBy, inputValue, outputsOf } from '@inferal-oss/semblance'
+import type { HostAdapter, HostContext, HostMount, HostRenderer, HtmlIndex, OutputBinding } from '@semblance-dev/semblance'
+import { emitOutput, hostedBy, inputValue, outputsOf } from '@semblance-dev/semblance'
 import {
   type ComponentType,
   createContext,
@@ -50,7 +50,7 @@ export interface ReactHostsOptions {
   components: Record<string, ComponentType<any>>
   /** Wraps every React root the adapter makes (providers: a theme, a router): one per <sem-host>. */
   wrap?: (children: ReactNode) => ReactNode
-  /** For server rendering: react-dom/server's renderToString (@inferal-oss/semblance-react/server passes it). */
+  /** For server rendering: react-dom/server's renderToString (@semblance-dev/semblance-react/server passes it). */
   renderToString?: (node: ReactNode) => string
   /** A hydration that did not match (a recoverable error React reports). */
   onRecoverableError?: (e: unknown) => void
@@ -125,7 +125,7 @@ export class ReactHosts implements HostAdapter {
   }
 
   html(key: string): string {
-    if (!this.opts.renderToString) throw new Error('Server rendering needs renderToString: use reactHosts from @inferal-oss/semblance-react/server')
+    if (!this.opts.renderToString) throw new Error('Server rendering needs renderToString: use reactHosts from @semblance-dev/semblance-react/server')
     return this.opts.renderToString(this.tree(key))
   }
 

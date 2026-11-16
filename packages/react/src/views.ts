@@ -1,4 +1,4 @@
-// Maintained views in React (docs/VIEWS.md): a component reads a view of @inferal-oss/semblance/views
+// Maintained views in React (docs/VIEWS.md): a component reads a view of @semblance-dev/semblance/views
 // with useView or useRows, over useSyncExternalStore. Each view has one source here, shared by every
 // component that reads it: it hears the view's own changes (ViewHandle.subscribe, called only for a
 // tick that changed that view) and keeps one snapshot until the next, so a component re-renders when
@@ -8,7 +8,7 @@
 //
 // Only types come from the framework, so a page that uses views and these hooks pulls in neither
 // the hosted-component adapter nor the framework's main entry.
-import type { Quad, Row, Term, ViewHandle } from '@inferal-oss/semblance/views'
+import type { Quad, Row, Term, ViewHandle } from '@semblance-dev/semblance/views'
 import { useSyncExternalStore } from 'react'
 
 /** What a view holds now: its rows in order (a SELECT), its triples (a CONSTRUCT), and how many changes it has had. */

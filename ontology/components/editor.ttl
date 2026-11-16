@@ -104,7 +104,7 @@ WHERE {
     { SELECT ?lineRecord WHERE {
       OPTIONAL { $this c:value ?lv0 } OPTIONAL { $this c:original ?lo0 }
       BIND(STR(COALESCE(?lv0, ?lo0, "")) AS ?lineText)
-      LATERAL { (?lineText "[^\\n]*\\n|[^\\n]+$") sx:matches (?lineMatch ?lineAt) }
+      (?lineText "[^\\n]*\\n|[^\\n]+$") sx:matches (?lineMatch ?lineAt) .
       BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
       BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
     } ORDER BY ?lineRecord }
@@ -118,7 +118,7 @@ WHERE {
       OPTIONAL { $this c:value ?sv0 } OPTIONAL { $this c:original ?so0 }
       BIND(STR(COALESCE(?sv0, ?so0, "")) AS ?stringText)
       c:SparqlLexicon c:quotedPattern ?quoted .
-      LATERAL { (?stringText ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
+      (?stringText ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) .
       FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
       BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
       BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
@@ -130,7 +130,7 @@ WHERE {
     { SELECT ?hashRecord WHERE {
       OPTIONAL { $this c:value ?hv0 } OPTIONAL { $this c:original ?ho0 }
       BIND(STR(COALESCE(?hv0, ?ho0, "")) AS ?hashText)
-      LATERAL { (?hashText "[^\\n]*\\n|[^\\n]+$") sx:matches (?hashMatch ?hashAt) }
+      (?hashText "[^\\n]*\\n|[^\\n]+$") sx:matches (?hashMatch ?hashAt) .
       BIND(IF(STRENDS(?hashMatch, "\\n"), SUBSTR(?hashMatch, 1, STRLEN(?hashMatch) - 1), ?hashMatch) AS ?hashLine)
       BIND(CONCAT("|", SUBSTR(MD5(?hashLine), 1, 12), ":", SUBSTR(CONCAT("0000000", STR(?hashAt)), STRLEN(STR(?hashAt)) + 1)) AS ?hashRecord)
     } ORDER BY ?hashRecord }
@@ -195,7 +195,7 @@ WHERE {
       FILTER(?fe > ?fs)
       BIND(SUBSTR(?text, ?fs + 1, ?fe - ?fs) AS ?src)
       c:SparqlLexicon c:tokenPattern ?pattern .
-      LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+      (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) .
       BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
       BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
       BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
@@ -275,7 +275,7 @@ WHERE {
   LATERAL { SELECT ?caretLine ?pattern (SUM(IF(BOUND(?lg1), 1, 0)) AS ?comments) (SUM(IF(!BOUND(?lg1) && !BOUND(?lg2) && !BOUND(?lg3) && !BOUND(?lg4) && !BOUND(?lg5) && !BOUND(?lg6) && !BOUND(?lg7) && !BOUND(?lg8) && !BOUND(?lg9),
         STRLEN(?lm) - STRLEN(REPLACE(?lm, '"', "")), 0)) AS ?doubles) (SUM(IF(!BOUND(?lg1) && !BOUND(?lg2) && !BOUND(?lg3) && !BOUND(?lg4) && !BOUND(?lg5) && !BOUND(?lg6) && !BOUND(?lg7) && !BOUND(?lg8) && !BOUND(?lg9),
         STRLEN(?lm) - STRLEN(REPLACE(?lm, "'", "")), 0)) AS ?singles) WHERE {
-      LATERAL { (?caretLine ?pattern) sx:matches (?lm ?lat ?lg1 ?lg2 ?lg3 ?lg4 ?lg5 ?lg6 ?lg7 ?lg8 ?lg9) }
+      (?caretLine ?pattern) sx:matches (?lm ?lat ?lg1 ?lg2 ?lg3 ?lg4 ?lg5 ?lg6 ?lg7 ?lg8 ?lg9) .
     } GROUP BY ?caretLine ?pattern }
   FILTER(COALESCE(?comments, 0) = 0 && xsd:integer(COALESCE(?doubles, 0)) - xsd:integer(FLOOR(COALESCE(?doubles, 0) / 2)) * 2 = 0 && xsd:integer(COALESCE(?singles, 0)) - xsd:integer(FLOOR(COALESCE(?singles, 0) / 2)) * 2 = 0)
   # The word before the caret: a variable, a prefixed name (or its part), a word.
@@ -296,7 +296,7 @@ WHERE {
   FILTER(?mode != "prefixed" || EXISTS { { ?pdx sem:prefixName ?ppx ; sem:namespace ?pnx } UNION { ?pdx sh:prefix ?ppx ; sh:namespace ?pnx FILTER NOT EXISTS { ?pex sem:prefixName ?ppx } } FILTER(STR(?ppx) = ?typedPrefix) })
   # The prefixes the text uses.
   LATERAL { SELECT ?value (CONCAT("|", GROUP_CONCAT(DISTINCT ?usedPrefix; separator="|"), "|") AS ?used) (COUNT(DISTINCT ?usedPrefix) AS ?usedCount) WHERE {
-      OPTIONAL { LATERAL { (?value "(^|[^A-Za-z0-9_?$])([A-Za-z][A-Za-z0-9_-]*):") sx:matches (?um ?uat ?ub ?usedPrefix) } }
+      OPTIONAL { (?value "(^|[^A-Za-z0-9_?$])([A-Za-z][A-Za-z0-9_-]*):") sx:matches (?um ?uat ?ub ?usedPrefix) . }
     } GROUP BY ?value }
   # The candidates, each a sort key, completion, kind and what it says (a namespace, or what it is about),
   # the first of each completion kept, the first eight.
@@ -306,7 +306,7 @@ WHERE {
           # Variables of the text but the word itself, by name.
           FILTER(?mode = "variable")
           BIND(CONCAT(SUBSTR(?value, 1, ?from), SUBSTR(?value, ?caret + 1)) AS ?rest)
-          LATERAL { (?rest "[?$]([A-Za-z_][A-Za-z0-9_]*)") sx:matches (?vm ?vat ?vname) }
+          (?rest "[?$]([A-Za-z_][A-Za-z0-9_]*)") sx:matches (?vm ?vat ?vname) .
           FILTER(STRSTARTS(?vname, SUBSTR(?typed, 2)) && ?vname != SUBSTR(?typed, 2))
           BIND(CONCAT(SUBSTR(?typed, 1, 1), ?vname) AS ?completion)
           BIND(CONCAT("0", ?vname, "\\u0002", ?completion, "\\u0002variable\\u0002") AS ?candidate)
@@ -428,7 +428,7 @@ WHERE {
       { SELECT ?ln WHERE {
         OPTIONAL { $this c:value ?nv0 } OPTIONAL { $this c:original ?no0 }
         BIND(CONCAT(STR(COALESCE(?nv0, ?no0, "")), "\\n") AS ?nText)
-        LATERAL { (?nText "\\n") sx:matches (?nm ?nat) }
+        (?nText "\\n") sx:matches (?nm ?nat) .
         BIND(STRLEN(REPLACE(SUBSTR(?nText, 1, ?nat), "[^\\n]", "")) AS ?ln)
       } ORDER BY ?ln }
     } }
@@ -543,7 +543,7 @@ WHERE {
   } UNION {
     # Each line, numbered.
     BIND(CONCAT(?value, "\\n") AS ?lined)
-    LATERAL { (?lined "[^\\n]*\\n") sx:matches (?lm ?lat) }
+    (?lined "[^\\n]*\\n") sx:matches (?lm ?lat) .
     BIND(SUBSTR(?lm, 1, STRLEN(?lm) - 1) AS ?lineText)
     BIND(STRLEN(REPLACE(SUBSTR(?lined, 1, ?lat - 1), "[^\\n]", "")) AS ?i)
     BIND(IRI(CONCAT(?me, "/~line", STR(?i))) AS ?el)

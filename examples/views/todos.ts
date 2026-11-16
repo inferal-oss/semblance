@@ -1,7 +1,7 @@
 // The views the example keeps over the todo store (examples/remote/: a SourceServer with three
 // todos): the open todos in the order they were made, and how many are done and open. Plain SPARQL
 // over the store's own vocabulary: no ontology, no components.
-import type { Pattern, ViewHandle, Views } from '@inferal-oss/semblance/views'
+import type { Pattern, ViewHandle, Views } from '@semblance-dev/semblance/views'
 
 export const EX = 'https://example.org/remote#'
 

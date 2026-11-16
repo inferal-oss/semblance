@@ -226,7 +226,9 @@ npm run pack:check     # the npm packages as a consumer gets them (docs/RELEASIN
 - **Gates are the maintainer's.** Don't merge past a failing review gate (an approvals check), a "stays unmerged until …" condition, or a design-approval wait without the
   maintainer's go-ahead. When a permission check blocks a merge, a force-push or another action,
   stop and ask the maintainer in the same session; another agent never does it in your place.
-- Licence: `MIT OR Apache-2.0`. The npm package is `@inferal-oss/semblance`.
+- Licence: `MIT OR Apache-2.0`. The npm packages are `@semblance-dev/semblance`,
+  `@semblance-dev/semblance-react`, `@semblance-dev/rdf-engine-wat` and `@semblance-dev/rdf-engine-rust`
+  (`docs/RELEASING.md`).
 
 ## Map
 
@@ -253,4 +255,5 @@ npm run pack:check     # the npm packages as a consumer gets them (docs/RELEASIN
 | `demo/` | the site (`app.ttl`, `gallery/`, `main.ts` is the host) |
 | `examples/hello/` | the Getting started example |
 | `test/` | unit, integration, parity, cost and soak tests |
-| `scripts/build-package.ts`, `scripts/pack-check.ts` | the npm packages: JavaScript and declarations into `lib/` from `exports`, and the tarball check (`docs/RELEASING.md`, `CHANGELOG.md`) |
+| `scripts/build-package.ts`, `scripts/pack-check.ts`, `scripts/release-version.ts` | the npm packages: JavaScript and declarations into `lib/` from `exports`, the tarball check, one version for all four (`docs/RELEASING.md`, `CHANGELOG.md`) |
+| `packages/` | `react/` (`@semblance-dev/semblance-react`), `rdf-engine-wat/` and `rdf-engine-rust/` (the engine builds as packages; the core meets them in `src/store/engines/`) |

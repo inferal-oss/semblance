@@ -133,7 +133,7 @@ The effect could read `ext:from` triples from the store and watch them, as the c
 ## The adapter API (host effect)
 
 ```ts
-import { Islands, type IslandAdapter, type Widget } from '@inferal-oss/semblance'
+import { Islands, type IslandAdapter, type Widget } from '@semblance-dev/semblance'
 
 const islands = new Islands(bus, renderer, {
   widgets: { spark },                     // ext:widget "spark" → { mount(el, inputs, emit) → { update, destroy } }
@@ -166,7 +166,7 @@ interface IslandHandle { update(changed: ReadonlyMap<string, Input>): void; dest
   `{ load(): Promise<Widget> }`, which gives loading on demand by dynamic import: the module is fetched
   the first time an island of that kind is shown.
 - **React** fits behind `ext:Widget` for an island (a React widget that owns its subtree). To have React
-  draw Semblance's own components, with children, use `@inferal-oss/semblance-react` ([HOSTED.md](HOSTED.md)).
+  draw Semblance's own components, with children, use `@semblance-dev/semblance-react` ([HOSTED.md](HOSTED.md)).
   React is not a dependency of Semblance; this is the whole island adapter:
 
   ```ts
@@ -432,7 +432,7 @@ one push and the same rule runs and DOM operations with 2 islands or 62).
    reporting created and removed slot elements), and a soak case.
 2. **Rendered state from foreign components.** `ext:state` bindings written to a named graph without
    reactions (shared with #35).
-3. **Vue, Svelte and Solid adapters.** The React one is done: `@inferal-oss/semblance-react`
+3. **Vue, Svelte and Solid adapters.** The React one is done: `@semblance-dev/semblance-react`
    (`packages/react/`, React a peer dependency) draws hosted components, with events and server
    rendering ([HOSTED.md](HOSTED.md)). The others implement the same `HostAdapter`.
 4. **Loading on demand.** `ext:loading` (`ext:Eager`, `ext:Idle`, `ext:Visible`, `ext:Media`) with the

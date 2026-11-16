@@ -224,7 +224,11 @@ ui:tools a c:Window ; c:title "Tools" ; c:open false ;
     c:body ui:views .
 ui:toolsToggle a c:Toggle ; c:controls ui:tools ; c:property c:open ;
     c:label "Tools" , "Інструменти"@uk , "Werkzeuge"@de , "الأدوات"@ar ; c:icon "⌗" ;
-    key:shortcut "mod+." .
+    key:shortcut "mod+." ;
+    # The inspector it opens is prepared once the page is quiet, so a first open, or a tap, shows it
+    # at once: about 15 ms of idle time and a thousand derived triples on a page, and no cost to a
+    # later click, since a hover changes nothing while the window is closed (#434).
+    sem:anticipates true .
 
 # --- the tool tabs --------------------------------------------------------------------------------
 
@@ -265,10 +269,12 @@ ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
 ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ui:viewRows ) .
 
 # Every tool is a view of the same graph. ↗ opens one in a window; tab and window state are graph state.
-# The tools are evaluated when first opened (about 40 ms); warming them ahead would hold
-# some 20,000 more triples on every page for a panel most visitors never open.
-ui:views sem:warm sem:Lazy .
-ui:views a c:Tabs ; c:detachable true ; c:windowsOn ui:desktop ;
+# What the window shows (its shown tab) is prepared on intent, pointing at Tools (sem:OpenPreview),
+# and in idle time (ui:toolsToggle anticipates it). The other tabs stay parked while the window is
+# closed; while it is open, the tab next to the shown one is prepared (sem:anticipatesNear), its
+# maintained views with it (#434).
+ui:views sem:warm sem:OnIntent .
+ui:views a c:Tabs ; c:detachable true ; c:windowsOn ui:desktop ; sem:anticipatesNear 1 ;
     c:tabs ( ui:inspectorTab ui:queryTab ui:activityTab ui:logTab ui:engineTab ) ;
     c:selected ui:inspectorTab .
 
@@ -419,22 +425,30 @@ WHERE {
   }
 }""" .
 
-# Hovering any component inspects the hit node while the inspector is Live (not over itself).
+# Hovering any component inspects the hit node while the inspector is Live (not over itself, nor the
+# Tools window that holds it: its tabs and title bar) and can be seen: its window open, or its tab
+# detached into a window of its own. While it is closed a hover changes nothing, so the inspector
+# prepared ahead (sem:OpenPreview) is what opening shows; reaching for another tool re-renders
+# nothing either (#434).
 ui:InspectOnHover a beh:Reaction ;
     beh:when beh:Hover ;
     beh:sourceClass sem:Component ;
     beh:deletes """CONSTRUCT { ui:app ui:inspecting ?old }
 WHERE {
   ui:app ui:inspectorMode ui:Live .
+  { ui:tools c:open true } UNION { ui:inspectorTab c:detached true }
   $event beh:node ?hit .
   FILTER NOT EXISTS { ?inside sem:renders ui:inspectorCard ; (rdfhtml:hasChild|^sem:renders)* ?hit }
+  FILTER NOT EXISTS { ?window sem:renders ui:tools ; (rdfhtml:hasChild|^sem:renders)* ?hit }
   ui:app ui:inspecting ?old FILTER(?old != ?hit)
 }""" ;
     beh:inserts """CONSTRUCT { ui:app ui:inspecting ?hit }
 WHERE {
   ui:app ui:inspectorMode ui:Live .
+  { ui:tools c:open true } UNION { ui:inspectorTab c:detached true }
   $event beh:node ?hit .
   FILTER NOT EXISTS { ?inside sem:renders ui:inspectorCard ; (rdfhtml:hasChild|^sem:renders)* ?hit }
+  FILTER NOT EXISTS { ?window sem:renders ui:tools ; (rdfhtml:hasChild|^sem:renders)* ?hit }
 }""" .
 
 ui:textCard a c:Flippable ; c:front ui:textProjection .

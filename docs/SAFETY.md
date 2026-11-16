@@ -25,7 +25,7 @@ Trust is the host's decision, never the graph's: no triple makes a graph trusted
   ```
 
   or give a projection the policy yourself: `runtime.project({ …, policy: authoredPolicy(trusted) })`,
-  `renderToString({ …, policy })`, `compileStyles(store, { policy, onRefused })`.
+  `renderToString({ …, policy, onRefused })`, `compileStyles(store, { policy, onRefused })`.
 
 The policy is read from a **trusted** store: one with the ontology and your own graphs, and not the
 author's, which could add to its lists. `mount` reads it from a store of `graphs` alone, kept apart
@@ -289,8 +289,9 @@ Nothing is dropped silently.
 | a turn over a work budget | what was complete; the rest keeps its last rendering | as usual | `budget`, once per turn |
 
 A refused element keeps its place among its siblings, empty, so the gap shows in the inspector and in
-tests. The drag-and-drop layer uses `data-sem-refused` for a refused drop as well, and its theme
-animates both (#405).
+tests. `data-sem-refused` means only that: the safety layer writes it, an authored graph may not, and
+no theme styles it. A draggable whose drop was refused has a state of its own,
+`data-sem-drop-refused`, which the drag-and-drop theme shakes on a draggable only.
 
 Reports are `Refused` errors (`src/safety.ts`), with `at` (the node's IRI, or the style rule's),
 `kind` and a message such as `Refused on <https://example.org/evil#it/~x>: authored content may not
@@ -304,8 +305,9 @@ have a script element.` Where they go:
 - **`renderToString`**: to its `onRefused`, by default `console.warn`, from both the projection and
   the stylesheet (and a turn over a work budget); `rendered.projection.index.refusals` has the
   projection's afterwards.
-- **`renderToStream`**: the projection's to `console.error`. It compiles no stylesheet: compile the one
-  it links with `compileStyles(store, { policy, onRefused })`.
+- **`renderToStream`**: the projection's to its `onRefused` (it takes `renderToString`'s options), by
+  default `console.warn`. It compiles no stylesheet: compile the one it links with
+  `compileStyles(store, { policy, onRefused })`.
 - **A live example**: as warnings under its editor, the same on the server and in the browser.
 - **`HtmlIndex.refusals`**: every reason by node, kept while the node exists. Each reason is
   reported once per node.
@@ -459,9 +461,12 @@ TypeScript, so the same code runs in Node, Deno and workers.
   Oxigraph), compile; it allows WebAssembly, not `eval`.
 - `style-src 'self'`: the compiled stylesheet and each live example's are constructed stylesheets
   (`adoptedStyleSheets`), which it allows; a stylesheet inline in the document, and the styles a
-  server writes into a prerendered live example, by hash. `style-src-attr 'unsafe-inline'`: the DOM
-  patcher writes `style` attributes with `setAttribute`, each of which, under the policy, passed the
-  CSS check first. Writing them through the CSSOM, so this line can go, is #157.
+  server writes into a prerendered live example, by hash. `style-src-attr 'unsafe-inline'`: the `style`
+  attributes in server-rendered HTML, each of which, under the policy, passed the CSS check first. The
+  DOM patcher itself sets a `style` through the CSSOM (`style.cssText`, #157), which the policy does not
+  restrict (checked in Chrome under `style-src 'self'` alone: `test/fixtures/csp`); a page whose HTML is
+  not prerendered can leave this line out. The live DOM keeps the browser's parse of a declaration
+  block; `toHTML` keeps the graph's text.
 - `img-src`, `media-src`: `data:` and `blob:` are the resource schemes the policy allows (`blob:` is
   also what picked and dropped files are previewed from). List the origins images may come from,
   rather than `https:`, if authored graphs should not load from anywhere.
@@ -485,7 +490,7 @@ throw instead of parsing (a test scans `src/` for such sinks). Its one policy, `
 script URLs of the page's own origin, for what the host loads itself:
 
 ```ts
-import { scriptURL } from '@inferal-oss/semblance/web'
+import { scriptURL } from '@semblance-dev/semblance/web'
 import thumbnails from './thumbnails.worker.ts?worker&url' // Vite: the worker's URL
 new Worker(scriptURL(thumbnails), { type: 'module' })
 ```

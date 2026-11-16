@@ -34,7 +34,8 @@ function instrument(h: H) {
   let inViews = false
   const acc = { views: 0, viewStore: 0, viewSelects: 0, viewMatches: 0, otherStore: 0 }
   const store = h.store as unknown as Record<string, (...a: unknown[]) => unknown>
-  for (const name of ['select', 'construct', 'match']) {
+  for (const name of ['select', 'construct', 'match', 'matchBatch']) {
+    if (!store[name]) continue
     const orig = store[name]!.bind(h.store)
     store[name] = (...args: unknown[]) => {
       const t = performance.now()
@@ -44,7 +45,8 @@ function instrument(h: H) {
         const dt = performance.now() - t
         if (inViews) {
           acc.viewStore += dt
-          if (name === 'match') acc.viewMatches++
+          // (a batch of matches is one crossing, #248)
+          if (name === 'match' || name === 'matchBatch') acc.viewMatches++
           else acc.viewSelects++
         } else acc.otherStore += dt
       }

@@ -276,7 +276,7 @@ const handle: FnRule = (ctx, focus) => {
     }
     o.attr(root, 'data-sem-lifted', '').attr(root, 'data-sem-drag-status', status)
   }
-  if (ctx.objects(focus, DND.refusedBy).length) o.attr(root, 'data-sem-refused', '')
+  if (ctx.objects(focus, DND.refusedBy).length) o.attr(root, 'data-sem-drop-refused', '')
   return o.quads
 }
 

@@ -14,7 +14,7 @@
   (call $init_terms)
   (call $init_store))
 
-(func (export "abi_version") (result i32) (i32.const 3))
+(func (export "abi_version") (result i32) (i32.const 4))
 
 ;; The SPARQL extension groups (EXTENSIONS.md): Math, Text, Locale, Matches, JSON.
 (func (export "extensions") (result i32) (i32.const 31))
@@ -24,6 +24,7 @@
 ;; --- terms ---------------------------------------------------------------------
 
 (func (export "intern_iri") (param $n i32) (result i32)
+  (if (i32.eqz (call $iri_valid (global.get $in) (local.get $n))) (then (return (call $fail (@str "bad IRI")))))
   (call $intern (i32.const 1) (global.get $in) (local.get $n) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 1)))
 (func (export "lookup_iri") (param $n i32) (result i32)
   (call $intern (i32.const 1) (global.get $in) (local.get $n) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))
@@ -112,6 +113,7 @@
     (else (i32.const 0))))
 (func (export "match") (param $s i32) (param $p i32) (param $o i32) (param $g i32) (result i32)
   (call $match (local.get $s) (local.get $p) (local.get $o) (local.get $g)))
+(func (export "match_batch") (param $n i32) (result i32) (call $match_batch (local.get $n)))
 
 (func (export "apply") (param $removes i32) (param $adds i32) (result i32)
   (local $q i32) (local $mid i32) (local $end i32)

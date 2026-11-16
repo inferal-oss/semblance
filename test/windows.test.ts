@@ -122,7 +122,8 @@ describe('windows', () => {
     const floating = [...root('wn-layout-floating-control').querySelectorAll('button')].find((button) => button.textContent?.includes('Floating'))!
     click(floating)
     expect(fact('desktop', 'tileLayout')).toBe(c + 'DesktopFloatingLayout')
-    expect(root('wn-layout-toolbar').closest('[hidden]')).not.toBeNull()
+    // A hidden case of the switch leaves the document (c:KeepShownCase, #465).
+    expect(root('wn-layout-toolbar')).toBeNull()
     expect(root('win-checklist').getAttribute('style')).toBe(saved)
     // The gallery control and the parked desktop control stay usable on another cycle.
     click(grid)

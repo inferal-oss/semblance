@@ -312,7 +312,7 @@ again in memory, and compares the graphs.
 ## From code
 
 ```ts
-import { frameworkChanges, migrate, verify } from '@inferal-oss/semblance/migrate'
+import { frameworkChanges, migrate, verify } from '@semblance-dev/semblance/migrate'
 
 const { files, findings } = await migrate({ files: sources, changes: frameworkChanges(), from: '0.2.0' })
 ```

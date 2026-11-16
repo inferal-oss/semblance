@@ -2,6 +2,8 @@
 // or mount a component graph in one call.
 
 export { createStore, hasStore, initWeb, loadStore, loadStoreWithOntology, ontologySources, type StoreKind } from './load.ts'
+export { addEngine } from './engine.ts'
+export type { EngineBuild, EngineKind } from '../store/engine-build.ts'
 export { DomRenderer } from '../render/dom.ts'
 export { isApple, markPlatform, PLATFORM_ATTRIBUTE } from './platform.ts'
 export { scriptURL, TRUSTED_TYPES_POLICY } from './trusted-types.ts'

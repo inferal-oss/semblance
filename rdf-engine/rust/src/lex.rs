@@ -114,7 +114,7 @@ impl<'a> Cur<'a> {
             match c {
                 b'>' => {
                     self.i += 1;
-                    return Ok(());
+                    return if crate::iri::valid(out) { Ok(()) } else { self.err("bad IRI") };
                 }
                 b'\\' => {
                     self.i += 1;
