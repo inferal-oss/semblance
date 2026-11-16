@@ -425,9 +425,11 @@ WHERE {
   }
 }""" .
 
-# Hovering any component inspects the hit node while the inspector is Live (not over itself) and
-# can be seen: its window open, or its tab detached into a window of its own. While it is closed a
-# hover changes nothing, so the inspector prepared ahead (sem:OpenPreview) is what opening shows (#434).
+# Hovering any component inspects the hit node while the inspector is Live (not over itself, nor the
+# Tools window that holds it: its tabs and title bar) and can be seen: its window open, or its tab
+# detached into a window of its own. While it is closed a hover changes nothing, so the inspector
+# prepared ahead (sem:OpenPreview) is what opening shows; reaching for another tool re-renders
+# nothing either (#434).
 ui:InspectOnHover a beh:Reaction ;
     beh:when beh:Hover ;
     beh:sourceClass sem:Component ;
@@ -437,6 +439,7 @@ WHERE {
   { ui:tools c:open true } UNION { ui:inspectorTab c:detached true }
   $event beh:node ?hit .
   FILTER NOT EXISTS { ?inside sem:renders ui:inspectorCard ; (rdfhtml:hasChild|^sem:renders)* ?hit }
+  FILTER NOT EXISTS { ?window sem:renders ui:tools ; (rdfhtml:hasChild|^sem:renders)* ?hit }
   ui:app ui:inspecting ?old FILTER(?old != ?hit)
 }""" ;
     beh:inserts """CONSTRUCT { ui:app ui:inspecting ?hit }
@@ -445,6 +448,7 @@ WHERE {
   { ui:tools c:open true } UNION { ui:inspectorTab c:detached true }
   $event beh:node ?hit .
   FILTER NOT EXISTS { ?inside sem:renders ui:inspectorCard ; (rdfhtml:hasChild|^sem:renders)* ?hit }
+  FILTER NOT EXISTS { ?window sem:renders ui:tools ; (rdfhtml:hasChild|^sem:renders)* ?hit }
 }""" .
 
 ui:textCard a c:Flippable ; c:front ui:textProjection .

@@ -308,7 +308,9 @@ describe('intent preloading of what a control opens (sem:OpenPreview, #434)', ()
     expect(workbench()).toBe(true)
     expect(kept()).toBe(true)
     const tab = (name: string) => [...h.document.querySelectorAll('[role=tab]')].find((t) => t.textContent === name)!
+    // Reaching for the tab (a hover over the Tools window itself inspects nothing) and clicking it.
     const before = h.screen.engine.stats.ruleRuns
+    h.fire(tab('Query'), 'mouseover')
     h.fire(tab('Query'), 'click')
     expect(h.screen.engine.stats.ruleRuns - before).toBeLessThan(40)
     h.fire(tab('Inspector'), 'click')
