@@ -242,7 +242,7 @@ c:Sparkline sem:version 1 ; sem:closure "503fd84c93efdbb2" ; sem:internal "new" 
 c:Specimen sem:version 2 ; sem:closure "51c246631a3148db" ; sem:internal "On a phone a specimen, its stage, a card's body and a surface take one step less inset, and a dock panel's header wraps, so what they hold fits at 320px (#246)" .
 c:Spinner sem:version 1 ; sem:closure "3a6f03108b666df7" ; sem:internal "new" .
 c:SplitView sem:version 1 ; sem:closure "526b048270e89644" ; sem:internal "new" .
-c:Stack sem:version 1 ; sem:closure "d6b11a67d242f448" ; sem:internal "new" .
+c:Stack sem:version 2 ; sem:closure "a992e7ad0d3e26ca" ; sem:changedBy change:field-row-cells .
 c:StallReport sem:version 1 ; sem:closure "08b5dab9b633cfc3" ; sem:internal "new" .
 c:Stat sem:version 1 ; sem:closure "762e6109ea3bf780" ; sem:internal "new" .
 c:StatusBar sem:version 1 ; sem:closure "3caac0579317be60" ; sem:internal "new" .

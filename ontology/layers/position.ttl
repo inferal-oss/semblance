@@ -134,10 +134,12 @@ pos:AlignedColumns a pos:Layout ; sem:slug "aligned-columns" ;
 # an error under one field never moves its neighbours' controls (aligning the row's ends did: the
 # end of a field with help is its help line). Each field that declares its parts takes its rows from
 # the row (pos:RowSubgrid, derived); anything else in it - a button that acts on the fields - sits
-# in the control row. A field's parts go in their tracks by role (lc:role, shown as data-sem-part):
+# in the control row, in a cell of its own that takes the row's tracks as a field does (c:Stack mints
+# it, #522). A field's parts go in their tracks by role (lc:role, shown as data-sem-part):
 # a field without a label leaves the label track empty, so its control is in the control track too. The columns share the line as flex items would: each as wide as its content,
 # the space left shared out, so a button stays a button's width. On a phone they wrap, two or one
-# to a line, and each line has rows of its own.
+# to a line, and each line has rows of its own; every child takes a whole line's tracks, so a button
+# is beside the control of the line it is on, never under another item.
 pos:FieldRow a pos:Layout ; sem:slug "field-row" ;
     rdfs:label "Fields side by side"@en , "Поля поруч"@uk , "Felder nebeneinander"@de , "حقول متجاورة"@ar ;
     rdfs:comment "A row of form fields that line up part by part: labels in one row, controls in the next, help and errors below; other children (a button) beside the controls."@en ;

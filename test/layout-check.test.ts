@@ -79,6 +79,12 @@ const EXPECTED: [RegExp, string[]][] = [
   // each field's whole box, label and input; after, on the input, in every theme, on a phone, in Arabic
   [/^518-before_/, ['besideFieldOnItsControl']],
   [/^518-after_/, []],
+  // #522: on a phone a row of fields wraps; an item that is not a field, placed as it came over a line's
+  // label and control tracks, landed under another in a field's help tracks (Kanban's Undo/Redo, the
+  // performance page's Clear) or, taller than the input, sat off its middle (Doodle's Add). After, each
+  // is in a cell of its own, beside the control of its line: 375px in three themes and Arabic, 320, 1280
+  [/^522-before_/, ['besideFieldOnItsControl']],
+  [/^522-after_/, []],
 ]
 
 describe('layout checker over recorded pages', () => {

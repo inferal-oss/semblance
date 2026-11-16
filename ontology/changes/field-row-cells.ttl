@@ -1,0 +1,38 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:field-row-cells a chg:Change ;
+    rdfs:label "In a row of fields, what is not a field sits in a cell of its own"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/522> ;
+    chg:motivation """On a phone a row of fields (pos:FieldRow) wraps, and each line has tracks of its own: label,
+control, help, error. Anything that was not a field was placed as it came, spanning the label and control tracks
+and sitting at their foot. A second one then fitted under the first, in the help and error tracks of the field
+beside it (Kanban's Undo/Redo under Add, the performance page's Clear under Run), and one taller than the control
+(a Doodle button) was off its middle. A two-part field (a c:Choice: caption and select) could land the same way
+under a shorter neighbour, at any width. CSS cannot send an item that is placed as it comes to the control track of
+whichever line it lands on, and a button cannot be a subgrid without its box spanning every track.""" ;
+    chg:substance """c:StackRendering (SPARQL and its twin): in a c:Stack with pos:layout pos:FieldRow, each child that
+is not a field (no class with pos:rowParts: a button, a toolbar, a switch, a segmented control, a stack) is the
+only child of a cell, a div minted as <stack>/~cell-<the child's IRI, encoded for a URI>, with no attributes; the
+cells and the fields are the row's children, in list order (ord:immediatelyPrecedes between them). A stack with
+another layout, or none, renders its children directly as before. The theme (theme/layout.ttl): every child of a
+field row spans four tracks (grid-row: span 4), a field (a two-part one too) and a cell alike; a cell is a subgrid
+of those tracks with its item in the control track (grid-row: 2), at the start of its column and centred, so a
+taller item makes the control track as tall as it is; a cell whose item is hidden (the hidden attribute) is not
+displayed, so it takes no column, as the item would not. On a phone every child takes a whole line's tracks, and the
+lines are spaced by the margin under every child but the last. The phone rule that spanned a non-field over two
+tracks at their foot (grid-row: span 2, align-self: end) is gone.""" ;
+    chg:forwardGuide """Nothing to move in a graph. A stylesheet or a script that found a field row's button as the
+row's direct child ([data-sem-layout=field-row] > button) finds it one level down, in its cell
+([data-sem-layout=field-row] > :not([data-sem-c]) > button), and the row's children are fields and cells. Something
+in a field row that relied on spanning two tracks on a phone now spans a line's four, centred on its control.""" ;
+    chg:backwardGuide """Going back, a non-field child of a field row is the row's direct child again, placed by the
+theme in the control track (grid-row: 2) at full width and over the label and control tracks at their foot on a
+phone, where a second one can again land under the first.""" ;
+    chg:affects c:Stack .
