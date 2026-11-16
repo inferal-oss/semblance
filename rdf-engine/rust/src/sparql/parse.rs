@@ -324,6 +324,7 @@ impl P<'_, '_> {
             return self.c.err("undefined prefix");
         };
         let mut out = self.namespaces[ns as usize].clone();
+        let ns_len = out.len();
         let (mut keep_len, mut keep_i) = (out.len(), self.c.i);
         let mut first = true;
         loop {
@@ -359,6 +360,10 @@ impl P<'_, '_> {
         }
         out.truncate(keep_len);
         self.c.i = keep_i;
+        // some characters of a local name can make the IRI invalid
+        if out[ns_len..].iter().any(|&c| iri::special(c)) && !iri::valid(&out) {
+            return self.c.err("bad IRI");
+        }
         Ok(out)
     }
 

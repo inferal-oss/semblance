@@ -45,6 +45,7 @@
 (func (export "cq_str") (param $p i32) (param $n i32) (result i32) (call $simple (local.get $p) (local.get $n)))
 
 (func (export "cq_iri") (param $p i32) (param $n i32) (result i32)
+  (if (i32.eqz (call $iri_valid (local.get $p) (local.get $n))) (then (return (i32.const 0))))
   (global.set $base_p (i32.load offset=108 (global.get $q)))
   (global.set $base_n (i32.load offset=112 (global.get $q)))
   (call $iri_ref (local.get $p) (local.get $n)))

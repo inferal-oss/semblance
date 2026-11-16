@@ -556,6 +556,7 @@ impl Parser<'_, '_> {
             return self.c.err("undefined prefix");
         };
         out.extend_from_slice(&self.namespaces[ns].1);
+        let ns_len = out.len();
         // PN_LOCAL; a trailing unescaped '.' ends the statement instead.
         let (mut keep_len, mut keep_i) = (out.len(), self.c.i);
         let mut first = true;
@@ -592,6 +593,10 @@ impl Parser<'_, '_> {
         }
         out.truncate(keep_len);
         self.c.i = keep_i;
+        // some characters of a local name can make the IRI invalid
+        if out[ns_len..].iter().any(|&c| iri::special(c)) && !iri::valid(out) {
+            return self.c.err("bad IRI");
+        }
         Ok(())
     }
 

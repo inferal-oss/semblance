@@ -445,6 +445,9 @@ impl Reader {
             self.buf.extend_from_slice(&self.tables[1][prefix as usize].value);
         }
         self.buf.extend_from_slice(&self.tables[0][name as usize].value);
+        if !crate::iri::valid(&self.buf) {
+            return Err("bad IRI");
+        }
         let id = dict.intern(Key::iri(&self.buf));
         let n = &mut self.tables[0][name as usize];
         n.prefix = prefix;
@@ -460,6 +463,9 @@ impl Reader {
         }
         if e.value == RDF_LANG || e.value == RDF_DIR_LANG {
             return Err("rdf:langString or rdf:dirLangString as a datatype");
+        }
+        if !crate::iri::valid(&e.value) {
+            return Err("bad IRI");
         }
         let t = dict.intern(Key::iri(&e.value));
         self.tables[2][id as usize].term = t;

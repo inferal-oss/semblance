@@ -143,7 +143,11 @@ fn lang_key<'a>(input: &'a [u8], scratch: &'a mut Vec<u8>, len: u32, lang_len: u
 #[unsafe(no_mangle)]
 pub extern "C" fn intern_iri(len: u32) -> u32 {
     let s = st();
-    s.dict.intern(Key::iri(&s.input[..len as usize]))
+    let v = &s.input[..len as usize];
+    if !crate::iri::valid(v) {
+        return fail(b"bad IRI") as u32;
+    }
+    s.dict.intern(Key::iri(v))
 }
 
 #[unsafe(no_mangle)]
@@ -1015,6 +1019,9 @@ pub extern "C" fn cq_strterm(p: u32, n: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn cq_iri(p: u32, n: u32) -> u32 {
     let r = run_state();
+    if !crate::iri::valid(bytes_at(p, n)) {
+        return 0;
+    }
     let mut out = Vec::new();
     crate::iri::resolve(r.ctx.base, bytes_at(p, n), &mut out);
     r.ctx.dict.intern(Key::iri(&out))
