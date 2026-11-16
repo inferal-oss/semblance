@@ -48,15 +48,17 @@ describe('walks in SPARQL', () => {
     for (const h of shells) {
       h.set(UI + 'app', UI + 'page', UI + 'Components')
       h.set(UI + 'app', UI + 'galleryGroup', UI + 'GroupWindows')
+      h.set(UI + 'win-checklist', NS.c + 'open', '"true"')
       h.set(UI + 'win-log', NS.c + 'open', '"true"')
     }
     const [empty] = shells.map((h) => h.html('win-log-members'))
     expect(empty).toContain('sem-empty')
+    // Each tick of the checklist's first box is an event (the page's own controls: a hidden page leaves the document).
     for (let i = 0; i < 9; i++) {
       for (const h of shells) {
-        const field = h.document.querySelector('[data-sem-c=text-field] input') as HTMLInputElement
-        field.value = 'x'.repeat(i + 1)
-        h.fire(field, 'input')
+        const box = [...h.document.querySelectorAll('[data-sem-c=checkbox]')].find((c) => c.textContent!.includes('Drag me by my title bar'))!.querySelector('input')!
+        box.checked = i % 2 === 0
+        h.fire(box, 'change')
       }
       const [a, b] = shells.map((h) => h.html('win-log-members'))
       expect(a, `after ${i + 1} events`).toBe(b)

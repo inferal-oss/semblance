@@ -212,9 +212,12 @@ export function compileStyles(store: GraphStore, opts: CompileOptions = {}): str
     if (!conditions.every((m) => allowed(m, 'media', r))) continue
     const media = conditions.sort().join(', ')
     // Without sty:appliesTo, a rule styles its part wherever it appears (e.g. a mark any layer
-    // may add), or every element carrying its sty:when value.
+    // may add), or every element carrying its sty:when value. A part listing several selectors
+    // (a, b) is scoped to the sty:when value in each, as a class's rule is to the class: only the
+    // first would be otherwise, and the rest would apply under every theme.
     if (!classes.length) {
-      if (when) variantRules.push([0, block(when + (state ?? '') + (part ? ' ' + part : ''), declarations(r)), media])
+      const scoped = (part ? splitSelectors(part) : ['']).map((p) => when + (state ?? '') + (p ? ' ' + p : '')).join(', ')
+      if (when) variantRules.push([0, block(scoped, declarations(r)), media])
       else if (part) componentRules.push([0, block(part, declarations(r)), media])
       continue
     }

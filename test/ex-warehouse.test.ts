@@ -262,12 +262,15 @@ describe('the warehouse example', () => {
       h.choose(item)
       for (let i = 0; i < sales; i++) h.click(h.button('Sell'))
     }
-    if (!stay) h.click(h.button('Home'))
     const orders = 3
     for (let i = 0; i < orders; i++) {
+      // Each rush starts on the page; with another page open, it runs while that page is shown
+      // (the warehouse's page, a hidden case, has left the document: #465).
+      if (!stay && i) h.open()
       const rush = h.shell.nodeOf(UI + 'ex-warehouse-rush/~root') as Element
       h.fire(rush, 'click')
       h.sync()
+      if (!stay) h.click(h.button('Home'))
       h.advance(3100)
       for (const [item, onHand] of Object.entries(h.ledger())) expect(onHand, item).toBeGreaterThanOrEqual(0)
     }
