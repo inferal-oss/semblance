@@ -8,6 +8,7 @@ import { reactions as actionsReactions } from '../components/actions.ts'
 import { reactions as inputsReactions } from '../components/inputs.ts'
 import { reactions as feedbackReactions } from '../components/feedback.ts'
 import { reactions as dataReactions } from '../components/data.ts'
+import { seriesReactions } from '../components/series.ts'
 import { reactions as navigationReactions } from '../components/navigation.ts'
 import { reactions as overlaysReactions } from '../components/overlays.ts'
 import { reactions as workbenchReactions } from '../components/workbench.ts'
@@ -35,10 +36,13 @@ import { reactions as walkthroughReactions } from '../components/walkthrough.ts'
 import { reactions as liveReactions } from '../components/live.ts'
 import { reactions as formsReactions } from '../components/forms.ts'
 import { reactions as sheetReactions } from '../components/sheet.ts'
+import { conversionReactions } from '../components/conversions.ts'
 import { reactions as stallReactions } from '../components/stall.ts'
 import { reactions as galleryReactions } from '../components/gallery.ts'
 
 const textFieldInput: ReactionFn = ({ runtime, event, target, match, object }) => {
+  // A disabled entry keeps what it holds (c:TextEntry).
+  if (object(target, C.disabled)?.value === 'true') return { add: [], remove: [] }
   const f = runtime.store.factory
   const value = object(event, BEH.value)
   return {
@@ -149,6 +153,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...inputsReactions,
   ...feedbackReactions,
   ...dataReactions,
+  ...seriesReactions,
   ...navigationReactions,
   ...overlaysReactions,
   ...galleryReactions,
@@ -177,5 +182,6 @@ export const reactions: Record<string, ReactionFn> = {
   ...liveReactions,
   ...formsReactions,
   ...sheetReactions,
+  ...conversionReactions,
   ...stallReactions,
 }

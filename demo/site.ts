@@ -23,8 +23,21 @@ export function siteGraphs(appGraph: string, gallery: Record<string, string>): s
 }
 
 /** The examples show their own source, recorded as data (c:SourceText). `gallery` is keyed by demo/gallery/<file>. */
-export function recordSiteSources(store: GraphStore, gallery: Record<string, string>): void {
-  recordSources(store, { 'src/examples/todo.ts': todoApp(5), ...Object.fromEntries(Object.entries(gallery).filter(([p]) => isExampleSource(p))) })
+export function recordSiteSources(store: GraphStore, gallery: Record<string, string>, loaded?: ReadonlySet<string>): void {
+  recordSources(store, { 'src/examples/todo.ts': todoApp(5), ...siteSources(gallery, loaded) })
+}
+
+/** The gallery's example files whose source the site shows (of those loaded, when not all are). */
+export function siteSources(gallery: Record<string, string>, loaded?: ReadonlySet<string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(gallery).filter(([p]) => isExampleSource(p) && (!loaded || loaded.has(p))))
+}
+
+/** The graphs every page loads first, bundled with the client: the todo example's and app.ttl. */
+export const FIRST_GRAPHS = ['src/examples/todo.ts', 'demo/app.ttl']
+
+/** siteGraphs by name: the todo example's graph, app.ttl, then the gallery's files by path. */
+export function siteNamedGraphs(appGraph: string, gallery: Record<string, string>): Record<string, string> {
+  return { 'src/examples/todo.ts': todoApp(5), 'demo/app.ttl': appGraph, ...Object.fromEntries(Object.keys(gallery).sort().map((p) => [p, gallery[p]!])) }
 }
 
 /**

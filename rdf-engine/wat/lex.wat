@@ -309,6 +309,25 @@
 ;; where the host may be an IP literal in '[' ']', and brackets appear nowhere
 ;; else. Returns 1, or 0 after an error.
 (func $iri_check (param $p i32) (param $n i32) (result i32)
+  (if (result i32) (call $iri_ok (local.get $p) (local.get $n))
+    (then (i32.const 1))
+    (else (call $syntax (@str "bad IRI")))))
+
+;; Whether [p, p+n), an IRI reference as written (escapes decoded, not
+;; resolved), is one the engine accepts: no byte IRIREF excludes, and
+;; $iri_check's rules. The store API, the Turtle family, SPARQL and IRI() all
+;; hold IRIs to this, so the store never holds an IRI query text cannot write.
+(func $iri_valid (param $p i32) (param $n i32) (result i32)
+  (local $i i32)
+  (loop $chars
+    (if (i32.lt_u (local.get $i) (local.get $n)) (then
+      (if (call $iri_bad (i32.load8_u (i32.add (local.get $p) (local.get $i)))) (then (return (i32.const 0))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $chars))))
+  (call $iri_ok (local.get $p) (local.get $n)))
+
+;; $iri_check without the error: 1 or 0.
+(func $iri_ok (param $p i32) (param $n i32) (result i32)
   (local $i i32) (local $c i32) (local $e i32) (local $seg i32) (local $frag i32)
   (local $h i32) (local $auth i32) (local $auth_end i32) (local $colon i32) (local $lit i32) (local $close i32)
   (local.set $e (i32.add (local.get $p) (local.get $n)))
@@ -373,7 +392,7 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $chars))))
     (return (i32.const 1)))
-  (call $syntax (@str "bad IRI")))
+  (i32.const 0))
 
 ;; A string (on '"' or '\''), short or long, unescaped.
 (func $scan_string (result i32)
@@ -680,9 +699,14 @@
   (i32.const 0))
 
 ;; Read the next token into $tok.
+(global $prev_end (mut i32) (i32.const 0))   ;; where the previous token ended
+(global $tok_at (mut i32) (i32.const 0))     ;; where this token starts
+
 (func $lex
   (local $c i32) (local $c1 i32)
+  (global.set $prev_end (global.get $p))
   (call $skip)
+  (global.set $tok_at (global.get $p))
   (local.set $c (call $peek))
   (local.set $c1 (call $peek_at (i32.const 1)))
   (if (i32.lt_s (local.get $c) (i32.const 0)) (then (global.set $tok (i32.const T_EOF)) (return)))

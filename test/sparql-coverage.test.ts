@@ -47,8 +47,6 @@ describe('SPARQL coverage', () => {
     expect(awaiting).toEqual([
       // The combobox work (#14) brings the typeahead's function twins.
       ...['TagInputPills', 'TypeaheadMatches', 'TypeaheadOptionRendering', 'TypeaheadOptions', 'TypeaheadRendering'].map((rendering) => ({ rendering, issue: '14' })),
-      // Views over derived triples (#147): formulas over a sheet's derived inputs or a view's figures.
-      { rendering: 'QueryFormula', issue: '147' },
     ])
   })
 
@@ -66,11 +64,10 @@ describe('SPARQL coverage', () => {
     expect(reactions).toEqual([])
   })
 
-  it('every reaction has SPARQL (beh:deletes / beh:inserts), unless it awaits an extension', () => {
+  it('every reaction has SPARQL (beh:deletes / beh:inserts)', () => {
     const loose = rows(`SELECT ?reaction WHERE {
   ?reaction a beh:Reaction .
   FILTER NOT EXISTS { ?reaction beh:inserts ?i } FILTER NOT EXISTS { ?reaction beh:deletes ?d }
-  FILTER NOT EXISTS { ?reaction sem:needsExtension ?extension }
 } ORDER BY ?reaction`)
     expect(loose).toEqual([])
   })

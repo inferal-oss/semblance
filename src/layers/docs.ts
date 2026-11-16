@@ -9,7 +9,7 @@ import { compareKeys, TUPLE } from '../render/order-key.ts'
 import { md5Key } from '../components/data.ts'
 import { BEH, C, H, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { encodeForUri, isTrue, labelOf, named, nodes, rdfList, text } from '../components/util.ts'
-import { turtleTokens } from '../turtle.ts'
+import { section, topNode } from '../components/turtle.ts'
 
 const S = NS.sem
 const RDFS_DOMAIN = NS.rdfs + 'domain'
@@ -89,64 +89,50 @@ const specimenOntology: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** Quads describing a class: itself, its properties, renderings (+ rules), reactions and shape. */
-function classQuads(ctx: RuleContext, cls: NamedNode): { title: string; quads: Quad[] }[] {
-  const f = ctx.f
-  const elide = new Set([S + 'construct', BEH.deletes, BEH.inserts].map(String))
-  const about = (s: Term): Quad[] =>
-    ctx.match(s, null, null).map((q) => (elide.has(q.predicate.value) ? f.quad(q.subject, q.predicate, f.literal('…')) : q))
-  const withBlanks = (qs: Quad[]): Quad[] => {
-    const out = [...qs]
-    for (let i = 0; i < out.length; i++) if (out[i]!.object.termType === 'BlankNode') out.push(...ctx.match(out[i]!.object, null, null))
-    return out
-  }
-  const sections: { title: string; quads: Quad[] }[] = [{ title: 'the class', quads: about(cls) }]
-  const props = ctx.match(null, RDFS_DOMAIN, cls).map((q) => q.subject)
-  if (props.length) sections.push({ title: 'its properties', quads: props.flatMap(about) })
-  const renderings = ctx.match(null, S + 'targets', cls).map((q) => q.subject)
-  if (renderings.length) {
-    const rules = renderings.flatMap((r) => ctx.match(null, S + 'implements', r).map((q) => q.subject))
-    sections.push({ title: 'how it renders', quads: [...renderings, ...rules].flatMap(about) })
-  }
-  const layerRenderings = ctx.match(null, S + 'layer', cls).map((q) => q.subject)
-  if (layerRenderings.length) sections.push({ title: 'what the layer renders', quads: layerRenderings.flatMap(about) })
-  const reactions = ctx.match(null, BEH.sourceClass, cls).map((q) => q.subject)
-  if (reactions.length) sections.push({ title: 'how it reacts', quads: reactions.flatMap(about) })
-  const shapes = ctx.match(null, NS.sh + 'targetClass', cls).map((q) => q.subject)
-  if (shapes.length) sections.push({ title: 'what a valid one looks like', quads: withBlanks(shapes.flatMap(about)) })
-  return sections
-}
-
-/** Every framework namespace, so any term the reference shows reads as a prefixed name. */
-const PREFIXES: Record<string, string> = { ...NS }
-
-const classDoc: FnRule = (ctx, focus) => {
-  // c:of, or what c:bindProperty of c:bindFrom holds (a selection, as the reference has).
+/** The class a class doc shows: c:of, or what c:bindProperty of c:bindFrom holds (a selection, as the reference has). */
+function shownClass(ctx: RuleContext, focus: NamedNode): NamedNode | undefined {
   const from = ctx.object(focus, C.bindFrom)
   const bound = ctx.object(focus, C.bindProperty)
   const cls = ctx.object(focus, C.of) ?? (named(from) && named(bound) ? ctx.object(from, bound) : undefined)
-  if (!named(cls)) return []
+  return named(cls) ? cls : undefined
+}
+
+/** The element the Turtle printer puts the class's tokens in (turtle.ttl). */
+const classDoc: FnRule = (ctx, focus) => {
+  if (!shownClass(ctx, focus)) return []
   const o = ctx.out(focus)
-  const tokens = ctx.untraced(() => turtleTokens(classQuads(ctx, cls), PREFIXES, undefined, false))
-  // One span per colored token, plain text runs for whitespace and punctuation.
-  const parts = []
-  let plain = ''
-  let i = 0
-  const flush = () => {
-    if (plain) parts.push(o.text('t' + i++, plain))
-    plain = ''
-  }
-  for (const t of tokens) {
-    if (t.kind === 'space' || t.kind === 'punct') {
-      plain += t.text
-      continue
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle', tabindex: '0' }))
+  return o.quads
+}
+
+/**
+ * What a class doc prints, a section each: the class; the properties whose rdfs:domain it is; its
+ * renderings and their rules; what layers it is for render; its reactions; its SHACL shapes.
+ */
+const classDocTurtle: FnRule = (ctx, focus) => {
+  const cls = shownClass(ctx, focus)
+  if (!cls) return []
+  const o = ctx.out(focus)
+  const subjects = (p: string) => ctx.match(null, p, cls).map((q) => q.subject)
+  const renderings = subjects(S + 'targets')
+  const sections: [string, Term[]][] = [
+    ['the class', [cls]],
+    ['its properties', subjects(RDFS_DOMAIN)],
+    ['how it renders', [...renderings, ...renderings.flatMap((r) => ctx.match(null, S + 'implements', r).map((q) => q.subject))]],
+    ['what the layer renders', subjects(S + 'layer')],
+    ['how it reacts', subjects(BEH.sourceClass)],
+    ['what a valid one looks like', subjects(NS.sh + 'targetClass')],
+  ]
+  sections.forEach(([title, members], i) => {
+    if (!members.length) return
+    section(ctx, o, i, title)
+    const seen = new Set<string>()
+    for (const s of members) {
+      if (s.termType === 'Literal' || seen.has(s.termType + s.value)) continue
+      seen.add(s.termType + s.value)
+      topNode(ctx, o, i, s)
     }
-    flush()
-    const id = 't' + i++
-    parts.push(o.el(id + 's', 'Span', { class: 'ttl-' + t.kind }, [o.text(id, t.text)]))
-  }
-  flush()
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle', tabindex: '0' }, parts))
+  })
   return o.quads
 }
 
@@ -162,5 +148,5 @@ const toggleOntology: ReactionFn = (ctx) => {
   return { add: [], remove: [] }
 }
 
-export const docsFunctions: Record<string, FnRule> = { 'docs:specimen': specimenOntology, 'class-doc': classDoc }
+export const docsFunctions: Record<string, FnRule> = { 'docs:specimen': specimenOntology, 'class-doc': classDoc, 'class-doc:turtle': classDocTurtle }
 export const docsReactions: Record<string, ReactionFn> = { 'docs:toggle': toggleOntology }

@@ -5,13 +5,16 @@
   (global.set $top (global.get $HEAP))
   (global.set $errbuf (call $alloc (i32.const 160)))
   (call $init_load)
+  (call $init_jelly)
+  (call $init_jelly_writer)
+  (global.set $jcols (call $alloc0 (i32.const 48)))
   (call $init_knowns)
   (call $init_functions)
   (global.set $nbuf (call $alloc (i32.const 400)))
   (call $init_terms)
   (call $init_store))
 
-(func (export "abi_version") (result i32) (i32.const 2))
+(func (export "abi_version") (result i32) (i32.const 4))
 
 ;; The SPARQL extension groups (EXTENSIONS.md): Math, Text, Locale, Matches, JSON.
 (func (export "extensions") (result i32) (i32.const 31))
@@ -21,6 +24,7 @@
 ;; --- terms ---------------------------------------------------------------------
 
 (func (export "intern_iri") (param $n i32) (result i32)
+  (if (i32.eqz (call $iri_valid (global.get $in) (local.get $n))) (then (return (call $fail (@str "bad IRI")))))
   (call $intern (i32.const 1) (global.get $in) (local.get $n) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 1)))
 (func (export "lookup_iri") (param $n i32) (result i32)
   (call $intern (i32.const 1) (global.get $in) (local.get $n) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))
@@ -109,6 +113,7 @@
     (else (i32.const 0))))
 (func (export "match") (param $s i32) (param $p i32) (param $o i32) (param $g i32) (result i32)
   (call $match (local.get $s) (local.get $p) (local.get $o) (local.get $g)))
+(func (export "match_batch") (param $n i32) (result i32) (call $match_batch (local.get $n)))
 
 (func (export "apply") (param $removes i32) (param $adds i32) (result i32)
   (local $q i32) (local $mid i32) (local $end i32)
@@ -137,6 +142,10 @@
 (func (export "quad_count") (result i32) (global.get $qn))
 
 (func (export "load") (param $fmt i32) (param $len i32) (param $base_len i32) (param $graph i32) (result i32)
+  (if (i32.eq (local.get $fmt) (i32.const 5)) (then
+    (if (i32.eqz (local.get $graph)) (then (local.set $graph (i32.const 1))))
+    (if (i32.eqz (call $kind (local.get $graph))) (then (return (call $fail (@str "graph is not a term")))))
+    (return (call $jelly_load (local.get $len) (local.get $graph)))))
   (if (i32.gt_u (i32.sub (local.get $fmt) (i32.const 1)) (i32.const 3)) (then (return (call $fail (@str "unknown format")))))
   (call $load (local.get $fmt) (local.get $len) (local.get $base_len) (local.get $graph)))
 

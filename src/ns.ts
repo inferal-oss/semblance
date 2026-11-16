@@ -48,6 +48,16 @@ export const NS = {
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
   file: 'https://semblance.dev/ns/file#',
   ol: 'https://semblance.dev/ns/outline#',
+  lc: 'https://semblance.dev/ns/layout-constraints#',
+  blk: 'https://semblance.dev/ns/block#',
+  po: 'http://www.essepuntato.it/2008/12/pattern#',
+  doco: 'http://purl.org/spar/doco/',
+  oa: 'http://www.w3.org/ns/oa#',
+  co: 'http://purl.org/co/',
+  safe: 'https://semblance.dev/ns/safety#',
+  src: 'https://semblance.dev/ns/source#',
+  mig: 'https://semblance.dev/ns/migration#',
+  chg: 'https://semblance.dev/ns/change#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -101,8 +111,12 @@ export const ORD = {
 
 export const SEM = {
   watchesAnywhere: sem + 'watchesAnywhere',
+  watchesStatements: sem + 'watchesStatements',
+  watchesManyValued: sem + 'watchesManyValued',
+  inverseVia: sem + 'inverseVia',
   Component: sem + 'Component',
   Rule: sem + 'Rule',
+  Rendering: sem + 'Rendering',
   targets: sem + 'targets',
   modality: sem + 'modality',
   stratum: sem + 'stratum',
@@ -138,10 +152,13 @@ export const SEM = {
   Layer: sem + 'Layer',
   DocsLayer: sem + 'DocsLayer',
   warm: sem + 'warm',
+  setsAside: sem + 'setsAside',
   Eager: sem + 'Eager',
   Lazy: sem + 'Lazy',
   OnIntent: sem + 'OnIntent',
   IntentPreview: sem + 'IntentPreview',
+  anticipates: sem + 'anticipates',
+  anticipatesNear: sem + 'anticipatesNear',
   select: sem + 'select',
   text: sem + 'text',
   verdict: sem + 'verdict',
@@ -196,6 +213,9 @@ export const C = {
   Switch: c + 'Switch',
   cases: c + 'cases',
   when: c + 'when',
+  caseRetention: c + 'caseRetention',
+  KeepEveryCase: c + 'KeepEveryCase',
+  keptHidden: c + 'keptHidden',
   ProjectionView: c + 'ProjectionView',
   HostSlot: c + 'HostSlot',
   projectionGraph: c + 'projectionGraph',
@@ -215,6 +235,10 @@ export const C = {
   tearsInto: c + 'tearsInto',
   gathers: c + 'gathers',
   tearDistance: c + 'tearDistance',
+  FlipSourcePhrase: c + 'FlipSourcePhrase',
+  FlipViewPhrase: c + 'FlipViewPhrase',
+  FlipToSourceHint: c + 'FlipToSourceHint',
+  FlipToViewHint: c + 'FlipToViewHint',
   TearOffCue: c + 'TearOffCue',
   TearBackCue: c + 'TearBackCue',
   ReturnCue: c + 'ReturnCue',
@@ -344,6 +368,8 @@ export const FILES_GRAPH = 'urn:semblance:files'
 export const NETWORK_GRAPH = 'urn:semblance:network'
 /** What the rendered-state effect measures (rnd:State, rnd:Viewport; src/rendered.ts): unrecorded. */
 export const RENDERED_GRAPH = 'urn:semblance:rendered'
+/** What the remote-sources effect knows (src/remote.ts): each source's state and src:SyncLog. */
+export const SOURCES_GRAPH = 'urn:semblance:sources'
 export const SVG_NS = 'http://www.w3.org/2000/svg'
 
 export const BEH = {
@@ -384,6 +410,8 @@ export const BEH = {
   Click: beh + 'Click',
   raise: beh + 'raise',
   raisedBy: beh + 'raisedBy',
+  continues: beh + 'continues',
+  continued: beh + 'continued',
 } as const
 
 export const A11Y = { Layer: NS.a11y + 'Layer' } as const
@@ -460,9 +488,23 @@ export const EXT = {
   as: NS.ext + 'as', Property: NS.ext + 'Property', Attribute: NS.ext + 'Attribute', on: NS.ext + 'on', emits: NS.ext + 'emits',
   path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module',
   CustomElement: NS.ext + 'CustomElement', Widget: NS.ext + 'Widget',
+  Hosted: NS.ext + 'Hosted', component: NS.ext + 'component',
 } as const
 /** The outlines layer (ontology/layers/outline.ttl). */
 export const OL = { label: NS.ol + 'label', defaultLabel: NS.ol + 'defaultLabel', shows: NS.ol + 'shows' } as const
+
+/** The layout constraints layer (ontology/layers/constraints.ttl): parts by role, on rendered nodes. */
+export const LC = {
+  Layer: NS.lc + 'Layer',
+  role: NS.lc + 'role',
+  atWidth: NS.lc + 'atWidth',
+  WithParts: NS.lc + 'WithParts',
+  SingleLineControl: NS.lc + 'SingleLineControl',
+  FieldLabel: NS.lc + 'FieldLabel',
+  NavItem: NS.lc + 'NavItem',
+  index: NS.lc + 'index',
+  Role: NS.lc + 'Role',
+} as const
 
 /** The rendered state (ontology/layers/rendered.ttl, src/rendered.ts). */
 export const RND = Object.fromEntries(
@@ -470,13 +512,13 @@ export const RND = Object.fromEntries(
     'observes', 'Aspect', 'Geometry', 'Visibility', 'Overlap', 'Focus', 'Hover', 'Press', 'Scroll', 'Open', 'Animation',
     'State', 'of', 'observesSelf', 'fixed', 'x', 'y', 'width', 'height', 'within', 'cell', 'rendered', 'inViewport', 'ratio', 'overlaps',
     'focused', 'focusWithin', 'focusVisible', 'hovered', 'pressed', 'scrollTop', 'scrollLeft', 'scrollHeight', 'scrollWidth',
-    'overflows', 'atStart', 'atEnd', 'open', 'topLayer', 'animating', 'Viewport',
+    'overflows', 'atStart', 'atEnd', 'open', 'topLayer', 'animating', 'Viewport', 'Layout', 'parent', 'line', 'scrolls', 'clientWidth',
   ].map((l) => [l, NS.rnd + l]),
 ) as Record<
   | 'observes' | 'Aspect' | 'Geometry' | 'Visibility' | 'Overlap' | 'Focus' | 'Hover' | 'Press' | 'Scroll' | 'Open' | 'Animation'
   | 'State' | 'of' | 'observesSelf' | 'fixed' | 'x' | 'y' | 'width' | 'height' | 'within' | 'cell' | 'rendered' | 'inViewport' | 'ratio' | 'overlaps'
   | 'focused' | 'focusWithin' | 'focusVisible' | 'hovered' | 'pressed' | 'scrollTop' | 'scrollLeft' | 'scrollHeight' | 'scrollWidth'
-  | 'overflows' | 'atStart' | 'atEnd' | 'open' | 'topLayer' | 'animating' | 'Viewport',
+  | 'overflows' | 'atStart' | 'atEnd' | 'open' | 'topLayer' | 'animating' | 'Viewport' | 'Layout' | 'parent' | 'line' | 'scrolls' | 'clientWidth',
   string
 >
 /** The dependency layer (ontology/layers/dependency.ttl). */
@@ -492,4 +534,17 @@ export const DEP = {
 } as const
 
 /** The layers an app gets unless it names its own: what every page needs, none of the tools'. */
-export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.TooltipLayer, FS.Layer]
+export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.TooltipLayer, FS.Layer, LC.Layer]
+
+/** Block documents (ontology/components/blocks.ttl): DoCo, the Pattern Ontology, Web Annotation, and what Semblance adds. */
+export const PO = { contains: NS.po + 'contains' } as const
+export const CO = { nextItem: NS.co + 'nextItem' } as const
+export const OA = { start: NS.oa + 'start', end: NS.oa + 'end', hasBody: NS.oa + 'hasBody' } as const
+export const BLK = Object.fromEntries(
+  [
+    'Block', 'TextBlock', 'Container', 'Document', 'Paragraph', 'Heading', 'Quote', 'List', 'BulletedList', 'NumberedList', 'TodoList',
+    'Item', 'ListItem', 'TodoItem', 'Toggle', 'Callout', 'Divider', 'Code', 'Math', 'Table', 'Row', 'Cell', 'Columns', 'Column', 'Image',
+    'File', 'Bookmark', 'Embed', 'Linked', 'DocumentLink', 'Contents', 'Mark', 'Strong', 'Emphasis', 'Strike', 'InlineCode', 'Link',
+    'Mention', 'element', 'textElement', 'mark', 'level', 'checked', 'header', 'target', 'prefix', 'linePrefix',
+  ].map((n) => [n, NS.blk + n]),
+) as Record<string, string>

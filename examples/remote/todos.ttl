@@ -1,0 +1,11 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <https://example.org/remote#> .
+
+# What the store holds to begin with. The page does not have it: it binds to it and loads it.
+
+ex:todos c:item ex:t1 , ex:t2 , ex:t3 .
+ex:t1 a ex:Todo ; rdfs:label "Write the core ontology" ; ex:done true ; ex:created "2026-11-01T09:00:00Z"^^xsd:dateTime .
+ex:t2 a ex:Todo ; rdfs:label "Sketch the style layer" ; ex:done false ; ex:created "2026-11-02T09:00:00Z"^^xsd:dateTime .
+ex:t3 a ex:Todo ; rdfs:label "Wire up behaviour" ; ex:done false ; ex:created "2026-11-03T09:00:00Z"^^xsd:dateTime .

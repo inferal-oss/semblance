@@ -361,7 +361,7 @@ ag:FollowAgain a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-collab-liv
 
 # --- how it works ---------------------------------------------------------------------------------------------
 
-ui:ex-collab-how a c:Walkthrough ; c:label "How it works" ;
+ui:ex-collab-how a c:Walkthrough ; c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-collab-w1 ui:ex-collab-w2 ui:ex-collab-w3 ui:ex-collab-w4 ui:ex-collab-w5 ui:ex-collab-w6 ui:ex-collab-w7 ) .
 

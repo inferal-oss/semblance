@@ -90,7 +90,8 @@ ui:queryTurtle a c:ResultTurtle ; c:of ui:currentQuery .
 ui:queryPlanTab a c:Tab ; c:label "Plan" , "План"@uk , "Plan"@de , "الخطة"@ar ; c:content ui:queryPlan .
 ui:queryPlan a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:queryPlanSummary ui:queryPlanTable ) .
 ui:queryPlanSummary a c:Text ; c:valueQuery ui:qPlanSummary ; c:dataset ui:currentQuery .
-ui:qPlanSummary a sem:View ; sem:select """
+# A view over what the runtime writes about the query (iv:reads), stepped when it writes it.
+ui:qPlanSummary a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ui:currentQuery ; sem:select """
 SELECT ?label WHERE {
   BIND(EXISTS { ui:currentQuery a iv:View } AS ?live)
   OPTIONAL { ui:currentQuery iv:strategy ?s FILTER(?s IN (iv:Incremental, iv:Recompute)) }

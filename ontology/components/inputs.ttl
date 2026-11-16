@@ -931,16 +931,16 @@ c:characters a owl:DatatypeProperty ; rdfs:domain c:Charset ;
     rdfs:comment "A character class body, as inside [...]: \"0-9\", \"A-Za-z0-9\", \"2-9A-HJ-NP-Z\"."@en .
 c:inputMode a owl:DatatypeProperty ; rdfs:domain c:Charset ;
     rdfs:comment "The virtual keyboard to offer (the inputmode attribute): numeric, text, decimal..."@en .
-c:Digits a c:Charset ; rdfs:label "Digits"@en ; sem:order 1 ; c:characters "0-9" ; c:inputMode "numeric" .
-c:Letters a c:Charset ; rdfs:label "Letters"@en ; sem:order 2 ; c:characters "A-Za-z" ; c:inputMode "text" .
-c:Alphanumeric a c:Charset ; rdfs:label "Letters and digits"@en ; sem:order 3 ; c:characters "A-Za-z0-9" ; c:inputMode "text" .
-c:Hexadecimal a c:Charset ; rdfs:label "Hexadecimal"@en ; sem:order 4 ; c:characters "0-9A-Fa-f" ; c:inputMode "text" .
-c:AnyCharacter a c:Charset ; rdfs:label "Any character but space"@en ; sem:order 5 ; c:characters "\\S" ; c:inputMode "text" .
+c:Digits a c:Charset ; rdfs:label "Digits"@en , "Цифри"@uk , "Ziffern"@de , "أرقام"@ar ; sem:order 1 ; c:characters "0-9" ; c:inputMode "numeric" .
+c:Letters a c:Charset ; rdfs:label "Letters"@en , "Літери"@uk , "Buchstaben"@de , "حروف"@ar ; sem:order 2 ; c:characters "A-Za-z" ; c:inputMode "text" .
+c:Alphanumeric a c:Charset ; rdfs:label "Letters and digits"@en , "Літери й цифри"@uk , "Buchstaben und Ziffern"@de , "حروف وأرقام"@ar ; sem:order 3 ; c:characters "A-Za-z0-9" ; c:inputMode "text" .
+c:Hexadecimal a c:Charset ; rdfs:label "Hexadecimal"@en , "Шістнадцяткові"@uk , "Hexadezimal"@de , "ست عشري"@ar ; sem:order 4 ; c:characters "0-9A-Fa-f" ; c:inputMode "text" .
+c:AnyCharacter a c:Charset ; rdfs:label "Any character but space"@en , "Будь-який символ, крім пробілу"@uk , "Jedes Zeichen außer Leerzeichen"@de , "أي محرف عدا المسافة"@ar ; sem:order 5 ; c:characters "\\S" ; c:inputMode "text" .
 
 c:case a owl:ObjectProperty ; rdfs:range c:Case ; rdfs:comment "Letter case a code is kept in."@en .
 c:Case a owl:Class .
-c:UpperCase a c:Case ; rdfs:label "Upper case"@en ; sem:order 1 .
-c:LowerCase a c:Case ; rdfs:label "Lower case"@en ; sem:order 2 .
+c:UpperCase a c:Case ; rdfs:label "Upper case"@en , "Великі літери"@uk , "Großbuchstaben"@de , "أحرف كبيرة"@ar ; sem:order 1 .
+c:LowerCase a c:Case ; rdfs:label "Lower case"@en , "Малі літери"@uk , "Kleinbuchstaben"@de , "أحرف صغيرة"@ar ; sem:order 2 .
 
 c:cellStyle a owl:ObjectProperty ;
     rdfs:range c:CellStyle ;
@@ -948,10 +948,10 @@ c:cellStyle a owl:ObjectProperty ;
     rdfs:comment "How a code's cells are drawn."@en ;
     sty:hookAttribute "data-sem-cells" .
 c:CellStyle a owl:Class .
-c:Boxes a c:CellStyle ; rdfs:label "Boxes"@en ; sem:slug "boxes" ; sem:order 1 .
-c:Underlined a c:CellStyle ; rdfs:label "Underlined"@en ; sem:slug "underlined" ; sem:order 2 .
-c:Filled a c:CellStyle ; rdfs:label "Filled"@en ; sem:slug "filled" ; sem:order 3 .
-c:Joined a c:CellStyle ; rdfs:label "Joined"@en ; sem:slug "joined" ; sem:order 4 ;
+c:Boxes a c:CellStyle ; rdfs:label "Boxes"@en , "Клітинки"@uk , "Kästchen"@de , "مربعات"@ar ; sem:slug "boxes" ; sem:order 1 .
+c:Underlined a c:CellStyle ; rdfs:label "Underlined"@en , "Підкреслені"@uk , "Unterstrichen"@de , "مسطّرة"@ar ; sem:slug "underlined" ; sem:order 2 .
+c:Filled a c:CellStyle ; rdfs:label "Filled"@en , "Заповнені"@uk , "Gefüllt"@de , "معبأة"@ar ; sem:slug "filled" ; sem:order 3 .
+c:Joined a c:CellStyle ; rdfs:label "Joined"@en , "Зʼєднані"@uk , "Verbunden"@de , "متصلة"@ar ; sem:slug "joined" ; sem:order 4 ;
     rdfs:comment "Cells of a group share borders, like a segmented field."@en .
 
 c:CodeInputRendering a sem:Rendering ; sem:targets c:CodeInput ; sem:stratum 0 .

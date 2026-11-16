@@ -55,6 +55,34 @@ SELECT ?task ?label ?start ?end WHERE {
 ex:plan a c:GanttChart ; c:label "Plan" ; c:view ex:planView .
 ```
 
+Series charts draw a maintained view's rows in long form, a value (`c:valueVariable`) of a series
+(`c:seriesVariable`, optional) for a category (`c:categoryVariable`): `c:AreaChart`, `c:ColumnChart`
+(grouped, or `c:stacked true`), `c:ScatterChart` (an x, `c:xVariable`; bubbles with
+`c:sizeVariable`), `c:PieChart` and `c:DonutChart`, `c:Histogram` (bins of `c:valueVariable`, about
+`c:binCount`), `c:BoxPlot` (medians, quartiles and ranges), `c:Sparkline` (word-sized, for tiles
+and table cells), and the faceted kinds: `c:BarChart` (horizontal stacked bars with totals, small multiples
+by `c:facetVariable`) and `c:Heatmap` (series down, categories across, a cell per pair on a log ramp,
+`c:flagVariable` outlining some), and `c:LineChart` (log values against numeric categories, log-log with
+`c:logScale`, a `c:referenceLine "linear"`). A legend series with `c:axis c:SecondaryAxis` gets a second scale (`c:secondaryUnit`);
+`c:annotation` draws a `c:Threshold` (`c:at`) or a `c:MarkedRange` (`c:fromValue`, `c:toValue`); a
+legend item is a toggle that hides or shows its series (`c:hiddenSeries`). They share their parts: a
+plan mints the series (the legend's items, `c:legend` to name and order them), the categories and a
+point per series and category; a layout adds stack bases, the value scale (steps of 1, 2 or 5 × 10ⁿ)
+and its ticks. The frame writes the scale as custom properties and each point its own values, so the
+theme places the marks: a changed row re-renders its points, not the chart. A point is a list item
+with its value in words and a tooltip; Tab reaches the chart and the arrow keys move between points.
+As text, a series chart is its name and its points' words; bar charts and heatmaps write a line per
+row (`c:saysRows`). A table column with `c:format "component"` holds the component its value names in
+each cell, e.g. a row's sparkline.
+
+```turtle
+ex:sales a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """PREFIX ex: <https://example.org/>
+SELECT ?month ?channel ?amount WHERE { ?s ex:month ?month ; ex:channel ?channel ; ex:amount ?amount ; ex:at ?at }
+ORDER BY ?at""" .
+ex:chart a c:ColumnChart ; c:label "Sales" ; c:view ex:sales ; c:categoryVariable "month" ;
+  c:seriesVariable "channel" ; c:valueVariable "amount" ; c:unit "k€" ; c:stacked true .
+```
+
 `c:RdfEditor` shows an RDF document as structure, and edits it when `c:editable true`. The document
 is the resources it lists (`c:entry`); each is a tree item with its predicates beside their objects,
 and what nests is nested under where it is used: a blank node, a list, the reifiers of a statement
@@ -95,6 +123,21 @@ page's "Editing a dataset" shows all of it.
 ex:editor a c:RdfEditor ; c:label "Library" ; c:entry ex:book , ex:author ; c:editable true ; c:arrows c:ArrowsCurrent .
 ex:changes a c:RdfEditor ; c:label "What changed" ; c:entry ex:book , ex:author ; c:diff true .
 ex:undo a c:Button , beh:Undoer ; c:label "Undo" .
+```
+
+A `c:BlockEditor` shows a document of blocks (`c:of` a `blk:Document`): a tree in DoCo and the
+Pattern Ontology, where containers hold blocks (`po:contains`) in a chain (`co:nextItem`)
+and a text block's text is its `rdf:value` with standoff marks (`blk:Strong`, `blk:Link`, … each an
+`oa:TextPositionSelector` with `oa:start` and `oa:end`). Every block type is a class that is also a
+component: a text block class that names its element (`blk:element rdfhtml:Aside`) is rendered by the
+shared rendering, any other brings its own. Documents render as semantic HTML and, in the Text
+modality, as Markdown. [Block documents](BLOCKS.md) has the model and the design of the editor.
+
+```turtle
+ex:notes a c:BlockEditor ; c:label "Notes" ; c:of ex:doc .
+ex:doc a blk:Document ; po:contains ex:h , ex:p .
+ex:h a blk:Heading1 ; rdf:value "Plans" ; co:nextItem ex:p .
+ex:p a blk:Paragraph ; rdf:value "Ship it." ; blk:mark [ a blk:Strong ; oa:start 0 ; oa:end 4 ] .
 ```
 
 ## SPARQL first; functions are the escape hatch
@@ -194,7 +237,7 @@ A rendering rule runs once per instance (`$this`) and constructs RDF/HTML
 - **Identity.** Mint every node from the focus: `BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)`.
   Never blank nodes. A minted IRI is stable across re-evaluation, so the DOM node is reused, and
   it doubles as the element's `id` for `label for`, `aria-labelledby` and `aria-describedby`.
-- **Order.** Siblings are ordered with `ord:immediatelyPrecedes` (or `ord:precedes`); an
+- **Order.** Siblings are ordered with `co:nextItem` (or `ord:precedes`); an
   ambiguous order is an error. Member-wise siblings carry `sem:orderKey` and are sorted instead.
 - **Optional parts.** Bind an optional node to `?none` (unbound) when its data is missing:
   `BIND(IF(BOUND(?icon), IRI(CONCAT(STR($this), "/~icon")), ?none) AS ?iconNode)`. Unbound
@@ -217,7 +260,11 @@ Each (rule, focus) pair owns its output; the engine diffs outputs and patches on
 A pair is dirty when the focus's own triples change, and also:
 
 - `sem:follows c:of` — when the triples of the node the focus points at through `c:of` change
-  (for components that show another node's data);
+  (for components that show another node's data). A function rule's pair whose last evaluation
+  read only through the context's trace (no `ctx.untraced`, no pattern without an IRI subject, no
+  query it does not `follow`) is re-run by those reads alone: a followed node's change re-runs it
+  only if it read that predicate there. The declaration still stands for its SPARQL twin and for
+  pairs that read untraced;
 - `sem:watches c:value` — narrows it: only these predicates make the focus dirty. It applies to
   the followed nodes' triples as well as the focus's own: a rule with both `sem:follows` and
   `sem:watches` must list every predicate of the followed node it reads (the workbench's result
@@ -233,10 +280,32 @@ A pair is dirty when the focus's own triples change, and also:
   graph makes each focus of the rendering dirty: for a list of everything of a kind (every
   shortcut, every shape result), which reaches what it lists from no path of its focus. Keep its
   foci few: every such change re-runs them all;
+- `sem:watchesStatements true` — the focus is a property and the rule reads the statements made
+  with it on any node (`?s $this ?o`: `nav:Containment`, whose foci are the containment
+  properties): adding or removing one makes that focus dirty;
+- `sem:watchesManyValued l10n:pickedAs` — the rule reads, on any node, the statements made with
+  each predicate that has that property, and says something only about a node with two values or
+  more of one (`l10n:Terms`, on texts with translations): a change in the input to such a node's
+  values makes each focus dirty, and a text with one value replaced by another does not. A host
+  that takes an addition in slices brackets them with `Runtime.arriving`, so the rule runs once;
+- `sem:follows ( c:of [ sem:inverseVia ( c:inTree c:parentProperty ) ] )` — a path whose last
+  step goes against a predicate named in the data: a triple `?child ?p ?node` makes dirty the
+  foci that reach `?node` along the path's other steps and name `?p` along the given one (a tree's
+  item hears the children pointing at its node through its tree's `c:parentProperty`). A
+  `[ sem:inverse p ]` step does the same for a fixed `p`;
 - `sem:requires c:icon` — the rule is skipped for a focus without that property;
 - `sem:inputOnly true` — derived triples (other rules' output) do not re-trigger it;
 - `sem:forEach c:item` — the rendering is member-wise: evaluated once per (focus, member), so
   adding or re-sorting one item touches only that item.
+
+A graph loaded after start (`runtime.load(turtle)`, or any change that adds or removes a
+`sem:Rule`, a `sem:Rendering` or a triple about one) brings its rules into the running engine as
+enabling a layer does: they are evaluated for every focus they apply to, in their stratum, and the
+bus answers its reactions; the site's pages load the graphs they need first this way and the rest
+in idle time (docs/SSR.md, "Bytes"). A rule need not declare what only a late graph states, like a
+class's slug: when they have all arrived (`runtime.arriving(false)`, or `runtime.reread()` after
+`runtime.load`) what was evaluated before is evaluated again, once. So a rule must say the same when
+evaluated again: it cannot go by its own output (`FILTER NOT EXISTS` on what it writes).
 
 Strata only run upward: a rule that a higher stratum's output would make dirty again throws
 "Stratification violation". A rule at a low stratum (say -15) targeting a component onto which a
@@ -336,6 +405,10 @@ Two kinds of SHACL, both data:
   derives `c:error` (which fields render) and disables buttons whose `val:requires` fields are
   invalid. Messages are `sh:message`, language-tagged.
 
+A shape describes; it does not guard. A trusted projection still renders what a shape flags (a
+`c:Link` whose `c:href` is `javascript:`); keeping that out of a graph you do not trust is the
+safety policy's job ([SAFETY.md](SAFETY.md)).
+
 ## Styling
 
 `sty:StyleRule`s compile into cascade layers (tokens, hooks, components, variants, intents).
@@ -379,6 +452,11 @@ on the rule; its function twin calls `formatLocale(ctx.languages)` for the same 
 BIND(sx:formatNumber(xsd:double(STR(?value)), ?locale, "maximumFractionDigits=2") AS ?shown)
 ```
 
+A number shown or written to an attribute as it is takes its canonical text, not the store's:
+`STR` of `"1.50"^^xsd:decimal` is `1.50` on a store that keeps the lexical form and `1.5` on one that
+keeps the value (Oxigraph). Cast it, `IF(isNumeric(?v), xsd:string(?v), STR(?v))`, and call
+`numberText` (`src/rdf.ts`) in the function twin; `test/number-text.test.ts` renders them on every store.
+
 Lists in the viewer's collation are placed by order keys: `sx:sortKey(?label, ?locale)` (case
 folded, accents stripped) as a `sem:orderKey`, since a CONSTRUCT cannot rank rows by
 `localeCompare`; the function twin computes the same key (`sortKey` from
@@ -418,12 +496,12 @@ components and shown only where there is no `ol:label`: an island is named by wh
 
 ## Integrating with your app
 
-`mount` (from `@inferal-oss/semblance/web`) is the short way. The pieces it wires, for when you
+`mount` (from `@semblance-dev/semblance/web`) is the short way. The pieces it wires, for when you
 need them yourself:
 
 ```ts
-import { compileStyles, EventBus, MOD, Runtime } from '@inferal-oss/semblance'
-import { DomRenderer, initWeb, loadStore } from '@inferal-oss/semblance/web'
+import { compileStyles, EventBus, MOD, Runtime } from '@semblance-dev/semblance'
+import { DomRenderer, initWeb, loadStore } from '@semblance-dev/semblance/web'
 
 await initWeb('wat')
 const store = loadStore('wat', components, app)       // Semblance's ontology + yours
@@ -446,21 +524,32 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
 - **Embedding.** Mount several roots into several elements of an existing page; or place an
   unstyled `c:HostSlot` inside a layout, name it with `c:slot`, and mount existing application
   content into `renderer.slot(name)`. Use `c:ProjectionView` for a styled inspection surface.
-- **Server-side.** `loadStore` from `@inferal-oss/semblance/node`, project, `toHTML` / `toText`.
+- **Server-side.** `loadStore` from `@semblance-dev/semblance/node`, project, `toHTML` / `toText`.
 - **Remembering state.** `per:Policy` nodes say what to keep where; attach `Persistence` with
   storage backends before the first projection ([PERSISTENCE.md](../PERSISTENCE.md)).
 - **The address.** `nav:Location` and `nav:Dimension`s say which state lives in the URL;
   attach `Navigation` and links can point at resources (`c:to`) instead of addresses.
+- **Menu destinations.** A `c:MenuItem` with `c:href` or resolved `nav:href` renders an anchor
+  with `role="menuitem"`. An item without a destination renders a button. `c:disabled true`
+  keeps a destination item as a disabled button, so it cannot navigate. The menu's choice
+  reaction still closes it when an enabled item is chosen.
 - **Things due later, the clipboard.** Attach a `Scheduler` (`beh:dueAt` becomes a `beh:Due`
   event) and a `Clipboard` (a `clip:Request` is written with `navigator.clipboard`, or a stand-in
   you pass, e.g. in tests); both report back as events on the bus.
+- **Graphs you do not trust.** A graph from a person, a page or a model goes in `mount`'s
+  `authored`, not `graphs`: the projection and the stylesheet then render under the `safe:Authored`
+  policy, read from your own graphs, and what it refuses is reported to `onRefused`. Wiring by hand,
+  pass `policy: authoredPolicy(trustedStore)` to `runtime.project` and `compileStyles`. How it works,
+  extending the policy and a Content Security Policy to go with it: [SAFETY.md](SAFETY.md).
 - **Files.** A `c:FileDrop` asks for the system picker (a `file:Pick`) and receives files dropped on
   its zone; `Files` (`src/files.ts`) performs both and reports each file as events, offered to the
   drop so its shape decides (`file:Added`, `file:Refusal`). It uploads each accepted file at once when
   the drop says where: `file:uploadTo` (an HTTP POST of a form with the file; `send` replaces it) or
   `file:handler`, the name of a handler you give it, which reports progress and is aborted when the
   file is removed. File contents never enter the graph: read them with `files.fileOf(fileIri)`.
-  `mount` attaches it (options: `files: { handlers, send, picker }`, or `false`); wiring by hand,
+  An upload goes only to the page's own origin or one the host lists (`uploadOrigins`); elsewhere it
+  fails with the reason ([SAFETY.md](SAFETY.md)).
+  `mount` attaches it (options: `files: { handlers, send, picker, uploadOrigins }`, or `false`); wiring by hand,
   `new Files(bus, { handlers, onHandled: () => renderer.flush() }).attach(renderer)`. Tests pass a
   stand-in `picker` and handlers (`test/harness.ts`).
 
@@ -514,17 +603,22 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   ```
 - **Connectors.** A `c:Connector` (an arrow `c:from` one component `c:to` another) is drawn by a
   host effect that measures its ends: `mount` attaches it; wiring by hand, call
-  `attachConnectors(element)` (`@inferal-oss/semblance/web`). It does nothing while the page has no
+  `attachConnectors(element)` (`@semblance-dev/semblance/web`). It does nothing while the page has no
   connector, at most one frame's work per frame otherwise, and never writes geometry into the graph.
 - **Swiped tracks.** A gallery's carousel and a lightbox scroll on snap points (`data-sem-snap`): a
   host effect brings the item the graph calls current (`data-sem-current`) into view and reports
   where a swipe came to rest as an unrecorded `c:Snapped` event. `mount` attaches it; by hand,
-  `attachSnaps(element)` (`@inferal-oss/semblance/web`).
+  `attachSnaps(element)` (`@semblance-dev/semblance/web`).
 - **Rendered state.** What the page knows about a component and the graph does not (where it is,
   whether it is on screen or overlaps another, focus, hover, scroll, open) is written to the graph
   for the components that ask (`rnd:observes`); see [Rendered state](#rendered-state) below.
 - **Idle work.** Call `runtime.warm(ms)` in idle time so hidden views are ready before they are
-  shown; `sem:warm sem:Eager | sem:OnIntent` says which.
+  shown; `sem:warm sem:Eager | sem:OnIntent` says which. A step costs about its budget, not the
+  whole of what it set off: what it leaves waits for the next, whole components at a time. Once the
+  page is quiet, `anticipate(runtime)` (`src/intent.ts`) prepares what choices would show, with no
+  pointing first (a tap): `sem:anticipates true` on a choice prepares every option (a site's
+  sections), `sem:anticipatesNear n` the options up to `n` places from the chosen one while the
+  choice is shown, following it (a section's own pages); the nearest go first, across choices.
 - **Live examples.** `c:LiveExample` shows Turtle (code editors, `c:CodeEditor` with `c:language
   "turtle"`) beside what it renders, each in a sandbox of its own: attach `Sandboxes`
   (`src/sandbox.ts`) with a store loader and call `sync()` after each flush. It mounts a sandbox in an

@@ -82,7 +82,7 @@ ui:dt-grid-columns a c:Chips ; c:label "Columns" ; c:controls ui:dt-grid-logGrid
 ui:dt-grid-selected a c:Metrics ; c:of ui:dt-grid-logGrid ; c:fields ( c:selectedRow ) .
 
 ui:dt-grid-log a c:Flippable ; c:front ui:dt-grid-log-spec .
-ui:dt-grid-log-spec a c:Specimen ; c:demonstrates c:DataGrid , c:GridColumn , c:TextFilter , c:ValueFilter , c:FlagFilter ; c:label "Data grid" ;
+ui:dt-grid-log-spec a c:Specimen ; c:demonstrates c:DataGrid , c:GridColumn , c:TextFilter , c:ValueFilter , c:FlagFilter ; c:label "Data grid" , "Таблиця даних"@uk , "Datenraster"@de , "شبكة البيانات"@ar ;
     c:help "A build log's lines as rows (role=grid): the members of an LDES stream in capture order, eight to a page with the newest followed. Headers sort (again to reverse); dragging a header's edge (or arrow keys on it) sets that column's c:width; the chips choose the c:shows columns. The filters are nodes the grid is c:filteredBy, edited by ordinary controls. Clicking a row (or Up / Down) selects its line and pins the window; the footer pages and jumps back to the latest." ;
     c:children ( ui:dt-grid-logBar ui:dt-grid-columns ui:dt-grid-logGrid ui:dt-grid-selected ) .
 
@@ -118,7 +118,7 @@ ui:dt-grid-traceGrid a c:DataGrid ; c:label "Checkout trace" ; c:collection ui:t
     c:gridColumns ( ui:dt-grid-col-op ui:dt-grid-col-took ui:dt-grid-col-bars ) .
 ui:dt-grid-services a c:Legend ; c:label "Services" ; c:of ui:Service .
 ui:dt-grid-trace a c:Flippable ; c:front ui:dt-grid-trace-spec .
-ui:dt-grid-trace-spec a c:Specimen ; c:demonstrates c:DataGrid ; c:label "Waterfall" ;
+ui:dt-grid-trace-spec a c:Specimen ; c:demonstrates c:DataGrid ; c:label "Waterfall" , "Водоспад"@uk , "Wasserfall"@de , "الشلال"@ar ;
     c:help "A trace's spans on one time scale: a c:TimeBarCell column places each span's bar by its start and end, colored by its service's c:swatch; the header's time axis is on the same scale (the grid's window computes it from the rows it shows). A span without an end is still running: its bar runs to the end of the scale." ;
     c:children ( ui:dt-grid-services ui:dt-grid-traceGrid ) .
 
@@ -127,6 +127,6 @@ ui:dt-grid-trace-spec a c:Specimen ; c:demonstrates c:DataGrid ; c:label "Waterf
 ui:dt-grid-axis-short a c:TimeAxis ; c:start 0 ; c:end 180 .
 ui:dt-grid-axis-long a c:TimeAxis ; c:start 1200 ; c:end 9800 .
 ui:dt-grid-axis a c:Flippable ; c:front ui:dt-grid-axis-spec .
-ui:dt-grid-axis-spec a c:Specimen ; c:demonstrates c:TimeAxis ; c:label "Time axis" ;
+ui:dt-grid-axis-spec a c:Specimen ; c:demonstrates c:TimeAxis ; c:label "Time axis" , "Часова вісь"@uk , "Zeitachse"@de , "محور الزمن"@ar ;
     c:help "Ticks across a time range at the smallest 1, 2, 5 × 10ⁿ ms interval that needs at most five steps, in ms or s. Offsets are custom properties, so bars drawn on the same scale line up with the ticks." ;
     c:children ( ui:dt-grid-axis-short ui:dt-grid-axis-long ) .

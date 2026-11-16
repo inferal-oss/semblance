@@ -4,8 +4,9 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { formatLocale } from '../engine/context.ts'
-import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, DND, H, L10N, LC, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
+import { seriesFunctions } from './series.ts'
 import { ganttFunctions } from './gantt.ts'
 import { C as VIEW_C } from '../view/functions.ts'
 import { formulaFunctions } from './formula.ts'
@@ -20,6 +21,7 @@ import { functions as outlineFunctions } from './outline.ts'
 import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
 import { statusFunctions } from '../layers/status.ts'
+import { constraintsFunctions } from '../layers/constraints.ts'
 import { positionFunctions } from '../layers/position.ts'
 import { l10nFunctions } from '../layers/l10n.ts'
 import { announceFunctions } from '../layers/announce.ts'
@@ -35,7 +37,7 @@ import { functions as typeFunctions } from './type.ts'
 import { functions as actionsFunctions } from './actions.ts'
 import { functions as inputsFunctions } from './inputs.ts'
 import { functions as feedbackFunctions, phrase } from './feedback.ts'
-import { functions as dataFunctions } from './data.ts'
+import { functions as dataFunctions, md5Key } from './data.ts'
 import { functions as navigationFunctions } from './navigation.ts'
 import { functions as overlaysFunctions } from './overlays.ts'
 import { functions as disclosureFunctions } from './disclosure.ts'
@@ -43,10 +45,14 @@ import { functions as gridFunctions } from './grid.ts'
 import { functions as panesFunctions } from './panes.ts'
 import { functions as payloadFunctions } from './payload.ts'
 import { functions as rdfEditorFunctions } from './rdf-editor.ts'
+import { functions as blockFunctions } from './blocks.ts'
 import { functions as toolbarFunctions } from './toolbar.ts'
 import { functions as messagesFunctions } from './messages.ts'
 import { containerFunctions } from './containers.ts'
 import { viewFunctions } from './views.ts'
+import { turtleFunctions } from './turtle.ts'
+import { markupFunctions } from './markup.ts'
+import { editorFunctions } from './editor.ts'
 import { functions as walkthroughFunctions } from './walkthrough.ts'
 import { functions as liveFunctions } from './live.ts'
 import { functions as formsFunctions } from './forms.ts'
@@ -55,7 +61,7 @@ import { functions as connectorFunctions } from './connector.ts'
 import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
-import { tokenizeSparql } from '../sparql-tokens.ts'
+import { matchTokens } from '../sparql-tokens.ts'
 import { encodeForUri, isA, isTrue, labelOf, nodes, RDFS_LABEL, rdfList, str, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
 
@@ -109,15 +115,20 @@ const textFieldScreen: FnRule = (ctx, focus) => {
   const error = text(ctx, focus, C.error)
   const o = ctx.out(focus)
   const inputId = mint(focus.value, 'input')
-  const parts = [
-    ...(label === undefined ? [] : [o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)])]),
-    o.el('input', 'Input', {
-      type: str(ctx.object(focus, NS.c + 'inputType')) ?? 'text',
-      id: inputId,
-      value: str(ctx.object(focus, C.value)),
-      placeholder: text(ctx, focus, C.placeholder),
-    }),
-  ]
+  const input = o.el('input', 'Input', {
+    type: str(ctx.object(focus, NS.c + 'inputType')) ?? 'text',
+    id: inputId,
+    value: str(ctx.object(focus, C.value)),
+    placeholder: text(ctx, focus, C.placeholder),
+    disabled: isTrue(ctx.object(focus, C.disabled)) ? '' : undefined,
+  })
+  o.t(input, LC.role, ctx.nn(LC.SingleLineControl))
+  const parts = [input]
+  if (label !== undefined) {
+    const el = o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)])
+    o.t(el, LC.role, ctx.nn(LC.FieldLabel))
+    parts.unshift(el)
+  }
   if (help !== undefined) parts.push(o.el('help', 'Div', {}, [o.text('help-text', help)]))
   if (error !== undefined) parts.push(o.el('error', 'Div', {}, [o.text('error-text', error)]))
   o.renders(o.el('root', 'Div', {}, parts))
@@ -371,6 +382,8 @@ const segmented: FnRule = (ctx, focus) => {
   }
   // Over a place the address's path carries, a form whose buttons submit to the address each sets.
   const navigates = navigatesBy(ctx, target, property)
+  // A nav list's options are its items (lc:NavItem).
+  const item = isA(ctx, focus, NS.c + 'NavList') ? ctx.nn(LC.NavItem) : undefined
   const buttons = options(ctx, focus, property).map((opt) => {
     const key = encodeForUri(opt.value)
     const symbol = str(ctx.object(opt, SEM.symbol))
@@ -378,9 +391,10 @@ const segmented: FnRule = (ctx, focus) => {
       ...(symbol ? [o.el('opt-' + key + '-symbol', 'Span', {}, [o.text('opt-' + key + '-symbol-text', symbol)])] : []),
       o.el('opt-' + key + '-label', 'Span', {}, [o.text('opt-' + key + '-label-text', label(ctx, opt))]),
     ]
-    const b = o.el('opt-' + key, 'Button', { type: navigates ? 'submit' : 'button' }, parts)
+    const b = o.el('opt-' + key, 'Button', { type: navigates ? 'submit' : 'button', value: opt.value }, parts)
     o.attr(b, 'aria-pressed', String(opt.value === current))
     o.t(b, C.selects, opt)
+    if (item) o.t(b, LC.role, item)
     return b
   })
   const root = o.el('root', navigates ? 'Form' : 'Div', {}, buttons)
@@ -392,15 +406,17 @@ const segmented: FnRule = (ctx, focus) => {
 
 const PROV_NS = 'http://www.w3.org/ns/prov#'
 const PROV_DERIVED_FROM = PROV_NS + 'wasDerivedFrom'
+/** An IRI by the longest namespace the engine knows that starts it (then the least prefix), else <iri>. */
 const shortIri = (iri: string) => {
-  for (const [p, ns] of Object.entries(NS)) if (iri.startsWith(ns)) return `${p}:${iri.slice(ns.length)}`
-  return `<${iri}>`
+  let best: [string, string] | undefined
+  for (const [p, ns] of Object.entries(NS)) if (iri.startsWith(ns) && (!best || ns.length > best[1].length || (ns.length === best[1].length && p < best[0]))) best = [p, ns]
+  return best ? `${best[0]}:${iri.slice(best[1].length)}` : `<${iri}>`
 }
 
 /**
  * The rules that made a view: for the component and every component rendered
  * inside it, the plans of the activities that generated or decorated its root
- * (its PROV-O trail). Deduplicated, ordered by stratum.
+ * (its PROV-O trail). Deduplicated, ordered by stratum, then by IRI.
  */
 function plansOf(ctx: RuleContext, component: Term): { plan: Term; role: 'generated' | 'decorated' }[] {
   const plan = (activity: Term) => {
@@ -438,7 +454,7 @@ function plansOf(ctx: RuleContext, component: Term): { plan: Term; role: 'genera
     const slot = ctx.object(t, SEM.implements)
     return Number(str(ctx.object(t, SEM.stratum)) ?? (slot && str(ctx.object(slot, SEM.stratum))) ?? 0)
   }
-  return [...found.values()].sort((a, b) => stratum(a.plan) - stratum(b.plan) || a.seen - b.seen)
+  return [...found.values()].sort((a, b) => stratum(a.plan) - stratum(b.plan) || (a.plan.value < b.plan.value ? -1 : a.plan.value > b.plan.value ? 1 : 0))
 }
 
 /** Queries and views a component (or one inside it) shows data from (c:dataQuery and its subproperties). */
@@ -503,9 +519,9 @@ const flippableSource: FnRule = (ctx, focus) => {
   const revealed = flipped || isTrue(ctx.object(focus, C.revealed))
   const source = revealed ? [o.node('source')] : []
   // Both faces float their flip control in the same corner.
-  const backBar = o.el('back-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-back', '↺ View', 'Show the view')])
+  const backBar = o.el('back-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-back', `↺ ${phrase(ctx, C.FlipViewPhrase, 'View')}`, phrase(ctx, C.FlipToViewHint, 'Show the view'))])
   const back = o.el('back', 'Div', { class: 'sem-face sem-back', inert: flipped ? undefined : '' }, [backBar, ...source])
-  const bar = o.el('front-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-front', '</> Source', 'Show how this view is made')])
+  const bar = o.el('front-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-front', `</> ${phrase(ctx, C.FlipSourcePhrase, 'Source')}`, phrase(ctx, C.FlipToSourceHint, 'Show how this view is made'))])
   o.t(frontFace, H.hasChild, bar).t(bar, ORD.precedes, front)
   o.t(faces, H.hasChild, back).t(frontFace, ORD.precedes, back)
   if (flipped) o.t(frontFace, H.ns + 'inert', '')
@@ -524,9 +540,10 @@ const sourceBack: FnRule = (ctx, focus) => {
   const front = ctx.object(focus, C.of)
   if (front?.termType !== 'NamedNode') return []
   const o = ctx.out(focus)
+  // Its tokens keyed by where they start, as c:SourceBackRendering-sparql keys them.
   const code = (key: string, source: string) =>
-    o.el(key + '-code', 'Pre', { class: 'sem-code' }, tokenizeSparql(source.trim()).map((t, j) =>
-      t.kind === 'text' ? o.text(`${key}-t${j}`, t.text) : o.el(`${key}-s${j}`, 'Span', { class: 'tok-' + t.kind }, [o.text(`${key}-t${j}`, t.text)]),
+    o.el(key + '-code', 'Pre', { class: 'sem-code' }, matchTokens(source.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, '')).map((t) =>
+      t.kind === 'text' ? o.text(`${key}-${t.start}`, t.text) : o.el(`${key}-${t.start}`, 'Span', { class: 'tok-' + t.kind }, [o.text(`${key}-${t.start}-text`, t.text)]),
     ))
   const section = (key: string, title: string, meta: string, body: NamedNode) =>
     o.el(key, 'Section', { class: 'sem-rule' }, [
@@ -544,17 +561,21 @@ const sourceBack: FnRule = (ctx, focus) => {
           ? ctx
               .select(`SELECT DISTINCT ?plan WHERE { GRAPH <${projection}> { ?association <http://www.w3.org/ns/prov#hadPlan> ?plan } }`)
               .map((b) => ({ plan: b.get('plan')!, role: 'generated' as const }))
-              .sort((a, b) => a.plan.value.localeCompare(b.plan.value))
+              .sort((a, b) => (a.plan.value < b.plan.value ? -1 : a.plan.value > b.plan.value ? 1 : 0))
           : plansOf(ctx, front),
     }
   })
-  const data = queries.map((q, i) => {
+  // In order by sem:orderKey (the data queries by IRI, then the rules by stratum and IRI), each keyed by its IRI.
+  const order = (n: NamedNode, key: string) => (o.t(n, SEM.orderKey, key), n)
+  const data = queries.map((q) => {
     const select = str(ctx.object(q, SEM.select))
     const construct = str(ctx.object(q, SEM.construct))
-    return section(`data-${i}`, shortIri(q.value), `data · ${label(ctx, q)}`, code(`data-${i}`, select ?? construct ?? ''))
+    const key = `data-${md5Key(q.value)}`
+    return order(section(key, shortIri(q.value), `data · ${label(ctx, q)}`, code(key, select ?? construct ?? '')), 'c' + q.value)
   })
-  const rules = plans.map(({ plan, role }, i) => {
-    const key = `rule-${i}`
+  const projected = str(ctx.object(front, C.projectionGraph)) !== undefined
+  const rules = plans.map(({ plan, role }) => {
+    const key = `rule-${md5Key(plan.value)}`
     const from = ctx.object(plan, SEM.constructFrom)
     const query = str(ctx.object(plan, SEM.construct)) ?? (from && str(ctx.object(from, SEM.construct)))
     const fn = str(ctx.object(plan, SEM.function))
@@ -562,11 +583,14 @@ const sourceBack: FnRule = (ctx, focus) => {
     const layer = ctx.object(plan, SEM.layer) ?? (slot && ctx.object(slot, SEM.layer))
     const stratum = str(ctx.object(plan, SEM.stratum)) ?? (slot && str(ctx.object(slot, SEM.stratum))) ?? '0'
     const meta = [role === 'generated' ? 'renders' : 'decorates', `stratum ${stratum}`, layer ? `layer ${shortIri(layer.value)}` : 'component rule'].join(' · ')
-    return section(key, shortIri(plan.value), meta, code(key, query ?? `# a function rule: "${fn ?? '?'}" (src/components)`))
+    const rank = String(Number(stratum)).padStart(6, '0')
+    return order(section(key, shortIri(plan.value), meta, code(key, query ?? `# a function rule: "${fn ?? '?'}" (src/components)`)), 'd' + (projected ? '' : rank) + plan.value)
   })
-  const header = o.el('header', 'Div', { class: 'sem-back-header' }, [o.el('title', 'Strong', {}, [o.text('title-text', 'How this view is made')])])
-  const empty = data.length || rules.length ? [] : [o.el('empty', 'P', {}, [o.text('empty-text', 'Enable provenance to see the rules behind this view.')])]
-  o.renders(o.el('root', 'Div', {}, [header, ...empty, ...data, ...rules]))
+  const header = order(o.el('header', 'Div', { class: 'sem-back-header' }, [o.el('title', 'Strong', {}, [o.text('title-text', 'How this view is made')])]), 'a')
+  const empty = data.length || rules.length ? [] : [order(o.el('empty', 'P', {}, [o.text('empty-text', 'Enable provenance to see the rules behind this view.')]), 'b')]
+  const root = o.el('root', 'Div')
+  for (const child of [header, ...empty, ...data, ...rules]) o.t(root, H.hasChild, child)
+  o.renders(root)
   return o.quads
 }
 
@@ -619,10 +643,20 @@ const choice: FnRule = (ctx, focus) => {
     const key = encodeForUri(opt.value)
     return o.el('opt-' + key, 'Option', { value: opt.value, selected: opt.value === current ? '' : undefined }, [o.text('opt-' + key + '-text', label(ctx, opt))])
   }))
-  o.renders(o.el('root', 'Label', { for: selectId }, [o.el('caption', 'Span', {}, [o.text('caption-text', caption)]), select]))
+  const captionEl = o.el('caption', 'Span', {}, [o.text('caption-text', caption)])
+  const root = o.el('root', 'Label', { for: selectId }, [captionEl, select])
+  o.renders(root)
+  // Its parts: the select and the caption above it; placed inline, the pill around both is its
+  // control where it is wide, and on a compact screen the caption goes above the select again.
+  const inline = ctx.match(focus, NS.c + 'labelPlacement', ctx.nn(NS.c + 'LabelInline')).length > 0
+  o.t(select, LC.role, ctx.nn(LC.SingleLineControl)).t(captionEl, LC.role, ctx.nn(LC.FieldLabel))
+  if (inline) {
+    o.t(root, LC.role, ctx.nn(LC.SingleLineControl)).t(root, LC.atWidth, ctx.nn(NS.sty + 'RegularWidth'))
+    o.t(select, LC.atWidth, ctx.nn(NS.sty + 'CompactWidth')).t(captionEl, LC.atWidth, ctx.nn(NS.sty + 'CompactWidth'))
+  }
   return o.quads
 }
-choice.watches = (ctx, focus) => new Set([...watchControlled(ctx, focus), C.disabled])
+choice.watches = (ctx, focus) => new Set([...watchControlled(ctx, focus), C.disabled, NS.c + 'labelPlacement'])
 
 const chips: FnRule = (ctx, focus) => {
   const target = ctx.object(focus, C.controls)
@@ -851,7 +885,11 @@ export const functions: Record<string, FnRule> = {
   ...stallFunctions,
   ...containerFunctions,
   ...viewFunctions,
+  ...turtleFunctions,
+  ...markupFunctions,
+  ...editorFunctions,
   ...chartFunctions,
+  ...seriesFunctions,
   ...ganttFunctions,
   ...formulaFunctions,
   ...moneyFunctions,
@@ -866,6 +904,7 @@ export const functions: Record<string, FnRule> = {
   ...validationFunctions,
   ...keyboardFunctions,
   ...statusFunctions,
+  ...constraintsFunctions,
   ...positionFunctions,
   ...l10nFunctions,
   ...announceFunctions,
@@ -889,6 +928,7 @@ export const functions: Record<string, FnRule> = {
   ...panesFunctions,
   ...payloadFunctions,
   ...rdfEditorFunctions,
+  ...blockFunctions,
   ...toolbarFunctions,
   ...messagesFunctions,
   ...walkthroughFunctions,

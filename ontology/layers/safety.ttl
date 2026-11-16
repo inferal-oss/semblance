@@ -1,0 +1,225 @@
+@prefix safe: <https://semblance.dev/ns/safety#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix svg: <https://semblance.dev/ns/svg#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Safety: what a rendering from an untrusted author (a person, a page, a model) may contain, so a
+# graph can describe an interface without running code or reaching outside what it renders.
+#
+# Remote resources: an authored rendering names an http(s) address only in an attribute, a link
+# (followed when a person follows it) or an image, audio or video source (safe:resourceAttribute,
+# loaded as it is rendered, as in any page). The policy limits their schemes; their origins are the
+# host's to limit, with a Content-Security-Policy (img-src, media-src). CSS loads nothing from an
+# address: a style rule reaches beyond the element it is written for, and loads on states (a hover)
+# that render nothing to check.
+#
+# Trust is the host's, not the graph's: a projection is authored when the host projects it with a
+# policy (Runtime.project({ policy }), every live example's sandbox), and the policy is read from a
+# trusted store (the framework's ontology and the app's own Turtle), never from the store the
+# authored graph is in, which could add to these lists. The HTML index applies it, so the DOM
+# patcher, the HTML and text serializers, server rendering and take-over give the same answer; the
+# style compiler applies its CSS part. Everything refused is reported (src/safety.ts).
+#
+#   an element of a class not listed   -> an empty <sem-refused data-sem-refused="script">
+#   an attribute not listed            -> left out (the element stays)
+#   a URL of a scheme not listed       -> the attribute is left out
+#   an id reference to an id the rendering does not have -> the attribute is left out
+#   a style declaration that fails     -> left out of the style attribute or the stylesheet
+
+<https://semblance.dev/ns/safety> a owl:Ontology ;
+    rdfs:label "Semblance safety layer"@en .
+
+safe:Policy a owl:Class ;
+    rdfs:comment "What an authored rendering may contain: elements, attributes, URL schemes and CSS."@en .
+
+safe:element a owl:ObjectProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An element class an authored rendering may have."@en .
+safe:hostComponent a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A host component (ext:component, docs/HOSTED.md) an authored graph may have drawn; none by default. Any other renders as its projected element."@en .
+safe:customElement a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A custom element (ext:tag on a hosted class) an authored rendering may be created as; none by default. Any other renders as its projected element."@en .
+safe:widget a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A widget (ext:widget, docs/FOREIGN.md) an authored island may mount; none by default. An island that names any other is not mounted: its slot stays its projected element, and it is reported."@en .
+safe:module a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A module (ext:module) an authored island may have loaded; none by default."@en .
+safe:adapter a owl:ObjectProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An adapter (ext:adapter) an authored island may be mounted by, beyond the built-in ones (ext:CustomElement and ext:Widget, which their safe:customElement and safe:widget lists govern); none by default."@en .
+safe:property a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A property an authored input (ext:input as ext:Property) may set on an island or a custom element; none by default. An input as ext:Attribute is checked as any authored attribute is. Never set, listed or not: properties that take markup (innerHTML, outerHTML, srcdoc, dangerouslySetInnerHTML), event handlers (on…), React's reserved props (ref, key, children) and prototype names."@en .
+safe:attribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A content attribute name an authored rendering may have."@en .
+safe:attributePrefix a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "Every attribute named with this prefix (and only letters, digits and hyphens after it) is allowed."@en .
+safe:refusedAttributePrefix a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "Every attribute named with this prefix is refused, though a safe:attributePrefix allows it, unless its name is a safe:attribute itself."@en .
+safe:refusedLinkType a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A link type an authored rel may not hold."@en .
+safe:idReferenceAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is an id: an element of the same authored rendering must have it. Authored content renders in the host's document, where any other id is the host's."@en .
+safe:idReferenceListAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is a list of ids, each held as a safe:idReferenceAttribute is."@en .
+safe:fragmentAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A URL attribute whose fragment, when the URL is only one (#id), names an element of the document: it is held as a safe:idReferenceAttribute is. # alone names none."@en .
+safe:urlAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is one URL: it must be relative, a fragment, or of a safe:scheme."@en .
+safe:urlListAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is a list of image candidates (srcset): each URL is checked."@en .
+safe:resourceAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A URL attribute that loads an image or media: it also takes a safe:resourceScheme."@en .
+safe:scheme a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A URL scheme (with its colon) any URL attribute may have."@en .
+safe:resourceScheme a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "The start of a URL (a scheme, or a scheme and a media type) that only a safe:resourceAttribute may have, since it loads nothing that runs."@en .
+safe:styleAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is CSS declarations: each must pass the CSS check."@en .
+safe:cssValueAttribute a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "An attribute whose value is one CSS value (an SVG paint, which can name a resource with url()): it must pass the CSS check."@en .
+safe:fetchingFunction a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A CSS function whose argument names a resource: refused in a value, except url() of a fragment or of a safe:resourceScheme, which loads nothing from elsewhere. The set of such functions is closed, so it is listed rather than every function CSS has."@en .
+safe:refusedProperty a owl:DatatypeProperty ; rdfs:domain safe:Policy ;
+    rdfs:comment "A CSS property that binds behaviour or code, refused whatever its value."@en .
+
+# Work budgets: an authored graph brings its own rules, so what it may cost is bounded too. A turn
+# (src/engine/watchdog.ts: everything one input causes) of a runtime that projects authored content
+# stops at the first of its time budget, its evaluation budget, or a projection holding more derived
+# triples than its output budget; its held work is then dropped, as the watchdog's sem:Stop drops it
+# (every derived triple still comes from a complete evaluation, and what is left is counted out of
+# date), and the host reports it (a Refused of kind "budget"). A string the policy checks (an
+# attribute, an input, a piece of CSS) longer than safe:maxLength is refused without being read.
+safe:budget a owl:DatatypeProperty ; rdfs:domain safe:Policy ; rdfs:range xsd:duration ;
+    rdfs:comment "How long a turn of authored content may run (the watchdog's budget, src/engine/watchdog.ts)."@en .
+safe:maxEvaluations a owl:DatatypeProperty ; rdfs:domain safe:Policy ; rdfs:range xsd:integer ;
+    rdfs:comment "How many rule evaluations (a rule for a focus) a turn of authored content may make: deterministic, unlike the time budget, so a server renders the same at any load."@en .
+safe:maxDerived a owl:DatatypeProperty ; rdfs:domain safe:Policy ; rdfs:range xsd:integer ;
+    rdfs:comment "How many derived triples an authored projection may hold (its output size): over it, each turn stops at its first check."@en .
+safe:maxLength a owl:DatatypeProperty ; rdfs:domain safe:Policy ; rdfs:range xsd:integer ;
+    rdfs:comment "The longest string the policy checks: an attribute value, an input, a piece of CSS. A longer one is refused unread."@en .
+
+# The policy of authored content: what the framework itself emits, and nothing that runs code,
+# loads another document, or names where the page is or what it may run.
+#
+# Never listed: rdfhtml:Script, rdfhtml:Iframe, rdfhtml:Object, rdfhtml:Embed, rdfhtml:Base,
+# rdfhtml:Link, rdfhtml:Meta, rdfhtml:Style, rdfhtml:Noscript, rdfhtml:Template, rdfhtml:Slot,
+# rdfhtml:Html, rdfhtml:Head, rdfhtml:Body, rdfhtml:Title; no on… attribute, srcdoc, is, nonce,
+# ping, http-equiv, sandbox, allow, integrity, shadowrootmode; no javascript:, vbscript: or data:
+# except an image's.
+safe:Authored a safe:Policy ;
+    rdfs:label "authored"@en ;
+    safe:budget "PT1.5S"^^xsd:duration ;
+    safe:maxEvaluations 200000 ;
+    safe:maxDerived 1000000 ;
+    safe:maxLength 262144 ;
+    safe:element
+        rdfhtml:A , rdfhtml:Abbr , rdfhtml:Address , rdfhtml:Area , rdfhtml:Article , rdfhtml:Aside ,
+        rdfhtml:Audio , rdfhtml:B , rdfhtml:Bdi , rdfhtml:Bdo , rdfhtml:Blockquote , rdfhtml:Br ,
+        rdfhtml:Button , rdfhtml:Canvas , rdfhtml:Caption , rdfhtml:Cite , rdfhtml:Code , rdfhtml:Col ,
+        rdfhtml:Colgroup , rdfhtml:Data , rdfhtml:Datalist , rdfhtml:Dd , rdfhtml:Del , rdfhtml:Details ,
+        rdfhtml:Dfn , rdfhtml:Dialog , rdfhtml:Div , rdfhtml:Dl , rdfhtml:Dt , rdfhtml:Em ,
+        rdfhtml:Fieldset , rdfhtml:Figcaption , rdfhtml:Figure , rdfhtml:Footer , rdfhtml:Form ,
+        rdfhtml:H1 , rdfhtml:H2 , rdfhtml:H3 , rdfhtml:H4 , rdfhtml:H5 , rdfhtml:H6 , rdfhtml:Header ,
+        rdfhtml:Hgroup , rdfhtml:Hr , rdfhtml:I , rdfhtml:Img , rdfhtml:Input , rdfhtml:Ins ,
+        rdfhtml:Kbd , rdfhtml:Label , rdfhtml:Legend , rdfhtml:Li , rdfhtml:Main , rdfhtml:Map ,
+        rdfhtml:Mark , rdfhtml:Menu , rdfhtml:Meter , rdfhtml:Nav , rdfhtml:Ol , rdfhtml:Optgroup ,
+        rdfhtml:Option , rdfhtml:Output , rdfhtml:P , rdfhtml:Picture , rdfhtml:Pre , rdfhtml:Progress ,
+        rdfhtml:Q , rdfhtml:Rp , rdfhtml:Rt , rdfhtml:Ruby , rdfhtml:S , rdfhtml:Samp , rdfhtml:Search ,
+        rdfhtml:Section , rdfhtml:Select , rdfhtml:Selectedcontent , rdfhtml:Small , rdfhtml:Source ,
+        rdfhtml:Span , rdfhtml:Strong , rdfhtml:Sub , rdfhtml:Summary , rdfhtml:Sup , rdfhtml:Table ,
+        rdfhtml:Tbody , rdfhtml:Td , rdfhtml:Textarea , rdfhtml:Tfoot , rdfhtml:Th , rdfhtml:Thead ,
+        rdfhtml:Time , rdfhtml:Tr , rdfhtml:Track , rdfhtml:U , rdfhtml:Ul , rdfhtml:Var ,
+        rdfhtml:Video , rdfhtml:Wbr ,
+        svg:Svg , svg:G , svg:Defs , svg:LinearGradient , svg:Stop , svg:Rect , svg:Circle , svg:Line ,
+        svg:Path , svg:Text , svg:Title ;
+    safe:attributePrefix "data-" , "aria-" ;
+    # The framework's own hooks are refused, except those its components render (an authored graph
+    # has them by using the component anyway): data-sem-sandbox, data-sem-ssr and the like, which
+    # the host sets, are not listed. test/safety.test.ts checks every hook the ontology renders is.
+    safe:refusedAttributePrefix "data-sem-" ;
+    safe:refusedLinkType "opener" ;
+    safe:idReferenceAttribute "for" , "form" , "list" , "commandfor" , "popovertarget" ,
+        "aria-activedescendant" , "data-sem-anchor" , "data-sem-origin" ;
+    safe:idReferenceListAttribute "headers" , "itemref" , "aria-controls" , "aria-describedby" ,
+        "aria-details" , "aria-errormessage" , "aria-flowto" , "aria-labelledby" , "aria-owns" ;
+    safe:fragmentAttribute "href" , "usemap" ;
+    safe:attribute
+        # HTML
+        "abbr" , "accept" , "accept-charset" , "accesskey" , "action" , "alt" , "autocapitalize" ,
+        "autocomplete" , "autocorrect" , "autofocus" , "autoplay" , "checked" , "cite" , "class" ,
+        "closedby" , "color" , "cols" , "colspan" , "command" , "commandfor" , "contenteditable" ,
+        "controls" , "coords" , "datetime" , "decoding" , "default" , "dir" , "dirname" , "disabled" ,
+        "download" , "draggable" , "enctype" , "enterkeyhint" , "fetchpriority" , "for" , "form" ,
+        "formaction" , "formenctype" , "formmethod" , "formnovalidate" , "formtarget" , "headers" ,
+        "headingoffset" , "headingreset" , "height" , "hidden" , "high" , "href" , "hreflang" , "id" ,
+        "inert" , "inputmode" , "ismap" , "itemid" , "itemprop" , "itemref" , "itemscope" , "itemtype" ,
+        "kind" , "label" , "lang" , "list" , "loading" , "loop" , "low" , "max" , "maxlength" , "media" ,
+        "method" , "min" , "minlength" , "multiple" , "muted" , "name" , "novalidate" , "open" ,
+        "optimum" , "pattern" , "placeholder" , "playsinline" , "popover" , "popovertarget" ,
+        "popovertargetaction" , "poster" , "preload" , "readonly" , "rel" ,
+        "required" , "reversed" , "role" , "rows" , "rowspan" , "scope" , "selected" , "shape" , "size" ,
+        "sizes" , "slot" , "span" , "spellcheck" , "src" , "srclang" , "srcset" , "start" , "step" ,
+        "style" , "tabindex" , "target" , "title" , "translate" , "type" , "usemap" , "value" , "width" ,
+        "wrap" , "writingsuggestions" ,
+        # SVG presentation and geometry
+        "viewBox" , "preserveAspectRatio" , "xmlns" , "x" , "y" , "x1" , "x2" , "y1" , "y2" , "cx" , "cy" ,
+        "r" , "rx" , "ry" , "d" , "points" , "transform" , "fill" , "fill-opacity" , "fill-rule" ,
+        "stroke" , "stroke-width" , "stroke-opacity" , "stroke-linecap" , "stroke-linejoin" ,
+        "stroke-dasharray" , "stroke-dashoffset" , "vector-effect" , "opacity" , "offset" ,
+        "stop-color" , "stop-opacity" , "gradientUnits" , "gradientTransform" , "text-anchor" ,
+        "dominant-baseline" , "font-size" , "font-weight" , "focusable" , "paint-order" ,
+        # The framework's hooks its components render
+        "data-sem-align" , "data-sem-anchor" , "data-sem-anchor-width" , "data-sem-axis" ,
+        "data-sem-backdrop" , "data-sem-c" , "data-sem-caret" , "data-sem-cells" ,
+        "data-sem-change" , "data-sem-color-scheme" , "data-sem-compact-as" ,
+        "data-sem-concealed" , "data-sem-contrast" , "data-sem-control" , "data-sem-controlled" ,
+        "data-sem-current" , "data-sem-density" , "data-sem-direction" ,
+        "data-sem-dismiss-outside" , "data-sem-done" , "data-sem-drag" , "data-sem-drag-status" ,
+        "data-sem-drop" , "data-sem-drop-after" , "data-sem-drop-before" ,
+        "data-sem-drop-ordered" , "data-sem-drop-over" , "data-sem-drop-reason" , "data-sem-drop-refused" ,
+        "data-sem-drop-zone" , "data-sem-edge" , "data-sem-elevation" , "data-sem-emphasis" ,
+        "data-sem-end" , "data-sem-entered" , "data-sem-escape" , "data-sem-file-state" ,
+        "data-sem-fill" , "data-sem-focus" , "data-sem-from" , "data-sem-fullscreen" ,
+        "data-sem-gap" , "data-sem-gesture" , "data-sem-guides" , "data-sem-heads" ,
+        "data-sem-highlighted" , "data-sem-inset" , "data-sem-intent" , "data-sem-item" ,
+        "data-sem-justify" , "data-sem-keep-focus" , "data-sem-key-hint" ,
+        "data-sem-key-hint-apple" , "data-sem-kind" , "data-sem-label-placement" ,
+        "data-sem-layout" , "data-sem-leader" , "data-sem-lifted" , "data-sem-line" ,
+        "data-sem-link" , "data-sem-lit" , "data-sem-mark" , "data-sem-max" , "data-sem-measure" ,
+        "data-sem-mentions" , "data-sem-min" , "data-sem-mixin" , "data-sem-motion" ,
+        "data-sem-move-size" , "data-sem-nav-activate" , "data-sem-nav-items" ,
+        "data-sem-nav-node" , "data-sem-nav-orientation" , "data-sem-nav-toggle" ,
+        "data-sem-nav-wrap" , "data-sem-numeric" , "data-sem-origin" , "data-sem-outline" ,
+        "data-sem-outlines" , "data-sem-part" , "data-sem-part-at" , "data-sem-placed" ,
+        "data-sem-placeholder" , "data-sem-privacy" , "data-sem-range" , "data-sem-recalculated" ,
+        "data-sem-remembered" , "data-sem-return-cue" , "data-sem-role" ,
+        "data-sem-route" , "data-sem-row-span" , "data-sem-rows" , "data-sem-rule" ,
+        "data-sem-salience" , "data-sem-scroll" , "data-sem-select-on-focus" ,
+        "data-sem-selected" , "data-sem-sensitive" , "data-sem-shape-invalid" ,
+        "data-sem-shortcut" , "data-sem-shortcut-apple" , "data-sem-shortcut-other" ,
+        "data-sem-shown-while" , "data-sem-sign" , "data-sem-size" , "data-sem-sizes" ,
+        "data-sem-snap" , "data-sem-sources" , "data-sem-state" , "data-sem-step" ,
+        "data-sem-sticky" , "data-sem-strength" , "data-sem-takes-focus" ,
+        "data-sem-tear-back-cue" , "data-sem-tear-cue" , "data-sem-tear-distance" ,
+        "data-sem-term" , "data-sem-text" , "data-sem-text-align" , "data-sem-text-root" ,
+        "data-sem-text-style" , "data-sem-theme" , "data-sem-tile-layout" , "data-sem-tiled" ,
+        "data-sem-to" , "data-sem-tone" , "data-sem-tooltip" , "data-sem-window-state" ;
+    safe:urlAttribute "href" , "src" , "action" , "formaction" , "poster" , "cite" , "itemid" , "itemtype" ;
+    safe:urlListAttribute "srcset" ;
+    safe:resourceAttribute "src" , "srcset" , "poster" ;
+    safe:scheme "http:" , "https:" , "mailto:" , "tel:" ;
+    safe:resourceScheme "data:image/" , "blob:" ;
+    safe:styleAttribute "style" ;
+    safe:cssValueAttribute "fill" , "stroke" ;
+    safe:fetchingFunction "url" , "image-set" , "-webkit-image-set" , "image" , "cross-fade" ,
+        "-webkit-cross-fade" , "element" , "-moz-element" , "src" , "expression" , "paint" ;
+    safe:refusedProperty "behavior" , "-moz-binding" .
+
+# The authored box: the element authored content renders in (a live example's sandbox, an authored
+# mount element, the mount element of a page rendered under a policy; src/style/scope.ts). The
+# styles authored graphs add are scoped to it, and it contains them: fixed and absolute positions
+# resolve to it rather than to the page, and what is drawn outside it is clipped - beyond a margin
+# as wide as a live example's preview pads it, so a focus ring or a shadow at its edge still shows.
+[] a sty:StyleRule ; sty:part "[data-sem-sandbox]" ;
+    sty:declares [ sty:property "contain" ; sty:raw "layout paint" ] ,
+                 [ sty:property "overflow-clip-margin" ; sty:raw "var(--sem-space-3)" ] .

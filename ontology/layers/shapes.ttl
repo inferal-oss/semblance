@@ -12,12 +12,13 @@
 # (sh:targetClass) saying what a well-formed instance looks like (ontology/
 # shapes/components.ttl). The layer validates each component declared in the
 # graph against the shapes of its classes and their superclasses, before
-# anything renders, and records standard SHACL results in the derived graph:
+# anything renders, as the strata below the components leave it (a c:value against the c:max a
+# formula derives, both from the same change), and records standard SHACL results in the derived graph:
 #   <result> a sh:ValidationResult ; sh:focusNode <component> ; sh:resultPath <p> ;
 #            sh:resultMessage "…" ; sh:sourceShape <shape> ; sh:resultSeverity sh:Violation .
 # A component with violations is outlined, with the messages as its tooltip,
 # and c:ShapeReport lists every result. Supported constraints, in property shapes
-# (sh:property) whose sh:path is a property: sh:minCount, sh:maxCount, sh:datatype,
+# (sh:property) whose sh:path is a property: sh:minCount, sh:maxCount, sh:uniqueLang, sh:datatype,
 # sh:class, sh:nodeKind, sh:in, sh:minInclusive, sh:maxInclusive, sh:minLength,
 # sh:maxLength, sh:pattern, sh:lessThanOrEquals. On the node shape: sh:or, a list of
 # property shapes the focus must conform to one of. Each alternative is read as needing
@@ -35,8 +36,9 @@ val:violation a owl:ObjectProperty ; rdfs:range sh:ValidationResult ;
 val:Shapes a sem:Rendering ;
     sem:targets sem:Component ;
     sem:layer val:ShapesLayer ;
-    sem:stratum -9 ;
-    sem:inputOnly true .
+    sem:stratum -1 ;
+    sem:inputOnly true ;
+    sem:watchesAnywhere sh:targetClass .
 val:Shapes-fn a sem:Rule ; sem:implements val:Shapes ; sem:function "shapes:validate" .
 # Each constraint of each property shape of the focus's classes (shapes.ts checkProperty):
 # counts, then one test per value, then pairs with another property; then each sh:or of
@@ -61,7 +63,7 @@ WHERE {
   {
     ?shape sh:property ?ps .
     ?ps sh:path ?path ; ?constraint ?param .
-    FILTER(isIRI(?path) && ?constraint IN (sh:minCount, sh:maxCount, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
+    FILTER(isIRI(?path) && ?constraint IN (sh:minCount, sh:maxCount, sh:uniqueLang, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
                                            sh:maxInclusive, sh:minLength, sh:maxLength, sh:pattern, sh:lessThanOrEquals))
   } UNION {
     # The node shape's own constraint: about the focus, with no path.
@@ -86,14 +88,20 @@ WHERE {
       FILTER(IF(?constraint = sh:minCount, COALESCE(?n, 0) < ?bound, COALESCE(?n, 0) > ?bound))
       BIND(IF(?constraint = sh:minCount, CONCAT("at least ", STR(?param), " values"), CONCAT("at most ", STR(?param), " values")) AS ?fallback)
     } UNION {
-      FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:lessThanOrEquals, sh:or))
+      # Two values in one language: one result per language, as SHACL says (untagged values are not in one).
+      FILTER(?constraint = sh:uniqueLang && STR(?param) = "true")
+      ?focus ?path ?inLanguage , ?alsoInLanguage .
+      FILTER(LANG(?inLanguage) != "" && ?inLanguage != ?alsoInLanguage && LCASE(LANG(?inLanguage)) = LCASE(LANG(?alsoInLanguage)))
+      BIND(CONCAT("more than one value in \\"", LCASE(LANG(?inLanguage)), "\\"") AS ?fallback)
+    } UNION {
+      FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:uniqueLang, sh:lessThanOrEquals, sh:or))
       ?focus ?path ?value .
       OPTIONAL { FILTER(?constraint = sh:pattern) ?ps sh:flags ?flags }
       FILTER(IF(?constraint = sh:datatype,
                 !(COALESCE(DATATYPE(?value), sh:none) = ?param
                   || (?param IN (xsd:integer, xsd:decimal, xsd:double, xsd:float) && DATATYPE(?value) IN (xsd:integer, xsd:decimal, xsd:double, xsd:float)
                       && (?param != xsd:integer || COALESCE(xsd:double(STR(?value)) = FLOOR(xsd:double(STR(?value))), false)))),
-             IF(?constraint = sh:class, NOT EXISTS { ?value a/rdfs:subClassOf* ?param },
+             IF(?constraint = sh:class, NOT EXISTS { ?value (a|a/rdfs:subClassOf+) ?param },
              IF(?constraint = sh:nodeKind, (?param = sh:IRI && !isIRI(?value)) || (?param = sh:Literal && !isLiteral(?value)),
              IF(?constraint = sh:in, NOT EXISTS { ?param rdf:rest*/rdf:first ?value },
              isLiteral(?value) && IF(?constraint = sh:minInclusive, !COALESCE(xsd:double(STR(?value)) >= xsd:double(STR(?param)), false),
@@ -128,7 +136,7 @@ WHERE {
         { ?member sh:path ?memberPath FILTER(isIRI(?memberPath)) ?focus ?memberPath ?held }
         UNION { ?member sh:path/sh:inversePath ?inverse FILTER(isIRI(?inverse)) ?held ?inverse ?focus }
         OPTIONAL { ?member sh:qualifiedValueShape/sh:class ?qualifiedClass }
-        FILTER(!BOUND(?qualifiedClass) || EXISTS { ?held a/rdfs:subClassOf* ?qualifiedClass })
+        FILTER(!BOUND(?qualifiedClass) || EXISTS { ?held (a|a/rdfs:subClassOf+) ?qualifiedClass })
       } GROUP BY ?param ?focus } }
       FILTER(COALESCE(?holding, 0) = 0)
       BIND(?focus AS ?value)
@@ -152,8 +160,9 @@ val:EntryShapes a sem:Rendering ;
     sem:targets sem:Component ;
     sem:forEach c:entry ;
     sem:requires c:validated ;
-    sem:stratum -9 ;
-    sem:inputOnly true .
+    sem:stratum -1 ;
+    sem:inputOnly true ;
+    sem:watchesAnywhere sh:targetClass .
 val:EntryShapes-fn a sem:Rule ; sem:implements val:EntryShapes ; sem:function "shapes:validate" .
 val:EntryShapes-sparql a sem:Rule ; sem:implements val:EntryShapes ; sem:constructFrom val:Shapes-sparql .
 c:validated a owl:DatatypeProperty ; rdfs:range xsd:boolean ;

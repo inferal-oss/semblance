@@ -4,10 +4,13 @@
 import type { Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, VAL, XSD_BOOLEAN } from '../ns.ts'
-import { isTrue, nodes, rdfList, str, text } from '../components/util.ts'
+import { isBlank, isTrue, nodes, rdfList, str, text } from '../components/util.ts'
 import { LATIN, parseDate, parseTime } from '../components/dates.ts'
 
 const SH = NS.sh
+// The lexical forms of xsd:integer and xsd:decimal, around white space. Number() reads more: 1e3, 0x10.
+const INTEGER = /^\s*[-+]?[0-9]+\s*$/
+const DECIMAL = /^\s*[-+]?([0-9]+([.][0-9]*)?|[.][0-9]+)\s*$/
 
 /** The first constraint of `shape` that `value` violates, as a message; undefined if it conforms. */
 function violation(ctx: RuleContext, shape: Term, value: string | undefined): string | undefined {
@@ -17,7 +20,7 @@ function violation(ctx: RuleContext, shape: Term, value: string | undefined): st
   }
   const message = (fallback: string) => text(ctx, shape, SH + 'message') ?? fallback
   const required = (n('minCount') ?? 0) > 0
-  if (value === undefined || value === '') return required ? message('Required.') : undefined
+  if (value === undefined || value === '' || (required && isBlank(value))) return required ? message('Required.') : undefined
   const minLength = n('minLength')
   if (minLength !== undefined && value.length < minLength) return message(`At least ${minLength} characters.`)
   const maxLength = n('maxLength')
@@ -35,7 +38,7 @@ function violation(ctx: RuleContext, shape: Term, value: string | undefined): st
   const datatype = str(ctx.object(shape, SH + 'datatype'))
   const numeric = datatype === NS.xsd + 'integer' || datatype === NS.xsd + 'decimal'
   const x = Number(value)
-  if (numeric && (value.trim() === '' || !Number.isFinite(x) || (datatype === NS.xsd + 'integer' && !Number.isInteger(x)))) {
+  if (numeric && !(datatype === NS.xsd + 'integer' ? INTEGER : DECIMAL).test(value)) {
     return message(datatype === NS.xsd + 'integer' ? 'A whole number.' : 'A number.')
   }
   const min = n('minInclusive')

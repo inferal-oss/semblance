@@ -10,45 +10,26 @@
 
 # Formulas: a component's value as a query. Any component that shows a c:value (a Stat's
 # figure, a Progress's fraction, a Badge's count) may take it from a SPARQL SELECT instead of
-# stating it: c:valueQuery names a sem:View whose first solution is the value. The rule runs
-# before the components (stratum -1) and writes what the solution says - ?value as c:value,
-# ?tone (a sty:Tone, when bound) as sty:tone, ?max as c:max and ?label as c:label - so the
-# component renders it like a stated value; $this in the query is the component.
+# stating it: c:valueQuery names a maintained view (iv:View, iv:materialize iv:Graph; docs/IVM.md)
+# whose first solution is the value. c:Formula runs before the components (stratum -1) and writes
+# what the solution says - ?value as c:value, ?tone (a sty:Tone, when bound) as sty:tone, ?max as
+# c:max and ?label as c:label - so the component renders it like a stated value.
 #
-# A query is maintained as a view (iv:View, iv:materialize iv:Graph; docs/IVM.md) and c:Formula
-# reads its first row from the views graph: rs:index 1, else the row the views runtime keys first.
-# A query that reads $this is a view per component that asks it (iv:perReferrer c:valueQuery), its
-# rows under the component. A query that is not a view - one over what rules or the views runtime
-# derive (a sheet's formulas, a view's own figures), which views cannot read yet - is run by
-# c:QueryFormula, a function, when c:dataset changes.
+# c:Formula reads the view's first row from the views graph: rs:index 1, else the row the views
+# runtime keys first. A query that reads $this (the component) is a view per component that asks it
+# (iv:perReferrer c:valueQuery), its rows under the component. A view over what rules derive (a
+# sheet's formulas read the cells other formulas give values) names the rendering (iv:reads
+# c:Formula); one over what the views runtime writes about views (iv:lastRows, iv:inputRows, its
+# strategy) names those views (iv:reads), and is stepped when the runtime writes them.
 
 c:valueQuery a owl:ObjectProperty ; rdfs:range sem:View ; rdfs:subPropertyOf c:dataQuery ;
-    rdfs:comment """A SELECT (a sem:View) whose first solution is the component's value: ?value becomes its
-c:value and ?tone, ?max and ?label, when bound, its sty:tone, c:max and c:label. Maintained as a view (iv:View), or
-else re-run when c:dataset changes; $this is the component."""@en .
-
-# Which of the two takes a component (they take turns, sem:requires / sem:unless): c:runsQuery
-# true when its query is not a view. Re-run only when the query or its type changes.
-c:runsQuery a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
-    rdfs:comment "Derived: the component's c:valueQuery is not a maintained view, so c:QueryFormula runs it."@en .
-c:FormulaKind a sem:Rendering ;
-    sem:targets sem:Component ;
-    sem:requires c:valueQuery ;
-    sem:stratum -2 ;
-    sem:inputOnly true ;
-    sem:watches c:valueQuery , rdf:type ;
-    sem:follows c:valueQuery .
-c:FormulaKind-fn a sem:Rule ; sem:implements c:FormulaKind ; sem:function "formula:kind" .
-c:FormulaKind-sparql a sem:Rule ;
-    sem:implements c:FormulaKind ;
-    sem:construct """
-CONSTRUCT { $this c:runsQuery true }
-WHERE { $this c:valueQuery ?view . FILTER NOT EXISTS { ?view a iv:View } }""" .
+    rdfs:comment """A SELECT, maintained as a view (an iv:View materialized as a graph), whose first solution is the
+component's value: ?value becomes its c:value and ?tone, ?max and ?label, when bound, its sty:tone, c:max and c:label;
+$this is the component (a view per component, iv:perReferrer c:valueQuery)."""@en .
 
 c:Formula a sem:Rendering ;
     sem:targets sem:Component ;
     sem:requires c:valueQuery ;
-    sem:unless c:runsQuery ;
     sem:stratum -1 ;
     sem:inputOnly true ;
     sem:readsMinted true ;
@@ -75,13 +56,3 @@ WHERE {
   LATERAL { OPTIONAL { ?lb rs:value ?label0 FILTER(isLiteral(?label0)) } }
   BIND(?value0 AS ?value) BIND(?tone0 AS ?tone) BIND(?max0 AS ?max) BIND(?label0 AS ?label)
 }""" .
-
-c:QueryFormula a sem:Rendering ;
-    sem:targets sem:Component ;
-    sem:requires c:runsQuery ;
-    sem:stratum -1 ;
-    sem:inputOnly true ;
-    sem:follows c:dataset ;
-    sem:functionOnly "awaits #147 (views over derived triples): it runs a query that is not a maintained view, because it reads what rules or the views runtime derive (a sheet's formulas, a view's figures), which a view cannot read yet." ;
-    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/147> .
-c:QueryFormula-fn a sem:Rule ; sem:implements c:QueryFormula ; sem:function "formula:query" .

@@ -1,5 +1,6 @@
 import { EXT } from '../ns.ts'
 import type { HtmlIndex } from './html-index.ts'
+import { HOST_ELEMENT, hostedBy, type HostAdapter } from './hosts.ts'
 
 const escapeText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const escapeAttr = (s: string) => escapeText(s).replace(/"/g, '&quot;')
@@ -7,6 +8,14 @@ const escapeAttr = (s: string) => escapeText(s).replace(/"/g, '&quot;')
 export interface SerializeOptions {
   /** What a host-owned slot (sem:slot) holds, by its name, as HTML (a live example's sandbox, rendered on the server); else an island's tag or nothing. */
   slots?: (name: string) => string | undefined
+  /** Draws the nodes a host component library draws (ext:component): its server markup, in a <sem-host>. */
+  hosts?: HostAdapter
+  /**
+   * Leave out the components placed under a hidden element, as a projection that never showed them
+   * has none there (their rules wait until they are shown): a warm runtime's page, moved from an
+   * address that showed them, as a fresh store renders it (src/server/warm.ts).
+   */
+  shownOnly?: boolean
 }
 
 /** Static HTML for a component instance (server-side rendering, tests). */
@@ -15,19 +24,22 @@ export function toHTML(index: HtmlIndex, focus: string, opts: SerializeOptions =
   return root ? node(index, root, opts) : ''
 }
 
-function node(index: HtmlIndex, k: string, opts: SerializeOptions = {}): string {
+function node(index: HtmlIndex, k: string, opts: SerializeOptions = {}, hidden = false): string {
   const n = index.nodes.get(k)!
   if (n.cls === 'Text') return escapeText(n.data ?? '')
+  if (hostedBy(index, opts.hosts, k) !== undefined) return `<${HOST_ELEMENT}>${opts.hosts!.html(k)}</${HOST_ELEMENT}>`
   const tag = index.tagName(k) ?? 'sem-unknown'
   const attrs = index.attributes(k).map(([name, v]) => (v === '' ? ` ${name}` : ` ${name}="${escapeAttr(v)}"`))
   const open = `<${tag}${attrs.join('')}>`
   if (index.isVoid(k)) return open
   if (n.slot !== undefined) return `${open}${opts.slots?.(n.slot) ?? island(index, k)}</${tag}>`
+  const under = hidden || (!!opts.shownOnly && n.props.has('hidden'))
   const inner = index
     .childrenOf(k)
-    .map((slot) => index.resolve(slot))
+    // A component (a slot that resolves to another node, its root) under a hidden element is left out with shownOnly.
+    .map((slot) => (under && index.resolve(slot) !== slot ? undefined : index.resolve(slot)))
     .filter((r): r is string => r !== undefined)
-    .map((r) => node(index, r, opts))
+    .map((r) => node(index, r, opts, under))
     .join('')
   return `${open}${inner}</${tag}>`
 }
@@ -37,8 +49,9 @@ function node(index: HtmlIndex, k: string, opts: SerializeOptions = {}): string 
  * inputs (ext:Attribute), which upgrades in place when its definition loads; anything else is empty.
  */
 function island(index: HtmlIndex, k: string): string {
-  const tag = index.nodes.get(k)?.tag
-  if (!tag || !/^[a-z][a-z0-9._]*-[a-z0-9._-]*$/.test(tag)) return ''
+  // Through the index's checked accessors only: a valid tag and input names, and under a policy what it allows.
+  const tag = index.islandTag(k)
+  if (!tag) return ''
   const attrs = [...index.islandInputs(k).values()]
     .filter((i) => i.as === EXT.Attribute)
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))

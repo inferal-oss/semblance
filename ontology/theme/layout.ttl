@@ -56,6 +56,12 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
                  [ sty:property "background" ; sty:raw "radial-gradient(circle at 1px 1px, var(--sem-border) 1px, transparent 0) 0 0 / 16px 16px, var(--sem-surface-sunken)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
+# On a phone a specimen, its stage, a card and a surface inside it each keep 24px on both sides,
+# which leaves a third of the screen to what they show: there each container takes one step less.
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-4 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-3 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage > *" ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] .
@@ -92,10 +98,10 @@
                  [ sty:property "color" ; sty:token tok:muted ] .
 
 # --- elevations (sty:Flat and sty:Raised are in theme/default.ttl) ---
-sty:Overlay a sty:Elevation ; rdfs:label "Overlay"@en ; sem:slug "overlay" ; sem:order 3 ;
+sty:Overlay a sty:Elevation ; rdfs:label "Overlay"@en , "Накладка"@uk , "Overlay"@de , "طبقة عائمة"@ar ; sem:slug "overlay" ; sem:order 3 ;
     rdfs:comment "Floats above the page: menus, popovers, dialogs."@en .
-sty:Flat rdfs:label "Flat"@en ; sem:order 1 .
-sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
+sty:Flat rdfs:label "Flat"@en , "Плоска"@uk , "Flach"@de , "مسطحة"@ar ; sem:order 1 .
+sty:Raised rdfs:label "Raised"@en , "Піднята"@uk , "Erhöht"@de , "مرتفعة"@ar ; sem:order 2 .
 
 # --- surface ---
 # Direction, gap and inset are the position layer's; the surface only fills them in
@@ -116,6 +122,8 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
     sty:declares [ sty:property "gap" ; sty:token tok:space-3 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-inset])" ;
     sty:declares [ sty:property "padding" ; sty:token tok:space-5 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-inset])" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-4 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state "[data-sem-tone]" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--tone-soft)" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--tone-border)" ] .
@@ -207,9 +215,11 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 # Its container is at least as tall as the viewport and pushes the bar to its end,
 # so the bar sits at the bottom of the window on short pages too; on long pages it
 # sticks to the bottom (above a taskbar docked there: --sem-dock-bottom, windows.ttl) while the
-# content scrolls under it.
+# content scrolls under it. What sticks to the top (pos:StickToTop) ends above it (--sem-sticky-bottom:
+# its least height and its border).
 [] a sty:StyleRule ; sty:part ":has(> [data-sem-c=status-bar])" ;
-    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+    sty:declares [ sty:property "--sem-sticky-bottom" ; sty:raw "41px" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-direction" ; sty:raw "column" ] ,
                  [ sty:property "min-height" ; sty:raw "100dvh" ] .
 [] a sty:StyleRule ; sty:appliesTo c:StatusBar ;

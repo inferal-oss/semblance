@@ -4,6 +4,7 @@
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix rnd: <https://semblance.dev/ns/rendered#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
@@ -25,8 +26,10 @@ sem:ComponentShape a sh:NodeShape ; sh:targetClass sem:Component ;
                 [ sh:path pos:direction ; sh:maxCount 1 ; sh:class pos:Direction ] ,
                 [ sh:path pos:layout ; sh:maxCount 1 ; sh:class pos:Layout ] ,
                 [ sh:path pos:align ; sh:maxCount 1 ; sh:class pos:Alignment ] ,
-                [ sh:path c:label ; sh:nodeKind sh:Literal ] ,
-                [ sh:path c:help ; sh:nodeKind sh:Literal ] ,
+                [ sh:path c:label ; sh:nodeKind sh:Literal ; sh:uniqueLang true ] ,
+                [ sh:path c:help ; sh:nodeKind sh:Literal ; sh:uniqueLang true ] ,
+                [ sh:path c:title ; sh:uniqueLang true ] ,
+                [ sh:path c:note ; sh:uniqueLang true ] ,
                 [ sh:path c:disabled ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
                 [ sh:path fs:fullscreen ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
                 [ sh:path fs:fullViewport ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
@@ -35,7 +38,14 @@ sem:ComponentShape a sh:NodeShape ; sh:targetClass sem:Component ;
                   sh:message "rnd:observes takes aspects of the rendered state (rnd:Geometry, rnd:Visibility, rnd:Overlap, rnd:Focus, rnd:Hover, rnd:Press, rnd:Scroll, rnd:Open, rnd:Animation)."@en ,
                       "rnd:observes приймає аспекти стану відображення (rnd:Geometry, rnd:Visibility, rnd:Overlap, rnd:Focus, rnd:Hover, rnd:Press, rnd:Scroll, rnd:Open, rnd:Animation)."@uk ,
                       "rnd:observes nimmt Aspekte des Darstellungszustands (rnd:Geometry, rnd:Visibility, rnd:Overlap, rnd:Focus, rnd:Hover, rnd:Press, rnd:Scroll, rnd:Open, rnd:Animation)."@de ,
-                      "تأخذ rnd:observes جوانب من حالة العرض (rnd:Geometry وrnd:Visibility وrnd:Overlap وrnd:Focus وrnd:Hover وrnd:Press وrnd:Scroll وrnd:Open وrnd:Animation)."@ar ] .
+                      "تأخذ rnd:observes جوانب من حالة العرض (rnd:Geometry وrnd:Visibility وrnd:Overlap وrnd:Focus وrnd:Hover وrnd:Press وrnd:Scroll وrnd:Open وrnd:Animation)."@ar ] ,
+                # A formula reads a maintained view's rows (ontology/components/formula.ttl): a query
+                # that is not one gives the component no value, and nothing else says why.
+                [ sh:path c:valueQuery ; sh:class iv:View ;
+                  sh:message "c:valueQuery names a maintained view: an iv:View with iv:materialize iv:Graph."@en ,
+                      "c:valueQuery називає підтримуване подання: iv:View з iv:materialize iv:Graph."@uk ,
+                      "c:valueQuery nennt eine gepflegte Sicht: eine iv:View mit iv:materialize iv:Graph."@de ,
+                      "تسمّي c:valueQuery عرضًا مُصانًا: iv:View مع iv:materialize iv:Graph."@ar ] .
 
 # An accessible name, for a control a c:Field can wrap (one with a c:labelPart): its own c:label, or
 # the label of the c:Field whose c:content it is (that label points at the control's labelPart). Only
@@ -77,14 +87,32 @@ c:EmblemShape a sh:NodeShape ; sh:targetClass c:Emblem ;
                   sh:message "An emblem's c:viewBox is four numbers: min-x min-y width height." ] ,
                 [ sh:path c:pathData ; sh:minCount 1 ; sh:maxCount 1 ] ,
                 [ sh:path c:fillRule ; sh:maxCount 1 ; sh:in ( "nonzero" "evenodd" ) ] .
+# A link goes to a resource (c:to; the navigation layer derives its address, nav:href, which is not
+# input to check) or to an address (c:href), or both, the address as the fallback.
+c:LinkToShape a sh:PropertyShape ;
+    rdfs:comment "Goes to a resource, at the location that shows it."@en ;
+    sh:path c:to ; sh:minCount 1 .
+c:LinkHrefShape a sh:PropertyShape ;
+    rdfs:comment "Goes to an address."@en ;
+    sh:path c:href ; sh:minCount 1 .
 c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
-    sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
+    sh:or ( c:LinkToShape c:LinkHrefShape ) ;
+    sh:message "A link needs a destination: a resource (c:to) or an address (c:href)."@en ,
+        "Посилання потребує призначення: ресурс (c:to) або адресу (c:href)."@uk ,
+        "Ein Link braucht ein Ziel: eine Ressource (c:to) oder eine Adresse (c:href)."@de ,
+        "يحتاج الرابط إلى وجهة: مورد (c:to) أو عنوان (c:href)."@ar ;
+    sh:property [ sh:path c:href ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
                   sh:message "A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] ,
+                [ sh:path c:to ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
+                  sh:message "A link's c:to is one resource: an IRI." ] ,
                 [ sh:path c:content ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
                   sh:message "A link's body (c:content) is one component." ] ,
                 [ sh:path c:currentPage ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
                 [ sh:path c:count ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ;
                   sh:message "A link's c:count is one whole number, zero or more." ] .
+c:MenuItemShape a sh:NodeShape ; sh:targetClass c:MenuItem ;
+    sh:property [ sh:path c:href ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
+                  sh:message "A menu item's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] .
 c:HostSlotShape a sh:NodeShape ; sh:targetClass c:HostSlot ;
     sh:property [ sh:path c:slot ; sh:maxCount 1 ; sh:datatype xsd:string ;
                   sh:message "A host slot has one name (c:slot), a plain string." ] .
@@ -134,8 +162,19 @@ c:AppBarShape a sh:NodeShape ; sh:targetClass c:AppBar ;
 c:TabsShape a sh:NodeShape ; sh:targetClass c:Tabs ;
     sh:property [ sh:path c:tabs ; sh:minCount 1 ; sh:maxCount 1 ] ,
                 [ sh:path c:selected ; sh:maxCount 1 ; sh:class c:Tab ] .
+c:TabContentShape a sh:PropertyShape ;
+    rdfs:comment "Shows a component."@en ;
+    sh:path c:content ; sh:minCount 1 .
+c:TabSlotShape a sh:PropertyShape ;
+    rdfs:comment "Shows a slot the host fills."@en ;
+    sh:path c:slot ; sh:minCount 1 .
 c:TabShape a sh:NodeShape ; sh:targetClass c:Tab ;
-    sh:property [ sh:path c:label ; sh:minCount 1 ] , [ sh:path c:content ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
+    sh:or ( c:TabContentShape c:TabSlotShape ) ;
+    sh:message "A tab shows a component (c:content) or a host-owned slot (c:slot)."@en ,
+        "Вкладка показує компонент (c:content) або слот застосунку (c:slot)."@uk ,
+        "Ein Tab zeigt eine Komponente (c:content) oder einen Slot der Anwendung (c:slot)."@de ,
+        "تعرض علامة التبويب مكوّنًا (c:content) أو فتحة يملؤها التطبيق المضيف (c:slot)."@ar ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ] , [ sh:path c:content ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
 c:WindowShape a sh:NodeShape ; sh:targetClass c:Window ;
     sh:property [ sh:path c:width ; sh:maxCount 1 ; sh:minInclusive 160 ] , [ sh:path c:height ; sh:maxCount 1 ; sh:minInclusive 100 ] .
 c:TableShape a sh:NodeShape ; sh:targetClass c:Table ;

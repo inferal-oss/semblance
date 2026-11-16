@@ -1,11 +1,14 @@
 // The app as a site (docs/SSR.md): what `semblance build` renders beforehand and `semblance serve`
 // (or server.ts) renders per request. The client (main.ts) mounts the same graphs at the same root.
 import { readFileSync } from 'node:fs'
-import { defineSite } from '@inferal-oss/semblance/node'
+import { defineSite } from '@semblance-dev/semblance/node'
 
 const read = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8')
 
 export default defineSite({
   root: 'https://example.org/hello#page',
   graphs: () => [read('tally.ttl'), read('app.ttl')],
+  // Only the part of Semblance's ontology these graphs use (docs/SUBSET.md): the client loads it
+  // (virtual:semblance/ontology) in place of the whole, and the pages are rendered from it.
+  subset: true,
 })

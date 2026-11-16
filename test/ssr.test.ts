@@ -2,13 +2,14 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
-import { loadStore } from '../src/node/load.ts'
-import { loadSite, renderSite, siteRoutes } from '../src/node/site.ts'
-import { Navigation } from '../src/navigation.ts'
+import { loadStore, loadStoreOf, ontologyFiles } from '../src/node/load.ts'
+import { loadSite, namedGraphs, pageGraphs, renderSite, siteRoutes } from '../src/node/site.ts'
+import { Navigation, setBase } from '../src/navigation.ts'
 import { MOD, NS } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toHTML } from '../src/render/serialize.ts'
-import { Runtime } from '../src/runtime.ts'
+import { parseTurtle, Runtime } from '../src/runtime.ts'
+import { sourceQuads } from '../src/sources.ts'
 import { renderDocument } from '../src/server/document.ts'
 import { graphLanguages, serializeRoot } from '../src/server/render.ts'
 import { renderToStream } from '../src/server/stream.ts'
@@ -16,7 +17,8 @@ import type { Site } from '../src/server/site.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { DEFAULT_LAYERS } from '../src/web/mount.ts'
 import { replayKept, takeOver } from '../src/web/takeover.ts'
-import { prepareSite, recordSiteSources, ROOT, siteGraphs, siteLayers } from '../demo/site.ts'
+import { sliceAddition } from '../src/slices.ts'
+import { prepareSite, recordSiteSources, ROOT, siteGraphs, siteLayers, siteSources } from '../demo/site.ts'
 
 // Server-side rendering (docs/SSR.md): a page rendered beforehand (the build) or per request is
 // byte for byte the client's first render of the same address, so the client adopts its DOM
@@ -26,11 +28,14 @@ const root = new URL('../', import.meta.url)
 const TEMPLATE = '<!doctype html><html lang="en"><head><title>t</title></head><body><div id="app"></div><script type="module" src="/main.js"></script></body></html>'
 
 /** The site's client up to its first render, as demo/main.ts runs it (empty storage). */
-async function siteClient(url: string, extra?: (store: GraphStore) => void) {
+async function siteClient(url: string, extra?: (store: GraphStore) => void, only?: string[]) {
   const site = await loadSite(new URL('semblance.config.ts', root).pathname)
-  const graphs = await site.graphs()
-  const store = loadStore('wat', ...graphs)
-  site.setup?.(store, { single: false })
+  const named = await namedGraphs(site)
+  // The graphs a page names (its client loads those first), or all of them.
+  const graphs = Object.entries(named).filter(([n]) => !only || only.includes(n)).map(([, t]) => t)
+  const store = only ? loadStoreOf('wat', only, ...graphs) : loadStore('wat', ...graphs)
+  site.setup?.(store, { single: false, ...(only && { graphs: new Set(only) }) })
+  setBase(store, '/')
   extra?.(store)
   const u = new URL(url, 'https://semblance.test/')
   const location = { pathname: u.pathname, search: u.search, hash: u.hash }
@@ -102,6 +107,44 @@ describe('server-side rendering: the site', () => {
     client.runtime.dispose()
   })
 
+  it.each(['/', '/examples/settings/', '/uk/components/inputs/'])('names the graphs %s needs first: its client takes it over with only those, then loads the rest without a change', async (url) => {
+    const site = await loadSite(new URL('semblance.config.ts', root).pathname)
+    const server = await renderSite(site, url)
+    const graphs = await pageGraphs(site, url, server.html)
+    expect(graphs).toBeDefined()
+    const named = { ...ontologyFiles(), ...(await namedGraphs(site)) }
+    // Fewer than all: the page's client fetches less before it is interactive.
+    expect(graphs!.length).toBeLessThan(Object.keys(named).length)
+    expect(graphs).toContain('demo/app.ttl')
+    const client = await siteClient(url, undefined, graphs)
+    expect(client.html).toBe(server.html)
+    const taken = adopt(renderDocument(TEMPLATE, server), client)
+    expect(taken.mismatches).toBe(0)
+    expect(taken.ops).toBe(0)
+    // The rest, as the client loads it in idle time, with the examples' sources: what defines rules
+    // in one change, then the rest a slice at a time (demo/main.ts), none of them a long task.
+    const rest = Object.keys(named).filter((n) => !graphs!.includes(n))
+    const f = client.store.factory
+    const add = rest.flatMap((n) => parseTurtle(named[n]!, f))
+    add.push(...sourceQuads(f, siteSources(Object.fromEntries(rest.filter((n) => n.startsWith('demo/gallery/')).map((n) => [n, named[n]!])))))
+    const slices = sliceAddition(add, 150)
+    expect(slices.rules.length + slices.rest.reduce((n, s) => n + s.length, 0)).toBe(add.length)
+    expect(slices.rest.length).toBeGreaterThan(1)
+    client.runtime.apply({ add: slices.rules, remove: [] })
+    for (const slice of slices.rest) client.runtime.apply({ add: slice, remove: [] })
+    expect(serializeRoot(client.runtime, client.screen, ROOT, { sandboxes: { load: (...t) => loadStore('wat', ...t) }, prefer: 'sparql' })).toBe(server.html)
+    // Every rule of the site is active now, as in a client that loaded everything at once.
+    const full = await siteClient(url)
+    const rules = (c: typeof client) => c.screen.engine.activeRules.map((r) => r.iri).sort()
+    expect(rules(client)).toEqual(rules(full))
+    // And every maintained view (a view whose query came with the rest is defined then).
+    const views = (c: typeof client) => c.runtime.views.all().map((v) => v.iri).sort()
+    expect(views(client)).toEqual(views(full))
+    server.runtime.dispose()
+    client.runtime.dispose()
+    full.runtime.dispose()
+  })
+
   it.each(['Semblance', 'Paper', 'Terminal', 'Blueprint', 'Sunset', 'Cupertino', 'Tracker', 'Classic', 'Fluent', 'Doodle'])('renders the same in the %s theme', async (theme) => {
     const site = themed(await loadSite(new URL('semblance.config.ts', root).pathname), theme)
     const server = await renderSite(site, '/docs/overview/')
@@ -157,7 +200,7 @@ describe('server-side rendering: an app (the getting-started example)', () => {
     ;(globalThis as { __semblanceKept?: unknown }).__semblanceKept = { events: [early], stop() {} }
 
     // The client, as mount() does: the same graphs, the same root, its own projection.
-    const store = loadStore('wat', ...(await site.graphs()))
+    const store = loadStore('wat', ...Object.values(await namedGraphs(site)))
     const runtime = new Runtime(store)
     const screen = runtime.project({ modality: MOD.Screen, layers: DEFAULT_LAYERS, languages: graphLanguages(store, site.root), name: 'screen', roots: [site.root] })
     const renderer = new DomRenderer(screen.index, host, site.root)
@@ -177,7 +220,7 @@ describe('server-side rendering: an app (the getting-started example)', () => {
 
   it('streams the head before the projection, then the root', async () => {
     const site = await hello()
-    const store = loadStore('wat', ...(await site.graphs()))
+    const store = loadStore('wat', ...Object.values(await namedGraphs(site)))
     const chunks: string[] = []
     let status = 0
     const reader = renderToStream({ store, root: site.root, url: '/', template: TEMPLATE, stylesheet: { href: '/semblance.css' }, onStatus: (s) => (status = s) }).getReader()
@@ -195,7 +238,7 @@ describe('server-side rendering: documents', () => {
   it('puts the language, direction and attributes on <html>, and takes the HTML as it is', () => {
     const doc = renderDocument(TEMPLATE, { html: '<p>$& $1 cost</p>', css: 'p{}', lang: 'ar', dir: 'rtl' }, { attributes: { 'data-sem-color-scheme': 'dark' }, head: '<link rel="modulepreload" href="/a.js">' })
     expect(doc).toContain('<html lang="ar" dir="rtl" data-sem-color-scheme="dark">')
-    expect(doc).toContain('<div id="app" data-sem-ssr><p>$& $1 cost</p></div><script>')
+    expect(doc).toContain('</script><div id="app" data-sem-ssr><p>$& $1 cost</p></div>')
     expect(doc).toContain('<style data-sem-styles>p{}</style><link rel="modulepreload" href="/a.js"></head>')
     expect(() => renderDocument('<html><body></body></html>', { html: '', lang: 'en', dir: 'ltr' })).toThrow(/no empty <div id="app">/)
   })

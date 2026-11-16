@@ -32,7 +32,7 @@ has all of them.
 | group | IRI | contents |
 |---|---|---|
 | Math | `sx:Math` | `sx:log` … `sx:pi` |
-| Text | `sx:Text` | `sx:codepoint` … `sx:fnv1a` |
+| Text | `sx:Text` | `sx:codepoint` … `sx:blankLabel` |
 | Locale | `sx:Locale` | `sx:formatNumber`, `sx:formatDateTime`, `sx:collated`, `sx:sortKey` |
 | Matches | `sx:Matches` | `sx:matches`, `sx:chars` |
 | JSON | `sx:Json` | `sx:json` |
@@ -96,6 +96,8 @@ literals of `xsd:integer` or a type derived from it.
 | `sx:utf8Hex(s)` | `xsd:string`: each UTF-8 byte of `s` as two lowercase hex digits, space-separated (`"€"` → `"e2 82 ac"`, `""` → `""`) |
 | `sx:decodeURI(s)` | `xsd:string`: `%XX` sequences (either case) decoded as UTF-8, everything else kept (`+` too); error if a `%` is not followed by two hex digits or the bytes are not UTF-8 |
 | `sx:fnv1a(s)` | `xsd:string`: FNV-1a 32-bit hash (offset basis `811c9dc5`, prime `01000193`) of the UTF-8 bytes, 8 lowercase hex digits |
+| `sx:jsonString(s)` | `xsd:string`: `s` as `JSON.stringify` writes it: in double quotes, with `"` and `\` escaped, `\b` `\t` `\n` `\f` `\r`, and the other control characters (below U+0020) as `\u00xx` (lowercase hex); everything else as it is (`"a\tb"` → `"\"a\\tb\""`) |
+| `sx:blankLabel(b)` | `xsd:string`: the label of the blank node `b` as the store names it (the value of the host's term for it, `store.match`), so a rule can mint an IRI per blank node it reads; the labels are the store's own (each engine names nodes its own way), for identity, not for showing; error if `b` is not a blank node |
 
 String results are simple literals (no language tag) whatever the input.
 
@@ -117,6 +119,17 @@ invalid tag or option (`Intl` throws) is an error. Results are simple literals.
 
 The time zone `sx:formatDateTime` uses when the options name none is a store
 option (`timeZone`, default the host's own), so tests can fix it (`"UTC"`).
+
+Three `sx:formatDateTime` options are not `Intl`'s; with them a rule reads a
+locale's calendar as patterns and names (`formatToParts`, `Intl.Locale`):
+
+| option | result |
+|---|---|
+| `part=<type>` | the text of the first field of that type alone (`part=month` with `month=long`: `"жовтня"` in a Ukrainian long date); `""` when there is none |
+| `fields=<type>:<text>,…` | the formatted text with each listed field's text replaced (`fields=day:%d,month:%m,year:%y`: `"%d.%m.%y"` in German); other fields as formatted |
+| `info=firstDay` | the locale's first day of the week, `1` (Monday) … `7` (Sunday); `dt` is not read |
+| `info=hourCycle` | the resolved hour cycle (`h11`, `h12`, `h23`, `h24`; `""` when the options show no hour) |
+| `info=locale` | `lang` as a canonical tag (`"en-gb"`: `"en-GB"`) |
 
 The engines reach `Intl` through one more `env` import (ABI.md):
 `intl(op, in_ptr, in_len, out_ptr, out_cap) -> i32`, with UTF-8 arguments
@@ -178,6 +191,8 @@ One row per code point of `?text`: `?char` the code point as an `xsd:string`,
 
 ```sparql
 (?payload) sx:json (?path ?parent ?key ?kind ?value)
+(?payload) sx:json (?path ?parent ?key ?kind ?value ?index)
+(?payload) sx:json (?path ?parent ?key ?kind ?value ?index ?json ?kept)
 ```
 
 Parses `?payload` as JSON (RFC 8259) and yields one row per value, in document
@@ -188,10 +203,34 @@ of `"object"`, `"array"`, `"string"`, `"number"`, `"boolean"`, `"null"`, and
 `?value` the scalar's value (unbound for objects, arrays and null): a string as
 `xsd:string`; a number with its JSON spelling as the lexical form, as
 `xsd:integer` (no fraction or exponent), `xsd:decimal` (a fraction, no exponent)
-or `xsd:double` (an exponent); `true` and `false` as `xsd:boolean`. Pointer
-tokens escape `~` as `~0` and `/` as `~1`. Invalid JSON (including a lone
-surrogate escape, and nesting deeper than 512) yields no rows; whitespace
-around the value is allowed. Rules mint IRIs from `?path`.
+or `xsd:double` (an exponent); `true` and `false` as `xsd:boolean`. The optional `?index` is the value's
+0-based position among its parent's members or items (`xsd:integer`; unbound
+for the root), so a rule can order an object's members as the source does
+(`ORDER BY ?index`, or `ord:` from it); for an array item it equals `?key`.
+
+The optional `?json` is a scalar or `null` as `JSON.stringify(JSON.parse(…))`
+writes it (`xsd:string`; unbound for objects and arrays), so a rule can show
+what a JavaScript twin shows: a number in ECMAScript's shortest form (the
+fewest digits that read back as the same double, the nearest of them and on a
+tie the even one; plain from `1e-6` to below `1e21`, else with an exponent):
+`1.50` → `1.5`, `-2e3` → `-2000`, `0.1e1` → `1`, `1e21` → `1e+21`, `1E-7` →
+`1e-7`, `-0` → `0`, and a number beyond the doubles (`1e400`) → `null`; a string
+quoted and re-escaped (`"` and `\` escaped, `\b \t \n \f \r`, other controls as
+`\u00xx`, a lone surrogate as `\udxxx`, everything else as itself: `"€"`);
+`true`, `false`, `null`. The optional `?kept` (`xsd:boolean`) is whether
+`JSON.parse` keeps the value: false for an earlier occurrence of a member name
+in the same object and everything under it. A kept duplicate's `?index` is its
+first occurrence's position, which is where `JSON.parse` puts it (in every form
+of the relation). JavaScript also lists integer-like member names (`"2"`) first,
+in numeric order; `?index` stays the source position, and a rule that must
+follow that order sorts those names first itself.
+
+Pointer tokens escape `~` as `~0` and `/` as `~1`. A lone surrogate escape
+(`"\ud800"`), which `JSON.parse` accepts, is U+FFFD in `?value`, `?key` and
+`?path`, and escaped in `?json`; two names that differ only in their lone
+surrogates are still different members. Invalid JSON (and nesting deeper than
+512) yields no rows; whitespace around the value is allowed. Rules mint IRIs
+from `?path`.
 
 ## Status
 

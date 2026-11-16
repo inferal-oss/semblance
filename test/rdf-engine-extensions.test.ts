@@ -42,6 +42,77 @@ function sameDouble(got: string | undefined, want: number) {
   expect(Object.is(n, want), `${lex} is ${want}`).toBe(true)
 }
 
+/** A seeded generator (mulberry32), so a failing sweep can be replayed. */
+function random(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Number texts in many JSON spellings: random bit patterns, decimal digits and exponents. */
+function numberTexts(n: number, next: () => number): string[] {
+  const out: string[] = []
+  const bits = new DataView(new ArrayBuffer(8))
+  const int = (k: number) => Math.floor(next() * k)
+  const digits = (k: number) => Array.from({ length: k }, () => int(10)).join('')
+  while (out.length < n) {
+    const pick = int(5)
+    if (pick === 4) {
+      // an exact tie between two shortest spellings (…15.625: .62 or .63; the even one)
+      out.push(String(2 ** 47 + int(2 ** 50)) + ['.25', '.75', '.125', '.375', '.625', '.875', '.5'][int(7)]!)
+    } else if (pick === 0) {
+      bits.setUint32(0, int(2 ** 32))
+      bits.setUint32(4, int(2 ** 32))
+      const x = bits.getFloat64(0)
+      if (!Number.isFinite(x)) continue
+      // as JavaScript writes it, or with as many digits as an exponent spelling keeps
+      out.push(next() < 0.5 ? String(x) : x.toExponential(int(21)).replace('e', next() < 0.5 ? 'e' : 'E'))
+    } else if (pick === 1) {
+      // an integer of up to 30 digits
+      out.push((next() < 0.3 ? '-' : '') + String(1 + int(9)) + digits(int(30)))
+    } else if (pick === 2) {
+      // a fraction, maybe with trailing zeros
+      out.push((next() < 0.3 ? '-' : '') + (next() < 0.5 ? '0' : String(1 + int(9)) + digits(int(8))) + '.' + digits(1 + int(20)))
+    } else {
+      // an exponent near the thresholds, or at the ends of the doubles
+      const e = next() < 0.7 ? int(50) - 25 : int(700) - 350
+      out.push((next() < 0.3 ? '-' : '') + String(int(10)) + (next() < 0.5 ? '.' + digits(1 + int(17)) : '') + (next() < 0.5 ? 'e' : 'E') + (e >= 0 && next() < 0.5 ? '+' : '') + (e < 0 ? '-' : '') + String(Math.abs(e)).padStart(int(3) + 1, '0'))
+    }
+  }
+  return out
+}
+
+/** JSON strings (their source text) of code units JSON.stringify spells in every way: controls, quotes, backslashes, lone and paired surrogates. */
+function stringTexts(n: number, next: () => number): string[] {
+  const int = (k: number) => Math.floor(next() * k)
+  const pools = [
+    () => int(0x20),
+    () => [0x22, 0x5c, 0x2f, 0x7f][int(4)]!,
+    () => 0x20 + int(0x5f),
+    () => 0x80 + int(0xd800 - 0x80),
+    () => 0xd800 + int(0x800),
+    () => 0xe000 + int(0x2000),
+  ]
+  return Array.from({ length: n }, () => {
+    let units = Array.from({ length: int(12) }, () => pools[int(pools.length)]!())
+    // some paired surrogates too
+    if (next() < 0.3) units = [...units, 0xd83d, 0xde00]
+    const text = String.fromCharCode(...units)
+    // the source: as JSON.stringify writes it, with some characters as \u escapes (either case)
+    let source = ''
+    for (const ch of JSON.stringify(text).slice(1, -1).match(/\\u[0-9a-f]{4}|\\.|[\s\S]/gu) ?? []) {
+      if (ch.length === 1 && next() < 0.3) {
+        const hex = ch.charCodeAt(0).toString(16).padStart(4, '0')
+        source += '\\u' + (next() < 0.5 ? hex : hex.toUpperCase())
+      } else source += ch
+    }
+    return `"${source}"`
+  })
+}
+
 const MATH: [string, number | undefined][] = [
   ['sx:log(10)', Math.log(10)],
   ['sx:log(2.5)', Math.log(2.5)],
@@ -112,6 +183,12 @@ const TEXT: [string, string | undefined][] = [
   ['sx:fnv1a("€")', fnv1a('€') + '^^string'],
   ['sx:fnv1a("x"@en)', fnv1a('x') + '^^string'],
   ['sx:fnv1a(1)', undefined],
+  ['sx:jsonString("")', '""^^string'],
+  ['sx:jsonString("a\\"b\\\\c/")', JSON.stringify('a"b\\c/') + '^^string'],
+  ['sx:jsonString("t\\tn\\nr\\rb\\bf\\f")', JSON.stringify('t\tn\nr\rb\bf\f') + '^^string'],
+  ['sx:jsonString(CONCAT("x", sx:char(1), sx:char(31), sx:char(127), "é😀"))', JSON.stringify('x\u0001\u001f\u007fé😀') + '^^string'],
+  ['sx:jsonString("hi"@en)', '"hi"^^string'],
+  ['sx:jsonString(1)', undefined],
   ['sx:unknown("x")', undefined],
 ]
 
@@ -140,6 +217,14 @@ const LOCALE: [string, string | undefined][] = [
   ['sx:formatDateTime("2026-10-26T14:05:00Z"^^xsd:dateTime, "en", "hour=numeric;minute=2-digit;hour12=false;timeZone=Asia/Tokyo")', '23:05'],
   ['sx:formatDateTime("2026-10-26"^^xsd:date, "uk", "dateStyle=long")', formatDateTime(new Date('2026-10-26T00:00:00Z'), 'uk', 'dateStyle=long', 'UTC')],
   ['sx:formatDateTime("2026-10-26T14:05:00Z", "en")', undefined],
+  ['sx:formatDateTime("2026-10-24"^^xsd:date, "uk", "weekday=long;year=numeric;month=long;day=numeric;timeZone=UTC;part=month")', 'жовтня^^string'],
+  ['sx:formatDateTime("2026-10-24"^^xsd:date, "en", "year=numeric;month=long;timeZone=UTC;part=dayPeriod")', '^^string'],
+  ['sx:formatDateTime("2026-10-24"^^xsd:date, "de", "year=numeric;month=2-digit;day=2-digit;timeZone=UTC;fields=day:%d,month:%m,year:%y")', '%d.%m.%y^^string'],
+  ['sx:formatDateTime("2026-10-24"^^xsd:date, "en-US", "info=firstDay")', '7^^string'],
+  ['sx:formatDateTime("2026-10-24"^^xsd:date, "en-GB", "info=firstDay")', '1^^string'],
+  ['sx:formatDateTime("2026-10-24"^^xsd:date, "en-US", "hour=numeric;info=hourCycle")', 'h12^^string'],
+  ['sx:formatDateTime("2026-10-24"^^xsd:date, "en-gb", "info=locale")', 'en-GB^^string'],
+  ['sx:formatDateTime("2026-10-24"^^xsd:date, "en", "info=nothing")', undefined],
   ['sx:sortKey("Éclair", "fr")', 'eclair^^string'],
   ['sx:sortKey("ÅNGSTRÖM", "en")', sortKey('ÅNGSTRÖM', 'en') + '^^string'],
   ['sx:sortKey("İstanbul", "tr")', sortKey('İstanbul', 'tr') + '^^string'],
@@ -234,6 +319,27 @@ describe.skipIf(!built.length).each(built)('%s engine: SPARQL extensions', (kind
       expect(rows(s, n, ['n'])).toEqual(['12^^integer'])
     })
 
+    // An input bound by a BIND before the relation, in its group, under OPTIONAL or LATERAL,
+    // or computed from a triple's value: the relation sees each row's value, compiled too (#281).
+    it('each magic relation takes an input a BIND binds', () => {
+      const cases: [string, string[], string[]][] = [
+        [`SELECT ?c ?i { BIND("ab" AS ?src) (?src) sx:chars (?c ?i) } ORDER BY ?i`, ['c', 'i'], ['a^^string 1^^integer', 'b^^string 2^^integer']],
+        [`SELECT ?m { BIND("ab" AS ?src) (?src "[a-z]") sx:matches (?m ?at) } ORDER BY ?at`, ['m'], ['a^^string', 'b^^string']],
+        [`SELECT ?p { BIND("[1]" AS ?src) (?src) sx:json (?p ?par ?k ?kind ?v) } ORDER BY ?p`, ['p'], ['^^string', '/0^^string']],
+        [`SELECT ?m { BIND("[a-z]" AS ?re) ("ab" ?re) sx:matches (?m ?at) } ORDER BY ?at`, ['m'], ['a^^string', 'b^^string']],
+        [`SELECT ?c { BIND(SUBSTR("abcd", 2, 2) AS ?span) (?span) sx:chars (?c ?i) } ORDER BY ?i`, ['c'], ['b^^string', 'c^^string']],
+        [`SELECT ?c { BIND("ab" AS ?src) OPTIONAL { (?src) sx:chars (?c ?i) } } ORDER BY ?c`, ['c'], ['a^^string', 'b^^string']],
+        [`SELECT ?m { BIND("ab" AS ?src) LATERAL { OPTIONAL { BIND("[a-z]" AS ?re) (?src ?re) sx:matches (?m ?at) } } } ORDER BY ?m`, ['m'], ['a^^string', 'b^^string']],
+        [`SELECT ?m { <http://x/b> <http://x/src> ?t . LATERAL { OPTIONAL { BIND(UCASE(?t) AS ?u) (?u "[A-Z]") sx:matches (?m ?at) } } } ORDER BY ?at`, ['m'], ['T', 'H', 'R', 'E', 'E'].map((c) => `${c}^^string`)],
+        [`SELECT ?k { BIND("{\\"a\\": 1}" AS ?src) OPTIONAL { BIND("" AS ?root) (?src) sx:json (?p ?root ?k ?kind ?v) } } ORDER BY ?k`, ['k'], ['-', 'a^^string']],
+        // Bound outside a LATERAL, beside others its right side never reads (the tokenizer rules' shape).
+        [`SELECT ?m { BIND("ab cd" AS ?text) BIND(STRLEN(?text) AS ?len) LATERAL { <http://x/re> <http://x/is> ?re . (?text ?re) sx:matches (?m ?at) } } ORDER BY ?at`, ['m'], ['ab^^string', 'cd^^string']],
+        [`SELECT ?m { BIND("ab cd" AS ?text) BIND(STRLEN(?text) AS ?len) LATERAL { { FILTER(?len > 0) BIND(SUBSTR(?text, 1, ?len) AS ?src) <http://x/re> <http://x/is> ?re . (?src ?re) sx:matches (?m ?at) } UNION { BIND("nl" AS ?m) } } } ORDER BY ?m`, ['m'], ['ab^^string', 'cd^^string', 'nl^^string']],
+      ]
+      s.loadTurtle(`<http://x/b> <http://x/src> "three" . <http://x/re> <http://x/is> "[a-z]+" .`)
+      for (const [q, vars, want] of cases) expect(rows(s, q, vars), q).toEqual(want)
+    })
+
     it('a magic relation written with a list of the wrong shape is an ordinary pattern', () => {
       expect(rows(s, `SELECT ?m { "abc" sx:matches (?m) }`, ['m'])).toEqual([])
       expect(rows(s, `SELECT ?m { ("a" "a") sx:matches ?m }`, ['m'])).toEqual([])
@@ -267,15 +373,111 @@ describe.skipIf(!built.length).each(built)('%s engine: SPARQL extensions', (kind
       expect(rows(s, esc, ['path'])).toEqual(['/a~1b~0c^^string'])
     })
 
+    it('sx:json: ?index, each value\'s position among its siblings', () => {
+      const json = '{"z": 1, "a": [true, {"y": null, "b": "x"}], "m": {}}'
+      const q = `SELECT ?path ?index { (${JSON.stringify(json)}) sx:json (?path ?parent ?key ?kind ?value ?index) }`
+      expect(rows(s, q, ['path', 'index'])).toEqual([
+        '^^string -',
+        '/z^^string 0^^integer',
+        '/a^^string 1^^integer',
+        '/a/0^^string 0^^integer',
+        '/a/1^^string 1^^integer',
+        '/a/1/y^^string 0^^integer',
+        '/a/1/b^^string 1^^integer',
+        '/m^^string 2^^integer',
+      ])
+      // members in source order, not by key or path
+      const ordered = `SELECT ?key { (${JSON.stringify(json)}) sx:json (?path "" ?key ?kind ?value ?index) } ORDER BY ?index`
+      expect(rows(s, ordered, ['key'])).toEqual(['z^^string', 'a^^string', 'm^^string'])
+      // a bound index selects that sibling
+      expect(rows(s, `SELECT ?path { (${JSON.stringify(json)}) sx:json (?path "/a/1" ?key ?kind ?value 1) }`, ['path'])).toEqual(['/a/1/b^^string'])
+      // the five-variable form is unchanged
+      expect(rows(s, `SELECT ?path { (${JSON.stringify(json)}) sx:json (?path ?parent ?key ?kind ?value) }`, ['path'])).toHaveLength(8)
+      expect(rows(s, `SELECT ?i { (" 42 ") sx:json (?p ?parent ?key ?k ?v ?i) }`, ['i'])).toEqual(['-'])
+    })
+
+    /** ?json of each item of a JSON array, by position. */
+    const spelled = (doc: string) =>
+      rows(s, `SELECT ?key ?json { (${JSON.stringify(doc)}) sx:json (?path "" ?key ?kind ?value ?index ?json ?kept) } ORDER BY ?index`, ['json'])
+        .map((r) => r.replace(/\^\^string$/, ''))
+
+    it('sx:json: ?json, each scalar as JSON.stringify writes it', () => {
+      const items = ['1.50', '-2e3', '1e21', '1E-7', '-0', '0.1e1', '0', '-0.0', '1e+21', '999999999999999999999', '123456789012345678901234567890',
+        '0.000001', '0.0000001', '1e-6', '1e400', '-1e400', '1e-400', '5e-324', '1.7976931348623157e308', '0.1', '100', '1.0e2', '2.5E+3', '9007199254740993', '262475353774415.625', '-1649968063940606.25', '0.125', '5e-7',
+        '"€"', '"a\\u0001b\\u001f\\u007f"', '"\\"\\\\\\/"', '"\\b\\f\\n\\r\\t"', '"\\u00e9\\u2028\\u2029"', '"\\ud83d\\ude00😀"',
+        '"\\ud800"', '"\\udc00\\ud800"', '"x\\uDBFFy"', '"\\ud800\\u0041"', '"\\ud800\\ud83d\\ude00"', '""', 'true', 'false', 'null']
+      const doc = `[${items.join(', ')}]`
+      expect(spelled(doc)).toEqual(JSON.parse(doc).map((x: unknown) => JSON.stringify(x)))
+      // objects and arrays have none; the root has one when it is a scalar
+      expect(rows(s, `SELECT ?kind ?json { ("[{}, []]") sx:json (?p ?parent ?key ?kind ?v ?i ?json ?kept) }`, ['kind', 'json']))
+        .toEqual(['array^^string -', 'object^^string -', 'array^^string -'])
+      expect(rows(s, `SELECT ?json { (" 1.50 ") sx:json (?p ?parent ?key ?k ?v ?i ?json) }`, ['json'])).toEqual(['1.5^^string'])
+      // a lone surrogate: JSON.parse keeps it, so the value is read (U+FFFD in ?value) and spelled escaped
+      expect(rows(s, `SELECT ?v ?json { ("\\"a\\\\ud800\\"") sx:json (?p ?parent ?key ?k ?v ?i ?json) }`, ['v', 'json'])).toEqual(['a\ufffd^^string "a\\ud800"^^string'])
+    })
+
+    it('sx:json: ?json against JSON.stringify(JSON.parse(…)), a randomized sweep', () => {
+      const next = random(276)
+      for (const items of [numberTexts(1500, next), stringTexts(500, next)]) {
+        const doc = `[${items.join(',')}]`
+        const want: string[] = JSON.parse(doc).map((x: unknown) => JSON.stringify(x))
+        const got = spelled(doc)
+        const wrong = items.map((t, i) => [t, got[i], want[i]]).filter(([, g, w]) => g !== w)
+        expect(wrong.slice(0, 10), `${wrong.length} of ${items.length} differ`).toEqual([])
+      }
+    })
+
+    it('sx:json: ?kept, the duplicate keys JSON.parse keeps, at the first one\'s position', () => {
+      const json = '{"a": 1, "b": {"x": [2], "x": 3}, "a": {"y": {"z": 4}}, "c": 5, "b": 6, "\\ud800": 7, "\\ud801": 8, "\\ud800": 9}'
+      const q = `SELECT ?path ?index ?kept { (${JSON.stringify(json)}) sx:json (?path ?parent ?key ?kind ?value ?index ?json ?kept) }`
+      expect(rows(s, q, ['path', 'index', 'kept'])).toEqual([
+        '^^string - true^^boolean',
+        '/a^^string 0^^integer false^^boolean',
+        '/b^^string 1^^integer false^^boolean',
+        '/b/x^^string 0^^integer false^^boolean',
+        '/b/x/0^^string 0^^integer false^^boolean',
+        '/b/x^^string 0^^integer false^^boolean',
+        '/a^^string 0^^integer true^^boolean',
+        '/a/y^^string 0^^integer true^^boolean',
+        '/a/y/z^^string 0^^integer true^^boolean',
+        '/c^^string 3^^integer true^^boolean',
+        '/b^^string 1^^integer true^^boolean',
+        '/\ufffd^^string 5^^integer false^^boolean',
+        '/\ufffd^^string 6^^integer true^^boolean',
+        '/\ufffd^^string 5^^integer true^^boolean',
+      ])
+      // the kept members, by ?index, are JSON.parse's
+      const parsed = JSON.parse(json)
+      const kept = `SELECT ?json { (${JSON.stringify(json)}) sx:json (?path "" ?key ?kind ?value ?index ?json true) } ORDER BY ?index`
+      expect(rows(s, kept, ['json'])).toEqual(Object.values(parsed).map((v) => (typeof v === 'object' ? '-' : `${JSON.stringify(v)}^^string`)))
+      // a duplicate within an earlier duplicate: both dropped with it
+      const nested = '{"o": {"k": 1, "k": 2}, "o": 3}'
+      expect(rows(s, `SELECT ?path ?kept { (${JSON.stringify(nested)}) sx:json (?path ?parent ?key ?kind ?value ?index ?json ?kept) }`, ['path', 'kept']))
+        .toEqual(['^^string true^^boolean', '/o^^string false^^boolean', '/o/k^^string false^^boolean', '/o/k^^string false^^boolean', '/o^^string true^^boolean'])
+      // arrays have no duplicates; the six-variable form is unchanged apart from a kept duplicate's ?index
+      expect(rows(s, `SELECT ?kept { ("[1, 1]") sx:json (?p ?parent ?key ?k ?v ?i ?json ?kept) }`, ['kept'])).toEqual(['true^^boolean', 'true^^boolean', 'true^^boolean'])
+      expect(rows(s, `SELECT ?i { ("{\\"a\\": 1, \\"a\\": 2}") sx:json (?p "" ?key ?k ?v ?i) }`, ['i'])).toEqual(['0^^integer', '0^^integer'])
+    })
+
     it('sx:json: scalars at the root, invalid JSON, depth', () => {
       expect(rows(s, `SELECT ?k ?v { (" 42 ") sx:json (?p ?parent ?key ?k ?v) }`, ['k', 'v'])).toEqual(['number^^string 42^^integer'])
       expect(rows(s, `SELECT ?k ?v { ("\\"x\\"") sx:json (?p ?parent ?key ?k ?v) }`, ['k', 'v'])).toEqual(['string^^string x^^string'])
-      for (const bad of ['{', '[1,]', '{"a" 1}', '01', '1.', '"\\ud800"', 'tru', '[1] 2', '', "{'a': 1}", '"a\nb"', '-', '1e']) {
+      for (const bad of ['{', '[1,]', '{"a" 1}', '01', '1.', '"\\ud80"', '"\\u00"', 'tru', '[1] 2', '', "{'a': 1}", '"a\nb"', '-', '1e']) {
         expect(rows(s, `SELECT ?k { (${JSON.stringify(bad)}) sx:json (?p ?parent ?key ?k ?v) }`, ['k']), bad).toEqual([])
       }
       const deep = (n: number) => '['.repeat(n) + ']'.repeat(n)
       expect(rows(s, `SELECT (COUNT(*) AS ?n) { (${JSON.stringify(deep(512))}) sx:json (?p ?parent ?key ?k ?v) }`, ['n'])).toEqual(['512^^integer'])
       expect(rows(s, `SELECT (COUNT(*) AS ?n) { (${JSON.stringify(deep(513))}) sx:json (?p ?parent ?key ?k ?v) }`, ['n'])).toEqual(['0^^integer'])
+    })
+
+    it('sx:blankLabel: a blank node\'s label, as the host names its term', () => {
+      s.loadTurtle(`<http://x/bl> <http://x/p> [ <http://x/q> 1 ] , [ <http://x/q> 2 ] .`)
+      const host = s.match(s.factory.namedNode('http://x/bl'), s.factory.namedNode('http://x/p'), null).map((q) => q.object.value).sort()
+      expect(host).toHaveLength(2)
+      const got = s.select(`${PREFIXES}SELECT ?l { <http://x/bl> <http://x/p> ?b BIND(sx:blankLabel(?b) AS ?l) }`, [s.factory.defaultGraph()]).map((r) => r.get('l'))
+      expect(got.map(show).sort()).toEqual(host.map((l) => `${l}^^string`))
+      expect(value(s, 'sx:blankLabel(<http://x/bl>)')).toBeUndefined()
+      expect(value(s, 'sx:blankLabel("b1")')).toBeUndefined()
     })
 
     it('extensions in CONSTRUCT rules bound per focus', () => {

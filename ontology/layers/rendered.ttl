@@ -54,6 +54,18 @@ rnd:Aspect a owl:Class ;
 rnd:Geometry a rnd:Aspect ;
     rdfs:label "geometry"@en , "геометрія"@uk , "Geometrie"@de , "الهندسة"@ar ;
     rdfs:comment "Where the component's box is and how big (rnd:x, rnd:y, rnd:width, rnd:height), and which observed components it is inside (rnd:within)."@en .
+rnd:Layout a rnd:Aspect ;
+    rdfs:label "layout"@en , "розкладка"@uk , "Layout"@de , "التخطيط"@ar ;
+    rdfs:comment """Geometry for checking layout (the layout constraints layer, lc:): boxes in hundredths of a
+pixel (xsd:decimal) and as laid out, before any transform (a theme that tilts a card moves no box in
+it); the nearest observed component it is in (rnd:parent); in a row (pos:direction pos:Row, pos:layout
+pos:FieldRow), the line each child is on (rnd:line); whether it clips its inline overflow (rnd:scrolls),
+and otherwise, where its content is wider than it, by how much (rnd:scrollWidth, rnd:clientWidth; a
+part's always: a nav item that clips its text still says it does not fit). And the boxes of
+the parts its component names (lc:role, shown as data-sem-part): a state of their own, rnd:of the part's
+node, with its lc:role and lc:index (its order among its component's parts of that role) and rnd:parent
+its component's state. A part named at one width class only (lc:atWidth) is measured while the viewport
+is in it."""@en .
 rnd:Visibility a rnd:Aspect ;
     rdfs:label "visibility"@en , "видимість"@uk , "Sichtbarkeit"@de , "الظهور"@ar ;
     rdfs:comment "Whether it is rendered at all (rnd:rendered), in the viewport (rnd:inViewport), and how much of it (rnd:ratio)."@en .
@@ -110,6 +122,17 @@ rnd:height a owl:DatatypeProperty ; rdfs:range xsd:integer ;
 rnd:within a owl:ObjectProperty ; rdfs:domain rnd:State ; rdfs:range rnd:State ;
     rdfs:label "within"@en , "всередині"@uk , "innerhalb"@de , "داخل"@ar ;
     rdfs:comment "Every observed component (with geometry) it is shown inside, at any depth."@en .
+rnd:parent a owl:ObjectProperty ; rdfs:domain rnd:State ; rdfs:range rnd:State ;
+    rdfs:label "parent"@en , "батьківський"@uk , "übergeordnet"@de , "الأصل"@ar ;
+    rdfs:comment "With rnd:Layout: the nearest observed component it is shown in (for a part: its component)."@en .
+rnd:line a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:integer ;
+    rdfs:label "line"@en , "рядок"@uk , "Zeile"@de , "السطر"@ar ;
+    rdfs:comment "With rnd:Layout, for a child of a row: the line it is on (0, 1, ...) when the row wraps. A child starts a new line where it begins below the line so far."@en .
+rnd:scrolls a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "clips"@en , "обрізає"@uk , "beschneidet"@de , "يقص"@ar ;
+    rdfs:comment "With rnd:Layout: it clips or scrolls its inline overflow (present only while true)."@en .
+rnd:clientWidth a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "The width its content is shown in (whole CSS pixels); with rnd:Layout, written where its content is wider."@en .
 rnd:cell a owl:DatatypeProperty ; rdfs:domain rnd:State ;
     rdfs:comment """With rnd:Overlap: the grid cells its box covers ("column,row", 256 px squares of the document;
 "vcolumn,row" of the viewport when rnd:fixed), what the overlap view joins on."""@en .

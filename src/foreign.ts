@@ -12,9 +12,12 @@
 // source of truth: a reaction that changes the value it was told (clamps, refuses) is pushed back.
 import type { Term } from '@rdfjs/types'
 import type { EventBus, Handled } from './behaviour/events.ts'
+import type { Quad_Graph } from '@rdfjs/types'
 import { EXT, NS, RDFS_SUBCLASS, RDF_TYPE } from './ns.ts'
 import type { DomRenderer } from './render/dom.ts'
-import type { IslandInput } from './render/html-index.ts'
+import { isCustomElementName, type IslandInput } from './render/html-index.ts'
+import { islandProblem, type SafetyPolicy } from './safety.ts'
+import type { GraphStore } from './store/types.ts'
 
 const XSD = NS.xsd
 const RDF_JSON = NS.rdf + 'JSON'
@@ -77,12 +80,24 @@ export interface IslandsOptions {
    * mounts. The graph names a module; only the host decides what code that is.
    */
   modules?: Record<string, () => Promise<unknown>>
+  /**
+   * Where ext:module is read: the trusted graphs when the page renders authored content (mount's
+   * `trusted`), so an author cannot have a registered module loaded; the runtime's store otherwise.
+   */
+  trusted?: GraphStore
   /** After each output a reaction handled (to patch the DOM). */
   onHandled?: (h: Handled) => void
   onError?: (e: Error, island: string) => void
+  /**
+   * Authored content (src/safety.ts): mount only the islands the policy allows (their custom element,
+   * widget, module and adapter); any other stays its projected element and is reported. By default
+   * the policy of the renderer's index, so the effect cannot mount around it.
+   */
+  policy?: SafetyPolicy
 }
 
-interface OutputBinding {
+/** An output binding (ext:output): which event a DOM event or callback becomes. */
+export interface OutputBinding {
   on: string
   emits: string
   path?: string
@@ -149,7 +164,7 @@ export function applyInputs(el: Element, inputs: Iterable<Input>): void {
 
 /** ext:CustomElement: the element named by ext:tag; inputs are its properties or attributes, outputs its DOM events. */
 export const customElementAdapter: IslandAdapter = (slot, ctx) => {
-  if (!ctx.tag || !ctx.tag.includes('-')) throw new Error(`<${ctx.island}> names no custom element tag (ext:tag)`)
+  if (!ctx.tag || !isCustomElementName(ctx.tag)) throw new Error(`<${ctx.island}> names no custom element tag (ext:tag)`)
   const el = slot.ownerDocument.createElement(ctx.tag)
   applyInputs(el, ctx.inputs.values())
   const listeners = ctx.outputs.map((name) => [name, (e: Event) => ctx.emit(name, e)] as const)
@@ -270,46 +285,42 @@ export class Islands {
     const f = store.factory
     const dg = f.defaultGraph()
     const classes = this.classesOf(island)
-    const said = (p: string) => {
+    const said = (p: string, from = store) => {
       for (const s of [island, ...classes]) {
-        const o = store.match(f.namedNode(s), f.namedNode(p), null, dg)[0]?.object
+        const o = from.match(f.namedNode(s), f.namedNode(p), null, dg)[0]?.object
         if (o) return o.value
       }
       return undefined
     }
-    const one = (s: Term, p: string) => store.match(s as never, f.namedNode(p), null, dg)[0]?.object.value
-    const outputs: OutputBinding[] = []
-    for (const s of [island, ...classes]) {
-      for (const q of store.match(f.namedNode(s), f.namedNode(EXT.output), null, dg)) {
-        const on = one(q.object, EXT.on)
-        const emits = one(q.object, EXT.emits)
-        if (!on || !emits) continue
-        const fields = store.match(q.object as never, f.namedNode(EXT.field), null, dg).flatMap((fq) => {
-          const path = one(fq.object, EXT.path)
-          const predicate = one(fq.object, EXT.predicate)
-          return path && predicate ? [{ path, predicate }] : []
-        })
-        outputs.push({ on, emits, path: one(q.object, EXT.path), fields })
-      }
+    const index = this.renderer.index
+    const policy = this.opts.policy ?? index.policy
+    // The slot's tag as the index allows it; one the island states only in the store, checked the same way.
+    const tag = index.nodes.get(key)?.tag !== undefined ? index.islandTag(key) : said(EXT.tag)
+    if (index.nodes.get(key)?.tag !== undefined && tag === undefined) return
+    const adapterIri = said(EXT.adapter) ?? (tag ? EXT.CustomElement : EXT.Widget)
+    const widget = said(EXT.widget)
+    const module = said(EXT.module, this.opts.trusted ?? store)
+    if (policy) {
+      const why = islandProblem(policy, { adapter: adapterIri, tag, widget, module })
+      if (why) return index.refuse(key, 'element', `island <${island}>: ${why}; rendered as its element`)
     }
-    const adapterIri = said(EXT.adapter) ?? (said(EXT.tag) ? EXT.CustomElement : EXT.Widget)
+    const outputs = outputsOf(this.bus, island, classes)
     const adapter = this.opts.adapters?.[adapterIri] ?? (adapterIri === EXT.CustomElement ? customElementAdapter : adapterIri === EXT.Widget ? widgetAdapter : undefined)
     const m: Mounted = { key, island, el, pushed: new Map(), outputs, applying: false, gone: false }
     this.mounted.set(key, m)
     if (!adapter) return this.fail(new Error(`No adapter for <${adapterIri}>`), island)
-    const current = this.renderer.index.islandInputs(key)
+    const current = index.islandInputs(key)
     for (const [name, i] of current) m.pushed.set(name, { key: termKey(i.value), as: i.as })
     const ctx: IslandContext = {
       island,
-      tag: this.renderer.index.nodes.get(key)?.tag ?? said(EXT.tag),
-      widget: said(EXT.widget),
+      tag,
+      widget,
       inputs: new Map([...current].map(([n, i]) => [n, resolved(i)])),
       outputs: [...new Set(outputs.map((o) => o.on))],
       emit: (name, payload) => this.output(m, name, payload),
       widgets: this.opts.widgets ?? {},
     }
     this.counts.mounts++
-    const module = said(EXT.module)
     if (module !== undefined) {
       const loader = this.opts.modules?.[module]
       if (!loader) return this.fail(new Error(`No module registered as "${module}"`), island)
@@ -388,20 +399,8 @@ export class Islands {
     if (m.gone) return
     // What the component says while it is being told something is its echo of it.
     if (m.applying) return void this.counts.echoes++
-    const store = this.bus.runtime.store
-    const f = store.factory
-    for (const b of m.outputs) {
-      if (b.on !== name) continue
-      const v = b.path !== undefined ? at(payload, b.path) : undefined
-      const about: [string, Term][] = []
-      for (const field of b.fields) {
-        const fv = at(payload, field.path)
-        if (fv === undefined || fv === null) continue
-        about.push([field.predicate, literal(f, fv)])
-      }
+    for (const handled of emitOutput(this.bus, m.island, m.outputs, name, payload)) {
       this.counts.outputs++
-      const value = v === undefined || v === null ? undefined : typeof v === 'object' ? JSON.stringify(v) : String(v)
-      const handled = this.bus.emit(b.emits, m.island, { value, about })
       if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) this.opts.onHandled?.(handled)
     }
   }
@@ -422,20 +421,73 @@ export class Islands {
     else console.error(`island <${island}>:`, e)
   }
 
-  /** The island's classes and their superclasses, most specific first. */
   private classesOf(island: string): string[] {
-    const store = this.bus.runtime.store
-    const f = store.factory
-    const out: string[] = []
-    const todo = store.match(f.namedNode(island), f.namedNode(RDF_TYPE), null, f.defaultGraph()).map((q) => q.object.value)
-    while (todo.length) {
-      const c = todo.shift()!
-      if (out.includes(c)) continue
-      out.push(c)
-      todo.push(...store.match(f.namedNode(c), f.namedNode(RDFS_SUBCLASS), null, f.defaultGraph()).map((q) => q.object.value))
-    }
-    return out
+    return classesOf(this.bus, island)
   }
+}
+
+/** Where an instance's classes and bindings are read: a runtime's store and a projection's derived graph (an EventBus is one). */
+export type BindingSource = Pick<EventBus, 'runtime' | 'projection'>
+
+/** An instance's classes and their superclasses, most specific first (an instance a rendering minted is typed in its derived graph). */
+export function classesOf(bus: BindingSource, focus: string): string[] {
+  const store = bus.runtime.store
+  const f = store.factory
+  const out: string[] = []
+  const typed = (g: Quad_Graph) => store.match(f.namedNode(focus), f.namedNode(RDF_TYPE), null, g).map((q) => q.object.value)
+  const todo = [...typed(f.defaultGraph()), ...typed(bus.projection.engine.graph)]
+  while (todo.length) {
+    const c = todo.shift()!
+    if (out.includes(c)) continue
+    out.push(c)
+    todo.push(...store.match(f.namedNode(c), f.namedNode(RDFS_SUBCLASS), null, f.defaultGraph()).map((q) => q.object.value))
+  }
+  return out
+}
+
+/** The output bindings (ext:output) an instance declares, or its classes do. */
+export function outputsOf(bus: BindingSource, focus: string, classes = classesOf(bus, focus)): OutputBinding[] {
+  const store = bus.runtime.store
+  const f = store.factory
+  const dg = f.defaultGraph()
+  const one = (s: Term, p: string) => store.match(s as never, f.namedNode(p), null, dg)[0]?.object.value
+  const outputs: OutputBinding[] = []
+  for (const s of [focus, ...classes]) {
+    for (const q of store.match(f.namedNode(s), f.namedNode(EXT.output), null, dg)) {
+      const on = one(q.object, EXT.on)
+      const emits = one(q.object, EXT.emits)
+      if (!on || !emits) continue
+      const fields = store.match(q.object as never, f.namedNode(EXT.field), null, dg).flatMap((fq) => {
+        const path = one(fq.object, EXT.path)
+        const predicate = one(fq.object, EXT.predicate)
+        return path && predicate ? [{ path, predicate }] : []
+      })
+      outputs.push({ on, emits, path: one(q.object, EXT.path), fields })
+    }
+  }
+  return outputs
+}
+
+/**
+ * Report output `name` of `focus`: each binding for it becomes an event addressed to `focus`, its
+ * beh:value read along ext:path from the payload and each ext:field typed (numbers, booleans, JSON).
+ */
+export function emitOutput(bus: EventBus, focus: string, outputs: readonly OutputBinding[], name: string, payload: unknown): Handled[] {
+  const f = bus.runtime.store.factory
+  const out: Handled[] = []
+  for (const b of outputs) {
+    if (b.on !== name) continue
+    const v = b.path !== undefined ? at(payload, b.path) : undefined
+    const about: [string, Term][] = []
+    for (const field of b.fields) {
+      const fv = at(payload, field.path)
+      if (fv === undefined || fv === null) continue
+      about.push([field.predicate, literal(f, fv)])
+    }
+    const value = v === undefined || v === null ? undefined : typeof v === 'object' ? JSON.stringify(v) : String(v)
+    out.push(bus.emit(b.emits, focus, { value, about }))
+  }
+  return out
 }
 
 function literal(f: EventBus['runtime']['store']['factory'], v: unknown): Term {

@@ -152,8 +152,9 @@ describe('c:Table', () => {
     const counts = rows.map((r) => Number(r.querySelectorAll('td')[2]!.textContent))
     expect(counts).toEqual([...counts].sort((a, b) => b - a))
     expect(rows[0]!.querySelectorAll('td')[2]!.className).toBe('sem-end')
-    const slug = rows.find((r) => r.querySelector('th')!.textContent === 'Table')!.querySelector('code')!
-    expect(slug.textContent).toBe('table')
+    // c:Table, and the block editor's blk:Table, which is labelled "Table" too
+    const slugs = rows.filter((r) => r.querySelector('th')!.textContent === 'Table').map((r) => r.querySelector('code')!.textContent)
+    expect(slugs).toContain('table')
     expect(document.querySelector('[data-sem-c=table] .sem-sort-icon')!.getAttribute('aria-hidden')).toBe('true')
   })
 
@@ -231,8 +232,9 @@ describe('c:DescriptionList, c:Stat and c:Avatar', () => {
     expect(dl.localName).toBe('dl')
     const pairs = [...dl.querySelectorAll('.sem-pair')].map((p) => [p.querySelector('dt')!.textContent, p.querySelector('dd')!.textContent])
     expect(pairs[0]).toEqual(['slug', 'table'])
-    // c:Table is a sem:Component and a c:Sortable, and (ontology/alignments.ttl) a schema:Table.
-    expect(pairs[1]).toEqual(['subClassOf', 'Table, Sortable, Component'])
+    // c:Table is a sem:Component and a c:Sortable, and (ontology/alignments.ttl) a schema:Table: in
+    // the viewer's collation of their labels.
+    expect(pairs[1]).toEqual(['subClassOf', 'Component, Sortable, Table'])
     expect(pairs[2]![1]).toMatch(/^Rows of a SPARQL SELECT/)
     expect([...root('dt-dl-explicit').querySelectorAll('dt')].map((d) => d.textContent)).toEqual(['Store', 'Strata', 'Change log', 'Identity'])
   })
@@ -331,11 +333,11 @@ describe('c:Tree', () => {
     click(twisty)
     expect(objects(UI + 'dt-tree-classes', NS.c + 'expandedNode')).toContain(NS.c + 'Chart')
     expect(item('Chart').getAttribute('aria-expanded')).toBe('true')
-    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['BarChart', 'Gantt chart', 'Heatmap', 'LineChart'])
-    expect(item('BarChart').getAttribute('aria-level')).toBe('3')
+    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['Gantt chart', 'RowChart'])
+    expect(item('RowChart').getAttribute('aria-level')).toBe('3')
     click(item('Chart').querySelector('.sem-twisty')!)
     expect(item('Chart').getAttribute('aria-expanded')).toBe('false')
-    expect(item('BarChart')).toBeUndefined()
+    expect(item('RowChart')).toBeUndefined()
   })
 
   it('selects a node from its label, and the breadcrumbs follow and navigate back up', () => {

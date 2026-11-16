@@ -2,8 +2,14 @@ performance.mark('sem:boot')
 // Entry point. The same document boots either the app or, inside a hidden
 // srcdoc iframe owned by the Performance view, a single benchmark cell - so
 // cells run in a fresh realm even when the whole demo is one HTML file.
+// Trusted Types first: the site's policies exist before anything writes to a sink.
+import './trusted-types.ts'
 import { CELL_PREFIX } from './cell-protocol.ts'
-import { hasEngine, startEngine } from '../src/web/engine.ts'
+import { addEngine, hasEngine, startEngine } from '../src/web/engine.ts'
+
+// The site offers both of Semblance's engines (the store picker); the rust build is an optional peer
+// of the package, which an app adds when it wants it.
+addEngine('rust', () => import('@semblance-dev/rdf-engine-rust'))
 
 // The engine (main.ts's default store, or the one the address asks for) is fetched and compiled
 // while the bundles download, not after them.

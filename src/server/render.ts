@@ -5,13 +5,19 @@
 // Platform-neutral: the caller loads the store (src/node/load.ts, src/web/load.ts or its own
 // engine module), so this runs in Node, Deno and workers alike.
 import type { FnRule } from '../engine/context.ts'
-import { Navigation, readAddress, readLocations, spellAddress } from '../navigation.ts'
+import { addressDelta, currentValues, type Location, Navigation, readAddress, readLocations, type Reader, spellAddress } from '../navigation.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../ns.ts'
+import type { HostRenderer } from '../render/hosts.ts'
 import { toHTML } from '../render/serialize.ts'
 import { type Projection, Runtime } from '../runtime.ts'
-import { prerenderSandboxes, type SandboxOptions } from '../sandbox.ts'
+import { prerenderSandboxes, type PrerenderOptions, type SandboxOptions } from '../sandbox.ts'
+import type { Delta } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
+import { boxSelector, scopedCss } from '../style/scope.ts'
+import { Refused, type SafetyPolicy } from '../safety.ts'
+import { stopOverBudget } from '../budget.ts'
+import { rememberedPolicies, type RememberedPolicy } from './remembered.ts'
 
 export interface RenderOptions {
   /** The loaded store: the framework's ontology and the app's graphs (it is projected, and changed). */
@@ -36,7 +42,25 @@ export interface RenderOptions {
    * browser builds it: how to load a sandbox's store (the client's store kind), and its turn limit.
    * Without it their slots are empty until the client builds them.
    */
-  sandboxes?: Pick<SandboxOptions, 'load' | 'budgetMs'>
+  sandboxes?: Pick<SandboxOptions, 'load' | 'budgetMs'> & Pick<PrerenderOptions, 'cache'>
+  /**
+   * Render the store as authored content (src/safety.ts): elements, attributes and styles the policy
+   * refuses are left out, and reported. Read it from a trusted store (authoredPolicy), not this one.
+   */
+  policy?: SafetyPolicy
+  /**
+   * With a policy: the store it was read from (the ontology and the app's own graphs). Its stylesheet
+   * is the page's, and only what the rendered store adds is scoped to the authored box (the mount
+   * element, `Rendered.box`); without it the whole stylesheet is scoped to the box.
+   */
+  trusted?: GraphStore
+  /**
+   * With a policy: hear about what it refused, and about a projection over its work budgets (time,
+   * rule evaluations, output), which is stopped and rendered as far as it got (by default console.warn).
+   */
+  onRefused?: (e: Error) => void
+  /** A component library that draws hosted components (as mount's `hosts`): their server markup, which the client hydrates. */
+  hosts?: HostRenderer
 }
 
 export interface Rendered {
@@ -44,6 +68,10 @@ export interface Rendered {
   html: string
   /** The compiled stylesheet (unless styles: false). */
   css?: string
+  /** With a policy: the authored box the mount element is (its BOX_ATTRIBUTE, src/style/scope.ts), which the stylesheet is scoped to. */
+  box?: string
+  /** With a policy: why the projection was stopped over a work budget (it is rendered as far as it got). */
+  exceeded?: string
   /** 200, or 404 when the address names a place no location knows. */
   status: number
   /** The document's language and direction, for <html lang dir>. */
@@ -51,6 +79,8 @@ export interface Rendered {
   dir: 'ltr' | 'rtl'
   /** The address as the graph spells it (the canonical URL of what was rendered). */
   address?: string
+  /** What the page can put back before its first paint (src/web/remembered.ts). */
+  remembered: RememberedPolicy[]
   runtime: Runtime
   projection: Projection
 }
@@ -68,17 +98,42 @@ const noHistory = { pushState() {}, replaceState() {} }
  * projection), and say whether it names a place: a path whose every segment was read.
  */
 export async function readUrl(store: GraphStore, root: string, url: string): Promise<{ found: boolean; address?: string }> {
-  const location = urlOf(url)
-  const navigation = new Navigation(store, { root, location, history: noHistory, events: new EventTarget(), links: new EventTarget() })
+  const navigation = new Navigation(store, { root, location: urlOf(url), history: noHistory, events: new EventTarget(), links: new EventTarget() })
   await navigation.restore()
-  const loc = navigation.location()
+  return addressStatus(storeReader(store), navigation.location(), url)
+}
+
+/** A reader of a store's default graph (what the navigation model reads). */
+export function storeReader(store: GraphStore): Reader {
+  return { f: store.factory, match: (s, p, o) => store.match(s, p ? store.factory.namedNode(p) : null, o, store.factory.defaultGraph()) }
+}
+
+/**
+ * Whether `url`, once read into the graph `r` reads, names a place (a path whose every segment
+ * was read), and the address as the graph spells it (Navigation.href).
+ */
+export function addressStatus(r: Reader, loc: Location | undefined, url: string): { found: boolean; address?: string } {
+  const location = urlOf(url)
   if (!loc) return { found: location.pathname === '/' || location.pathname.endsWith('/index.html'), address: undefined }
-  const r = { f: store.factory, match: (s: Parameters<GraphStore['match']>[0], p: string | null, o: Parameters<GraphStore['match']>[2]) => store.match(s, p ? store.factory.namedNode(p) : null, o, store.factory.defaultGraph()) }
   const path = location.pathname.replace(/\/index\.html?$/, '/')
   const want = path.endsWith('/') ? path : path + '/'
   // A place is found when what the address says spells it back: every segment was read.
   const found = !loc.paths || want === loc.base || spellAddress(r, loc, readAddress(r, loc, want)).path === want
-  return { found, address: navigation.href() }
+  const spelled = spellAddress(r, loc, currentValues(r, loc))
+  const params = new URLSearchParams(location.search)
+  for (const [k, v] of spelled.query) v === undefined ? params.delete(k) : params.set(k, v)
+  const search = params.toString()
+  return { found, address: (loc.paths ? spelled.path : location.pathname) + (search ? '?' + search : '') + spelled.fragment }
+}
+
+/** What reading `url` into the graph `r` reads changes (readUrl, as a change), for the location of `root`. */
+export function urlDelta(r: Reader, root: string, url: string): { loc?: Location; delta: Delta } {
+  const loc = readLocations(r).find((l) => l.root === root)
+  if (!loc) return { delta: { add: [], remove: [] } }
+  const u = urlOf(url)
+  // What the client's location reads: the path (without index.html) when the location has paths, the query, the fragment.
+  const address = (loc.paths ? u.pathname.replace(/\/index\.html?$/, '/') : '') + u.search + u.hash
+  return { loc, delta: addressDelta(r, loc, address).delta }
 }
 
 /** The document's language and direction: the projection's first language, and its l10n:direction. */
@@ -91,45 +146,66 @@ export function documentLanguage(store: GraphStore, code: string): { lang: strin
 
 /** The languages a store's graph states for an app: the l10n:language of the location's subjects, else none. */
 export function graphLanguages(store: GraphStore, root: string): string[] {
-  const f = store.factory
-  const r = { f, match: (s: Parameters<GraphStore['match']>[0], p: string | null, o: Parameters<GraphStore['match']>[2]) => store.match(s, p ? f.namedNode(p) : null, o, f.defaultGraph()) }
+  return readerLanguages(storeReader(store), root)
+}
+
+/** graphLanguages, of the graph a reader reads. */
+export function readerLanguages(r: Reader, root: string): string[] {
   const loc = readLocations(r).find((l) => l.root === root)
-  const subjects = [f.namedNode(root), ...(loc?.dimensions.map((d) => d.subject) ?? [])]
-  for (const s of subjects) {
-    const language = store.match(s, f.namedNode(NS.l10n + 'language'), null, f.defaultGraph())[0]?.object
-    const code = language && store.match(language as never, f.namedNode(NS.l10n + 'code'), null)[0]?.object.value
+  for (const s of [r.f.namedNode(root), ...(loc?.dimensions.map((d) => d.subject) ?? [])]) {
+    const language = r.match(s, NS.l10n + 'language', null)[0]?.object
+    const code = language && r.match(language, NS.l10n + 'code', null)[0]?.object.value
     if (code) return [code]
   }
   return []
 }
 
 /** Read the address and prepare the store: what decides the document's language, before projecting. */
-export async function readyToRender(opts: RenderOptions): Promise<{ status: number; address?: string; languages: string[]; lang: string; dir: 'ltr' | 'rtl' }> {
+export async function readyToRender(opts: RenderOptions): Promise<{ status: number; address?: string; languages: string[]; lang: string; dir: 'ltr' | 'rtl'; remembered: RememberedPolicy[] }> {
   const { store, root } = opts
   const { found, address } = opts.url !== undefined ? await readUrl(store, root, opts.url) : { found: true, address: undefined }
   opts.prepare?.(store)
   const languages = opts.languages ?? graphLanguages(store, root)
-  return { status: found ? 200 : 404, address, languages, ...documentLanguage(store, languages[0] ?? 'en') }
+  return { status: found ? 200 : 404, address, languages, remembered: rememberedPolicies(store, root), ...documentLanguage(store, languages[0] ?? 'en') }
 }
 
 /** Project the prepared store and serialize the root (after readyToRender). */
-export function project(opts: RenderOptions, languages: string[]): Pick<Rendered, 'html' | 'css' | 'runtime' | 'projection'> {
+export function project(opts: RenderOptions, languages: string[]): Pick<Rendered, 'html' | 'css' | 'box' | 'exceeded' | 'runtime' | 'projection'> {
   const { store, root } = opts
   const runtime = new Runtime(store)
-  const projection = runtime.project({ modality: MOD.Screen, layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer ?? 'sparql', functions: opts.functions, languages, provenance: opts.provenance, name: 'screen', roots: [root] })
-  const css = opts.styles === false ? undefined : compileStyles(store)
-  let siteCss = css
-  const html = serializeRoot(runtime, projection, root, { ...opts, siteCss: () => (siteCss ??= compileStyles(store)) })
-  return { html, css, runtime, projection }
+  const onRefused = opts.onRefused ?? ((e: Error) => console.warn('[semblance]', e.message))
+  const projection = runtime.project(
+    { modality: MOD.Screen, layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer ?? 'sparql', functions: opts.functions, languages, provenance: opts.provenance, name: 'screen', roots: [root], policy: opts.policy },
+    opts.policy ? (e) => (e instanceof Refused ? onRefused(e) : console.error(e)) : undefined,
+  )
+  // Over a work budget (authored content): stopped, reported, and rendered as far as it got.
+  const over = opts.policy ? stopOverBudget(runtime, root) : undefined
+  if (over) onRefused(over)
+  // Authored: the trusted sheet is the page's, what the store adds stays in the box (src/style/scope.ts).
+  const box = authoredBox(opts)
+  const trustedCss = box && opts.styles !== false && opts.trusted ? compileStyles(opts.trusted) : ''
+  const compiled = opts.styles === false ? undefined : compileStyles(store, { policy: opts.policy, onRefused })
+  const css = box && compiled !== undefined ? [trustedCss, scopedCss(compiled, trustedCss, boxSelector(box))].filter(Boolean).join('\n\n') : compiled
+  let siteCss = box ? undefined : css
+  const html = serializeRoot(runtime, projection, root, { ...opts, siteCss: () => (siteCss ??= box ? trustedCss : compileStyles(store)) })
+  return { html, css, runtime, projection, ...(box && { box }), ...(over && { exceeded: over.message }) }
 }
+
+/** The authored box of a rendering under a policy (the mount element's BOX_ATTRIBUTE), or none. */
+export const authoredBox = (opts: Pick<RenderOptions, 'policy'>): string | undefined => (opts.policy ? 'authored' : undefined)
 
 /**
  * The root's HTML as the projection has it now, with the live examples it shows rendered in
  * their slots (with `sandboxes`): what a page rendered beforehand holds, at each address.
  */
-export function serializeRoot(runtime: Runtime, projection: Projection, root: string, opts: Pick<RenderOptions, 'sandboxes' | 'prefer' | 'functions'> & { siteCss?: () => string }): string {
+export function serializeRoot(runtime: Runtime, projection: Projection, root: string, opts: Pick<RenderOptions, 'sandboxes' | 'prefer' | 'functions' | 'hosts'> & { siteCss?: () => string; shownOnly?: boolean }): string {
   const slots = opts.sandboxes ? prerenderSandboxes(runtime, projection, { ...opts.sandboxes, prefer: opts.prefer ?? 'sparql', functions: opts.functions, roots: [root], siteCss: opts.siteCss }) : undefined
-  return toHTML(projection.index, root, slots?.size ? { slots: (name) => slots.get(name) } : {})
+  const hosts = opts.hosts?.(projection.index, { runtime, projection })
+  try {
+    return toHTML(projection.index, root, { ...(slots?.size ? { slots: (name: string) => slots.get(name) } : {}), hosts, shownOnly: opts.shownOnly })
+  } finally {
+    hosts?.dispose()
+  }
 }
 
 /** Project `root` at `url` and serialize it: what the client's first render of that address shows. */

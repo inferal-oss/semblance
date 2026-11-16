@@ -307,7 +307,7 @@
                  [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:appliesTo c:TimelineItem ; sty:part ".sem-effect" ;
-    sty:declares [ sty:property "color" ; sty:token tok:faint ] .
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
 
 # --- tree ---
 [] a sty:StyleRule ; sty:appliesTo c:Tree ;

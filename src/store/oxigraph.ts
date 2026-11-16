@@ -1,9 +1,75 @@
-import type { Quad, Quad_Graph, Term } from '@rdfjs/types'
+import type { Quad, Quad_Graph, Quad_Object, Quad_Predicate, Quad_Subject, Term } from '@rdfjs/types'
 import type * as Ox from 'oxigraph'
 import { DataFactory } from 'n3'
-import type { Factory, GraphStore } from './types.ts'
+import { dumpJellyOf, jellyFramesOf, jellyReaderInto, readJellyInto } from '../jelly/store.ts'
+import { doesNotFetch, type Factory, type GraphStore } from './types.ts'
 
 const COMPACT_MIN = 5_000
+
+const free = (t: unknown) => (t as { free?: () => void }).free?.()
+
+/** A term of Oxigraph's as a plain RDF/JS one, its WebAssembly object released. */
+function plainTerm(t: Ox.Term): Term {
+  if (t.termType === 'Quad') return plainQuad(t as Ox.Quad)
+  const f = DataFactory
+  const plain = (): Term => {
+    switch (t.termType) {
+      case 'NamedNode':
+        return f.namedNode(t.value)
+      case 'BlankNode':
+        return f.blankNode(t.value)
+      case 'DefaultGraph':
+        return f.defaultGraph()
+      case 'Literal': {
+        if (t.language) return f.literal(t.value, t.direction ? ({ language: t.language, direction: t.direction } as never) : t.language)
+        const datatype = t.datatype
+        const literal = f.literal(t.value, f.namedNode(datatype.value))
+        free(datatype)
+        return literal
+      }
+      default:
+        throw new Error(`Oxigraph returned a ${t.termType} term`)
+    }
+  }
+  const term = plain()
+  free(t)
+  return term
+}
+
+/** A quad of Oxigraph's as a plain RDF/JS one, its WebAssembly objects released. */
+export function plainQuad(q: Ox.Quad): Quad {
+  const quad = DataFactory.quad(plainTerm(q.subject as Ox.Term) as Quad_Subject, plainTerm(q.predicate as Ox.Term) as Quad_Predicate, plainTerm(q.object as Ox.Term) as Quad_Object, plainTerm(q.graph as Ox.Term) as Quad_Graph)
+  free(q)
+  return quad
+}
+
+/**
+ * A query's result in plain RDF/JS terms: solutions, quads, or a boolean as it is. Each of Oxigraph's
+ * own terms is a WebAssembly object that lives in its one memory, capped at 4 GiB, until it is freed
+ * or a finalizer does so, and finalizers run only between tasks: a synchronous stretch of queries (a
+ * test that sweeps a site) fills the memory with terms it no longer holds, and Oxigraph traps
+ * ("RuntimeError: unreachable"). So no term of Oxigraph's outlives the call that returned it.
+ */
+export function plainResult<T>(result: unknown): T {
+  if (!Array.isArray(result)) return result as T
+  return result.map((r: Map<string, Ox.Term> | Ox.Quad) => (r instanceof Map ? new Map([...r].map(([k, t]) => [k, plainTerm(t)])) : plainQuad(r))) as T
+}
+
+/**
+ * `query` for a store that runs SPARQL synchronously and fetches nothing (Oxigraph's JavaScript
+ * build has no HTTP client): its own errors for SERVICE and LOAD, said plainly. A SERVICE SILENT
+ * answers as an unreachable endpoint does, with no solutions there.
+ */
+export async function answerLocally<T>(kind: string, run: () => T): Promise<T> {
+  try {
+    return run()
+  } catch (err) {
+    const message = (err as Error).message ?? ''
+    if (/^The service .* is not supported|HTTP client is not available/.test(message))
+      throw doesNotFetch(kind)
+    throw err
+  }
+}
 
 /**
  * Oxigraph adapter. The module is injected because Node (`oxigraph/node.js`)
@@ -25,9 +91,9 @@ export function oxigraphStore(ox: typeof Ox): GraphStore {
   let disposed = false
   let threshold = COMPACT_MIN
   const compact = () => {
-    const live = store.match(null, null, null, null)
-    const fresh = new ox.Store(live)
-    ;(store as unknown as { free?: () => void }).free?.()
+    const live = store.match(null, null, null, null).map(plainQuad)
+    const fresh = new ox.Store(live as Ox.Quad[])
+    free(store)
     store = fresh
     deletes = 0
     threshold = Math.max(COMPACT_MIN, live.length / 2)
@@ -43,20 +109,26 @@ export function oxigraphStore(ox: typeof Ox): GraphStore {
       if (++deletes > threshold) compact()
     },
     has: (q) => store.has(q as Ox.Quad),
-    match: (s, p, o, g) => store.match(s as Ox.Term, p as Ox.Term, o as Ox.Term, g as Ox.Term) as unknown as Quad[],
+    match: (s, p, o, g) => store.match(s as Ox.Term, p as Ox.Term, o as Ox.Term, g as Ox.Term).map(plainQuad),
     select(query: string, graphs: Quad_Graph[]) {
-      return store.query(query, { default_graph: graphs as Ox.NamedNode[] }) as unknown as Map<string, Term>[]
+      return plainResult(store.query(query, { default_graph: graphs as Ox.NamedNode[] }))
     },
     construct(query: string, graphs: Quad_Graph[]): Quad[] {
-      return store.query(query, { default_graph: graphs as Ox.NamedNode[] }) as unknown as Quad[]
+      return plainResult(store.query(query, { default_graph: graphs as Ox.NamedNode[] }))
     },
+    query: (query, opts = {}) => answerLocally('oxigraph', () => plainResult(store.query(query, opts.graphs ? { default_graph: opts.graphs as Ox.NamedNode[] } : {}))),
+    update: (update) => answerLocally('oxigraph', () => store.update(update)),
     loadTurtle: (text) => store.load(text, { format: 'text/turtle' }),
+    loadJelly: (bytes, graph) => readJellyInto((q) => store.add(q as Ox.Quad), bytes, graph),
+    dumpJelly: (graph, options) => dumpJellyOf(store.match(null, null, null, (graph ?? null) as Ox.Term).map(plainQuad), options),
+    jellyReader: (graph) => jellyReaderInto((q) => store.add(q as Ox.Quad), graph),
+    jellyFrames: (graph, options) => jellyFramesOf(store.match(null, null, null, (graph ?? null) as Ox.Term).map(plainQuad), options),
     size: () => store.size,
     dispose() {
       // Once only: freeing twice would hand Oxigraph a dangling pointer.
       if (disposed) return
       disposed = true
-      ;(store as unknown as { free?: () => void }).free?.()
+      free(store)
     },
   }
 }

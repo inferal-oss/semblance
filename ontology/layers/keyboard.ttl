@@ -124,7 +124,7 @@ CONSTRUCT {
 WHERE {
   $this key:hint ?hint .
   FILTER NOT EXISTS { $this key:shortcut ?bound }
-  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?self . ?self key:rendersHint true }
+  FILTER NOT EXISTS { $this (a|a/rdfs:subClassOf+) ?self . ?self key:rendersHint true }
   VALUES (?pluses ?ends ?modifiers) { ("(\\\\s*\\\\+\\\\s*)+" "^[\\\\s+]+|[\\\\s+]+$" "\\\\+(?:(?:mod|ctrl|alt|shift|meta)\\\\+)+") }
   BIND(CONCAT("+", REPLACE(REPLACE(LCASE(STR(?hint)), ?pluses, "+"), ?ends, ""), "+") AS ?parts)
   BIND(CONTAINS(?parts, "+mod+") AS ?mod)

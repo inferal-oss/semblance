@@ -20,6 +20,10 @@ export class FakeLayout implements RenderedLayout {
   readonly view = { width: 1280, height: 800, scrollTop: 0, scrollLeft: 0 }
   /** How many boxes were read (each a layout read in a browser). */
   reads = 0
+  /** The document's width, when wider than the viewport (rnd:Layout). */
+  documentWide?: number
+  /** Components that clip their inline overflow (rnd:Layout). */
+  readonly clipping = new Set<string>()
 
   constructor(private readonly componentOf: (el: Element) => string | undefined) {}
 
@@ -72,6 +76,20 @@ export class FakeLayout implements RenderedLayout {
   open(el: Element): boolean | undefined {
     const c = this.componentOf(el)
     return c === undefined ? undefined : this.opened.get(c)
+  }
+
+  documentWidth(): number {
+    return this.documentWide ?? this.view.width
+  }
+
+  clips(el: Element): boolean {
+    const c = this.componentOf(el)
+    return c !== undefined && this.clipping.has(c)
+  }
+
+  /** A width media condition, at the viewport's width. */
+  matches(media: string): boolean {
+    return [...media.matchAll(/\((min|max)-width:\s*(\d+)px\)/g)].every(([, k, v]) => (k === 'min' ? this.view.width >= +v! : this.view.width <= +v!))
   }
 
   topLayer(el: Element): boolean {

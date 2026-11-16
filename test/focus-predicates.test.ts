@@ -11,19 +11,30 @@ const of = (where: string) => {
 
 describe('focus predicates', () => {
   it('reads a predicate the focus names, along a path, or chosen among IRIs', () => {
-    expect(of('?this ex:controls ?t ; ex:property ?p . ?t ?p ?v')).toEqual({ via: ['urn:x:property'], iris: [] })
+    expect(of('?this ex:controls ?t ; ex:property ?p . ?t ?p ?v')).toEqual({ via: ['?urn:x:controls urn:x:property'], iris: [] })
     expect(of('OPTIONAL { ?this ex:property ?p0 } BIND(COALESCE(?p0, ex:checked) AS ?p) BIND(EXISTS { ?this ?p ?v } AS ?on)')).toEqual({ via: ['urn:x:property'], iris: ['urn:x:checked'] })
-    expect(of('?this ex:validates ?s . OPTIONAL { ?s ex:path ?p0 } ?this ex:property ?q BIND(COALESCE(?p0, ?q) AS ?p) ?t ?p ?v')).toEqual({ via: ['urn:x:validates urn:x:path', 'urn:x:property'], iris: [] })
+    expect(of('?this ex:validates ?s . OPTIONAL { ?s ex:path ?p0 } ?this ex:property ?q BIND(COALESCE(?p0, ?q) AS ?p) ?t ?p ?v')).toEqual({ via: ['?urn:x:property urn:x:validates urn:x:path', '?urn:x:validates urn:x:property'], iris: [] })
     expect(of('?g ex:pickerFor ?this ; ex:end ?p . ?t ?p ?v')).toEqual({ via: ['^urn:x:pickerFor urn:x:end'], iris: [] })
     expect(of('VALUES (?p) { (ex:a) (ex:b) } ?this ?p ?v')).toEqual({ via: [], iris: ['urn:x:a', 'urn:x:b'] })
     expect(of('BIND(IF(?k = 1, ex:a, ex:b) AS ?p) ?this ?p ?v')).toEqual({ via: [], iris: ['urn:x:a', 'urn:x:b'] })
     // A predicate that has a property (the style layer's hooked ones): when nothing links it to the focus.
     expect(of('?this ?p ?v . ?p ex:hookAttribute ?name')).toEqual({ via: [], iris: [], marked: ['urn:x:hookAttribute'] })
-    expect(of('?this ex:validates ?s . OPTIONAL { ?s ex:path ?p } ?this ex:property ?p . ?t ?p ?v')).toEqual({ via: ['urn:x:property'], iris: [] })
+    expect(of('?this ex:validates ?s . OPTIONAL { ?s ex:path ?p } ?this ex:property ?p . ?t ?p ?v')).toEqual({ via: ['?urn:x:validates urn:x:property'], iris: [] })
     // Other patterns over the variable only narrow it.
     expect(of('?this ex:property ?p . OPTIONAL { ?p ex:label ?l } ?t ?p ?v')).toEqual({ via: ['urn:x:property'], iris: [] })
     // A LATERAL subquery takes what it projects from before it.
-    expect(of('?this ex:property ?p ; ex:controls ?t . LATERAL { SELECT ?t ?p (MIN(?w) AS ?v) WHERE { ?t ?p ?w } GROUP BY ?t ?p }')).toEqual({ via: ['urn:x:property'], iris: [] })
+    expect(of('?this ex:property ?p ; ex:controls ?t . LATERAL { SELECT ?t ?p (MIN(?w) AS ?v) WHERE { ?t ?p ?w } GROUP BY ?t ?p }')).toEqual({ via: ['?urn:x:controls urn:x:property'], iris: [] })
+  })
+
+  it('reads a pattern only for a focus that has what its groups require of it (#379)', () => {
+    // A branch over the options in use reads the property only where the focus has c:optionsInUse.
+    expect(of('?this ex:inUse ?u FILTER(STR(?u) = "true") ?this ex:property ?p . ?n ?p ?v')).toEqual({ via: ['?urn:x:inUse urn:x:property'], iris: [] })
+    expect(of('{ SELECT ?this ?o WHERE { { ?this ex:options ?o } UNION { ?this ex:inUse ?u ; ex:property ?p . ?n ?p ?o } } }')).toEqual({ via: ['?urn:x:inUse urn:x:property'], iris: [] })
+    // What a group around it requires counts; what another branch or an OPTIONAL holds does not.
+    expect(of('?this ex:shown ?s . { ?this ex:a ?x ; ex:property ?p . ?n ?p ?v } UNION { ?this ex:b ?y }')).toEqual({ via: ['?urn:x:a ?urn:x:shown urn:x:property'], iris: [] })
+    expect(of('OPTIONAL { ?this ex:c ?z } ?this ex:property ?p . ?n ?p ?v')).toEqual({ via: ['urn:x:property'], iris: [] })
+    // What the predicate itself must have: a property with a range.
+    expect(of('?this ex:property ?p . ?p ex:range ?c . OPTIONAL { ?n ?p ?v }')).toEqual({ via: ['urn:x:property ?urn:x:range'], iris: [] })
   })
 
   it('reads every predicate when the variable can be anything where it is read', () => {

@@ -23,19 +23,19 @@ sty:textStyle a owl:ObjectProperty ;
     rdfs:comment "Where a run of text sits in the type scale: display, title, subtitle, body, caption, overline or mono."@en ;
     sty:hookAttribute "data-sem-text-style" .
 sty:TextStyle a owl:Class ; rdfs:comment "A step of the type scale: font size, weight, line height and letter spacing from the type tokens."@en .
-sty:Display a sty:TextStyle ; rdfs:label "Display"@en ; sem:slug "display" ; sem:order 1 ;
+sty:Display a sty:TextStyle ; rdfs:label "Display"@en , "Дисплейний"@uk , "Display"@de , "عرضي"@ar ; sem:slug "display" ; sem:order 1 ;
     rdfs:comment "The largest step: a page's one big statement."@en .
-sty:Title a sty:TextStyle ; rdfs:label "Title"@en ; sem:slug "title" ; sem:order 2 ;
+sty:Title a sty:TextStyle ; rdfs:label "Title"@en , "Заголовок"@uk , "Titel"@de , "عنوان"@ar ; sem:slug "title" ; sem:order 2 ;
     rdfs:comment "Titles of pages and sections."@en .
-sty:Subtitle a sty:TextStyle ; rdfs:label "Subtitle"@en ; sem:slug "subtitle" ; sem:order 3 ;
+sty:Subtitle a sty:TextStyle ; rdfs:label "Subtitle"@en , "Підзаголовок"@uk , "Untertitel"@de , "عنوان فرعي"@ar ; sem:slug "subtitle" ; sem:order 3 ;
     rdfs:comment "A quieter line under a title."@en .
-sty:Body a sty:TextStyle ; rdfs:label "Body"@en ; sem:slug "body" ; sem:order 4 ;
+sty:Body a sty:TextStyle ; rdfs:label "Body"@en , "Основний"@uk , "Fließtext"@de , "متن"@ar ; sem:slug "body" ; sem:order 4 ;
     rdfs:comment "Running text (the default)."@en .
-sty:Caption a sty:TextStyle ; rdfs:label "Caption"@en ; sem:slug "caption" ; sem:order 5 ;
+sty:Caption a sty:TextStyle ; rdfs:label "Caption"@en , "Підпис"@uk , "Bildunterschrift"@de , "تسمية توضيحية"@ar ; sem:slug "caption" ; sem:order 5 ;
     rdfs:comment "Small supporting text: hints, footnotes, metadata."@en .
-sty:Overline a sty:TextStyle ; rdfs:label "Overline"@en ; sem:slug "overline" ; sem:order 6 ;
+sty:Overline a sty:TextStyle ; rdfs:label "Overline"@en , "Надзаголовок"@uk , "Dachzeile"@de , "عنوان علوي"@ar ; sem:slug "overline" ; sem:order 6 ;
     rdfs:comment "A small upper-case label above a title."@en .
-sty:Mono a sty:TextStyle ; rdfs:label "Mono"@en ; sem:slug "mono" ; sem:order 7 ;
+sty:Mono a sty:TextStyle ; rdfs:label "Mono"@en , "Моноширинний"@uk , "Monospace"@de , "أحادي العرض"@ar ; sem:slug "mono" ; sem:order 7 ;
     rdfs:comment "Monospaced text: identifiers, IRIs, numbers that line up."@en .
 
 # --- Text --------------------------------------------------------------------------------------
@@ -462,14 +462,15 @@ WHERE {
 
 c:Code a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment """Code: inline (<code>) or, with c:block true, a block (<pre><code>). With c:language
-"sparql" or "turtle" its tokens are colored with the same palette as the rule sources on the
-back of every card. c:label is the code."""@en ;
+    rdfs:comment """Code: inline (<code>) or, with c:block true, a block (<pre><code>). With a c:language
+some lexicon colors ("sparql", "turtle", "typescript", "shell", "json", "html", "http": c:CodeLexicon)
+its tokens are colored with the same palette as the rule sources on the back of every card.
+c:label is the code."""@en ;
     sem:slug "code" .
 c:block a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Render as a block rather than inline."@en .
-c:language a owl:DatatypeProperty ; rdfs:comment "The language of a code sample (\"sparql\", \"turtle\"), for coloring."@en .
+c:language a owl:DatatypeProperty ; rdfs:comment "The language of a code sample (\"sparql\", \"turtle\", \"typescript\", …), for coloring; on a lexicon, a name of the language it colors."@en .
 # Code is two renderings: c:CodeRendering for everything but colored samples, and
-# c:CodeColoredRendering for SPARQL and Turtle samples on screen (their tokens colored).
+# c:CodeColoredRendering for samples on screen in a language a lexicon colors (their tokens colored).
 c:CodeRendering a sem:Rendering ; sem:targets c:Code ; sem:stratum 0 .
 c:CodeRendering-fn a sem:Rule ; sem:implements c:CodeRendering ; sem:function "code" .
 
@@ -503,8 +504,8 @@ WHERE {
   OPTIONAL { $this c:language ?language0 }
   BIND(LCASE(STR(?language0)) AS ?language)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  # SPARQL and Turtle samples are colored token by token: c:CodeColoredRendering, a function.
-  FILTER(!BOUND(?language) || !(?language IN ("sparql", "turtle")))
+  # Samples in a language a lexicon colors are colored token by token: c:CodeColoredRendering.
+  FILTER(!BOUND(?language) || NOT EXISTS { ?lexicon c:tokenPattern ?lexiconPattern ; c:language ?language })
   BIND(IF(?block, rdfhtml:Pre, rdfhtml:Code) AS ?element)
   BIND(REPLACE(?source, "^\\n+|[ \\t\\n\\r]+$", "") AS ?trimmed)
   BIND(IF(!?block, IRI(CONCAT(STR($this), "/~code-text")), ?none) AS ?inlineText)
@@ -545,10 +546,87 @@ WHERE {
   BIND(IF(?block, CONCAT("    ", REPLACE(REPLACE(?source, "[ \\t\\n\\r]+$", ""), "\\n", "\\n    ")), CONCAT("`", ?source, "`")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .
-c:CodeColoredRendering a sem:Rendering ; sem:targets c:Code ; sem:modality mod:Screen ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Matches (sx:matches): it splits a SPARQL or Turtle sample into tokens to color each, which needs a regex-match relation." ;
-    sem:needsExtension sx:Matches .
+c:CodeColoredRendering a sem:Rendering ; sem:targets c:Code ; sem:modality mod:Screen ; sem:stratum 0 .
 c:CodeColoredRendering-fn a sem:Rule ; sem:implements c:CodeColoredRendering ; sem:function "code:colored" .
+# Its tokens by its language's lexicon (sx:matches), each keyed by where it starts, so both sides mint
+# the same nodes: plain text as text, the rest as spans of class tok-<kind>. SPARQL and Turtle split by
+# c:SparqlLexicon's groups; any other lexicon (c:LanguageLexicon) gives each group its c:groupKinds.
+c:CodeColoredRendering-sparql a sem:Rule ;
+    sem:implements c:CodeColoredRendering ;
+    sem:needsExtension sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:hasChild ?tag , ?blockCode ; rdfhtml:attribute ?tabAttr .
+  ?tabAttr a rdfhtml:Attribute ; rdfhtml:attributeName "tabindex" ; rdfhtml:attributeValue "0" .
+  ?tag a rdfhtml:Span ; rdfhtml:class "sem-language" ; rdfhtml:hasChild ?tagText ; ord:immediatelyPrecedes ?code ; rdfhtml:attribute ?tagHidden .
+  ?tagHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?tagText a rdfhtml:Text ; rdfhtml:data ?language .
+  ?code a rdfhtml:Code ; rdfhtml:hasChild ?tok , ?tail .
+  ?tok a ?tokElement ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterHead .
+  ?tokText a rdfhtml:Text ; rdfhtml:data ?spanned .
+  ?tail a rdfhtml:Text ; rdfhtml:data ?tailText ; ord:immediatelyPrecedes ?afterTail .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Code .
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
+  BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
+  OPTIONAL { $this c:value ?value0 }
+  BIND(COALESCE(?label0, STR(?value0)) AS ?source)
+  FILTER(BOUND(?source))
+  OPTIONAL { $this c:language ?language0 }
+  BIND(LCASE(STR(?language0)) AS ?language)
+  # Its language's lexicon (compared, so that a sample with no language has none).
+  ?lexicon c:tokenPattern ?pattern ; c:language ?lexiconLanguage . FILTER(STR(?lexiconLanguage) = ?language)
+  OPTIONAL { ?lexicon c:groupKinds ?kinds }
+  BIND(EXISTS { $this c:block ?block0 FILTER(STR(?block0) = "true") } AS ?block)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?block, rdfhtml:Pre, rdfhtml:Code) AS ?element)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~root-tabindex")), ?none) AS ?tabAttr)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~language")), ?none) AS ?tag)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~language-text")), ?none) AS ?tagText)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~language-aria-hidden")), ?none) AS ?tagHidden)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~code")), ?root) AS ?code)
+  BIND(IF(?block, ?code, ?none) AS ?blockCode)
+  BIND(IF(?block, REPLACE(?source, "^\\n+|[ \\t\\n\\r]+$", ""), ?source) AS ?src)
+  BIND(?language = "turtle" AS ?turtle)
+  BIND(STRLEN(?src) AS ?length)
+  BIND(CONCAT(STR($this), "/~code-") AS ?key)
+  LATERAL { OPTIONAL {
+    (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) .
+    BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
+    BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
+    # A lexicon of c:groupKinds: the kind of the group that matched (the n-th of its kinds).
+    BIND(IF(BOUND(?g1), 1, IF(BOUND(?g2), 2, IF(BOUND(?g3), 3, IF(BOUND(?g4), 4, IF(BOUND(?g5), 5,
+      IF(BOUND(?g6), 6, IF(BOUND(?g7), 7, IF(BOUND(?g8), 8, IF(BOUND(?g9), 9, 0))))))))) AS ?group)
+    BIND(IF(?group = 0, "text", REPLACE(?kinds, CONCAT("^(?:[^ ]+ ){", STR(?group - 1), "}([^ ]+).*$"), "$1")) AS ?groupKind)
+    BIND(IF(BOUND(?kinds), IF(?groupKind = "word", IF(EXISTS { ?lexicon c:keyword ?m }, "keyword", "text"), ?groupKind),
+      IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
+      IF(BOUND(?g5), IF(?m = "GROUP BY" || ?m = "ORDER BY", "keyword", "text"),
+      IF(BOUND(?g6), IF(STRENDS(?m, "/"), "text", IF(EXISTS { c:SparqlLexicon c:keyword ?pfx }, "keyword", "pname")),
+      IF(BOUND(?g7), IF(?turtle && (?m = "@prefix" || ?m = "@base"), "keyword", "text"),
+      IF(BOUND(?g8), IF(?numeral || REGEX(?m, "^[0-9]+[.][0-9]"), "number", "text"),
+      IF(BOUND(?g9) && EXISTS { c:SparqlLexicon c:keyword ?m }, "keyword", "text")))))))))) AS ?kind)
+    BIND(IF(BOUND(?kinds), STRLEN(?m), IF(BOUND(?g6) && ?kind = "keyword", STRLEN(?pfx), IF(BOUND(?g8) && ?kind = "number" && !?numeral, STRLEN(STRBEFORE(?m, ".")), STRLEN(?m)))) AS ?headLen)
+    BIND(SUBSTR(?m, 1, ?headLen) AS ?head)
+    BIND(IF(?headLen < STRLEN(?m), SUBSTR(?m, ?headLen + 1), ?none) AS ?tailText)
+    BIND(?at + STRLEN(?m) AS ?next)
+    BIND(IRI(CONCAT(?key, STR(?at))) AS ?tok)
+    BIND(IF(?kind = "text", rdfhtml:Text, rdfhtml:Span) AS ?tokElement)
+    BIND(IF(?kind = "text", ?none, CONCAT("tok-", ?kind)) AS ?tokClass)
+    BIND(IF(?kind = "text", ?head, ?none) AS ?plain)
+    BIND(IF(?kind = "text", ?none, IRI(CONCAT(?key, STR(?at), "-text"))) AS ?tokText)
+    BIND(IF(?kind = "text", ?none, ?head) AS ?spanned)
+    BIND(IF(BOUND(?tailText), IRI(CONCAT(?key, STR(?at + ?headLen))), ?none) AS ?tail)
+    BIND(IF(?next <= ?length, IRI(CONCAT(?key, STR(?next))), ?none) AS ?after)
+    BIND(COALESCE(?tail, ?after) AS ?afterHead)
+    BIND(IF(BOUND(?tail), ?after, ?none) AS ?afterTail)
+  } }
+}""" .
 
 # --- Blockquote --------------------------------------------------------------------------------
 

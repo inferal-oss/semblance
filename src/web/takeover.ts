@@ -1,9 +1,12 @@
 // Taking over server-rendered HTML (docs/SSR.md). A page rendered on a server or at build time
 // (src/server/render.ts) marks its mount element data-sem-ssr and carries CAPTURE_SCRIPT right
-// after it: what the visitor does before the client is ready (a click on a button, typing in a
+// before it: what the visitor does before the client is ready (a click on a button, typing in a
 // field) is kept, not lost. The client projects the same graph at the same address, adopts the
 // DOM (DomRenderer.adopt: no node is created) and replays what was kept, as if it happened now.
+// A region inside the page that the client takes over later (a live example's sandbox) carries
+// data-sem-ssr too: what is done there is kept until that region's own takeover replays it.
 import type { DomRenderer } from '../render/dom.ts'
+import { globalOwn, querySelectorIn } from './builtins.ts'
 
 /** The attribute a server-rendered mount element carries. */
 export const SSR_ATTRIBUTE = 'data-sem-ssr'
@@ -15,9 +18,11 @@ const KEPT = ['click', 'submit', 'input', 'change']
 /**
  * The inline script that keeps events until the client takes over: clicks on anything but a link
  * (links work without scripts) and submits are held back and kept; input and change are kept and
- * happen as usual (what was typed stays in the field). Small and dependency-free: it runs first.
+ * happen as usual (what was typed stays in the field). A kept event goes no further: no listener
+ * sees it before its region is taken over (`replayKept`), so a native control never changes while
+ * the graph does not. Small and dependency-free: it runs first.
  */
-export const CAPTURE_SCRIPT = `(()=>{const k=[],t=${JSON.stringify(KEPT)},h=e=>{const x=e.target;if(!(x instanceof Element)||!x.closest("[${SSR_ATTRIBUTE}]"))return;if(e.type==="click"&&x.closest("a[href]"))return;k.push(e);if(e.type==="click"||e.type==="submit")e.preventDefault()};for(const n of t)addEventListener(n,h,true);globalThis.__semblanceKept={events:k,stop(){for(const n of t)removeEventListener(n,h,true)}}})()`
+export const CAPTURE_SCRIPT = `(()=>{const k=[],t=${JSON.stringify(KEPT)},h=e=>{const x=e.target;if(!(x instanceof Element)||!x.closest("[${SSR_ATTRIBUTE}]"))return;if(e.type==="click"&&x.closest("a[href]"))return;k.push(e);e.stopPropagation();if(e.type==="click"||e.type==="submit")e.preventDefault()};for(const n of t)addEventListener(n,h,true);globalThis.__semblanceKept={events:k,stop(){for(const n of t)removeEventListener(n,h,true)}}})()`
 
 interface Kept {
   events: Event[]
@@ -27,6 +32,38 @@ interface Kept {
 /** Whether `host` holds server-rendered HTML to take over. */
 export function serverRendered(host: Element): boolean {
   return host.hasAttribute(SSR_ATTRIBUTE)
+}
+
+/** The <meta> a page names the graphs its client needs first in (space-separated). */
+export const PAGE_GRAPHS_META = 'semblance-graphs'
+
+/**
+ * The graphs the page says its client needs first (src/server/page-graphs.ts: `ontology/<file>` and
+ * the site's own names), or undefined: then it needs all of them.
+ */
+export function pageGraphs(doc: Document): string[] | undefined {
+  const content = doc.querySelector(`meta[name="${PAGE_GRAPHS_META}"]`)?.getAttribute('content')
+  return content ? content.split(/\s+/).filter(Boolean) : undefined
+}
+
+/**
+ * The file a static build writes beside its pages (at the site's base): the graphs each page names,
+ * for a client that moves to another page before it has every graph (it takes in that page's first).
+ */
+export const PAGE_GRAPHS_INDEX = 'semblance-graphs.json'
+
+/** PAGE_GRAPHS_INDEX: the graphs, each distinct set of them (a hex digit per four, the first in its lowest bit), and each page's set by its address. */
+export interface PageGraphsIndex {
+  graphs: string[]
+  sets: string[]
+  pages: Record<string, number>
+}
+
+/** The graphs the page at `path` names, by the index, or undefined: it names none (it needs all). */
+export function indexedPageGraphs(index: PageGraphsIndex, path: string): string[] | undefined {
+  const set = index.sets[index.pages[path] ?? -1]
+  if (set === undefined) return undefined
+  return index.graphs.filter((_, i) => (parseInt(set[i >> 2] ?? '0', 16) >> (i & 3)) & 1)
 }
 
 /** Whether the document has the server's stylesheet. */
@@ -45,23 +82,41 @@ export function takeOver(renderer: DomRenderer): { nodes: number; mismatches: nu
   return { ...adopted, replay: () => replayKept(renderer.host) }
 }
 
-/** Dispatch again, on their elements under `host`, the events the capture script kept; stop keeping. */
-export function replayKept(host: Element): number {
-  const g = globalThis as { __semblanceKept?: Kept }
-  const kept = g.__semblanceKept
-  if (!kept) return 0
-  kept.stop()
-  g.__semblanceKept = undefined
-  let replayed = 0
+/**
+ * Dispatch again, on their elements under `host`, the events the capture script kept there; with
+ * `discard`, let them go instead (the region will never be taken over). Events in a region under
+ * `host` still marked data-sem-ssr stay kept for its own takeover. Once no region is left to take
+ * over, the capture script stops keeping.
+ */
+export function replayKept(host: Element, opts: { discard?: boolean } = {}): number {
+  // Set by the capture script; never an element of that id (src/web/builtins.ts).
+  const kept = globalOwn<Kept>('__semblanceKept')
+  if (!kept || !Array.isArray(kept.events) || typeof kept.stop !== 'function') return 0
+  const pending = (target: Element) => {
+    const region = target.closest(`[${SSR_ATTRIBUTE}]`)
+    return !!region && host.contains(region)
+  }
+  const mine: Event[] = []
+  const rest: Event[] = []
   for (const e of kept.events.splice(0)) {
     const target = e.target as Element | null
-    if (!target?.isConnected || !host.contains(target)) continue
+    if (!target?.isConnected) continue
+    if (host.contains(target) && !pending(target)) mine.push(e)
+    else rest.push(e)
+  }
+  kept.events.push(...rest)
+  if (!querySelectorIn(host, `[${SSR_ATTRIBUTE}]`)) {
+    kept.stop()
+    ;(globalThis as { __semblanceKept?: Kept }).__semblanceKept = undefined
+  }
+  if (opts.discard) return 0
+  for (const e of mine) {
+    const target = e.target as Element
     const View = target.ownerDocument.defaultView as (Window & typeof globalThis) | null
     const Mouse = View?.MouseEvent
     const Plain = View?.Event ?? Event
     const copy = e.type === 'click' && Mouse ? new Mouse('click', e as MouseEvent) : new Plain(e.type, { bubbles: true, cancelable: e.type === 'click' || e.type === 'submit' })
     target.dispatchEvent(copy)
-    replayed++
   }
-  return replayed
+  return mine.length
 }

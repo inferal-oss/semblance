@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { mountShell } from './harness.ts'
 import { implementationGaps } from './implementations.ts'
 import { fakeLayout } from './drag-layout.ts'
+import { compileStyles } from '../src/style/compile.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const DND = 'https://semblance.dev/ns/dragdrop#'
@@ -169,7 +170,7 @@ describe('drag and drop', () => {
     expect(s.log()[0]).toBe('Refusal')
     expect(s.bus.recent(1)[0]!.some((q) => q.predicate.value.endsWith('handledBy') && q.object.value === UI + 'ShelfDrop')).toBe(false)
     expect(s.toasts()).toContain('Today holds two tasks at most.')
-    expect(s.item('Dark mode').hasAttribute('data-sem-refused')).toBe(true)
+    expect(s.item('Dark mode').hasAttribute('data-sem-drop-refused')).toBe(true)
     s.drag('Dark mode', ...at(2, 0))
     expect(s.labels('dndBugs')).toEqual(['Bug: crash on an empty query'])
     expect(s.toasts()).toContain('Only bugs go here.')
@@ -179,7 +180,26 @@ describe('drag and drop', () => {
     s.drag('Review the shapes', ...at(0, 0))
     s.drag('Dark mode', ...at(1, 1))
     expect(s.labels('dndToday')).toEqual(['Bug: login loops on Safari', 'Dark mode for the editor'])
-    expect(s.item('Dark mode').hasAttribute('data-sem-refused')).toBe(false)
+    expect(s.item('Dark mode').hasAttribute('data-sem-drop-refused')).toBe(false)
+  })
+
+  it('a refused drop is its own state: its shake never reaches an element the safety policy refused', () => {
+    for (const prefer of ['sparql', 'function'] as const) {
+      const s = shelves(prefer)
+      s.drag('Dark mode', ...at(1, 1))
+      const dark = s.item('Dark mode')
+      expect(dark.hasAttribute('data-sem-drop-refused')).toBe(true)
+      expect(dark.hasAttribute('data-sem-refused')).toBe(false)
+      // What the safety layer renders for a refused element, in the same drop zone, beside the refused draggable.
+      const refused = s.document.createElement('sem-refused')
+      refused.setAttribute('data-sem-refused', 'script')
+      dark.parentElement!.append(refused)
+      const shaking = [...compileStyles(s.store).matchAll(/([^{}]+)\{[^}]*animation:\s*sem-drop-refused/g)].map((m) => m[1]!.trim())
+      expect(shaking.length).toBeGreaterThan(0)
+      expect(shaking.some((sel) => dark.matches(sel))).toBe(true)
+      expect(shaking.filter((sel) => refused.matches(sel))).toEqual([])
+      refused.remove()
+    }
   })
 
   it('refuses in the viewer\'s language, and says it the same with SPARQL and with function rules', () => {
@@ -262,7 +282,7 @@ describe('drag and drop', () => {
     expect(html(b!)).toBe(html(a!))
     for (const h of [a!, b!]) h.drag('Profile', ...at(2, 0))
     expect(html(b!)).toBe(html(a!))
-    expect(html(a!)).toContain('data-sem-refused')
+    expect(html(a!)).toContain('data-sem-drop-refused')
     for (const h of [a!, b!]) h.drag('Profile', ...at(1, 2))
     expect(rank(b!, 'task-profile')).toEqual(rank(a!, 'task-profile'))
     expect(html(b!)).toBe(html(a!))

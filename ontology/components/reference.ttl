@@ -24,6 +24,7 @@
 
 c:TermTree a owl:Class ;
     rdfs:subClassOf sem:Component ;
+    sem:readsWholeOntology true ;
     rdfs:comment """A navigation tree (role=tree) of vocabularies, derived from the ontology in the store. Its
 sections (c:sections, an rdf:List of c:TermSection) list branches: the instances of the section's
 c:branchClass, by sem:order, then name. A branch's terms are the subjects that point at it through
@@ -381,6 +382,7 @@ c:TermTree key:navigation key:TreeNavigation .
 
 c:TermOverview a owl:Class ;
     rdfs:subClassOf sem:Component , c:Selector ;
+    sem:readsWholeOntology true ;
     rdfs:comment """What the ontology says about one term: the term c:bindProperty of c:bindFrom holds (a
 selection). A header (its prefixed name, its kind, its IRI) and its rdfs:comment, then its facts:
 what it says, by predicate, and what points at it (c:InverseFacet, and its shape). Values that are
@@ -469,10 +471,13 @@ CONSTRUCT {
 WHERE {
   $this a c:TermOverview .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?t FILTER(isIRI(?t)) }
+  OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?held FILTER(isIRI(?held)) }
+  # An unbound term would match anything below: a missing one is a node with no triples.
+  BIND(BOUND(?held) AS ?hasTerm)
+  BIND(COALESCE(?held, sem:Nothing) AS ?t)
   LATERAL { {
     # Nothing bound: the empty text.
-    FILTER(!BOUND(?t))
+    FILTER(!?hasTerm)
     BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
     BIND(IRI(CONCAT(STR($this), "/~empty-text")) AS ?emptyText)
     OPTIONAL { ?e0At l10n:of $this ; l10n:emptyText ?e0 }
@@ -485,7 +490,7 @@ WHERE {
     BIND(STR(COALESCE(?e0, ?e1, ?e2, ?e3, "Pick a term.")) AS ?emptyWords)
   } UNION {
     # The header: prefixed name, kind, IRI; then the comment.
-    FILTER(BOUND(?t))
+    FILTER(?hasTerm)
     BIND(IRI(CONCAT(STR($this), "/~head")) AS ?head)
     BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
     BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
@@ -517,7 +522,7 @@ WHERE {
     BIND(COALESCE(?comment, ?facts) AS ?afterHead)
   } UNION {
     # The facts, one value per row: what the term says, what points at it, its shape.
-    FILTER(BOUND(?t))
+    FILTER(?hasTerm)
     BIND(IRI(CONCAT(STR($this), "/~facts")) AS ?facts)
     BIND(EXISTS { $this c:controls ?selectTarget ; c:property ?selectProperty FILTER(isIRI(?selectTarget) && isIRI(?selectProperty)) } AS ?selectable)
     LATERAL {

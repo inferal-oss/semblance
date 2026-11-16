@@ -66,7 +66,9 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
   it('typing updates c:value and re-renders only the editor', () => {
     const h = workbench()
     const runs = (rule: string) => h.screen.engine.stats.byRule.get(C + rule)?.runs ?? 0
-    const before = { bench: runs('QueryWorkbenchRendering-fn'), table: runs('ResultTableRendering-sparql'), editor: runs('CodeEditorRendering-fn') }
+    // On Oxigraph (no sx: functions) the editor renders by its function twin.
+    const editorRuns = () => runs('CodeEditorRendering-sparql-screen') + runs('CodeEditorRendering-fn')
+    const before = { bench: runs('QueryWorkbenchRendering-fn'), table: runs('ResultTableRendering-sparql'), editor: editorRuns() }
     const rows = panel(h).querySelector('tbody')!.innerHTML
     const query = 'SELECT ?tab WHERE { ?tab a c:Tab }'
     type(h, query)
@@ -77,7 +79,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(spans).toContain('tok-var:?tab')
     expect(spans).toContain('tok-pname:c:Tab')
     expect(highlighted(h).textContent).toBe(query + ' ')
-    expect(runs('CodeEditorRendering-fn')).toBe(before.editor + 1)
+    expect(editorRuns()).toBe(before.editor + 1)
     expect(runs('QueryWorkbenchRendering-fn')).toBe(before.bench)
     expect(runs('ResultTableRendering-sparql')).toBe(before.table)
     expect(panel(h).querySelector('tbody')!.innerHTML).toBe(rows) // results change only on Run
@@ -335,7 +337,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(out).toMatch(/1 │ # Every component class/)
     expect(out).toContain('[ Run ]')
     expect(out).toContain('Results of: Components and their renderings · SELECT')
-    expect(implementationGaps(['components/workbench.ttl'])).toEqual({ noSparql: [], noFunction: [] })
+    expect(implementationGaps(['components/workbench.ttl', 'components/result-graph.ttl'])).toEqual({ noSparql: [], noFunction: [] })
   })
 })
 
@@ -532,7 +534,7 @@ describe('selecting a node in the graph view', () => {
       expect(a, `step ${i}`).toBe(b)
       expect(shells.map((h) => value(h, UI + 'queryGraph', C + 'selectedTerm'))).toEqual(Array(2).fill(value(shells[0]!, UI + 'queryGraph', C + 'selectedTerm')))
     })
-    expect(implementationGaps(['components/workbench.ttl'])).toEqual({ noSparql: [], noFunction: [] })
+    expect(implementationGaps(['components/workbench.ttl', 'components/result-graph.ttl'])).toEqual({ noSparql: [], noFunction: [] })
   })
 
   it('is remembered with the rest of the workbench', async () => {

@@ -13,12 +13,16 @@
 # shape's sh:message, which every field already renders (and the a11y layer
 # turns into aria-invalid + an announced message). Errors appear once the
 # field has a value; a required field without one is invalid but quiet.
+# Text of only white space is no value for a required field (sh:minCount): it
+# speaks as a value does, and no shape has to say so itself.
 #
 # A button with val:requires (fields) is disabled while any of them is
 # invalid. The layer runs before the components (stratum -10), so they render
 # its conclusions like any other input. Supported: sh:minCount (required),
 # sh:minLength, sh:maxLength, sh:pattern (+ sh:flags), sh:minInclusive,
-# sh:maxInclusive, sh:datatype (xsd:integer / xsd:decimal), sh:in.
+# sh:maxInclusive, sh:datatype (xsd:integer / xsd:decimal: the text must be in that datatype's
+# lexical form, so 1e3, which a browser's number input allows, is not one; .5 and 5. are decimals),
+# sh:in.
 #
 # A field that edits a property of another node (c:controls, c:property: a
 # combobox, a tag input) is checked by the values that node has: sh:minCount
@@ -98,16 +102,16 @@ WHERE {
   } } }
     BIND(xsd:double(REPLACE(?value, "^\\\\s+|\\\\s+$", "")) AS ?xp)
     BIND(?datatypep = xsd:integer || ?datatypep = xsd:decimal AS ?numericp)
-    BIND(IF(!BOUND(?value) || ?value = "",
+    BIND(IF(!BOUND(?value) || ?value = "" || (COALESCE(xsd:double(?minCountp), 0) > 0 && REGEX(?value, "^[\\\\t\\\\n\\\\r    -     　]*$")),
            IF(COALESCE(xsd:double(?minCountp), 0) > 0, COALESCE(?messagep, "Required."), ?none),
          IF(BOUND(?minLengthp) && STRLEN(?value) < xsd:double(?minLengthp), COALESCE(?messagep, CONCAT("At least ", STR(?minLengthp), " characters.")),
          IF(BOUND(?maxLengthp) && STRLEN(?value) > xsd:double(?maxLengthp), COALESCE(?messagep, CONCAT("At most ", STR(?maxLengthp), " characters.")),
          IF(BOUND(?patternp) && !REGEX(?value, STR(?patternp), COALESCE(STR(?flagsp), "")), COALESCE(?messagep, "Does not match the expected format."),
-         IF(COALESCE(?numericp, false) && (REPLACE(?value, "^\\\\s+|\\\\s+$", "") = "" || !BOUND(?xp) || (?datatypep = xsd:integer && ?xp != FLOOR(?xp))),
+         IF(COALESCE(?numericp, false) && (!BOUND(?xp) || !REGEX(?value, IF(?datatypep = xsd:integer, "^\\\\s*[-+]?[0-9]+\\\\s*$", "^\\\\s*[-+]?([0-9]+([.][0-9]*)?|[.][0-9]+)\\\\s*$"))),
             COALESCE(?messagep, IF(?datatypep = xsd:integer, "A whole number.", "A number.")),
          IF(BOUND(?minp) && !COALESCE(?xp >= xsd:double(?minp), false), COALESCE(?messagep, CONCAT("At least ", STR(?minp), ".")),
          IF(BOUND(?maxp) && !COALESCE(?xp <= xsd:double(?maxp), false), COALESCE(?messagep, CONCAT("At most ", STR(?maxp), ".")),
-         IF(EXISTS { ?shape sh:in ?listp } && NOT EXISTS { ?shape sh:in/rdf:rest*/rdf:first ?allowedp FILTER(STR(?allowedp) = ?value) },
+         IF(EXISTS { ?shape sh:in ?listp } && NOT EXISTS { ?shape (sh:in/rdf:first|sh:in/rdf:rest+/rdf:first) ?allowedp FILTER(STR(?allowedp) = ?value) },
             COALESCE(?messagep, "Not one of the allowed values."), ?none)))))))) AS ?plainProblem)
     FILTER(BOUND(?plainProblem))
   } ORDER BY STR(?shape) LIMIT 1 }
@@ -165,11 +169,11 @@ WHERE {
          IF(BOUND(?minLengthe) && STRLEN(?typed) < xsd:double(?minLengthe), COALESCE(?messagee, CONCAT("At least ", STR(?minLengthe), " characters.")),
          IF(BOUND(?maxLengthe) && STRLEN(?typed) > xsd:double(?maxLengthe), COALESCE(?messagee, CONCAT("At most ", STR(?maxLengthe), " characters.")),
          IF(BOUND(?patterne) && !REGEX(?typed, STR(?patterne), COALESCE(STR(?flagse), "")), COALESCE(?messagee, "Does not match the expected format."),
-         IF(COALESCE(?numerice, false) && (REPLACE(?typed, "^\\\\s+|\\\\s+$", "") = "" || !BOUND(?xe) || (?datatypee = xsd:integer && ?xe != FLOOR(?xe))),
+         IF(COALESCE(?numerice, false) && (!BOUND(?xe) || !REGEX(?typed, IF(?datatypee = xsd:integer, "^\\\\s*[-+]?[0-9]+\\\\s*$", "^\\\\s*[-+]?([0-9]+([.][0-9]*)?|[.][0-9]+)\\\\s*$"))),
             COALESCE(?messagee, IF(?datatypee = xsd:integer, "A whole number.", "A number.")),
          IF(BOUND(?mine) && !COALESCE(?xe >= xsd:double(?mine), false), COALESCE(?messagee, CONCAT("At least ", STR(?mine), ".")),
          IF(BOUND(?maxe) && !COALESCE(?xe <= xsd:double(?maxe), false), COALESCE(?messagee, CONCAT("At most ", STR(?maxe), ".")),
-         IF(EXISTS { ?shape sh:in ?liste } && NOT EXISTS { ?shape sh:in/rdf:rest*/rdf:first ?allowede FILTER(STR(?allowede) = ?typed) },
+         IF(EXISTS { ?shape sh:in ?liste } && NOT EXISTS { ?shape (sh:in/rdf:first|sh:in/rdf:rest+/rdf:first) ?allowede FILTER(STR(?allowede) = ?typed) },
             COALESCE(?messagee, "Not one of the allowed values."), ?none)))))))) AS ?entryProblem)
     FILTER(BOUND(?entryProblem))
   } ORDER BY STR(?shape) LIMIT 1 }
@@ -282,5 +286,5 @@ WHERE {
   BIND(?atCapacity AS ?full)
   BIND(COALESCE(?entryProblem, IF(?unreadable, ?datedProblem, ?none)) AS ?entry)
   # A button: disabled while a field it requires is invalid.
-  BIND(IF(EXISTS { $this val:requires/rdf:rest*/rdf:first ?field . ?field val:invalid ?flag FILTER(STR(?flag) = "true") }, true, ?none) AS ?disabled)
+  BIND(IF(EXISTS { $this (val:requires/rdf:first|val:requires/rdf:rest+/rdf:first) ?field . ?field val:invalid ?flag FILTER(STR(?flag) = "true") }, true, ?none) AS ?disabled)
 }""" .
