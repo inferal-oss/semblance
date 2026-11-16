@@ -399,6 +399,9 @@ sty:Raised rdfs:label "Raised"@en , "Піднята"@uk , "Erhöht"@de , "مرت
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
                  [ sty:property "row-gap" ; sty:raw "0" ] .
+# A cell whose item is hidden (an idle progress bar) takes no column, as the item would not.
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-c]):has(> [hidden])" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-c]) > *" ;
     sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
                  [ sty:property "justify-self" ; sty:raw "start" ] ,

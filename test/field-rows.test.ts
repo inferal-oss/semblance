@@ -235,6 +235,8 @@ describe('fields side by side', () => {
     const item = block('[data-sem-layout="field-row"] > :not([data-sem-c]) > *')
     expect(item).toMatch(/grid-row: 2/)
     expect(item).toMatch(/align-self: center/)
+    // a hidden item's cell takes no column
+    expect(block('[data-sem-layout="field-row"] > :not([data-sem-c]):has(> [hidden])')).toMatch(/display: none/)
     // a row of a list with a field in it: the other cells in the control track, each keeping its column
     expect(block('[data-sem-layout="subgrid"]:has(> [data-sem-row-span])')).toMatch(/grid-auto-flow: column/)
     expect(block('[data-sem-layout="subgrid"]:has(> [data-sem-row-span]) > :not([data-sem-row-span])')).toMatch(/grid-row: 2/)

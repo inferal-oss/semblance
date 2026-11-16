@@ -24,7 +24,8 @@ cells and the fields are the row's children, in list order (ord:immediatelyPrece
 another layout, or none, renders its children directly as before. The theme (theme/layout.ttl): every child of a
 field row spans four tracks (grid-row: span 4), a field (a two-part one too) and a cell alike; a cell is a subgrid
 of those tracks with its item in the control track (grid-row: 2), at the start of its column and centred, so a
-taller item makes the control track as tall as it is. On a phone every child takes a whole line's tracks, and the
+taller item makes the control track as tall as it is; a cell whose item is hidden (the hidden attribute) is not
+displayed, so it takes no column, as the item would not. On a phone every child takes a whole line's tracks, and the
 lines are spaced by the margin under every child but the last. The phone rule that spanned a non-field over two
 tracks at their foot (grid-row: span 2, align-self: end) is gone.""" ;
     chg:forwardGuide """Nothing to move in a graph. A stylesheet or a script that found a field row's button as the
