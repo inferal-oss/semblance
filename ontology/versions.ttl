@@ -93,7 +93,7 @@ c:Calendar sem:version 1 ; sem:closure "fd8ca49460639de0" ; sem:internal "new" .
 c:CalendarEntry sem:version 1 ; sem:closure "56748a3c2cae2fdb" ; sem:internal "new" .
 c:Canvas sem:version 1 ; sem:closure "69eab156284dc6d5" ; sem:internal "new" .
 c:CanvasItem sem:version 1 ; sem:closure "ecda9dc74d7abbf0" ; sem:internal "new" .
-c:Card sem:version 2 ; sem:closure "1a9403f0448a411e" ; sem:internal "On a phone a specimen, its stage, a card's body and a surface take one step less inset, and a dock panel's header wraps, so what they hold fits at 320px (#246)" .
+c:Card sem:version 3 ; sem:closure "7ec1ab3dec1e5785" ; sem:changedBy change:card-title-link .
 c:Charset sem:version 1 ; sem:closure "e0bd36111a8206a5" ; sem:internal "new" .
 c:Chart sem:version 1 ; sem:closure "c4cbf309f649c5a7" ; sem:internal "new" .
 c:ChartPoint sem:version 2 ; sem:closure "e8efc0f602b5e769" ; sem:changedBy change:charts-on-shared-parts .

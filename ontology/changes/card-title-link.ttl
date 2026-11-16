@@ -1,0 +1,23 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:card-title-link a chg:Change ;
+    rdfs:label "A card with an address links its title"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/86> ;
+    chg:motivation """A c:Card could not link to the resource it shows without becoming a c:LinkedCard, whose one
+link wraps the whole card and so cannot hold actions of its own.""" ;
+    chg:substance """A c:Card with c:href, or with a nav:href the navigation layer resolved (which wins), renders its
+title as h2 > a[href]; the badge, note and header actions stay outside the link. The Text rendering's title line
+ends with " <address>". c:CardShape allows one c:href, a web, mail or relative address. A card without an address
+renders as before.""" ;
+    chg:forwardGuide """Nothing to move. A c:Card that already carried a c:href for another purpose now links its
+title: remove the c:href if that is not wanted.""" ;
+    chg:backwardGuide """Going back, a card's c:href is ignored and its title is plain text; use a c:LinkedCard or a
+c:Link among its actions instead.""" ;
+    chg:affects c:Card .

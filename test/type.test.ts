@@ -108,8 +108,8 @@ describe('linked Card titles', () => {
     const { root } = showPage('layout')
     const card = root('ly-linked-card-example')
     expect(card.localName).toBe('article')
-    expect(card.querySelector('header h2 > a')?.getAttribute('href')).toBe('#docs')
-    expect(card.querySelector('header .sem-actions > a')?.getAttribute('href')).toBe('#components')
+    expect(card.querySelector('header h2 > a')?.getAttribute('href')).toBe('/docs/')
+    expect(card.querySelector('header .sem-actions > a')?.getAttribute('href')).toBe('/components/')
     expect(card.querySelector('header h2 > a')?.contains(card.querySelector('.sem-actions'))).toBe(false)
   })
 
