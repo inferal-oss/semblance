@@ -3,10 +3,10 @@
 // own, already rendered, which the client takes over without rendering it again (with preload,
 // the pages' <head> also preloads the client's modules and the engine's WASM). In a single-file
 // build (vite-plugin-singlefile) the one file is rendered, with the stylesheet inline.
-import { readFileSync } from 'node:fs'
-import { dirname, resolve, sep } from 'node:path'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Plugin, ResolvedConfig } from 'vite'
+import { type Plugin, type ResolvedConfig, searchForWorkspaceRoot } from 'vite'
 import { buildSite, loadSite, siteOntology } from './site.ts'
 import { minifyTurtle } from './turtle-min.ts'
 
@@ -59,7 +59,44 @@ export function semblance(opts: SemblancePluginOptions = {}): Plugin[] {
       return `export default ${JSON.stringify(minifyTurtle(readFileSync(path!, 'utf8')))}`
     },
   }
-  return [turtle, subset(opts), site(opts)]
+  return [turtle, linked(), subset(opts), site(opts)]
+}
+
+/**
+ * The real folders of the `node_modules` a project reaches from `root` (it and each folder above
+ * it) that are links to somewhere else, such as a git worktree's link to the main checkout's. The
+ * dev server resolves a module through the link to its real path, and serves it only from an
+ * allowed folder (`server.fs.allow`), which the project's own folder no longer contains: these
+ * are the folders to allow as well.
+ */
+export function linkedModules(root: string): string[] {
+  const found: string[] = []
+  for (let dir = resolve(root); ; dir = dirname(dir)) {
+    const modules = join(dir, 'node_modules')
+    if (existsSync(modules)) {
+      const real = realpathSync(modules)
+      if (real !== join(realpathSync(dir), 'node_modules') && !found.includes(real)) found.push(real)
+    }
+    if (dirname(dir) === dir) return found
+  }
+}
+
+/**
+ * The dev server serves what a linked `node_modules` holds (linkedModules): engines' WASM, fonts,
+ * any module resolved through the link. Added to the project's allowed folders, or to Vite's
+ * default (the workspace's root) when it states none.
+ */
+function linked(): Plugin {
+  return {
+    name: NAME + ':linked-modules',
+    apply: 'serve',
+    config(user) {
+      const root = resolve(user.root ?? '.')
+      const extra = linkedModules(root)
+      if (extra.length === 0) return
+      return { server: { fs: { allow: user.server?.fs?.allow ? extra : [searchForWorkspaceRoot(root), ...extra] } } }
+    },
+  }
 }
 
 /**

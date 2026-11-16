@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
+import { linkedModules } from '../../src/node/vite.ts'
 import { todoStore } from '../remote/store.ts'
 
 // In this repository the packages are their own source; an app that installed them imports
@@ -14,7 +15,8 @@ export default defineConfig({
       { find: /^@inferal-oss\/semblance-react\/views$/, replacement: repo + '/packages/react/src/views.ts' },
     ],
   },
-  server: { fs: { allow: [repo] } },
+  // A linked node_modules (a worktree's) is served from where it really is.
+  server: { fs: { allow: [repo, ...linkedModules(repo)] } },
   optimizeDeps: { exclude: ['oxigraph'], include: ['n3', 'react', 'react-dom/client'] },
   plugins: [
     {
