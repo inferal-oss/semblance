@@ -8,7 +8,7 @@ const change = (value: string | undefined) => value === NS.c + 'DiffAdded' ? ['a
 const viewScreen: FnRule = (ctx, focus) => {
   const out = ctx.out(focus)
   const lines = nodes(ctx, ctx.object(focus, NS.c + 'items'))
-  out.renders(out.el('root', 'Div', { role: 'list', 'aria-label': text(ctx, focus, C.label) ?? 'Text changes' }, lines))
+  out.renders(out.el('root', 'Div', { role: 'list', 'aria-label': text(ctx, focus, C.label) ?? text(ctx, ctx.nn(NS.c + 'DiffViewPhrase'), RDFS_LABEL) ?? '' }, lines))
   return out.quads
 }
 

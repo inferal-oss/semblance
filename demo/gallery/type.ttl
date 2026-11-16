@@ -122,7 +122,8 @@ ui:ty-diff-removed a c:DiffLine ; c:value "old world" ; c:diffKind c:DiffRemoved
 ui:ty-diff-added a c:DiffLine ; c:value "Semblance world" ; c:diffKind c:DiffAdded .
 ui:ty-diff-after a c:DiffLine ; c:value "Goodbye." ; c:diffKind c:DiffContext .
 ui:ty-diff a c:Flippable ; c:front ui:ty-diff-spec .
-ui:ty-diff-spec a c:Specimen ; c:demonstrates c:DiffView , c:DiffLine ; c:label "Text diff" ;
+ui:ty-diff-spec a c:Specimen ; c:demonstrates c:DiffView , c:DiffLine ;
+    c:label "Text diff" , "Порівняння тексту"@uk , "Textvergleich"@de , "مقارنة النص"@ar ;
     c:help "An ordered list of plain text lines. Each line is added, removed or unchanged; the sign and colors follow the theme." ;
     c:children ( ui:ty-diff-view ) .
 

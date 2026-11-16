@@ -16,6 +16,8 @@ c:DiffKind a owl:Class .
 c:DiffAdded a c:DiffKind ; rdfs:label "Added"@en , "Додано"@uk , "Hinzugefügt"@de , "مضاف"@ar .
 c:DiffRemoved a c:DiffKind ; rdfs:label "Removed"@en , "Вилучено"@uk , "Entfernt"@de , "محذوف"@ar .
 c:DiffContext a c:DiffKind ; rdfs:label "Unchanged"@en , "Без змін"@uk , "Unverändert"@de , "دون تغيير"@ar .
+c:DiffViewPhrase a c:Phrase ; rdfs:comment "The accessible name of a c:DiffView without a c:label."@en ;
+    rdfs:label "Text changes"@en , "Зміни тексту"@uk , "Textänderungen"@de , "تغييرات النص"@ar .
 
 c:DiffViewRendering a sem:Rendering ; sem:targets c:DiffView ; sem:stratum 0 .
 c:DiffViewRendering-fn-screen a sem:Rule ; sem:implements c:DiffViewRendering ; sem:modality mod:Screen ; sem:function "diff:view-screen" .
@@ -35,7 +37,9 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelAttr)
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
-  BIND(STR(COALESCE(?localLabel, ?ownLabel, "Text changes")) AS ?label)
+  OPTIONAL { ?phraseAt l10n:of c:DiffViewPhrase ; l10n:name ?localPhrase }
+  OPTIONAL { c:DiffViewPhrase rdfs:label ?enPhrase FILTER(langMatches(lang(?enPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:DiffViewPhrase ; l10n:name ?l10nPick }) }
+  BIND(STR(COALESCE(?localLabel, ?ownLabel, ?localPhrase, ?enPhrase)) AS ?label)
   {} UNION {
     $this c:items/rdf:rest*/rdf:first ?line .
   } UNION {

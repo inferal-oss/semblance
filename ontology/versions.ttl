@@ -119,6 +119,8 @@ c:DateRangeField sem:version 1 ; sem:closure "cccf5b6e8ced0adf" ; sem:internal "
 c:DescriptionList sem:version 1 ; sem:closure "6f79cc9f9a5162d7" ; sem:internal "new" .
 c:Desktop sem:version 1 ; sem:closure "47242e7e921a9a6c" ; sem:internal "new" .
 c:Dialog sem:version 1 ; sem:closure "a868e0e741834336" ; sem:internal "new" .
+c:DiffLine sem:version 1 ; sem:closure "b70109eda7fe8da3" ; sem:internal "new" .
+c:DiffView sem:version 1 ; sem:closure "b0f473d36a50e3a6" ; sem:internal "new" .
 c:Divider sem:version 1 ; sem:closure "c1622b60bcd49b91" ; sem:internal "new" .
 c:DockPanel sem:version 2 ; sem:closure "d5858ed71af1ef9b" ; sem:internal "On a phone a specimen, its stage, a card's body and a surface take one step less inset, and a dock panel's header wraps, so what they hold fits at 320px (#246)" .
 c:DockResizable sem:version 1 ; sem:closure "632091bd30f8fb34" ; sem:internal "new" .
