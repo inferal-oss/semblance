@@ -441,7 +441,11 @@ component defers to a hook it should not override with a `sty:state` such as
   fields (`pos:FieldRow`): it takes the row's own tracks (label, control, help, error) and the
   row's other cells, a tag or a unit or a button, sit in the control track, centred on the control
   rather than on the label and control together (#518). A field's parts go in their tracks by role
-  (`data-sem-part`), so a field without a label still has its control in the control track.
+  (`data-sem-part`), so a field without a label still has its control in the control track. In a
+  `pos:FieldRow` a child that is not a field goes in a cell of its own (`c:Stack` mints it), which
+  takes a line's four tracks as a field does and holds it in the control track, so on a phone, where
+  the row wraps, a button sits beside the control of the line it lands on and never under another
+  item (#522). Style such an item as `[data-sem-layout=field-row] > :not([data-sem-c]) > …`.
 - **Columns whose parts line up.** A container says `pos:layout pos:AlignedColumns` (or is any grid
   of columns, such as a `c:Grid`, that says it): each child with parts takes its rows from it
   (`pos:rows pos:RowSubgrid`) and spans one row per part (`pos:rowSpan`). Both are derived, before the

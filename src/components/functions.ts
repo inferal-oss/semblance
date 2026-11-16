@@ -4,7 +4,7 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { formatLocale } from '../engine/context.ts'
-import { BEH, C, DND, H, L10N, LC, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, DND, H, L10N, LC, MOD, NS, ORD, POS, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
 import { seriesFunctions } from './series.ts'
 import { ganttFunctions } from './gantt.ts'
@@ -22,7 +22,7 @@ import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
 import { statusFunctions } from '../layers/status.ts'
 import { constraintsFunctions } from '../layers/constraints.ts'
-import { positionFunctions } from '../layers/position.ts'
+import { declaredParts, positionFunctions } from '../layers/position.ts'
 import { l10nFunctions } from '../layers/l10n.ts'
 import { announceFunctions } from '../layers/announce.ts'
 import { clipboardFunctions } from '../layers/clipboard.ts'
@@ -72,7 +72,10 @@ import { viewRows } from '../view/rows.ts'
 const stack: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const children = rdfList(ctx, ctx.object(focus, C.children)).filter((t): t is NamedNode => t.termType === 'NamedNode')
-  o.renders(o.el('root', 'Div', {}, children))
+  // in a row of fields, what is not a field goes in a cell of its own (#522)
+  const cells = ctx.objects(focus, POS.layout).some((l) => l.value === POS.FieldRow)
+  const slots = cells ? children.map((child) => (declaredParts(ctx, child) === undefined ? o.el('cell-' + encodeForUri(child.value), 'Div', {}, [child]) : child)) : children
+  o.renders(o.el('root', 'Div', {}, slots))
   return o.quads
 }
 

@@ -384,10 +384,22 @@ sty:Raised rdfs:label "Raised"@en , "Піднята"@uk , "Erhöht"@de , "مرت
 [] a sty:StyleRule ; sty:part ":is([data-sem-layout=field-row], [data-sem-layout=subgrid]) > [data-sem-row-span] > :not([data-sem-part=field-label]) ~ :not([role=dialog], [role=listbox])" ;
     sty:declares [ sty:property "margin-block-start" ; sty:token tok:space-2 ] ,
                  [ sty:property "contain" ; sty:raw "inline-size" ] .
+# Every child of a field row takes one line's four tracks, label, control, help, error: a field by its
+# parts (a choice, with two, leaves help and error empty), anything else in a cell of its own (c:Stack
+# mints it). So whatever comes next starts a line of its own or the next column of this one, never the
+# help and error tracks under something shorter (#522).
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> *" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "span 4" ] .
 # What is not a field (a button acting on the fields, a switch, a segmented control) sits beside the
 # controls, at its own width, centred on their track: a shorter control (a switch) lines up on their
-# middle, one of the control height on their edges.
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-row-span])" ;
+# middle, one of the control height on their edges, and a taller one makes the track as tall as it is.
+# Its cell (no component of its own) is a subgrid of the line, with nothing in the label track.
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-c])" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "row-gap" ; sty:raw "0" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-c]) > *" ;
     sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
                  [ sty:property "justify-self" ; sty:raw "start" ] ,
                  [ sty:property "align-self" ; sty:raw "center" ] .
@@ -398,15 +410,12 @@ sty:Raised rdfs:label "Raised"@en , "Піднята"@uk , "Erhöht"@de , "مرت
 [] a sty:StyleRule ; sty:when pos:Subgrid ; sty:state ":has(> [data-sem-row-span])" ; sty:part "> :not([data-sem-row-span])" ;
     sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
                  [ sty:property "align-self" ; sty:raw "center" ] .
-# On a phone the fields wrap, two or one to a line (each line with rows of its own).
+# On a phone the fields wrap, two or one to a line (each line with tracks of its own). Every child
+# takes a whole line's tracks, so a button lands beside the control of the line it is on, or starts
+# a line of its own.
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "grid-auto-flow" ; sty:raw "row" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 9rem), 1fr))" ] .
-# Placed as it comes, a button may start in a line's label row: it takes that row and the control
-# row and sits at their foot, beside the controls of the line it lands in.
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ; sty:part "> :not([data-sem-row-span])" ;
-    sty:declares [ sty:property "grid-row" ; sty:raw "span 2" ] ,
-                 [ sty:property "align-self" ; sty:raw "end" ] .
-# Lines of wrapped fields are spaced by the margin under each field (the tracks have no gap).
-[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ; sty:part "> [data-sem-row-span]:not(:last-child)" ;
+# Lines are spaced by the margin under each child (the tracks have no gap).
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ; sty:part "> :not(:last-child)" ;
     sty:declares [ sty:property "margin-block-end" ; sty:token tok:space-3 ] .

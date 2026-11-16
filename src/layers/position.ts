@@ -16,7 +16,7 @@ const alignedColumns: FnRule = (ctx, focus) => {
 }
 
 /** The most parts any class of `focus` declares (pos:rowParts), if one does. */
-const declaredParts = (ctx: RuleContext, focus: Parameters<RuleContext['objects']>[0]) => {
+export const declaredParts = (ctx: RuleContext, focus: Parameters<RuleContext['objects']>[0]) => {
   let declared: number | undefined
   const seen = new Set<string>()
   const classes = ctx.objects(focus, RDF_TYPE)

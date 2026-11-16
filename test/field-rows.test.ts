@@ -8,6 +8,11 @@
 // in their tracks by role (data-sem-part), so a field without a label keeps its control in the
 // control track.
 //
+// Anything in a field row that isn't a field goes in a cell of its own (c:Stack mints it), which takes
+// a line's tracks as a field does and holds the item in the control track: wrapped on a phone, the
+// item sits beside the control of the line it is on, never under another item in a field's help and
+// error tracks (#522).
+//
 // Layout itself needs a browser; this checks what decides it: the derivations (both
 // implementations, also as the graph changes), the anatomy every field shares (label first, control
 // second, so part N lands in track N), and the compiled rules.
@@ -91,6 +96,41 @@ describe('fields side by side', () => {
       html.push(app.innerHTML)
     }
     expect(html[1]).toBe(html[0])
+  })
+
+  it('what is not a field goes in a cell of its own, in list order; alike under SPARQL and functions', () => {
+    const html: string[][] = [[], []]
+    for (const [i, prefer] of (['sparql', 'function'] as const).entries()) {
+      const { store, runtime, dom, el, app } = project(prefer)
+      const kids = (id: string) => [...el(id).children].map((k) => (k.hasAttribute('data-sem-c') ? k.getAttribute('data-sem-c') : `cell(${[...k.children].map((c) => c.getAttribute('data-sem-c')).join()})`))
+      expect(kids('row'), prefer).toEqual(['choice', 'text-field', 'text-field', 'cell(button)', 'cell(stack)'])
+      expect(kids('bare'), prefer).toEqual(['text-field', 'text-area', 'field', 'cell(button)'])
+      expect(dom.keyOf(el('go').parentElement!), prefer).toBe(`${UI}row/~cell-${encodeURIComponent(UI + 'go')}`)
+      // a cell is not a component: no slug, no hooks, nothing but its item
+      const cell = el('go').parentElement!
+      expect([...cell.attributes].map((a) => a.name), prefer).toEqual([])
+      // only a field row has cells: a row of a list, a column, a bar do not
+      expect(kids('sheetRow'), prefer).toEqual(['text-field', 'tag'])
+      expect(kids('root'), prefer).toEqual(['stack', 'toolbar', 'stack', 'stack', 'stack'])
+      html[i]!.push(app.innerHTML)
+      // the graph changes: a button moves to the front, then the row stops being a field row
+      const f = store.factory
+      const nn = (s: string) => f.namedNode(s)
+      const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+      const cells = ['bareGo', 'unlabelled', 'notes', 'wrapped'].map((_, k) => nn(UI + 'bare-list-' + k))
+      const add = [f.quad(nn(UI + 'bare'), nn(NS.c + 'children'), cells[0]!, f.defaultGraph())]
+      for (const [k, id] of ['bareGo', 'unlabelled', 'notes', 'wrapped'].entries())
+        add.push(f.quad(cells[k]!, nn(RDF + 'first'), nn(UI + id), f.defaultGraph()), f.quad(cells[k]!, nn(RDF + 'rest'), cells[k + 1] ?? nn(RDF + 'nil'), f.defaultGraph()))
+      runtime.apply({ add, remove: store.match(nn(UI + 'bare'), nn(NS.c + 'children'), null, f.defaultGraph()) })
+      dom.flush()
+      expect(kids('bare'), prefer).toEqual(['cell(button)', 'text-field', 'text-area', 'field'])
+      html[i]!.push(app.innerHTML)
+      runtime.apply({ add: [], remove: store.match(nn(UI + 'bare'), nn(NS.pos + 'layout'), null, f.defaultGraph()) })
+      dom.flush()
+      expect(kids('bare'), prefer).toEqual(['button', 'text-field', 'text-area', 'field'])
+      html[i]!.push(app.innerHTML)
+    }
+    expect(html[1]).toEqual(html[0])
   })
 
   it('a field in a row of a list takes the row\'s tracks, the cells beside it do not; alike under SPARQL and functions', () => {
@@ -189,12 +229,19 @@ describe('fields side by side', () => {
     const after = block(`${fields} > :not([data-sem-part=field-label]) ~ :not([role=dialog], [role=listbox])`)
     expect(after).toMatch(/margin-block-start: var\(--sem-space-2\)/)
     expect(after).toMatch(/contain: inline-size/)
-    expect(block('[data-sem-layout="field-row"] > :not([data-sem-row-span])')).toMatch(/grid-row: 2/)
+    // every child takes a line's four tracks; a cell is a subgrid of them with its item in the control track
+    expect(block('[data-sem-layout="field-row"] > *')).toMatch(/grid-row: span 4/)
+    expect(block('[data-sem-layout="field-row"] > :not([data-sem-c])')).toMatch(/grid-template-rows: subgrid/)
+    const item = block('[data-sem-layout="field-row"] > :not([data-sem-c]) > *')
+    expect(item).toMatch(/grid-row: 2/)
+    expect(item).toMatch(/align-self: center/)
     // a row of a list with a field in it: the other cells in the control track, each keeping its column
     expect(block('[data-sem-layout="subgrid"]:has(> [data-sem-row-span])')).toMatch(/grid-auto-flow: column/)
     expect(block('[data-sem-layout="subgrid"]:has(> [data-sem-row-span]) > :not([data-sem-row-span])')).toMatch(/grid-row: 2/)
     const compact = css.slice(css.indexOf('@media (max-width: 640px)', css.indexOf('@layer sem.variants')))
     expect(compact).toMatch(/\[data-sem-layout="field-row"\] \{[^}]*grid-auto-flow: row/)
+    // wrapped, nothing is placed by a span of its own: no item at a line's foot, none in two tracks
+    expect(compact.slice(0, compact.indexOf('\n}'))).not.toMatch(/align-self: end|span 2/)
     // a choice is a field: its select is the shared single-line box; the pill is the inline variant's
     expect(css).toMatch(/\[data-sem-c=choice\] select\)[^{]*\{[^}]*block-size: var\(--control-h, var\(--sem-control-height\)\)/)
     expect(css).toMatch(/\[data-sem-c="choice"\]\[data-sem-label-placement="inline"\] \{[^}]*display: inline-flex/)
