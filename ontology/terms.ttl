@@ -1524,6 +1524,7 @@ sem:Narrower a sem:Term .
 sem:NextFrame a sem:Term .
 sem:Observed a sem:Term .
 sem:OnIntent a sem:Term .
+sem:OpenPreview a sem:Term .
 sem:Query a sem:Term .
 sem:QueryDeadline a sem:Term .
 sem:QueryWork a sem:Term .

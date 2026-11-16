@@ -184,7 +184,8 @@ sem:anticipates a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
 options would show is evaluated in idle time, an option at a time, as when it is pointed at (where its
 warmth allows: sem:OnIntent, sem:Eager), and kept. A first click shows it at once, and so does a tap,
 which no pointing comes before. Only what the option would show: an inner switch's other cases stay
-parked. For the few choices a visitor is likely to make next, such as a site's sections."""@en .
+parked. For the few choices a visitor is likely to make next, such as a site's sections. On a control
+with no options (a toggle of a window's c:open), what it opens (sem:OpenPreview), one step away."""@en .
 sem:anticipatesNear a owl:DatatypeProperty ; rdfs:range xsd:nonNegativeInteger ;
     rdfs:comment """On a choice (a section's own list of pages, tabs): once the page is quiet, while the choice is
 shown, what the options up to this many places either side of the chosen one would show is evaluated in
@@ -192,13 +193,17 @@ idle time, as sem:anticipates does for every option, nearest first (at each dist
 the previous; places are the order the choice shows its options in). It follows the choice: what moves
 out of reach is no longer kept, so its views stop being maintained. For a choice with many options,
 of which the ones next to the current one are the likely next (#436). Across choices, options are
-prepared by their distance from what each has chosen: the likely ones first."""@en .
+prepared by their distance from what each has chosen: the likely ones first. A choice inside
+something that opens (tabs in a window) is planned again as it is shown or hidden."""@en .
 
 # What a control would show, when it is pointed at: intent previews. Each is a
 # SELECT with $control (the component the pointed element belongs to) and
 # $option (what the element c:selects) that returns ?content - the hidden
-# component that choosing it would show. The host runs them on hover / focus
-# and evaluates that content ahead of the click (where its warmth allows).
+# component that choosing it would show. A preview that does not read $option is
+# for a control with no options (a toggle, a button that opens something): it is
+# asked of the component the innermost pointed element belongs to. The host runs
+# them on hover / focus and evaluates that content ahead of the click (where its
+# warmth allows).
 sem:IntentPreview a owl:Class ;
     rdfs:comment "A query from a pointed-at choice ($control, $option) to the ?content it would show."@en .
 
@@ -213,6 +218,16 @@ sem:SwitchPreview a sem:IntentPreview ;
 sem:TabPreview a sem:IntentPreview ;
     rdfs:label "a tab's content"@en ;
     sem:select """SELECT DISTINCT ?content WHERE { $option a c:Tab ; c:content ?content }""" .
+# A control with no options: what it opens (a toggle of a window's c:open, a button that c:opens an
+# overlay). Without $option, it is asked of the control the pointed element belongs to (#434).
+sem:OpenPreview a sem:IntentPreview ;
+    rdfs:label "what a control opens"@en ;
+    rdfs:comment "A control that opens a frame or an overlay (c:Toggle on its c:open, c:opens): its body or content."@en ;
+    sem:select """SELECT DISTINCT ?content WHERE {
+  { $control c:controls ?opened ; c:property c:open } UNION { $control c:opens ?opened }
+  { ?opened c:body ?content } UNION { ?opened c:content ?content }
+  FILTER(isIRI(?content))
+}""" .
 
 sem:prefixName a owl:DatatypeProperty ;
     rdfs:comment """A prefix the engine knows (the framework's; the graph's own are sh:declare): each engine states
