@@ -11,7 +11,7 @@ running example is `examples/react/`: the todo app's graph (`src/examples/todo.t
 drawn by a small design system of the example's own.
 
 ```bash
-npm install @inferal-oss/semblance @inferal-oss/semblance-react react react-dom
+npm install @semblance-dev/semblance @semblance-dev/semblance-react react react-dom
 npm install --save-dev vite
 ```
 
@@ -99,8 +99,8 @@ smaller.
 ## 3. Mount with the adapter
 
 ```ts
-import { mount } from '@inferal-oss/semblance/web'
-import { reactHosts } from '@inferal-oss/semblance-react'
+import { mount } from '@semblance-dev/semblance/web'
+import { reactHosts } from '@semblance-dev/semblance-react'
 
 await mount(document.getElementById('app')!, {
   root: 'https://example.org/todo#page',
@@ -139,8 +139,8 @@ The site description takes the same adapter, from the package's server entry (it
 `react-dom/server`'s `renderToString`):
 
 ```ts
-import { defineSite } from '@inferal-oss/semblance/node'
-import { reactHosts } from '@inferal-oss/semblance-react/server'
+import { defineSite } from '@semblance-dev/semblance/node'
+import { reactHosts } from '@semblance-dev/semblance-react/server'
 
 export default defineSite({ root: '…', graphs: () => [...], hosts: reactHosts({ components }) })
 ```
@@ -215,6 +215,6 @@ see [Extending or narrowing the policy](SAFETY.md#extending-or-narrowing-the-pol
 | `src/render/dom.ts`, `src/render/serialize.ts` | `<sem-host>`, adopt and hydrate, custom element props |
 | `src/web/mount.ts`, `src/server/render.ts`, `src/server/site.ts` | the `hosts` option |
 | `src/foreign.ts` | `outputsOf`, `emitOutput`, shared with islands |
-| `packages/react/` | `@inferal-oss/semblance-react` |
+| `packages/react/` | `@semblance-dev/semblance-react` |
 | `examples/react/` | the design system, its bindings, the example |
 | `test/hosted.test.ts` | rendering, parity, events, outputs, context, cost, SSR and hydration, themes, custom elements, fallback |

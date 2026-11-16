@@ -1,9 +1,9 @@
 // The todo app's graph (src/examples/todo.ts), drawn by a design system of the example's own
-// (design-system.tsx) through @inferal-oss/semblance-react. Semblance projects, reacts and renders the
+// (design-system.tsx) through @semblance-dev/semblance-react. Semblance projects, reacts and renders the
 // text; React draws the hosted components. The page is rendered at build time and taken over here.
-import { L10N } from '@inferal-oss/semblance'
-import { mount } from '@inferal-oss/semblance/web'
-import { reactHosts } from '@inferal-oss/semblance-react'
+import { L10N } from '@semblance-dev/semblance'
+import { mount } from '@semblance-dev/semblance/web'
+import { reactHosts } from '@semblance-dev/semblance-react'
 import { todoApp, todoReactions } from '../../src/examples/todo.ts'
 import app from './app.ttl?raw'
 import bindings from './bindings.ttl?raw'

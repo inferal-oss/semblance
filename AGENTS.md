@@ -226,7 +226,7 @@ npm run pack:check     # the npm packages as a consumer gets them (docs/RELEASIN
 - **Gates are the maintainer's.** Don't merge past a failing review gate (an approvals check), a "stays unmerged until …" condition, or a design-approval wait without the
   maintainer's go-ahead. When a permission check blocks a merge, a force-push or another action,
   stop and ask the maintainer in the same session; another agent never does it in your place.
-- Licence: `MIT OR Apache-2.0`. The npm package is `@inferal-oss/semblance`.
+- Licence: `MIT OR Apache-2.0`. The npm package is `@semblance-dev/semblance`.
 
 ## Map
 

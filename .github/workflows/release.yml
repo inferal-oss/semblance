@@ -1,4 +1,4 @@
-# Publish @inferal-oss/semblance and @inferal-oss/semblance-react to npm with provenance, when a
+# Publish @semblance-dev/semblance and @semblance-dev/semblance-react to npm with provenance, when a
 # GitHub release is published for a tag v<version> (docs/RELEASING.md). The packages' versions must be
 # the tag's; the checks of a publish run first. npm authenticates the workflow by its OIDC token
 # (trusted publishing, configured for both packages on npmjs.com); a package not yet on npm, which

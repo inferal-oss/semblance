@@ -22,7 +22,7 @@ await mount(element, { root: 'https://example.org/hello#page', graphs: [tally, a
 With `subset`, the static build and the request handler render from a store of the subset (so the
 built `semblance.css` has only its styles), and the client loads the plugin's module in place of
 the whole ontology, which it then does not fetch. Outside this repository, an app's TypeScript sees
-the module with `/// <reference types="@inferal-oss/semblance/virtual" />`. In Node,
+the module with `/// <reference types="@semblance-dev/semblance/virtual" />`. In Node,
 `appOntology(graphs)` returns the subset, and `loadStoreWithOntology(kind, subset.turtle, ...graphs)`
 loads a store from it.
 

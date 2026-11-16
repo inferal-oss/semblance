@@ -1,5 +1,5 @@
-// The packages as a consumer gets them (docs/RELEASING.md): pack @inferal-oss/semblance and
-// @inferal-oss/semblance-react, check what the tarballs carry, install them into an empty project
+// The packages as a consumer gets them (docs/RELEASING.md): pack @semblance-dev/semblance and
+// @semblance-dev/semblance-react, check what the tarballs carry, install them into an empty project
 // and build and render examples/hello from them.
 //
 //   npx tsx scripts/pack-check.ts [--no-build] [--keep]     (npm run pack:check)
@@ -79,12 +79,12 @@ writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'hello', private
 writeFileSync(
   join(app, 'vite.config.ts'),
   `import { defineConfig } from 'vite'
-import { semblance } from '@inferal-oss/semblance/node'
+import { semblance } from '@semblance-dev/semblance/node'
 
 export default defineConfig({
   optimizeDeps: {
-    exclude: ['@inferal-oss/semblance', 'oxigraph'],
-    include: ['@inferal-oss/semblance > n3'],
+    exclude: ['@semblance-dev/semblance', 'oxigraph'],
+    include: ['@semblance-dev/semblance > n3'],
   },
   plugins: [semblance({ config: 'semblance.config.ts' })],
 })
@@ -93,7 +93,7 @@ export default defineConfig({
 writeFileSync(
   join(app, 'env.d.ts'),
   `/// <reference types="vite/client" />
-/// <reference types="@inferal-oss/semblance/virtual" />
+/// <reference types="@semblance-dev/semblance/virtual" />
 `,
 )
 writeFileSync(
@@ -111,8 +111,8 @@ writeFileSync(
 writeFileSync(
   join(app, 'render.mjs'),
   `import { readFileSync } from 'node:fs'
-import { loadStore } from '@inferal-oss/semblance/node'
-import { renderToString } from '@inferal-oss/semblance/server'
+import { loadStore } from '@semblance-dev/semblance/node'
+import { renderToString } from '@semblance-dev/semblance/server'
 
 const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8')
 const store = loadStore('wat', read('tally.ttl'), read('app.ttl'))
@@ -123,9 +123,9 @@ console.log(JSON.stringify({ html, css: css?.length ?? 0, status }))
 // The React package's declarations, against the core's (a peer dependency).
 writeFileSync(
   join(app, 'hosts.ts'),
-  `import type { HostRenderer } from '@inferal-oss/semblance'
-import { reactHosts } from '@inferal-oss/semblance-react'
-import { reactHosts as serverHosts } from '@inferal-oss/semblance-react/server'
+  `import type { HostRenderer } from '@semblance-dev/semblance'
+import { reactHosts } from '@semblance-dev/semblance-react'
+import { reactHosts as serverHosts } from '@semblance-dev/semblance-react/server'
 
 export const client: HostRenderer = reactHosts({ components: {} })
 export const server: HostRenderer = serverHosts({ components: {} })
@@ -133,8 +133,8 @@ export const server: HostRenderer = serverHosts({ components: {} })
 )
 writeFileSync(
   join(app, 'react.mjs'),
-  `const react = await import('@inferal-oss/semblance-react')
-const server = await import('@inferal-oss/semblance-react/server')
+  `const react = await import('@semblance-dev/semblance-react')
+const server = await import('@semblance-dev/semblance-react/server')
 console.log(JSON.stringify({ react: typeof react.reactHosts, server: Object.keys(server).length }))
 `,
 )
@@ -159,7 +159,7 @@ try {
   check(cli.includes('Hello, Semblance'), 'semblance render / (the CLI, from lib/)')
 
   const react = JSON.parse(run(process.execPath, ['react.mjs'], { cwd: app })) as { react: string; server: number }
-  check(react.react === 'function' && react.server > 0, '@inferal-oss/semblance-react and /server import in Node')
+  check(react.react === 'function' && react.server > 0, '@semblance-dev/semblance-react and /server import in Node')
 
   run(join(app, 'node_modules/.bin/tsc'), ['-p', '.'], { cwd: app, stdio: 'inherit' })
   check(true, 'tsc: the app type-checks against the declarations')

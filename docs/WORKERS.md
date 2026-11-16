@@ -26,8 +26,8 @@ requests a page, a page again, an address that names nothing and the stylesheet.
 ## The Worker
 
 ```ts
-import { engineStore, renderDocument, warmRenderer } from '@inferal-oss/semblance/server'
-import wat from '@inferal-oss/semblance/wasm/wat.wasm' // a WebAssembly.Module
+import { engineStore, renderDocument, warmRenderer } from '@semblance-dev/semblance/server'
+import wat from '@semblance-dev/semblance/wasm/wat.wasm' // a WebAssembly.Module
 import ontology from './build/ontology.ttl' // `semblance subset`
 import app from './app.ttl'
 
@@ -53,7 +53,7 @@ export default {
 }
 ```
 
-`@inferal-oss/semblance/server` is platform-neutral: it reads no files and fetches nothing. What a
+`@semblance-dev/semblance/server` is platform-neutral: it reads no files and fetches nothing. What a
 Worker needs differently from Node:
 
 - **The engine is a module.** A Worker may not compile WebAssembly at run time, so the engine's

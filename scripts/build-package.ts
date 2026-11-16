@@ -1,5 +1,5 @@
 // The packages' build (docs/RELEASING.md): JavaScript and declarations for every entry of
-// @inferal-oss/semblance and @inferal-oss/semblance-react, into lib/ and packages/react/lib/.
+// @semblance-dev/semblance and @semblance-dev/semblance-react, into lib/ and packages/react/lib/.
 //
 //   npx tsx scripts/build-package.ts     (npm run build:package; npm pack runs it first)
 //
@@ -96,7 +96,7 @@ function verify(manifest: Manifest, packageDir: string): void {
 
 const read = (file: string) => JSON.parse(readFileSync(file, 'utf8')) as Manifest
 
-// --- @inferal-oss/semblance -------------------------------------------------------------------
+// --- @semblance-dev/semblance -------------------------------------------------------------------
 
 const core = read(join(repo, 'package.json'))
 const lib = join(repo, 'lib')
@@ -114,9 +114,9 @@ for (const file of [...engines, ...globSync('layout-solver/build/*.wasm', { cwd:
 for (const file of globSync('src/**/*.d.ts', { cwd: repo })) cpSync(join(repo, file), join(lib, file))
 verify(core, repo)
 
-// --- @inferal-oss/semblance-react -------------------------------------------------------------
+// --- @semblance-dev/semblance-react -------------------------------------------------------------
 
-// Its imports of @inferal-oss/semblance resolve to the declarations just built, so they stay imports
+// Its imports of @semblance-dev/semblance resolve to the declarations just built, so they stay imports
 // of the package (a peer dependency) rather than copies of its sources.
 const reactDir = join(repo, 'packages/react')
 const react = read(join(reactDir, 'package.json'))

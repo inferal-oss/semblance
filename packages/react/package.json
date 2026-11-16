@@ -1,5 +1,5 @@
 {
-  "name": "@inferal-oss/semblance-react",
+  "name": "@semblance-dev/semblance-react",
   "version": "0.1.0",
   "license": "MIT OR Apache-2.0",
   "type": "module",
@@ -40,7 +40,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@inferal-oss/semblance": "^0.1.0",
+    "@semblance-dev/semblance": "^0.1.0",
     "react": ">=19",
     "react-dom": ">=19"
   },

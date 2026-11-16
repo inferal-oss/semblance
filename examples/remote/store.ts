@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import type { Quad } from '@rdfjs/types'
 // In this repository the server is imported from its source; an app imports it from
-// '@inferal-oss/semblance/node'.
+// '@semblance-dev/semblance/node'.
 import { SourceServer } from '../../src/node/source-server.ts'
 
 const LABEL = 'http://www.w3.org/2000/01/rdf-schema#label'

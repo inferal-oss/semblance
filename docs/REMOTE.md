@@ -182,12 +182,12 @@ made the write stale is kept.
 
 ## The reference server
 
-`SourceServer` (`src/node/source-server.ts`, exported from `@inferal-oss/semblance/node`) is an
+`SourceServer` (`src/node/source-server.ts`, exported from `@semblance-dev/semblance/node`) is an
 in-memory store behind an HTTP handler that speaks the protocol:
 
 ```ts
 import { createServer } from 'node:http'
-import { SourceServer } from '@inferal-oss/semblance/node'
+import { SourceServer } from '@semblance-dev/semblance/node'
 
 const store = new SourceServer({
   validate: ({ add }) => (add.some(tooLong) ? 'A todo is at most 40 characters.' : undefined),

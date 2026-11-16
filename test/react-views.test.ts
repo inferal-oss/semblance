@@ -1,5 +1,5 @@
 // useView / useRows (packages/react/src/views.ts, docs/VIEWS.md): React components over views of
-// @inferal-oss/semblance/views. Renders are counted: a change re-renders the components whose view it
+// @semblance-dev/semblance/views. Renders are counted: a change re-renders the components whose view it
 // changed, and only those; a change no view sees re-renders nothing. renderToString gives the server
 // snapshot, and a client over the same data hydrates it without a mismatch.
 import { parseHTML } from 'linkedom'

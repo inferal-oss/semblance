@@ -1,6 +1,6 @@
-// @inferal-oss/semblance: the runtime, its engine and the RDF/HTML it keeps, independent of
-// where it runs. Load a store with `@inferal-oss/semblance/web` (browser, Vite) or
-// `@inferal-oss/semblance/node`, then project it here.
+// @semblance-dev/semblance: the runtime, its engine and the RDF/HTML it keeps, independent of
+// where it runs. Load a store with `@semblance-dev/semblance/web` (browser, Vite) or
+// `@semblance-dev/semblance/node`, then project it here.
 
 export { Runtime, type Projection } from './runtime.ts'
 export type { EngineOptions, EngineStats } from './engine/engine.ts'

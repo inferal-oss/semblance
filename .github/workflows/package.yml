@@ -1,5 +1,5 @@
-# The npm packages as a consumer gets them (docs/RELEASING.md): build @inferal-oss/semblance and
-# @inferal-oss/semblance-react, pack them, check what the tarballs carry, install them into an empty
+# The npm packages as a consumer gets them (docs/RELEASING.md): build @semblance-dev/semblance and
+# @semblance-dev/semblance-react, pack them, check what the tarballs carry, install them into an empty
 # project and build and render examples/hello from them (the browser build, renderToString in
 # Node, the CLI, the declarations). On every pull request and push to main that touches what ships.
 name: Package

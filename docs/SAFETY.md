@@ -485,7 +485,7 @@ throw instead of parsing (a test scans `src/` for such sinks). Its one policy, `
 script URLs of the page's own origin, for what the host loads itself:
 
 ```ts
-import { scriptURL } from '@inferal-oss/semblance/web'
+import { scriptURL } from '@semblance-dev/semblance/web'
 import thumbnails from './thumbnails.worker.ts?worker&url' // Vite: the worker's URL
 new Worker(scriptURL(thumbnails), { type: 'module' })
 ```

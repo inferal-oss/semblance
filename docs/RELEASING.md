@@ -4,8 +4,8 @@ Semblance is published to npm as two packages, released together with one versio
 
 | package | what |
 |---|---|
-| `@inferal-oss/semblance` | the framework: `.` (the core), `./web` (the browser: `mount`), `./node` (Node: stores, sites, the Vite plugin), `./server` (server rendering), `./views` (maintained views on their own, `docs/VIEWS.md`; a `node` and a browser build), `./virtual` (types of the Vite plugin's module), `./ontology/*` (the Turtle), `./wasm/*` (the engines' WebAssembly), and the `semblance` command |
-| `@inferal-oss/semblance-react` | React as the library under Semblance (`docs/HOSTED.md`): `.`, `./server` and `./views` (the hooks over views) |
+| `@semblance-dev/semblance` | the framework: `.` (the core), `./web` (the browser: `mount`), `./node` (Node: stores, sites, the Vite plugin), `./server` (server rendering), `./views` (maintained views on their own, `docs/VIEWS.md`; a `node` and a browser build), `./virtual` (types of the Vite plugin's module), `./ontology/*` (the Turtle), `./wasm/*` (the engines' WebAssembly), and the `semblance` command |
+| `@semblance-dev/semblance-react` | React as the library under Semblance (`docs/HOSTED.md`): `.`, `./server` and `./views` (the hooks over views) |
 
 Each release is a tag `v<version>` and a GitHub release whose notes are the changelog's entry.
 
@@ -112,8 +112,8 @@ On `main`, with every merge of the release in it:
    (`publishConfig.access` is `public`). npm authenticates the workflow through trusted publishing
    (configured for both packages on npmjs.com, naming this repository and `release.yml`); a package
    not yet on npm has no trusted publisher, so its first publish uses the `NPM_TOKEN` secret.
-4. Check: `npm view @inferal-oss/semblance version`, the provenance on the packages' npm pages, and
-   an empty project that installs `@inferal-oss/semblance` from the registry and builds.
+4. Check: `npm view @semblance-dev/semblance version`, the provenance on the packages' npm pages, and
+   an empty project that installs `@semblance-dev/semblance` from the registry and builds.
 
 Until the first publish the root `package.json` keeps `"private": true`; dropping it is part of
 that release.

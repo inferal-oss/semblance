@@ -15,7 +15,7 @@ you type, with its reactions running. Docs → Recipes has more small examples; 
 ## Install
 
 ```bash
-npm install @inferal-oss/semblance
+npm install @semblance-dev/semblance
 npm install --save-dev vite
 ```
 
@@ -36,8 +36,8 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   optimizeDeps: {
-    exclude: ['@inferal-oss/semblance', 'oxigraph'],
-    include: ['@inferal-oss/semblance > n3'],
+    exclude: ['@semblance-dev/semblance', 'oxigraph'],
+    include: ['@semblance-dev/semblance > n3'],
   },
 })
 ```
@@ -68,7 +68,7 @@ and mount it:
 
 ```ts
 // main.ts
-import { mount } from '@inferal-oss/semblance/web'
+import { mount } from '@semblance-dev/semblance/web'
 import app from './app.ttl?raw'
 
 await mount(document.getElementById('app')!, { root: 'https://example.org/hello#page', graphs: [app] })
@@ -252,8 +252,8 @@ viewer's language (an untagged source label plus `@uk`, `@de`, `@ar` translation
 The same graph renders to HTML or text without a DOM:
 
 ```ts
-import { MOD, Runtime, toHTML } from '@inferal-oss/semblance'
-import { loadStore } from '@inferal-oss/semblance/node'
+import { MOD, Runtime, toHTML } from '@semblance-dev/semblance'
+import { loadStore } from '@semblance-dev/semblance/node'
 
 const store = loadStore('wat', tally, app)
 const screen = new Runtime(store).project({ modality: MOD.Screen, roots: [page] })

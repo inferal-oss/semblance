@@ -2,7 +2,7 @@
 
 Semblance keeps SPARQL views up to date from the changes to their inputs ([IVM.md](IVM.md)). A
 change costs what it changes in a view, however large the store is or the view. The views do not
-need the rest of Semblance. `@inferal-oss/semblance/views` is a store and the views over it, with
+need the rest of Semblance. `@semblance-dev/semblance/views` is a store and the views over it, with
 no ontology, no rule engine, no renderer and no projection. You bring your own data and your own UI
 kit. Changes come in as deltas, and every view is kept current from them.
 
@@ -13,7 +13,7 @@ separate decision ([below](#moving-on-to-the-framework)).
 ## A first view
 
 ```ts
-import { openViews } from '@inferal-oss/semblance/views'
+import { openViews } from '@semblance-dev/semblance/views'
 
 const views = await openViews({ kind: 'wat' }) // a store of Semblance's engine, empty
 views.load(`
@@ -113,7 +113,7 @@ each tick once every view has settled.
 protocol in [REMOTE.md](REMOTE.md), read-only:
 
 ```ts
-import { followSource, httpTransport, openViews } from '@inferal-oss/semblance/views'
+import { followSource, httpTransport, openViews } from '@semblance-dev/semblance/views'
 
 const views = await openViews()
 const open = views.select(EX + 'open', OPEN_TODOS)
@@ -133,7 +133,7 @@ await source.ready // the snapshot is in
 
 Statements land in the default graph, or in `graph` (one of the views' graphs). The transport is
 `httpTransport(endpoint)` (Jelly where the server offers it, else server-sent events), or any
-`SourceTransport`. The reference server is `SourceServer` from `@inferal-oss/semblance/node`.
+`SourceTransport`. The reference server is `SourceServer` from `@semblance-dev/semblance/node`.
 
 A change from the store costs what it changes in the views. `test/views-remote.test.ts` checks
 that one change does the same work in a store of 10 and of 20 000 statements that are not followed.
@@ -142,10 +142,10 @@ effect instead (`src:Source`). That effect also writes back and keeps its state 
 
 ## React
 
-`@inferal-oss/semblance-react/views` (also exported from `@inferal-oss/semblance-react`):
+`@semblance-dev/semblance-react/views` (also exported from `@semblance-dev/semblance-react`):
 
 ```tsx
-import { useRows, useView } from '@inferal-oss/semblance-react/views'
+import { useRows, useView } from '@semblance-dev/semblance-react/views'
 
 function OpenTodos({ view }: { view: ViewHandle }) {
   const rows = useRows(view) // [{ todo: 'https://…#a', label: 'Write' }, …], in the view's order
@@ -173,7 +173,7 @@ function Graph({ view }: { view: ViewHandle }) {
 - The server snapshot is the same snapshot. `renderToString` over views built before rendering
   shows what they hold, and a client that builds the same views from the same data hydrates it as
   it is.
-- Only types come from `@inferal-oss/semblance`, so a page that uses views and these hooks pulls
+- Only types come from `@semblance-dev/semblance`, so a page that uses views and these hooks pulls
   in neither the hosted-component adapter nor the framework's main entry.
 
 ## What it costs

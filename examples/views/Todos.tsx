@@ -1,7 +1,7 @@
 // The example's components: plain React, each reading one view (useRows). A change to the store
 // re-renders the components whose view it changed, and only those.
-import type { ViewHandle } from '@inferal-oss/semblance/views'
-import { useRows } from '@inferal-oss/semblance-react/views'
+import type { ViewHandle } from '@semblance-dev/semblance/views'
+import { useRows } from '@semblance-dev/semblance-react/views'
 
 export const renders = { open: 0, counts: 0 }
 

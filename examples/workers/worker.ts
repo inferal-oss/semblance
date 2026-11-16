@@ -4,7 +4,7 @@
 //   npx vite build --config examples/hello/vite.config.ts
 //   npx semblance subset --config examples/hello/semblance.config.ts --out examples/workers/build/ontology.ttl
 //   npx wrangler@4 dev --config examples/workers/wrangler.jsonc
-import { engineStore, renderDocument, warmRenderer } from '@inferal-oss/semblance/server'
+import { engineStore, renderDocument, warmRenderer } from '@semblance-dev/semblance/server'
 // A .wasm import is a WebAssembly.Module, compiled when the Worker is deployed (a Worker may not
 // compile WebAssembly from bytes at run time).
 import wat from '../../rdf-engine/build/wat.wasm'

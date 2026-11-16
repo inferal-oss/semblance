@@ -1,4 +1,4 @@
-// @inferal-oss/semblance/views in Node: the views (./index.ts) and the built-in stores, without the
+// @semblance-dev/semblance/views in Node: the views (./index.ts) and the built-in stores, without the
 // framework's ontology. openStore reads only what its kind needs (an engine build).
 import type { GraphStore } from '../store/types.ts'
 import { createStore, type StoreKind, type StoreOptions } from '../node/stores.ts'

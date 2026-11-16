@@ -253,7 +253,7 @@ return new Response(dumpJellyStream(store), { headers: { 'content-type': 'applic
 
 ui:doc-jl-stream-h a c:Heading ; c:level 2 ; c:label "Frame by frame" .
 ui:doc-jl-stream-1 a c:Text ; c:label "A stream need not arrive whole. FrameSplitter cuts the frames out of chunks as they come (a fetch body, a socket), and a reader takes one frame at a time. A writer hands back frames as they fill." .
-ui:doc-jl-stream-code a c:Code ; c:block true ; c:language "typescript" ; c:label """import { FrameSplitter, JellyReader, JellyWriter, delimit } from '@inferal-oss/semblance'
+ui:doc-jl-stream-code a c:Code ; c:block true ; c:language "typescript" ; c:label """import { FrameSplitter, JellyReader, JellyWriter, delimit } from '@semblance-dev/semblance'
 
 const split = new FrameSplitter()
 const reader = new JellyReader(DataFactory)
@@ -321,21 +321,21 @@ ui:doc-ov-components a c:Link , c:Setter ; c:label "components" ; c:href "/compo
 ui:doc-start a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:doc-gs-h ui:doc-gs-1 ui:doc-gs-install ui:doc-gs-2 ui:doc-gs-vite ui:doc-gs-3 ui:gs-page ui:doc-gs-3b ui:doc-gs-4 ui:doc-gs-mount ui:doc-gs-5 ui:gs-tally ui:doc-gs-5b ui:doc-gs-6 ui:gs-react ui:doc-gs-7 ) .
 ui:doc-gs-h a c:Heading ; c:level 1 ; c:label "Getting started" .
-ui:doc-gs-1 a c:Text ; c:label "Semblance is the npm package @inferal-oss/semblance: compiled JavaScript with its types, its ontologies and its WebAssembly engines, built into your app by your bundler - today Vite." .
-ui:doc-gs-install a c:Code ; c:block true ; c:language "shell" ; c:label """npm install @inferal-oss/semblance
+ui:doc-gs-1 a c:Text ; c:label "Semblance is the npm package @semblance-dev/semblance: compiled JavaScript with its types, its ontologies and its WebAssembly engines, built into your app by your bundler - today Vite." .
+ui:doc-gs-install a c:Code ; c:block true ; c:language "shell" ; c:label """npm install @semblance-dev/semblance
 npm install --save-dev vite""" .
 ui:doc-gs-2 a c:Text ; c:label "The package finds its ontology files and engine builds with import.meta.glob, so Vite must not pre-bundle it; its Turtle parser, N3, is CommonJS and must be pre-bundled:" .
 ui:doc-gs-vite a c:Code ; c:block true ; c:language "typescript" ; c:label """// vite.config.ts
 export default defineConfig({
   optimizeDeps: {
-    exclude: ['@inferal-oss/semblance', 'oxigraph'],
-    include: ['@inferal-oss/semblance > n3'],
+    exclude: ['@semblance-dev/semblance', 'oxigraph'],
+    include: ['@semblance-dev/semblance > n3'],
   },
 })""" .
 ui:doc-gs-3 a c:Text ; c:label "The interface is data. A page in Turtle, beside what it renders: edit it, and the rendering follows as you type." .
 ui:doc-gs-3b a c:Text ; c:label "Each example here runs in a sandbox of its own: its own graph, rules and events, so an edit that does not parse only shows where it went wrong, beside the last rendering that worked. Semblance's prefixes (c:, sty:, pos:, tok:, beh: and the rest) are declared for the examples; Copy puts them in front of the source, so what you paste is a complete file." .
 ui:doc-gs-4 a c:Text ; c:label "In your app the page is a file, app.ttl, and mount shows it. mount loads a store with Semblance's ontologies and your graphs, compiles the theme, projects the root, patches it into the element and routes its events to reactions:" .
-ui:doc-gs-mount a c:Code ; c:block true ; c:language "typescript" ; c:label """import { mount } from '@inferal-oss/semblance/web'
+ui:doc-gs-mount a c:Code ; c:block true ; c:language "typescript" ; c:label """import { mount } from '@semblance-dev/semblance/web'
 import app from './app.ttl?raw'
 import tally from './tally.ttl?raw'
 
@@ -762,7 +762,7 @@ ui:doc-in-list a c:DescriptionList ; c:of ui:doc-in-items ; c:fields ( ui:in-dat
 ui:doc-in-items ui:in-data "Change the graph with runtime.apply({ add, remove }) or runtime.transaction(…), then flush; read it with store.match or SPARQL. Keep your data in your own vocabulary and point components at it." ;
     ui:in-proj "runtime.project again for another root or the Text modality; every change reaches all projections once." ;
     ui:in-embed "Mount several roots into an existing page, or place an unstyled c:HostSlot inside a layout and mount existing content into renderer.slot(name)." ;
-    ui:in-ssr "In Node, loadStore from @inferal-oss/semblance/node, project, and toHTML or toText." ;
+    ui:in-ssr "In Node, loadStore from @semblance-dev/semblance/node, project, and toHTML or toText." ;
     ui:in-per "per:Policy nodes say what to remember; attach Persistence before the first projection." ;
     ui:in-nav "nav:Location says which state lives in the address; attach Navigation, and links can point at resources (c:to)." ;
     ui:in-safe "A graph from a visitor or a model goes in mount's authored, not graphs: it renders under the safe:Authored policy (no script, no embedded documents, no styles or images loaded from elsewhere on its own), and what is refused is reported to onRefused. The live examples here run that way; Safe authoring, in these docs, has how it works, extending the policy and a Content Security Policy to go with it." ;
@@ -1011,7 +1011,7 @@ ui:sa-c-script rdfs:label "script-src" . ui:sa-c-wasm rdfs:label "'wasm-unsafe-e
 ui:sa-c-img rdfs:label "img-src, media-src" . ui:sa-c-connect rdfs:label "connect-src" . ui:sa-c-form rdfs:label "form-action" .
 ui:doc-sa-csp-2 a c:Text ; c:label "contentSecurityPolicy(opts) gives the same as a header value, with frame-ancestors 'self', which a meta cannot carry. A streamed document sends its head before the root's HTML exists, so the styles of a live example prerendered into it are not among the hashes: allow them with directives, or render with renderToString." .
 ui:doc-sa-tt-1 a c:Text ; c:label "Trusted Types: require-trusted-types-for 'script' makes every script sink (innerHTML, srcdoc, a script's src, new Worker) take only values a named policy made. Semblance writes no HTML and no script from a string - the renderer creates elements and sets attributes and text - so it runs under Trusted Types as it is, and an authored input that reached innerHTML would throw rather than parse. Its one policy, semblance, makes script URLs of the page's own origin, for what the host loads itself:" .
-ui:doc-sa-tt-code a c:Code ; c:block true ; c:language "ts" ; c:label """import { scriptURL } from '@inferal-oss/semblance/web'
+ui:doc-sa-tt-code a c:Code ; c:block true ; c:language "ts" ; c:label """import { scriptURL } from '@semblance-dev/semblance/web'
 import thumbnails from './thumbnails.worker.ts?worker&url'
 new Worker(scriptURL(thumbnails), { type: 'module' })""" .
 ui:doc-sa-tt-2 a c:Text ; c:label "This site runs under the recommended policy. Its fonts and its foreign-component examples' CDN are listed; demo/trusted-types.ts adds a policy for the page's own HTML (the Performance view's benchmark cells run in it) and a default policy for Leaflet, flatpickr, Temml and Shoelace's icons, which write HTML themselves: what they write is parsed inertly and stripped of what runs code or loads a document." .
@@ -1387,9 +1387,9 @@ ui:doc-re-pro-json a c:Code ; c:block true ; c:language "json" ; c:label """{ "o
 ui:doc-re-pro-3 a c:Text ; c:label "The server applies a write atomically, answering 200 with the new cursor, or 409 when it refuses: stale when a statement the write removes is not in the store (compare-and-set: the page made it from a state someone else has changed since, which keeps a single-valued property single-valued when two pages change it at once), or the store's own validation. repair is what the store holds of the statements the write touched; applying it puts the page back in step, and keeps the change from elsewhere." .
 
 ui:doc-re-srv-h a c:Heading ; c:level 2 ; c:label "The reference server" .
-ui:doc-re-srv-1 a c:Text ; c:label "SourceServer (src/node/source-server.ts, exported from @inferal-oss/semblance/node) is an in-memory store behind an HTTP handler that speaks the protocol:" .
+ui:doc-re-srv-1 a c:Text ; c:label "SourceServer (src/node/source-server.ts, exported from @semblance-dev/semblance/node) is an in-memory store behind an HTTP handler that speaks the protocol:" .
 ui:doc-re-srv-ts a c:Code ; c:block true ; c:language "typescript" ; c:label """import { createServer } from 'node:http'
-import { SourceServer } from '@inferal-oss/semblance/node'
+import { SourceServer } from '@semblance-dev/semblance/node'
 
 const store = new SourceServer({
   validate: ({ add }) => (add.some(tooLong) ? 'A todo is at most 40 characters.' : undefined),
@@ -1566,9 +1566,9 @@ ui:doc-iv-2 a c:Text ; c:children ( "A view is ordinary SPARQL: the same text ru
 ui:doc-iv-example a c:Link ; c:label "Warehouse" ; c:to ui:exp-warehouse .
 
 ui:doc-iv-alone-h a c:Heading ; c:level 2 ; c:label "Views without the framework" .
-ui:doc-iv-alone-1 a c:Text ; c:label "The views need nothing else from Semblance. @inferal-oss/semblance/views is a store and the views over it, with no ontology, no rules and no renderer: SPARQL over your own data, kept current by deltas, under the component library you already have. Each apply, write or transaction is one tick, and each view hears its own change and nothing else." .
-ui:doc-iv-alone-code a c:Code ; c:block true ; c:language "typescript" ; c:label """import { followSource, httpTransport, openViews } from '@inferal-oss/semblance/views'
-import { useRows } from '@inferal-oss/semblance-react/views'
+ui:doc-iv-alone-1 a c:Text ; c:label "The views need nothing else from Semblance. @semblance-dev/semblance/views is a store and the views over it, with no ontology, no rules and no renderer: SPARQL over your own data, kept current by deltas, under the component library you already have. Each apply, write or transaction is one tick, and each view hears its own change and nothing else." .
+ui:doc-iv-alone-code a c:Code ; c:block true ; c:language "typescript" ; c:label """import { followSource, httpTransport, openViews } from '@semblance-dev/semblance/views'
+import { useRows } from '@semblance-dev/semblance-react/views'
 
 // Semblance's engine, empty: no ontology.
 const views = await openViews()

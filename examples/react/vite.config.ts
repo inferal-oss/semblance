@@ -10,13 +10,13 @@ export default defineConfig({
   root: import.meta.dirname,
   resolve: {
     alias: [
-      { find: /^@inferal-oss\/semblance-react$/, replacement: repo + '/packages/react/src/index.ts' },
-      { find: /^@inferal-oss\/semblance-react\/server$/, replacement: repo + '/packages/react/src/server.ts' },
-      { find: /^@inferal-oss\/semblance(\/web|\/node|\/server)?$/, replacement: repo + '/src$1/index.ts' },
+      { find: /^@semblance-dev\/semblance-react$/, replacement: repo + '/packages/react/src/index.ts' },
+      { find: /^@semblance-dev\/semblance-react\/server$/, replacement: repo + '/packages/react/src/server.ts' },
+      { find: /^@semblance-dev\/semblance(\/web|\/node|\/server)?$/, replacement: repo + '/src$1/index.ts' },
     ],
   },
   server: { fs: { allow: [repo] } },
-  optimizeDeps: { exclude: ['@inferal-oss/semblance', 'oxigraph'], include: ['n3', 'react', 'react-dom', 'react-dom/client'] },
+  optimizeDeps: { exclude: ['@semblance-dev/semblance', 'oxigraph'], include: ['n3', 'react', 'react-dom', 'react-dom/client'] },
   plugins: [semblance({ config: resolve(import.meta.dirname, 'semblance.config.ts') })],
   build: { outDir: resolve(import.meta.dirname, 'dist'), emptyOutDir: true },
 })
