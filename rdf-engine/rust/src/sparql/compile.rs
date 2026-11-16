@@ -460,6 +460,20 @@ fn exists_inline(p: &Pattern) -> bool {
     }
 }
 
+/// The variables read as inputs by the magic relations in `p` (subqueries included).
+fn magic_inputs(p: &Pattern, out: &mut Vec<Var>) {
+    match p {
+        Pattern::Magic(m) => m.ins.iter().for_each(|x| tv_vars(x, out)),
+        Pattern::Join(a, b) | Pattern::Union(a, b) | Pattern::Lateral(a, b) | Pattern::Minus(a, b) | Pattern::LeftJoin(a, b, _) => {
+            magic_inputs(a, out);
+            magic_inputs(b, out);
+        }
+        Pattern::Filter(_, a) | Pattern::Extend(a, ..) | Pattern::Graph(_, a) => magic_inputs(a, out),
+        Pattern::Sub(s) => magic_inputs(&s.pattern, out),
+        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) => {}
+    }
+}
+
 /// An expression whose value is a term id already: a variable or a constant.
 fn simple(e: &Expr) -> bool {
     matches!(e, Expr::Var(_) | Expr::Const(_))
@@ -781,13 +795,21 @@ impl<'q> Gen<'q> {
         super::parse::pattern_vars(b, &mut m);
         let mut mentioned = alloc::vec![false; n];
         m.iter().for_each(|&v| mentioned[v as usize] = true);
-        if !(0..n).any(|v| mentioned[v] && safe[v] && st.bound[v] == 0 && aft[v] == CERTAIN) {
+        // A magic relation's input the left row may bind (a BIND's, say) runs it
+        // per row too: evaluated once without it, the relation has no rows,
+        // while the interpreter passes each row's value in (#281).
+        let mut ins = Vec::new();
+        magic_inputs(b, &mut ins);
+        let passes = |v: usize| aft[v] == CERTAIN || (aft[v] != 0 && ins.contains(&(v as Var)));
+        if !(0..n).any(|v| mentioned[v] && safe[v] && st.bound[v] == 0 && passes(v)) {
             return None;
         }
         let mut mask = Vec::new();
+        let reads = super::eval::mentioned(b, n);
         for v in 0..n {
-            // (b's expressions may read a variable its patterns do not mention)
-            if !safe[v] && st.bound[v] != CERTAIN && aft[v] != 0 {
+            // (b's expressions may read a variable its patterns do not mention;
+            // one b never reads needs no hiding, bound before the join or not)
+            if reads[v] && !safe[v] && st.bound[v] != CERTAIN && aft[v] != 0 {
                 // bound maybe before the join: the interpreter would pass it whatever its safety
                 if st.bound[v] == MAYBE {
                     return None;

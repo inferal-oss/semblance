@@ -130,10 +130,10 @@ WHERE {
   BIND(COALESCE(?runText0, "") AS ?runText)
   LATERAL { OPTIONAL { SELECT ?runText (MIN(?runFormKey) AS ?runFormFirst) WHERE {
       c:SparqlLexicon c:tokenPattern ?runFormPattern .
-      LATERAL { (?runText ?runFormPattern) sx:matches (?runFormM ?runFormAt ?runFormG1 ?runFormG2 ?runFormG3 ?runFormG4 ?runFormG5 ?runFormG6) }
+      (?runText ?runFormPattern) sx:matches (?runFormM ?runFormAt ?runFormG1 ?runFormG2 ?runFormG3 ?runFormG4 ?runFormG5 ?runFormG6) .
       BIND(STRBEFORE(COALESCE(?runFormG6, ""), ":") AS ?runFormPfx)
       FILTER(!BOUND(?runFormG1) && !BOUND(?runFormG4) && (!BOUND(?runFormG6) || STRENDS(?runFormM, "/") || EXISTS { c:SparqlLexicon c:keyword ?runFormPfx }))
-      LATERAL { (?runFormM "[A-Za-z]+") sx:matches (?runFormW ?runFormWAt) }
+      (?runFormM "[A-Za-z]+") sx:matches (?runFormW ?runFormWAt) .
       FILTER(!(UCASE(?runFormW) IN ("PREFIX", "BASE")))
       BIND(?runFormAt + ?runFormWAt AS ?runFormPos)
       BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?runFormPos)), STRLEN(STR(?runFormPos)) + 1), UCASE(?runFormW)) AS ?runFormKey)
@@ -193,10 +193,10 @@ WHERE {
     BIND(COALESCE(STR(?sampleConstruct0), STR(?sampleSelect0), "") AS ?sampleText)
     LATERAL { OPTIONAL { SELECT ?sampleText (MIN(?sampleFormKey) AS ?sampleFormFirst) WHERE {
       c:SparqlLexicon c:tokenPattern ?sampleFormPattern .
-      LATERAL { (?sampleText ?sampleFormPattern) sx:matches (?sampleFormM ?sampleFormAt ?sampleFormG1 ?sampleFormG2 ?sampleFormG3 ?sampleFormG4 ?sampleFormG5 ?sampleFormG6) }
+      (?sampleText ?sampleFormPattern) sx:matches (?sampleFormM ?sampleFormAt ?sampleFormG1 ?sampleFormG2 ?sampleFormG3 ?sampleFormG4 ?sampleFormG5 ?sampleFormG6) .
       BIND(STRBEFORE(COALESCE(?sampleFormG6, ""), ":") AS ?sampleFormPfx)
       FILTER(!BOUND(?sampleFormG1) && !BOUND(?sampleFormG4) && (!BOUND(?sampleFormG6) || STRENDS(?sampleFormM, "/") || EXISTS { c:SparqlLexicon c:keyword ?sampleFormPfx }))
-      LATERAL { (?sampleFormM "[A-Za-z]+") sx:matches (?sampleFormW ?sampleFormWAt) }
+      (?sampleFormM "[A-Za-z]+") sx:matches (?sampleFormW ?sampleFormWAt) .
       FILTER(!(UCASE(?sampleFormW) IN ("PREFIX", "BASE")))
       BIND(?sampleFormAt + ?sampleFormWAt AS ?sampleFormPos)
       BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?sampleFormPos)), STRLEN(STR(?sampleFormPos)) + 1), UCASE(?sampleFormW)) AS ?sampleFormKey)
@@ -265,10 +265,10 @@ WHERE {
   BIND(COALESCE(?runText0, "") AS ?runText)
   LATERAL { OPTIONAL { SELECT ?runText (MIN(?runFormKey) AS ?runFormFirst) WHERE {
       c:SparqlLexicon c:tokenPattern ?runFormPattern .
-      LATERAL { (?runText ?runFormPattern) sx:matches (?runFormM ?runFormAt ?runFormG1 ?runFormG2 ?runFormG3 ?runFormG4 ?runFormG5 ?runFormG6) }
+      (?runText ?runFormPattern) sx:matches (?runFormM ?runFormAt ?runFormG1 ?runFormG2 ?runFormG3 ?runFormG4 ?runFormG5 ?runFormG6) .
       BIND(STRBEFORE(COALESCE(?runFormG6, ""), ":") AS ?runFormPfx)
       FILTER(!BOUND(?runFormG1) && !BOUND(?runFormG4) && (!BOUND(?runFormG6) || STRENDS(?runFormM, "/") || EXISTS { c:SparqlLexicon c:keyword ?runFormPfx }))
-      LATERAL { (?runFormM "[A-Za-z]+") sx:matches (?runFormW ?runFormWAt) }
+      (?runFormM "[A-Za-z]+") sx:matches (?runFormW ?runFormWAt) .
       FILTER(!(UCASE(?runFormW) IN ("PREFIX", "BASE")))
       BIND(?runFormAt + ?runFormWAt AS ?runFormPos)
       BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?runFormPos)), STRLEN(STR(?runFormPos)) + 1), UCASE(?runFormW)) AS ?runFormKey)
@@ -313,10 +313,10 @@ WHERE {
       BIND(COALESCE(STR(?sampleConstruct0), STR(?sampleSelect0), "") AS ?sampleText)
       LATERAL { OPTIONAL { SELECT ?sampleText (MIN(?sampleFormKey) AS ?sampleFormFirst) WHERE {
       c:SparqlLexicon c:tokenPattern ?sampleFormPattern .
-      LATERAL { (?sampleText ?sampleFormPattern) sx:matches (?sampleFormM ?sampleFormAt ?sampleFormG1 ?sampleFormG2 ?sampleFormG3 ?sampleFormG4 ?sampleFormG5 ?sampleFormG6) }
+      (?sampleText ?sampleFormPattern) sx:matches (?sampleFormM ?sampleFormAt ?sampleFormG1 ?sampleFormG2 ?sampleFormG3 ?sampleFormG4 ?sampleFormG5 ?sampleFormG6) .
       BIND(STRBEFORE(COALESCE(?sampleFormG6, ""), ":") AS ?sampleFormPfx)
       FILTER(!BOUND(?sampleFormG1) && !BOUND(?sampleFormG4) && (!BOUND(?sampleFormG6) || STRENDS(?sampleFormM, "/") || EXISTS { c:SparqlLexicon c:keyword ?sampleFormPfx }))
-      LATERAL { (?sampleFormM "[A-Za-z]+") sx:matches (?sampleFormW ?sampleFormWAt) }
+      (?sampleFormM "[A-Za-z]+") sx:matches (?sampleFormW ?sampleFormWAt) .
       FILTER(!(UCASE(?sampleFormW) IN ("PREFIX", "BASE")))
       BIND(?sampleFormAt + ?sampleFormWAt AS ?sampleFormPos)
       BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?sampleFormPos)), STRLEN(STR(?sampleFormPos)) + 1), UCASE(?sampleFormW)) AS ?sampleFormKey)
