@@ -159,7 +159,7 @@ c:JsonNode sem:version 1 ; sem:closure "9717c1bf60fb8042" ; sem:internal "new" .
 c:JsonTree sem:version 1 ; sem:closure "630e99a553b16fdd" ; sem:internal "new" .
 c:Kbd sem:version 1 ; sem:closure "f82fcf14689efe08" ; sem:internal "new" .
 c:Legend sem:version 1 ; sem:closure "6b92926554401ed1" ; sem:internal "new" .
-c:Lightbox sem:version 1 ; sem:closure "517d12bc94880243" ; sem:internal "new" .
+c:Lightbox sem:version 2 ; sem:closure "974f7ee398cef6b1" ; sem:changedBy change:lightbox-compact .
 c:LineChart sem:version 2 ; sem:closure "1410c7cd9820d413" ; sem:changedBy change:charts-on-shared-parts .
 c:LinePoint sem:version 1 ; sem:closure "f6f0c0a14e8bb5ca" ; sem:internal "new" .
 c:Link sem:version 1 ; sem:closure "3ac39dc5ebf4d5e2" ; sem:internal "new" .
