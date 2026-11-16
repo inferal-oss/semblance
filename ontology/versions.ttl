@@ -264,8 +264,8 @@ c:TermSection sem:version 1 ; sem:closure "f8d9a06d5ebd223a" ; sem:internal "new
 c:TermTree sem:version 1 ; sem:closure "1d11b8690d644c9b" ; sem:internal "new" .
 c:Text sem:version 1 ; sem:closure "8b9ae4aaaf377e08" ; sem:internal "new" .
 c:TextArea sem:version 1 ; sem:closure "31524a306f370083" ; sem:internal "new" .
-c:TextEntry sem:version 1 ; sem:closure "2591e65c7b26be34" ; sem:internal "new" .
-c:TextField sem:version 1 ; sem:closure "2d38f82b0a0e2749" ; sem:internal "new" .
+c:TextEntry sem:version 2 ; sem:closure "200e9791f11f4707" ; sem:changedBy change:text-entry-disabled .
+c:TextField sem:version 2 ; sem:closure "e73782464aa520f3" ; sem:changedBy change:text-entry-disabled .
 c:ThemeSwitcher sem:version 1 ; sem:closure "72c569ac05a2934c" ; sem:internal "new" .
 c:TiledWorkspace sem:version 1 ; sem:closure "31b34552ade3a70b" ; sem:internal "new" .
 c:TimeAxis sem:version 1 ; sem:closure "36c9d179091af936" ; sem:internal "new" .
