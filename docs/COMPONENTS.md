@@ -688,6 +688,26 @@ text values, field and entry modes, units and locale formatting keep their behav
 Keep item and content IRIs stable when changing the list. A host slot inside a value then keeps
 its DOM and drafts when another item is inserted or the list is reordered.
 
+### Overlays that wait for a step
+
+An overlay (`c:Dialog`, `c:Drawer`, and the other `c:Overlay` kinds) is open while `c:open` is
+true. Its own ✕ and its scrim close it through one reaction for every kind, `c:OverlayClose`, and
+Escape clicks the ✕ of the last open overlay. When a step must be done before the panel goes (a
+value shown once, a choice that cannot be skipped), say `c:dismissible false`: the reaction then
+leaves it open, and a dialog or a drawer renders no ✕ (so Escape has nothing to press, and does not
+reach what is under it) and a scrim that does not close it. Its title, description, focus and Text
+rendering stay as they are. Give it an action that closes it, a button that `c:closes` it, or set
+`c:open false` from the host once the step is done:
+
+```turtle
+ui:recovery a c:Dialog ; c:label "Save your recovery code" ; c:dismissible false ;
+    c:content ui:code ; c:actions ( ui:saved ) .
+ui:saved a c:Button ; c:label "I have saved it" ; c:closes ui:recovery .
+```
+
+`c:dismissible` is a fact like any other, so it can change while the overlay is open (true once the
+step is done, say), and the ✕ comes back.
+
 ### Rendered state
 
 A component asks for its rendered state with `rnd:observes` (for itself and everything shown in

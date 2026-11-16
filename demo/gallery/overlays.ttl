@@ -16,13 +16,13 @@
 # Gallery page: Overlays.
 
 ui:gallery-overlays a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-overlays-intro ui:ov-dialogs ui:ov-drawers ui:ov-popovers ui:ov-lightboxes ui:ov-palettes ) .
+    c:children ( ui:gallery-overlays-intro ui:ov-dialogs ui:ov-required ui:ov-drawers ui:ov-popovers ui:ov-lightboxes ui:ov-palettes ) .
 ui:gallery-overlays-intro a c:Heading ; c:label "Overlays" , "Накладки"@uk , "Overlays"@de , "الطبقات العائمة"@ar .
 
 # Dialogs and drawers are fixed to the viewport, so they live on the shell's desktop
 # (outside the gallery's flippable cards, whose 3D transforms would contain them).
 # The buttons on this page open them by saying so: `c:opens`.
-ui:desktop c:hosts ui:ov-dialog , ui:ov-confirm , ui:ov-drawer-end , ui:ov-drawer-start , ui:ov-palette .
+ui:desktop c:hosts ui:ov-dialog , ui:ov-confirm , ui:ov-ack , ui:ov-drawer-end , ui:ov-drawer-start , ui:ov-palette .
 
 # --- dialogs ---
 ui:ov-dialog a c:Dialog ; c:label "Rename graph" ;
@@ -45,6 +45,20 @@ ui:ov-dialogs a c:Flippable ; c:front ui:ov-dialogs-spec .
 ui:ov-dialogs-spec a c:Specimen ; c:demonstrates c:Dialog ; c:label "Dialog" , "Діалог"@uk , "Dialog"@de , "مربع حوار"@ar ;
     c:help "A modal panel over a scrim (role=dialog, aria-modal, labelled by its title). Its state is one fact, c:open: buttons that c:opens or c:closes it set it, and so do its ✕ and a click on the scrim. Closed, its content is not evaluated." ;
     c:children ( ui:ov-open-dialog ui:ov-open-confirm ) .
+
+# A dialog that stays open until its one action is taken: no ✕, and neither the scrim nor Escape closes it.
+ui:ov-ack a c:Dialog ; c:label "Save your recovery code" ; c:dismissible false ;
+    c:help "It is shown once. Keep it somewhere safe before you go on: it is the only way back in if you lose your device." ;
+    c:content ui:ov-ack-code ;
+    c:actions ( ui:ov-ack-done ) .
+ui:ov-ack-code a c:Code ; c:label "7QX4-K2M9-VD3R-8HWN" .
+ui:ov-ack-done a c:Button ; c:label "I have saved it" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:closes ui:ov-ack .
+ui:ov-open-ack a c:Button ; c:label "Show recovery code" ; sty:tone sty:Accent ; sty:emphasis sty:Soft ; c:opens ui:ov-ack .
+ui:ov-required a c:Flippable ; c:front ui:ov-required-spec .
+ui:ov-required-spec a c:Specimen ; c:demonstrates c:Dialog ;
+    c:label "Dialog with a required step" , "Діалог з обов'язковим кроком"@uk , "Dialog mit Pflichtschritt"@de , "مربع حوار بخطوة إلزامية"@ar ;
+    c:help "With c:dismissible false a dialog (or a drawer) stays open until a required step is done: it has no ✕, and neither a click on the scrim nor Escape closes it. Only its action, a button that c:closes it, or the graph setting c:open false, does." ;
+    c:children ( ui:ov-open-ack ) .
 
 # --- drawers ---
 ui:ov-drawer-end a c:Drawer ; c:side "end" ; c:label "Filters" ;

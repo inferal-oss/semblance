@@ -274,5 +274,9 @@ export const reactions: Record<string, ReactionFn> = {
   },
   // Toasts that were hosted (c:hosts) leave their region when dismissed, so a region fed
   // by a stream of announcements does not grow; listed ones (c:toasts) are only closed.
-  'toast:unhost': (ctx) => (hitMarks(ctx, FB.closes) ? { add: [], remove: ctx.match(null, C.hosts, ctx.target) } : none()),
+  // A toast that is c:dismissible false stays where it is, as overlay:close leaves it open.
+  'toast:unhost': (ctx) =>
+    hitMarks(ctx, FB.closes) && !ctx.match(ctx.target, NS.c + 'dismissible', null).some((q) => q.object.value === 'false')
+      ? { add: [], remove: ctx.match(null, C.hosts, ctx.target) }
+      : none(),
 }

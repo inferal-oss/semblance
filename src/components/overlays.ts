@@ -1,5 +1,5 @@
 // Function rules and reactions for the overlays components (ontology/components/overlays.ttl).
-import type { NamedNode } from '@rdfjs/types'
+import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, MOD, NS, RDF_TYPE } from '../ns.ts'
@@ -16,16 +16,21 @@ const OV = {
   CommandPalette: c + 'CommandPalette',
   opens: c + 'opens',
   side: c + 'side',
+  dismissible: c + 'dismissible',
   trigger: c + 'trigger',
 } as const
 
 const none = (): Delta => ({ add: [], remove: [] })
 
+/** Whether an overlay closes by its own ✕, scrim and Escape (its c:dismissible values): unless one is false. */
+const dismissible = (values: Term[]) => !values.some((v) => v.value === 'false')
+
 /**
  * A modal surface over the page: a scrim and a panel (role=dialog, aria-modal) with a
  * title (c:label), a description (c:help), content (c:content) and actions (c:actions).
- * The ✕ and the scrim close it (c:closes); closed, it renders an empty hidden root, so
- * its content is not evaluated at all.
+ * The ✕ and the scrim close it (c:closes), unless it is c:dismissible false: then it has
+ * no ✕ (so no Escape shortcut) and a scrim that does not close it. Closed, it renders an
+ * empty hidden root, so its content is not evaluated at all.
  */
 function modal(kind: 'dialog' | 'drawer'): FnRule {
   return (ctx, focus) => {
@@ -50,16 +55,19 @@ function modal(kind: 'dialog' | 'drawer'): FnRule {
       )
       return o.quads
     }
-    const closeLabel = phrase(ctx, FB.Close, 'Close')
-    const close = o.el('close', 'Button', { type: 'button', class: 'sem-close' }, [o.text('close-text', '✕')])
-    // Escape activates the close control of the topmost open overlay (keyboard layer).
-    o.attr(close, 'aria-label', closeLabel).attr(close, 'data-sem-escape', '')
-    o.t(close, FB.closes, focus)
+    const closes = dismissible(ctx.objects(focus, OV.dismissible))
+    let close: NamedNode | undefined
+    if (closes) {
+      close = o.el('close', 'Button', { type: 'button', class: 'sem-close' }, [o.text('close-text', '✕')])
+      // Escape activates the close control of the topmost open overlay (keyboard layer).
+      o.attr(close, 'aria-label', phrase(ctx, FB.Close, 'Close')).attr(close, 'data-sem-escape', '')
+      o.t(close, FB.closes, focus)
+    }
     const titleNode = o.node('title')
     const bodyNode = o.node('desc')
     const head = o.el('head', 'Header', { class: 'sem-head' }, [
       ...(title ? [o.el('title', 'H2', { id: titleNode.value }, [o.text('title-text', title)])] : []),
-      close,
+      ...(close ? [close] : []),
     ])
     const parts: NamedNode[] = [head]
     if (body) parts.push(o.el('desc', 'P', { id: bodyNode.value, class: 'sem-desc' }, [o.text('desc-text', body)]))
@@ -73,7 +81,7 @@ function modal(kind: 'dialog' | 'drawer'): FnRule {
     if (body) o.attr(panel, 'aria-describedby', bodyNode.value)
     const scrim = o.el('scrim', 'Div', { class: 'sem-scrim' })
     o.attr(scrim, 'aria-hidden', 'true')
-    o.t(scrim, FB.closes, focus)
+    if (closes) o.t(scrim, FB.closes, focus)
     const root = o.el('root', 'Div', { id }, [scrim, panel])
     if (kind === 'drawer') o.attr(root, 'data-side', str(ctx.object(focus, OV.side)) === 'start' ? 'start' : 'end')
     o.renders(root)
@@ -161,7 +169,7 @@ export const functions: Record<string, FnRule> = { dialog: modal('dialog'), draw
 export const reactions: Record<string, ReactionFn> = {
   'overlay:open': openClose(OV.opens, true),
   'overlay:close-from': openClose(FB.closes, false),
-  'overlay:close': (ctx) => (hitMarks(ctx, FB.closes) ? setFlag(ctx, ctx.target, FB.open, false) : none()),
+  'overlay:close': (ctx) => (dismissible(ctx.match(ctx.target, OV.dismissible, null).map((q) => q.object)) && hitMarks(ctx, FB.closes) ? setFlag(ctx, ctx.target, FB.open, false) : none()),
   'popover:toggle': (ctx) => {
     if (!hitMarks(ctx, FB.toggles)) return none()
     return setFlag(ctx, ctx.target, FB.open, !ctx.match(ctx.target, FB.open, null).some((q) => q.object.value === 'true'))

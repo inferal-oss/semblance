@@ -907,6 +907,7 @@ c:diff a sem:Term .
 c:diffKind a sem:Term .
 c:dimension a sem:Term .
 c:disabled a sem:Term .
+c:dismissible a sem:Term .
 c:docks a sem:Term .
 c:does a sem:Term .
 c:draft a sem:Term .

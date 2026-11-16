@@ -118,7 +118,7 @@ c:DateField sem:version 1 ; sem:closure "47f448cac48c3dc9" ; sem:internal "new" 
 c:DateRangeField sem:version 1 ; sem:closure "cccf5b6e8ced0adf" ; sem:internal "new" .
 c:DescriptionList sem:version 1 ; sem:closure "6f79cc9f9a5162d7" ; sem:internal "new" .
 c:Desktop sem:version 1 ; sem:closure "47242e7e921a9a6c" ; sem:internal "new" .
-c:Dialog sem:version 1 ; sem:closure "a868e0e741834336" ; sem:internal "new" .
+c:Dialog sem:version 2 ; sem:closure "47f9e7556a8ba4cf" ; sem:changedBy change:overlay-dismissible .
 c:DiffLine sem:version 1 ; sem:closure "b70109eda7fe8da3" ; sem:internal "new" .
 c:DiffView sem:version 1 ; sem:closure "eae078d84c61b2c3" ; sem:internal "new" .
 c:Divider sem:version 1 ; sem:closure "c1622b60bcd49b91" ; sem:internal "new" .
@@ -127,7 +127,7 @@ c:DockResizable sem:version 1 ; sem:closure "632091bd30f8fb34" ; sem:internal "n
 c:Dockable sem:version 1 ; sem:closure "36c2103e75f3524a" ; sem:internal "new" .
 c:DonutChart sem:version 1 ; sem:closure "3b6976e8ff6b813b" ; sem:internal "new" .
 c:Draggable sem:version 1 ; sem:closure "17333a9fe48201f0" ; sem:internal "new" .
-c:Drawer sem:version 1 ; sem:closure "79ffe0edbfe564c8" ; sem:internal "new" .
+c:Drawer sem:version 2 ; sem:closure "4aceeb302eed1ec5" ; sem:changedBy change:overlay-dismissible .
 c:EditorLine sem:version 2 ; sem:closure "7872d67005b35b9d" ; sem:internal "Each sx:matches joins its group again instead of sitting in its own LATERAL, now that compiled Rust passes a BIND's value into a magic relation (#281); the same rows and HTML" .
 c:ElementMarkup sem:version 1 ; sem:closure "e33385cd084190fa" ; sem:internal "new" .
 c:Emblem sem:version 1 ; sem:closure "3f017d0438908b35" ; sem:internal "new" .
@@ -186,7 +186,7 @@ c:NavLink sem:version 1 ; sem:closure "5793dd3d481b7937" ; sem:internal "new" .
 c:NavList sem:version 1 ; sem:closure "30ac8ee5553b0523" ; sem:internal "new" .
 c:Outline sem:version 1 ; sem:closure "7452208d66ef1650" ; sem:internal "new" .
 c:OutlineItem sem:version 1 ; sem:closure "4926767874dd9efb" ; sem:internal "new" .
-c:Overlay sem:version 1 ; sem:closure "e229f03f02fe8373" ; sem:internal "new" .
+c:Overlay sem:version 2 ; sem:closure "21663a562016264b" ; sem:changedBy change:overlay-dismissible .
 c:Pagination sem:version 1 ; sem:closure "cef2c66574284469" ; sem:internal "new" .
 c:Palette sem:version 1 ; sem:closure "c68d10afd8e64152" ; sem:internal "new" .
 c:PaletteSection sem:version 1 ; sem:closure "3bf9b57e88b15ecf" ; sem:internal "new" .
@@ -275,7 +275,7 @@ c:TimeAxis sem:version 1 ; sem:closure "36c9d179091af936" ; sem:internal "new" .
 c:TimeField sem:version 1 ; sem:closure "05cb18c1bf7a074e" ; sem:internal "new" .
 c:Timeline sem:version 1 ; sem:closure "58583010e792680e" ; sem:internal "new" .
 c:TimelineItem sem:version 1 ; sem:closure "30590a3437d90986" ; sem:internal "new" .
-c:Toast sem:version 1 ; sem:closure "23f0d3e438646f5f" ; sem:internal "new" .
+c:Toast sem:version 2 ; sem:closure "8d85b16394a652ae" ; sem:changedBy change:overlay-dismissible .
 c:ToastRegion sem:version 1 ; sem:closure "a792d7916c9fcc5d" ; sem:internal "new" .
 c:Toggle sem:version 1 ; sem:closure "c9a471ad760c2c20" ; sem:internal "new" .
 c:ToggleSwitch sem:version 1 ; sem:closure "c2f934e05b0a5bd7" ; sem:internal "new" .

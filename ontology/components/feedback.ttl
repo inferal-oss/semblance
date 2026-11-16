@@ -816,9 +816,10 @@ WHERE {
 }""" .
 
 # Dismissing a toast closes it (c:OverlayClose, overlays.ttl); a hosted toast also leaves its
-# region, so a region fed by a stream of announcements does not grow.
+# region, so a region fed by a stream of announcements does not grow. A toast that is
+# c:dismissible false stays, as c:OverlayClose leaves it open.
 c:ToastUnhost a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Toast ;
-    beh:deletes """CONSTRUCT { ?region c:hosts $this } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . ?region c:hosts $this }""" ;
+    beh:deletes """CONSTRUCT { ?region c:hosts $this } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . ?region c:hosts $this FILTER NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") } }""" ;
     sem:function "toast:unhost" .

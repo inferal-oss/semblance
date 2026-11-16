@@ -1,0 +1,34 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:overlay-dismissible a chg:Change ;
+    rdfs:label "An overlay can stay open until a required step is done (c:dismissible false)"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/87> ;
+    chg:motivation """Every dialog and drawer closed by its ✕, a click on its scrim and Escape, so a panel that shows a
+value once (a recovery code) or asks for a choice that cannot be skipped could be dismissed before the step was
+done.""" ;
+    chg:substance """c:Overlay has a new property, c:dismissible (xsd:boolean, true by default). With c:dismissible
+false, c:OverlayClose, the one reaction by which an overlay's own ✕ and scrim close it, in SPARQL and in its
+function twin (overlay:close), leaves c:open as it is, for every kind of overlay; c:ToastUnhost (toast:unhost)
+leaves such a toast in its region. An open c:Dialog or c:Drawer that is not dismissible renders no ✕ (its
+<overlay>/~close nodes are not drawn, so there is no data-sem-escape control) and its scrim carries no c:closes;
+its title, description, content, actions, focus handling and Text rendering are as before. A c:Button that
+c:closes it still closes it (c:Closes), and so does the graph setting c:open false. The keyboard host no longer
+lets Escape reach a control behind the last open modal, so Escape over a non-dismissible modal closes nothing.
+c:dismissible may change while the overlay is open: the ✕ and the closing scrim come back with it. Other kinds
+(c:Toast, c:Lightbox, c:CommandPalette, c:Window) still draw their ✕ and scrim; with c:dismissible false these do
+nothing. The shapes of c:Dialog and c:Drawer (a new
+c:DrawerShape, which also checks c:open) accept at most one xsd:boolean c:dismissible. An overlay without
+c:dismissible, or with c:dismissible true, renders and behaves as before.""" ;
+    chg:forwardGuide """Nothing to move. To keep a dialog or drawer open until a step is done, say c:dismissible false and
+give it an action that c:closes it (or set c:open false from the host when the step is done).""" ;
+    chg:backwardGuide """Going back, c:dismissible is not read: a dialog or drawer that said c:dismissible false has its ✕
+again and closes by the ✕, its scrim and Escape. Remove the triples, or keep them; they are ignored. An app that
+relied on the step being required must guard it another way.""" ;
+    chg:affects c:Overlay , c:Dialog , c:Drawer , c:Toast .
