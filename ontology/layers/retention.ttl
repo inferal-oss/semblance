@@ -117,6 +117,76 @@ ret:AnnounceDropped a beh:Reaction ;
     ann:tone sty:Warning ;
     sem:function "retention:crossed-dropped" .
 
+# --- the memory budget -----------------------------------------------------------------------------------
+
+# How much memory the page may use (ret:maxBytes, or ret:maxMiB). The pressure effect (src/retention/
+# pressure.ts) measures what it can, in idle time: the engines' WebAssembly memory everywhere, the JS
+# heap where the browser reports it (Chromium), an estimate from the store's size otherwise. It writes
+# the figures and a level into urn:semblance:retention, and answers each level in a fixed order,
+# cheapest and safest first: it evicts derived state (the renderings of what is hidden, both
+# projections; never what is shown or sem:warm sem:Eager), compacts the engines, offloads history
+# (what was recalled; at Critical, half of what ret:having policies hold), raises ret:Pressure for
+# reactions to answer, and last asks the host (mount's onRetention). Owned data is never dropped.
+ret:MemoryBudget a owl:Class ;
+    rdfs:label "Memory"@en , "Пам’ять"@uk , "Arbeitsspeicher"@de , "الذاكرة"@ar ;
+    rdfs:comment "How much memory the page may use, and what the pressure effect measures against it."@en .
+ret:maxBytes a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:integer .
+ret:maxMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:decimal ;
+    rdfs:label "Maximum memory (MiB)"@en , "Найбільше пам’яті (МіБ)"@uk , "Höchster Speicher (MiB)"@de , "أقصى ذاكرة (ميبيبايت)"@ar ;
+    rdfs:comment "The budget in mebibytes (2^20 bytes), for a person to set; ret:maxBytes wins when both are given."@en .
+ret:maxFrom a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:comment "A component whose c:value is the budget in MiB (a slider a person sets it with); ret:maxBytes and ret:maxMiB win."@en .
+ret:elevatedAt a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:decimal ;
+    rdfs:comment "The share of the budget above which pressure is elevated (default 0.8)."@en .
+
+ret:Level a owl:Class ; rdfs:label "Pressure"@en , "Тиск"@uk , "Druck"@de , "الضغط"@ar .
+ret:Normal a ret:Level ; sem:order 1 ; rdfs:label "Normal"@en , "Звичайний"@uk , "Normal"@de , "عادي"@ar .
+ret:Elevated a ret:Level ; sem:order 2 ; rdfs:label "Elevated"@en , "Підвищений"@uk , "Erhöht"@de , "مرتفع"@ar .
+ret:Critical a ret:Level ; sem:order 3 ; rdfs:label "Critical"@en , "Критичний"@uk , "Kritisch"@de , "حرج"@ar .
+ret:Measured a ret:Level ; sem:order 0 ; rdfs:label "As measured"@en , "Як виміряно"@uk , "Wie gemessen"@de , "كما قيس"@ar ;
+    rdfs:comment "ret:simulate's default: the level is the one measured."@en .
+
+# Written by the pressure effect, on the budget, in urn:semblance:retention.
+ret:level a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range ret:Level ;
+    rdfs:label "Pressure"@en , "Тиск"@uk , "Druck"@de , "الضغط"@ar .
+ret:usedMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Used (MiB)"@en , "Використано (МіБ)"@uk , "Belegt (MiB)"@de , "المستخدم (ميبيبايت)"@ar .
+ret:wasmMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Engine memory (MiB)"@en , "Пам’ять рушія (МіБ)"@uk , "Engine-Speicher (MiB)"@de , "ذاكرة المحرك (ميبيبايت)"@ar .
+ret:heapMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "JS heap (MiB)"@en , "Купа JS (МіБ)"@uk , "JS-Heap (MiB)"@de , "كومة JS (ميبيبايت)"@ar .
+ret:triples a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Triples"@en , "Трійки"@uk , "Tripel"@de , "الثلاثيات"@ar .
+ret:derivedTriples a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Derived triples"@en , "Похідні трійки"@uk , "Abgeleitete Tripel"@de , "الثلاثيات المشتقة"@ar .
+ret:evicted a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Derived triples evicted"@en , "Витіснено похідних трійок"@uk , "Verdrängte abgeleitete Tripel"@de , "الثلاثيات المشتقة المُخلاة"@ar .
+
+# Set by a person or a reaction, in the input graph, on the budget.
+ret:simulate a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range ret:Level ;
+    rdfs:label "Simulate"@en , "Імітувати"@uk , "Simulieren"@de , "محاكاة"@ar ;
+    rdfs:comment "Act as if the level were this one, whatever is measured (the Memory tool, tests)."@en .
+ret:request a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:comment "Written by a reaction: do this once now (ret:Evict, ret:OffloadNow). Performed and removed by the pressure effect."@en .
+ret:Evict a owl:NamedIndividual ; rdfs:label "Evict now"@en , "Витіснити зараз"@uk , "Jetzt verdrängen"@de , "إخلاء الآن"@ar .
+ret:OffloadNow a owl:NamedIndividual ; rdfs:label "Offload now"@en , "Вивантажити зараз"@uk , "Jetzt auslagern"@de , "التفريغ الآن"@ar .
+
+# Pressure the effect's own steps did not relieve: raised on the budget, for reactions to answer (raise
+# the budget, close what the app can close). Once per crossing into Critical.
+ret:Pressure a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:comment "Memory stayed critical after eviction, compaction and offloading."@en .
+ret:warned a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ; rdfs:comment "That pressure was announced this session."@en .
+ret:AnnouncePressure a beh:Reaction ;
+    beh:when ret:Pressure ;
+    beh:sourceClass ret:MemoryBudget ;
+    beh:inserts """CONSTRUCT { $this ret:warned ret:Critical } WHERE { FILTER NOT EXISTS { $this ret:warned ret:Critical } }""" ;
+    ann:announces "This page is using a lot of memory: hidden views were cleared and older history moved to storage"@en ,
+        "Ця сторінка використовує багато пам’яті: приховані подання очищено, старішу історію перенесено до сховища"@uk ,
+        "Diese Seite braucht viel Speicher: verborgene Ansichten wurden geleert, älterer Verlauf ausgelagert"@de ,
+        "تستخدم هذه الصفحة ذاكرة كثيرة: أُفرغت العروض المخفية ونُقل السجل الأقدم إلى التخزين"@ar ;
+    ann:tone sty:Warning ;
+    sem:function "retention:pressure-warned" .
+
 # --- the streams' policies -------------------------------------------------------------------------------
 
 # The change log keeps its 200 most recent members, and the 1,000 most recent of those that recorded an

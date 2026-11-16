@@ -66,13 +66,13 @@ const horizonList: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** The first horizon event of its kind on a stream says so, once (ret:crossed). */
-const crossed =
-  (kind: string): ReactionFn =>
+/** The first event of its kind on a node says so, once: `$this <flag> <kind>` (ret:crossed, ret:warned). */
+const once =
+  (flag: string, kind: string): ReactionFn =>
   (ctx) => {
     const f = ctx.runtime.store.factory
-    if (ctx.match(ctx.target, RET + 'crossed', f.namedNode(kind)).length) return { add: [], remove: [] }
-    return { add: [f.quad(ctx.target, f.namedNode(RET + 'crossed'), f.namedNode(kind))], remove: [] }
+    if (ctx.match(ctx.target, flag, f.namedNode(kind)).length) return { add: [], remove: [] }
+    return { add: [f.quad(ctx.target, f.namedNode(flag), f.namedNode(kind))], remove: [] }
   }
 
 /** Show older: the stream the hit button recalls, asked for its list's c:limit (50) most recent offloaded members. */
@@ -90,7 +90,8 @@ const recall: ReactionFn = (ctx) => {
 
 export const retentionFunctions: Record<string, FnRule> = { 'horizon-list': horizonList }
 export const retentionReactions: Record<string, ReactionFn> = {
-  'retention:crossed-offloaded': crossed(RET + 'Offloaded'),
-  'retention:crossed-dropped': crossed(RET + 'Dropped'),
+  'retention:crossed-offloaded': once(RET + 'crossed', RET + 'Offloaded'),
+  'retention:crossed-dropped': once(RET + 'crossed', RET + 'Dropped'),
+  'retention:pressure-warned': once(RET + 'warned', RET + 'Critical'),
   'retention:recall': recall,
 }

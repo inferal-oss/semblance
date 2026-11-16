@@ -583,6 +583,56 @@ export class Engine {
     }
   }
 
+  /** When each focus with output was last seen shown (by evict's scans), to evict the oldest first. */
+  private shownAt = new Map<string, number>()
+  private scans = 0
+
+  /**
+   * Drop the output of hidden work (docs/RETENTION.md): derived state, rebuilt when it is shown again.
+   * Pairs whose focus is not demanded, not always evaluated and not kept (`keep`: sem:warm sem:Eager)
+   * lose their output and are parked again, as if never shown, a focus at a time: those seen shown
+   * longest ago first (never seen shown: first of all), until about `limit` derived triples are released.
+   * Returns how many were. Costs a look at every pair with output: for idle time under memory pressure.
+   */
+  evict(limit = Infinity, keep?: (focus: string) => boolean): number {
+    if (!this.demand || limit <= 0) return 0
+    const scan = ++this.scans
+    const shown = new Map<string, boolean>()
+    const isShown = (owner: string) => {
+      let v = shown.get(owner)
+      if (v === undefined) shown.set(owner, (v = this.demand!(owner) || !!keep?.(owner)))
+      return v
+    }
+    const hidden: { rule: Rule; key: string; owner: string }[] = []
+    for (const [rule, byFocus] of this.outputs) {
+      if (rule.always) continue
+      for (const key of byFocus.keys()) {
+        const owner = focusOf(key)
+        if (isShown(owner)) this.shownAt.set(owner, scan)
+        else hidden.push({ rule, key, owner })
+      }
+    }
+    if (!hidden.length) return 0
+    const at = (owner: string) => this.shownAt.get(owner) ?? 0
+    hidden.sort((a, b) => at(a.owner) - at(b.owner) || (a.owner < b.owner ? -1 : a.owner > b.owner ? 1 : 0))
+    const before = this.refs.size
+    for (let i = 0; i < hidden.length && before - this.refs.size < limit; ) {
+      const owner = hidden[i]!.owner
+      for (; i < hidden.length && hidden[i]!.owner === owner; i++) {
+        const { rule, key } = hidden[i]!
+        if (!this.outputs.get(rule)?.has(key)) continue
+        this.commit(rule, key, [])
+        this.forgetReads(rule, key)
+        this.forgetFollowing(rule, key)
+        if (this.isInstance(key, rule)) this.deferred.add(rule, key)
+      }
+      this.shownAt.delete(owner)
+    }
+    // What read the released output follows (parked, being hidden too, or run if shown).
+    this.run()
+    return before - this.refs.size
+  }
+
   /** Whether any undemanded work is parked. */
   get hasDeferred(): boolean {
     return this.deferred.size > 0

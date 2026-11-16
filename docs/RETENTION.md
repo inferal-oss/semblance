@@ -1,9 +1,9 @@
 # Bounded memory and retention
 
-**Status: design agreed (§6), being built (§7).** This document surveys everything in Semblance that
-grows with time, use or history (measured on `main` at 4727466), sorts it into what may be dropped and
-what may not, and sets out how it is bounded. As the pieces land it becomes the guide to retention:
-§8 is how an app uses it.
+**How an app uses it: §8.** What is built and what is not: §7. The rest is the survey and the design
+behind it: everything in Semblance that grows with time, use or history (measured on `main` at
+4727466), sorted into what may be dropped and what may not, and the decisions on how it is bounded
+(§6, agreed on 2026-11-16).
 
 The goal, in one line: **memory is bounded and retention is not forever, but a person never finds
 their data silently gone.**
@@ -375,7 +375,7 @@ It writes a level (`ret:Normal`, `ret:Elevated`, `ret:Critical`) and the figures
 Owned data is never dropped at any step. It can only be offloaded, and it is marked unsaved when it
 cannot be.
 
-## 6.4 The earlier recommendation, in order of risk
+### 6.4 The earlier recommendation, in order of risk
 
 The phases below are in order of risk, and the first does not wait on the design.
 
@@ -403,16 +403,207 @@ The phases below are in order of risk, and the first does not wait on the design
    - Add `ret:Pressure`, `onRetention` and a prompt component.
    - Handle owned-data pressure end to end.
 
-## 7. Plan
+## 7. Plan, and what is built
 
-Tracked in #530, linked from the Plan (#8). The engine's part,
-compaction by re-instantiation, is on the engine tracker (#9).
+Tracked in #530, linked from the Plan (#8).
+
+| piece | where | state |
+|---|---|---|
+| Retention policies for every stream, offload to IndexedDB, recall, horizons, announcements | `ontology/layers/retention.ttl`, `src/retention/` | built |
+| Undo on the change log, bigger bound, recalled past it | `beh:UndoRetention`, `src/behaviour/events.ts` | built |
+| The memory budget, pressure, eviction of hidden renderings, `onRetention` | `src/retention/pressure.ts`, `Engine.evict`, `Runtime.evict` | built |
+| The Memory tool | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
+| The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime) | their own pull request | separate |
+| Engine compaction: giving wasm memory back | the engine (#9) | separate; the pressure effect calls `store.compact()` when a store has it |
+| Cold graphs offloaded or unloaded under pressure; network capture on the shared module; `per:retention` as `ret:Within`; toasts that wait for acknowledgement | | not yet |
 
 ## 8. Using retention
 
-*Filled in as the pieces land: declaring a policy, offloading and recalling, setting a memory
-budget, answering pressure in a reaction or in `onRetention`, the Memory tool, and testing an app
-under pressure.*
+### 8.1 Declaring a policy
+
+A stream says what it keeps through its view's policies, as in LDES. A member is kept while any
+policy keeps it:
+
+```turtle
+ex:Orders a ldes:EventStream ; tree:view ex:OrdersView .
+ex:OrdersView ldes:retentionPolicy ex:KeepRecent .
+ex:KeepRecent a ret:Latest ;          # or beh:LatestMembersPolicy, its subclass
+    ldes:amount 500 ;                 # the 500 most recent
+    ret:onExpiry ret:Offload ;        # what leaves goes to this browser's storage (default ret:Drop)
+    ret:storageAmount 20000 ;         # and storage keeps 20,000 of them, then drops the oldest
+    ret:announce true .               # a person-facing history: the first offload or drop is announced
+```
+
+- **`ret:Within`** (or `ldes:DurationAgoPolicy`) keeps by age: `tree:value "PT10M"`.
+- **`ret:having`** narrows a policy to members with one of the given properties. It extends the
+  others: a member they let go is offered to it.
+- **`ret:recallLimit`** on the stream bounds how many recalled members memory holds besides what the
+  policies keep (default 1,000).
+- **No policy** means the stream keeps everything, as LDES says. Every stream Semblance itself writes
+  declares one.
+
+Change a policy in the graph and the next append follows it. An app's own stream is retained by the
+same code. From a host effect:
+
+```ts
+import { logStream } from '@semblance-dev/semblance'
+
+const log = logStream(runtime.retention, EX + 'Orders', 'urn:example:orders', (d) => runtime.write('urn:example:orders', d))
+const leaving = log.append({ iri: member.value, seq, at: Date.now() })   // what no policy keeps any more
+runtime.write('urn:example:orders', { add: memberTriples, remove: leaving })
+```
+
+A stream whose members own more than their own triples (the change log's recorded changes, minted
+under the member) gives `runtime.retention.stream(iri, host)` a `closure`, as `src/behaviour/events.ts`
+does.
+
+### 8.2 Offloading and recalling
+
+What leaves by `ret:Offload` goes through three stages:
+
+1. It is serialized as it leaves the graph, in the same write.
+2. It is written to storage in chunks of 64 members (N-Triples), off the interaction.
+3. Until a write succeeds, it waits in memory as text (`ret:pending`), so a refused write loses
+   nothing.
+
+The storage is `mount`'s `retention.storage`. By default it is this browser's IndexedDB (database
+`semblance-offload`); `false` turns offloading off, and then `ret:Offload` drops and counts. Keys
+start with `semblance:ret:<run>|`. A new page sweeps what earlier pages offloaded, because history
+goes with the page that kept it.
+
+To bring history back into the live graph:
+
+- **From a reaction:** `?stream ret:recall 50`. The effect performs the recall, then removes the
+  request.
+- **From the host:** `runtime.retention.get(stream).recall(50)`.
+- **From the person:** `c:HorizonList`'s Show older button.
+
+Recalled members are members again. Views over the stream see them, and memory holds them up to
+`ret:recallLimit`.
+
+### 8.3 Undo
+
+Undo stays where it was, on the change log's members (`beh:asserted`, `beh:retracted`), with a
+bigger bound. `beh:UndoRetention` keeps the 1,000 most recent members that recorded an undoable
+change, besides the log's 200 newest, and offloads past that. Raise or lower its `ldes:amount` per app.
+
+- **Recall ahead of need.** An undo that reaches one of the 16 oldest undoable members in memory
+  recalls the most recent offloaded ones (64 at a time). The next undo finds them, so undo goes
+  back as far as storage holds.
+- **No gaps.** What memory holds of undo history stays one contiguous run. When something must leave
+  it, an undone member goes first (losing only its redo), otherwise the oldest. An undo never skips
+  a step.
+- **No repeats.** An undone member is stored without its recorded change, so a recall never offers
+  to undo it twice.
+
+### 8.4 Horizons and announcements
+
+Each retained stream has a `ret:Horizon` at `<stream>/~horizon`, in `urn:semblance:retention`. It
+carries:
+
+- `ret:inMemory`, `ret:offloaded`, `ret:pending`, `ret:recalled` and `ret:dropped`;
+- `ret:oldestKept`;
+- `ret:refused` (why storage last refused).
+
+It is written only when a figure changes. Rules read it like any graph state. `c:HorizonList`
+(Data group) lists every horizon, or the one `c:of` names, with Show older (`c:limit` members at a
+time, 50 by default). The site's Change log tool shows the log's.
+
+The first time in a session that a person-facing policy (`ret:announce true`) offloads or drops,
+the effect raises one event on the stream: `ret:Offloaded` or `ret:Dropped`. Its reaction
+announces it ("Older history moved to this browser's storage", "Older history is no longer kept"),
+in the viewer's language, as a toast.
+
+### 8.5 The memory budget
+
+```turtle
+ex:memory a ret:MemoryBudget ; ret:maxMiB 512 .       # or ret:maxBytes, or ret:maxFrom a slider
+```
+
+`mount(element, { maxMemory: 512 * 2 ** 20 })` declares one for a graph that has none. The pressure
+effect (`src/retention/pressure.ts`, attached by `mount`) measures in idle time, every two seconds:
+
+- the engines' WebAssembly memory;
+- the JS heap, where the browser reports it (Chromium's `performance.memory`);
+- otherwise, an estimate from the store's size.
+
+It writes `ret:level` (`ret:Normal`, `ret:Elevated` from `ret:elevatedAt`, default 0.8, `ret:Critical`
+from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:triples`,
+`ret:derivedTriples`, `ret:evicted`) into `urn:semblance:retention`. Each level is answered in this
+order:
+
+1. **Evict derived state.** What is hidden loses its renderings in both projections, screen and
+   text: a quarter of them at Elevated, all at Critical (`Runtime.evict`, `Engine.evict`). Never
+   evicted: what is shown, what is `sem:warm sem:Eager`, and what is always evaluated. Evicted work
+   is parked as if never shown, and a page shown again renders exactly as on a fresh visit. While
+   pressure is above Normal, idle time evaluates nothing hidden ahead of time.
+2. **Compact the engines,** when the store can (`store.compact()`).
+3. **Offload history.** What was recalled goes back to storage, and at Critical so does the oldest
+   half of what `ret:having` policies hold.
+4. **Raise `ret:Pressure`** on the budget, for the app's reactions to answer: raise the budget, close
+   what the app can close. Its framework reaction announces it. This happens once per crossing into
+   Critical, after the effect's own steps have run twice.
+5. **Ask the host** (`onRetention`) once per crossing, after a third step.
+
+`ret:simulate` on the budget (`ret:Normal`, `ret:Elevated`, `ret:Critical`, or `ret:Measured`, the
+default) makes the effect act as if a level held. `ret:request ret:Evict` or `ret:request
+ret:OffloadNow` asks for that step once, now.
+
+Measured on the site: a visit of every page holds 1,107k triples. Evicting at Critical leaves 180k
+(147k at start), and every page shown again is byte-identical to a fresh render
+(`test/retention-evict.test.ts`).
+
+### 8.6 The last line of defence: `onRetention`
+
+```ts
+mount(element, {
+  root, graphs,
+  maxMemory: 512 * 2 ** 20,
+  onRetention: async (r) => {
+    if (r.reason === 'memory') return { maxBytes: r.maxBytes * 1.5 }   // or nothing: keep what is
+    if (r.reason === 'storage') return { drop: !(await askThePerson(r.stream!)) }
+  },
+})
+```
+
+It is called only when policies and reactions have not settled it:
+
+- **`reason: 'memory'`.** The budget stayed exceeded after every step. Answer with a new `maxBytes`,
+  which is written to the graph, or with nothing.
+- **`reason: 'storage'`.** The browser keeps refusing to store a stream's offloaded history, and more
+  than twice what its policies keep waits in memory (`stream`, `pending`). Answer `drop: false` to
+  keep it there. Without that answer, the oldest of what waits beyond the bound is dropped, counted
+  on the horizon and announced.
+
+Nothing here ever drops owned data. The default graph, remembered state and kept files are not
+retained streams.
+
+### 8.7 The Memory tool
+
+The site's Tools window (⌘.) has a **Memory** tab, which is a view of the same graph. It shows:
+
+- the level and the figures (`c:Metrics` of `ui:memoryBudget`);
+- the maximum, a slider the budget follows (`ret:maxFrom`);
+- a choice that simulates a level;
+- Evict hidden views and Offload history, which are `c:Setter`s writing `ret:request`;
+- every stream's horizon, with Show older.
+
+Simulate Critical on a long visit to watch the derived triples fall and the announcement arrive.
+
+### 8.8 Testing an app under pressure
+
+- **Inject the measurement.** `new MemoryPressure(runtime, { sample: () => ({ wasmBytes, heapBytes }) })`,
+  then `await pressure.step()`. Each step measures and acts once.
+- **Simulate in the graph.** `ret:simulate ret:Critical` works in tests as in the tool.
+- **Give storage you can fill.** `runtime.retention.use(backend)` takes any `Backend` with `keys`. Set
+  `runtime.retention.opts.schedule` to run writes at once, and `await runtime.retention.flush()`.
+- **Assert conservation.** For every stream: appended = `inMemory + offloaded + pending + dropped`
+  (`RetainedStream.figures()`), and `dropped` stays 0 where the app promises it.
+- **Bound the soak.** A soak test that measures "once the log is at its bound" must pass every bound,
+  `beh:UndoRetention`'s too; `test/soak.test.ts` sets it smaller to do so.
+
+`test/retention.test.ts`, `test/retention-pressure.test.ts` and `test/retention-evict.test.ts` are
+worked examples of each.
 
 ## Appendix: the questions as they were asked
 

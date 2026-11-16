@@ -20,6 +20,7 @@
 @prefix st: <https://semblance.dev/ns/status#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix ret: <https://semblance.dev/ns/retention#> .
 @prefix prv: <https://semblance.dev/ns/privacy#> .
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
@@ -275,7 +276,7 @@ ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRu
 # maintained views with it (#434).
 ui:views sem:warm sem:OnIntent .
 ui:views a c:Tabs ; c:detachable true ; c:windowsOn ui:desktop ; sem:anticipatesNear 1 ;
-    c:tabs ( ui:inspectorTab ui:queryTab ui:activityTab ui:logTab ui:engineTab ) ;
+    c:tabs ( ui:inspectorTab ui:queryTab ui:activityTab ui:logTab ui:memoryTab ui:engineTab ) ;
     c:selected ui:inspectorTab .
 
 ui:inspectorTab a c:Tab ; c:label "Inspector" ; c:content ui:inspectorCard .
@@ -460,6 +461,28 @@ ui:activityCard a c:Flippable ; c:front ex:activity .
 ui:logCard a c:Flippable ; c:front ui:changeLog .
 ui:changeLog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:rememberLogSwitch ui:changeLogHorizon ui:changeLogHead ui:changeLogMembers ) .
+# --- memory: the budget, its pressure, and where every stream's history is (docs/RETENTION.md) ---------
+
+# The site's memory budget, set by the slider; the pressure effect (demo/main.ts) measures against it
+# in idle time and writes what it finds into urn:semblance:retention, which the metrics read.
+ui:memoryBudget a ret:MemoryBudget ; ret:maxFrom ui:memoryLimit ; ret:simulate ret:Measured .
+ui:memoryTab a c:Tab ; c:label "Memory" , "Пам’ять"@uk , "Speicher"@de , "الذاكرة"@ar ; c:content ui:memoryCard .
+ui:memoryCard a c:Flippable ; c:front ui:memoryPanel .
+ui:memoryPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:memoryMetrics ui:memoryLimit ui:memorySimulate ui:memoryActions ui:memoryHorizons ) .
+ui:memoryMetrics a c:Metrics ; c:of ui:memoryBudget ;
+    c:fields ( ret:level ret:usedMiB ret:heapMiB ret:wasmMiB ret:triples ret:derivedTriples ret:evicted ) .
+ui:memoryLimit a c:Slider ; c:min 64 ; c:max 4096 ; c:step 64 ; c:value 2048 ; c:unit "MiB" , "МіБ"@uk , "MiB"@de , "ميبيبايت"@ar ;
+    c:label "Maximum memory" , "Найбільше пам’яті"@uk , "Höchster Speicher"@de , "أقصى ذاكرة"@ar .
+# What the effect does at each level, without waiting for the page to grow: As measured, or one forced.
+ui:memorySimulate a c:Segmented ; c:controls ui:memoryBudget ; c:property ret:simulate .
+ui:memoryActions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:memoryEvict ui:memoryOffload ) .
+ui:memoryEvict a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:Evict ;
+    c:label "Evict hidden views" , "Витіснити приховані подання"@uk , "Verborgene Ansichten verdrängen"@de , "إخلاء العروض المخفية"@ar .
+ui:memoryOffload a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:OffloadNow ;
+    c:label "Offload history" , "Вивантажити історію"@uk , "Verlauf auslagern"@de , "تفريغ السجل"@ar .
+ui:memoryHorizons a c:HorizonList .
+
 # Where the log's history is: in memory, offloaded to this browser's storage (Show older brings it back),
 # or no longer kept (docs/RETENTION.md).
 ui:changeLogHorizon a c:HorizonList ; c:of beh:ChangeLog .

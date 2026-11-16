@@ -28,6 +28,7 @@ ui:DocLayers a ui:DocSection ; rdfs:label "Layers" , "Шари"@uk , "Schichten"
 ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" , "Поведінка і події"@uk , "Verhalten und Ereignisse"@de , "السلوك والأحداث"@ar ; sem:order 9 ; ui:key "behaviour" .
 ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" , "Стилі й теми"@uk , "Stile und Designs"@de , "الأنماط والسمات"@ar ; sem:order 10 ; ui:key "styling" .
 ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" , "Збереження"@uk , "Persistenz"@de , "الحفظ"@ar ; sem:order 11 ; ui:key "persistence" .
+ui:DocRetention a ui:DocSection ; rdfs:label "Retention and memory" , "Зберігання і пам’ять"@uk , "Aufbewahrung und Speicher"@de , "الاحتفاظ والذاكرة"@ar ; sem:order 11.5 ; ui:key "retention" .
 ui:DocRemote a ui:DocSection ; rdfs:label "Remote data" , "Віддалені дані"@uk , "Entfernte Daten"@de , "البيانات البعيدة"@ar ; sem:order 12 ; ui:key "remote" .
 ui:DocFetching a ui:DocSection ; rdfs:label "SERVICE and LOAD" , "SERVICE і LOAD"@uk , "SERVICE und LOAD"@de , "SERVICE و LOAD"@ar ; sem:order 13 ; ui:key "fetching" .
 ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقل"@ar ; sem:order 14 ; ui:key "navigation" .
@@ -43,7 +44,7 @@ ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:s
 ui:docsSide a c:Stack ; pos:direction pos:Column ; pos:sticky pos:StickToTop ; c:children ( ui:docsNav ) .
 ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker ; sem:anticipatesNear 4 .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
-    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-remote ui:dcs-fetching ui:dcs-navigation ui:dcs-views ui:dcs-jelly ui:dcs-tools ui:dcs-performance ui:dcs-migrations ) .
+    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-retention ui:dcs-remote ui:dcs-fetching ui:dcs-navigation ui:dcs-views ui:dcs-jelly ui:dcs-tools ui:dcs-performance ui:dcs-migrations ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
 ui:dcs-start c:when ui:DocStart ; c:content ui:doc-start .
 ui:dcs-recipes c:when ui:DocRecipes ; c:content ui:doc-recipes .
@@ -55,6 +56,7 @@ ui:dcs-layers c:when ui:DocLayers ; c:content ui:doc-layers .
 ui:dcs-behaviour c:when ui:DocBehaviour ; c:content ui:doc-behaviour .
 ui:dcs-styling c:when ui:DocStyling ; c:content ui:doc-styling .
 ui:dcs-persistence c:when ui:DocPersistence ; c:content ui:doc-persistence .
+ui:dcs-retention c:when ui:DocRetention ; c:content ui:doc-retention .
 ui:dcs-remote c:when ui:DocRemote ; c:content ui:doc-remote .
 ui:dcs-fetching c:when ui:DocFetching ; c:content ui:doc-fetching .
 ui:dcs-navigation c:when ui:DocNavigation ; c:content ui:doc-navigation .
@@ -1204,6 +1206,52 @@ ui:doc-pe-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ui:rem
 ui:doc-pe-2 a c:Text ; c:label "That policy is this site\u2019s own, running now: change the theme and open the page in another tab: it opens in that theme, and a tab already open follows. The edits of the live examples in these docs are remembered the same way (ui:rememberLiveExamples, a CONSTRUCT over every example\u2019s sources). Every write, restore and forget is a member of per:StateLog. On this site the display settings and the colour scheme are remembered on this device (per:acrossTabs: every open tab follows them); the tools, the language, private mode and the page you were on, for the tab; the change log only if you switch it on." .
 ui:doc-pe-3 a c:Text ; c:children ( "Persistence keeps what this browser should remember. Data that several people share, kept in a store on a server, is a remote source instead: " ui:doc-pe-to-remote " says how a page binds to it." ) .
 ui:doc-pe-to-remote a c:Link , c:Setter ; c:label "Remote data" ; c:href "/docs/remote/" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocRemote .
+
+# --- Retention and memory --- (docs/RETENTION.md says the same, at more length)
+ui:doc-retention a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-rt-h ui:doc-rt-1 ui:doc-rt-2
+                 ui:doc-rt-pol-h ui:doc-rt-pol-1 ui:doc-rt-pol-ttl ui:doc-rt-pol-2
+                 ui:doc-rt-off-h ui:doc-rt-off-1 ui:doc-rt-off-2
+                 ui:doc-rt-undo-h ui:doc-rt-undo-1
+                 ui:doc-rt-mem-h ui:doc-rt-mem-1 ui:doc-rt-mem-ttl ui:doc-rt-mem-2 ui:doc-rt-mem-3
+                 ui:doc-rt-ask-h ui:doc-rt-ask-1 ui:doc-rt-ask-ts ui:doc-rt-ask-2
+                 ui:doc-rt-tool-h ui:doc-rt-tool-1 ) .
+ui:doc-rt-h a c:Heading ; c:level 1 ; c:label "Retention and memory" .
+ui:doc-rt-1 a c:Text ; c:label "A long session grows: the change log, undo, what reactions recorded, the renderings of every page a person has seen. Retention is how Semblance keeps that bounded without a person ever finding their data silently gone. State comes in three kinds, and each has its rule. Data, what the app or the person owns, is never dropped by retention. History, logs and undo, is bounded by policies in the graph, and what leaves is counted, said, and where it matters kept in the browser's storage, from where it comes back. Derived state, the renderings and caches, is evicted freely under memory pressure, because it can be rebuilt." .
+ui:doc-rt-2 a c:Text ; c:label "Everything here is vocabulary (ontology/layers/retention.ttl, prefix ret:) read by one retention module (src/retention/) that every stream the framework writes goes through: the change log, the remembered-state log, the sync log and the stall log." .
+ui:doc-rt-pol-h a c:Heading ; c:level 2 ; c:label "Policies" .
+ui:doc-rt-pol-1 a c:Text ; c:label "A stream says what it keeps through its view's retention policies, as in LDES; a member is kept while any of them keeps it. ret:Latest keeps the most recent ldes:amount members, ret:Within those of a recent duration, and ret:having narrows a policy to members with one of the given properties. ret:onExpiry says what happens to what leaves: dropped (the default) or offloaded." .
+ui:doc-rt-pol-ttl a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:Orders a ldes:EventStream ; tree:view ex:OrdersView .
+ex:OrdersView ldes:retentionPolicy ex:KeepRecent .
+ex:KeepRecent a ret:Latest ;
+    ldes:amount 500 ;               # the 500 most recent in memory
+    ret:onExpiry ret:Offload ;      # what leaves goes to this browser's storage
+    ret:storageAmount 20000 ;       # which keeps 20,000, then drops the oldest
+    ret:announce true .             # the first offload or drop is announced""" .
+ui:doc-rt-pol-2 a c:Text ; c:label "Each retained stream has a horizon (ret:Horizon, in the graph urn:semblance:retention): how many members are in memory, offloaded, waiting for storage, recalled and no longer kept. c:HorizonList shows them, with Show older. The first time in a session a person-facing policy offloads or drops, a toast says so." .
+ui:doc-rt-off-h a c:Heading ; c:level 2 ; c:label "Offloading and recalling" .
+ui:doc-rt-off-1 a c:Text ; c:label "What leaves by ret:Offload is serialized as it leaves the graph and written to IndexedDB in chunks, off the interaction. Until storage takes it, it waits in memory as text, so a refused write loses nothing. mount's retention.storage chooses the storage; by default it is this browser's IndexedDB." .
+ui:doc-rt-off-2 a c:Text ; c:label "A reaction brings offloaded history back into the live graph by writing ?stream ret:recall 50; the effect performs it and removes the request. Recalled members are members again: every view over the stream sees them." .
+ui:doc-rt-undo-h a c:Heading ; c:level 2 ; c:label "Undo" .
+ui:doc-rt-undo-1 a c:Text ; c:label "Undo lives on the change log, with a bigger bound: besides its 200 newest members, the log keeps the 1,000 most recent that recorded an undoable change (beh:UndoRetention), and offloads past that. An undo that nears the oldest of those recalls more, so undo reaches back as far as storage holds. What memory holds of undo history is always one contiguous run, so an undo never skips a step." .
+ui:doc-rt-mem-h a c:Heading ; c:level 2 ; c:label "The memory budget" .
+ui:doc-rt-mem-1 a c:Text ; c:label "An app says how much memory a page may use with a ret:MemoryBudget, or mount's maxMemory. The pressure effect measures in idle time - the engines' WebAssembly memory, and the JS heap where the browser reports it - and writes a level into the graph: normal, elevated (80% by default) or critical." .
+ui:doc-rt-mem-ttl a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:memory a ret:MemoryBudget ; ret:maxMiB 512 .""" .
+ui:doc-rt-mem-2 a c:Text ; c:label "Above normal it acts in a fixed order, cheapest and safest first: it evicts the renderings of what is hidden, in every projection (never what is shown, or sem:warm sem:Eager); compacts the engines; offloads history; raises ret:Pressure on the budget, for the app's own reactions to answer; and last asks the host. While pressure holds, idle time evaluates nothing hidden ahead of time. A page shown again after eviction renders exactly as it would on a first visit." .
+ui:doc-rt-mem-3 a c:Text ; c:label "On this site, a visit of every page holds over a million triples; evicting at critical leaves about 180,000." .
+ui:doc-rt-ask-h a c:Heading ; c:level 2 ; c:label "The last line of defence" .
+ui:doc-rt-ask-1 a c:Text ; c:label "When the policies and the app's reactions have not settled it, mount's onRetention is asked: when memory stays over the budget after every step, or when the browser keeps refusing to store offloaded history and more than twice what its policies keep waits in memory." .
+ui:doc-rt-ask-ts a c:Code ; c:block true ; c:language "typescript" ; c:label """mount(element, {
+  root, graphs,
+  maxMemory: 512 * 2 ** 20,
+  onRetention: async (r) => {
+    if (r.reason === 'memory') return { maxBytes: r.maxBytes * 1.5 }
+    if (r.reason === 'storage') return { drop: !(await askThePerson(r.stream)) }
+  },
+})""" .
+ui:doc-rt-ask-2 a c:Text ; c:label "Without an answer, memory keeps what it holds, and history storage refused is dropped past its bound, counted on its horizon and announced. Owned data is never dropped." .
+ui:doc-rt-tool-h a c:Heading ; c:level 2 ; c:label "The Memory tool" .
+ui:doc-rt-tool-1 a c:Text ; c:label "The Tools window (⌘.) has a Memory tab: the level and what was measured, the maximum, a choice that simulates a level, buttons that evict hidden views and offload history now, and every stream's horizon with Show older. Simulate critical after visiting a few pages to watch the derived triples fall." .
 
 # --- Remote data --- (docs/REMOTE.md says the same, at more length)
 ui:doc-remote a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;

@@ -231,6 +231,24 @@ export class StreamRetention {
     return { member: m!, policy: p }
   }
 
+  /** Everything recalled leaves again (memory pressure): the most recent first, with the policy each came from. */
+  releaseRecalled(): Expiry[] {
+    const out: Expiry[] = []
+    while (this.back.length) out.push(this.take(this.back, this.back.length - 1, undefined))
+    return out
+  }
+
+  /** The oldest `share` of what each ret:having policy keeps leaves (memory pressure). */
+  shrink(share: number): Expiry[] {
+    const out: Expiry[] = []
+    const policies = new Map(this.policies().map((p) => [p.iri, p]))
+    for (const [iri, q] of this.extended) {
+      const n = Math.floor(q.length * share)
+      for (let i = 0; i < n; i++) out.push(this.take(q, 0, policies.get(iri)))
+    }
+    return out
+  }
+
   /**
    * Members brought back from storage (oldest first): held besides what the policies keep, up to the
    * recall limit; returns those that no longer fit, with the policy they came from.

@@ -445,13 +445,33 @@ export class Runtime {
     this.resumeViews()
   }
 
+  /**
+   * Memory pressure (src/retention/pressure.ts): above normal, idle time evaluates no hidden work ahead
+   * of time (what eviction released stays released until it is shown).
+   */
+  pressure: 'normal' | 'elevated' | 'critical' = 'normal'
+
+  /**
+   * Release the derived state of what is hidden (Engine.evict), in every projection, until about
+   * `limit` derived triples are gone: what is sem:warm sem:Eager stays. Returns how many went.
+   */
+  evict(limit = Infinity): number {
+    let freed = 0
+    for (const p of this.projections) {
+      const warmth = this.warmth.get(p.engine)
+      freed += p.engine.evict(limit - freed, (focus) => warmth?.(focus) === SEM.Eager)
+      settle(p)
+    }
+    return freed
+  }
+
   /** Spend up to `budgetMs` evaluating hidden work (see Engine.warm). Returns whether work remains. */
   warm(budgetMs: number): boolean {
     const until = performance.now() + budgetMs
     let more = false
-    const share = budgetMs / Math.max(1, this.projections.length)
+    const share = this.pressure === 'normal' ? budgetMs / Math.max(1, this.projections.length) : 0
     for (const p of this.projections) {
-      more = p.engine.warm(share) || more
+      if (share > 0) more = p.engine.warm(share) || more
       settle(p)
     }
     // (A view at a time once the budget is spent: rebuilding several hidden views is a long task.)

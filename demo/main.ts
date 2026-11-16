@@ -10,6 +10,7 @@ import { workerThumbnails } from '../src/file-store.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
+import { MemoryPressure } from '../src/retention/pressure.ts'
 import { Navigation, rendererReveal, setBase, windowScroll } from '../src/navigation.ts'
 import { anticipate, attachIntent } from '../src/intent.ts'
 import { type IdleDeadline, whenIdle } from '../src/idle.ts'
@@ -347,6 +348,9 @@ runtime.apply = (delta) => {
 const prefixes = { ...NS, ...declaredPrefixes(store), ui: UI, ex: EX }
 const short = (iri: string) => compactIri(iri, prefixes)
 const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer })
+// The memory budget (ui:memoryBudget): measured in idle time; above it, hidden pages' renderings are
+// evicted and history offloaded; the Memory tool shows it and simulates pressure (docs/RETENTION.md).
+new MemoryPressure(runtime, { bus, onChange: () => flush() }).attach()
 // Pointing at a navigation item or a tab evaluates what it would show (sem:OnIntent).
 attachIntent(runtime, shell, { flush: () => flush() })
 // Walkthroughs: the step in view is reported to the graph; arrows follow what it mentions.

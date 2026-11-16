@@ -70,6 +70,8 @@ export interface RetentionOptions {
   schedule?: (flush: () => void) => void
   /** Hear about a write storage refused (a quota). */
   onRefused?: (e: Error) => void
+  /** Storage keeps refusing and history waits in memory past its bound: 'keep' it there, or let the oldest go. */
+  onStorage?: (stream: string, waiting: number) => 'keep' | 'drop' | Promise<'keep' | 'drop'>
   /** The clock (ms). */
   now?: () => number
 }
@@ -304,6 +306,7 @@ export class RetainedStream {
           } catch (e) {
             this.refused = e instanceof Error ? e.message : String(e)
             this.owner.opts.onRefused?.(e instanceof Error ? e : new Error(String(e)))
+            await this.overflow()
             this.report()
             return
           }
@@ -322,6 +325,29 @@ export class RetainedStream {
     return this.flushing
   }
 
+  /**
+   * Storage refused, and more waits in memory than twice what the policies keep: the host is asked
+   * (onStorage, mount's onRetention); unless it says to keep it, the oldest of what waits beyond that
+   * is dropped, counted and announced.
+   */
+  private async overflow() {
+    let waiting = 0
+    for (const p of this.pending.values()) waiting += p.members.length
+    const cap = 2 * Math.max(64, ...this.policies().map((p) => p.amount ?? 0))
+    if (waiting <= cap) return
+    const keep = (await this.owner.opts.onStorage?.(this.iri, waiting)) === 'keep'
+    if (keep || this.owner.stopped) return
+    for (const p of this.pending.values()) {
+      const over = Math.min(p.members.length, waiting - cap)
+      if (over <= 0) continue
+      p.members.splice(0, over)
+      p.nt.splice(0, over)
+      waiting -= over
+      this.dropped += over
+      if (p.policy.announce) this.cross('dropped')
+    }
+  }
+
   /** Past the policy's ret:storageAmount, the oldest chunks go (and are counted as dropped). */
   private async trim(policy: Policy) {
     if (policy.storageAmount === undefined) return
@@ -337,6 +363,15 @@ export class RetainedStream {
       this.dropped += c!.count
       if (policy.announce) this.cross('dropped')
     }
+  }
+
+  /**
+   * Memory pressure: what was recalled goes back to storage, and the oldest `share` of what ret:having
+   * policies keep (0: none). Removed from the graph now; written to storage as any offload is.
+   */
+  relieve(share: number): void {
+    const leaving = this.leave([...this.retention.releaseRecalled(), ...(share > 0 ? this.retention.shrink(share) : [])])
+    if (leaving.length) this.host.write({ add: [], remove: leaving })
   }
 
   /** Offloaded members, by policy (all when not given), in storage now. */
