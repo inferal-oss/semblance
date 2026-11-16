@@ -289,8 +289,9 @@ Nothing is dropped silently.
 | a turn over a work budget | what was complete; the rest keeps its last rendering | as usual | `budget`, once per turn |
 
 A refused element keeps its place among its siblings, empty, so the gap shows in the inspector and in
-tests. The drag-and-drop layer uses `data-sem-refused` for a refused drop as well, and its theme
-animates both (#405).
+tests. `data-sem-refused` means only that: the safety layer writes it, an authored graph may not, and
+no theme styles it. A draggable whose drop was refused has a state of its own,
+`data-sem-drop-refused`, which the drag-and-drop theme shakes on a draggable only.
 
 Reports are `Refused` errors (`src/safety.ts`), with `at` (the node's IRI, or the style rule's),
 `kind` and a message such as `Refused on <https://example.org/evil#it/~x>: authored content may not

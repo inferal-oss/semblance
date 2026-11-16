@@ -43,7 +43,9 @@
                  [ sty:property "outline-offset" ; sty:raw "2px" ] .
 [] a sty:StyleRule ; sty:part ":is([data-sem-motion=reduced], [data-sem-motion=none]) [data-sem-lifted]" ;
     sty:declares [ sty:property "scale" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:part "[data-sem-refused]" ;
+# A draggable whose drop was refused shakes. Its own state, on a draggable only: data-sem-refused is
+# the safety layer's mark of a refused element (docs/SAFETY.md), and never shakes.
+[] a sty:StyleRule ; sty:part "[data-sem-gesture=drag][data-sem-drop-refused]" ;
     sty:declares [ sty:property "animation" ; sty:raw "sem-drop-refused var(--sem-duration-slow) var(--sem-ease)" ] .
 # While a pointer drag is on, the page does not select text and the pointer says "carrying".
 [] a sty:StyleRule ; sty:part ":root[data-sem-dragging], :root[data-sem-dragging] *" ;

@@ -459,7 +459,7 @@ CONSTRUCT {
   ?tab a rdfhtml:Attribute ; rdfhtml:attributeName "tabindex" ; rdfhtml:attributeValue "0" .
   ?liftedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-lifted" ; rdfhtml:attributeValue "" .
   ?statusAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-drag-status" ; rdfhtml:attributeValue ?status .
-  ?refusedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-refused" ; rdfhtml:attributeValue "" .
+  ?refusedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-drop-refused" ; rdfhtml:attributeValue "" .
 }
 WHERE {
   $this a/rdfs:subClassOf* dnd:Draggable .
@@ -512,5 +512,5 @@ WHERE {
   BIND(IF(BOUND(?keeper), ?none, IRI(CONCAT(STR($this), "/~root-tabindex"))) AS ?tab)
   BIND(IF(?lifted, IRI(CONCAT(STR($this), "/~root-data-sem-lifted")), ?none) AS ?liftedAttr)
   BIND(IF(BOUND(?status), IRI(CONCAT(STR($this), "/~root-data-sem-drag-status")), ?none) AS ?statusAttr)
-  BIND(IF(EXISTS { $this dnd:refusedBy ?refusal }, IRI(CONCAT(STR($this), "/~root-data-sem-refused")), ?none) AS ?refusedAttr)
+  BIND(IF(EXISTS { $this dnd:refusedBy ?refusal }, IRI(CONCAT(STR($this), "/~root-data-sem-drop-refused")), ?none) AS ?refusedAttr)
 }""" .
