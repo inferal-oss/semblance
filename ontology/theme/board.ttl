@@ -103,6 +103,10 @@
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:token tok:space-2 ] ,
                  [ sty:property "min-height" ; sty:raw "28px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:BoardCard ; sty:part ".sem-locked" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BoardCard ; sty:part ".sem-person" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font-size" ; sty:token tok:text-xs ] ,

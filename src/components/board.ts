@@ -161,8 +161,9 @@ const cardView: FnRule = (ctx, focus) => {
   const personValue = valueOf(P.cardPerson)
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
-    const line = `  - ${title}${personValue ? ` · ${plainLabel(ctx, personValue)}` : ''}${tagValue ? ` [${plainLabel(ctx, tagValue)}]` : ''}`
-    o.renders(o.el('root', 'Div', {}, [o.text('text', line)]))
+    const lockedNote = locked ? ` (${text(ctx, ctx.nn(NS.c + 'CardLockedPhrase'), RDFS_LABEL) ?? ''})` : ''
+    const line = `  - ${title}${personValue ? ` · ${plainLabel(ctx, personValue)}` : ''}${tagValue ? ` [${plainLabel(ctx, tagValue)}]` : ''}${href !== undefined ? ` <${href}>` : ''}${lockedNote}`
+    o.renders(o.el('root', 'Div', {}, named(content) ? [o.text('text', line), content] : [o.text('text', line)]))
     return o.quads
   }
   const titleEl = o.el('title', href === undefined ? 'Span' : 'A', { class: 'sem-title', id: o.node('title').value, href }, [o.text('title-text', title)])
@@ -205,6 +206,8 @@ const cardView: FnRule = (ctx, focus) => {
     o.t(remove, P.removesCard, item).t(remove, SEM.orderKey, '3')
     o.t(moves, H.hasChild, remove)
   }
+  // A locked card says so where its move controls would be.
+  if (locked) o.t(moves, H.hasChild, o.el('locked', 'Span', { class: 'sem-locked' }, [o.text('locked-text', phrase(NS.c + 'CardLockedPhrase'))]))
   footParts.push(moves)
   // Optional parts are ordered with (non-immediate) ord:precedes, as the SPARQL rule does.
   const head = o.el('head', 'Div', { class: 'sem-card-head' })

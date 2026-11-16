@@ -68,6 +68,8 @@ c:removesCard a owl:ObjectProperty ; rdfs:comment "On a card's control: the item
 c:refusedBy a owl:ObjectProperty ; rdfs:domain c:BoardCard ; rdfs:range beh:Event ;
     rdfs:comment "The last event whose move of this card was refused (its lane was full); cleared by a move."@en .
 c:MoveCommand a c:Phrase ; rdfs:label "Move to"@en , "Перемістити в"@uk , "Verschieben nach"@de , "نقل إلى"@ar .
+c:CardLockedPhrase a c:Phrase ; rdfs:comment "Shown on a board card that c:cardLocked holds in its lane, in place of its move controls."@en ;
+    rdfs:label "Locked"@en , "Заблоковано"@uk , "Gesperrt"@de , "مقفلة"@ar .
 
 # --- the board: lanes, with their headers ----------------------------------------------------------
 # A lane's count is an aggregate over the cards that name it (it follows c:card, so a card that
@@ -240,7 +242,9 @@ CONSTRUCT {
   ?avatar a c:Avatar ; c:label ?personName ; sty:size sty:Small ; ord:precedes ?person .
   ?person a rdfhtml:Span ; rdfhtml:class "sem-person" ; rdfhtml:hasChild ?personText ; ord:precedes ?moves .
   ?personText a rdfhtml:Text ; rdfhtml:data ?personName .
-  ?moves a rdfhtml:Span ; rdfhtml:class "sem-moves" ; rdfhtml:hasChild ?prevStep, ?nextStep, ?remove .
+  ?moves a rdfhtml:Span ; rdfhtml:class "sem-moves" ; rdfhtml:hasChild ?prevStep, ?nextStep, ?remove, ?lockNote .
+  ?lockNote a rdfhtml:Span ; rdfhtml:class "sem-locked" ; rdfhtml:hasChild ?lockText .
+  ?lockText a rdfhtml:Text ; rdfhtml:data ?lockedLabel .
   ?prevStep a rdfhtml:Span ; rdfhtml:class "sem-step" ; sem:orderKey "1" ; rdfhtml:hasChild ?prev .
   ?prev a c:IconButton ; c:icon "←" ; c:label ?prevLabel ; c:movesTo ?prevLane ; sty:size sty:Small ; sty:emphasis sty:Ghost .
   ?nextStep a rdfhtml:Span ; rdfhtml:class "sem-step" ; sem:orderKey "2" ; rdfhtml:hasChild ?next .
@@ -274,6 +278,8 @@ WHERE {
   OPTIONAL { c:MoveCommand rdfs:label ?movePhrase FILTER(langMatches(lang(?movePhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:MoveCommand ; l10n:name ?l10nPick }) }
   OPTIONAL { ?removePhraseAt l10n:of c:RemoveCommand ; l10n:name ?removePhrase }
   OPTIONAL { c:RemoveCommand rdfs:label ?removePhrase FILTER(langMatches(lang(?removePhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:RemoveCommand ; l10n:name ?l10nPick }) }
+  OPTIONAL { ?lockedPhraseAt l10n:of c:CardLockedPhrase ; l10n:name ?lockedPhrase }
+  OPTIONAL { c:CardLockedPhrase rdfs:label ?lockedPhrase FILTER(langMatches(lang(?lockedPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CardLockedPhrase ; l10n:name ?l10nPick }) }
   OPTIONAL { $this c:previousLane ?prevLane . OPTIONAL { ?prevPlainAt l10n:of ?prevLane ; l10n:name ?prevPlain }
   OPTIONAL { ?prevLane rdfs:label ?prevPlain FILTER(lang(?prevPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?prevLane ; l10n:name ?l10nPick }) } }
   OPTIONAL { $this c:nextLane ?nextLane . OPTIONAL { ?nextPlainAt l10n:of ?nextLane ; l10n:name ?nextPlain }
@@ -303,14 +309,17 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~foot")) AS ?foot)
   BIND(COALESCE(?content, ?foot) AS ?headNext)
   BIND(IRI(CONCAT(STR($this), "/~moves")) AS ?moves)
+  BIND(IF(?locked, IRI(CONCAT(STR($this), "/~locked")), ?none) AS ?lockNote)
+  BIND(IF(?locked, IRI(CONCAT(STR($this), "/~locked-text")), ?none) AS ?lockText)
+  BIND(IF(?locked, STR(?lockedPhrase), ?none) AS ?lockedLabel)
 }""" .
 c:BoardCardRendering-sparql-text a sem:Rule ;
     sem:implements c:BoardCardRendering ;
     sem:modality mod:Text ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text .
-  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text, ?content .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line ; ord:immediatelyPrecedes ?content .
 }
 WHERE {
   $this a c:BoardCard ; c:of ?item ; c:onBoard ?board .
@@ -325,9 +334,14 @@ WHERE {
     OPTIONAL { ?tagPlainAt l10n:of ?tagValue ; l10n:name ?tagPlain }
   OPTIONAL { ?tagValue rdfs:label ?tagPlain FILTER(lang(?tagPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?tagValue ; l10n:name ?l10nPick }) }
   }
+  OPTIONAL { ?board c:cardHref ?hrefProperty . ?item ?hrefProperty ?hrefValue }
+  OPTIONAL { ?board c:cardContent ?contentProperty . ?item ?contentProperty ?content FILTER(isIRI(?content)) }
+  BIND(EXISTS { ?board c:cardLocked ?lockedProperty . ?item ?lockedProperty true } AS ?locked)
+  OPTIONAL { ?lockedPhraseAt l10n:of c:CardLockedPhrase ; l10n:name ?lockedPhrase }
+  OPTIONAL { c:CardLockedPhrase rdfs:label ?lockedPhrase FILTER(langMatches(lang(?lockedPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CardLockedPhrase ; l10n:name ?l10nPick }) }
   BIND(IF(isLiteral(?personValue), STR(?personValue), STR(COALESCE(?personPlain, REPLACE(STR(?personValue), "^.*[#/]", "")))) AS ?personName)
   BIND(IF(isLiteral(?tagValue), STR(?tagValue), STR(COALESCE(?tagPlain, REPLACE(STR(?tagValue), "^.*[#/]", "")))) AS ?tagLabel)
-  BIND(CONCAT("  - ", STR(?titleValue), IF(BOUND(?personName), CONCAT(" · ", ?personName), ""), IF(BOUND(?tagLabel), CONCAT(" [", ?tagLabel, "]"), "")) AS ?line)
+  BIND(CONCAT("  - ", STR(?titleValue), IF(BOUND(?personName), CONCAT(" · ", ?personName), ""), IF(BOUND(?tagLabel), CONCAT(" [", ?tagLabel, "]"), ""), IF(BOUND(?hrefValue), CONCAT(" <", STR(?hrefValue), ">"), ""), IF(?locked, CONCAT(" (", STR(?lockedPhrase), ")"), "")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
 }""" .
