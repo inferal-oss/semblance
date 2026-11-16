@@ -56,6 +56,12 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
                  [ sty:property "background" ; sty:raw "radial-gradient(circle at 1px 1px, var(--sem-border) 1px, transparent 0) 0 0 / 16px 16px, var(--sem-surface-sunken)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
+# On a phone a specimen, its stage, a card and a surface inside it each keep 24px on both sides,
+# which leaves a third of the screen to what they show: there each container takes one step less.
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-4 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-3 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage > *" ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] .
@@ -116,6 +122,8 @@ sty:Raised rdfs:label "Raised"@en , "Піднята"@uk , "Erhöht"@de , "مرت
     sty:declares [ sty:property "gap" ; sty:token tok:space-3 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-inset])" ;
     sty:declares [ sty:property "padding" ; sty:token tok:space-5 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-inset])" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-4 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state "[data-sem-tone]" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--tone-soft)" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--tone-border)" ] .
