@@ -597,7 +597,7 @@ WHERE {
   BIND(STRLEN(?src) AS ?length)
   BIND(CONCAT(STR($this), "/~code-") AS ?key)
   LATERAL { OPTIONAL {
-    LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+    (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) .
     BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
     BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
     # A lexicon of c:groupKinds: the kind of the group that matched (the n-th of its kinds).

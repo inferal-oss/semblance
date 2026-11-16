@@ -506,7 +506,7 @@ WHERE {
       # by sx:matches: a record's place is its line's number.
       LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?lineRecord; separator="") AS ?lines0) WHERE {
         { SELECT ?text ?lineRecord WHERE {
-          LATERAL { (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) }
+          (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) .
           BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
           BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
         } ORDER BY ?lineAt }
@@ -516,7 +516,7 @@ WHERE {
       LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?stringRecord; separator="") AS ?strings0) WHERE {
         { SELECT ?text ?stringRecord WHERE {
           c:SparqlLexicon c:quotedPattern ?quoted .
-          LATERAL { (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
+          (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) .
           FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
           BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
           BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
@@ -560,7 +560,7 @@ WHERE {
             FILTER(?fe > ?fs)
             BIND(SUBSTR(?text, ?fs, ?fe - ?fs) AS ?src)
             c:SparqlLexicon c:tokenPattern ?pattern .
-            LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+            (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) .
             BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
             BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
             BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
@@ -644,7 +644,7 @@ WHERE {
       # by sx:matches: a record's place is its line's number.
       LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?lineRecord; separator="") AS ?lines0) WHERE {
         { SELECT ?text ?lineRecord WHERE {
-          LATERAL { (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) }
+          (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) .
           BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
           BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
         } ORDER BY ?lineAt }
@@ -654,7 +654,7 @@ WHERE {
       LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?stringRecord; separator="") AS ?strings0) WHERE {
         { SELECT ?text ?stringRecord WHERE {
           c:SparqlLexicon c:quotedPattern ?quoted .
-          LATERAL { (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
+          (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) .
           FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
           BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
           BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
@@ -698,7 +698,7 @@ WHERE {
             FILTER(?fe > ?fs)
             BIND(SUBSTR(?text, ?fs, ?fe - ?fs) AS ?src)
             c:SparqlLexicon c:tokenPattern ?pattern .
-            LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
+            (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) .
             BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
             BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
             BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",

@@ -319,6 +319,27 @@ describe.skipIf(!built.length).each(built)('%s engine: SPARQL extensions', (kind
       expect(rows(s, n, ['n'])).toEqual(['12^^integer'])
     })
 
+    // An input bound by a BIND before the relation, in its group, under OPTIONAL or LATERAL,
+    // or computed from a triple's value: the relation sees each row's value, compiled too (#281).
+    it('each magic relation takes an input a BIND binds', () => {
+      const cases: [string, string[], string[]][] = [
+        [`SELECT ?c ?i { BIND("ab" AS ?src) (?src) sx:chars (?c ?i) } ORDER BY ?i`, ['c', 'i'], ['a^^string 1^^integer', 'b^^string 2^^integer']],
+        [`SELECT ?m { BIND("ab" AS ?src) (?src "[a-z]") sx:matches (?m ?at) } ORDER BY ?at`, ['m'], ['a^^string', 'b^^string']],
+        [`SELECT ?p { BIND("[1]" AS ?src) (?src) sx:json (?p ?par ?k ?kind ?v) } ORDER BY ?p`, ['p'], ['^^string', '/0^^string']],
+        [`SELECT ?m { BIND("[a-z]" AS ?re) ("ab" ?re) sx:matches (?m ?at) } ORDER BY ?at`, ['m'], ['a^^string', 'b^^string']],
+        [`SELECT ?c { BIND(SUBSTR("abcd", 2, 2) AS ?span) (?span) sx:chars (?c ?i) } ORDER BY ?i`, ['c'], ['b^^string', 'c^^string']],
+        [`SELECT ?c { BIND("ab" AS ?src) OPTIONAL { (?src) sx:chars (?c ?i) } } ORDER BY ?c`, ['c'], ['a^^string', 'b^^string']],
+        [`SELECT ?m { BIND("ab" AS ?src) LATERAL { OPTIONAL { BIND("[a-z]" AS ?re) (?src ?re) sx:matches (?m ?at) } } } ORDER BY ?m`, ['m'], ['a^^string', 'b^^string']],
+        [`SELECT ?m { <http://x/b> <http://x/src> ?t . LATERAL { OPTIONAL { BIND(UCASE(?t) AS ?u) (?u "[A-Z]") sx:matches (?m ?at) } } } ORDER BY ?at`, ['m'], ['T', 'H', 'R', 'E', 'E'].map((c) => `${c}^^string`)],
+        [`SELECT ?k { BIND("{\\"a\\": 1}" AS ?src) OPTIONAL { BIND("" AS ?root) (?src) sx:json (?p ?root ?k ?kind ?v) } } ORDER BY ?k`, ['k'], ['-', 'a^^string']],
+        // Bound outside a LATERAL, beside others its right side never reads (the tokenizer rules' shape).
+        [`SELECT ?m { BIND("ab cd" AS ?text) BIND(STRLEN(?text) AS ?len) LATERAL { <http://x/re> <http://x/is> ?re . (?text ?re) sx:matches (?m ?at) } } ORDER BY ?at`, ['m'], ['ab^^string', 'cd^^string']],
+        [`SELECT ?m { BIND("ab cd" AS ?text) BIND(STRLEN(?text) AS ?len) LATERAL { { FILTER(?len > 0) BIND(SUBSTR(?text, 1, ?len) AS ?src) <http://x/re> <http://x/is> ?re . (?src ?re) sx:matches (?m ?at) } UNION { BIND("nl" AS ?m) } } } ORDER BY ?m`, ['m'], ['ab^^string', 'cd^^string', 'nl^^string']],
+      ]
+      s.loadTurtle(`<http://x/b> <http://x/src> "three" . <http://x/re> <http://x/is> "[a-z]+" .`)
+      for (const [q, vars, want] of cases) expect(rows(s, q, vars), q).toEqual(want)
+    })
+
     it('a magic relation written with a list of the wrong shape is an ordinary pattern', () => {
       expect(rows(s, `SELECT ?m { "abc" sx:matches (?m) }`, ['m'])).toEqual([])
       expect(rows(s, `SELECT ?m { ("a" "a") sx:matches ?m }`, ['m'])).toEqual([])

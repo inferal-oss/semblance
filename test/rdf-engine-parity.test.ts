@@ -123,6 +123,14 @@ describe.skipIf(!built)('Semblance queries on both builds', () => {
   }
   const shell = mountShell(5, 'wat', 'sparql')
   for (const page of ['Home', 'Docs', 'Components', 'Examples', 'Playground'] as const) shell.showPage(page)
+  // The Data group too: its hex view and JSON tree feed magic relations from BIND (#281).
+  {
+    const f = shell.store.factory
+    const [app, group] = [f.namedNode('https://semblance.dev/demo#app'), f.namedNode('https://semblance.dev/demo#galleryGroup')]
+    shell.showPage('Components')
+    shell.runtime.apply({ remove: shell.store.match(app, group, null), add: [f.quad(app, group, f.namedNode('https://semblance.dev/demo#GroupData'))] })
+    shell.shell.flush()
+  }
   engineStoreHooks.created = undefined
   const source = recording!.engine
 
