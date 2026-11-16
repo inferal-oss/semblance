@@ -351,6 +351,90 @@ describe('typing in one breath is one undo step (c:BlockEditor)', () => {
   })
 })
 
+describe('redo offers only what was undone since the latest change (c:BlockEditor)', () => {
+  const setup = (prefer: 'sparql' | 'function') => {
+    const clock = new ManualClock()
+    const h = mount(prefer, 'wat', '', clock)
+    const key = (s: string) => {
+      for (const ch of s) {
+        clock.advance(120)
+        h.input('insertText', ch)
+      }
+    }
+    const shown = (b: string) => h.app.querySelector(`[id="${EX}${b}/~text"]`)!.textContent
+    const undone = () => h.store.match(h.store.factory.namedNode(NS.beh + 'ChangeLog'), h.store.factory.namedNode(NS.beh + 'undone'), null)
+    return { h, clock, key, shown, undone }
+  }
+
+  for (const prefer of ['sparql', 'function'] as const) {
+    it(`forgets what was undone once a new change is made: undo, type elsewhere, Redo does nothing (${prefer})`, () => {
+      const { h, key, shown, undone } = setup(prefer)
+      h.select('p2', 11)
+      key(' one')
+      expect(h.value('p2')).toBe('Second line one')
+      h.click('Undo')
+      expect(h.value('p2')).toBe('Second line')
+      expect(undone()).toHaveLength(1)
+      // A change in another block: the step undone before it is no longer there to redo.
+      h.select('p1', 0)
+      key('A')
+      expect(h.value('p1')).toBe('AHello world')
+      expect(undone()).toHaveLength(0)
+      h.click('Redo')
+      expect(h.value('p2')).toBe('Second line')
+      expect(shown('p2')).toBe('Second line')
+      expect(h.value('p1')).toBe('AHello world')
+      expect(shown('p1')).toBe('AHello world')
+      // Undo still takes back the new change, and then nothing (the forgotten step is gone).
+      h.click('Undo')
+      expect(h.value('p1')).toBe('Hello world')
+      h.click('Undo')
+      expect(h.value('p1')).toBe('Hello world')
+      expect(h.value('p2')).toBe('Second line')
+      // What this undo undid is there to redo, as long as nothing is changed in between.
+      h.click('Redo')
+      expect(h.value('p1')).toBe('AHello world')
+      expect(shown('p1')).toBe('AHello world')
+    })
+
+    it(`undoes twice and redoes twice when nothing changed in between (${prefer})`, () => {
+      const { h, clock, key, shown, undone } = setup(prefer)
+      h.select('p2', 11)
+      key(' one')
+      clock.advance(2000)
+      h.select('p1', 0)
+      key('A')
+      h.click('Undo')
+      h.click('Undo')
+      expect([h.value('p1'), h.value('p2')]).toEqual(['Hello world', 'Second line'])
+      expect(undone()).toHaveLength(2)
+      h.click('Redo')
+      expect([h.value('p1'), h.value('p2')]).toEqual(['Hello world', 'Second line one'])
+      h.click('Redo')
+      expect([h.value('p1'), h.value('p2')]).toEqual(['AHello world', 'Second line one'])
+      expect([shown('p1'), shown('p2')]).toEqual(['AHello world', 'Second line one'])
+      expect(undone()).toHaveLength(0)
+      // Nothing left to redo.
+      h.click('Redo')
+      expect([h.value('p1'), h.value('p2')]).toEqual(['AHello world', 'Second line one'])
+    })
+  }
+
+  it('renders the same with SPARQL and function rules through undo, a change elsewhere and Redo', () => {
+    const both = [setup('sparql'), setup('function')] as const
+    const step = (what: string, act: (t: (typeof both)[number]) => void) => {
+      for (const t of both) act(t)
+      sameHtml(both[1].h.html(), both[0].h.html(), what)
+      expect(both[1].h.text(), what).toBe(both[0].h.text())
+    }
+    step('typed', (t) => (t.h.select('p2', 11), t.key(' one')))
+    step('undone', (t) => t.h.click('Undo'))
+    step('typed elsewhere', (t) => (t.h.select('p1', 0), t.key('A')))
+    step('redo does nothing', (t) => t.h.click('Redo'))
+    for (const t of both) expect([t.h.value('p1'), t.h.value('p2')]).toEqual(['AHello world', 'Second line'])
+  })
+})
+
 describe('a long editing session (c:BlockEditor)', () => {
   it('keeps the graph, the engine and the HTML index bounded once the change log is at its bound', () => {
     const h = mount('sparql')
