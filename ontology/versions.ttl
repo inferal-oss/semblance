@@ -172,7 +172,7 @@ c:MarkupNode sem:version 1 ; sem:closure "031a6f715b5672b9" ; sem:internal "new"
 c:Maximizable sem:version 1 ; sem:closure "03da6f420769fab9" ; sem:internal "new" .
 c:Mention sem:version 1 ; sem:closure "59c19b0c7c7bd717" ; sem:internal "new" .
 c:Menu sem:version 1 ; sem:closure "66c4527a8cb25efe" ; sem:internal "new" .
-c:MenuItem sem:version 1 ; sem:closure "b71eb60509dc95ff" ; sem:internal "new" .
+c:MenuItem sem:version 2 ; sem:closure "0ecc5e459fa16e9f" ; sem:changedBy change:menu-item-links .
 c:Message sem:version 1 ; sem:closure "746382458fdd3fef" ; sem:internal "new" .
 c:MessageList sem:version 1 ; sem:closure "f84d8ec5192f89ba" ; sem:internal "new" .
 c:Metrics sem:version 1 ; sem:closure "e39028f1dc804a6a" ; sem:internal "new" .
