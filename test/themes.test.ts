@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { loadStore } from '../src/node/load.ts'
 import { NS, SEM, STY } from '../src/ns.ts'
 import { compileStyles } from '../src/style/compile.ts'
+import { splitSelectors } from '../src/style/scope.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -287,6 +288,14 @@ describe('structural themes', () => {
     for (const [layer, sel] of own) {
       expect(layer, sel).toBe('sem.variants')
       for (const s of sel.split(/, (?=\[data-sem-theme="semblance"\])/)) expect(s, s).toContain(guard('semblance'))
+    }
+    // a rule whose part lists several selectors is scoped to its theme in each, never only in the
+    // first (the rest would apply under every theme, and to a page that names no theme)
+    for (const { slug } of themes) {
+      for (const [layer, sel] of rules) {
+        if (layer !== 'sem.variants' || !sel.includes(guard(slug))) continue
+        for (const s of splitSelectors(sel)) if (s.includes(guard(slug))) expect(s, s).toMatch(new RegExp(`^\\[data-sem-theme="${slug}"\\][ :]`))
+      }
     }
     // rules that must beat an intent rule scope themselves with a state, in the intents layer
     for (const slug of STRUCTURAL) {
