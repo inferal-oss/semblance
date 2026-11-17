@@ -69,26 +69,51 @@ export function hybridStore(ox: typeof Ox): GraphStore {
       free(rebuild?.fresh)
       rebuild = undefined
     },
+    size: () => mirror.size!(),
+    // The mirror's dictionary (N3 never frees a term's number until it is copied).
+    footprint: () => mirror.footprint!(),
     maintain(budgetMs) {
       const until = performance.now() + budgetMs
-      if (!rebuild) {
-        if (!due()) return false
-        rebuild = { fresh: new ox.Store(), todo: mirror.match(null, null, null, null), next: 0 }
-        deletes = 0
+      let more = false
+      if (rebuild || due()) {
+        if (!rebuild) {
+          rebuild = { fresh: new ox.Store(), todo: mirror.match(null, null, null, null), next: 0 }
+          deletes = 0
+        }
+        more = !copy(until) || due()
       }
-      const r = rebuild
-      while (r.next < r.todo.length && performance.now() < until) {
-        const end = Math.min(r.todo.length, r.next + 256)
-        // A quad deleted since the snapshot was taken is gone from the mirror: skip it.
-        for (; r.next < end; r.next++) if (mirror.has(r.todo[r.next]!)) r.fresh.add(r.todo[r.next] as Ox.Quad)
-      }
-      if (r.next < r.todo.length) return true
-      ;(sparql as unknown as { free?: () => void }).free?.()
-      sparql = r.fresh
-      live = r.todo.length
-      rebuild = undefined
-      return due()
+      // The mirror's dictionary is copied in idle time too, with at least a millisecond, so that a
+      // long rebuild of Oxigraph's copy does not starve it.
+      return mirror.maintain!(Math.max(1, until - performance.now())) || more
     },
+    // Both copies at once: the mirror's (with `below`, when its dictionary has outgrown the live
+    // terms) and Oxigraph's (with `below`, when it holds dead versions enough to rebuild).
+    compact(opts = {}) {
+      const t = performance.now()
+      const m = mirror.compact!(opts)
+      if (rebuild || opts.below === undefined || due()) {
+        rebuild ??= { fresh: new ox.Store(), todo: mirror.match(null, null, null, null), next: 0 }
+        deletes = 0
+        copy(Infinity)
+      }
+      return m && { ...m, ms: performance.now() - t }
+    },
+  }
+
+  /** Copy what is left of Oxigraph's rebuild until `until` (performance.now()), and swap when complete. */
+  function copy(until: number): boolean {
+    const r = rebuild!
+    while (r.next < r.todo.length && performance.now() < until) {
+      const end = Math.min(r.todo.length, r.next + 256)
+      // A quad deleted since the snapshot was taken is gone from the mirror: skip it.
+      for (; r.next < end; r.next++) if (mirror.has(r.todo[r.next]!)) r.fresh.add(r.todo[r.next] as Ox.Quad)
+    }
+    if (r.next < r.todo.length) return false
+    ;(sparql as unknown as { free?: () => void }).free?.()
+    sparql = r.fresh
+    live = r.todo.length
+    rebuild = undefined
+    return true
   }
 }
 
