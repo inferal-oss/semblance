@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
 import { todoReactions } from '../src/examples/todo.ts'
 import { BEH, EVENTS_GRAPH, LDES, NS, RETENTION_GRAPH } from '../src/ns.ts'
-import { MemoryPressure, type PressureReport } from '../src/retention/pressure.ts'
+import { HEAP_ESTIMATE, heapCountsWasm, MemoryPressure, type PressureReport, type Sample, usage } from '../src/retention/pressure.ts'
 import { setup } from './helpers.ts'
 import { mountSite } from './harness.ts'
 import { type Page, sitePages } from './site-clicks.ts'
@@ -61,6 +61,32 @@ describe('the memory budget (ret:MemoryBudget)', () => {
     // A budget set with ret:maxBytes wins over ret:maxMiB.
     h.set('maxBytes', h.f.literal(String(200 * MIB), h.f.namedNode(NS.xsd + 'integer')))
     expect(await h.pressure.step()).toBe('normal')
+  })
+
+  it("counts the engines' memory once where the heap figure holds it (Chromium), and estimates the heap where none is reported", async () => {
+    const h = setup('wat', {}, 5, [FIXTURE])
+    const f = h.store.factory
+    let x: Sample = { wasmBytes: 60 * MIB, heapBytes: 90 * MIB, heapIncludesWasm: true }
+    const pressure = new MemoryPressure(h.runtime, { sample: () => x })
+    const figure = (p: string) => h.store.match(f.namedNode(BUDGET), f.namedNode(RET + p), null, f.namedNode(RETENTION_GRAPH))[0]?.object.value
+    // 90 MiB in all, 30 of them JS (not 150): Elevated on the 100 MiB budget, not Critical.
+    expect(await pressure.step()).toBe('elevated')
+    expect(figure('usedMiB')).toBe('90.0')
+    expect(figure('heapMiB')).toBe('30.0')
+    expect(figure('wasmMiB')).toBe('60.0')
+    // A heap figure without the engines' memory (another browser's) is added to it.
+    x = { wasmBytes: 60 * MIB, heapBytes: 30 * MIB }
+    await pressure.step()
+    expect(figure('usedMiB')).toBe('90.0')
+    // Which Chromium counts it (measured): 143 does, 151 and later do not; other browsers report no heap.
+    expect(heapCountsWasm('Mozilla/5.0 (Macintosh) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/143.0.7499.4 Safari/537.36')).toBe(true)
+    expect(heapCountsWasm('Mozilla/5.0 (Macintosh) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36')).toBe(false)
+    expect(heapCountsWasm('Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15')).toBe(false)
+    // Without a heap figure, the triples stand in for it, derived ones dearer.
+    const u = usage({ wasmBytes: 0 }, 1000, 400)
+    expect(u.estimated).toBe(true)
+    expect(u.js).toBe(400 * HEAP_ESTIMATE.derivedTriple + 600 * HEAP_ESTIMATE.triple)
+    h.runtime.dispose()
   })
 
   it('acts as if a level held when one is simulated, and performs requests', async () => {

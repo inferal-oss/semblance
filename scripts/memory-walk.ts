@@ -11,6 +11,7 @@
 //   … --snapshot out.heapsnapshot   # heap snapshots after the idle baseline (out.base.heapsnapshot) and at the end, after a GC
 //                                   # (scripts/heap-summary.ts summarises them by constructor)
 //   … --sampling                 # allocation sampling over the walk: the functions that allocate most
+//   … --channel chrome            # the installed Chrome (default: Playwright's Chromium, 143)
 //   … --base https://semblance.dev   # the deployed site (no window.semblance: heap and wasm only)
 //   … --json out.json
 //
@@ -127,7 +128,11 @@ interface Reading {
 }
 
 const { server, base } = opt('base') ? { server: undefined, base: opt('base')!.replace(/\/$/, '') } : await serve(dist)
-const browser = await chromium.launch({ args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'] })
+// --channel chrome (the installed Chrome) or --executable <path>. Which Chromium matters: up to 143
+// (Playwright's own build) usedJSHeapSize counts WebAssembly memory, from 151 on it does not, and V8
+// collects later when it does not (#552). The figures to trust are v8 used and wasm, apart.
+const browser = await chromium.launch({ args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'], channel: opt('channel'), executablePath: opt('executable') })
+console.error(`browser ${browser.version()}`)
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
 await context.addInitScript({ content: `globalThis.__name ??= (f) => f;(${wasmProbe})()` })
 const page = await context.newPage()

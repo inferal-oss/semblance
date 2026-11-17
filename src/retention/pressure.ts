@@ -56,7 +56,31 @@ export type OnRetention = (report: PressureReport) => RetentionAnswer | void | P
 
 export interface Sample {
   wasmBytes: number
+  /** The JS heap, where the browser reports it. */
   heapBytes?: number
+  /**
+   * Whether heapBytes already counts the WebAssembly memory. Chromium's usedJSHeapSize is V8's heap
+   * and its array buffers' backing stores; up to Chromium 143 the engines' memory was among them
+   * (added to wasmBytes, it would count twice), from 151 on it is not (#552).
+   */
+  heapIncludesWasm?: boolean
+}
+
+/**
+ * What the JS heap holds per triple, where the browser does not say (WebKit, Firefox, Node):
+ * measured on the site (scripts/memory-walk.ts, #552), a derived triple costs the engine's and the
+ * HTML index's bookkeeping besides its terms; a loaded one much less.
+ */
+export const HEAP_ESTIMATE = { derivedTriple: 600, triple: 250 }
+
+/** A sample's figures, each counted once: what the page uses, its JS part and its WebAssembly part. */
+export function usage(x: Sample, triples: number, derived: number): { used: number; js: number; wasm: number; estimated: boolean } {
+  if (x.heapBytes !== undefined) {
+    const js = x.heapIncludesWasm ? Math.max(0, x.heapBytes - x.wasmBytes) : x.heapBytes
+    return { used: js + x.wasmBytes, js, wasm: x.wasmBytes, estimated: false }
+  }
+  const js = derived * HEAP_ESTIMATE.derivedTriple + Math.max(0, triples - derived) * HEAP_ESTIMATE.triple
+  return { used: js + x.wasmBytes, js, wasm: x.wasmBytes, estimated: true }
 }
 
 export interface PressureOptions {
@@ -79,7 +103,18 @@ export function measure(runtime: Runtime): Sample {
   const store = runtime.store
   const wasmBytes = store.memoryBytes?.() ?? (store as unknown as { engine?: { x?: { memory?: WebAssembly.Memory } } }).engine?.x?.memory?.buffer.byteLength ?? 0
   const memory = (globalThis.performance as unknown as { memory?: { usedJSHeapSize: number } } | undefined)?.memory
-  return { wasmBytes, heapBytes: memory?.usedJSHeapSize }
+  const heapBytes = memory?.usedJSHeapSize
+  return { wasmBytes, heapBytes, heapIncludesWasm: heapBytes !== undefined && heapBytes >= wasmBytes && heapCountsWasm() }
+}
+
+/**
+ * Whether this browser's performance.memory counts WebAssembly memory in usedJSHeapSize. Measured
+ * (#552): Chromium 143 does, 151 and 157 do not; the versions between are taken as not doing it, so
+ * that the engines' memory is counted twice there rather than missed.
+ */
+export function heapCountsWasm(userAgent = globalThis.navigator?.userAgent ?? ''): boolean {
+  const major = Number(/Chrom(?:e|ium)\/(\d+)/.exec(userAgent)?.[1])
+  return Number.isFinite(major) && major <= 143
 }
 
 export class MemoryPressure {
@@ -172,8 +207,10 @@ export class MemoryPressure {
     const maxBytes = this.maxBytes(b)
     const x = (this.opts.sample ?? (() => measure(this.runtime)))()
     const triples = store.size?.() ?? 0
-    // Without a heap figure (outside Chromium), the store's size stands in for what the heap holds.
-    const used = x.wasmBytes + (x.heapBytes ?? triples * 120)
+    // Each counted once (Chromium's heap figure holds the engines' memory); without a heap figure
+    // (outside Chromium), the store's triples stand in for what the heap holds.
+    const u = usage(x, triples, this.derived())
+    const used = u.used
     const elevatedAt = Number(this.one(b, RET + 'elevatedAt')?.value ?? 0.8)
     const measured: Level = used >= maxBytes ? 'critical' : used >= maxBytes * elevatedAt ? 'elevated' : 'normal'
     const simulated = this.one(b, RET + 'simulate')?.value
@@ -210,7 +247,7 @@ export class MemoryPressure {
         }
       }
     }
-    this.report(b, { level, used, wasm: x.wasmBytes, heap: x.heapBytes, triples, derived: this.derived() })
+    this.report(b, { level, used, wasm: x.wasmBytes, heap: u.estimated ? undefined : u.js, triples, derived: this.derived() })
     if (!this.runtime.ended) this.opts.onChange?.()
     return level
   }

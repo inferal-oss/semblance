@@ -577,8 +577,11 @@ ex:memory a ret:MemoryBudget ; ret:maxMiB 512 .       # or ret:maxBytes, or ret:
 effect (`src/retention/pressure.ts`, attached by `mount`) measures in idle time, every two seconds:
 
 - the engines' WebAssembly memory;
-- the JS heap, where the browser reports it (Chromium's `performance.memory`);
-- otherwise, an estimate from the store's size.
+- the JS heap, where the browser reports it (Chromium's `performance.memory`). Up to Chromium 143 its
+  figure held the engines' memory too (151 and later leave it out), so each is counted once:
+  `ret:heapMiB` is the JS part alone and `ret:usedMiB` the sum;
+- otherwise (WebKit, Firefox, Node), an estimate from the store's triples: 600 bytes of JS a derived
+  triple and 250 a loaded one, as measured on the site (`HEAP_ESTIMATE`, #552).
 
 It writes `ret:level` (`ret:Normal`, `ret:Elevated` from `ret:elevatedAt`, default 0.8, `ret:Critical`
 from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:liveMiB`,

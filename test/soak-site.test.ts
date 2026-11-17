@@ -2,7 +2,7 @@ import { appendFileSync } from 'node:fs'
 import type { Quad } from '@rdfjs/types'
 import { describe, expect, it } from 'vitest'
 import { NS } from '../src/ns.ts'
-import { measure, MemoryPressure } from '../src/retention/pressure.ts'
+import { measure, MemoryPressure, usage } from '../src/retention/pressure.ts'
 import { mountSite } from './harness.ts'
 import { type Page, sitePages } from './site-clicks.ts'
 
@@ -77,13 +77,12 @@ describe('a site soak within the memory budget', () => {
     // The budget in the graph: ret:maxMiB wins over the Memory tool's slider (ret:maxFrom).
     const budget = f.namedNode(UI + 'memoryBudget')
     site.runtime.apply({ remove: [], add: [f.quad(budget, f.namedNode(NS.ret + 'maxMiB'), f.literal(String(BUDGET_MIB), f.namedNode(NS.xsd + 'integer')))] })
-    // Measured as the effect measures by default: the engine's memory, and the store's size for the heap.
+    // Measured as the effect measures by default: the engine's memory, and an estimate from the
+    // store's triples for the heap, which Node does not report.
     const pressure = new MemoryPressure(site.runtime, { onChange: () => site.shell.flush() })
     const triples = () => s.size?.() ?? s.match(null, null, null).length
-    const used = () => {
-      const x = measure(site.runtime)
-      return (x.wasmBytes + (x.heapBytes ?? triples() * 120)) / MIB
-    }
+    const derived = () => site.runtime.projections.reduce((n, p) => n + p.engine.derivedSize, 0)
+    const used = () => usage(measure(site.runtime), triples(), derived()).used / MIB
     const wasm = () => s.memoryBytes!() / MIB
     // What the app owns: the default graph, but for the page and what picks it.
     const key = (q: Quad) => `${q.subject.value} ${q.predicate.value} ${q.object.termType}:${q.object.value}`

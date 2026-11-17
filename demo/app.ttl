@@ -122,7 +122,8 @@ ui:ms rdfs:label "update + DOM" ; c:unit "ms" .
 ui:ruleRuns rdfs:label "rule runs" .
 ui:domOps rdfs:label "DOM operations" .
 ui:viewRows rdfs:label "view rows" ; rdfs:comment "Rows the maintained views processed (docs/IVM.md)." .
-ui:heap rdfs:label "JS heap" .
+ui:heap rdfs:label "JS heap" ; rdfs:comment "Without the engine's memory, which Chromium up to 143 counts in its heap figure."@en .
+ui:wasm rdfs:label "engine memory" .
 ui:storage rdfs:label "storage (incl. session)" ; c:unit "KB" .
 ui:triples rdfs:label "triples" .
 ui:domNodes rdfs:label "DOM nodes" .
@@ -160,7 +161,7 @@ ui:howItWorks rnd:observesSelf rnd:Geometry , rnd:Visibility .
 # docked to the bottom of the shell. The host writes ui:stats; c:Metrics shows it.
 ui:perfPanel a c:StatusBar ; c:label "Performance" , "Продуктивність"@uk , "Leistung"@de , "الأداء"@ar ;
     c:children ( ui:lastUpdate ui:memory ) .
-ui:memory a c:Metrics ; c:of ui:stats ; c:fields ( ui:heap ui:storage ui:triples ui:domNodes ) .
+ui:memory a c:Metrics ; c:of ui:stats ; c:fields ( ui:heap ui:wasm ui:storage ui:triples ui:domNodes ) .
 
 # Announcing reactions (ann:announces) show up here as toasts, from the change log.
 ui:announcements a c:ToastRegion ; ann:from beh:ChangeLog ; c:limit 3 .
@@ -472,7 +473,7 @@ ui:memoryPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:memoryMetrics ui:memoryLimit ui:memorySimulate ui:memoryActions ui:memoryHorizons ui:memoryUnsaved ui:memoryGraphs ui:memoryClasses ui:memoryStructures ) .
 ui:memoryMetrics a c:Metrics ; c:of ui:memoryBudget ;
     c:fields ( ret:level ret:usedMiB ret:heapMiB ret:wasmMiB ret:liveMiB ret:compactedMiB ret:triples ret:derivedTriples ret:evicted ) .
-ui:memoryLimit a c:Slider ; c:min 64 ; c:max 4096 ; c:step 64 ; c:value 2048 ; c:unit "MiB" , "МіБ"@uk , "MiB"@de , "ميبيبايت"@ar ;
+ui:memoryLimit a c:Slider ; c:min 64 ; c:max 4096 ; c:step 64 ; c:value 1024 ; c:unit "MiB" , "МіБ"@uk , "MiB"@de , "ميبيبايت"@ar ;
     c:label "Maximum memory" , "Найбільше пам’яті"@uk , "Höchster Speicher"@de , "أقصى ذاكرة"@ar .
 # What the effect does at each level, without waiting for the page to grow: As measured, or one forced.
 ui:memorySimulate a c:Segmented ; c:controls ui:memoryBudget ; c:property ret:simulate .
