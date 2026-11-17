@@ -1,16 +1,16 @@
 // Retained streams: their policies, their horizons, and offloading to the browser's storage
 // (docs/RETENTION.md). The effect that appends to a stream (the event bus, the persistence and sync
 // logs, the stall log, network capture) asks its RetainedStream what retires with each append and
-// removes it in the same write. What leaves by ret:Offload is serialized at once and written to
-// storage in chunks, off the interaction; until a write succeeds it is held as text (ret:pending),
-// so a refused write loses nothing. A recall reads chunks back, newest first, and the stream puts
-// their members back into the live graph.
+// removes it in the same write. What leaves by ret:Offload is taken at once (its triples, as terms)
+// and written to storage in chunks, each one Jelly stream (./chunk.ts), off the interaction; until
+// a write succeeds it is held (ret:pending), so a refused write loses nothing. A recall reads chunks
+// back, newest first, and the stream puts their members back into the live graph.
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
-import { Parser, Writer } from 'n3'
 import { NS, RETENTION_GRAPH } from '../ns.ts'
 import type { Delta } from '../rdf.ts'
 import type { Backend } from '../persistence.ts'
 import type { GraphStore } from '../store/types.ts'
+import { decodeChunk, encodeChunk, loadChunk, storeChunk } from './chunk.ts'
 import { type Expiry, type Member, type Policy, policiesOf, StreamRetention } from './policy.ts'
 
 const RET = NS.ret
@@ -45,16 +45,11 @@ interface Chunk {
   count: number
 }
 
-interface Stored {
-  members: Member[]
-  nt: string
-}
-
-/** Members waiting for storage, as text, by policy. */
+/** Members waiting for storage, with what of their closures is stored, by policy. */
 interface Pending {
   policy: Policy
   members: Member[]
-  nt: string[]
+  closures: Quad[][]
 }
 
 export interface RetentionOptions {
@@ -156,19 +151,15 @@ export class Retention {
     await Promise.all(this.all().map((s) => s.flush()))
   }
 
-  serialize(quads: Quad[]): string {
-    const w = new Writer({ format: 'N-Triples' })
-    for (const q of quads) w.addQuad(q.subject as never, q.predicate as never, q.object as never)
-    let out = ''
-    w.end((_e, r) => (out = r ?? ''))
-    return out
+  /** Members and their closures as a stored chunk (a Jelly stream). */
+  encode(members: Member[], closures: Quad[][]): Uint8Array {
+    return encodeChunk(members, closures, this.store.factory)
   }
 
-  parse(nt: string, graph: string): Quad[] {
+  /** A stored chunk (a Jelly stream, or the earlier N-Triples layout) back as members and their triples in `graph`. */
+  decode(value: Uint8Array | string, graph: string): { members: Member[]; quads: Quad[] } {
     const f = this.store.factory
-    const g = f.namedNode(graph)
-    const term = (t: Term): Term => (t.termType === 'NamedNode' ? f.namedNode(t.value) : t.termType === 'Literal' ? f.literal(t.value, t.language || f.namedNode(t.datatype.value)) : t)
-    return new Parser({ format: 'N-Triples' }).parse(nt).map((q) => f.quad(term(q.subject as Term) as NamedNode, term(q.predicate as Term) as NamedNode, term(q.object as Term) as NamedNode, g))
+    return decodeChunk(value, f.namedNode(graph), f)
   }
 }
 
@@ -254,9 +245,9 @@ export class RetainedStream {
       out.push(...closure)
       if (policy?.exit === 'offload' && this.owner.backend) {
         let p = this.pending.get(policy.iri)
-        if (!p) this.pending.set(policy.iri, (p = { policy, members: [], nt: [] }))
+        if (!p) this.pending.set(policy.iri, (p = { policy, members: [], closures: [] }))
         p.members.push(member)
-        p.nt.push(this.owner.serialize(this.host.storable ? this.host.storable(f.namedNode(member.iri), closure) : closure))
+        p.closures.push(this.host.storable ? this.host.storable(f.namedNode(member.iri), closure) : closure)
         if (policy.announce) this.cross('offloaded')
       } else {
         this.dropped++
@@ -298,11 +289,10 @@ export class RetainedStream {
       for (const [iri, p] of [...this.pending]) {
         while (p.members.length) {
           const members = p.members.slice(0, size)
-          const stored: Stored = { members, nt: p.nt.slice(0, size).join('') }
           const key = `${this.owner.prefix}${this.owner.run}|${this.iri}|${iri}|${String(members[0]!.seq).padStart(12, '0')}`
           if (this.owner.stopped) return
           try {
-            await b.set(key, JSON.stringify(stored))
+            await storeChunk(b, key, this.owner.encode(members, p.closures.slice(0, size)))
           } catch (e) {
             this.refused = e instanceof Error ? e.message : String(e)
             this.owner.opts.onRefused?.(e instanceof Error ? e : new Error(String(e)))
@@ -312,7 +302,7 @@ export class RetainedStream {
           }
           this.refused = undefined
           p.members.splice(0, members.length)
-          p.nt.splice(0, members.length)
+          p.closures.splice(0, members.length)
           this.chunks.push({ key, policy: iri, first: members[0]!.seq, count: members.length })
           this.offloaded += members.length
           await this.trim(p.policy)
@@ -341,7 +331,7 @@ export class RetainedStream {
       const over = Math.min(p.members.length, waiting - cap)
       if (over <= 0) continue
       p.members.splice(0, over)
-      p.nt.splice(0, over)
+      p.closures.splice(0, over)
       waiting -= over
       this.dropped += over
       if (p.policy.announce) this.cross('dropped')
@@ -401,16 +391,22 @@ export class RetainedStream {
     const policies = new Map(this.policies().map((p) => [p.iri, p]))
     let back = 0
     for (const c of picked) {
-      const raw = await b.get(c.key)
+      const raw = await loadChunk(b, c.key).catch(() => undefined)
       if (this.owner.stopped) return back
       this.chunks.splice(this.chunks.indexOf(c), 1)
       this.offloaded -= c.count
-      if (!raw) {
+      let stored: { members: Member[]; quads: Quad[] } | undefined
+      try {
+        stored = raw === undefined ? undefined : this.owner.decode(raw, this.host.graph)
+      } catch {
+        // Unreadable: counted as dropped, as a chunk storage lost is.
+      }
+      if (!stored || stored.members.length !== c.count) {
         this.dropped += c.count
+        await b.remove(c.key).catch(() => undefined)
         continue
       }
-      const stored = JSON.parse(raw) as Stored
-      const quads = this.owner.parse(stored.nt, this.host.graph)
+      const quads = stored.quads
       const f = this.owner.store.factory
       const g = f.namedNode(this.host.graph)
       const links = stored.members.map((m) => f.quad(f.namedNode(this.iri), f.namedNode(NS.tree + 'member'), f.namedNode(m.iri), g))
