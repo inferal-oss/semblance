@@ -35,6 +35,19 @@ each pays, on whole pages: results/compiled.md). Tools › Engine › "Compiled 
 runs say a module pays for itself, the most time first, a bounded number per idle
 slice; a module that then runs slower than the interpreter did is dropped.
 
+**Memory.** An instance's WebAssembly memory never shrinks: what `collect` and removals free is
+reused inside it, never returned. The store (`host/store.ts`) reports `memoryBytes()`, the memory's
+high-water mark, and `liveBytes()`, an estimate of what a fresh instance holding the same quads and
+terms would need. `compact()` copies the store into a fresh instance, term by term (so blank nodes
+keep their labels, which a Jelly or Turtle load would replace), swaps it in and drops the old one;
+the term objects it handed out stay valid, re-tagged with their new ids, and prepared queries are
+prepared again as they run. `maintain` compacts when live state is below half the memory and the
+memory is above 64 MiB (`compaction: { below, floor }`, `setCompaction`), never while a fetch or a
+Jelly stream is in flight. On the site after a visit of every page (`test/site-compaction.test.ts`),
+the memory goes from 506 to 337 MiB in some 340 ms with every quad kept; what is left above live
+state is the engines' own growth (WAT grows by half its memory, Rust's size classes keep the blocks
+of outgrown vectors).
+
 ## Parity guard
 
 The two builds match one to one, and WAT is at least as fast. The **Engines** workflow

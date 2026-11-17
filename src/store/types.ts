@@ -90,6 +90,17 @@ export interface GraphStore {
    * Returns whether more remains. Optional; stores without upkeep omit it.
    */
   maintain?(budgetMs: number): boolean
+  /** The bytes the store holds outside the JavaScript heap (WebAssembly memory, which never shrinks). Optional. */
+  memoryBytes?(): number
+  /** An estimate of the bytes its live state needs, against memoryBytes: what compact would leave. Optional. */
+  liveBytes?(): number
+  /**
+   * Give back what the memory holds beyond live state (Semblance's engines: copy into a fresh
+   * instance). With `below`, only when liveBytes is below that fraction of memoryBytes (when it
+   * would win). Undefined when it did not: it would not win, or a fetch is in flight. Optional, as
+   * memoryBytes.
+   */
+  compact?(opts?: { below?: number }): StoreCompaction | undefined
   /**
    * Release what the store holds outside the JavaScript heap (WebAssembly memory), which garbage
    * collection does not see: every Oxigraph store shares one capped WebAssembly memory. The store
@@ -157,4 +168,13 @@ export class QueryInterrupted extends Error {
 export function storeFailure(store: GraphStore, e: unknown, query: string): string {
   const message = (e as Error).message
   return e instanceof WebAssembly.RuntimeError ? `the ${store.kind} store trapped (${message}) running:\n${query}` : message
+}
+
+/** What one compaction did: the memory's bytes before and after, what it kept, how long it took. */
+export interface StoreCompaction {
+  before: number
+  after: number
+  quads: number
+  terms: number
+  ms: number
 }
