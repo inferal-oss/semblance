@@ -563,7 +563,9 @@ order:
    is parked as if never shown, and a page shown again renders exactly as on a fresh visit. While
    pressure is above Normal, idle time evaluates nothing hidden ahead of time.
 2. **Compact the engines,** when the store can and it would win: when the live estimate is below
-   three quarters of the memory at Elevated, nine tenths at Critical (`store.compact({ below })`).
+   three quarters of the memory at Elevated, nine tenths at Critical. At Elevated a step starts or
+   continues one a slice at a time (`store.compactStep`, 8 ms), which idle time carries on; at
+   Critical it finishes now (`store.compact({ below })`).
 3. **Offload history.** What was recalled goes back to storage, and at Critical so does the oldest
    half of what `ret:having` policies hold.
 4. **Raise `ret:Pressure`** on the budget, for the app's reactions to answer: raise the budget, close

@@ -19,6 +19,8 @@ import type { Runtime } from '../runtime.ts'
 const RET = NS.ret
 const RDF_TYPE = NS.rdf + 'type'
 const MIB = 2 ** 20
+// What one step of pressure spends on a compaction in slices (ms); idle time carries it on.
+const SLICE_MS = 8
 // A short stable key for a minted node's local name (FNV-1a, base 36).
 const hash = (s: string) => {
   let h = 0x811c9dc5
@@ -187,7 +189,10 @@ export class MemoryPressure {
       this.evict(level === 'critical' ? Infinity : Math.ceil(derived * 0.25))
       // A compaction copies the whole store: only when live state is below most of the memory
       // (after the eviction above), so lasting pressure does not copy a store that cannot shrink.
-      this.compact({ below: level === 'critical' ? 0.9 : 0.75 })
+      // At Elevated it starts (or continues) one a slice at a time, which idle time carries on;
+      // at Critical it finishes now.
+      if (level === 'critical') this.compact({ below: 0.9 })
+      else this.compactSlice({ below: 0.75 })
       this.offload(level)
       if (level === 'critical') this.escalation++
       // 4: the app's reactions, once a crossing.
@@ -232,7 +237,17 @@ export class MemoryPressure {
 
   /** Compact the store where it can, and count what it gave back. */
   private compact(opts?: { below?: number }) {
-    const done = this.runtime.store.compact?.(opts)
+    this.count(this.runtime.store.compact?.(opts))
+  }
+
+  /** One slice of a compaction (a store that compacts in slices), else the whole of one. */
+  private compactSlice(opts: { below?: number }) {
+    const store = this.runtime.store
+    if (store.compactStep) this.count(store.compactStep(SLICE_MS, opts))
+    else this.compact(opts)
+  }
+
+  private count(done: { before: number; after: number } | undefined) {
     if (done) this.compacted += Math.max(0, done.before - done.after)
   }
 
