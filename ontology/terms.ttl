@@ -2328,6 +2328,7 @@ ret:OffloadNow a sem:Term .
 ret:Offloaded a sem:Term .
 ret:Policy a sem:Term .
 ret:Pressure a sem:Term .
+ret:Reference a sem:Term .
 ret:StructureUsage a sem:Term .
 ret:UntilAcknowledged a sem:Term .
 ret:Usage a sem:Term .
