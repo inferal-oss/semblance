@@ -50,9 +50,9 @@ export class Runtime {
   /** Bumped when a sem:warm triple changes; each node's own sem:warm until then. */
   private warmDeclared = 0
   /**
-   * Each node's own sem:warm, as idle time asks it, per projection, in two generations: a change of
-   * structure (index.visibility) starts a new one, and what the last one asked is taken from it, so
-   * nodes that went do not stay and nodes that stand are not asked of the store again.
+   * Each node's own sem:warm, as idle time asks it, per projection, in two generations: every
+   * GENERATION changes of structure (index.visibility) start a new one, which takes from the last what
+   * is still asked, so nodes that went do not stay and nodes that stand are not asked of the store again.
    */
   private readonly ownWarmth = new Map<Engine, { now: Map<string, string | undefined>; before: Map<string, string | undefined> }>()
   private readonly refreshListeners: (() => void)[] = []
@@ -416,6 +416,7 @@ export class Runtime {
       // (forgetting it there had idle time ask the store again for every ancestor of every focus
       // after each page it prepared: anticipation a third slower, #546).
       let structure = -1
+      let changes = 0
       let declared = -1
       let nearest = new Map<string, string | undefined>()
       const ownWarmth = { now: new Map<string, string | undefined>(), before: new Map<string, string | undefined>() }
@@ -430,7 +431,11 @@ export class Runtime {
       }
       const warmth = (focus: string) => {
         if (declared !== this.warmDeclared) (declared = this.warmDeclared), (structure = -1), ownWarmth.now.clear(), ownWarmth.before.clear()
-        if (structure !== index.visibility) (structure = index.visibility), (nearest = new Map()), (ownWarmth.before = ownWarmth.now), (ownWarmth.now = new Map())
+        if (structure !== index.visibility) {
+          structure = index.visibility
+          nearest = new Map()
+          if (++changes % GENERATION === 0) (ownWarmth.before = ownWarmth.now), (ownWarmth.now = new Map())
+        }
         if (nearest.has(focus)) return nearest.get(focus)
         const v = index.nearest(focus, own)
         nearest.set(focus, v)
@@ -718,4 +723,6 @@ function settle(p: Projection) {
 /** At most this many rounds of views over rules per turn (Runtime.rounds). */
 const MAX_ROUNDS = 64
 
+/** Changes of structure per generation of Runtime.ownWarmth. */
+const GENERATION = 32
 const declaresWarmth = (q: Quad) => q.predicate.value === SEM.warm

@@ -577,6 +577,25 @@ async function walk(browser: Browser, base: string, path: string, width: Width, 
     const names = await listed()
     let current = c.phone ? await list.locator('select option:checked').textContent() : await list.locator('button[aria-pressed=true]').textContent()
     for (let pass = 1; pass <= passes; pass++) {
+      // --pressure Critical: between passes, the Memory tool simulates that level for a few seconds (its
+      // eviction, compaction and offload run), then goes back to As measured: the revisits that follow
+      // pay for what it let go.
+      if (pass > 1 && opt('pressure')) {
+        const level = async (label: string) => {
+          if (!(await page.getByRole('tab', { name: 'Memory', exact: true }).first().isVisible().catch(() => false))) {
+            await displayMenu(c)
+            await click(c, 'Tools')
+            await page.getByRole('tab', { name: 'Memory', exact: true }).first().click()
+          }
+          await page.getByRole('button', { name: label, exact: true }).filter({ visible: true }).first().click()
+        }
+        await level(opt('pressure')!)
+        await sleep(6000)
+        await level('As measured')
+        await displayMenu(c)
+        await click(c, 'Tools')
+        await settle(page, await now(page), capMs)
+      }
       const order = names.map((n) => n.trim())
       if (random) for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [order[i], order[j]] = [order[j]!, order[i]!] }
       for (const name of order) {
