@@ -1,0 +1,345 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix ret: <https://semblance.dev/ns/retention#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix net: <https://semblance.dev/ns/network#> .
+@prefix src: <https://semblance.dev/ns/source#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix tree: <https://w3id.org/tree#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+
+# Retention layer: what is kept, for how long, and what happens to what leaves (docs/RETENTION.md).
+#
+# Every bounded stream or history says so with policies in the graph, read by the effect that
+# appends to it (src/retention/). A stream's view names its policies (ldes:retentionPolicy, LDES
+# semantics: a member is kept while any policy keeps it). What no policy keeps any more leaves by
+# its policy's exit: dropped, or offloaded to the browser's storage (IndexedDB), from where it can be
+# recalled into the live graph. Each retained stream has a horizon (ret:Horizon, in
+# urn:semblance:retention) that says how much is in memory, how much was offloaded and how much
+# is no longer kept, so nothing leaves without a trace a person can see; crossing a person-facing
+# horizon for the first time in a session is announced.
+#
+# Three kinds of state, three rules: data (what the app or the person owns) is never dropped by
+# retention; history (logs, undo) is bounded by these policies; derived state is evicted freely.
+
+<https://semblance.dev/ns/retention> a owl:Ontology ;
+    rdfs:label "Semblance retention layer"@en .
+
+# --- policies -------------------------------------------------------------------------------------
+
+ret:Policy a owl:Class ; rdfs:subClassOf ldes:RetentionPolicy ;
+    rdfs:comment "What a stream keeps. Several policies on one view: a member is kept while any of them keeps it."@en .
+ret:Latest a owl:Class ; rdfs:subClassOf ret:Policy ;
+    rdfs:comment "Keeps the ldes:amount most recent members (by the stream's sequence path)."@en .
+ret:Within a owl:Class ; rdfs:subClassOf ret:Policy ;
+    rdfs:comment "Keeps the members appended within a duration (tree:value, an xsd:duration) of now."@en .
+beh:LatestMembersPolicy rdfs:subClassOf ret:Latest .
+ldes:DurationAgoPolicy rdfs:subClassOf ret:Within .
+
+ret:having a owl:ObjectProperty ; rdfs:domain ret:Policy ; rdfs:range rdf:Property ;
+    rdfs:comment """The policy keeps only members that have one of these properties (on the member, in the
+stream's graph). It extends the stream's other policies: a member they let go is offered to it, and it
+keeps the ldes:amount most recent of those it was offered. The change log keeps the members that
+recorded an undoable change (beh:asserted, beh:retracted) longer than the rest this way."""@en .
+
+ret:Exit a owl:Class ; rdfs:comment "What happens to a member a policy no longer keeps."@en .
+ret:Drop a ret:Exit ; rdfs:comment "It is removed (the default). The horizon counts it."@en .
+ret:Offload a ret:Exit ;
+    rdfs:comment "It is written to the browser's storage, then removed; it can be recalled into the live graph (ret:recall)."@en .
+ret:onExpiry a owl:ObjectProperty ; rdfs:domain ret:Policy ; rdfs:range ret:Exit .
+ret:storageAmount a owl:DatatypeProperty ; rdfs:domain ret:Policy ; rdfs:range xsd:integer ;
+    rdfs:comment "How many offloaded members storage keeps for the policy; past it, the oldest are dropped (and counted)."@en .
+ret:announce a owl:DatatypeProperty ; rdfs:domain ret:Policy ; rdfs:range xsd:boolean ;
+    rdfs:comment "Person-facing: the first time in a session the policy offloads or drops a member, it is announced."@en .
+ret:recallLimit a owl:DatatypeProperty ; rdfs:domain ldes:EventStream ; rdfs:range xsd:integer ;
+    rdfs:comment "How many recalled members the stream holds in memory besides what its policies keep (default 1000); past it, the earliest recalled go back."@en .
+
+# --- horizons ---------------------------------------------------------------------------------------
+
+# Written by the retention effect into urn:semblance:retention, one per retained stream, minted under
+# the stream (<stream>/~horizon). Rules and components read them.
+ret:Horizon a owl:Class ;
+    rdfs:label "History kept"@en , "Збережена історія"@uk , "Aufbewahrter Verlauf"@de , "السجل المحفوظ"@ar ;
+    rdfs:comment "Where a retained stream's history stops: how much of it is in memory, offloaded, recalled, and no longer kept."@en .
+ret:of a owl:ObjectProperty ; rdfs:domain ret:Horizon ; rdfs:comment "The stream the horizon is of."@en .
+ret:inMemory a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:integer ; rdfs:comment "Members in the graph."@en .
+ret:offloaded a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:integer ; rdfs:comment "Members in the browser's storage, recallable."@en .
+ret:pending a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:integer ;
+    rdfs:comment "Members on their way to storage: out of the graph, held until the write succeeds."@en .
+ret:recalled a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:integer ; rdfs:comment "Members brought back from storage and held in memory."@en .
+ret:dropped a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:integer ; rdfs:comment "Members no longer kept anywhere, this session."@en .
+ret:oldestKept a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:dateTime ; rdfs:comment "When the oldest member in memory was appended."@en .
+ret:refused a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:string ;
+    rdfs:comment "Why storage refused the last write (a quota): what was to be offloaded is held in memory meanwhile."@en .
+
+# --- recalling ----------------------------------------------------------------------------------------
+
+ret:recall a owl:DatatypeProperty ; rdfs:domain ldes:EventStream ; rdfs:range xsd:integer ;
+    rdfs:comment """Written by a reaction on a stream (in the input graph): bring back this many of its most recent
+offloaded members, into the live graph. Performed and removed by the retention effect."""@en .
+ret:recalls a owl:ObjectProperty ; rdfs:comment "On a rendered element: the stream whose offloaded members activating it recalls."@en .
+
+# --- announcing a horizon ------------------------------------------------------------------------------
+
+# The first time in a session a person-facing policy (ret:announce true) offloads or drops a member,
+# the effect raises one of these events on the stream; their reactions say so (ann:announces).
+ret:Offloaded a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:comment "A stream's person-facing policy offloaded members to storage for the first time this session."@en .
+ret:Dropped a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:comment "A stream's person-facing policy stopped keeping members for the first time this session."@en .
+ret:crossed a owl:ObjectProperty ; rdfs:domain ldes:EventStream ; rdfs:range rdfs:Class ;
+    rdfs:comment "Which horizon events the stream announced this session (so each is announced once)."@en .
+
+ret:AnnounceOffloaded a beh:Reaction ;
+    beh:when ret:Offloaded ;
+    beh:sourceClass ldes:EventStream ;
+    beh:inserts """CONSTRUCT { $this ret:crossed ret:Offloaded } WHERE { FILTER NOT EXISTS { $this ret:crossed ret:Offloaded } }""" ;
+    ann:announces "Older history moved to this browser's storage"@en , "Старішу історію перенесено до сховища браузера"@uk ,
+        "Älterer Verlauf wurde in den Browserspeicher verschoben"@de , "نُقل السجل الأقدم إلى تخزين المتصفح"@ar ;
+    sem:function "retention:crossed-offloaded" .
+ret:AnnounceDropped a beh:Reaction ;
+    beh:when ret:Dropped ;
+    beh:sourceClass ldes:EventStream ;
+    beh:inserts """CONSTRUCT { $this ret:crossed ret:Dropped } WHERE { FILTER NOT EXISTS { $this ret:crossed ret:Dropped } }""" ;
+    ann:announces "Older history is no longer kept"@en , "Старіша історія більше не зберігається"@uk ,
+        "Älterer Verlauf wird nicht mehr aufbewahrt"@de , "لم يعد السجل الأقدم محفوظًا"@ar ;
+    ann:tone sty:Warning ;
+    sem:function "retention:crossed-dropped" .
+
+# --- the memory budget -----------------------------------------------------------------------------------
+
+# How much memory the page may use (ret:maxBytes, or ret:maxMiB). The pressure effect (src/retention/
+# pressure.ts) measures what it can, in idle time: the engines' WebAssembly memory everywhere, the JS
+# heap where the browser reports it (Chromium), an estimate from the store's size otherwise. It writes
+# the figures and a level into urn:semblance:retention, and answers each level in a fixed order,
+# cheapest and safest first: it evicts derived state (the renderings of what is hidden, both
+# projections; never what is shown or sem:warm sem:Eager), compacts the engines, offloads history
+# (what was recalled; at Critical, half of what ret:having policies hold), raises ret:Pressure for
+# reactions to answer, and last asks the host (mount's onRetention). Owned data is never dropped.
+ret:MemoryBudget a owl:Class ;
+    rdfs:label "Memory"@en , "Пам’ять"@uk , "Arbeitsspeicher"@de , "الذاكرة"@ar ;
+    rdfs:comment "How much memory the page may use, and what the pressure effect measures against it."@en .
+ret:maxBytes a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:integer .
+ret:maxMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:decimal ;
+    rdfs:label "Maximum memory (MiB)"@en , "Найбільше пам’яті (МіБ)"@uk , "Höchster Speicher (MiB)"@de , "أقصى ذاكرة (ميبيبايت)"@ar ;
+    rdfs:comment "The budget in mebibytes (2^20 bytes), for a person to set; ret:maxBytes wins when both are given."@en .
+ret:maxFrom a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:comment "A component whose c:value is the budget in MiB (a slider a person sets it with); ret:maxBytes and ret:maxMiB win."@en .
+ret:elevatedAt a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:decimal ;
+    rdfs:comment "The share of the budget above which pressure is elevated (default 0.8)."@en .
+
+ret:Level a owl:Class ; rdfs:label "Pressure"@en , "Тиск"@uk , "Druck"@de , "الضغط"@ar .
+ret:Normal a ret:Level ; sem:order 1 ; rdfs:label "Normal"@en , "Звичайний"@uk , "Normal"@de , "عادي"@ar .
+ret:Elevated a ret:Level ; sem:order 2 ; rdfs:label "Elevated"@en , "Підвищений"@uk , "Erhöht"@de , "مرتفع"@ar .
+ret:Critical a ret:Level ; sem:order 3 ; rdfs:label "Critical"@en , "Критичний"@uk , "Kritisch"@de , "حرج"@ar .
+ret:Measured a ret:Level ; sem:order 0 ; rdfs:label "As measured"@en , "Як виміряно"@uk , "Wie gemessen"@de , "كما قيس"@ar ;
+    rdfs:comment "ret:simulate's default: the level is the one measured."@en .
+
+# Written by the pressure effect, on the budget, in urn:semblance:retention.
+ret:level a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range ret:Level ;
+    rdfs:label "Pressure"@en , "Тиск"@uk , "Druck"@de , "الضغط"@ar .
+ret:usedMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Used (MiB)"@en , "Використано (МіБ)"@uk , "Belegt (MiB)"@de , "المستخدم (ميبيبايت)"@ar .
+ret:wasmMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Engine memory (MiB)"@en , "Пам’ять рушія (МіБ)"@uk , "Engine-Speicher (MiB)"@de , "ذاكرة المحرك (ميبيبايت)"@ar .
+ret:heapMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "JS heap (MiB)"@en , "Купа JS (МіБ)"@uk , "JS-Heap (MiB)"@de , "كومة JS (ميبيبايت)"@ar .
+ret:triples a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Triples"@en , "Трійки"@uk , "Tripel"@de , "الثلاثيات"@ar .
+ret:derivedTriples a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Derived triples"@en , "Похідні трійки"@uk , "Abgeleitete Tripel"@de , "الثلاثيات المشتقة"@ar .
+ret:evicted a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Derived triples evicted"@en , "Витіснено похідних трійок"@uk , "Verdrängte abgeleitete Tripel"@de , "الثلاثيات المشتقة المُخلاة"@ar .
+
+# Set by a person or a reaction, in the input graph, on the budget.
+ret:simulate a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range ret:Level ;
+    rdfs:label "Simulate"@en , "Імітувати"@uk , "Simulieren"@de , "محاكاة"@ar ;
+    rdfs:comment "Act as if the level were this one, whatever is measured (the Memory tool, tests)."@en .
+ret:request a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:comment "Written by a reaction: do this once now (ret:Evict, ret:OffloadNow). Performed and removed by the pressure effect."@en .
+ret:Evict a owl:NamedIndividual ; rdfs:label "Evict now"@en , "Витіснити зараз"@uk , "Jetzt verdrängen"@de , "إخلاء الآن"@ar .
+ret:OffloadNow a owl:NamedIndividual ; rdfs:label "Offload now"@en , "Вивантажити зараз"@uk , "Jetzt auslagern"@de , "التفريغ الآن"@ar .
+
+# Pressure the effect's own steps did not relieve: raised on the budget, for reactions to answer (raise
+# the budget, close what the app can close). Once per crossing into Critical.
+ret:Pressure a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:comment "Memory stayed critical after eviction, compaction and offloading."@en .
+ret:warned a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ; rdfs:comment "That pressure was announced this session."@en .
+ret:AnnouncePressure a beh:Reaction ;
+    beh:when ret:Pressure ;
+    beh:sourceClass ret:MemoryBudget ;
+    beh:inserts """CONSTRUCT { $this ret:warned ret:Critical } WHERE { FILTER NOT EXISTS { $this ret:warned ret:Critical } }""" ;
+    ann:announces "This page is using a lot of memory: hidden views were cleared and older history moved to storage"@en ,
+        "Ця сторінка використовує багато пам’яті: приховані подання очищено, старішу історію перенесено до сховища"@uk ,
+        "Diese Seite braucht viel Speicher: verborgene Ansichten wurden geleert, älterer Verlauf ausgelagert"@de ,
+        "تستخدم هذه الصفحة ذاكرة كثيرة: أُفرغت العروض المخفية ونُقل السجل الأقدم إلى التخزين"@ar ;
+    ann:tone sty:Warning ;
+    sem:function "retention:pressure-warned" .
+
+# --- the streams' policies -------------------------------------------------------------------------------
+
+# The change log keeps its 200 most recent members, and the 1,000 most recent of those that recorded an
+# undoable change beyond them, so undo reaches far back while what aggregates the log stays small.
+# What either lets go is offloaded to the browser's storage, where Show older and an Undo past the
+# horizon find it again.
+beh:ChangeLogView ldes:retentionPolicy beh:UndoRetention .
+beh:ChangeLogRetention ret:onExpiry ret:Offload ; ret:storageAmount 5000 ; ret:announce true .
+beh:UndoRetention a beh:LatestMembersPolicy ;
+    ldes:amount 1000 ;
+    ret:having beh:asserted , beh:retracted ;
+    ret:onExpiry ret:Offload ;
+    ret:storageAmount 10000 ;
+    ret:announce true .
+
+# Names short enough for a list of horizons, in the viewer's language.
+beh:ChangeLog c:label "Change log"@en , "Журнал змін"@uk , "Änderungsprotokoll"@de , "سجل التغييرات"@ar .
+per:StateLog c:label "Remembered state"@en , "Збережений стан"@uk , "Gemerkter Zustand"@de , "الحالة المحفوظة"@ar .
+src:SyncLog c:label "Sync"@en , "Синхронізація"@uk , "Synchronisierung"@de , "المزامنة"@ar .
+net:Capture c:label "Network"@en , "Мережа"@uk , "Netzwerk"@de , "الشبكة"@ar .
+sem:StallLog c:label "Stalls"@en , "Затримки"@uk , "Hänger"@de , "التوقفات"@ar .
+
+# --- c:HorizonList: every retained stream, how much of it is where, and Show older ------------------------
+
+ret:InMemoryPhrase a c:Phrase ; rdfs:label "{n} in memory"@en , "у пам’яті: {n}"@uk , "{n} im Arbeitsspeicher"@de , "{n} في الذاكرة"@ar .
+ret:OffloadedPhrase a c:Phrase ; rdfs:label "{n} in this browser's storage"@en , "у сховищі браузера: {n}"@uk , "{n} im Browserspeicher"@de , "{n} في تخزين المتصفح"@ar .
+ret:DroppedPhrase a c:Phrase ; rdfs:label "{n} no longer kept"@en , "більше не зберігається: {n}"@uk , "{n} nicht mehr aufbewahrt"@de , "{n} لم تعد محفوظة"@ar .
+ret:ShowOlderPhrase a c:Phrase ; rdfs:label "Show older"@en , "Показати старіші"@uk , "Ältere zeigen"@de , "عرض الأقدم"@ar .
+
+c:HorizonList a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Every retained stream's horizon (or the one c:of names): what is in memory, offloaded and no longer kept, and Show older, which recalls what was offloaded."@en ;
+    sem:slug "horizon-list" .
+c:HorizonListRendering a sem:Rendering ; sem:targets c:HorizonList ; sem:stratum 0 ;
+    sem:watchesAnywhere ret:inMemory , ret:offloaded , ret:dropped , ret:recalled , ret:pending .
+c:HorizonListRendering-fn a sem:Rule ; sem:implements c:HorizonListRendering ; sem:function "horizon-list" .
+c:HorizonListRendering-sparql-screen a sem:Rule ;
+    sem:implements c:HorizonListRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Ul ; sem:renders $this ; rdfhtml:attribute ?rootName ; rdfhtml:hasChild ?row .
+  ?rootName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?listLabel .
+  ?row a rdfhtml:Li ; sem:orderKey ?order ; rdfhtml:hasChild ?what , ?older .
+  ?what ord:immediatelyPrecedes ?older .
+  ?what a rdfhtml:Div ; rdfhtml:class "sem-what" ; rdfhtml:hasChild ?labelEl , ?statusEl .
+  ?labelEl ord:immediatelyPrecedes ?statusEl .
+  ?labelEl a rdfhtml:Strong ; rdfhtml:hasChild ?labelText . ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?statusEl a rdfhtml:Span ; rdfhtml:hasChild ?statusText . ?statusText a rdfhtml:Text ; rdfhtml:data ?status .
+  ?older a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-older" ; rdfhtml:disabled ?disabled ;
+    ret:recalls ?s ; rdfhtml:hasChild ?olderText .
+  ?olderText a rdfhtml:Text ; rdfhtml:data ?olderLabel .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:HorizonList .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?rootName)
+  BIND(ret:Horizon AS ?class)
+  OPTIONAL { ?classAt l10n:of ?class ; l10n:name ?classPicked }
+  OPTIONAL { FILTER(!BOUND(?classPicked)) ?class rdfs:label ?classOnly FILTER(LANG(?classOnly) = "en") }
+  BIND(STR(COALESCE(?classPicked, ?classOnly)) AS ?listLabel)
+  OPTIONAL { ?inMemoryAt l10n:of ret:InMemoryPhrase ; l10n:name ?inMemoryPicked }
+  OPTIONAL { FILTER(!BOUND(?inMemoryPicked)) ret:InMemoryPhrase rdfs:label ?inMemoryOnly FILTER(LANG(?inMemoryOnly) = "en") }
+  BIND(STR(COALESCE(?inMemoryPicked, ?inMemoryOnly)) AS ?inMemoryPhrase)
+  OPTIONAL { ?offloadedAt l10n:of ret:OffloadedPhrase ; l10n:name ?offloadedPicked }
+  OPTIONAL { FILTER(!BOUND(?offloadedPicked)) ret:OffloadedPhrase rdfs:label ?offloadedOnly FILTER(LANG(?offloadedOnly) = "en") }
+  BIND(STR(COALESCE(?offloadedPicked, ?offloadedOnly)) AS ?offloadedPhrase)
+  OPTIONAL { ?droppedAt l10n:of ret:DroppedPhrase ; l10n:name ?droppedPicked }
+  OPTIONAL { FILTER(!BOUND(?droppedPicked)) ret:DroppedPhrase rdfs:label ?droppedOnly FILTER(LANG(?droppedOnly) = "en") }
+  BIND(STR(COALESCE(?droppedPicked, ?droppedOnly)) AS ?droppedPhrase)
+  OPTIONAL { ?olderAt l10n:of ret:ShowOlderPhrase ; l10n:name ?olderPicked }
+  OPTIONAL { FILTER(!BOUND(?olderPicked)) ret:ShowOlderPhrase rdfs:label ?olderOnly FILTER(LANG(?olderOnly) = "en") }
+  BIND(STR(COALESCE(?olderPicked, ?olderOnly)) AS ?olderLabel)
+  OPTIONAL {
+    ?h a ret:Horizon ; ret:of ?s .
+    FILTER(NOT EXISTS { $this c:of ?only } || EXISTS { $this c:of ?s })
+    ?viewer l10n:formatLocale ?locale .
+    OPTIONAL { { ?s l10n:label ?sC } UNION { ?sCAt l10n:of ?s ; l10n:label ?sC } }
+    OPTIONAL { FILTER(!BOUND(?sC)) ?s c:label ?sCOnly FILTER(isLiteral(?sCOnly)) }
+    OPTIONAL { ?sRAt l10n:of ?s ; l10n:name ?sR }
+    OPTIONAL { FILTER(!BOUND(?sR)) ?s rdfs:label ?sROnly FILTER(isLiteral(?sROnly)) }
+    BIND(STR(COALESCE(?sC, ?sCOnly, ?sR, ?sROnly, REPLACE(STR(?s), "^.*[#/]", ""))) AS ?label)
+    OPTIONAL { ?h ret:inMemory ?inMemoryRaw }
+    OPTIONAL { ?h ret:offloaded ?offloadedRaw }
+    OPTIONAL { ?h ret:dropped ?droppedRaw }
+    BIND(COALESCE(xsd:double(STR(?inMemoryRaw)), 0) AS ?inMemory)
+    BIND(COALESCE(xsd:double(STR(?offloadedRaw)), 0) AS ?offloaded)
+    BIND(COALESCE(xsd:double(STR(?droppedRaw)), 0) AS ?dropped)
+    BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale)) AS ?order)
+    BIND(CONCAT(STR($this), "/~h-", SUBSTR(MD5(STR(?s)), 1, 8)) AS ?k)
+    BIND(IF(?offloaded > 0, ?none, "") AS ?disabled)
+  }
+  BIND(CONCAT(STRBEFORE(?inMemoryPhrase, "{n}"), COALESCE(sx:formatNumber(?inMemory, ?locale), STR(?inMemory)), STRAFTER(?inMemoryPhrase, "{n}")) AS ?inMemoryText)
+  BIND(CONCAT(STRBEFORE(?offloadedPhrase, "{n}"), COALESCE(sx:formatNumber(?offloaded, ?locale), STR(?offloaded)), STRAFTER(?offloadedPhrase, "{n}")) AS ?offloadedText)
+  BIND(CONCAT(STRBEFORE(?droppedPhrase, "{n}"), COALESCE(sx:formatNumber(?dropped, ?locale), STR(?dropped)), STRAFTER(?droppedPhrase, "{n}")) AS ?droppedText)
+  BIND(CONCAT(?inMemoryText, IF(?offloaded > 0, CONCAT(" · ", ?offloadedText), ""), IF(?dropped > 0, CONCAT(" · ", ?droppedText), "")) AS ?status)
+  BIND(IRI(?k) AS ?row)
+  BIND(IRI(CONCAT(?k, "-what")) AS ?what)
+  BIND(IRI(CONCAT(?k, "-label")) AS ?labelEl)
+  BIND(IRI(CONCAT(?k, "-label-text")) AS ?labelText)
+  BIND(IRI(CONCAT(?k, "-status")) AS ?statusEl)
+  BIND(IRI(CONCAT(?k, "-status-text")) AS ?statusText)
+  BIND(IRI(CONCAT(?k, "-older")) AS ?older)
+  BIND(IRI(CONCAT(?k, "-older-text")) AS ?olderText)
+}""" .
+c:HorizonListRendering-sparql-text a sem:Rule ;
+    sem:implements c:HorizonListRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?lineData ; sem:orderKey ?order .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:HorizonList .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { ?inMemoryAt l10n:of ret:InMemoryPhrase ; l10n:name ?inMemoryPicked }
+  OPTIONAL { FILTER(!BOUND(?inMemoryPicked)) ret:InMemoryPhrase rdfs:label ?inMemoryOnly FILTER(LANG(?inMemoryOnly) = "en") }
+  BIND(STR(COALESCE(?inMemoryPicked, ?inMemoryOnly)) AS ?inMemoryPhrase)
+  OPTIONAL { ?offloadedAt l10n:of ret:OffloadedPhrase ; l10n:name ?offloadedPicked }
+  OPTIONAL { FILTER(!BOUND(?offloadedPicked)) ret:OffloadedPhrase rdfs:label ?offloadedOnly FILTER(LANG(?offloadedOnly) = "en") }
+  BIND(STR(COALESCE(?offloadedPicked, ?offloadedOnly)) AS ?offloadedPhrase)
+  OPTIONAL { ?droppedAt l10n:of ret:DroppedPhrase ; l10n:name ?droppedPicked }
+  OPTIONAL { FILTER(!BOUND(?droppedPicked)) ret:DroppedPhrase rdfs:label ?droppedOnly FILTER(LANG(?droppedOnly) = "en") }
+  BIND(STR(COALESCE(?droppedPicked, ?droppedOnly)) AS ?droppedPhrase)
+  OPTIONAL {
+    ?h a ret:Horizon ; ret:of ?s .
+    FILTER(NOT EXISTS { $this c:of ?only } || EXISTS { $this c:of ?s })
+    ?viewer l10n:formatLocale ?locale .
+    OPTIONAL { { ?s l10n:label ?sC } UNION { ?sCAt l10n:of ?s ; l10n:label ?sC } }
+    OPTIONAL { FILTER(!BOUND(?sC)) ?s c:label ?sCOnly FILTER(isLiteral(?sCOnly)) }
+    OPTIONAL { ?sRAt l10n:of ?s ; l10n:name ?sR }
+    OPTIONAL { FILTER(!BOUND(?sR)) ?s rdfs:label ?sROnly FILTER(isLiteral(?sROnly)) }
+    BIND(STR(COALESCE(?sC, ?sCOnly, ?sR, ?sROnly, REPLACE(STR(?s), "^.*[#/]", ""))) AS ?label)
+    OPTIONAL { ?h ret:inMemory ?inMemoryRaw }
+    OPTIONAL { ?h ret:offloaded ?offloadedRaw }
+    OPTIONAL { ?h ret:dropped ?droppedRaw }
+    BIND(COALESCE(xsd:double(STR(?inMemoryRaw)), 0) AS ?inMemory)
+    BIND(COALESCE(xsd:double(STR(?offloadedRaw)), 0) AS ?offloaded)
+    BIND(COALESCE(xsd:double(STR(?droppedRaw)), 0) AS ?dropped)
+    BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale)) AS ?order)
+    BIND(CONCAT(STR($this), "/~h-", SUBSTR(MD5(STR(?s)), 1, 8)) AS ?k)
+  }
+  BIND(CONCAT(STRBEFORE(?inMemoryPhrase, "{n}"), COALESCE(sx:formatNumber(?inMemory, ?locale), STR(?inMemory)), STRAFTER(?inMemoryPhrase, "{n}")) AS ?inMemoryText)
+  BIND(CONCAT(STRBEFORE(?offloadedPhrase, "{n}"), COALESCE(sx:formatNumber(?offloaded, ?locale), STR(?offloaded)), STRAFTER(?offloadedPhrase, "{n}")) AS ?offloadedText)
+  BIND(CONCAT(STRBEFORE(?droppedPhrase, "{n}"), COALESCE(sx:formatNumber(?dropped, ?locale), STR(?dropped)), STRAFTER(?droppedPhrase, "{n}")) AS ?droppedText)
+  BIND(CONCAT(?label, ": ", ?inMemoryText, IF(?offloaded > 0, CONCAT(" · ", ?offloadedText), ""), IF(?dropped > 0, CONCAT(" · ", ?droppedText), ""), "\\n") AS ?lineData)
+  BIND(IRI(CONCAT(?k, "-line")) AS ?line)
+}""" .
+
+c:HorizonRecall a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:HorizonList ;
+    beh:deletes """CONSTRUCT { ?s ret:recall ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n ret:recalls ?s . ?s ret:recall ?old }""" ;
+    beh:inserts """CONSTRUCT { ?s ret:recall ?n } WHERE { $event beh:node ?hit . ?e rdfhtml:hasChild* ?hit . ?e ret:recalls ?s . OPTIONAL { $this c:limit ?limit } BIND(COALESCE(?limit, 50) AS ?n) }""" ;
+    sem:function "retention:recall" .

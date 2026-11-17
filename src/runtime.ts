@@ -5,9 +5,11 @@ import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
 import type { SafetyPolicy } from './safety.ts'
 import type { GraphStore } from './store/types.ts'
-import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, NS, PERF_GRAPH, PERSIST_GRAPH, RENDERED_GRAPH, SEM } from './ns.ts'
+import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, NS, PERF_GRAPH, PERSIST_GRAPH, RENDERED_GRAPH, RETENTION_GRAPH, SEM } from './ns.ts'
+import { Retention } from './retention/offload.ts'
 import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
+import { retentionFunctions } from './layers/retention.ts'
 import { navigationFunctions } from './navigation.ts'
 import { privacyFunctions } from './layers/privacy.ts'
 import { functions as workbenchFunctions } from './components/workbench.ts'
@@ -72,11 +74,31 @@ export class Runtime {
    * turn over it is suspended, its pending work held until continueStall() or stopStall().
    */
   readonly watchdog = new Watchdog()
+  /**
+   * Every retained stream's policies, horizon and offloaded history (docs/RETENTION.md): the effects
+   * that append to a stream ask it what retires. A host gives it storage (`retention.use`).
+   */
+  readonly retention: Retention
   /** The open transaction: every effective change since it began, by graph and quad (net weight). */
   private tx?: Consolidation
 
   constructor(readonly store: GraphStore) {
-    this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH], functions: viewFunctions })
+    this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH, RETENTION_GRAPH], functions: viewFunctions })
+    this.retention = new Retention(store, (d) => void this.write(RETENTION_GRAPH, d))
+    this.onEnd(() => this.retention.stop())
+    // A reaction asks for offloaded history back (`?stream ret:recall ?n`, Show older): the request is
+    // performed, then removed.
+    this.onInput((graph, delta) => {
+      if (graph !== undefined) return
+      for (const q of delta.add) {
+        if (q.predicate.value !== NS.ret + 'recall') continue
+        const stream = this.retention.get(q.subject.value)
+        const done = () => {
+          if (!this.ended) this.apply({ add: [], remove: this.store.match(q.subject, q.predicate, null, this.store.factory.defaultGraph()) })
+        }
+        void (stream ? stream.recall(Number(q.object.value) || 50) : Promise.resolve(0)).then(done, done)
+      }
+    })
     // A window's next expiry: a tick with no input.
     this.views.onTimer = () => {
       this.advance()
@@ -331,11 +353,11 @@ export class Runtime {
   private projectWatched(opts: ProjectOptions, onError?: (e: Error) => void): Projection {
     const name = opts.name ?? 'main'
     const engine = new Engine(this.store, {
-      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH, VIEW_GRAPH],
+      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH, RETENTION_GRAPH, VIEW_GRAPH],
       // A rule maintained as a view (iv:strategy iv:Incremental): one hosted view per rule and projection.
       maintain: (rule, query) => this.views.hostRule(mint(rule.iri, 'view-' + name), query),
       ...opts,
-      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
+      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...retentionFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
     const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase(), opts.policy)
     engine.watchdog = this.watchdog
@@ -423,13 +445,33 @@ export class Runtime {
     this.resumeViews()
   }
 
+  /**
+   * Memory pressure (src/retention/pressure.ts): above normal, idle time evaluates no hidden work ahead
+   * of time (what eviction released stays released until it is shown).
+   */
+  pressure: 'normal' | 'elevated' | 'critical' = 'normal'
+
+  /**
+   * Release the derived state of what is hidden (Engine.evict), in every projection, until about
+   * `limit` derived triples are gone: what is sem:warm sem:Eager stays. Returns how many went.
+   */
+  evict(limit = Infinity): number {
+    let freed = 0
+    for (const p of this.projections) {
+      const warmth = this.warmth.get(p.engine)
+      freed += p.engine.evict(limit - freed, (focus) => warmth?.(focus) === SEM.Eager)
+      settle(p)
+    }
+    return freed
+  }
+
   /** Spend up to `budgetMs` evaluating hidden work (see Engine.warm). Returns whether work remains. */
   warm(budgetMs: number): boolean {
     const until = performance.now() + budgetMs
     let more = false
-    const share = budgetMs / Math.max(1, this.projections.length)
+    const share = this.pressure === 'normal' ? budgetMs / Math.max(1, this.projections.length) : 0
     for (const p of this.projections) {
-      more = p.engine.warm(share) || more
+      if (share > 0) more = p.engine.warm(share) || more
       settle(p)
     }
     // (A view at a time once the budget is spent: rebuilding several hidden views is a long task.)

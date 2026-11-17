@@ -6,6 +6,9 @@ import { Islands, type IslandAdapter, type WidgetLike } from '../foreign.ts'
 import { DomRenderer } from '../render/dom.ts'
 import type { HostContext, HostRenderer } from '../render/hosts.ts'
 import { RenderedState } from '../rendered.ts'
+import { indexedDbBackend } from '../persistence.ts'
+import type { OffloadBackend } from '../retention/offload.ts'
+import { MemoryPressure, type OnRetention } from '../retention/pressure.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import { configureFetching, doesNotFetch, type FetchPolicy, type GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
@@ -109,6 +112,24 @@ export interface MountOptions {
   /** Record provenance (ontology/layers/provenance.ttl). */
   provenance?: boolean
   /**
+   * Retention (docs/RETENTION.md): where history the graph's policies offload goes (ret:Offload; by
+   * default this browser's IndexedDB, database "semblance-offload"); false keeps nothing beyond what
+   * the policies hold in memory, and says so on each stream's horizon.
+   */
+  retention?: { storage?: OffloadBackend | false }
+  /**
+   * The most memory the page should use, in bytes (docs/RETENTION.md): a ret:MemoryBudget for a graph
+   * that declares none. Above it, what is hidden is evicted, the engines compacted and history
+   * offloaded; what that does not relieve raises ret:Pressure, and last asks `onRetention`.
+   */
+  maxMemory?: number
+  /**
+   * Asked last, when the budget stays exceeded after every step of the pressure effect, or when the
+   * browser refuses to store offloaded history and it waits in memory past its bound. Answer with a
+   * new budget (`maxBytes`), or whether that history may be dropped (`drop`). Owned data is never dropped.
+   */
+  onRetention?: OnRetention
+  /**
    * Remote sources (src:Source, docs/REMOTE.md): each source's store, by the source's IRI. The graph
    * says what a page binds to; the host, here, says where it is and with what credentials.
    */
@@ -133,6 +154,8 @@ export interface MountedApp {
   rendered: RenderedState
   /** The remote-sources effect, when `sources` was given. */
   sources?: RemoteSources
+  /** The memory budget's effect (docs/RETENTION.md): `step()` measures and acts now. */
+  pressure: MemoryPressure
   /**
    * When content is authored: a store of the ontology and `graphs` alone, where the effects read
    * their configuration (sources, locations, uploads, modules), so the author cannot reconfigure
@@ -196,6 +219,9 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   if (shadow) shadow.replaceChildren(host)
   const ssr = !shadow && serverRendered(element)
   const runtime = new Runtime(store)
+  // History its policies let go is offloaded to this browser's storage, from where it can come back.
+  const offload = opts.retention?.storage === false ? undefined : (opts.retention?.storage ?? (typeof indexedDB === 'undefined' ? undefined : indexedDbBackend('semblance-offload')))
+  if (offload) void runtime.retention.use(offload)
   const projection = runtime.project({
     modality: MOD.Screen,
     layers: opts.layers ?? DEFAULT_LAYERS,
@@ -346,6 +372,10 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   // Remote sources: their part of the graph is loaded, follows the stores, and is written back.
   const sources = opts.sources && new RemoteSources(runtime, { ...opts.sources, trusted, bus, onChange: () => (flush(), scheduleWarmup()) })
   const detachSources = sources?.attach()
+  // The memory budget: measured in idle time, answered by eviction, compaction, offloading, the app's
+  // reactions and last the host (docs/RETENTION.md).
+  const pressure = new MemoryPressure(runtime, { bus, maxBytes: opts.maxMemory, onRetention: opts.onRetention, onChange: flush })
+  const detachPressure = pressure.attach()
   // What the visitor did before now (a click, typing) happens now, on the adopted nodes.
   const takeover = adopted && { nodes: adopted.nodes, mismatches: adopted.mismatches, replayed: adopted.replay() }
 
@@ -358,6 +388,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     files,
     navigation,
     takeover,
+    pressure,
     islands,
     rendered,
     sources,
@@ -381,6 +412,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachRendered()
       detachNavigation?.()
       detachSources?.()
+      detachPressure()
       if (sheet) dropSheet(shadow ?? doc, sheet)
       runtime.dispose()
       trusted?.dispose?.()

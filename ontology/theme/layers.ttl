@@ -270,6 +270,43 @@
 [] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part ".sem-forget:disabled" ;
     sty:declares [ sty:property "opacity" ; sty:raw "0.4" ] , [ sty:property "cursor" ; sty:raw "default" ] .
 
+# --- retained history: the horizon list (what is in memory, in this browser's storage, no longer kept) ---
+[] a sty:StyleRule ; sty:appliesTo c:HorizonList ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:HorizonList ; sty:part "> li" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "justify-content" ; sty:raw "space-between" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:HorizonList ; sty:part ".sem-what" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "gap" ; sty:raw "2px" ] , [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:HorizonList ; sty:part ".sem-what span" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] , [ sty:property "font-size" ; sty:token tok:text-xs ] , [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:HorizonList ; sty:part ".sem-older" ;
+    sty:declares [ sty:property "padding" ; sty:tokens ( tok:space-1 tok:space-3 ) ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:HorizonList ; sty:part ".sem-older:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] , [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:HorizonList ; sty:part ".sem-older:disabled" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.4" ] , [ sty:property "cursor" ; sty:raw "default" ] .
+
 # --- privacy: concealed content is blurred (text fields are masked instead) ---
 [] a sty:StyleRule ; sty:part ":is([data-sem-privacy=conceal], [data-sem-privacy=private]) [data-sem-concealed]:not([data-sem-c=text-field]), [data-sem-privacy=private] [data-sem-sensitive]" ;
     sty:declares [ sty:property "filter" ; sty:raw "blur(9px) saturate(0.3)" ] ,

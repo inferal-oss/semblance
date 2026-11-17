@@ -438,6 +438,12 @@ describe('redo offers only what was undone since the latest change (c:BlockEdito
 describe('a long editing session (c:BlockEditor)', () => {
   it('keeps the graph, the engine and the HTML index bounded once the change log is at its bound', () => {
     const h = mount('sparql')
+    // The log keeps 1,000 undoable members besides its 200 newest (docs/RETENTION.md): fewer here, so
+    // the session reaches that bound too.
+    const f = h.store.factory
+    const undo = f.namedNode(NS.beh + 'UndoRetention')
+    for (const q of h.store.match(undo, f.namedNode(NS.ldes + 'amount'), null)) h.store.delete(q)
+    h.store.add(f.quad(undo, f.namedNode(NS.ldes + 'amount'), f.literal('50', f.namedNode(NS.xsd + 'integer'))))
     // One turn returns the document to where it was: a run of typing and its Backspaces, a copy across
     // blocks, the / menu opened, closed and its "/" taken back, an @ that opens nothing.
     const turn = () => {
@@ -462,7 +468,7 @@ describe('a long editing session (c:BlockEditor)', () => {
       ...Object.fromEntries(Object.entries(h.screen.index.footprint()).map(([k, v]) => ['index.' + k, v])),
       log: h.bus.recent(10_000).length,
     })
-    for (let i = 0; i < 30; i++) turn() // past the change log's bound (200 events)
+    for (let i = 0; i < 30; i++) turn() // past the change log's bounds (200 events, and 50 undoable ones before them)
     const warm = footprint()
     for (let i = 0; i < 40; i++) turn()
     const after = footprint()

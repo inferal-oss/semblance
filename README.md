@@ -266,12 +266,26 @@ the component set. The demo's **Components** page shows all of it.
   paths, a SHACL shape, a `tree:view`). The stream names its newest member
   (`beh:latest`), and each member names the one before it (`beh:previous`), so
   the N newest members are read in N steps.
-- The log is **bounded**: the view's retention policy is a
-  `beh:LatestMembersPolicy` with `ldes:amount 200` (an `ldes:DurationAgoPolicy`
-  bounds by age instead). Retirement touches only the members that expire.
-  Change the amount in the graph to trade history for per-event cost of the
-  views that aggregate it. `c:StreamStats` is a component whose single SPARQL
-  rule aggregates that stream.
+- The log is **bounded**: the view's retention policies keep its 200 newest
+  members (`beh:LatestMembersPolicy`, `ldes:amount 200`; an `ldes:DurationAgoPolicy`
+  bounds by age instead), and the 1,000 most recent that recorded an undoable
+  change beyond them (`beh:UndoRetention`). Retirement touches only the members
+  that expire, and what leaves is offloaded to the browser's storage, from where
+  Show older and an undo past it bring it back (see Retention, below).
+  `c:StreamStats` is a component whose single SPARQL rule aggregates that stream.
+
+### Retention and memory
+Memory is bounded and retention is not forever, but nothing a person owns disappears silently
+([docs/RETENTION.md](docs/RETENTION.md)). Data (what the app or the person owns) is never dropped by
+retention. History (logs, undo) is bounded by policies in the graph (`ret:`,
+`ontology/layers/retention.ttl`, one module in `src/retention/` for every stream). What it lets go is
+offloaded to IndexedDB and recalled into the live graph on request (`ret:recall`), and each stream's
+horizon (`ret:Horizon`, `c:HorizonList`) says what is in memory, offloaded and no longer kept; the
+first crossing is announced. Derived state is evicted under a memory budget (`ret:MemoryBudget`,
+mount's `maxMemory`). The pressure effect measures the engines' memory and the JS heap, and answers in
+order: it evicts hidden renderings, compacts, offloads, raises `ret:Pressure` for the app's
+reactions, and last asks the host (`onRetention`). The Tools window's Memory tab shows it and
+simulates pressure.
 
 ### Components
 About 140 component classes in twelve groups (layout, type, actions, inputs,

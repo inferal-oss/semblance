@@ -58,6 +58,7 @@ export const NS = {
   src: 'https://semblance.dev/ns/source#',
   mig: 'https://semblance.dev/ns/migration#',
   chg: 'https://semblance.dev/ns/change#',
+  ret: 'https://semblance.dev/ns/retention#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -370,6 +371,8 @@ export const NETWORK_GRAPH = 'urn:semblance:network'
 export const RENDERED_GRAPH = 'urn:semblance:rendered'
 /** What the remote-sources effect knows (src/remote.ts): each source's state and src:SyncLog. */
 export const SOURCES_GRAPH = 'urn:semblance:sources'
+/** What retention reports (src/retention/): each retained stream's horizon, the memory budget's pressure. */
+export const RETENTION_GRAPH = 'urn:semblance:retention'
 export const SVG_NS = 'http://www.w3.org/2000/svg'
 
 export const BEH = {

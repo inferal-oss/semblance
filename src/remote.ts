@@ -13,6 +13,7 @@ import { readRetired, type Retired, retiredIn } from './retired.ts'
 import type { EventBus } from './behaviour/events.ts'
 import { BEH, NS, RDF_TYPE, SOURCES_GRAPH, XSD_INTEGER } from './ns.ts'
 import { type Delta, quadKey } from './rdf.ts'
+import { logStream } from './retention/offload.ts'
 import type { Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
 import { concerns, type DeltaMessage, fromNTriples, heldOf, type Pattern, type Snapshot, statementsOf, toNTriples, type WriteRequest, type WriteResult } from './source-protocol.ts'
@@ -35,7 +36,7 @@ export interface RemoteSourcesOptions {
   onChange?: () => void
   /** Waits between attempts to reach a store: doubling from minMs up to maxMs (default 500, 10000). */
   backoff?: { minMs?: number; maxMs?: number }
-  /** How many members src:SyncLog keeps (default 100). */
+  /** How many members src:SyncLog keeps, instead of what its policies in the graph say (src:SyncLogView: 100). */
   logSize?: number
   /**
    * Where the sources are declared (src:Source, src:pattern, src:writable, src:graph, src:awaits):
@@ -365,7 +366,7 @@ export class RemoteSources {
     s.state = state
   }
 
-  /** A member of src:SyncLog (bounded by logSize). */
+  /** A member of src:SyncLog (bounded by its policies in the graph, or by the host's logSize). */
   private record(kind: string, s: Bound, about: { added?: number; removed?: number; cursor?: number; reset?: boolean; of?: Term; reason?: string; cause?: boolean }): Term {
     const f = this.f
     const store = this.runtime.store
@@ -388,11 +389,19 @@ export class RemoteSources {
     // Which interaction made a write: the newest member of the change log.
     const cause = about.cause && store.match(this.nn(BEH.ChangeLog), this.nn(BEH.latest), null)[0]?.object
     if (cause) add.push(f.quad(m, this.nn(PROV + 'wasInformedBy'), cause))
-    this.members.push(m)
     const remove: Quad[] = []
-    while (this.members.length > (this.opts.logSize ?? 100)) {
-      const old = this.members.shift()!
-      remove.push(...store.match(old, null, null, g), ...store.match(log, this.nn(NS.tree + 'member'), old, g))
+    if (this.opts.logSize !== undefined) {
+      // The host's own bound, instead of the graph's.
+      this.members.push(m)
+      while (this.members.length > this.opts.logSize) {
+        const old = this.members.shift()!
+        remove.push(...store.match(old, null, null, g), ...store.match(log, this.nn(NS.tree + 'member'), old, g))
+      }
+    } else {
+      // Bounded by its policies in the graph (src:SyncLogView), as every retained stream is (docs/RETENTION.md).
+      const runtime = this.runtime
+      const stream = logStream(runtime.retention, SRC + 'SyncLog', SOURCES_GRAPH, (d) => runtime.write(SOURCES_GRAPH, d))
+      remove.push(...stream.append({ iri: m.value, seq: this.seq, at: Date.now() }))
     }
     this.applying++
     try {

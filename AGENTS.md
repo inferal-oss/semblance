@@ -34,7 +34,8 @@ performs the effects of graph state (the address, storage, timers, network captu
 6. **Constant cost.** An interaction costs what it changes, not the size of the app or its
    history. Keep templates attributable to `$this` (bulk evaluation), use `EXISTS` over correlated
    `OPTIONAL`, use member-wise rules (`sem:forEach`) for collections, bound streams with retention
-   policies. `test/cost.test.ts` and `test/soak.test.ts` must stay green.
+   policies (`ret:`, `docs/RETENTION.md`: data is never dropped, history is bounded with a way back,
+   derived state is evicted). `test/cost.test.ts` and `test/soak.test.ts` must stay green.
 7. **Every theme, every width, every language.** Check new UI in all themes (including the
    structural ones: Classic, Tracker, Doodle, Cupertino, Fluent), light and dark, at phone width,
    and in an RTL language. Theme rules sit in a later cascade layer than component rules: a
@@ -249,6 +250,7 @@ npm run pack:check     # the npm packages as a consumer gets them (docs/RELEASIN
 | `src/subset.ts` | the part of the ontology an app uses, shipped in place of the whole (`docs/SUBSET.md`) |
 | `src/jelly/` | RDF Jelly, binary and streaming: the TypeScript codec, and Jelly for stores without an engine (`docs/JELLY.md`; the engines' own are in `rdf-engine/`, `JELLY.md`) |
 | `src/sandbox.ts` | live examples: each in a sandbox of its own (host effect) |
+| `src/retention/`, `ontology/layers/retention.ttl` | retention: every stream's policies and horizon, offload to IndexedDB and recall, the memory budget and its pressure (`docs/RETENTION.md`) |
 | `src/migrate/`, `ontology/changes/`, `ontology/versions.ttl`, `ontology/terms.ttl` | versions and their check, changes, `semblance migrate` (`docs/MIGRATIONS.md`); `src/retired.ts` is what a page does with a retired term |
 | `src/safety.ts`, `ontology/layers/safety.ttl` | safe authoring: what an authored graph may render (`docs/SAFETY.md`) |
 | `src/store/` | store adapters (Oxigraph, N3, hybrid); `rdf-engine/` has Semblance's own engines |

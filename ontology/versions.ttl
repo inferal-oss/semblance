@@ -12,6 +12,7 @@
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix lc: <https://semblance.dev/ns/layout-constraints#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
+@prefix ret: <https://semblance.dev/ns/retention#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix src: <https://semblance.dev/ns/source#> .
 @prefix sx: <https://semblance.dev/ns/sparql#> .
@@ -155,6 +156,7 @@ c:Heatmap sem:version 2 ; sem:closure "c5953d06719a3f39" ; sem:changedBy change:
 c:HexView sem:version 1 ; sem:closure "5683467de7096e01" ; sem:internal "new" .
 c:Highlight sem:version 1 ; sem:closure "7f5b4ff056a93102" ; sem:internal "new" .
 c:Histogram sem:version 1 ; sem:closure "636664598cd02931" ; sem:internal "new" .
+c:HorizonList sem:version 1 ; sem:closure "a65d2c1e7b03982e" ; sem:internal "new" .
 c:HostSlot sem:version 1 ; sem:closure "8008ac4294b3210b" ; sem:internal "new" .
 c:IconButton sem:version 1 ; sem:closure "4c2bcf2edf94aecc" ; sem:internal "new" .
 c:ImageBrowser sem:version 1 ; sem:closure "2b2687106c923092" ; sem:internal "new" .
@@ -310,4 +312,5 @@ l10n:Viewer sem:version 1 ; sem:closure "e788d6f14cf3377e" ; sem:internal "new" 
 lc:WithParts sem:version 1 ; sem:closure "55f5674640084adb" ; sem:internal "new" .
 nav:ContainmentProperty sem:version 1 ; sem:closure "6107f25c832848e4" ; sem:internal "new" .
 nav:Location sem:version 1 ; sem:closure "ebe2918971db016a" ; sem:internal "new" .
+ret:MemoryBudget sem:version 1 ; sem:closure "89fd76aeb3d15db7" ; sem:internal "new" .
 src:Source sem:version 1 ; sem:closure "0a4d62fbc46c87e5" ; sem:internal "new" .

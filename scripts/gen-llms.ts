@@ -39,6 +39,7 @@ const GUIDES: [string, string, string][] = [
   ['Maintained views (IVM)', 'docs/IVM.md', 'incremental view maintenance under SPARQL views'],
   ['Design', 'DESIGN.md', 'the design system: tokens, components, themes'],
   ['Persistence', 'PERSISTENCE.md', 'what is remembered, where, and for how long'],
+  ['Retention and memory', 'docs/RETENTION.md', 'what is kept, offloaded and evicted, the memory budget and its pressure'],
   ['Agents', 'AGENTS.md', 'ground rules for building Semblance or building with it'],
 ]
 

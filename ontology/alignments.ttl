@@ -271,6 +271,7 @@ skos:relatedMatch sem:alignmentStrength sem:Related .
     [ sh:prefix "ann" ; sh:namespace "https://semblance.dev/ns/announce#"^^xsd:anyURI ],
     [ sh:prefix "st" ; sh:namespace "https://semblance.dev/ns/status#"^^xsd:anyURI ],
     [ sh:prefix "per" ; sh:namespace "https://semblance.dev/ns/persistence#"^^xsd:anyURI ],
+    [ sh:prefix "ret" ; sh:namespace "https://semblance.dev/ns/retention#"^^xsd:anyURI ],
     [ sh:prefix "prv" ; sh:namespace "https://semblance.dev/ns/privacy#"^^xsd:anyURI ],
     [ sh:prefix "net" ; sh:namespace "https://semblance.dev/ns/network#"^^xsd:anyURI ],
     [ sh:prefix "dep" ; sh:namespace "https://semblance.dev/ns/dependency#"^^xsd:anyURI ],

@@ -15,6 +15,7 @@ import type { Runtime } from '../runtime.ts'
 import type { Stall, Turn, Work } from '../engine/watchdog.ts'
 import { WD } from '../components/stall.ts'
 import type { EventBus } from './events.ts'
+import { logStream } from '../retention/offload.ts'
 import { type Hang, Heartbeat } from './heartbeat.ts'
 
 const XSD_DATETIME = NS.xsd + 'dateTime'
@@ -58,7 +59,8 @@ export class StallMonitor {
   private continuing = false
   private detach: (() => void)[] = []
   /** Retained log members, oldest first, with their subjects. */
-  private members: NamedNode[] = []
+  /** Sequence of the stall log's members (their order in retention). */
+  private logSeq = 0
   /** Recent DOM patches (the watchdog's clock), to blame what happened outside turns. */
   private renders: { start: number; end: number }[] = []
   /** When this effect last wrote: a long task of its own writing is not logged (no feedback). */
@@ -395,27 +397,14 @@ export class StallMonitor {
     if (member && node) {
       const log = this.nn(this.runtime.store.match(this.wd, this.nn(WD.stallLog), null)[0]?.object.value ?? WD.StallLog)
       delta.add.push(this.f.quad(log, this.nn(NS.tree + 'member'), node))
-      this.members.push(node)
-      const keep = this.retained(log)
-      const g = this.nn(PERF_GRAPH)
-      while (this.members.length > keep) {
-        const old = this.members.shift()!
-        delta.remove.push(...this.runtime.store.match(log, this.nn(NS.tree + 'member'), old, g), ...this.runtime.store.match(old, null, null, g))
-      }
+      // Bounded by its policies in the graph (sem:StallLogView), as every retained stream is (docs/RETENTION.md).
+      const runtime = this.runtime
+      const stream = logStream(runtime.retention, log.value, PERF_GRAPH, (d) => runtime.write(PERF_GRAPH, d))
+      delta.remove.push(...stream.append({ iri: node.value, seq: ++this.logSeq, at: Date.now() }))
     }
     this.runtime.write(PERF_GRAPH, delta)
     this.writing.push({ start, end: clock() })
     if (this.writing.length > 16) this.writing.shift()
-  }
-
-  private retained(log: NamedNode): number {
-    const store = this.runtime.store
-    for (const v of store.match(log, this.nn(NS.tree + 'view'), null))
-      for (const p of store.match(v.object as NamedNode, this.nn(NS.ldes + 'retentionPolicy'), null)) {
-        const amount = store.match(p.object as NamedNode, this.nn(NS.ldes + 'amount'), null)[0]
-        if (amount) return Number(amount.object.value)
-      }
-    return 50
   }
 
   private integer(n: number) {
