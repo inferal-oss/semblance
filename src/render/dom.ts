@@ -44,7 +44,7 @@ export class DomRenderer {
   footprint(): Record<string, number> {
     return { elements: this.els.size, applied: this.applied.size }
   }
-  private readonly takeDirty: () => ReturnType<ReturnType<HtmlIndex['consumer']>>
+  private readonly takeDirty: ReturnType<HtmlIndex['consumer']>
   /** DOM operations performed, for benchmarks. */
   ops = 0
   private readonly patched = new Set<() => void>()
@@ -67,6 +67,11 @@ export class DomRenderer {
   ) {
     this.doc = host.ownerDocument
     this.takeDirty = index.consumer()
+  }
+
+  /** Stop hearing of the index's changes (the renderer is let go). */
+  dispose(): void {
+    this.takeDirty.release()
   }
 
   keyOf(node: Node): string | undefined {

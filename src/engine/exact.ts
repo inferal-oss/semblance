@@ -7,6 +7,7 @@
 // state together. For a rule with exact dependencies the engine drops what was declared by hand -
 // "every triple about the focus", sem:follows (paths too), sem:watches, sem:readsMinted, a
 // member-wise rule's member reads - and dirties exactly the foci a change can reach.
+import { CappedMap } from '../capped.ts'
 import type { Quad, Term } from '@rdfjs/types'
 import type { Factory } from '../store/types.ts'
 import { prefixMap } from '../view/compile.ts'
@@ -17,12 +18,22 @@ import type { Rule } from './rules.ts'
 /** A rule's dependencies, or why it has none (it keeps its declarations). */
 export type RuleDeps = { deps: Dependencies } | { problem: string }
 
-const cache = new WeakMap<Factory, Map<string, RuleDeps>>()
+/**
+ * Rule texts whose dependencies are kept, per factory: N3's factory is the module's own (N3,
+ * Oxigraph and the hybrid share it), so it never goes, and live-edited rules bring new texts.
+ */
+const DEPS_CAP = 2048
+const cache = new WeakMap<Factory, CappedMap<string, RuleDeps>>()
 
-/** The dependencies of a SPARQL rule's query (cached per query text and store factory). */
+/** How many rule texts' dependencies are cached for a factory (for leak checks). */
+export function ruleDepsCached(f: Factory): number {
+  return cache.get(f)?.size ?? 0
+}
+
+/** The dependencies of a SPARQL rule's query (cached per query text and store factory, capped). */
 export function ruleDeps(f: Factory, rule: Rule): RuleDeps {
   let byText = cache.get(f)
-  if (!byText) cache.set(f, (byText = new Map()))
+  if (!byText) cache.set(f, (byText = new CappedMap(DEPS_CAP)))
   const text = rule.queryParts!.join('?this').replaceAll('$member', '?member')
   const key = (rule.forEach ? 'm ' : '') + text
   const hit = byText.get(key)

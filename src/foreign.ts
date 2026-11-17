@@ -200,7 +200,7 @@ export const widgetAdapter: IslandAdapter = async (slot, ctx) => {
 
 export class Islands {
   private readonly mounted = new Map<string, Mounted>()
-  private take?: () => { islands: Set<string>; recreate: Set<string> }
+  private take?: (() => { islands: Set<string>; recreate: Set<string> }) & { release(): void }
   private off?: () => void
   private seenVisibility = -1
   private syncing = false
@@ -226,6 +226,8 @@ export class Islands {
   dispose(): void {
     this.off?.()
     this.off = undefined
+    this.take?.release()
+    this.take = undefined
     for (const m of this.mounted.values()) this.destroy(m)
     this.mounted.clear()
   }

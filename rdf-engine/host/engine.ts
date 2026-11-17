@@ -692,7 +692,11 @@ export class Engine {
       // a module's cost, and its first run (compileShape warms it)
       if (done >= IDLE_COMPILE.perSlice || this.modules >= IDLE_COMPILE.maxModules || performance.now() + cost + p.ms / p.runs > until) break
       this.candidates.delete(p)
-      if (p.query.compileShape(p.shape) === null) this.stats.idleCompiled++, this.idleCompiledProfiles.push(p)
+      if (p.query.compileShape(p.shape) === null) {
+        this.stats.idleCompiled++
+        // For reports, the latest: modules come and go (slower than interpreted ones are dropped).
+        if (this.idleCompiledProfiles.push(p) > IDLE_COMPILE.maxModules) this.idleCompiledProfiles.shift()
+      }
       done++
     }
     this.stats.idleMs += performance.now() - t0

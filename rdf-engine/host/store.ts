@@ -111,6 +111,8 @@ export type EngineStore = GraphStore & {
   compact(opts?: { below?: number }): Compaction | undefined
   /** When `maintain` compacts (the retention layer tightens it under pressure). */
   setCompaction(policy: CompactionPolicy): void
+  /** Sizes of the host's caches over the engine (term objects, prepared queries, idle-compiled profiles), for leak checks. */
+  footprint(): Record<string, number>
   /** A deadline for queries, on the Date.now() clock: one running past it throws an error with `interrupted` (undefined: none). */
   setDeadline(at: number | undefined): void
   /** A step budget for each query, as setDeadline (undefined: unlimited). */
@@ -174,24 +176,45 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
   defaultGraph[ID] = DEFAULT_GRAPH
   /** Term objects by id, filled as ids come back from the engine. */
   let byId: (Term | undefined)[] = [undefined, defaultGraph]
-  /** Shared term objects by value, so the factory and results agree. */
+  /** Shared term objects by value, so the factory and results agree: those the engine took (tagged with an id). */
   const iris = new Map<string, Iri>()
+  const literals = new Map<string, Lit>()
+  /**
+   * Shared term objects the engine has not taken (made by the factory, or looked up and unknown),
+   * at most FRESH of each, the oldest forgotten first: collect() forgets only terms whose id it
+   * frees, so these would otherwise stay for good. Forgetting one loses only sharing. Tagged, a
+   * term moves to `iris` or `literals` (tagged).
+   */
+  const freshIris = new Map<string, Iri>()
+  const freshLiterals = new Map<string, Lit>()
+  const FRESH = 4096
+  function fresh<T>(m: Map<string, T>, k: string, t: T): T {
+    if (m.size >= FRESH) m.delete(m.keys().next().value!)
+    m.set(k, t)
+    return t
+  }
+  /** A shared term has an id now: kept with the engine's terms, until collect() frees it. */
+  function took(t: Base) {
+    if (t instanceof Iri) {
+      if (freshIris.get(t.value) === t) freshIris.delete(t.value), iris.set(t.value, t)
+    } else if (t instanceof Lit) {
+      const k = literalKey(t.value, t.language, t.direction, t.datatype.value)
+      if (freshLiterals.get(k) === t) freshLiterals.delete(k), literals.set(k, t)
+    }
+  }
+  const literalKey = (value: string, language: string, direction: string, datatype: string) => value + '\u0000' + (language ? language + '\u0000' + direction : datatype)
   const xsdString = namedNode(XSD_STRING)
 
   function namedNode(value: string): Iri {
-    let t = iris.get(value)
-    if (!t) iris.set(value, (t = new Iri(value)))
-    return t
+    return iris.get(value) ?? freshIris.get(value) ?? fresh(freshIris, value, new Iri(value))
   }
 
-  const literals = new Map<string, Lit>()
-  const literalKey = (value: string, language: string, direction: string, datatype: string) => value + '\u0000' + (language ? language + '\u0000' + direction : datatype)
   function sharedLiteral(value: string, language: string, direction: '' | 'ltr' | 'rtl', datatype: string): Lit {
     const k = literalKey(value, language, direction, datatype)
-    let t = literals.get(k)
+    let t = literals.get(k) ?? freshLiterals.get(k)
     if (!t) {
       const dt = language ? (direction ? RDF_DIR_LANG : RDF_LANG) : datatype
-      literals.set(k, (t = new Lit(value, language, direction, namedNode(dt))))
+      t = fresh(freshLiterals, k, new Lit(value, language, direction, namedNode(dt)))
     }
     return t
   }
@@ -226,6 +249,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
         if (id) {
           shared[ID] = id
           byId[id] ??= shared
+          took(shared)
         }
         break
       }
@@ -250,6 +274,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
           const dir = direction === 'ltr' ? 1 : direction === 'rtl' ? 2 : 0
           shared[ID] = sharedId = lang ? e.langLiteral(l.value, lang, dir) : e.literal(l.value, l.datatype.value === XSD_STRING ? 0 : idOf(l.datatype, true))
           byId[sharedId] ??= shared
+          took(shared)
         }
         return sharedId
       }
@@ -296,6 +321,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     }
     t[ID] = id
     byId[id] = t as Term
+    took(t)
     return t as Term
   }
 
@@ -731,6 +757,8 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       }
     },
     termCount: () => e.termCount(),
+    // The engine's own terms (iris, literals, blank nodes tagged) follow what is stored, and collect() frees them.
+    footprint: () => ({ freshIris: freshIris.size, freshLiterals: freshLiterals.size, prepared: prepared.size, idleCompiled: e.idleCompiledProfiles.length }),
     size: () => e.quadCount(),
     dispose() {
       // Each store has its own instance and memory; drop them and the term caches,
@@ -739,6 +767,8 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       byId.length = 0
       iris.clear()
       literals.clear()
+      freshIris.clear()
+      freshLiterals.clear()
       unknown.clear()
       e.dispose()
     },

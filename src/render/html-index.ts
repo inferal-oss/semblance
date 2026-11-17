@@ -153,7 +153,7 @@ export class HtmlIndex {
   private consumers = new Set<Dirty>()
   /** Sizes of the index, for leak checks. */
   footprint(): Record<string, number> {
-    return { nodes: this.nodes.size, attrs: this.attrs.size, immediate: this.immediate.size, strict: this.strict.size, roots: this.rootByFocus.size, chainParents: this.chainParent.size, aside: this.asideIn.size }
+    return { nodes: this.nodes.size, attrs: this.attrs.size, immediate: this.immediate.size, strict: this.strict.size, roots: this.rootByFocus.size, chainParents: this.chainParent.size, aside: this.asideIn.size, consumers: this.consumers.size }
   }
   /**
    * @param urlBase Where relative URLs in what is rendered resolve (nav:base: the site's root, an
@@ -300,16 +300,27 @@ export class HtmlIndex {
     if (i && !i.owners.size && i.name === undefined && i.value === undefined && i.as === undefined) this.inputNodes.delete(key)
   }
 
-  /** Register a consumer of changes; call the result to take what changed since the last call. */
-  consumer(): () => Dirty {
+  /**
+   * Register a consumer of changes; call the result to take what changed since the last call, and
+   * its release() when done (a disposed renderer or island): it then hears of nothing more.
+   */
+  consumer(): (() => Dirty) & { release(): void } {
     let mine = newDirty()
+    let released = false
     this.consumers.add(mine)
-    return () => {
+    const take = () => {
       const d = mine
       this.consumers.delete(d)
-      this.consumers.add((mine = newDirty()))
+      mine = newDirty()
+      if (!released) this.consumers.add(mine)
       return d
     }
+    return Object.assign(take, {
+      release: () => {
+        released = true
+        this.consumers.delete(mine)
+      },
+    })
   }
 
   rootOf(focus: string): string | undefined {

@@ -1,3 +1,4 @@
+import { CappedMap } from '../capped.ts'
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { H, NS, ORD, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
@@ -65,7 +66,12 @@ export interface RuleContext {
   /** Per-engine memo, e.g. for ontology lookups that never change during a run. */
   memo<T>(key: string, compute: () => T): T
   out(focus: NamedNode): Out
+  /** Sizes of its caches, for leak checks (names: NamedNodes by IRI, capped). */
+  footprint?(): Record<string, number>
 }
+
+/** How many NamedNodes a context keeps by IRI: function rules read many subjects once (members, minted nodes). */
+const NAMES_CAP = 8192
 
 /**
  * A function rule. `watches` optionally narrows (per focus) which predicates
@@ -126,7 +132,7 @@ const formatLocales = new Map<string, string>()
 export function createContext(store: GraphStore, graphs: Quad_Graph[], modality: string, languages: string[] = []): RuleContext {
   const graph = graphs[graphs.length - 1] as NamedNode
   const f = store.factory
-  const names = new Map<string, NamedNode>()
+  const names = new CappedMap<string, NamedNode>(NAMES_CAP)
   const nn = (iri: string) => {
     let n = names.get(iri)
     if (!n) names.set(iri, (n = f.namedNode(iri)))
@@ -185,6 +191,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
       return chain
     },
     nn,
+    footprint: () => ({ names: names.size }),
     match,
     object: (s, p) => match(s, p, null)[0]?.object,
     objects: (s, p) => match(s, p, null).map((q) => q.object),

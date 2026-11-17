@@ -1025,6 +1025,7 @@ export class Sandboxes {
     m.sheet = sheet
     this.followData(m, sandbox, false)
     m.detach = () => {
+      for (const r of [renderer, textRenderer, dataRenderer]) r?.dispose()
       detachStall()
       detachBus()
       detachFullscreen()
