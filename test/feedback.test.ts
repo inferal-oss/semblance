@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NS } from '../src/ns.ts'
 import { mountShell } from './harness.ts'
-import type { Quad } from '@rdfjs/types'
+import type { NamedNode, Quad } from '@rdfjs/types'
 
 const UI = 'https://semblance.dev/demo#'
 
@@ -156,6 +156,68 @@ describe('feedback components', () => {
     for (let i = 0; i < 12; i++) z(), dismiss(hosted().at(-1)!)
     expect(left().length).toBeLessThanOrEqual(3)
     expect(h.store.match(region, c('dismissedToast'), null).length).toBeLessThanOrEqual(3)
+  })
+
+  it.each(['sparql', 'function'] as const)('an announcement that waits for acknowledgement stays until it is dismissed (%s)', async (prefer) => {
+    const h = mountShell(5, 'oxigraph', prefer)
+    const f = h.store.factory
+    const c = (p: string) => f.namedNode(NS.c + p)
+    const nn = (iri: string) => f.namedNode(iri)
+    const region = nn(UI + 'announcements')
+    const log = nn(NS.beh + 'ChangeLog')
+    const member = nn(NS.tree + 'member')
+    const acknowledged = nn(NS.ret + 'acknowledged')
+    // A short change log, so the first member it lets go is no longer kept (no storage here), which is announced.
+    for (const [policy, n] of [['ChangeLogRetention', 4], ['UndoRetention', 2]] as const) {
+      for (const q of h.store.match(nn(NS.beh + policy), nn(NS.ldes + 'amount'), null)) h.store.delete(q)
+      h.store.add(f.quad(nn(NS.beh + policy), nn(NS.ldes + 'amount'), f.literal(String(n), nn(NS.xsd + 'integer'))))
+    }
+    const z = async () => {
+      const e = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+      Object.assign(e, { key: 'z', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
+      h.document.dispatchEvent(e)
+      await new Promise((r) => setTimeout(r, 0))
+      h.shell.flush()
+    }
+    const hosted = () => h.store.match(region, c('hosts'), null).map((q) => q.object.value).sort()
+    const label = (toast: string) => h.store.match(nn(toast), c('label'), null)[0]?.object.value
+    const el = (toast: string) => [...h.document.querySelectorAll('*')].find((x) => h.shell.keyOf(x) === toast + '/~root') as HTMLElement | undefined
+    const dismiss = (toast: string) => {
+      h.fire(el(toast)!.querySelector('.sem-close')!, 'click')
+      h.shell.flush()
+    }
+    for (let i = 0; i < 6; i++) await z()
+    const waiting = hosted().find((t) => label(t) === 'Older history is no longer kept')!
+    expect(waiting).toBeDefined()
+    const event = h.store.match(nn(waiting), nn(NS.ann + 'event'), null)[0]!.object as NamedNode
+    // Many newer announcements later, and long after the log would have let its event go, it is still there:
+    // the region's limit (3) counts only the others.
+    for (let i = 0; i < 12; i++) await z()
+    expect(hosted()).toContain(waiting)
+    expect(hosted().filter((t) => t !== waiting)).toHaveLength(3)
+    expect(el(waiting)?.hasAttribute('hidden')).toBe(false)
+    expect(el(waiting)?.textContent).toContain('Older history is no longer kept')
+    expect(h.store.match(log, member, event)).toHaveLength(1)
+    expect(h.runtime.retention.get(log.value)!.retention.waiting().map((m) => m.iri)).toEqual([event.value])
+    // Dismissing it acknowledges it: the region shows it no more, and the log lets its event go with the
+    // dismissal's own append, taking the acknowledgement with it.
+    const said: string[] = []
+    const apply = h.runtime.apply.bind(h.runtime)
+    h.runtime.apply = (d) => {
+      for (const [w, qs] of [['+', d.add], ['-', d.remove]] as const) for (const q of qs) if (q.predicate.equals(acknowledged) && q.subject.equals(event)) said.push(w + q.object.value)
+      return apply(d)
+    }
+    dismiss(waiting)
+    h.runtime.apply = apply
+    expect(said).toEqual(['+true', '-true'])
+    expect(hosted()).not.toContain(waiting)
+    expect(el(waiting)).toBeUndefined()
+    expect(h.store.match(log, member, event)).toHaveLength(0)
+    expect(h.store.match(event, acknowledged, null)).toHaveLength(0)
+    expect(h.runtime.retention.get(log.value)!.retention.waiting()).toHaveLength(0)
+    // The next dismissal in the region forgets its c:open false, as for any toast that is gone.
+    dismiss(hosted().at(-1)!)
+    expect(h.store.match(nn(waiting), c('open'), null)).toHaveLength(0)
   })
 
   it('a hosted toast leaves its region when dismissed', () => {

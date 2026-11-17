@@ -22,6 +22,7 @@ import { filesReactions, uploadReactions } from '../components/upload.ts'
 import { fullscreenReactions } from '../layers/fullscreen.ts'
 import { persistenceReactions } from '../persistence.ts'
 import { retentionReactions } from '../layers/retention.ts'
+import { announceReactions } from '../layers/announce.ts'
 import { locationReactions } from '../navigation.ts'
 import { reactions as disclosureReactions } from '../components/disclosure.ts'
 import { reactions as windowReactions } from '../components/containers.ts'
@@ -169,6 +170,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...fullscreenReactions,
   ...persistenceReactions,
   ...retentionReactions,
+  ...announceReactions,
   ...locationReactions,
   ...disclosureReactions,
   ...windowReactions,

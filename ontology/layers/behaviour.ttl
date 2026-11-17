@@ -7,6 +7,13 @@
 @prefix tree: <https://w3id.org/tree#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix ret: <https://semblance.dev/ns/retention#> .
+@prefix sx: <https://semblance.dev/ns/sparql#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
 
 # Behaviour layer: interaction is data.
 #
@@ -281,6 +288,62 @@ beh:UndoLatest a beh:Reaction ;
   OPTIONAL { ?m beh:retracted ?st . ?st rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o }
 }""" ;
     sem:function "beh:undo-latest" .
+
+# What an Undoer has to undo: per log, the members in memory that recorded a change not undone,
+# counted by a maintained view (a step costs what it changes, however long the log). With none, the
+# Undoer is disabled and says why (beh:UndoHorizon): nothing was done yet, or the log's horizon
+# (ret:Horizon) no longer keeps what came before. Undo recalls offloaded history ahead of need
+# (src/behaviour/events.ts), so what storage holds is back in memory before the count reaches 0.
+beh:undoableCount a owl:DatatypeProperty ; rdfs:domain ldes:EventStream ; rdfs:range xsd:integer ;
+    rdfs:comment "On a log: how many of its members in memory recorded a change that is not undone (beh:UndoableCounts)."@en .
+beh:UndoableCounts a iv:View ; iv:whileShown beh:Undoer ;
+    rdfs:label "undoable changes per log"@en ;
+    sem:function "undo:counts" ;
+    sem:construct """
+CONSTRUCT { ?log beh:undoableCount ?n }
+WHERE { { SELECT ?log (COUNT(DISTINCT ?undoable) AS ?n) WHERE {
+  ?log tree:member ?m .
+  BIND(IF(EXISTS { ?m beh:asserted|beh:retracted ?recorded } && NOT EXISTS { ?log beh:undone ?m }, ?m, ?none) AS ?undoable)
+} GROUP BY ?log } }""" .
+
+beh:NothingToUndo a c:Phrase ;
+    rdfs:label "Nothing to undo"@en , "Нічого скасовувати"@uk , "Nichts rückgängig zu machen"@de , "لا شيء للتراجع عنه"@ar .
+beh:HistoryStarts a c:Phrase ;
+    rdfs:label "History starts here: {n} older changes were not kept"@en ,
+        "Історія починається тут — старіших змін не збережено: {n}"@uk ,
+        "Der Verlauf beginnt hier: {n} ältere Änderungen wurden nicht aufbewahrt"@de ,
+        "يبدأ السجل هنا: لم تُحفظ {n} من التغييرات الأقدم"@ar .
+
+beh:UndoHorizon a sem:Rendering ;
+    rdfs:comment "A beh:Undoer with nothing to undo is disabled, and says where its log's history starts (sem:tooltip: shown on hover, announced as its description)."@en ;
+    sem:targets beh:Undoer ;
+    sem:modality mod:Screen ;
+    sem:stratum 10 ;
+    sem:watchesAnywhere beh:undoableCount , ret:dropped .
+beh:UndoHorizon-fn a sem:Rule ; sem:implements beh:UndoHorizon ; sem:function "undo:horizon" .
+beh:UndoHorizon-sparql a sem:Rule ;
+    sem:implements beh:UndoHorizon ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT { ?root rdfhtml:disabled "" ; sem:tooltip ?why . }
+WHERE {
+  $this a beh:Undoer .
+  OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
+  FILTER NOT EXISTS { ?log beh:undoableCount ?count FILTER(?count > 0) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { ?horizon a ret:Horizon ; ret:of ?log ; ret:dropped ?droppedRaw }
+  BIND(COALESCE(xsd:double(STR(?droppedRaw)), 0) AS ?dropped)
+  OPTIONAL { ?viewer l10n:formatLocale ?viewerLocale }
+  BIND(COALESCE(?viewerLocale, "en-US") AS ?locale)
+  OPTIONAL { ?nothingAt l10n:of beh:NothingToUndo ; l10n:name ?nothingPicked }
+  OPTIONAL { FILTER(!BOUND(?nothingPicked)) beh:NothingToUndo rdfs:label ?nothingOnly FILTER(LANG(?nothingOnly) = "en") }
+  OPTIONAL { ?startsAt l10n:of beh:HistoryStarts ; l10n:name ?startsPicked }
+  OPTIONAL { FILTER(!BOUND(?startsPicked)) beh:HistoryStarts rdfs:label ?startsOnly FILTER(LANG(?startsOnly) = "en") }
+  BIND(STR(COALESCE(?startsPicked, ?startsOnly)) AS ?starts)
+  BIND(IF(?dropped > 0,
+          CONCAT(STRBEFORE(?starts, "{n}"), COALESCE(sx:formatNumber(?dropped, ?locale), STR(?dropped)), STRAFTER(?starts, "{n}")),
+          STR(COALESCE(?nothingPicked, ?nothingOnly))) AS ?why)
+}""" .
 
 # Redo: activating a beh:Redoer applies again the change of the undone member that was undone last (the
 # undone member with the lowest sequence, since undo goes back from the newest) when it still can be -

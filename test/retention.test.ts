@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { NamedNode } from '@rdfjs/types'
 import { EventBus } from '../src/behaviour/events.ts'
-import { BEH, EVENTS_GRAPH, LDES, MOD, NS, RETENTION_GRAPH } from '../src/ns.ts'
+import { BEH, EVENTS_GRAPH, LDES, MOD, NS, RETENTION_GRAPH, SEM } from '../src/ns.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
 import { type Member, type Policy, StreamRetention } from '../src/retention/policy.ts'
 import type { OffloadBackend } from '../src/retention/offload.ts'
-import { setup } from './helpers.ts'
+import { SCREEN_LAYERS, setup } from './helpers.ts'
 import { todoReactions } from '../src/examples/todo.ts'
 
 const EX = 'https://example.org/retention#'
@@ -43,8 +43,8 @@ function storage() {
   return b satisfies OffloadBackend
 }
 
-function mounted(prefer: 'sparql' | 'function' = 'sparql', general = 5, undo = 10) {
-  const h = setup('wat', { prefer }, 5, [FIXTURE])
+function mounted(prefer: 'sparql' | 'function' = 'sparql', general = 5, undo = 10, offload = true) {
+  const h = setup('wat', { prefer, layers: [...SCREEN_LAYERS, SEM.TooltipLayer] }, 5, [FIXTURE])
   const { store, runtime } = h
   const f = store.factory
   const set = (s: string, p: string, o: string) => {
@@ -55,7 +55,7 @@ function mounted(prefer: 'sparql' | 'function' = 'sparql', general = 5, undo = 1
   set(NS.beh + 'UndoRetention', LDES.amount, String(undo))
   const backend = storage()
   Object.assign(runtime.retention.opts, { chunk: 4, schedule: (run: () => void) => run() })
-  void runtime.retention.use(backend)
+  if (offload) void runtime.retention.use(backend)
   const bus = new EventBus(runtime, h.screen, { prefer, functions: todoReactions })
   const horizon = () => runtime.retention.get(BEH.ChangeLog)!.figures()
   const counter = () => Number(store.match(f.namedNode(EX + 'counter'), f.namedNode(EX + 'n'), null)[0]?.object.value)
@@ -100,6 +100,27 @@ describe('retention policies (StreamRetention)', () => {
     )
     for (let i = 1; i <= 50; i++) none.append(member(i), i)
     expect(none.size).toBe(50)
+  })
+
+  it('holds back what awaits acknowledgement (ret:UntilAcknowledged) whatever its number, then lets it go as the others', () => {
+    const seen = new Set<string>()
+    const r = new StreamRetention(
+      () => [policy({ iri: 'urn:a', amount: 2 }), policy({ iri: 'urn:w', untilAcknowledged: true })],
+      () => false,
+      undefined,
+      undefined,
+      (m, p) => p.iri === 'urn:w' && m === 'urn:m2' && !seen.has(m),
+    )
+    const out: string[] = []
+    for (let i = 1; i <= 6; i++) for (const e of r.append(member(i), i)) out.push(e.member.iri)
+    expect(out).toEqual(['urn:m1', 'urn:m3', 'urn:m4'])
+    expect(r.waiting().map((m) => m.iri)).toEqual(['urn:m2'])
+    expect(r.size).toBe(3)
+    expect(r.oldest()?.iri).toBe('urn:m2')
+    // Acknowledged: it leaves at the next append, by the exit of the policy that let it go.
+    seen.add('urn:m2')
+    expect(r.append(member(7), 7).map((e) => `${e.member.iri}:${e.policy?.iri}`)).toEqual(['urn:m2:urn:a', 'urn:m5:urn:a'])
+    expect(r.waiting()).toHaveLength(0)
   })
 
   it('holds what was recalled besides what the policies keep, up to a limit; undone members leave first, else the oldest', () => {
@@ -276,5 +297,54 @@ describe('c:HorizonList', () => {
     h.bus.emit(NS.beh + 'Click', EX + 'horizons', { node: older.value })
     await h.settle()
     expect(h.horizon().recalled).toBeGreaterThan(0)
+  })
+})
+
+describe('a disabled Undo says where history starts', () => {
+  it('is disabled with nothing to undo, and says why, the same with SPARQL and function rules, in every language', async () => {
+    // No storage: what the log lets go is no longer kept, and the horizon counts it.
+    const sites = (['sparql', 'function'] as const).map((prefer) => mounted(prefer, 3, 2, false))
+    const html = () => {
+      const [a, b] = sites.map((h) => toHTML(h.screen.index, EX + 'undo'))
+      expect(a).toBe(b)
+      return a!
+    }
+    // What it says (sem:tooltip): shown on hover, and announced as its description (aria-description).
+    const why = () => {
+      const said = html().match(/data-sem-tooltip="([^"]*)"/)?.[1] ?? ''
+      expect(html()).toContain(said ? `aria-description="${said}"` : '')
+      return [said, said]
+    }
+    const click = async (what: string) => {
+      for (const h of sites) h.bus.emit(NS.beh + 'Click', EX + what)
+      for (const h of sites) await h.settle()
+    }
+    // Nothing done yet: nothing to undo.
+    expect(html()).toMatch(/<button[^>]* disabled/)
+    expect(html()).toContain('data-sem-tooltip="Nothing to undo"')
+    expect(why()).toEqual(['Nothing to undo', 'Nothing to undo'])
+    // A change: Undo is there to undo it, and says nothing.
+    await click('inc')
+    expect(html()).not.toMatch(/disabled|data-sem-tooltip/)
+    expect(why()).toEqual(['', ''])
+    for (const h of sites) expect(h.store.match(h.f.namedNode(BEH.ChangeLog), h.f.namedNode(BEH.undoableCount), null)[0]?.object.value).toBe('1')
+    await click('undo')
+    expect(why()).toEqual(['Nothing to undo', 'Nothing to undo'])
+    // Twelve changes on a log that keeps five: undo all it holds, and Undo says how much it no longer keeps.
+    for (let i = 0; i < 12; i++) await click('inc')
+    for (let i = 0; i < 12; i++) await click('undo')
+    for (const h of sites) expect(h.counter()).toBeGreaterThan(0)
+    const dropped = sites.map((h) => h.horizon().dropped)
+    expect(dropped[0]).toBeGreaterThan(0)
+    expect(dropped[1]).toBe(dropped[0])
+    expect(why()).toEqual(Array(2).fill(`History starts here: ${dropped[0]} older changes were not kept`))
+    expect(html()).toMatch(/<button[^>]* disabled/)
+    for (const languages of [['uk'], ['de'], ['ar'], ['en']]) {
+      for (const h of sites) h.screen.engine.reconfigure({ languages })
+      const [a, b] = why()
+      expect(a, languages.join()).toBe(b)
+      expect(a, languages.join()).toContain(String(dropped[0]))
+      if (languages[0] !== 'en') expect(a, languages.join()).not.toContain('History starts here')
+    }
   })
 })

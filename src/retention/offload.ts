@@ -208,6 +208,15 @@ export class RetainedStream {
         return limit ? Number(limit.object.value) : 1000
       },
       () => host.leaveFirst?.() ?? [],
+      // A ret:UntilAcknowledged policy holds back the events whose reaction names it (ann:retention:
+      // an announcement that waits for a person) until one says it was seen (ret:acknowledged true).
+      (member, policy) => {
+        const m = f.namedNode(member)
+        if (store.match(m, f.namedNode(RET + 'acknowledged'), null).some((q) => q.object.value === 'true')) return false
+        const said = f.namedNode(NS.ann + 'retention')
+        const p = f.namedNode(policy.iri)
+        return store.match(m, f.namedNode(NS.beh + 'handledBy'), null, g).some((q) => store.match(q.object as NamedNode, said, p).length > 0)
+      },
     )
   }
 

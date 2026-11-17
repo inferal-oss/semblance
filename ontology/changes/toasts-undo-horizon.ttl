@@ -1,0 +1,42 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ret: <https://semblance.dev/ns/retention#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:toasts-undo-horizon a chg:Change ;
+    rdfs:label "Announcements that matter wait to be dismissed; an Undoer with nothing to undo is disabled and says where history starts"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/530> ;
+    chg:motivation """An announced toast left as soon as newer announcements filled its region's c:limit, or when
+the change log retired its event, so "older history is no longer kept" or "this page is using a lot of
+memory" could vanish before anyone read it. And a beh:Undoer stayed enabled with nothing to undo, saying
+nothing of how far back its history goes once the log no longer keeps the oldest changes.""" ;
+    chg:substance """Toasts. A reaction may say how long its announcement stays: ann:retention names a policy. A
+ret:UntilAcknowledged policy (new, in the retention layer) keeps a member that awaits acknowledgement whatever its
+age or number. The change log's view has one, beh:AnnouncementRetention, and ret:AnnounceDropped and
+ret:AnnouncePressure name it. The toast of such an announcement is shown besides the region's c:limit of the others
+(ann:RecentAnnouncements no longer lists it; ann:Toasts adds every one not yet acknowledged), and the log holds its
+event back while it waits. Dismissing the toast states ret:acknowledged true on the event (ann:Acknowledge, function
+twin announce:acknowledge); the log then lets it go as it would have, taking the statement with it (offloaded with
+the member when it is offloaded). Every toast ann:Toasts derives now says which event it announces (ann:event).
+Toasts of other announcements behave as before.
+
+Undo. beh:UndoableCounts, a maintained view while a beh:Undoer is shown, writes beh:undoableCount on each log: its
+members in memory that recorded a change not undone. beh:UndoHorizon, a new screen rendering of beh:Undoer, marks
+its root disabled when that count is 0 and annotates it (sem:tooltip, so it is shown on hover and announced as
+aria-description) with the beh:NothingToUndo phrase, or, when the log's horizon (ret:Horizon) has dropped members,
+beh:HistoryStarts with that number in the viewer's locale. A function view's partition is now also reached by a
+triple that names its member as object (beh:undone), so the function twin counts the same.""" ;
+    chg:forwardGuide """Nothing to move. An app whose own announcement should wait for a person adds
+`ann:retention beh:AnnouncementRetention` to its reaction. An app that styled or scripted an always-enabled Undo
+button expects it disabled while there is nothing to undo; activating it through the graph (a key binding, a raised
+click) still runs beh:UndoLatest, which does nothing then.""" ;
+    chg:backwardGuide """Nothing to move. Going back, announcements leave by the region's limit and the log's bound
+again, ann:retention, ann:event, ret:acknowledged and beh:undoableCount are no longer read or written, and an Undoer
+is enabled whatever it has to undo.""" ;
+    chg:affects c:Toast , c:ToastRegion , beh:Undoer , ret:MemoryBudget .

@@ -25,6 +25,7 @@ import { constraintsFunctions } from '../layers/constraints.ts'
 import { declaredParts, positionFunctions } from '../layers/position.ts'
 import { l10nFunctions } from '../layers/l10n.ts'
 import { announceFunctions } from '../layers/announce.ts'
+import { undoFunctions } from '../behaviour/undo.ts'
 import { clipboardFunctions } from '../layers/clipboard.ts'
 import { fullscreenFunctions } from '../layers/fullscreen.ts'
 import { foreignFunctions } from '../layers/foreign.ts'
@@ -913,6 +914,7 @@ export const functions: Record<string, FnRule> = {
   ...positionFunctions,
   ...l10nFunctions,
   ...announceFunctions,
+  ...undoFunctions,
   ...clipboardFunctions,
   ...fullscreenFunctions,
   ...foreignFunctions,

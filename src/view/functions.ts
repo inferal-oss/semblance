@@ -108,10 +108,22 @@ const classes: FnView = {
   },
 }
 
+/** beh:UndoableCounts: per log, the members in memory that recorded a change not undone. */
+const undoable: FnView = {
+  streamVar: 'log',
+  memberVar: 'm',
+  groupBy: ['log'],
+  aggregates: [{ as: 'n', fn: 'COUNT', distinct: true, slot: 'undoable' }],
+  // A row for every member (so a later change to it, or that it was undone, reaches it), counted when undoable.
+  local: (ctx, log, m) => [row([['undoable', (ctx.objects(m, BEH.asserted).length || ctx.objects(m, BEH.retracted).length) && !ctx.match(log, BEH.undone, m).length ? m : undefined]])],
+  output: (ctx, r) => quads(ctx, [[r.get('log'), BEH.undoableCount, r.get('n')]]),
+}
+
 export const viewFunctions: Record<string, FnView> = {
   'stream-stats:totals': totals,
   'stream-stats:keys': keys,
   'count:members': members,
   'count:classes': classes,
+  'undo:counts': undoable,
 }
 
