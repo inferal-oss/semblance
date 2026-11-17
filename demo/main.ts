@@ -633,5 +633,6 @@ async function loadRest() {
 void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 
-// A handle for poking at the graph from the console (dev builds only).
-if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls, rendered } })
+// A handle for poking at the graph from the console (dev builds only, and a production build made
+// with VITE_SEMBLANCE_HANDLE=1 for measuring it: scripts/memory-walk.ts).
+if (import.meta.env.DEV || import.meta.env.VITE_SEMBLANCE_HANDLE) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls, rendered } })
