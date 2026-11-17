@@ -2360,6 +2360,7 @@ ret:offloaded a sem:Term .
 ret:oldestKept a sem:Term .
 ret:onExpiry a sem:Term .
 ret:pending a sem:Term .
+ret:pinned a sem:Term .
 ret:recall a sem:Term .
 ret:recallLimit a sem:Term .
 ret:recalled a sem:Term .

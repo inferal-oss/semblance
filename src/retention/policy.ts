@@ -8,9 +8,14 @@
 // A ret:UntilAcknowledged policy holds back the members it applies to (the host says which: on the
 // change log, the events whose announcing reaction names it) until a person acknowledges them; neither
 // an amount nor an age lets them go meanwhile, and once acknowledged they leave as the others would.
+// A member stated ret:pinned true is never let go, by any policy or by pressure, until it is unpinned.
+// LDES's own policies are read as LDES defines them: ldes:DurationAgoPolicy is a ret:Within,
+// ldes:PointInTimePolicy keeps what was appended from its ldes:pointInTime on, and
+// ldes:LatestVersionSubset keeps the ldes:amount (default 1) newest members of each entity (the
+// stream's ldes:versionOfPath; without one, each member is its own).
 // Every operation costs what it retires: members leave from the front of a queue, never by a scan.
 import type { NamedNode, Term } from '@rdfjs/types'
-import { LDES, NS } from '../ns.ts'
+import { LDES, NS, RDF_TYPE, RDFS_SUBCLASS } from '../ns.ts'
 import { parseDuration } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
 
@@ -33,6 +38,12 @@ export interface Policy {
   announce: boolean
   /** A ret:UntilAcknowledged policy: it keeps what awaits acknowledgement, whatever its age or number. */
   untilAcknowledged?: boolean
+  /** ldes:PointInTimePolicy's ldes:pointInTime (ms since the epoch): those appended from then on. */
+  since?: number
+  /** An ldes:LatestVersionSubset: the newest this many members of each entity (ldes:amount, default 1). */
+  versions?: number
+  /** The stream's ldes:versionOfPath, which names a member's entity (none: each member is its own). */
+  versionOf?: string
 }
 
 /**
@@ -42,8 +53,13 @@ export interface Policy {
 export function policiesOf(store: GraphStore, stream: Term): Policy[] {
   const f = store.factory
   const out: Policy[] = []
+  const versionOf = store.match(stream as NamedNode, f.namedNode(LDES.versionOfPath), null)[0]?.object
   for (const view of store.match(stream as NamedNode, f.namedNode(LDES.view), null))
-    for (const q of store.match(view.object as NamedNode, f.namedNode(LDES.retentionPolicy), null)) out.push(policyOf(store, q.object))
+    for (const q of store.match(view.object as NamedNode, f.namedNode(LDES.retentionPolicy), null)) {
+      const p = policyOf(store, q.object)
+      if (p.versions !== undefined && versionOf?.termType === 'NamedNode') p.versionOf = versionOf.value
+      out.push(p)
+    }
   return out.sort((a, b) => (a.iri < b.iri ? -1 : a.iri > b.iri ? 1 : 0))
 }
 
@@ -59,17 +75,41 @@ export function policyOf(store: GraphStore, p: Term, exit: Exit = 'drop'): Polic
   const duration = one(p, NS.tree + 'value') ?? one(p, LDES.fullLogDuration)
   const storage = one(p, RET + 'storageAmount')
   const onExpiry = one(p, RET + 'onExpiry')?.value
+  const kinds = classesOf(store, p)
+  const versions = kinds.has(LDES.LatestVersionSubset)
+  const point = kinds.has(LDES.PointInTimePolicy) ? one(p, LDES.pointInTime) : undefined
+  const since = point ? Date.parse(point.value) : NaN
   return {
     iri: p.value,
-    amount: amount ? Number(amount.value) : undefined,
-    withinMs: duration && !amount ? parseDuration(duration.value) : undefined,
+    // An ldes:LatestVersionSubset's amount counts versions of an entity, not members of the stream.
+    amount: amount && !versions ? Number(amount.value) : undefined,
+    withinMs: duration && !amount && !versions ? parseDuration(duration.value) : undefined,
     having: store.match(p as NamedNode, nn(RET + 'having'), null).map((x) => x.object.value),
     exit: onExpiry === RET + 'Offload' ? 'offload' : onExpiry === RET + 'Drop' ? 'drop' : exit,
     storageAmount: storage ? Number(storage.value) : undefined,
     announce: one(p, RET + 'announce')?.value === 'true',
-    untilAcknowledged: store.match(p as NamedNode, nn(NS.rdf + 'type'), nn(RET + 'UntilAcknowledged')).length > 0 || undefined,
+    untilAcknowledged: kinds.has(RET + 'UntilAcknowledged') || undefined,
+    since: Number.isFinite(since) ? since : undefined,
+    versions: versions ? (amount ? Number(amount.value) : 1) : undefined,
   }
 }
+
+/** The classes a policy node is an instance of, through rdfs:subClassOf (an app's own subclass of ldes:LatestVersionSubset is one). */
+function classesOf(store: GraphStore, p: Term): Set<string> {
+  const f = store.factory
+  const seen = new Set<string>()
+  const todo = store.match(p as NamedNode, f.namedNode(RDF_TYPE), null).map((q) => q.object)
+  while (todo.length) {
+    const c = todo.pop()!
+    if (c.termType !== 'NamedNode' || seen.has(c.value)) continue
+    seen.add(c.value)
+    for (const q of store.match(c, f.namedNode(RDFS_SUBCLASS), null)) todo.push(q.object)
+  }
+  return seen
+}
+
+/** A general policy: it keeps members by their place in the stream (an amount, an age, a point in time). */
+const isGeneral = (p: Policy) => !p.having.length && !p.untilAcknowledged && p.versions === undefined
 
 /** How many members a stream's policies keep at most, by count (Infinity when a policy keeps by age or none bounds it). */
 export function boundOf(policies: Policy[]): number {
@@ -85,7 +125,7 @@ export function boundOf(policies: Policy[]): number {
 
 /** The policies' amount for streams that only count (the inspection logs): the largest of the general ones. */
 export function amountOf(policies: Policy[], fallback: number): number {
-  const general = policies.filter((p) => !p.having.length && !p.untilAcknowledged)
+  const general = policies.filter(isGeneral)
   if (!general.length) return fallback
   if (general.some((p) => p.amount === undefined)) return Infinity
   return Math.max(...general.map((p) => p.amount!))
@@ -113,6 +153,11 @@ export interface Expiry {
  * history: when one must leave, it is a member the host says may leave first (an undone change,
  * newest first), else the oldest. So an undo never finds a newer step missing while an older one is
  * there.
+ *
+ * Members only an ldes:LatestVersionSubset keeps are set aside out of the general window, in the order
+ * they left it, until a newer version of their entity arrives; a member's entity is read at the next
+ * append, once the write that appended it has put its triples in the graph. Pinned members (ret:pinned)
+ * are held wherever a policy or pressure would let them go, and offered on once they are unpinned.
  */
 export class StreamRetention {
   /** Every member the general policies keep, oldest first. */
@@ -125,6 +170,14 @@ export class StreamRetention {
   private readonly from = new Map<string, Policy | undefined>()
   /** Members a ret:UntilAcknowledged policy holds back (oldest first), with the policy that let each go. */
   private readonly held: { member: Member; from: Policy | undefined }[] = []
+  /** Members held because they are pinned (ret:pinned), oldest first, with the policy that let each go. */
+  private readonly pins: { member: Member; from: Policy | undefined }[] = []
+  /** Per ldes:LatestVersionSubset policy: the newest members of each entity (oldest first), and their IRIs. */
+  private readonly versions = new Map<string, { latest: Map<string, Member[]>; kept: Set<string> }>()
+  /** Members appended whose entity is not read yet (the write that appended them is still to come). */
+  private unresolved: Member[] = []
+  /** Members out of the general window that only a version policy keeps, in the order they left it (by seq). */
+  private readonly aside = new Map<string, { member: Member; from: Policy | undefined }>()
 
   constructor(
     /** The stream's policies now (read on every append, so a change in the graph applies at once). */
@@ -137,11 +190,15 @@ export class StreamRetention {
     private readonly leaveFirst: () => Iterable<string> = () => [],
     /** Whether a member awaits acknowledgement under a ret:UntilAcknowledged policy (so it is held back). */
     private readonly awaits: (member: string, policy: Policy) => boolean = () => false,
+    /** Whether a member is pinned (ret:pinned true): no policy and no pressure lets it go. */
+    private readonly pinned: (member: string) => boolean = () => false,
+    /** A member's entity by the stream's ldes:versionOfPath (for ldes:LatestVersionSubset), if it has one. */
+    private readonly entityOf: (member: string, path: string) => string | undefined = () => undefined,
   ) {}
 
   /** Members in memory: what the policies keep plus what was recalled. */
   get size(): number {
-    let n = this.all.length + this.back.length + this.held.length
+    let n = this.all.length + this.back.length + this.held.length + this.pins.length + this.aside.size
     for (const q of this.extended.values()) n += q.length
     return n
   }
@@ -149,8 +206,19 @@ export class StreamRetention {
   /** The oldest member in memory (for the horizon). */
   oldest(): Member | undefined {
     let o: Member | undefined
-    for (const m of [this.all[0], this.back[0], this.held[0]?.member, ...[...this.extended.values()].map((q) => q[0])]) if (m && (!o || m.seq < o.seq)) o = m
+    const aside = this.aside.values().next().value?.member
+    for (const m of [this.all[0], this.back[0], this.held[0]?.member, this.pins[0]?.member, aside, ...[...this.extended.values()].map((q) => q[0])]) if (m && (!o || m.seq < o.seq)) o = m
     return o
+  }
+
+  /** Members held because they are pinned (ret:pinned), oldest first. */
+  pinnedMembers(): readonly Member[] {
+    return this.pins.map((h) => h.member)
+  }
+
+  /** Members out of the general window that only an ldes:LatestVersionSubset keeps, oldest first. */
+  versioned(): readonly Member[] {
+    return [...this.aside.values()].map((h) => h.member)
   }
 
   /** Members a ret:having policy keeps (oldest first), for recalling ahead of an undo. */
@@ -178,33 +246,116 @@ export class StreamRetention {
   /** Append a member; returns the members no policy keeps any more. */
   append(member: Member, now: number): Expiry[] {
     const policies = this.policies()
+    const versioned = policies.filter((p) => p.versions !== undefined)
+    // The members appended before this one have their triples now: their entities are read.
+    const out: Expiry[] = versioned.length || this.versions.size || this.unresolved.length ? this.resolve(versioned, policies, now) : []
     this.all.push(member)
+    if (versioned.length) this.unresolved.push(member)
     // No policy: the stream keeps everything (LDES: no policy, no retirement).
-    if (!policies.length) return []
-    const general = policies.filter((p) => !p.having.length && !p.untilAcknowledged)
+    if (!policies.length) return this.gate(out)
+    const general = policies.filter(isGeneral)
     const holding = policies.filter((p) => p.untilAcknowledged)
-    // What was held back and has since been acknowledged leaves now, as it would have then.
-    const out: Expiry[] = this.held.length ? this.release(holding, policies, now) : []
+    // What was held back and has since been acknowledged (or unpinned) leaves now, as it would have then.
+    if (this.held.length || this.pins.length) out.push(...this.release(holding, policies, now))
     while (this.all.length) {
       const size = this.all.length
       const m = this.all[0]!
       let kept = false
       let last: Policy | undefined
       for (const p of general) {
-        const keeps = p.amount !== undefined ? size <= p.amount : p.withinMs !== undefined ? m.at >= now - p.withinMs : true
+        const keeps =
+          p.amount !== undefined ? size <= p.amount : p.withinMs !== undefined ? m.at >= now - p.withinMs : p.since !== undefined ? m.at >= p.since : true
         if (keeps) kept = true
         else last = p
       }
       if (kept) break
       this.all.shift()
-      const from = last ?? general[0]
-      if (holding.some((p) => this.awaits(m.iri, p))) this.held.push({ member: m, from })
-      else out.push(...this.offer(m, from, policies, now))
+      const from = last ?? general[0] ?? versioned[0]
+      // Kept by a version policy only: set aside (not in the window's way) until a newer version comes.
+      if (versioned.some((p) => this.keepsVersion(p, m))) this.aside.set(m.iri, { member: m, from })
+      else out.push(...this.leaving(m, from, holding, policies, now))
+    }
+    return this.gate(out)
+  }
+
+  /** A member no general or version policy keeps: held back while it awaits acknowledgement, else offered on. */
+  private leaving(m: Member, from: Policy | undefined, holding: Policy[], policies: Policy[], now: number): Expiry[] {
+    if (holding.some((p) => this.awaits(m.iri, p))) {
+      this.held.push({ member: m, from })
+      return []
+    }
+    return this.offer(m, from, policies, now)
+  }
+
+  /** Whether a version policy keeps a member: one of the newest of its entity, or one whose entity is not read yet. */
+  private keepsVersion(p: Policy, m: Member): boolean {
+    return this.unresolved.includes(m) || this.versions.get(p.iri)?.kept.has(m.iri) === true
+  }
+
+  /**
+   * Read the entities of the members appended since the last append, for each version policy; a
+   * member a newer version displaces is no longer kept by that policy, and leaves if it was set aside
+   * and no other keeps it. A version policy no longer declared lets go of all it kept.
+   */
+  private resolve(versioned: Policy[], policies: Policy[], now: number): Expiry[] {
+    const out: Expiry[] = []
+    const holding = policies.filter((p) => p.untilAcknowledged)
+    const members = this.unresolved
+    this.unresolved = []
+    for (const u of members)
+      for (const p of versioned) {
+        let v = this.versions.get(p.iri)
+        if (!v) this.versions.set(p.iri, (v = { latest: new Map(), kept: new Set() }))
+        const key = (p.versionOf && this.entityOf(u.iri, p.versionOf)) || u.iri
+        let list = v.latest.get(key)
+        if (!list) v.latest.set(key, (list = []))
+        list.push(u)
+        v.kept.add(u.iri)
+        while (list.length > p.versions!) {
+          const x = list.shift()!
+          v.kept.delete(x.iri)
+          out.push(...this.unversion(x, p, versioned, holding, policies, now))
+        }
+      }
+    const declared = new Set(versioned.map((p) => p.iri))
+    for (const [iri, v] of this.versions) {
+      if (declared.has(iri)) continue
+      this.versions.delete(iri)
+      for (const m of [...this.aside.values()].map((h) => h.member)) if (v.kept.has(m.iri)) out.push(...this.unversion(m, undefined, versioned, holding, policies, now))
     }
     return out
   }
 
-  /** The held members no ret:UntilAcknowledged policy keeps any more (acknowledged), offered on as if they had just left. */
+  /**
+   * A member the version policy `by` no longer keeps: if it was set aside and none keeps it now, it
+   * leaves, by that policy's exit (it let it go last).
+   */
+  private unversion(m: Member, by: Policy | undefined, versioned: Policy[], holding: Policy[], policies: Policy[], now: number): Expiry[] {
+    const h = this.aside.get(m.iri)
+    if (!h || versioned.some((p) => this.keepsVersion(p, m))) return []
+    this.aside.delete(m.iri)
+    return this.leaving(m, by ?? h.from, holding, policies, now)
+  }
+
+  /** What leaves, but is pinned (ret:pinned), is held instead, with the policy that let it go. */
+  private gate(out: Expiry[]): Expiry[] {
+    if (!out.length) return out
+    const leave: Expiry[] = []
+    for (const e of out) {
+      if (!this.pinned(e.member.iri)) {
+        leave.push(e)
+        continue
+      }
+      this.pins.push({ member: e.member, from: e.policy })
+      if (this.pins.length > 1 && this.pins[this.pins.length - 2]!.member.seq > e.member.seq) this.pins.sort((a, b) => a.member.seq - b.member.seq)
+    }
+    return leave
+  }
+
+  /**
+   * The held members nothing holds any more (acknowledged, or unpinned), offered on as if they had
+   * just left. It looks at each held member once an append: as many as a person keeps waiting or pinned.
+   */
   private release(holding: Policy[], policies: Policy[], now: number): Expiry[] {
     const out: Expiry[] = []
     for (let i = 0; i < this.held.length; ) {
@@ -215,6 +366,15 @@ export class StreamRetention {
       }
       this.held.splice(i, 1)
       out.push(...this.offer(h.member, h.from, policies, now))
+    }
+    for (let i = 0; i < this.pins.length; ) {
+      const h = this.pins[i]!
+      if (this.pinned(h.member.iri)) {
+        i++
+        continue
+      }
+      this.pins.splice(i, 1)
+      out.push(...this.leaving(h.member, h.from, holding, policies, now))
     }
     return out
   }
@@ -278,7 +438,7 @@ export class StreamRetention {
   releaseRecalled(): Expiry[] {
     const out: Expiry[] = []
     while (this.back.length) out.push(this.take(this.back, this.back.length - 1, undefined))
-    return out
+    return this.gate(out)
   }
 
   /** The oldest `share` of what each ret:having policy keeps leaves (memory pressure). */
@@ -289,7 +449,7 @@ export class StreamRetention {
       const n = Math.floor(q.length * share)
       for (let i = 0; i < n; i++) out.push(this.take(q, 0, policies.get(iri)))
     }
-    return out
+    return this.gate(out)
   }
 
   /**
@@ -303,6 +463,6 @@ export class StreamRetention {
     const out: Expiry[] = []
     const limit = this.recallLimit()
     while (this.back.length > limit) out.push(this.evict(this.back, from))
-    return out
+    return this.gate(out)
   }
 }

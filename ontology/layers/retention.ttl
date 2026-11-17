@@ -49,7 +49,22 @@ ret:UntilAcknowledged a owl:Class ; rdfs:subClassOf ret:Policy ;
 ret:acknowledged a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "On a member (in the input graph): a person acknowledged it, by dismissing its toast. It leaves with the member, and is offloaded with it."@en .
 beh:LatestMembersPolicy rdfs:subClassOf ret:Latest .
+
+# LDES's own policies (LDES 1.0, §4.4), read as LDES defines them. Only the duration is a ret:Within;
+# the other two keep by other measures, so they are policies of their own, not ret:Latest or ret:Within.
 ldes:DurationAgoPolicy rdfs:subClassOf ret:Within .
+ldes:PointInTimePolicy rdfs:subClassOf ret:Policy ;
+    rdfs:comment "Keeps the members appended from its ldes:pointInTime (an xsd:dateTime) on."@en .
+ldes:LatestVersionSubset rdfs:subClassOf ret:Policy ;
+    rdfs:comment """Keeps the ldes:amount (default 1) most recent members of each entity: the value of the stream's
+ldes:versionOfPath on a member names the entity it is a version of; without one, each member is its own. Not a
+ret:Latest, whose ldes:amount counts members of the stream."""@en .
+
+ret:pinned a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "Pinned"@en , "Закріплено"@uk , "Angeheftet"@de , "مثبّت"@ar ;
+    rdfs:comment """On a member (in the input graph): a person keeps it. No policy and no memory pressure lets it go
+while ret:pinned true is stated; once that statement goes, it leaves as the stream's policies would have let it
+go. A pinned member counts as in memory on its horizon."""@en .
 
 ret:having a owl:ObjectProperty ; rdfs:domain ret:Policy ; rdfs:range rdf:Property ;
     rdfs:comment """The policy keeps only members that have one of these properties (on the member, in the
