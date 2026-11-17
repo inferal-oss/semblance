@@ -415,6 +415,7 @@ export class EventBus {
           f.quad(this.stream, nn(BEH.latest), event),
         ],
       })
+      this.forgetAcknowledged(remove)
       const undone = applied.add.filter((q) => q.predicate.value === BEH.undone).map((q) => q.object)
       if (undone.length) this.recallForUndo(undone)
       return { recorded: true, event, type, target: nn(target), reactions: reactions.map((r) => r.iri), delta: applied }
@@ -513,14 +514,17 @@ export class EventBus {
         for (const p of [BEH.asserted, BEH.retracted]) for (const q of store.match(m, f.namedNode(p), null, this.graph)) out.push(...store.match(q.object as NamedNode, null, null, this.graph))
         return out
       },
-      write: (delta) => runtime.log(delta),
+      write: (delta) => this.writeLog(delta),
       leaveFirst: () => store.match(this.stream, f.namedNode(BEH.undone), null, f.defaultGraph()).map((q) => q.object.value),
       // An undone member is stored without its recorded change: its redo goes with it, and a recall
       // never offers to undo it again.
+      // That its announcement was acknowledged (ret:acknowledged, in the input graph) goes with it, so a
+      // recall does not show it again.
       storable: (m, closure) => {
-        if (!store.match(this.stream, f.namedNode(BEH.undone), m, f.defaultGraph()).length) return closure
+        const seen = store.match(m, f.namedNode(NS.ret + 'acknowledged'), null, f.defaultGraph())
+        if (!store.match(this.stream, f.namedNode(BEH.undone), m, f.defaultGraph()).length) return seen.length ? [...closure, ...seen] : closure
         const statements = new Set(store.match(m, null, null, this.graph).filter((q) => q.predicate.value === BEH.asserted || q.predicate.value === BEH.retracted).map((q) => q.object.value))
-        return closure.filter((q) => !statements.has(q.subject.value) && !((q.predicate.value === BEH.asserted || q.predicate.value === BEH.retracted) && q.subject.equals(m)))
+        return [...closure.filter((q) => !statements.has(q.subject.value) && !((q.predicate.value === BEH.asserted || q.predicate.value === BEH.retracted) && q.subject.equals(m))), ...seen]
       },
       crossed: (kind) => {
         if (!runtime.ended) this.emit(kind === 'offloaded' ? NS.ret + 'Offloaded' : NS.ret + 'Dropped', this.stream.value)
@@ -530,8 +534,26 @@ export class EventBus {
       .match(this.stream, f.namedNode(LDES.member), null, this.graph)
       .map((m) => ({ iri: m.object.value, seq: Number(this.value(m.object, BEH.sequence)?.value ?? 0), at: Date.parse(this.value(m.object, BEH.at)?.value ?? '') || 0 }))
     const leaving = stream.load(found, this.clock.now())
-    if (leaving.length) runtime.log({ add: [], remove: leaving })
+    if (leaving.length) this.writeLog({ add: [], remove: leaving })
     return stream
+  }
+
+  /** A change to the log's graph; members it retires take with them that they were acknowledged (input graph). */
+  private writeLog(delta: Delta) {
+    this.runtime.log(delta)
+    this.forgetAcknowledged(delta.remove)
+  }
+
+  /** The members `removed` retires (their tree:member links): that their announcement was acknowledged goes too. */
+  private forgetAcknowledged(removed: Quad[]) {
+    const store = this.runtime.store
+    const f = this.f
+    const seen: Quad[] = []
+    for (const q of removed) {
+      if (q.predicate.value !== LDES.member || !q.subject.equals(this.stream)) continue
+      seen.push(...store.match(q.object as NamedNode, f.namedNode(NS.ret + 'acknowledged'), null, f.defaultGraph()))
+    }
+    if (seen.length) this.runtime.apply({ add: [], remove: seen })
   }
 
   /** Take a new member in: what no policy keeps any more, to remove in the same write. */
