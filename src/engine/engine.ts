@@ -8,7 +8,7 @@ import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
 import type { Watchdog } from './watchdog.ts'
 import { Parked } from './parked.ts'
-import { ExactIndex } from './exact.ts'
+import { ExactIndex, ruleDepsCached } from './exact.ts'
 import type { Lookup } from '../view/deps.ts'
 import { probeLookup } from '../view/lookup.ts'
 
@@ -424,7 +424,7 @@ export class Engine {
     for (const byFocus of this.queryFollowers.values()) following += byFocus.size
     let memberReaders = 0
     for (const byRule of this.memberReaders.values()) for (const keys of byRule.values()) memberReaders += keys.size
-    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, memberReaders, types: this.types.size, links: this.links.size, following, stale: this.stale.size, inputPairOwners: this.inputPairs.size, inputPairRules: this.inputPairsByRule.size, inputPairs: this.inputPairCount }
+    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, memberReaders, types: this.types.size, links: this.links.size, following, stale: this.stale.size, inputPairOwners: this.inputPairs.size, inputPairRules: this.inputPairsByRule.size, inputPairs: this.inputPairCount, names: this.ctx.footprint?.().names ?? 0, exactDeps: ruleDepsCached(this.store.factory) }
   }
 
   onChange(listener: Listener): () => void {

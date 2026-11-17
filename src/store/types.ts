@@ -101,6 +101,8 @@ export interface GraphStore {
    * memoryBytes.
    */
   compact?(opts?: { below?: number }): StoreCompaction | undefined
+  /** Sizes of what the store keeps beside its quads (term tables, host caches), for leak checks. Optional. */
+  footprint?(): Record<string, number>
   /**
    * Release what the store holds outside the JavaScript heap (WebAssembly memory), which garbage
    * collection does not see: every Oxigraph store shares one capped WebAssembly memory. The store

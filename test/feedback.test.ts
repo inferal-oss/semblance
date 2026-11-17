@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NS } from '../src/ns.ts'
 import { mountShell } from './harness.ts'
+import type { Quad } from '@rdfjs/types'
 
 const UI = 'https://semblance.dev/demo#'
 
@@ -116,6 +117,45 @@ describe('feedback components', () => {
     click(root('fb-toasts-reset'))
     expect(root('fb-toast-info').hasAttribute('hidden')).toBe(false)
     expect(root('fb-toast-success').hasAttribute('hidden')).toBe(false)
+  })
+
+  it.each(['sparql', 'function'] as const)('a dismissed announcement leaves nothing behind once it is no longer derived (%s)', (prefer) => {
+    const h = mountShell(5, 'oxigraph', prefer)
+    const f = h.store.factory
+    const c = (p: string) => f.namedNode(NS.c + p)
+    const region = f.namedNode(UI + 'announcements')
+    // Z pauses and resumes the inspector, and each says so: a toast from the change log (ann:Toasts).
+    const z = () => {
+      const e = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+      Object.assign(e, { key: 'z', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
+      h.document.dispatchEvent(e)
+      h.shell.flush()
+    }
+    const hosted = () => h.store.match(region, c('hosts'), null).map((q) => q.object.value).sort()
+    const dismiss = (toast: string) => {
+      const el = [...h.document.querySelectorAll('*')].find((x) => h.shell.keyOf(x) === toast + '/~root')!
+      h.fire(el.querySelector('.sem-close')!, 'click')
+      h.shell.flush()
+    }
+    const left = () => h.store.match(null, c('open'), null, f.defaultGraph()).filter((q: Quad) => q.subject.value.startsWith(region.value + '/~'))
+    z()
+    const first = hosted().at(-1)!
+    expect(first).toContain(region.value + '/~ann-')
+    dismiss(first)
+    expect(h.store.match(f.namedNode(first), c('open'), null).map((q) => q.object.value)).toEqual(['false'])
+    // Newer announcements push it out of the region's three: no rule derives it any more.
+    for (let i = 0; i < 4; i++) z()
+    expect(hosted()).not.toContain(first)
+    // The next dismissal in the region forgets it: no c:open false about a toast that is gone.
+    dismiss(hosted().at(-1)!)
+    expect(h.store.match(f.namedNode(first), c('open'), null)).toHaveLength(0)
+    expect(h.store.match(region, c('dismissedToast'), f.namedNode(first))).toHaveLength(0)
+    // What is left is about toasts the region still shows.
+    for (const q of left()) expect(hosted()).toContain(q.subject.value)
+    // Many dismissals later, it stays within the region's limit.
+    for (let i = 0; i < 12; i++) z(), dismiss(hosted().at(-1)!)
+    expect(left().length).toBeLessThanOrEqual(3)
+    expect(h.store.match(region, c('dismissedToast'), null).length).toBeLessThanOrEqual(3)
   })
 
   it('a hosted toast leaves its region when dismissed', () => {

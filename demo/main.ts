@@ -492,9 +492,13 @@ const demoUpload: Uploader = (file, ctx) =>
     ctx.signal.addEventListener('abort', () => clearInterval(timer), { once: true })
   })
 // Files kept in the browser (file:keepIn: the file explorer) go to IndexedDB; their previews are
-// made in a worker, so decoding a large photo never holds up the page.
+// made in a worker, so decoding a large photo never holds up the page. A page that loads the rest of
+// its graphs later says when they are all there: a kept file whose node they bring is not freed first.
+let allGraphsLoaded = () => {}
+const graphsLoaded = firstGraphs ? new Promise<void>((r) => (allGraphsLoaded = r)) : undefined
 new Files(bus, {
   handlers: { demo: demoUpload },
+  graphsLoaded,
   thumbnail: workerThumbnails(() => new Worker(scriptURL(thumbnailWorker), { type: 'module' })),
   onHandled: () => {
     syncSettings()
@@ -621,6 +625,7 @@ async function loadRest() {
   }
   await arrive(slices, { runtime, idle: nextIdle, task: nextTask, urgent, flush })
   await persistence.restoreAdded().catch((e) => console.warn('[semblance] could not restore remembered state', e))
+  allGraphsLoaded()
   flush()
   scheduleWarmup()
   performance.mark('sem:graphs')

@@ -3,7 +3,9 @@
 // whatever address it was at before: across pages, sections, languages, a target and an address
 // that names nothing.
 import { describe, expect, it } from 'vitest'
-import { createHandler, loadSite, renderSite, siteRenderer } from '../src/node/site.ts'
+import { createHandler, loadSite, renderSite, siteRenderer, siteStore } from '../src/node/site.ts'
+import { warmRenderer } from '../src/server/warm.ts'
+import type { GraphStore } from '../src/store/types.ts'
 
 const root = new URL('../', import.meta.url)
 
@@ -36,6 +38,34 @@ describe('a warm runtime per request', () => {
     }
     // One load per language (en, uk, ar); every other address moved a loaded runtime.
     expect(warm.stats).toEqual({ cold: 3, warm: routes.length - 3 })
+    warm.dispose()
+  })
+
+  it('keeps up its store between requests, and is loaded afresh after its share of them', async () => {
+    const site = await loadSite(new URL('examples/hello/semblance.config.ts', root).pathname)
+    const stores: (GraphStore & { termCount?(): number })[] = []
+    let upkeep = 0
+    const warm = warmRenderer({
+      root: site.root,
+      styles: false,
+      recycle: { requests: 3 },
+      load: async () => {
+        const store = await siteStore(site)
+        const maintain = store.maintain?.bind(store)
+        store.maintain = (ms) => (upkeep++, maintain?.(ms) ?? false)
+        stores.push(store)
+        return store
+      },
+    })
+    // Every address a distinct query: terms the engine takes from each one.
+    const pages: { html: string }[] = []
+    for (let i = 0; i < 7; i++) pages.push(await warm.render(`/?q=${i}`))
+    expect(pages.every((p) => p.html === pages[0]!.html)).toBe(true)
+    await warm.render('/')
+    // Upkeep after each request; a runtime served three, then the next was loaded afresh.
+    expect(upkeep).toBeGreaterThanOrEqual(7)
+    expect(warm.stats.cold).toBe(3)
+    expect(stores).toHaveLength(3)
     warm.dispose()
   })
 

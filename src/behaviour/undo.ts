@@ -11,7 +11,7 @@ import type { ReactionContext, ReactionFn } from './events.ts'
 const RDF = NS.rdf
 const TREE_MEMBER = NS.tree + 'member'
 
-/** A recorded statement's triple, in the input graph. */
+/** A recorded statement's triple, in the input graph (undefined: the statement is not whole). */
 function statement(ctx: ReactionContext, st: Term): Quad | undefined {
   const s = ctx.object(st, RDF + 'subject')
   const p = ctx.object(st, RDF + 'predicate')
@@ -21,6 +21,23 @@ function statement(ctx: ReactionContext, st: Term): Quad | undefined {
 
 const holds = (ctx: ReactionContext, q: Quad) => ctx.match(q.subject, q.predicate.value, q.object).length > 0
 
+/**
+ * A member's recorded change, or undefined when one of its statements is not whole (a remembered
+ * log stored without them): such a change is neither undone nor redone, as by beh:UndoLatest.
+ */
+function changeOf(ctx: ReactionContext, m: Term): { added: Quad[]; removed: Quad[] } | undefined {
+  const added: Quad[] = []
+  const removed: Quad[] = []
+  for (const [p, out] of [[BEH.asserted, added], [BEH.retracted, removed]] as const) {
+    for (const q of ctx.match(m, p, null)) {
+      const st = statement(ctx, q.object)
+      if (!st) return undefined
+      out.push(st)
+    }
+  }
+  return { added, removed }
+}
+
 const undoLatest: ReactionFn = (ctx) => {
   const f = ctx.runtime.store.factory
   const log = (ctx.object(ctx.target, BEH.log) as NamedNode | undefined) ?? f.namedNode(BEH.ChangeLog)
@@ -28,8 +45,9 @@ const undoLatest: ReactionFn = (ctx) => {
   let best: { m: Term; n: number; added: Quad[]; removed: Quad[] } | undefined
   for (const { object: m } of ctx.match(log, TREE_MEMBER, null)) {
     if (undone.has(m.value)) continue
-    const added = ctx.match(m, BEH.asserted, null).map((q) => statement(ctx, q.object)).filter((q): q is Quad => !!q)
-    const removed = ctx.match(m, BEH.retracted, null).map((q) => statement(ctx, q.object)).filter((q): q is Quad => !!q)
+    const change = changeOf(ctx, m)
+    if (!change) continue
+    const { added, removed } = change
     if (!added.length && !removed.length) continue
     if (!added.every((q) => holds(ctx, q)) || removed.some((q) => holds(ctx, q))) continue
     const n = Number(ctx.object(m, BEH.sequence)?.value ?? NaN)
@@ -49,8 +67,9 @@ const redoLatest: ReactionFn = (ctx) => {
   const log = (ctx.object(ctx.target, BEH.log) as NamedNode | undefined) ?? f.namedNode(BEH.ChangeLog)
   let best: { m: Term; n: number; added: Quad[]; removed: Quad[] } | undefined
   for (const { object: m } of ctx.match(log, BEH.undone, null)) {
-    const added = ctx.match(m, BEH.asserted, null).map((q) => statement(ctx, q.object)).filter((q): q is Quad => !!q)
-    const removed = ctx.match(m, BEH.retracted, null).map((q) => statement(ctx, q.object)).filter((q): q is Quad => !!q)
+    const change = changeOf(ctx, m)
+    if (!change) continue
+    const { added, removed } = change
     if (added.some((q) => holds(ctx, q)) || !removed.every((q) => holds(ctx, q))) continue
     const n = Number(ctx.object(m, BEH.sequence)?.value ?? NaN)
     if (!Number.isFinite(n)) continue

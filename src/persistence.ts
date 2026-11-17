@@ -584,19 +584,53 @@ export class Persistence {
       // Stopped while a write was awaited: its store may be released.
       if (this.stopped) return
       if (!dirty.includes(policy.iri) || !policy.enabled) continue
-      const k = this.kept.get(policy.iri)
-      if (k && (await this.writeChange(policy, k))) continue
-      // The tick the triples are of: what changes after it is the next write's.
-      const tick = this.runtime?.views.tickNo ?? -1
-      const quads = k ? k.view.quads().filter((q) => !this.isSensitive(q.predicate)) : this.collect(policy)
-      await this.removeStored(policy)
-      const blob: Blob = { version: policy.version, savedAt: Date.now(), nt: this.serialize(quads) }
-      await this.set(policy, this.key(policy.iri), JSON.stringify(blob), quads.length)
+      try {
+        await this.write(policy)
+      } catch (e) {
+        // A failed write (a full storage: QuotaExceededError) loses nothing: what was stored before
+        // stays, the policy stays dirty for the next change to retry, and the graph says it is unsaved.
+        if (this.stopped) return
+        this.dirty.add(policy.iri)
+        console.warn(`semblance: could not remember ${policy.iri}; the earlier copy is kept`, e)
+        this.unsaved(policy, true)
+        continue
+      }
       if (this.stopped) return
-      if (k) Object.assign(k, { tick, chunks: 0, chunkTriples: 0, baseTriples: quads.length })
-      this.record(PER + 'Write', policy, quads.length)
-      this.report(policy, quads.length)
+      this.unsaved(policy, false)
     }
+  }
+
+  /** Write one policy: a chunk of its change when it can be, else whole. Throws when storage refuses. */
+  private async write(policy: Policy): Promise<void> {
+    const k = this.kept.get(policy.iri)
+    if (k && (await this.writeChange(policy, k))) return
+    // The tick the triples are of: what changes after it is the next write's.
+    const tick = this.runtime?.views.tickNo ?? -1
+    const quads = k ? k.view.quads().filter((q) => !this.isSensitive(q.predicate)) : this.collect(policy)
+    // The new base replaces the old in one write, before the old chunks go: a write that fails
+    // leaves the earlier copy whole, and the chunks a new base no longer counts are never read.
+    const b = this.backend(policy.scope)
+    const before = this.storedChunks(await b.get(this.key(policy.iri)))
+    const blob: Blob = { version: policy.version, savedAt: Date.now(), nt: this.serialize(quads) }
+    await this.set(policy, this.key(policy.iri), JSON.stringify(blob), quads.length)
+    for (let i = 1; i <= before; i++) await b.remove(this.key(policy.iri) + '#' + i)
+    if (this.stopped) return
+    if (k) Object.assign(k, { tick, chunks: 0, chunkTriples: 0, baseTriples: quads.length })
+    this.record(PER + 'Write', policy, quads.length)
+    this.report(policy, quads.length)
+  }
+
+  /** per:unsaved on a policy (the persistence graph): its last write failed, what is stored is older. */
+  private unsaved(policy: Policy, on: boolean) {
+    const runtime = this.runtime
+    if (!runtime) return
+    const f = this.store.factory
+    const p = f.namedNode(policy.iri)
+    const g = f.namedNode(PERSIST_GRAPH)
+    const remove = this.store.match(p, f.namedNode(PER + 'unsaved'), null, g)
+    if (!on && !remove.length) return
+    if (on && remove.length) return
+    runtime.write(PERSIST_GRAPH, { remove, add: on ? [f.quad(p, f.namedNode(PER + 'unsaved'), f.literal('true', f.namedNode(XSD_BOOLEAN)))] : [] })
   }
 
   /**
@@ -612,15 +646,23 @@ export class Persistence {
     for (const [, q, w] of change.quads.entries()) if (!this.isSensitive(q.predicate)) (w > 0 ? add : remove).push(q)
     const n = add.length + remove.length
     if (k.chunks >= 64 || k.chunkTriples + n > Math.max(16, k.baseTriples)) return false
-    k.tick = change.tick
-    if (!n) return true
+    if (!n) return (k.tick = change.tick), true
     const raw = await this.backend(policy.scope).get(this.key(policy.iri))
     if (!raw) return false
     const blob = JSON.parse(raw) as Blob
+    const was = { tick: k.tick, chunks: k.chunks, chunkTriples: k.chunkTriples }
+    k.tick = change.tick
+    try {
+      // The chunk first, then the base that counts it: a failure of either leaves the base counting
+      // only what was stored before, and the change is written again (from the same tick) next time.
+      await this.set(policy, this.key(policy.iri) + '#' + (k.chunks + 1), JSON.stringify({ add: this.serialize(add), remove: this.serialize(remove) } satisfies Chunk), n)
+      await this.set(policy, this.key(policy.iri), JSON.stringify({ ...blob, savedAt: Date.now(), chunks: k.chunks + 1 } satisfies Blob), 0)
+    } catch (e) {
+      Object.assign(k, was)
+      throw e
+    }
     k.chunks++
     k.chunkTriples += n
-    await this.set(policy, this.key(policy.iri) + '#' + k.chunks, JSON.stringify({ add: this.serialize(add), remove: this.serialize(remove) } satisfies Chunk), n)
-    await this.set(policy, this.key(policy.iri), JSON.stringify({ ...blob, savedAt: Date.now(), chunks: k.chunks } satisfies Blob), 0)
     // Stopped while the write was awaited: its store may be released.
     if (this.stopped) return true
     const size = k.view.quads().filter((q) => !this.isSensitive(q.predicate)).length
@@ -638,15 +680,18 @@ export class Persistence {
   /** Remove what a policy stored: the base and its chunks. */
   private async removeStored(policy: Policy) {
     const b = this.backend(policy.scope)
-    const raw = await b.get(this.key(policy.iri))
-    let chunks = 0
-    try {
-      chunks = raw ? ((JSON.parse(raw) as Blob).chunks ?? 0) : 0
-    } catch {
-      chunks = 0
-    }
+    const chunks = this.storedChunks(await b.get(this.key(policy.iri)))
     for (let i = 1; i <= chunks; i++) await b.remove(this.key(policy.iri) + '#' + i)
     await b.remove(this.key(policy.iri))
+  }
+
+  /** How many chunks a stored base counts (0 for none, or one that does not parse). */
+  private storedChunks(raw: string | undefined): number {
+    try {
+      return raw ? ((JSON.parse(raw) as Blob).chunks ?? 0) : 0
+    } catch {
+      return 0
+    }
   }
 
   private isSensitive(p: Term): boolean {

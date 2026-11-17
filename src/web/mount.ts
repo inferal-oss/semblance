@@ -414,6 +414,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachSources?.()
       detachPressure()
       if (sheet) dropSheet(shadow ?? doc, sheet)
+      renderer.dispose()
       runtime.dispose()
       trusted?.dispose?.()
     },

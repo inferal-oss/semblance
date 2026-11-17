@@ -1,9 +1,9 @@
 // Function rules and reactions for the feedback components (ontology/components/feedback.ttl).
-import type { NamedNode, Term } from '@rdfjs/types'
+import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, STY, XSD_BOOLEAN } from '../ns.ts'
-import type { Delta } from '../rdf.ts'
+import { type Delta, MINT_SEPARATOR } from '../rdf.ts'
 import { isTrue, labelOf, named, nodes, num, RDFS_LABEL, str, text } from './util.ts'
 
 const c = NS.c
@@ -275,8 +275,21 @@ export const reactions: Record<string, ReactionFn> = {
   // Toasts that were hosted (c:hosts) leave their region when dismissed, so a region fed
   // by a stream of announcements does not grow; listed ones (c:toasts) are only closed.
   // A toast that is c:dismissible false stays where it is, as overlay:close leaves it open.
-  'toast:unhost': (ctx) =>
-    hitMarks(ctx, FB.closes) && !ctx.match(ctx.target, NS.c + 'dismissible', null).some((q) => q.object.value === 'false')
-      ? { add: [], remove: ctx.match(null, C.hosts, ctx.target) }
-      : none(),
+  // One a rule hosts (minted under its region) is noted on the region (c:dismissedToast); the noted
+  // toasts the region no longer hosts are forgotten, with their c:open.
+  'toast:unhost': (ctx) => {
+    if (!hitMarks(ctx, FB.closes) || ctx.match(ctx.target, NS.c + 'dismissible', null).some((q) => q.object.value === 'false')) return none()
+    const f = ctx.runtime.store.factory
+    const hosted = ctx.match(null, C.hosts, ctx.target)
+    const remove = [...hosted]
+    const add: Quad[] = []
+    for (const { subject: region } of hosted) {
+      for (const noted of ctx.match(region, C.dismissedToast, null)) {
+        if (ctx.match(region, C.hosts, noted.object).length) continue
+        remove.push(noted, ...ctx.match(noted.object, FB.open, null))
+      }
+      if (ctx.target.value.startsWith(region.value + MINT_SEPARATOR)) add.push(f.quad(region as NamedNode, f.namedNode(C.dismissedToast), ctx.target))
+    }
+    return { add, remove }
+  },
 }

@@ -32,7 +32,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { EventBus, Handled } from './behaviour/events.ts'
 import { receptionOf, zoneTarget } from './layers/dragdrop.ts'
 import { arrivalOf } from './components/upload.ts'
-import { decodeThumbnail, type FileStoreBackend, indexedDbFileStore, PREVIEW_SIZE, type Thumbnailer } from './file-store.ts'
+import { decodeThumbnail, type FileStoreBackend, indexedDbFileStore, type KeptFile, PREVIEW_SIZE, type Thumbnailer } from './file-store.ts'
 import { DND, FILE, FILES_GRAPH, NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
 import { mint, type Delta } from './rdf.ts'
 import type { DomRenderer } from './render/dom.ts'
@@ -95,6 +95,13 @@ export interface FilesOptions {
   progressEvery?: number
   /** Where kept files go (file:keepIn): IndexedDB by default where there is one; null: nothing can be kept. */
   keep?: FileStoreBackend | null
+  /**
+   * Resolves once every graph that may name a kept file has loaded and its remembered state is back
+   * (a page that loads graphs after its first paint: demo/main.ts loadRest, Persistence.restoreAdded).
+   * Until then a kept file whose node is not in the graph is held, not freed: its node may yet come.
+   * By default every graph is there when the effect attaches.
+   */
+  graphsLoaded?: Promise<unknown>
   /** How image previews are made (default: in this thread, decoded small; workerThumbnails for a worker); null: none. */
   thumbnail?: Thumbnailer | null
   /** How contents become addresses in this page (default URL.createObjectURL and revokeObjectURL); a stand-in for tests. */
@@ -138,6 +145,8 @@ export class Files {
   private readonly kept = new Map<string, Kept>()
   private readonly usage = new Map<string, { bytes: number; files: number }>()
   private readonly usageChanged = new Set<string>()
+  /** Kept files whose node is not (yet) in the graph, by handle: claimed when it comes, freed once every graph has loaded. */
+  private readonly unclaimed = new Map<string, KeptFile>()
   /** What to write to the files graph next (outside the input listener). */
   private pendingGraph: Delta = { add: [], remove: [] }
   private graphQueued = false
@@ -171,6 +180,7 @@ export class Files {
       for (const c of this.uploads.values()) c.abort()
       this.uploads.clear()
       for (const k of this.kept.values()) for (const u of k.urls) this.urls.revoke(u)
+      this.unclaimed.clear()
       this.detach = undefined
     }
     this.ready = this.track(this.restoreKept())
@@ -288,7 +298,9 @@ export class Files {
       if (q.subject.termType !== 'NamedNode') continue
       if (q.predicate.value === RDF_TYPE && q.object.value === FILE.Pick) this.pick(q.subject)
       else if (q.predicate.value === FILE.state && q.object.value === FILE.Uploading && !this.uploads.has(q.subject.value)) this.upload(q.subject)
-      else if (q.predicate.value === FILE.keptIn && q.object.termType === 'NamedNode' && !this.kept.has(q.subject.value)) this.keep(q.subject, q.object.value)
+      else if (q.predicate.value === FILE.keptIn && q.object.termType === 'NamedNode' && !this.kept.has(q.subject.value)) {
+        if (!this.claim(q.subject, q.object.value)) this.keep(q.subject, q.object.value)
+      }
     }
   }
 
@@ -409,11 +421,13 @@ export class Files {
     void this.backend?.remove(k.handle).catch(() => {})
   }
 
-  /** The files kept by an earlier page, back: counted, given addresses; those whose node is gone (never remembered) are freed. */
+  /**
+   * The files kept by an earlier page, back: counted, given addresses. One whose node is not in the
+   * graph is held until every graph has loaded (opts.graphsLoaded), then freed: it was never remembered.
+   */
   private async restoreKept() {
     // Every store is counted from the start, empty or not, so its cap's shapes have totals to read.
-    const graph = this.bus.runtime.store
-    for (const q of graph.match(null, graph.factory.namedNode(RDF_TYPE), graph.factory.namedNode(FILE.Store), graph.factory.defaultGraph())) this.count(q.subject.value, 0, 0)
+    this.countStores()
     this.flushGraph()
     const backend = this.backend
     if (!backend) return
@@ -428,18 +442,42 @@ export class Files {
     const f = store.factory
     for (const [handle, record] of all) {
       const node = store.match(null, f.namedNode(FILE.handle), f.literal(handle), f.defaultGraph())[0]?.subject
-      const keptIn = node && store.match(node, f.namedNode(FILE.keptIn), null, f.defaultGraph())[0]?.object.value
-      if (!node || !keptIn) {
-        void backend.remove(handle).catch(() => {})
-        continue
-      }
-      if (this.kept.has(node.value)) continue
-      const k: Kept = { handle, store: keptIn, size: record.size, urls: [] }
-      this.kept.set(node.value, k)
-      this.count(keptIn, k.size, 1)
-      this.publish(node.value, k, record.contents, record.preview)
+      if (node?.termType === 'NamedNode' && this.kept.has(node.value)) continue
+      this.unclaimed.set(handle, record)
+      const keptIn = node && store.match(node, f.namedNode(FILE.keptIn), null, f.defaultGraph())[0]?.object
+      if (node?.termType === 'NamedNode' && keptIn?.termType === 'NamedNode') this.claim(node, keptIn.value)
     }
     this.flushGraph()
+    await this.opts.graphsLoaded
+    if (!this.detach) return
+    // A store declared by a graph that came later is counted too.
+    this.countStores()
+    for (const handle of this.unclaimed.keys()) void backend.remove(handle).catch(() => {})
+    this.unclaimed.clear()
+    this.flushGraph()
+  }
+
+  /** Count every declared store that is not counted yet (an empty one at 0). */
+  private countStores() {
+    const graph = this.bus.runtime.store
+    const f = graph.factory
+    for (const q of graph.match(null, f.namedNode(RDF_TYPE), f.namedNode(FILE.Store), f.defaultGraph())) if (!this.usage.has(q.subject.value)) this.count(q.subject.value, 0, 0)
+  }
+
+  /** A held kept file whose node has come (with file:keptIn): kept again, counted and given addresses. */
+  private claim(node: NamedNode, keptIn: string): boolean {
+    if (!this.unclaimed.size) return false
+    const store = this.bus.runtime.store
+    const f = store.factory
+    const handle = store.match(node, f.namedNode(FILE.handle), null, f.defaultGraph())[0]?.object.value
+    const record = handle === undefined ? undefined : this.unclaimed.get(handle)
+    if (handle === undefined || !record) return false
+    this.unclaimed.delete(handle)
+    const k: Kept = { handle, store: keptIn, size: record.size, urls: [] }
+    this.kept.set(node.value, k)
+    this.count(keptIn, k.size, 1)
+    this.publish(node.value, k, record.contents, record.preview)
+    return true
   }
 
   // --- picking ------------------------------------------------------------------------------------------

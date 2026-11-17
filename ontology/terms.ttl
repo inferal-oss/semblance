@@ -932,6 +932,7 @@ c:diff a sem:Term .
 c:diffKind a sem:Term .
 c:dimension a sem:Term .
 c:disabled a sem:Term .
+c:dismissedToast a sem:Term .
 c:dismissible a sem:Term .
 c:docks a sem:Term .
 c:does a sem:Term .
@@ -2172,6 +2173,7 @@ per:size a sem:Term .
 per:storedSize a sem:Term .
 per:subject a sem:Term .
 per:toggles a sem:Term .
+per:unsaved a sem:Term .
 per:version a sem:Term .
 per:webStorage a sem:Term .
 pos:AlignedColumns a sem:Term .

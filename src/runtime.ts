@@ -49,7 +49,11 @@ export class Runtime {
   private readonly warmth = new WeakMap<Engine, (focus: string) => string | undefined>()
   /** Bumped when a sem:warm triple changes; each node's own sem:warm until then. */
   private warmDeclared = 0
-  private readonly ownWarmth = new Map<string, string | undefined>()
+  /**
+   * Each node's own sem:warm, as idle time asks it, per projection: kept while its structure
+   * (index.visibility) stands, as the nearest warmth is, so nodes that went do not stay.
+   */
+  private readonly ownWarmth = new Map<Engine, Map<string, string | undefined>>()
   private readonly refreshListeners: (() => void)[] = []
   private refreshQueued = false
   /** When the next refresh may run: a slow one waits longer, so following never takes over. */
@@ -337,6 +341,26 @@ export class Runtime {
    * `roots` (optional) are the instances this projection is mounted at: only
    * what is shown under them is evaluated (see Engine.demand); the rest waits.
    */
+  /** Sizes of the runtime's own caches and projections, for leak checks. */
+  footprint(): Record<string, number> {
+    let ownWarmth = 0
+    for (const m of this.ownWarmth.values()) ownWarmth += m.size
+    return { ownWarmth, projections: this.projections.length }
+  }
+
+  /**
+   * Let a projection go (not the first: the views read what it derives): it is no longer stepped,
+   * and its engine drops what it derived and kept.
+   */
+  unproject(p: Projection): void {
+    const i = this.projections.indexOf(p)
+    if (i <= 0) return
+    this.projections.splice(i, 1)
+    this.warmth.delete(p.engine)
+    this.ownWarmth.delete(p.engine)
+    p.engine.dispose()
+  }
+
   project(opts: ProjectOptions, onError?: (e: Error) => void): Projection {
     // Views start with the first projection (whose rule preference they share), before it reads the store.
     if (!this.views.isStarted) this.views.start(opts.prefer)
@@ -390,16 +414,17 @@ export class Runtime {
       let structure = -1
       let declared = -1
       let nearest = new Map<string, string | undefined>()
+      const ownWarmth = new Map<string, string | undefined>()
+      this.ownWarmth.set(engine, ownWarmth)
       const own = (key: string) => {
         if (key.includes(' ')) return undefined
-        if (declared !== this.warmDeclared) (declared = this.warmDeclared), this.ownWarmth.clear()
-        if (this.ownWarmth.has(key)) return this.ownWarmth.get(key)
+        if (ownWarmth.has(key)) return ownWarmth.get(key)
         const v = this.store.match(f.namedNode(key), warm, null)[0]?.object.value
-        this.ownWarmth.set(key, v)
+        ownWarmth.set(key, v)
         return v
       }
       const warmth = (focus: string) => {
-        if (structure !== index.visibility || declared !== this.warmDeclared) (structure = index.visibility), (nearest = new Map())
+        if (structure !== index.visibility || declared !== this.warmDeclared) (structure = index.visibility), (declared = this.warmDeclared), (nearest = new Map()), ownWarmth.clear()
         if (nearest.has(focus)) return nearest.get(focus)
         const v = index.nearest(focus, own)
         nearest.set(focus, v)

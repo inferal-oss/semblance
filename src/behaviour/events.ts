@@ -22,6 +22,9 @@ const UNDO_LOW_WATER = 16
 /** How many offloaded members a recall for undo brings back. */
 const RECALL_STEP = 64
 
+/** How many clipboard documents keep a Text projection (textOf). */
+const CLIPBOARD_TEXTS = 4
+
 // Re-exported: persistence imports it from rdf.ts, so it does not import this module (which imports it back).
 export { parseDuration }
 
@@ -1005,14 +1008,29 @@ export class EventBus {
     e.preventDefault()
   }
 
-  /** A Text-modality projection of a clipboard document (one per document, kept). */
+  /**
+   * A Text-modality projection of a clipboard document: one per document, the last few kept (each is
+   * stepped every tick while it is); the oldest is let go when another is needed.
+   */
   private textOf(root: string): Projection {
     let p = this.clipboardTexts.get(root)
-    if (!p) this.clipboardTexts.set(root, (p = this.runtime.project({ modality: MOD.Text, layers: [], prefer: this.opts.prefer, name: `clipboard-${this.clipboardTexts.size}`, roots: [root] })))
+    if (p) {
+      // Most recently used last: the oldest is the first to go.
+      this.clipboardTexts.delete(root)
+      this.clipboardTexts.set(root, p)
+      return p
+    }
+    while (this.clipboardTexts.size >= CLIPBOARD_TEXTS) {
+      const [oldest, old] = this.clipboardTexts.entries().next().value!
+      this.clipboardTexts.delete(oldest)
+      this.runtime.unproject(old)
+    }
+    this.clipboardTexts.set(root, (p = this.runtime.project({ modality: MOD.Text, layers: [], prefer: this.opts.prefer, name: `clipboard-${++this.clipboardSeq}`, roots: [root] })))
     return p
   }
 
   private readonly clipboardTexts = new Map<string, Projection>()
+  private clipboardSeq = 0
 
   /** Whether one text holder of a region comes before another in document order. */
   private precedes(region: Element, a: string, b: string): boolean {

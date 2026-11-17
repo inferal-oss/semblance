@@ -65,6 +65,9 @@ describe('soak', () => {
       ...Object.fromEntries(Object.entries(h.screen.index.footprint()).map(([k, v]) => ['index.' + k, v])),
       ...Object.fromEntries(Object.entries(h.shell.footprint()).map(([k, v]) => ['dom.' + k, v])),
       ...Object.fromEntries(Object.entries(h.runtime.views.footprint()).map(([k, v]) => ['views.' + k, v])),
+      // The runtime's own caches and the store's term tables and host caches (the WAT engine's).
+      ...Object.fromEntries(Object.entries(h.runtime.footprint()).map(([k, v]) => ['runtime.' + k, v])),
+      ...Object.fromEntries(Object.entries(h.store.footprint?.() ?? {}).map(([k, v]) => ['store.' + k, v])),
       log: h.bus.recent(10_000).length,
     })
     const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[xs.length >> 1]!

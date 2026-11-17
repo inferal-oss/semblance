@@ -108,22 +108,33 @@ export async function mountNavigating(opts: NavigationOptions, backends?: Record
  * for the browser's file store), as the host runs it: remembered state is restored before the first
  * projection. Mount it again with the same backends and store to see what survives a reload.
  */
-export async function mountSiteKeeping(backends: Record<string, Backend>, kept: FileStoreBackend, prefer: 'sparql' | 'function' = 'sparql') {
-  const store = sources(loadStore('oxigraph', todoApp(5), appGraph, ...gallery))
+export async function mountSiteKeeping(backends: Record<string, Backend>, kept: FileStoreBackend, prefer: 'sparql' | 'function' = 'sparql', held: string[] = []) {
+  const keep = Object.entries(galleryFiles).filter(([p]) => !held.some((h) => p.endsWith('/' + h)))
+  const store = sources(loadStore('oxigraph', todoApp(5), appGraph, ...keep.map(([, t]) => t)))
   const persistence = new Persistence(store, backends, { delayMs: 60_000 })
   await persistence.restore()
-  const shell = mount(store, prefer, undefined, kept)
+  // With graphs held back, the host says when they have all come (loadLater), as demo/main.ts does after loadRest.
+  let graphsLoaded: (() => void) | undefined
+  const shell = mount(store, prefer, undefined, kept, held.length ? new Promise<void>((r) => (graphsLoaded = r)) : undefined)
   persistence.attach(shell.runtime)
-  await shell.files.ready
+  if (!held.length) await shell.files.ready
   shell.shell.flush()
-  return { ...shell, persistence }
+  /** The held graphs arrive, their remembered state is put back, and the host says every graph is there. */
+  const loadLater = async () => {
+    for (const h of held) shell.runtime.load(galleryFiles['demo/gallery/' + h]!)
+    await persistence.restoreAdded()
+    graphsLoaded?.()
+    await shell.files.ready
+    shell.shell.flush()
+  }
+  return { ...shell, persistence, loadLater }
 }
 
 /**
  * `clock` is the host's time (beh:at, beh:dueAt): a ManualClock lets a test move it; by default nothing due fires.
  * `kept` is where files are kept (file:keepIn): a memory store (a fresh one by default).
  */
-function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock, kept: FileStoreBackend = memoryFileStore()) {
+function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock, kept: FileStoreBackend = memoryFileStore(), graphsLoaded?: Promise<unknown>) {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const runtime = new Runtime(store)
   const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.DocsLayer, NS.prv + 'Layer', FS.Layer]
@@ -164,6 +175,7 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock, 
     // Kept files: the store the test gave; an image's preview is a stand-in made at once, and
     // addresses are numbered (urls.made, urls.revoked say which were given out and taken back).
     keep: kept,
+    graphsLoaded,
     thumbnail: async (image) => new Blob([`preview of ${(image as FileLike).name}`], { type: 'image/webp' }),
     urls: { create: () => `blob:test/${++urls.made}`, revoke: (u) => void urls.revoked.push(u) },
     onHandled: () => shell.flush(),

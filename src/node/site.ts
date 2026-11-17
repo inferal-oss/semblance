@@ -11,7 +11,7 @@ import { renderDocument, type DocumentOptions } from '../server/document.ts'
 import { withCsp } from '../server/csp.ts'
 import { type Rendered, renderToString, serializeRoot } from '../server/render.ts'
 import type { Site } from '../server/site.ts'
-import { warmRenderer, type WarmRenderer } from '../server/warm.ts'
+import { type WarmOptions, warmRenderer, type WarmRenderer } from '../server/warm.ts'
 import { configureFetching, type GraphStore } from '../store/types.ts'
 import { appOntology, loadStore, loadStoreOf, loadStoreWithOntology, ontologyFiles } from './load.ts'
 import type { Subset } from '../subset.ts'
@@ -25,6 +25,8 @@ export interface RenderSiteOptions {
   base?: string
   /** Compile the stylesheet too (default true). */
   styles?: boolean
+  /** A warm renderer's recycling (WarmOptions.recycle): when a runtime is loaded afresh. */
+  recycle?: WarmOptions['recycle']
 }
 
 const graphsOf = new WeakMap<Site, Promise<Record<string, string>>>()
@@ -87,6 +89,7 @@ export function siteRenderer(site: Site, opts: RenderSiteOptions = {}): WarmRend
     sandboxes: sandboxesOf(site),
     attributes: site.documentAttributes,
     hosts: site.hosts,
+    recycle: opts.recycle,
   })
 }
 

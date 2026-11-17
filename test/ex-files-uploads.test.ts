@@ -196,6 +196,32 @@ describe("the file explorer's own files", () => {
     expect(h.rows()).toContain('Dune.jpg')
   })
 
+  it.each(['sparql', 'function'] as const)('kept files survive a reload whose page loads the explorer graph later (%s)', async (prefer) => {
+    const backends = { [NS.per + 'Database']: memoryBackend(), [NS.per + 'Session']: memoryBackend(), [NS.per + 'Device']: memoryBackend() }
+    const kept = memoryFileStore()
+    const first = await explorer(prefer, backends, kept)
+    await first.pick([file('Sunset.png', 'image/png', 120_000)])
+    await first.persistence.flush()
+    await kept.put('stray', { store: FX + 'store', name: 'Stray.png', type: 'image/png', size: 10, contents: file('Stray.png', 'image/png', 10) })
+    const handles = [...kept.files.keys()]
+    expect(handles).toHaveLength(2)
+
+    // A page whose first graphs do not include the explorer's (a server-rendered page elsewhere):
+    // its policy and the files' nodes come later, with the rest of the graphs.
+    const h = await mountSiteKeeping(backends, kept, prefer, ['_ex-files.ttl'])
+    mounted.push(h)
+    await new Promise((r) => setTimeout(r, 0))
+    expect([...kept.files.keys()].sort()).toEqual(handles.sort()) // nothing freed yet: its node may come
+    await h.loadLater()
+    const f = h.store.factory
+    const sunset = h.store.match(null, f.namedNode(FILE.name), f.literal('Sunset.png'), f.defaultGraph())[0]!.subject.value
+    expect([...kept.files.keys()]).not.toContain('stray') // never remembered: freed once every graph is there
+    expect(kept.files.size).toBe(1)
+    expect(h.store.match(f.namedNode(FX + 'store'), f.namedNode(FILE.usedBytes), null, f.namedNode(FILES_GRAPH)).map((q) => q.object.value)).toEqual(['120000'])
+    expect(h.store.match(f.namedNode(sunset), f.namedNode(FILE.preview), null, f.namedNode(FILES_GRAPH))).toHaveLength(1)
+    expect((await h.files.contentsOf(sunset))?.size).toBe(120_000)
+  })
+
   it('renders the same with SPARQL rules as with functions, and the files layer and the new views have both', async () => {
     expect(implementationGaps(['layers/files.ttl'])).toEqual({ noSparql: [], noFunction: [] })
     const html: string[][] = []

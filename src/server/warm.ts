@@ -20,6 +20,13 @@ export interface WarmOptions extends Omit<RenderOptions, 'store' | 'url' | 'laye
   layers?: Iterable<string> | ((store: GraphStore) => Iterable<string>)
   /** What to set on <html> besides lang and dir, read from the graph at the address (Site.documentAttributes). */
   attributes?(store: GraphStore): Record<string, string>
+  /**
+   * When a warm runtime is let go, to be loaded afresh at the next request of its language: every
+   * address brings terms (its path, query text), and an engine's memory only grows. After
+   * `requests` renders (default 1000), or once its store counts `terms` times the terms it had
+   * when loaded (default 4; a store that does not count them recycles by requests only).
+   */
+  recycle?: { requests?: number; terms?: number }
 }
 
 export type WarmRendered = Omit<Rendered, 'runtime' | 'projection'> & { attributes: Record<string, string> }
@@ -41,7 +48,16 @@ interface Warm {
   /** What the addresses read into the graph since it was loaded: undone before the next one is read. */
   applied: Delta
   css?: string
+  /** Renders so far, and the store's terms when loaded (recycle). */
+  requests: number
+  terms?: number
 }
+
+/** How long the store's upkeep runs between two requests (milliseconds): its term table collected. */
+const MAINTAIN_MS = 5
+
+/** A store's term count, where it keeps one (Semblance's engines). */
+const termsOf = (store: GraphStore) => (store as GraphStore & { termCount?(): number }).termCount?.()
 
 const key = (q: Quad) => `${q.subject.termType}:${q.subject.value} ${q.predicate.value} ${q.object.termType}:${q.object.value}${q.object.termType === 'Literal' ? '@' + q.object.language + '^' + q.object.datatype.value : ''}`
 
@@ -75,7 +91,27 @@ export function warmRenderer(opts: WarmOptions): WarmRenderer {
     const layers = typeof opts.layers === 'function' ? opts.layers(store) : opts.layers
     const { runtime, projection, css } = project({ ...opts, layers, store }, languages)
     stats.cold++
-    return { store, runtime, projection, languages, applied: delta, css }
+    return { store, runtime, projection, languages, applied: delta, css, requests: 0, terms: termsOf(store) }
+  }
+
+  const maxRequests = opts.recycle?.requests ?? 1000
+  const maxGrowth = opts.recycle?.terms ?? 4
+  /**
+   * Between requests: each store's upkeep (the engine frees the terms no quad uses any more), and a
+   * runtime that served its share, or whose terms outgrew it, let go.
+   */
+  const upkeep = () => {
+    for (const [k, w] of warm) {
+      try {
+        w.store.maintain?.(MAINTAIN_MS)
+      } catch {}
+      const terms = termsOf(w.store)
+      if (w.requests >= maxRequests || (terms !== undefined && w.terms !== undefined && terms > w.terms * maxGrowth)) {
+        warm.delete(k)
+        w.runtime.dispose()
+        w.store.dispose?.()
+      }
+    }
   }
 
   const page = (w: Warm, url: string): WarmRendered => {
@@ -100,11 +136,13 @@ export function warmRenderer(opts: WarmOptions): WarmRenderer {
         if (move.add.length || move.remove.length) w.runtime.apply(move)
         w.applied = delta
         stats.warm++
+        w.requests++
         return page(w, url)
       }
     }
     const w = await cold(url)
     warm.set(w.languages.join(' '), w)
+    w.requests++
     return page(w, url)
   }
 
@@ -113,7 +151,7 @@ export function warmRenderer(opts: WarmOptions): WarmRenderer {
     render(url) {
       const next = queue.then(() => render(url))
       // A failed render leaves its runtime where it may be wrong: the next request loads afresh.
-      queue = next.catch(() => {
+      queue = next.then(upkeep, () => {
         for (const w of warm.values()) w.runtime.dispose(), w.store.dispose?.()
         warm.clear()
       })
