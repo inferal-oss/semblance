@@ -43,8 +43,11 @@ ann:Layer a sem:Term .
 ann:RecentAnnouncements a sem:Term .
 ann:announces a sem:Term .
 ann:announcesFrom a sem:Term .
+ann:event a sem:Term .
 ann:from a sem:Term .
+ann:retention a sem:Term .
 ann:tone a sem:Term .
+beh:AnnouncementRetention a sem:Term .
 beh:Blur a sem:Term .
 beh:Change a sem:Term .
 beh:ChangeLog a sem:Term .
@@ -67,6 +70,7 @@ beh:Resize a sem:Term .
 beh:Size a sem:Term .
 beh:TearOff a sem:Term .
 beh:UndoRetention a sem:Term .
+beh:UndoableCounts a sem:Term .
 beh:Undoer a sem:Term .
 beh:added a sem:Term .
 beh:anchorBlock a sem:Term .
@@ -121,6 +125,7 @@ beh:toEnd a sem:Term .
 beh:toStart a sem:Term .
 beh:toTop a sem:Term .
 beh:undoable a sem:Term .
+beh:undoableCount a sem:Term .
 beh:undone a sem:Term .
 beh:value a sem:Term .
 beh:viewState a sem:Term .
@@ -2322,8 +2327,10 @@ ret:Offloaded a sem:Term .
 ret:Policy a sem:Term .
 ret:Pressure a sem:Term .
 ret:StructureUsage a sem:Term .
+ret:UntilAcknowledged a sem:Term .
 ret:Usage a sem:Term .
 ret:Within a sem:Term .
+ret:acknowledged a sem:Term .
 ret:announce a sem:Term .
 ret:class a sem:Term .
 ret:compactedMiB a sem:Term .

@@ -253,7 +253,7 @@ Derived state is evicted, not asked about:
 | Undo | its own history per document (§6, question 1), `ret:Latest 500` steps | compact (a checkpoint) | Undo disabled, with where history starts | the amount, and whether it is remembered |
 | Change log | `ret:Latest 200` | drop; archive when the app says so | the log view's horizon line; download | amount, duration, archive target |
 | Inspection logs (`net:`, state, sync, stall) | as today | drop | horizon line in their views | amount |
-| Announcements | errors `ret:UntilAcknowledged`, others `ret:Latest` | drop | errors stay until seen | which `ann:` severities need acknowledgement |
+| Announcements | those that matter `ret:UntilAcknowledged` (`ann:retention`), others the region's `c:limit` | drop | those that matter stay until dismissed | which reactions' announcements wait (`ann:retention`) |
 | Derived renderings | `ret:Budget` per projection | evict | none; a slower first show | the budget; `sem:warm` and `c:keptHidden` exempt |
 | Engine and caches | high-water rule, caps | rebuild, evict | none | none (host) |
 
@@ -436,7 +436,9 @@ Tracked in #530, linked from the Plan (#8).
 | The Memory tool, with usage by graph, class and host structure, the engines' live estimate and Compact now | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
 | The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime), and network capture on the shared module | #537 | built |
 | Engine compaction: giving wasm memory back | the engine (#9), `EngineStore.compact` | built; the pressure effect compacts when it would win, and `ret:CompactNow` asks for it |
-| Cold graphs offloaded or unloaded under pressure; `per:retention` as `ret:Within`; toasts that wait for acknowledgement | | not yet |
+| Toasts that wait for acknowledgement (`ret:UntilAcknowledged`, `ann:retention`) | `ontology/layers/announce.ttl`, `src/retention/policy.ts`, `src/layers/announce.ts` | built |
+| A disabled Undo says where history starts (`beh:UndoHorizon`, `beh:UndoableCounts`) | `ontology/layers/behaviour.ttl`, `src/behaviour/undo.ts` | built |
+| Cold graphs offloaded or unloaded under pressure; `per:retention` as `ret:Within`; remembered state that could not be saved announced and waiting | | not yet |
 
 ## 8. Using retention
 
@@ -518,6 +520,13 @@ change, besides the log's 200 newest, and offloads past that. Raise or lower its
   a step.
 - **No repeats.** An undone member is stored without its recorded change, so a recall never offers
   to undo it twice.
+- **Where history starts.** With nothing in memory to undo, a `beh:Undoer` is disabled and says why,
+  as its tooltip and its accessible description: "Nothing to undo", or, once the log's horizon has
+  dropped members, "History starts here: 1,240 older changes were not kept" (`beh:HistoryStarts`,
+  in the viewer's language and number format). What it counts is `beh:undoableCount` on the log, a
+  maintained view (`beh:UndoableCounts`) of the members in memory with a recorded change not undone,
+  so a step costs what it changes. Storage needs no count of its own: Undo recalls ahead of need, so
+  what storage holds is back in memory before the last step there is undone.
 
 ### 8.4 Horizons and announcements
 
@@ -536,6 +545,25 @@ The first time in a session that a person-facing policy (`ret:announce true`) of
 the effect raises one event on the stream: `ret:Offloaded` or `ret:Dropped`. Its reaction
 announces it ("Older history moved to this browser's storage", "Older history is no longer kept"),
 in the viewer's language, as a toast.
+
+An announcement that matters waits for a person. Its reaction names a `ret:UntilAcknowledged` policy
+(`ann:retention`); the change log's view carries one, `beh:AnnouncementRetention`, and
+`ret:AnnounceDropped` and `ret:AnnouncePressure` name it:
+
+- **No limit pushes it out.** The region's `c:limit` counts only the other toasts; every waiting one
+  not yet acknowledged is shown besides them, oldest first.
+- **No bound retires it.** The log holds its event back, whatever its age or number, while it waits.
+- **Dismissing it acknowledges it.** The ✕ states `ret:acknowledged true` on the event
+  (`ann:Acknowledge`); the log then lets the event go as it would have, and the statement goes with
+  it (into storage, when it is offloaded, so a recall does not show the toast again).
+
+Toasts have no timeout: the others leave as newer ones arrive or the log retires their events.
+
+```turtle
+ex:SyncFailed a beh:Reaction ; beh:when ex:Failed ;
+    ann:announces "Your changes could not be sent"@en ; ann:tone sty:Danger ;
+    ann:retention beh:AnnouncementRetention .   # stays until dismissed
+```
 
 ### 8.5 The memory budget
 

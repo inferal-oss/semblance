@@ -5,8 +5,12 @@
 // removed is back; a change that later ones overlapped is skipped, not forced. The SPARQL pair is
 // beh:UndoLatest (ontology/layers/behaviour.ttl); this is its function twin.
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
-import { BEH, NS } from '../ns.ts'
+import { BEH, H, NS, SEM } from '../ns.ts'
 import type { ReactionContext, ReactionFn } from './events.ts'
+import { type FnRule, formatLocale } from '../engine/context.ts'
+import { mint } from '../rdf.ts'
+import { RDFS_LABEL, text } from '../components/util.ts'
+import { formatNumber } from '../../rdf-engine/host/intl.ts'
 
 const RDF = NS.rdf
 const TREE_MEMBER = NS.tree + 'member'
@@ -81,3 +85,23 @@ const redoLatest: ReactionFn = (ctx) => {
 
 export const undoReactions: Record<string, ReactionFn> = { 'beh:undo-latest': undoLatest, 'beh:redo-latest': redoLatest }
 
+
+/**
+ * beh:UndoHorizon's twin: an Undoer whose log has nothing in memory to undo (beh:undoableCount, from
+ * beh:UndoableCounts) is disabled, and says why: nothing was done, or how much its horizon no longer keeps.
+ */
+const undoHorizon: FnRule = (ctx, focus) => {
+  const log = ctx.object(focus, BEH.log) ?? ctx.nn(BEH.ChangeLog)
+  if (ctx.objects(log, BEH.undoableCount).some((n) => Number(n.value) > 0)) return []
+  const horizon = ctx.match(null, NS.ret + 'of', log).map((q) => q.subject).find((h) => ctx.match(h, RDF + 'type', NS.ret + 'Horizon').length > 0)
+  const dropped = horizon ? Number(ctx.object(horizon, NS.ret + 'dropped')?.value ?? 0) || 0 : 0
+  ctx.readsLanguage()
+  const phrase = (local: string) => text(ctx, ctx.nn(NS.beh + local), RDFS_LABEL) ?? ''
+  const why = dropped > 0 ? phrase('HistoryStarts').split('{n}').join(formatNumber(dropped, formatLocale(ctx.languages))) : phrase('NothingToUndo')
+  const o = ctx.out(focus)
+  const root = ctx.nn(mint(focus.value, 'root'))
+  o.t(root, H.ns + 'disabled', '').t(root, SEM.tooltip, why)
+  return o.quads
+}
+
+export const undoFunctions: Record<string, FnRule> = { 'undo:horizon': undoHorizon }
