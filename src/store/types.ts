@@ -102,6 +102,12 @@ export interface GraphStore {
    * Optional, as memoryBytes.
    */
   compact?(opts?: { below?: number }): StoreCompaction | undefined
+  /**
+   * Compact a slice at a time: start one (by `below`, as compact) when none is in flight, then copy
+   * for about `budgetMs`; idle time (`maintain`) continues it. The compaction in the step that
+   * finished it, else undefined. Optional, as compact.
+   */
+  compactStep?(budgetMs: number, opts?: { below?: number }): StoreCompaction | undefined
   /** Sizes of what the store keeps beside its quads (term tables, host caches), for leak checks. Optional. */
   footprint?(): Record<string, number>
   /**

@@ -179,8 +179,11 @@ describe('maintained views in the app', () => {
       const h = mountShell(5, kind, prefer)
       const { document, store, fire } = h
       const f = store.factory
-      const policy = f.namedNode(NS.beh + 'ChangeLogRetention')
-      h.runtime.apply({ remove: store.match(policy, f.namedNode(LDES.amount), null), add: [f.quad(policy, f.namedNode(LDES.amount), f.literal('25', f.namedNode(NS.xsd + 'integer')))] })
+      // The log keeps its 25 most recent members, and (beh:UndoRetention) none beyond them for undo.
+      for (const [name, amount] of [['ChangeLogRetention', '25'], ['UndoRetention', '0']] as const) {
+        const policy = f.namedNode(NS.beh + name)
+        h.runtime.apply({ remove: store.match(policy, f.namedNode(LDES.amount), null), add: [f.quad(policy, f.namedNode(LDES.amount), f.literal(amount, f.namedNode(NS.xsd + 'integer')))] })
+      }
       // Strict from here on: every tick is checked against the store's own SPARQL from scratch (function views against their SPARQL).
       h.runtime.views.strict = true
       // (Queries a result view runs on request, c:QueryRuns, are not maintained: they stay as of their run.)
