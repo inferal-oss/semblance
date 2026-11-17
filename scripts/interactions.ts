@@ -540,6 +540,85 @@ if (opt('table')) {
   process.exit()
 }
 
+// --walk /examples/todo/: one visit that clicks through every page of that section's list, in the list's
+// order (or `--order random`), `--passes N` times (the second pass is revisits), each click measured as
+// above. What a person does clicking through the examples: a click's cost must not grow with the pages
+// visited before it (#465); `--modes cold` shows whether anticipation had the next page ready (#546).
+async function walk(browser: Browser, base: string, path: string, width: Width, throttle: number): Promise<Row[]> {
+  const passes = Number(opt('passes', '2'))
+  const random = opt('order') === 'random'
+  let seed = Number(opt('seed', '1'))
+  const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31)
+  const capMs = 10_000 * throttle
+  const { context, page } = await open(browser, base, path, width, throttle)
+  const c = { page, phone: width === 'phone', throttle }
+  const rows: Row[] = []
+  try {
+    // (`--modes cold`: from sem:ready on, the rest of the graphs and anticipation still running.)
+    if (!modes.includes('cold')) await warmUp(page, 30_000 * throttle)
+    const list = page.locator('[data-sem-c=nav-list]').filter({ visible: true }).first()
+    const listed = async () => (c.phone ? await list.locator('select option').allTextContents() : await list.getByRole('button').allTextContents()).map((n) => n.trim())
+    // --before Components,Docs: a long visit first, unmeasured: every page of those sections, then back.
+    const before = opt('before')?.split(',').filter(Boolean) ?? []
+    if (before.length) {
+      const back = (await page.locator('[data-sem-c=segmented][aria-label="Page"] button[aria-pressed=true]').textContent())?.trim()
+      for (const label of before) {
+        await nav(c, label)
+        await settle(page, await now(page), capMs, 300)
+        if (!(await list.isVisible().catch(() => false))) continue
+        for (const name of await listed()) {
+          await section(c, name)
+          await settle(page, await now(page), capMs, 300)
+        }
+        console.error(`visited ${label}: heap ${await page.evaluate(() => Math.round(((performance as any).memory?.usedJSHeapSize ?? 0) / 2 ** 20))} MiB`)
+      }
+      if (back) await nav(c, back), await settle(page, await now(page), capMs)
+    }
+    const names = await listed()
+    let current = c.phone ? await list.locator('select option:checked').textContent() : await list.locator('button[aria-pressed=true]').textContent()
+    for (let pass = 1; pass <= passes; pass++) {
+      const order = names.map((n) => n.trim())
+      if (random) for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [order[i], order[j]] = [order[j]!, order[i]!] }
+      for (const name of order) {
+        if (name === current?.trim()) continue
+        const it: Interaction = { id: `${pass === 1 ? 'first' : 'again'} → ${name}`, path, pageChange: true, act: (c) => section(c, name) }
+        let s: Sample
+        // --profile: a CPU profile of each click (Chromium), its functions by self time.
+        const cdp = opt('profile') && browserName === 'chromium' ? await page.context().newCDPSession(page) : undefined
+        if (cdp) await cdp.send('Profiler.enable'), await cdp.send('Profiler.setSamplingInterval', { interval: 200 }), await cdp.send('Profiler.start')
+        try {
+          s = await measure(page, it, c, capMs)
+        } catch (e) {
+          s = { error: (e as Error).message.split('\n')[0] }
+        }
+        if (cdp) {
+          const { profile } = (await cdp.send('Profiler.stop')) as any
+          await cdp.detach()
+          const self = new Map<string, number>()
+          const dt = new Map<number, number>()
+          profile.samples.forEach((id: number, i: number) => dt.set(id, (dt.get(id) ?? 0) + (profile.timeDeltas[i + 1] ?? 0) / 1000))
+          for (const n of profile.nodes) {
+            const f = n.callFrame
+            if (f.functionName === '(idle)' || f.functionName === '(program)') continue
+            const key = `${f.functionName || '(anon)'} ${f.url.split('/').pop()}:${f.lineNumber}:${f.columnNumber}`
+            self.set(key, (self.get(key) ?? 0) + (dt.get(n.id) ?? 0))
+          }
+          const top = [...self].sort((a, b) => b[1] - a[1]).slice(0, Number(opt('profile')) || 12)
+          console.error('    self: ' + top.map(([k, v]) => `${k} ${Math.round(v)}`).join(' | '))
+        }
+        current = name
+        if (opt('heap')) console.error(`    heap ${await page.evaluate(() => Math.round(((performance as any).memory?.usedJSHeapSize ?? 0) / 2 ** 20))} MiB`)
+        rows.push({ id: it.id, mode: pass === 1 ? 'first' : 'warm', width, throttle, pageChange: true, samples: [s] })
+        console.error(`${it.id} · ${width} · ${throttle}× → next ${ms(s.nextPaint)} largest ${ms(s.largestPaint)} settled ${ms(s.settled)} task ${ms(s.longTask)} runs ${ms(s.runs)}${s.error ? ' error: ' + s.error : ''}`)
+        if (opt('verbose')) for (const l of (s.loafs ?? []) as any[]) console.error(`    loaf +${Math.round(l.start)} ${Math.round(l.duration)} ms: ` + l.scripts.filter((x: any) => x.duration > 20).map((x: any) => `${x.invoker} ${x.fn}@${x.url}:${x.at} ${Math.round(x.duration)}`).join(', '))
+      }
+    }
+  } finally {
+    await context.close()
+  }
+  return rows
+}
+
 let base = opt('base')
 let server: Server | undefined
 if (!base) {
@@ -548,6 +627,19 @@ if (!base) {
 }
 base = base.replace(/\/$/, '')
 const browser = await (browserName === 'webkit' ? webkit : chromium).launch()
+if (opt('walk')) {
+  const rows: Row[] = []
+  for (const width of widths)
+    for (const throttle of throttles) {
+      if (throttle > 1 && browserName !== 'chromium') continue
+      rows.push(...(await walk(browser, base, opt('walk')!, width, throttle)))
+      report(rows, base, false)
+    }
+  await browser.close()
+  server?.close()
+  report(rows, base, true)
+  process.exit()
+}
 const chosen = INTERACTIONS.filter((it) => !only || only.some((o) => it.id.includes(o)))
 const rows: Row[] = []
 for (const it of chosen)

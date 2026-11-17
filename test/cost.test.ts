@@ -255,6 +255,12 @@ describe('idle time', () => {
     h.store.match = (...args) => (args[1]?.value === SEM.warm && reads++, match.apply(h.store, args))
     h.runtime.warm(8)
     expect(reads).toBe(0)
+    // Nor after a change of structure (a page prepared, a case shown): the nearest warmth is asked
+    // again, but no node's own sem:warm is read twice (#546: forgetting it with the structure made
+    // anticipation a third slower, and example pages were no longer prepared before the click).
+    h.screen.index.visibility++
+    h.runtime.warm(8)
+    expect(reads).toBe(0)
     // A part declared eager is seen at once.
     h.runtime.apply({ add: [h.store.factory.quad(h.store.factory.namedNode('https://semblance.dev/demo#views'), h.store.factory.namedNode(SEM.warm), h.store.factory.namedNode(SEM.Eager))], remove: [] })
     h.runtime.warm(8)

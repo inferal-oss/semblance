@@ -50,10 +50,11 @@ export class Runtime {
   /** Bumped when a sem:warm triple changes; each node's own sem:warm until then. */
   private warmDeclared = 0
   /**
-   * Each node's own sem:warm, as idle time asks it, per projection: kept while its structure
-   * (index.visibility) stands, as the nearest warmth is, so nodes that went do not stay.
+   * Each node's own sem:warm, as idle time asks it, per projection, in two generations: a change of
+   * structure (index.visibility) starts a new one, and what the last one asked is taken from it, so
+   * nodes that went do not stay and nodes that stand are not asked of the store again.
    */
-  private readonly ownWarmth = new Map<Engine, Map<string, string | undefined>>()
+  private readonly ownWarmth = new Map<Engine, { now: Map<string, string | undefined>; before: Map<string, string | undefined> }>()
   private readonly refreshListeners: (() => void)[] = []
   private refreshQueued = false
   /** When the next refresh may run: a slow one waits longer, so following never takes over. */
@@ -344,7 +345,7 @@ export class Runtime {
   /** Sizes of the runtime's own caches and projections, for leak checks. */
   footprint(): Record<string, number> {
     let ownWarmth = 0
-    for (const m of this.ownWarmth.values()) ownWarmth += m.size
+    for (const m of this.ownWarmth.values()) ownWarmth += m.now.size + m.before.size
     return { ownWarmth, projections: this.projections.length }
   }
 
@@ -409,22 +410,27 @@ export class Runtime {
       // Idle time warms only what an ancestor declares sem:warm sem:Eager (default: lazy).
       const f = this.store.factory
       const warm = f.namedNode(SEM.warm)
-      // Remembered until the projection's structure (index.visibility) or a sem:warm triple
-      // changes: idle time asks it of every focus with parked work, every slice.
+      // Idle time asks it of every focus with parked work, every slice. The nearest warmth is
+      // remembered until the projection's structure (index.visibility) changes; each node's own
+      // until a sem:warm triple does, kept over a change of structure while it is still asked
+      // (forgetting it there had idle time ask the store again for every ancestor of every focus
+      // after each page it prepared: anticipation a third slower, #546).
       let structure = -1
       let declared = -1
       let nearest = new Map<string, string | undefined>()
-      const ownWarmth = new Map<string, string | undefined>()
+      const ownWarmth = { now: new Map<string, string | undefined>(), before: new Map<string, string | undefined>() }
       this.ownWarmth.set(engine, ownWarmth)
       const own = (key: string) => {
         if (key.includes(' ')) return undefined
-        if (ownWarmth.has(key)) return ownWarmth.get(key)
-        const v = this.store.match(f.namedNode(key), warm, null)[0]?.object.value
-        ownWarmth.set(key, v)
+        const { now, before } = ownWarmth
+        if (now.has(key)) return now.get(key)
+        const v = before.has(key) ? before.get(key) : this.store.match(f.namedNode(key), warm, null)[0]?.object.value
+        now.set(key, v)
         return v
       }
       const warmth = (focus: string) => {
-        if (structure !== index.visibility || declared !== this.warmDeclared) (structure = index.visibility), (declared = this.warmDeclared), (nearest = new Map()), ownWarmth.clear()
+        if (declared !== this.warmDeclared) (declared = this.warmDeclared), (structure = -1), ownWarmth.now.clear(), ownWarmth.before.clear()
+        if (structure !== index.visibility) (structure = index.visibility), (nearest = new Map()), (ownWarmth.before = ownWarmth.now), (ownWarmth.now = new Map())
         if (nearest.has(focus)) return nearest.get(focus)
         const v = index.nearest(focus, own)
         nearest.set(focus, v)
