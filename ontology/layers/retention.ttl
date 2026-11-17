@@ -159,7 +159,8 @@ ret:usedMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
 ret:wasmMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
     rdfs:label "Engine memory (MiB)"@en , "Пам’ять рушія (МіБ)"@uk , "Engine-Speicher (MiB)"@de , "ذاكرة المحرك (ميبيبايت)"@ar .
 ret:heapMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
-    rdfs:label "JS heap (MiB)"@en , "Купа JS (МіБ)"@uk , "JS-Heap (MiB)"@de , "كومة JS (ميبيبايت)"@ar .
+    rdfs:label "JS heap (MiB)"@en , "Купа JS (МіБ)"@uk , "JS-Heap (MiB)"@de , "كومة JS (ميبيبايت)"@ar ;
+    rdfs:comment "The JS heap where the browser reports it, without the engines' WebAssembly memory (ret:wasmMiB), which Chromium's figure included up to version 143. ret:usedMiB counts each once."@en .
 ret:triples a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
     rdfs:label "Triples"@en , "Трійки"@uk , "Tripel"@de , "الثلاثيات"@ar .
 ret:derivedTriples a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;

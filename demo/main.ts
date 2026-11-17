@@ -10,7 +10,7 @@ import { workerThumbnails } from '../src/file-store.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
-import { MemoryPressure } from '../src/retention/pressure.ts'
+import { heapCountsWasm, MemoryPressure } from '../src/retention/pressure.ts'
 import { Navigation, rendererReveal, setBase, windowScroll } from '../src/navigation.ts'
 import { anticipate, attachIntent } from '../src/intent.ts'
 import { type IdleDeadline, whenIdle } from '../src/idle.ts'
@@ -314,8 +314,12 @@ async function recordMemory() {
     for (let i = 0; i < sessionStorage.length; i++) session += (sessionStorage.key(i)!.length + (sessionStorage.getItem(sessionStorage.key(i)!) ?? '').length) * 2
   } catch {}
   const storage = estimated + session
+  // Chromium up to 143 counts the engine's WebAssembly memory in its heap figure (src/retention/pressure.ts): shown apart.
+  const wasm = store.memoryBytes?.() ?? 0
+  if (heap !== undefined && legacy !== undefined && heap >= wasm && heapCountsWasm()) heap -= wasm
   writeStats({
     heap: f.literal(heap !== undefined ? `${(heap / 1024 / 1024).toFixed(1)} MB` : 'n/a (not reported by this browser)'),
+    wasm: f.literal(`${(wasm / 1024 / 1024).toFixed(1)} MB`),
     storage: decimal(storage / 1024),
     triples: integer(store.size?.() ?? store.match(null, null, null).length),
     domNodes: integer(document.getElementsByTagName('*').length),
@@ -633,5 +637,6 @@ async function loadRest() {
 void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 
-// A handle for poking at the graph from the console (dev builds only).
-if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls, rendered } })
+// A handle for poking at the graph from the console (dev builds only, and a production build made
+// with VITE_SEMBLANCE_HANDLE=1 for measuring it: scripts/memory-walk.ts).
+if (import.meta.env.DEV || import.meta.env.VITE_SEMBLANCE_HANDLE) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls, rendered } })

@@ -86,6 +86,7 @@ ui:ruleRuns rdfs:label "запуски правил"@uk , "Regelläufe"@de , "م
 ui:domOps rdfs:label "операції DOM"@uk , "DOM-Operationen"@de , "عمليات DOM"@ar .
 ui:viewRows rdfs:label "рядки подань"@uk , "Ansichtszeilen"@de , "صفوف العروض"@ar .
 ui:heap rdfs:label "купа JS"@uk , "JS-Heap"@de , "كومة JS"@ar .
+ui:wasm rdfs:label "пам’ять рушія"@uk , "Engine-Speicher"@de , "ذاكرة المحرك"@ar .
 ui:storage rdfs:label "сховище (із сеансом)"@uk , "Speicher (inkl. Sitzung)"@de , "التخزين (مع الجلسة)"@ar .
 ui:triples rdfs:label "трійки"@uk , "Tripel"@de , "ثلاثيات"@ar .
 ui:domNodes rdfs:label "вузли DOM"@uk , "DOM-Knoten"@de , "عُقد DOM"@ar .
