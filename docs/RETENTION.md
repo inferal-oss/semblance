@@ -103,7 +103,7 @@ option in code. "-" means nothing bounds it.
 | WAT and Rust wasm memory | peak live state | high-water mark | - | **Never shrinks.** WAT's allocator only grows, and Rust's heap says so. Free lists reuse space but never return it. |
 | Engine term dictionary | distinct terms | collected in idle at `termCount > 1.5 × live + 1000` | host | Never collected on the server: `src/server/warm.ts` never calls `maintain`, and query text from URLs becomes literals. So it grows with each distinct URL served. |
 | Host term caches (`rdf-engine/host/store.ts` `iris`, `literals`) | terms looked up | entries dropped by freed id | host | An IRI looked up without interning that the engine does not know keeps its entry forever. |
-| N3 entity dictionary (`n3` `_ids`/`_entities`) | distinct terms | - | - | N3 never frees ids. This is the N3 store and the hybrid's mirror, which is never rebuilt. |
+| N3 entity dictionary (`n3` `_ids`/`_entities`) | distinct terms | copied in idle at `terms > 1.5 × live + 5,000`; `compact()` at once | host | N3 never frees ids. This is the N3 store and the hybrid's mirror. The shell soak measured some 130 new terms an event before the copy. |
 | Oxigraph and hybrid dead versions | deletions | rebuild at 5,000 or half of live, hybrid **only in idle** | host | With no idle time, unbounded. |
 | `RuleContext.names` (`src/engine/context.ts`) | IRIs a function rule read | until rules change | host | Grows with every subject ever read, retired members included. |
 | `Runtime.ownWarmth` | nodes walked in idle | cleared on `sem:warm` changes | host | Keys of nodes that are gone stay. |
@@ -435,7 +435,9 @@ Tracked in #530, linked from the Plan (#8).
 | The memory budget, pressure, eviction of hidden renderings, `onRetention` | `src/retention/pressure.ts`, `Engine.evict`, `Runtime.evict` | built |
 | The Memory tool, with usage by graph, class and host structure, the engines' live estimate and Compact now | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
 | The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime), and network capture on the shared module | #537 | built |
-| Engine compaction: giving wasm memory back | the engine (#9), `EngineStore.compact` | built; the pressure effect compacts when it would win, and `ret:CompactNow` asks for it |
+| Engine compaction: giving wasm memory back, in idle time a slice at a time (changes made meanwhile journaled and replayed) | `rdf-engine/host/store.ts` (`compact`, `compactStep`), the engine (#9) | built; the pressure effect compacts when it would win, which finishes a compaction in flight at once, and `ret:CompactNow` asks for it |
+| Soaks: the footprint with terms, wasm bytes and host caches; the site within a budget; N3 and hybrid | `test/soak*.test.ts` | built |
+| N3's dictionary copied once it outgrows what is stored (the N3 store and the hybrid's mirror) | `src/store/n3.ts`, `src/store/hybrid.ts` | built |
 | Toasts that wait for acknowledgement (`ret:UntilAcknowledged`, `ann:retention`) | `ontology/layers/announce.ttl`, `src/retention/policy.ts`, `src/layers/announce.ts` | built |
 | A disabled Undo says where history starts (`beh:UndoHorizon`, `beh:UndoableCounts`) | `ontology/layers/behaviour.ttl`, `src/behaviour/undo.ts` | built |
 | Cold graphs offloaded or unloaded under pressure; `per:retention` as `ret:Within`; remembered state that could not be saved announced and waiting | | not yet |
@@ -674,6 +676,37 @@ and Measure usage shows where what is left is.
   (`RetainedStream.figures()`), and `dropped` stays 0 where the app promises it.
 - **Bound the soak.** A soak test that measures "once the log is at its bound" must pass every bound,
   `beh:UndoRetention`'s too; `test/soak.test.ts` sets it smaller to do so.
+- **Sample live state, not garbage.** Term dictionaries are collected only once they have grown by
+  half (the engines in idle time, N3 by a copy), so a sample between collections sees garbage rising,
+  not growth. Call `store.compact()` before each sample: the terms are then the live ones.
+- **WebAssembly memory is a high-water mark.** It never shrinks without a compaction. Assert that it
+  stops growing (the same figure over the second half of a soak), not that it is flat.
+- **Soak within a budget.** Put the budget in the graph (`ret:maxMiB` on the app's `ret:MemoryBudget`
+  wins over a slider), step the effect between interactions as idle time would, and choose a budget
+  that makes eviction and compaction act. Assert the memory once a step has run, and allow the overshoot
+  of one interaction before it: the next step is what measures it.
+- **Compare a page with its first visit.** Shown again after eviction, it must render byte for byte as
+  then. Let the views that follow their queries refresh first (a macrotask), or a live figure still
+  says "Measuring…" on one visit and not the other.
+
+The soaks, and what they measured:
+
+- `test/soak.test.ts`: the shell on WAT, 3,528 events. The graph (188k triples), the live terms (79k),
+  the engine's bookkeeping, the index, the DOM, the views, the runtime's and the store's caches, the
+  rendered state and the retained streams stay flat; the WebAssembly memory reaches its high-water mark
+  (67 MiB) in the first measured period and stays there.
+- `test/soak-stores.test.ts`: the same session on N3 (function rules; the site's reactions written in
+  SPARQL only are left out, as N3 cannot answer them), 3,528 events, and on the hybrid (function rules
+  preferred), 2,520 events. Both stay flat, N3's dictionary included (71k terms). Before the dictionary
+  was copied, it grew from 170k to 271k terms over 756 events, some 130 terms an event.
+- `test/soak-site.test.ts`: every page of the site in three passes on WAT, within 200 MiB. Unbounded, a
+  visit of every page reaches 337 MiB of WebAssembly memory and 1,109k triples (464 MiB as the effect
+  counts it, 120 bytes a triple standing in for the heap that Node does not report). Within the budget,
+  each pass reaches Elevated 4 to 8 times and Critical 1 to 3 times, on the heaviest pages, and
+  compacts 7 to 9 times. The memory stays at 100 to 120 MiB of WebAssembly memory and 470k triples at
+  most: 154 MiB at most once a step has run, and 206 MiB before it (the heaviest page adds 58 MiB). Every
+  page shown again is byte-identical to its first visit, nothing owned is lost, and a pass takes some
+  12 s, against 8 s unbounded (and 1 s once everything is kept).
 
 `test/retention.test.ts`, `test/retention-pressure.test.ts` and `test/retention-evict.test.ts` are
 worked examples of each.
