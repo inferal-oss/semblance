@@ -818,8 +818,25 @@ WHERE {
 # Dismissing a toast closes it (c:OverlayClose, overlays.ttl); a hosted toast also leaves its
 # region, so a region fed by a stream of announcements does not grow. A toast that is
 # c:dismissible false stays, as c:OverlayClose leaves it open.
+# A toast a rule hosts (minted under its region: an announcement, ann:Toasts) cannot leave: it goes
+# when the rule stops deriving it. Its region notes it (c:dismissedToast), and each dismissal in the
+# region forgets the noted toasts it no longer hosts, with their c:open: what dismissals leave is at
+# most the toasts the region shows (c:limit), never one per dismissal.
+c:dismissedToast a owl:ObjectProperty ; rdfs:domain c:ToastRegion ; rdfs:range c:Toast ;
+    rdfs:comment "A toast the region hosts by a rule that was dismissed: its c:open false goes, with this, at a later dismissal in the region once the rule no longer derives it."@en .
 c:ToastUnhost a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Toast ;
-    beh:deletes """CONSTRUCT { ?region c:hosts $this } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . ?region c:hosts $this FILTER NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") } }""" ;
+    beh:deletes """CONSTRUCT { ?region c:hosts $this . ?region c:dismissedToast ?gone . ?gone c:open ?goneOpen }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . ?region c:hosts $this
+  FILTER NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") }
+  OPTIONAL { ?region c:dismissedToast ?gone FILTER NOT EXISTS { ?region c:hosts ?gone } OPTIONAL { ?gone c:open ?goneOpen } }
+}""" ;
+    beh:inserts """CONSTRUCT { ?region c:dismissedToast $this }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . ?region c:hosts $this
+  FILTER(STRSTARTS(STR($this), CONCAT(STR(?region), "/~")))
+  FILTER NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") }
+}""" ;
     sem:function "toast:unhost" .

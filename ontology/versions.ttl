@@ -279,7 +279,7 @@ c:TimeAxis sem:version 1 ; sem:closure "36c9d179091af936" ; sem:internal "new" .
 c:TimeField sem:version 1 ; sem:closure "05cb18c1bf7a074e" ; sem:internal "new" .
 c:Timeline sem:version 1 ; sem:closure "58583010e792680e" ; sem:internal "new" .
 c:TimelineItem sem:version 1 ; sem:closure "30590a3437d90986" ; sem:internal "new" .
-c:Toast sem:version 2 ; sem:closure "8d85b16394a652ae" ; sem:changedBy change:overlay-dismissible .
+c:Toast sem:version 3 ; sem:closure "494ea23df4d22c87" ; sem:internal "a dismissal forgets c:open of toasts its region no longer derives (c:dismissedToast notes them); what is shown is unchanged" .
 c:ToastRegion sem:version 1 ; sem:closure "a792d7916c9fcc5d" ; sem:internal "new" .
 c:Toggle sem:version 1 ; sem:closure "c9a471ad760c2c20" ; sem:internal "new" .
 c:ToggleSwitch sem:version 1 ; sem:closure "c2f934e05b0a5bd7" ; sem:internal "new" .

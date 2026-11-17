@@ -210,6 +210,7 @@ export const C = {
   tileLayout: c + 'tileLayout',
   DesktopGridLayout: c + 'DesktopGridLayout',
   hosts: c + 'hosts',
+  dismissedToast: c + 'dismissedToast',
   windowsOn: c + 'windowsOn',
   Switch: c + 'Switch',
   cases: c + 'cases',
