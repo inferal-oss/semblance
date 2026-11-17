@@ -1052,7 +1052,7 @@ c:LabelAbove a c:LabelPlacement ; sem:slug "above" ; sem:order 1 ;
 c:LabelInline a c:LabelPlacement ; sem:slug "inline" ; sem:order 2 ;
     rdfs:label "Inline"@en , "В рядку"@uk , "In der Zeile"@de , "في السطر"@ar .
 
-# A choice in a toolbar (among its c:children) or an app bar (among its c:actions or c:moreActions)
+# A choice in a toolbar (among its c:children) or an app bar (among its c:actions, c:moreActions or c:endActions)
 # is a compact setting, not a form field: it is placed inline. Derived before the components, as the
 # style layer's other derivations are, so the hook carries it.
 c:ChoicesInlineInToolbars a sem:Rendering ;
@@ -1083,7 +1083,7 @@ c:ChoicesInlineInAppBars-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT { ?choice c:labelPlacement c:LabelInline }
 WHERE {
-  { $this c:children/rdf:rest*/rdf:first ?choice } UNION { $this c:actions/rdf:rest*/rdf:first ?choice } UNION { $this c:moreActions/rdf:rest*/rdf:first ?choice }
+  { $this c:children/rdf:rest*/rdf:first ?choice } UNION { $this c:actions/rdf:rest*/rdf:first ?choice } UNION { $this c:moreActions/rdf:rest*/rdf:first ?choice } UNION { $this c:endActions/rdf:rest*/rdf:first ?choice }
   FILTER(isIRI(?choice))
   ?choice a/rdfs:subClassOf* c:Choice .
 }""" .

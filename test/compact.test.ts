@@ -79,6 +79,22 @@ describe('width classes (sty:atWidth)', () => {
     expect(css.slice(css.indexOf(narrow))).not.toContain(narrow + '\n    [data-sem-c="segmented"][data-sem-compact-as')
   })
 
+  it('put an app bar\'s end actions in line with its actions: a grid where there is room, the one row on a compact or medium screen', () => {
+    const components = layerOf(css, 'components')
+    const narrow = '@media (max-width: 640px), (min-width: 641px) and (max-width: 1099px) {'
+    const media = components.indexOf(narrow)
+    const bar = '[data-sem-c="app-bar"]:has(> .sem-end):has(> .sem-actions > *)'
+    const grid = components.indexOf(`  ${bar} { display: grid; grid-template-columns: minmax(0, 1fr) auto; }`)
+    expect(grid).toBeGreaterThan(0)
+    expect(grid).toBeLessThan(media)
+    expect(components).toContain(`  ${bar} > .sem-actions { grid-area: 2 / 1; }`)
+    const end = components.slice(components.indexOf(`  ${bar} > .sem-end {`), media)
+    expect(end.slice(0, end.indexOf('}'))).toContain('grid-area: 2 / 2;')
+    expect(end.slice(0, end.indexOf('}'))).toContain('align-self: start;')
+    expect(components.indexOf(`    ${bar} { display: flex; }`, media)).toBeGreaterThan(media)
+    expect(components.indexOf(`    ${bar} > .sem-end { align-self: auto; }`, media)).toBeGreaterThan(media)
+  })
+
   it('narrows rules by a hooked value inside the condition too (a segmented control as a picker)', () => {
     const variants = layerOf(css, 'variants')
     const media = variants.indexOf(COMPACT)
@@ -109,7 +125,7 @@ describe('the app bar on a compact screen', () => {
   it('puts the more actions after the others, behind a More button that says what it opens', () => {
     const { $ } = site()
     const actions = $('[data-sem-c=app-bar] > .sem-actions')
-    expect([...actions.children].map((c) => c.getAttribute('data-sem-c') ?? c.className)).toEqual(['segmented', 'button', 'link', 'sem-more'])
+    expect([...actions.children].map((c) => c.getAttribute('data-sem-c') ?? c.className)).toEqual(['segmented', 'button', 'sem-more'])
     const toggle = actions.querySelector('.sem-more > .sem-more-toggle')!
     const body = actions.querySelector('.sem-more > .sem-more-body')!
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -117,6 +133,13 @@ describe('the app bar on a compact screen', () => {
     expect(toggle.getAttribute('aria-label')).toBe('Tools and display')
     expect(toggle.querySelector('[aria-hidden=true]')!.textContent).toBe('⋯')
     expect([...body.children].map((c) => c.getAttribute('data-sem-c'))).toEqual(['toggle', 'theme-switcher', 'choice'])
+  })
+
+  it('pins the end actions (c:endActions) after them, the bar\'s last part, never folded', () => {
+    const { $ } = site()
+    const bar = $('[data-sem-c=app-bar]')
+    expect([...bar.children].map((c) => c.className)).toEqual(['sem-brand', 'sem-actions', 'sem-end'])
+    expect([...$('[data-sem-c=app-bar] > .sem-end').children].map((c) => c.getAttribute('href'))).toEqual(['https://github.com/inferal-oss/semblance'])
   })
 
   it('opens and closes them through the graph (c:expanded)', () => {

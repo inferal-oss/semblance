@@ -137,10 +137,14 @@ the buttons as a control in the bar's text colour: its c:logo beside its label, 
 c:content alone (its c:label then its name) as a square control; on a compact screen a link with a logo
 shows the logo alone, its label kept as its name. Where there is room the more actions follow the others; on a
 compact or medium screen (sty:CompactWidth, sty:MediumWidth) they fold behind a More button, shown while the bar is c:expanded; Escape or a
-press outside closes them."""@en ;
+press outside closes them. c:endActions are pinned to the bar's corner, at its inline end after everything else:
+after the More button on a compact or medium screen; on a wider one, in line with the actions at the end of
+their row, which wraps within its own room rather than leaving them a row of their own."""@en ;
     sem:slug "app-bar" .
 c:moreActions a owl:ObjectProperty ; rdfs:domain c:AppBar ; rdfs:range rdf:List ;
     rdfs:comment "Secondary actions (settings, tools): after c:actions where there is room, behind a More button on a compact screen."@en .
+c:endActions a owl:ObjectProperty ; rdfs:domain c:AppBar ; rdfs:range rdf:List ;
+    rdfs:comment "Actions pinned to the bar's corner (the app's source, an account): at its inline end, after c:actions and the More button, never folded."@en .
 c:moreLabel a owl:DatatypeProperty ; rdfs:domain c:AppBar ;
     rdfs:comment "What the More button is called for assistive technology (default \"More\")."@en .
 c:byline a owl:ObjectProperty ; rdfs:domain c:AppBar ;
@@ -155,7 +159,7 @@ c:AppBarRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Header ; sem:renders $this ; rdfhtml:hasChild ?brand, ?actions .
+  ?root a rdfhtml:Header ; sem:renders $this ; rdfhtml:hasChild ?brand, ?actions, ?end .
   ?brand a rdfhtml:Div ; rdfhtml:class "sem-brand" ; rdfhtml:hasChild ?logoOut, ?nameOut, ?home, ?subtitle, ?bylineBox ; ord:immediatelyPrecedes ?actions .
   ?home a rdfhtml:A ; rdfhtml:class "sem-home" ; rdfhtml:href ?href ; rdfhtml:hasChild ?logoIn, ?nameIn ; ord:immediatelyPrecedes ?subtitle .
   ?bylineBox a rdfhtml:Span ; rdfhtml:class "sem-byline" ; rdfhtml:hasChild ?byline .
@@ -181,6 +185,9 @@ CONSTRUCT {
   ?moreIconText a rdfhtml:Text ; rdfhtml:data "⋯" .
   ?moreBody a rdfhtml:Div ; rdfhtml:class "sem-more-body" ; rdfhtml:id ?moreBodyId ; rdfhtml:hasChild ?moreAction .
   ?ma ord:immediatelyPrecedes ?mb .
+  ?end a rdfhtml:Div ; rdfhtml:class "sem-end" ; rdfhtml:hasChild ?endAction .
+  ?actions ord:immediatelyPrecedes ?end .
+  ?ea ord:immediatelyPrecedes ?eb .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:AppBar .
@@ -247,8 +254,11 @@ WHERE {
   BIND(IF(?openText = "true", IRI(CONCAT(STR($this), "/~more-toggle-data-sem-escape")), ?none) AS ?escapeAttr)
   BIND(IF(?openText = "true", IRI(CONCAT(STR($this), "/~more-toggle-data-sem-dismiss-outside")), ?none) AS ?dismissAttr)
   BIND(IF(BOUND(?firstMore), ?moreLabel0, ?none) AS ?moreLabel)
+  # The end actions, in a group of their own after the actions (and the More button): the bar's corner.
+  BIND(IF(EXISTS { $this c:endActions/rdf:rest*/rdf:first ?anyEnd FILTER(isIRI(?anyEnd)) }, IRI(CONCAT(STR($this), "/~end")), ?none) AS ?end)
   {} UNION { $this c:actions/rdf:rest*/rdf:first ?action FILTER(isIRI(?action)) } UNION { $this c:actions/rdf:rest* ?pairCell . ?pairCell rdf:first ?a ; rdf:rest/rdf:first ?b FILTER(isIRI(?a) && isIRI(?b)) }
   UNION { $this c:moreActions/rdf:rest*/rdf:first ?moreAction FILTER(isIRI(?moreAction)) } UNION { $this c:moreActions/rdf:rest* ?morePairCell . ?morePairCell rdf:first ?ma ; rdf:rest/rdf:first ?mb FILTER(isIRI(?ma) && isIRI(?mb)) }
+  UNION { $this c:endActions/rdf:rest*/rdf:first ?endAction FILTER(isIRI(?endAction)) } UNION { $this c:endActions/rdf:rest* ?endPairCell . ?endPairCell rdf:first ?ea ; rdf:rest/rdf:first ?eb FILTER(isIRI(?ea) && isIRI(?eb)) }
 }""" .
 
 # The More button opens and closes the folded actions (c:expanded; closed when absent).

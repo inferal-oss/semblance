@@ -98,9 +98,9 @@ describe('server-side rendering: the site', () => {
     const lang = url.match(/^\/(uk|de|ar)\//)?.[1] ?? 'en'
     expect(server.lang).toBe(lang)
     expect(server.dir).toBe(lang === 'ar' ? 'rtl' : 'ltr')
-    // The link to the source is in the first paint, named in the page's language.
+    // The link to the source is in the first paint, in the bar's corner, named in the page's language.
     const named = { en: 'Semblance on GitHub', uk: 'Semblance на GitHub', de: 'Semblance auf GitHub', ar: 'Semblance على GitHub' }[lang]
-    expect(server.html).toContain(`<a aria-label="${named}" data-sem-c="link" href="https://github.com/inferal-oss/semblance">`)
+    expect(server.html).toContain(`<div class="sem-end"><a aria-label="${named}" data-sem-c="link" href="https://github.com/inferal-oss/semblance">`)
     const page = renderDocument(TEMPLATE, server, { stylesheet: { href: '/semblance.css' }, attributes: server.attributes })
     const taken = adopt(page, client)
     expect(taken.mismatches).toBe(0)

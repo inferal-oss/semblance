@@ -183,16 +183,17 @@ ui:searchMark a c:Emblem ; c:decorative true ; c:viewBox "0 0 16 16" ;
     c:pathData "M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z" .
 
 # The page switcher first; the tools and the display settings after it, folded behind a More
-# button on a phone (c:moreActions), so the bar is one row there.
+# button on a phone (c:moreActions), so the bar is one row there; the source in the corner (c:endActions).
 ui:appBar a c:AppBar ;
     c:label "Semblance" ;
     c:to ui:home ;
     c:byline ui:sponsorLine ;
     c:logo ui:logo ;
-    c:actions ( ui:nav ui:paletteButton ui:sourceLink ) ;
+    c:actions ( ui:nav ui:paletteButton ) ;
     c:moreActions ( ui:toolsToggle ui:theme ui:themePicker ) ;
+    c:endActions ( ui:sourceLink ) ;
     c:moreLabel "Tools and display" , "Інструменти та вигляд"@uk , "Werkzeuge und Darstellung"@de , "الأدوات والعرض"@ar .
-# The source, in the bar on every page and at every width: the GitHub mark alone, named for assistive
+# The source, in the bar's corner on every page and at every width: the GitHub mark alone, named for assistive
 # technology in the viewer's language, opening in the same tab as the site's other link out
 # (ui:inferalLink).
 ui:sourceLink a c:Link ; c:href "https://github.com/inferal-oss/semblance" ; c:external false ; c:content ui:githubMark ;
