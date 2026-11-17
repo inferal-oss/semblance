@@ -117,6 +117,38 @@ describe('a graph loaded after start', () => {
     })
   }
 
+  // What l10n:Labels derives per component (sem:leavesTo) is not l10n:Terms': a component's own label
+  // changed in every language (a reaction, a view: the reader's progress bar) re-runs that component's
+  // l10n:Labels, never l10n:Terms over the whole graph; the same text on a node that is no component does (#547).
+  for (const prefer of ['sparql', 'function'] as const) {
+    it(`a component's translated label costs l10n:Terms nothing (WAT, ${prefer} preferred)`, () => {
+      const h = mountSite('wat', prefer)
+      const f = h.store.factory
+      const C = 'https://semblance.dev/ns/component#'
+      const label = f.namedNode(C + 'label')
+      const button = f.namedNode(UI + 'lateButton')
+      const column = f.namedNode(UI + 'lateColumn')
+      const says = (node: typeof button, en: string, de: string) => [f.quad(node, label, f.literal(en, 'en')), f.quad(node, label, f.literal(de, 'de'))]
+      const runs = (rule: string) => h.screen.engine.stats.byRule.get(`${L10N}${rule}-${prefer === 'sparql' ? 'sparql' : 'fn'}`)?.runs ?? 0
+      const picked = (node: typeof button, p: string) => h.store.match(node, f.namedNode(L10N + p), null, h.screen.engine.graph).map((q) => q.object.value)
+      h.runtime.apply({ add: [f.quad(button, f.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), f.namedNode(C + 'Button')), ...says(button, 'Pause', 'Anhalten')], remove: [] })
+      const terms = runs('Terms')
+      const labels = runs('Labels')
+      for (const [en, de] of [['Resume', 'Fortsetzen'], ['Pause', 'Anhalten'], ['Stop', 'Halt']]) {
+        const before = h.store.match(button, label, null).filter((q) => q.graph.termType === 'DefaultGraph')
+        h.runtime.apply({ add: says(button, en!, de!), remove: before })
+        expect(picked(button, 'label')).toEqual([en])
+      }
+      expect(runs('Terms')).toBe(terms)
+      expect(runs('Labels')).toBe(labels + 3)
+      // Not a component: l10n:Terms derives its twin, and hears its change.
+      h.runtime.apply({ add: says(column, 'Total', 'Summe'), remove: [] })
+      expect(runs('Terms')).toBe(terms + 1)
+      const at = h.store.match(null, f.namedNode(L10N + 'of'), column, h.screen.engine.graph)[0]!.subject
+      expect(h.store.match(at, f.namedNode(L10N + 'label'), null, h.screen.engine.graph).map((q) => q.object.value)).toEqual(['Total'])
+    })
+  }
+
   it('costs what it adds: loading a graph again changes nothing', () => {
     const late = mountSiteWithout(['_ex-settings.ttl'], 'wat', 'sparql')
     open(late)

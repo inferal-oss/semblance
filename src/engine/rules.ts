@@ -56,6 +56,12 @@ export interface Rule {
    * one: a change in the input to such a node's values makes each of its foci due.
    */
   manyValued: string[]
+  /**
+   * sem:leavesTo: with sem:watchesManyValued, the renderings that derive, per focus, what this rule
+   * leaves out - each one's target class and what it watches (sem:watches). A change to those
+   * predicates' values on an instance of that class makes this rule nothing due.
+   */
+  leavesTo: { target: string; predicates: string[] }[]
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
   /**
@@ -214,6 +220,7 @@ export function loadRules(store: GraphStore): Rule[] {
       anywhere: getAll(SEM.watchesAnywhere),
       watchesStatements: get(SEM.watchesStatements)?.value === 'true',
       manyValued: getAll(SEM.watchesManyValued),
+      leavesTo: getAll(SEM.leavesTo).map((other) => ({ target: all(namedNode(other), SEM.targets)[0] ?? '', predicates: all(namedNode(other), SEM.watches) })).filter((l) => l.target && l.predicates.length),
       memberWatches:
         getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
           ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }

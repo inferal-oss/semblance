@@ -269,7 +269,9 @@ WHERE {
 # Components' own labels (c:label) are l10n:Labels', per component, since they may change;
 # l10n:Terms covers what does not change while the page runs (phrases, the ontology's terms,
 # options, shapes' messages), and is re-run when the viewer's languages change, or when a text
-# with two values or more changes or arrives (sem:watchesManyValued: a graph loaded later). Its
+# with two values or more changes or arrives (sem:watchesManyValued: a graph loaded later), except a
+# component's own c:label, which l10n:Labels derives (sem:leavesTo): a label a reaction or a view
+# changes in every language re-runs that component's l10n:Labels, not this. Its
 # focus is the viewer (the engine's agent), never shown, so it is evaluated regardless (sem:always).
 # Only named nodes get twins (a derived node cannot be about a blank one): a translated text a
 # SPARQL rule reads lives on a node with an IRI (a shape, a phrase, an option).
@@ -335,7 +337,8 @@ l10n:Terms a sem:BuildingBlock ;
     sem:targets l10n:Viewer ;
     sem:stratum -25 ;
     sem:always true ;
-    sem:watchesManyValued l10n:pickedAs .
+    sem:watchesManyValued l10n:pickedAs ;
+    sem:leavesTo l10n:Labels .
 l10n:Terms-fn a sem:Rule ; sem:implements l10n:Terms ; sem:function "l10n:terms" .
 l10n:Terms-sparql a sem:Rule ;
     sem:implements l10n:Terms ;

@@ -308,7 +308,7 @@ ext:Island sem:version 1 ; sem:closure "c092bb53b7b10c6c" ; sem:internal "new" .
 fs:Fullscreenable sem:version 1 ; sem:closure "d7256845e53ee530" ; sem:internal "new" .
 key:Command sem:version 1 ; sem:closure "0a246ca552288591" ; sem:internal "new" .
 l10n:Dated sem:version 1 ; sem:closure "eb4435e8a3b227d1" ; sem:internal "new" .
-l10n:Viewer sem:version 1 ; sem:closure "e788d6f14cf3377e" ; sem:internal "new" .
+l10n:Viewer sem:version 2 ; sem:closure "f13ba1f3e29ae67d" ; sem:internal "l10n:Terms leaves a component's own c:label to l10n:Labels in its watch as in its query (sem:leavesTo): same output, no re-run over the whole graph when a component's translated label changes (#547)" .
 lc:WithParts sem:version 1 ; sem:closure "55f5674640084adb" ; sem:internal "new" .
 nav:ContainmentProperty sem:version 1 ; sem:closure "6107f25c832848e4" ; sem:internal "new" .
 nav:Location sem:version 1 ; sem:closure "ebe2918971db016a" ; sem:internal "new" .

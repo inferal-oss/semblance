@@ -1646,6 +1646,7 @@ sem:inverse a sem:Term .
 sem:inverseVia a sem:Term .
 sem:lastHang a sem:Term .
 sem:layer a sem:Term .
+sem:leavesTo a sem:Term .
 sem:logAfter a sem:Term .
 sem:memberWatches a sem:Term .
 sem:memberWatchesVia a sem:Term .

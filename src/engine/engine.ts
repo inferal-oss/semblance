@@ -1094,16 +1094,20 @@ export class Engine {
   }
 
   private isInstance(focus: string, rule: Rule): boolean {
-    const owner = focusOf(focus)
-    let targets = this.targets.get(owner)
+    return this.isA(focusOf(focus), rule.target)
+  }
+
+  /** Whether a node is an instance of a class (or of a subclass), among the classes rules target. */
+  private isA(node: string, cls: string): boolean {
+    let targets = this.targets.get(node)
     if (!targets) {
-      const classes = this.types.get(owner)
+      const classes = this.types.get(node)
       if (!classes) return false
       targets = new Set()
       for (const c of classes) for (const t of this.supers(c)) targets.add(t)
-      this.targets.set(owner, targets)
+      this.targets.set(node, targets)
     }
-    return targets.has(rule.target)
+    return targets.has(cls)
   }
 
   private watched(rule: Rule, focus: string, predicate: string): boolean {
@@ -1455,8 +1459,11 @@ export class Engine {
           else net.set(k, { q, rules, n: w })
         }
       }
-      for (const { q, rules, n } of net.values()) {
-        if (rules.every((r) => this.manyValuedDue.has(r))) continue
+      for (const { q, rules: all, n } of net.values()) {
+        // What another rendering derives per focus (sem:leavesTo: a component's own translated label)
+        // is not this rule's: changing it, by a reaction or a view, costs this rule nothing.
+        const rules = all.filter((r) => !this.manyValuedDue.has(r) && !r.leavesTo.some((l) => l.predicates.includes(q.predicate.value) && this.isA(q.subject.value, l.target)))
+        if (!rules.length) continue
         const values = new Set(input.flatMap((g) => this.store.match(q.subject, q.predicate, null, g)).filter((v) => v.object.termType === 'Literal').map((v) => v.object.value + '@' + (v.object as { language?: string }).language)).size
         if (values >= 2 || values - n >= 2) for (const r of rules) this.manyValuedDue.add(r)
       }

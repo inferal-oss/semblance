@@ -613,6 +613,8 @@ async function walk(browser: Browser, base: string, path: string, width: Width, 
         if (cdp) {
           const { profile } = (await cdp.send('Profiler.stop')) as any
           await cdp.detach()
+          // --profile-dir <dir>: each click's whole profile, for DevTools (Performance, load profile)
+          if (opt('profile-dir')) writeFileSync(join(opt('profile-dir')!, `${pass}-${name.replace(/[^\w]+/g, '-')}.cpuprofile`), JSON.stringify(profile))
           const self = new Map<string, number>()
           const dt = new Map<number, number>()
           profile.samples.forEach((id: number, i: number) => dt.set(id, (dt.get(id) ?? 0) + (profile.timeDeltas[i + 1] ?? 0) / 1000))

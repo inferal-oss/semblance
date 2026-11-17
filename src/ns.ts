@@ -114,6 +114,7 @@ export const SEM = {
   watchesAnywhere: sem + 'watchesAnywhere',
   watchesStatements: sem + 'watchesStatements',
   watchesManyValued: sem + 'watchesManyValued',
+  leavesTo: sem + 'leavesTo',
   inverseVia: sem + 'inverseVia',
   Component: sem + 'Component',
   Rule: sem + 'Rule',
