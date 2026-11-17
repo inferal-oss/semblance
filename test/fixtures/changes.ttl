@@ -1,0 +1,118 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# Example changes for test/changes.test.ts: a rename, a change of shape with its examples, and a
+# convergence with a lossy step. None of them happened; they exercise what the change log shows.
+
+change:example-label-hidden a chg:Change ;
+    rdfs:label "c:hideLabel is now c:labelHidden"@en ;
+    chg:issue <https://example.org/issues/1> ;
+    chg:recorded "2026-11-17"^^xsd:date ;
+    chg:motivation """Every other flag on a property reads as a state (c:disabled, c:required), and c:hideLabel read as
+a command. Agents writing a new field guessed c:labelHidden more often than not.""" ;
+    chg:substance """c:hideLabel is renamed c:labelHidden, everywhere it occurs: on a property, in a rule's template and
+in a shape's sh:path. The slug "hide-label" in a theme's CSS becomes "label-hidden". Nothing else changes.""" ;
+    chg:forwardGuide """Run semblance migrate. A stylesheet outside the graph that names [data-sem-hide-label] is
+reported as manual: rename it by hand.""" ;
+    chg:backwardGuide """semblance migrate --to the release before. The rename is its own reverse: the same bytes come back.""" ;
+    chg:affects c:Field , c:Toggle ;
+    chg:migrations ( change:example-label-hidden-field change:example-label-hidden-toggle ) .
+
+change:example-label-hidden-field a mig:Migration ;
+    mig:of c:Field ; mig:from 2 ; mig:to 3 ;
+    mig:renames [ mig:old c:hideLabel ; mig:new c:labelHidden ] , [ mig:old "hide-label" ; mig:new "label-hidden" ] .
+change:example-label-hidden-toggle a mig:Migration ;
+    mig:of c:Toggle ; mig:from 1 ; mig:to 2 ;
+    mig:renames [ mig:old c:hideLabel ; mig:new c:labelHidden ] .
+
+change:example-window-size a chg:Change ;
+    rdfs:label "a window's width and height are one c:size"@en ;
+    chg:issue <https://example.org/issues/2> ;
+    chg:recorded "2026-11-17"^^xsd:date ;
+    chg:motivation """A resize writes the width and the height in one event, and a reaction that read one of them
+without the other saw a window half resized. One node, written whole, cannot be read half.""" ;
+    chg:substance """c:Window's c:width and c:height move onto a size node, minted as <window>/~size, with c:w and c:h.
+c:WindowRendering and its twin read the node; a beh:Resize writes it. A window with neither stays without a size and
+is laid out by its desktop.""" ;
+    chg:forwardGuide """Run semblance migrate: instances, templates and patterns are rewritten. A query that reads only
+c:width is reported for review, since its pattern reads half of what moved.""" ;
+    chg:backwardGuide """Going back, the size node becomes c:width and c:height again; nothing is lost.""" ;
+    chg:affects c:Window ;
+    chg:migrations ( change:example-window-size-shape ) .
+
+change:example-window-size-shape a mig:Migration ;
+    mig:of c:Window ; mig:from 1 ; mig:to 2 ;
+    mig:forward """DELETE { ?f c:width ?w ; c:height ?h }
+INSERT { ?f c:size ?sz . ?sz c:w ?w ; c:h ?h }
+WHERE  { ?f a c:Window ; c:width ?w ; c:height ?h
+         BIND(IRI(CONCAT(STR(?f), "/~size")) AS ?sz) }""" ;
+    mig:backward """DELETE { ?f c:size ?sz . ?sz c:w ?w ; c:h ?h }
+INSERT { ?f c:width ?w ; c:height ?h }
+WHERE  { ?f a c:Window ; c:size ?sz . ?sz c:w ?w ; c:h ?h }""" ;
+    mig:example [
+        mig:before """ex:tools a c:Window ;
+    c:title "Tools" ;
+    c:width 760 ;
+    c:height 400 ;
+    c:open false .""" ;
+        mig:after """ex:tools a c:Window ;
+    c:title "Tools" ;
+    c:size <https://example.org/x#tools/~size> ;
+    c:open false .
+<https://example.org/x#tools/~size> c:w 760 ;
+    c:h 400 .""" ] .
+
+change:example-radio-into-choice a chg:Change ;
+    rdfs:label "a radio group is a c:Choice"@en ;
+    chg:issue <https://example.org/issues/3> ;
+    chg:recorded "2026-11-17"^^xsd:date ;
+    chg:motivation """c:RadioGroup and c:Choice picked one value of a property the same way, with two renderings,
+two sets of reactions and two shapes. One component with a variant keeps them from drifting apart.""" ;
+    chg:substance """c:RadioGroup is retired: a radio group is a c:Choice with c:variant "radio". The variant keeps
+which one each instance was, so the step comes back. c:columns, which only a radio group had, is retired too: a
+choice lays out its options by the theme.""" ;
+    chg:forwardGuide """Run semblance migrate. A radio group that set c:columns is migrated without it; the tool
+lists each one, so you can check its layout in the browser.""" ;
+    chg:backwardGuide """Going back, every c:Choice with c:variant "radio" is a c:RadioGroup again. Its c:columns
+does not come back: set it again by hand where it mattered.""" ;
+    chg:affects c:RadioGroup , c:Choice ;
+    chg:retires c:columns ;
+    chg:migrations ( change:example-radio-to-choice change:example-radio-columns ) .
+
+change:example-radio-to-choice a mig:Migration ;
+    mig:of c:RadioGroup ; mig:from 1 ; mig:to 2 ;
+    mig:forward """DELETE { ?x a c:RadioGroup }
+INSERT { ?x a c:Choice ; c:variant "radio" }
+WHERE  { ?x a c:RadioGroup }""" ;
+    mig:backward """DELETE { ?x a c:Choice ; c:variant "radio" }
+INSERT { ?x a c:RadioGroup }
+WHERE  { ?x a c:Choice ; c:variant "radio" }""" ;
+    mig:discriminator c:variant ;
+    mig:example [
+        mig:before """ex:size a c:RadioGroup ;
+    c:controls ex:order ;
+    c:property ex:size .""" ;
+        mig:after """ex:size a c:Choice ;
+    c:variant "radio" ;
+    c:controls ex:order ;
+    c:property ex:size .""" ] .
+
+change:example-radio-columns a mig:Migration ;
+    mig:of c:Choice ; mig:from 1 ; mig:to 2 ;
+    mig:forward """DELETE { ?x c:columns ?n }
+WHERE  { ?x a c:Choice ; c:variant "radio" ; c:columns ?n }""" ;
+    mig:loses """A radio group's number of columns (c:columns): a c:Choice lays its options out by the theme, and
+going back cannot know how many columns there were.""" ;
+    mig:example [
+        mig:before """ex:size a c:Choice ;
+    c:variant "radio" ;
+    c:columns 3 ;
+    c:property ex:size .""" ;
+        mig:after """ex:size a c:Choice ;
+    c:variant "radio" ;
+    c:property ex:size .""" ] .

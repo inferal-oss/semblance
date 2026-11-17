@@ -9,6 +9,8 @@ import type { GraphStore } from '../src/store/types.ts'
 import type { StoreKind } from '../src/web/load.ts'
 
 export const UI = 'https://semblance.dev/demo#'
+/** The change log's graph among the site's (src/changes/records.ts): generated when the site is built, from the change files and git. */
+export const CHANGES_GRAPH = 'demo/changes.ttl'
 /** The component the site projects: its mount root. */
 export const ROOT = UI + 'shell'
 

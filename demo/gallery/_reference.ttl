@@ -16,8 +16,8 @@
 # classes and properties. The selected term is one property of the app (ui:referenceSubject);
 # every view of it is bound to that property: what the ontology says (c:TermOverview), its
 # alignment with other vocabularies (c:TermAlignment), its neighbourhood as a graph (a
-# c:ResultGraph of a CONSTRUCT with $term bound) and its triples as Turtle (the docs layer's
-# c:ClassDoc). Only the visible tab is evaluated; a selection re-runs it and the tree's own rule.
+# c:ResultGraph of a CONSTRUCT with $term bound), its triples as Turtle (the docs layer's
+# c:ClassDoc) and its versions (c:ComponentHistory, from the change log). Only the visible tab is evaluated; a selection re-runs it and the tree's own rule.
 # Above the tree, a combobox finds any term the tree lists (c:optionsFrom), by prefixed name or
 # label, the 20 best matches as you type; "/" goes to it from anywhere on the page, and picking
 # one selects it, so the address follows (/reference/c:List/).
@@ -55,12 +55,13 @@ ui:referenceLead a c:Text ; sty:textStyle sty:Caption ;
             "Jeder Begriff des Frameworks, gelesen aus der Ontologie, die diese Seite darstellt: wählen Sie einen im Baum, einen verknüpften Begriff oder einen Knoten seines Graphen."@de ,
             "كل مصطلح في الإطار، مقروء من الأنطولوجيا التي تعرض هذه الصفحة: اختر واحدًا من الشجرة أو مصطلحًا مرتبطًا أو عقدة من رسمه البياني."@ar .
 
-ui:referenceTabs a c:Tabs ; c:tabs ( ui:refOverviewTab ui:refAlignmentTab ui:refGraphTab ui:refTurtleTab ) ;
+ui:referenceTabs a c:Tabs ; c:tabs ( ui:refOverviewTab ui:refAlignmentTab ui:refGraphTab ui:refTurtleTab ui:refHistoryTab ) ;
     c:selected ui:refOverviewTab .
 ui:refOverviewTab a c:Tab ; c:label "Overview" , "Огляд"@uk , "Überblick"@de , "نظرة عامة"@ar ; c:content ui:referenceOverviewPanel .
 ui:refAlignmentTab a c:Tab ; c:label "Alignment" , "Узгодження"@uk , "Abgleich"@de , "المواءمة"@ar ; c:content ui:referenceAlignment .
 ui:refGraphTab a c:Tab ; c:label "Graph" , "Граф"@uk , "Graph"@de , "رسم بياني"@ar ; c:content ui:referenceGraph .
 ui:refTurtleTab a c:Tab ; c:label "Turtle" ; c:content ui:referenceTurtle .
+ui:refHistoryTab a c:Tab ; c:label "History" , "Історія"@uk , "Verlauf"@de , "السجل"@ar ; c:content ui:referenceHistory .
 
 ui:referenceOverview a c:TermOverview ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject ;
     c:controls ui:app ; c:property ui:referenceSubject ;
@@ -72,6 +73,8 @@ ui:referenceMembers a c:TermMembers ; c:membersOf ui:referenceTree ;
     c:bindFrom ui:app ; c:bindProperty ui:referenceSubject ; c:controls ui:app ; c:property ui:referenceSubject .
 ui:referenceAlignment a c:TermAlignment ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject .
 ui:referenceTurtle a c:ClassDoc ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject .
+# Its versions, newest first, each with the change that accounts for it (the change log, demo/gallery/_changes.ttl).
+ui:referenceHistory a c:ComponentHistory ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject .
 
 # The neighbourhood: what the term points at, what points at it through the ontology's own links,
 # the ranges of its properties and the rules of its renderings. $term is the selection.

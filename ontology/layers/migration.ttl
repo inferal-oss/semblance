@@ -44,3 +44,8 @@ mig:example a owl:ObjectProperty ; rdfs:domain mig:Migration ;
     rdfs:comment "Turtle before and after this step: applied in both directions by a test."@en .
 mig:before a owl:DatatypeProperty ; rdfs:comment "An example's Turtle in the old shape."@en .
 mig:after a owl:DatatypeProperty ; rdfs:comment "An example's Turtle in the new shape."@en .
+
+mig:exampleDiff a owl:ObjectProperty ; rdfs:domain mig:Migration ;
+    rdfs:comment "Derived with a change log (chg:Log, ontology/layers/change.ttl): each of the migration's examples (sem:order) as the lines of a diff from before to after (mig:lines, an RDF list of c:DiffLine), which a c:DiffView shows."@en .
+mig:lines a owl:ObjectProperty ;
+    rdfs:comment "An example diff's lines, in order."@en .

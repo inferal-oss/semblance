@@ -501,11 +501,15 @@ export function addressOf(r: Reader, resource: Term, keeps?: Set<string>): strin
     if (target && !whole) needs.set(target.iri, resource)
     return linkAddress(spellAddress(r, loc, kept(r, loc, needs, keeps)))
   }
+  if (resource.termType !== 'NamedNode') return undefined
   // A term no component shows (a class, a property): the dimension whose values are terms (nav:showsTerms),
-  // with the values its parents need (nav:when), e.g. #reference/c:List.
-  if (resource.termType !== 'NamedNode' || !isTerm(r, resource)) return undefined
+  // with the values its parents need (nav:when), e.g. #reference/c:List. Else a value no component
+  // shows: the dimension whose property's range it is an instance of (a change on the Changes page).
+  const term = isTerm(r, resource)
   for (const loc of locations) {
-    const d = loc.dimensions.find((x) => x.terms && x.spelledIn !== undefined)
+    const d = term
+      ? loc.dimensions.find((x) => x.terms && x.spelledIn !== undefined)
+      : loc.dimensions.find((x) => !x.terms && !x.target && x.spelledIn !== undefined && isValueOf(r, x, resource))
     if (!d) continue
     const values: Values = new Map([[d.iri, resource]])
     for (let at: Dimension | undefined = d, n = 0; at?.parent && n < 16; n++) {
@@ -604,6 +608,12 @@ export function routesOf(r: Reader, loc: Location): string[] {
   }
   walk(0, new Map())
   return [...out].sort()
+}
+
+/** Whether a resource is an instance of the range of a dimension's property: a value it can hold. */
+function isValueOf(r: Reader, d: Dimension, t: Term): boolean {
+  const range = one(r, r.f.namedNode(d.property), RDFS_RANGE)
+  return !!range && range.termType === 'NamedNode' && r.match(t, RDF_TYPE, range).length > 0
 }
 
 /**

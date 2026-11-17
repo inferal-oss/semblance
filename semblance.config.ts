@@ -2,7 +2,8 @@
 // address (the Vite plugin in vite.config.ts), and what `semblance serve` renders per request.
 // The host's own writes before its first projection are demo/site.ts, which demo/main.ts runs too.
 import { readdirSync, readFileSync } from 'node:fs'
-import { carryInFragment, documentAttributes, FIRST_GRAPHS, prepareSite, recordSiteSources, ROOT, siteLayers, siteNamedGraphs } from './demo/site.ts'
+import { changeRecords } from './src/changes/records.ts'
+import { CHANGES_GRAPH, carryInFragment, documentAttributes, FIRST_GRAPHS, prepareSite, recordSiteSources, ROOT, siteLayers, siteNamedGraphs } from './demo/site.ts'
 import { defineSite } from './src/server/site.ts'
 
 const demo = new URL('./demo/', import.meta.url)
@@ -11,6 +12,8 @@ const gallery = Object.fromEntries(
     .filter((f) => f.endsWith('.ttl'))
     .map((f) => ['demo/gallery/' + f, readFileSync(new URL('gallery/' + f, demo), 'utf8')]),
 )
+// The change log: the change files and what git says about them (the release tags, the versions' history).
+gallery[CHANGES_GRAPH] = changeRecords()
 
 export default defineSite({
   root: ROOT,

@@ -1,0 +1,40 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# Changes: what changed in every component, release by release, read from the change log
+# (<https://semblance.dev/changes>, src/changes/records.ts) that the site loads with its graphs: the
+# change files in ontology/changes/, and what git says about them (when each was recorded, the
+# release tag whose history holds it, every version step of every component). A c:ChangeLog shows
+# it, or the change chosen (ui:changesAt, the address: /changes/field-row-cells/). Nothing here is
+# written by hand: a change merged into main is on the page with the next deploy.
+
+ui:changes a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
+    c:children ( ui:changesSide ui:changesMain ) .
+ui:changesSide a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:sticky pos:StickToTop ;
+    c:children ( ui:changesAll ui:changesAgents ui:changesMarkdown ui:changesFeed ui:changesSource ) .
+# Back to the log from a change: the page itself, without the change chosen.
+ui:changesAll a c:Link ; c:to ui:changes ;
+    c:label "All changes" , "Усі зміни"@uk , "Alle Änderungen"@de , "كل التغييرات"@ar .
+ui:changesAgents a c:Text ; sty:textStyle sty:Overline ;
+    c:label "For agents and feeds" , "Для агентів і стрічок"@uk , "Für Agenten und Feeds"@de , "للوكلاء والموجزات"@ar .
+ui:changesMarkdown a c:Link ; c:href "/llms/changes.md" ; c:external false ;
+    c:label "The changes as Markdown" , "Зміни в Markdown"@uk , "Die Änderungen als Markdown"@de , "التغييرات بصيغة Markdown"@ar .
+ui:changesFeed a c:Link ; c:href "/changes.atom" ; c:external false ;
+    c:label "Atom feed" , "Стрічка Atom"@uk , "Atom-Feed"@de , "موجز Atom"@ar .
+ui:changesSource a c:Link ; c:href "https://github.com/inferal-oss/semblance/tree/main/ontology/changes" ;
+    c:label "The change files" , "Файли змін"@uk , "Die Änderungsdateien"@de , "ملفات التغييرات"@ar .
+
+ui:changesMain a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:changesTitle ui:changesLead ui:changesLog ) .
+ui:changesTitle a c:Heading ; c:level 1 ; c:label "Changes" , "Зміни"@uk , "Änderungen"@de , "التغييرات"@ar .
+ui:changesLead a c:Text ; sty:textStyle sty:Caption ;
+    c:label "What changed in every component, release by release, and how to move with it: read from the change and migration ontologies. The unreleased first, then from the latest release to the earliest." ,
+            "Що змінилося в кожному компоненті, випуск за випуском, і як перейти: прочитано з онтологій змін і міграцій. Спершу невипущене, далі від останнього випуску до першого."@uk ,
+            "Was sich in jeder Komponente geändert hat, Release für Release, und wie man mitzieht: gelesen aus den Ontologien der Änderungen und Migrationen. Zuerst das Unveröffentlichte, dann vom neuesten Release zum ältesten."@de ,
+            "ما تغيّر في كل مكوّن، إصدارًا بعد إصدار، وكيف تنتقل معه: مقروء من أنطولوجيتَي التغييرات والترحيلات. غير المنشور أولًا، ثم من أحدث إصدار إلى أقدمه."@ar .
+ui:changesLog a c:ChangeLog ; c:of <https://semblance.dev/changes> ; c:bindFrom ui:app ; c:bindProperty ui:changesAt .

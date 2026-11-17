@@ -13,7 +13,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { todoApp } from '../src/examples/todo.ts'
-import { frameworkChanges } from '../src/migrate/index.ts'
+import { changeRecords } from '../src/changes/records.ts'
 import { addressOf } from '../src/navigation.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { MOD, NS } from '../src/ns.ts'
@@ -58,7 +58,8 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       .map((f) => ['demo/gallery/' + f, read('demo/gallery/' + f)]),
   )
   const siteFiles: Record<string, string> = { 'demo/app.ttl': read('demo/app.ttl'), ...galleryFiles }
-  const store = loadStore(options.store ?? 'wat', todoApp(5), ...Object.values(siteFiles))
+  // The change log (src/changes/records.ts), as the site loads it with its graphs.
+  const store = loadStore(options.store ?? 'wat', todoApp(5), ...Object.values(siteFiles), changeRecords())
   // As the host does: the examples' own files as c:SourceText, which their pages show.
   recordSources(store, { 'src/examples/todo.ts': todoApp(5), ...Object.fromEntries(Object.entries(galleryFiles).filter(([p]) => isExampleSource(p))) })
   const g = graph(store)
@@ -115,7 +116,22 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
     classDocs.set(t.value, doc)
   }
   const specimens = new Map(components.map((c) => [c.term.value, g.subjects(NS.c + 'demonstrates', c.term).filter((s) => g.isA(s, NS.c + 'Specimen'))]))
-  const roots = [...docs.map((d) => d.content.value), ...examples.map((e) => e.content.value), ...[...specimens.values()].flat().map((s) => s.value), ...classDocs.values()]
+  // Each change, as the Changes page shows it when it is chosen: a c:ChangeEntry of its own.
+  const changes = g
+    .instances(NS.chg + 'Change')
+    .filter((t) => store.match(t as never, f.namedNode(NS.chg + 'releasedIn'), null).length > 0)
+    .map((t) => ({ term: t, slug: g.literal(t, NS.sem + 'slug')!, label: g.label(t) }))
+    .filter((x) => x.slug)
+    .sort((a, b) => a.slug.localeCompare(b.slug))
+  const changeEntries = new Map<string, string>()
+  for (const x of changes) {
+    const entry = `${LLMS}change/${encodeURIComponent(x.slug)}`
+    store.add(f.quad(f.namedNode(entry), f.namedNode(NS.rdf + 'type'), f.namedNode(NS.c + 'ChangeEntry')))
+    store.add(f.quad(f.namedNode(entry), f.namedNode(NS.c + 'of'), x.term as never))
+    changeEntries.set(x.slug, entry)
+  }
+  const changesPage = UI + 'changesMain'
+  const roots = [...docs.map((d) => d.content.value), ...examples.map((e) => e.content.value), ...[...specimens.values()].flat().map((s) => s.value), ...classDocs.values(), changesPage, ...changeEntries.values()]
   const projection = new Runtime(store).project({ modality: MOD.Text, name: 'llms', roots: [...new Set(roots)] })
   const text = (focus: string) => tidy(toText(projection.index, focus))
 
@@ -318,29 +334,27 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       })
       .join('\n'),
   ]
-  // What changed in the components, for whoever has to move with it (docs/MIGRATIONS.md).
-  const changes = frameworkChanges()
-  out.set(
-    'llms/changes.md',
+  // What changed in the components, for whoever has to move with it (docs/MIGRATIONS.md): the Changes
+  // page's own text, release by release (the change log, src/changes/records.ts), and a page per change.
+  out.set('llms/changes.md', text(changesPage) + '\n')
+  for (const [slug, entry] of changeEntries) out.set(`llms/changes/${slug}.md`, text(entry) + '\n')
+  const changesSection = [
+    '## Changes',
     [
-      '# Changes',
-      '> What changed in the components, and how to move with it. `semblance migrate` carries the mechanical part; `semblance migrate --verify` decides whether a move is done.',
-      ...(changes.length
-        ? changes.map((c) => [`## ${c.label}`, c.release ? `Released in ${c.release}.` : 'Unreleased.', `Affects: ${c.affects.join(', ')}.`, `**Why.** ${c.motivation}`, `**What.** ${c.substance}`, `**Forward.** ${c.forwardGuide}`, `**Back.** ${c.backwardGuide}`].join('\n\n'))
-        : ['No changes yet.']),
-    ].join('\n\n') + '\n',
-  )
+      `- [Changes](${page('llms/changes.md')}): every change to a component, release by release (the unreleased first, then from the latest release to the earliest), with how to move forward and back with semblance migrate; on the site at ${SITE}changes/, and as an Atom feed at ${SITE}changes.atom`,
+      ...changes.map((x) => `- [${x.label.replace(/[[\]]/g, "")}](${page(`llms/changes/${x.slug}.md`)})`),
+    ].join('\n'),
+  ]
   const optional = [
     '## Optional',
     [
       `- [Source on GitHub](${REPO}): the framework, the ontologies (ontology/), the site (demo/) and Semblance's own SPARQL engines (rdf-engine/)`,
       `- [README](${repo('README.md')}): the architecture`,
       `- [npm package ${pkg.name}](https://www.npmjs.com/package/${pkg.name}): not published yet`,
-      `- [Changes](${page('llms/changes.md')}): what changed in the components, why, and how to move with it, in both directions`,
       `- [Full listing](${page('llms-full.txt')}): every component with its description, properties and an example, and every doc section as text`,
     ].join('\n'),
   ]
-  out.set('llms.txt', [...head, ...docsSection, ...componentsSection, ...layersSection, ...examplesSection, ...optional].join('\n\n') + '\n')
+  out.set('llms.txt', [...head, ...docsSection, ...componentsSection, ...layersSection, ...examplesSection, ...changesSection, ...optional].join('\n\n') + '\n')
   out.set(
     'llms-full.txt',
     [
