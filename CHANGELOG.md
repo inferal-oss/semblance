@@ -18,6 +18,8 @@ Each entry states the engines' ABI version (`rdf-engine/ABI.md`).
   appended from its `ldes:pointInTime` on, and `ldes:LatestVersionSubset` keeps the `ldes:amount`
   newest versions of each entity (`ldes:versionOfPath`); its amount was read before as the stream's
   newest members, which let go of versions LDES keeps (#530, [docs/RETENTION.md](docs/RETENTION.md) §8.1).
+- Changes as a page: `c:ChangeLog` shows a change log (`chg:Log`) release by release, the unreleased first; `c:ChangeEntry` one change with its migrations (`c:MigrationView`: renames, examples as a diff, the SPARQL Updates, what going back loses); `c:ComponentHistory` a component's versions. `src/changes/records.ts` makes the framework's log from the change files, the release tags and the history of `ontology/versions.ttl` (`chg:Release`, `chg:Step`, `chg:releasedIn`, `chg:recorded`, `chg:commit`). semblance.dev publishes it at /changes/, as Markdown under /llms/changes and as an Atom feed (#564).
+- A link (`c:to`) to a value a dimension holds that no component shows (an instance of its property's `rdfs:range`) goes where that value is shown; a dimension without `nav:keyProperty` is spelled by `sem:slug` in the SPARQL rules too (`change:links-to-dimension-values`, #564).
 
 - A static build writes `semblance-graphs.json` beside its pages (the graphs each page names). A
   click while the rest of the graphs arrive takes in what the page reached names first, and the

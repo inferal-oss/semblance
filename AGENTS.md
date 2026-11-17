@@ -252,6 +252,7 @@ npm run pack:check     # the npm packages as a consumer gets them (docs/RELEASIN
 | `src/sandbox.ts` | live examples: each in a sandbox of its own (host effect) |
 | `src/retention/`, `ontology/layers/retention.ttl` | retention: every stream's policies and horizon, offload to IndexedDB and recall, the memory budget and its pressure (`docs/RETENTION.md`) |
 | `src/migrate/`, `ontology/changes/`, `ontology/versions.ttl`, `ontology/terms.ttl` | versions and their check, changes, `semblance migrate` (`docs/MIGRATIONS.md`); `src/retired.ts` is what a page does with a retired term |
+| `src/changes/`, `ontology/components/changes.ttl`, `demo/gallery/_changes.ttl` | the change log from the change files, the release tags and the versions' history (`records.ts`), shown at /changes/ and on each Reference entry (History), as Markdown for agents and as Atom |
 | `src/safety.ts`, `ontology/layers/safety.ttl` | safe authoring: what an authored graph may render (`docs/SAFETY.md`) |
 | `src/store/` | store adapters (Oxigraph, N3, hybrid); `rdf-engine/` has Semblance's own engines |
 | `demo/` | the site (`app.ttl`, `gallery/`, `main.ts` is the host) |

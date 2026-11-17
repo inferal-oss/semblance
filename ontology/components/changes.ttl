@@ -1,0 +1,554 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+# Changes, as a page: a change log (chg:Log, ontology/layers/change.ttl) release by release, one
+# change with its migrations, and a component's versions. What they show is the record of the
+# change and migration ontologies (src/changes/records.ts derives the dates, the releases and the
+# version steps from git); they are drawn with the framework's own components, which each rule here
+# mints: headings, texts, badges, tags, links, linked cards, cards, alerts, code and diffs. Every
+# rendering is for every modality: the text projection of a change log is its Markdown for agents.
+
+c:ChangeLog a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A change log (c:of a chg:Log): its releases by sem:order (the unreleased one first, then
+from the latest to the earliest), each a heading, when it was released (or the release it follows)
+and how many changes it has, then a linked card per change (c:ChangeSummary), newest first; a
+release without changes says so. With c:bindFrom and c:bindProperty, when what that property
+holds is a chg:Change, it shows that change instead (c:ChangeEntry)."""@en ;
+    sem:slug "change-log" .
+c:ChangeSummary a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Internal: a change's card body in a c:ChangeLog (c:of the change): the first sentence of its motivation, the components it affects as tags, and when it was recorded with its issue."@en ;
+    sem:slug "change-summary" .
+c:ChangeEntry a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """One change (c:of a chg:Change): its name; its release, its kind (a change of meaning, one that
+migrates, one that loses something going back), when it was recorded, its issue and commit; the
+components it steps (from a version to the next, each a link to the term) and the terms it retires;
+why and what changed; how to move forward and back, with the semblance migrate command for each
+direction; and its migrations, in order, each a card (c:MigrationView)."""@en ;
+    sem:slug "change-entry" .
+c:MigrationView a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """One migration (c:of a mig:Migration): what going back loses (mig:loses) as a caution, its
+renames as a table (old, new), the property that keeps which term each instance was
+(mig:discriminator), each example as a diff from before to after (mig:exampleDiff), and its forward
+and backward SPARQL Updates."""@en ;
+    sem:slug "migration-view" .
+c:ComponentHistory a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A component's versions, newest first (c:of the component, or what c:bindProperty of
+c:bindFrom holds): a card per version step (chg:Step), with its release and date, and the change
+that accounts for it as a link, or the internal reason."""@en ;
+    sem:slug "component-history" .
+
+# --- phrases ---------------------------------------------------------------------------------------
+c:UnreleasedPhrase a c:Phrase ; rdfs:label "Unreleased"@en , "Не випущено"@uk , "Unveröffentlicht"@de , "غير منشور"@ar .
+c:NotReleasedPhrase a c:Phrase ; rdfs:label "Not released yet"@en , "Ще не випущено"@uk , "Noch nicht veröffentlicht"@de , "لم يُنشر بعد"@ar .
+c:SinceReleasePhrase a c:Phrase ; rdfs:label "Since {version}"@en , "Після {version}"@uk , "Seit {version}"@de , "منذ {version}"@ar .
+c:ReleasedOnPhrase a c:Phrase ; rdfs:label "Released {date}, tag {tag}"@en , "Випущено {date}, тег {tag}"@uk , "Veröffentlicht am {date}, Tag {tag}"@de , "نُشر في {date}، الوسم {tag}"@ar .
+c:ChangeCountOnePhrase a c:Phrase ; rdfs:label "1 change"@en , "1 зміна"@uk , "1 Änderung"@de , "تغيير واحد"@ar .
+c:ChangesCountPhrase a c:Phrase ; rdfs:label "{n} changes"@en , "змін: {n}"@uk , "{n} Änderungen"@de , "التغييرات: {n}"@ar .
+c:NoReleaseChangesPhrase a c:Phrase ; rdfs:label "No component changes in this release."@en , "У цьому випуску компоненти не змінювалися."@uk , "In diesem Release haben sich keine Komponenten geändert."@de , "لا تغييرات في المكونات في هذا الإصدار."@ar .
+c:NoChangesPhrase a c:Phrase ; rdfs:label "No changes recorded."@en , "Змін не записано."@uk , "Keine Änderungen verzeichnet."@de , "لا تغييرات مسجلة."@ar .
+c:MeaningKindPhrase a c:Phrase ; rdfs:label "meaning"@en , "зміст"@uk , "Bedeutung"@de , "المعنى"@ar .
+c:MigratesKindPhrase a c:Phrase ; rdfs:label "migrates"@en , "мігрує"@uk , "migriert"@de , "يُرحَّل"@ar .
+c:LossyKindPhrase a c:Phrase ; rdfs:label "lossy back"@en , "втрати назад"@uk , "verlustbehaftet zurück"@de , "العودة مع فقدان"@ar .
+c:RenameKindPhrase a c:Phrase ; rdfs:label "rename"@en , "перейменування"@uk , "Umbenennung"@de , "إعادة تسمية"@ar .
+c:ShapeKindPhrase a c:Phrase ; rdfs:label "change of shape"@en , "зміна форми"@uk , "Formänderung"@de , "تغيير الشكل"@ar .
+c:AffectsPhrase a c:Phrase ; rdfs:label "Affects"@en , "Зачіпає"@uk , "Betrifft"@de , "يؤثر في"@ar .
+c:RetiresPhrase a c:Phrase ; rdfs:label "Retires"@en , "Вилучає"@uk , "Entfernt"@de , "يُلغي"@ar .
+c:WhyPhrase a c:Phrase ; rdfs:label "Why"@en , "Чому"@uk , "Warum"@de , "لماذا"@ar .
+c:WhatChangedPhrase a c:Phrase ; rdfs:label "What changed"@en , "Що змінилося"@uk , "Was sich geändert hat"@de , "ما الذي تغيّر"@ar .
+c:MovingPhrase a c:Phrase ; rdfs:label "Moving with it"@en , "Як перейти"@uk , "Mitziehen"@de , "الانتقال معه"@ar .
+c:ForwardPhrase a c:Phrase ; rdfs:label "Forward"@en , "Уперед"@uk , "Vorwärts"@de , "إلى الأمام"@ar .
+c:BackPhrase a c:Phrase ; rdfs:label "Back"@en , "Назад"@uk , "Zurück"@de , "إلى الخلف"@ar .
+c:MeaningNotePhrase a c:Phrase ; rdfs:label "A change of meaning or behaviour: nothing in your files to rewrite. semblance migrate lists it; read it."@en ,
+    "Зміна змісту чи поведінки: у ваших файлах нічого переписувати. semblance migrate її показує; прочитайте її."@uk ,
+    "Eine Änderung der Bedeutung oder des Verhaltens: in Ihren Dateien ist nichts umzuschreiben. semblance migrate listet sie auf; lesen Sie sie."@de ,
+    "تغيير في المعنى أو السلوك: لا شيء في ملفاتك لإعادة كتابته. يسرده semblance migrate؛ اقرأه."@ar .
+c:MigrationsCountPhrase a c:Phrase ; rdfs:label "Migrations ({n})"@en , "Міграції ({n})"@uk , "Migrationen ({n})"@de , "الترحيلات ({n})"@ar .
+c:LosesPhrase a c:Phrase ; rdfs:label "Going back loses this"@en , "Повернення це втрачає"@uk , "Zurück geht dies verloren"@de , "العودة تفقد هذا"@ar .
+c:OldNamePhrase a c:Phrase ; rdfs:label "Old"@en , "Було"@uk , "Alt"@de , "القديم"@ar .
+c:NewNamePhrase a c:Phrase ; rdfs:label "New"@en , "Стало"@uk , "Neu"@de , "الجديد"@ar .
+c:DiscriminatorPhrase a c:Phrase ; rdfs:label "Which one each instance was is kept in {term}."@en , "Чим був кожен екземпляр, зберігає {term}."@uk , "Was jede Instanz war, hält {term} fest."@de , "ما كانت عليه كل نسخة يُحفظ في {term}."@ar .
+c:ExamplePhrase a c:Phrase ; rdfs:label "Example, before and after"@en , "Приклад, до і після"@uk , "Beispiel, vorher und nachher"@de , "مثال، قبل وبعد"@ar .
+c:ForwardUpdatePhrase a c:Phrase ; rdfs:label "Forward (SPARQL Update)"@en , "Уперед (SPARQL Update)"@uk , "Vorwärts (SPARQL Update)"@de , "إلى الأمام (SPARQL Update)"@ar .
+c:BackwardUpdatePhrase a c:Phrase ; rdfs:label "Back (SPARQL Update)"@en , "Назад (SPARQL Update)"@uk , "Zurück (SPARQL Update)"@de , "إلى الخلف (SPARQL Update)"@ar .
+c:VersionPhrase a c:Phrase ; rdfs:label "Version {n}"@en , "Версія {n}"@uk , "Version {n}"@de , "الإصدار {n}"@ar .
+c:NewComponentPhrase a c:Phrase ; rdfs:label "New."@en , "Новий."@uk , "Neu."@de , "جديد."@ar .
+c:NoVersionsPhrase a c:Phrase ; rdfs:label "No recorded versions."@en , "Версій не записано."@uk , "Keine verzeichneten Versionen."@de , "لا إصدارات مسجلة."@ar .
+
+# --- the log -----------------------------------------------------------------------------------------
+c:ChangeLogRendering a sem:Rendering ; sem:targets c:ChangeLog ; sem:stratum 0 ; sem:follows c:bindFrom .
+c:ChangeLogRendering-fn a sem:Rule ; sem:implements c:ChangeLogRendering ; sem:function "changes:log" .
+c:ChangeLogRendering-sparql a sem:Rule ;
+    sem:implements c:ChangeLogRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?entry , ?section , ?empty .
+  ?entry a c:ChangeEntry ; c:of ?selected .
+  ?empty a c:Text ; c:label ?emptyWords .
+  ?section a rdfhtml:Section ; rdfhtml:class "sem-release" ; sem:orderKey ?releaseOrder ; rdfhtml:hasChild ?heading , ?caption , ?none , ?cards .
+  ?heading a c:Heading ; c:level 2 ; c:label ?releaseName ; sem:orderKey "1" .
+  ?caption a c:Text ; sty:textStyle sty:Caption ; c:label ?captionWords ; sem:orderKey "2" .
+  ?none a c:Text ; c:label ?noneWords ; sem:orderKey "3" .
+  ?cards a rdfhtml:Div ; rdfhtml:class "sem-change-cards" ; sem:orderKey "3" ; rdfhtml:hasChild ?linked .
+  ?linked a c:LinkedCard ; c:to ?change ; c:content ?card ; sem:orderKey ?changeOrder .
+  ?card a c:Card ; c:label ?changeLabel ; c:badge ?kinds ; c:content ?summary .
+  ?summary a c:ChangeSummary ; c:of ?change .
+}
+WHERE {
+  $this a c:ChangeLog .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { {
+    # The change that is selected, instead of the log.
+    $this a c:ChangeLog ; c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?selected . ?selected a chg:Change .
+    BIND(IRI(CONCAT(STR($this), "/~entry")) AS ?entry)
+  } UNION {
+    # Each release: its name, when, and how many changes.
+    $this a c:ChangeLog ; c:of ?log .
+    FILTER NOT EXISTS { $this c:bindFrom ?from1 ; c:bindProperty ?bp1 . ?from1 ?bp1 ?selected1 . ?selected1 a chg:Change }
+    ?release a chg:Release ; chg:log ?log .
+    OPTIONAL { ?release sem:order ?order0 }
+    OPTIONAL { ?release chg:version ?version }
+    OPTIONAL { ?release chg:date ?date }
+    OPTIONAL { ?release chg:tag ?tag }
+    OPTIONAL { ?release chg:previous ?previous . ?previous chg:version ?previousVersion }
+    OPTIONAL { SELECT ?release (COUNT(DISTINCT ?counted) AS ?n0) WHERE { ?counted a chg:Change ; chg:releasedIn ?release } GROUP BY ?release }
+    BIND(COALESCE(?n0, 0) AS ?n)
+    OPTIONAL { ?unreleasedAt l10n:of c:UnreleasedPhrase ; l10n:name ?unreleased0 } OPTIONAL { c:UnreleasedPhrase rdfs:label ?unreleased1 FILTER(langMatches(lang(?unreleased1), "en")) }
+    OPTIONAL { ?releasedAt l10n:of c:ReleasedOnPhrase ; l10n:name ?released0 } OPTIONAL { c:ReleasedOnPhrase rdfs:label ?released1 FILTER(langMatches(lang(?released1), "en")) }
+    OPTIONAL { ?sinceAt l10n:of c:SinceReleasePhrase ; l10n:name ?since0 } OPTIONAL { c:SinceReleasePhrase rdfs:label ?since1 FILTER(langMatches(lang(?since1), "en")) }
+    OPTIONAL { ?notYetAt l10n:of c:NotReleasedPhrase ; l10n:name ?notYet0 } OPTIONAL { c:NotReleasedPhrase rdfs:label ?notYet1 FILTER(langMatches(lang(?notYet1), "en")) }
+    OPTIONAL { ?oneAt l10n:of c:ChangeCountOnePhrase ; l10n:name ?one0 } OPTIONAL { c:ChangeCountOnePhrase rdfs:label ?one1 FILTER(langMatches(lang(?one1), "en")) }
+    OPTIONAL { ?manyAt l10n:of c:ChangesCountPhrase ; l10n:name ?many0 } OPTIONAL { c:ChangesCountPhrase rdfs:label ?many1 FILTER(langMatches(lang(?many1), "en")) }
+    OPTIONAL { ?noneAt l10n:of c:NoReleaseChangesPhrase ; l10n:name ?none0 } OPTIONAL { c:NoReleaseChangesPhrase rdfs:label ?none1 FILTER(langMatches(lang(?none1), "en")) }
+    BIND(STR(COALESCE(?order0, 0)) AS ?releaseOrder)
+    BIND(COALESCE(STR(?version), STR(COALESCE(?unreleased0, ?unreleased1))) AS ?releaseName)
+    BIND(IF(BOUND(?version), REPLACE(REPLACE(STR(COALESCE(?released0, ?released1)), "\\\\{date\\\\}", STR(?date)), "\\\\{tag\\\\}", STR(?tag)),
+         IF(BOUND(?previousVersion), REPLACE(STR(COALESCE(?since0, ?since1)), "\\\\{version\\\\}", STR(?previousVersion)), STR(COALESCE(?notYet0, ?notYet1)))) AS ?when)
+    BIND(IF(?n = 1, STR(COALESCE(?one0, ?one1)), REPLACE(STR(COALESCE(?many0, ?many1)), "\\\\{n\\\\}", STR(?n))) AS ?count)
+    BIND(CONCAT(?when, " · ", ?count) AS ?captionWords)
+    BIND(IF(?n = 0, STR(COALESCE(?none0, ?none1)), ?unbound) AS ?noneWords)
+    BIND(IRI(CONCAT(STR($this), "/~release-", ENCODE_FOR_URI(COALESCE(STR(?version), "unreleased")))) AS ?section)
+    BIND(IRI(CONCAT(STR(?section), "-heading")) AS ?heading)
+    BIND(IRI(CONCAT(STR(?section), "-caption")) AS ?caption)
+    BIND(IF(?n = 0, IRI(CONCAT(STR(?section), "-none")), ?unbound) AS ?none)
+  } UNION {
+    # Each change, as a linked card in its release.
+    $this a c:ChangeLog ; c:of ?log .
+    FILTER NOT EXISTS { $this c:bindFrom ?from2 ; c:bindProperty ?bp2 . ?from2 ?bp2 ?selected2 . ?selected2 a chg:Change }
+    ?release a chg:Release ; chg:log ?log .
+    ?change a chg:Change ; chg:releasedIn ?release .
+    OPTIONAL { ?release chg:version ?version }
+    OPTIONAL { ?change sem:order ?changeOrder0 }
+    OPTIONAL { ?changeLabelAt l10n:of ?change ; l10n:name ?changeLabel0 }
+    OPTIONAL { SELECT ?change (MIN(STR(?anyLabel)) AS ?changeLabel1) WHERE { ?change a chg:Change ; rdfs:label ?anyLabel } GROUP BY ?change }
+    BIND(EXISTS { ?change chg:migrations ?migrations FILTER(?migrations != rdf:nil) } AS ?migrates)
+    BIND(EXISTS { ?change chg:migrations/rdf:rest*/rdf:first/mig:loses ?lost } AS ?lossy)
+    OPTIONAL { ?migratesAt l10n:of c:MigratesKindPhrase ; l10n:name ?migrates0 } OPTIONAL { c:MigratesKindPhrase rdfs:label ?migrates1 FILTER(langMatches(lang(?migrates1), "en")) }
+    OPTIONAL { ?meaningAt l10n:of c:MeaningKindPhrase ; l10n:name ?meaning0 } OPTIONAL { c:MeaningKindPhrase rdfs:label ?meaning1 FILTER(langMatches(lang(?meaning1), "en")) }
+    OPTIONAL { ?lossyAt l10n:of c:LossyKindPhrase ; l10n:name ?lossy0 } OPTIONAL { c:LossyKindPhrase rdfs:label ?lossy1 FILTER(langMatches(lang(?lossy1), "en")) }
+    BIND(CONCAT(IF(?migrates, STR(COALESCE(?migrates0, ?migrates1)), STR(COALESCE(?meaning0, ?meaning1))), IF(?lossy, CONCAT(" · ", STR(COALESCE(?lossy0, ?lossy1))), "")) AS ?kinds)
+    BIND(STR(COALESCE(?changeOrder0, 0)) AS ?changeOrder)
+    BIND(COALESCE(STR(?changeLabel0), ?changeLabel1, REPLACE(STR(?change), "^.*[#/]", "")) AS ?changeLabel)
+    BIND(IRI(CONCAT(STR($this), "/~release-", ENCODE_FOR_URI(COALESCE(STR(?version), "unreleased")))) AS ?section)
+    BIND(IRI(CONCAT(STR(?section), "-cards")) AS ?cards)
+    BIND(IRI(CONCAT(STR($this), "/~change-", SUBSTR(MD5(STR(?change)), 1, 8))) AS ?linked)
+    BIND(IRI(CONCAT(STR(?linked), "-card")) AS ?card)
+    BIND(IRI(CONCAT(STR(?linked), "-summary")) AS ?summary)
+  } UNION {
+    # A log with no releases at all.
+    $this a c:ChangeLog .
+    FILTER NOT EXISTS { $this c:bindFrom ?from3 ; c:bindProperty ?bp3 . ?from3 ?bp3 ?selected3 . ?selected3 a chg:Change }
+    FILTER NOT EXISTS { $this c:of ?log3 . ?release3 a chg:Release ; chg:log ?log3 }
+    OPTIONAL { ?emptyAt l10n:of c:NoChangesPhrase ; l10n:name ?empty0 } OPTIONAL { c:NoChangesPhrase rdfs:label ?empty1 FILTER(langMatches(lang(?empty1), "en")) }
+    BIND(STR(COALESCE(?empty0, ?empty1)) AS ?emptyWords)
+    BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+  } }
+}""" .
+
+# --- a change's card body ------------------------------------------------------------------------------
+c:ChangeSummaryRendering a sem:Rendering ; sem:targets c:ChangeSummary ; sem:stratum 0 .
+c:ChangeSummaryRendering-fn a sem:Rule ; sem:implements c:ChangeSummaryRendering ; sem:function "changes:summary" .
+c:ChangeSummaryRendering-sparql a sem:Rule ;
+    sem:implements c:ChangeSummaryRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?summary , ?tags , ?meta .
+  ?summary a rdfhtml:P ; rdfhtml:class "sem-summary" ; sem:orderKey "1" ; rdfhtml:hasChild ?summaryText .
+  ?summaryText a rdfhtml:Text ; rdfhtml:data ?first .
+  ?tags a rdfhtml:Div ; rdfhtml:class "sem-tags" ; sem:orderKey "2" ; rdfhtml:hasChild ?tag .
+  ?tag a c:Tag ; c:label ?name ; sty:size sty:Small ; sty:tone sty:Neutral ; sem:orderKey ?name .
+  ?meta a rdfhtml:P ; rdfhtml:class "sem-meta" ; sem:orderKey "3" ; rdfhtml:hasChild ?metaText .
+  ?metaText a rdfhtml:Text ; rdfhtml:data ?metaWords .
+}
+WHERE {
+  $this a c:ChangeSummary .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { {
+    # The first sentence of why it changed.
+    $this a c:ChangeSummary ; c:of ?change . ?change chg:motivation ?motivation .
+    BIND(REPLACE(REPLACE(STR(?motivation), "[ \\\\t\\\\r\\\\n]+", " "), "^(.*?[.!?]) .*$", "$1") AS ?first)
+    BIND(IRI(CONCAT(STR($this), "/~summary")) AS ?summary)
+    BIND(IRI(CONCAT(STR($this), "/~summary-text")) AS ?summaryText)
+  } UNION {
+    # What it affects, by prefixed name.
+    $this a c:ChangeSummary ; c:of ?change . ?change chg:affects ?t FILTER(isIRI(?t))
+    BIND(REPLACE(STR(?t), "[^#/]*$", "") AS ?tns)
+    BIND(REPLACE(STR(?t), "^.*[#/]", "") AS ?tlocal)
+    OPTIONAL { { SELECT ?tns (MIN(?tp0) AS ?tpfx) WHERE { ?td sh:prefix ?tp0 ; sh:namespace ?tn0 BIND(STR(?tn0) AS ?tns) } GROUP BY ?tns } }
+    BIND(IF(BOUND(?tpfx) && REGEX(?tlocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?tpfx), ":", ?tlocal), CONCAT("<", STR(?t), ">")) AS ?name)
+    BIND(IRI(CONCAT(STR($this), "/~tags")) AS ?tags)
+    BIND(IRI(CONCAT(STR($this), "/~tag-", SUBSTR(MD5(STR(?t)), 1, 8))) AS ?tag)
+  } UNION {
+    # When it was recorded, and its issue.
+    $this a c:ChangeSummary ; c:of ?change .
+    OPTIONAL { ?change chg:recorded ?recorded }
+    OPTIONAL { SELECT ?change (MIN(STR(?anyIssue)) AS ?issue) WHERE { ?change a chg:Change ; chg:issue ?anyIssue } GROUP BY ?change }
+    FILTER(BOUND(?recorded) || BOUND(?issue))
+    BIND(CONCAT(COALESCE(STR(?recorded), ""), IF(BOUND(?recorded) && BOUND(?issue), " · ", ""), IF(BOUND(?issue), CONCAT("#", REPLACE(STR(?issue), "^.*/", "")), "")) AS ?metaWords)
+    BIND(IRI(CONCAT(STR($this), "/~meta")) AS ?meta)
+    BIND(IRI(CONCAT(STR($this), "/~meta-text")) AS ?metaText)
+  } }
+}""" .
+
+# --- one change ------------------------------------------------------------------------------------------
+c:ChangeEntryRendering a sem:Rendering ; sem:targets c:ChangeEntry ; sem:stratum 0 .
+c:ChangeEntryRendering-fn a sem:Rule ; sem:implements c:ChangeEntryRendering ; sem:function "changes:entry" .
+c:ChangeEntryRendering-sparql a sem:Rule ;
+    sem:implements c:ChangeEntryRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?title , ?facts , ?affects , ?block , ?migrationCard .
+  ?title a c:Heading ; c:level 1 ; c:label ?label ; sem:orderKey "1" .
+  ?facts a rdfhtml:Div ; rdfhtml:class "sem-change-facts" ; sem:orderKey "2" ; rdfhtml:hasChild ?releaseBadge , ?kindBadge , ?lossyBadge , ?dateSpan , ?issueLink , ?commitLink .
+  ?releaseBadge a c:Badge ; c:label ?releaseName ; sty:tone ?releaseTone ; sty:emphasis sty:Outline ; sem:orderKey "1" .
+  ?kindBadge a c:Badge ; c:label ?kindWords ; sty:tone ?kindTone ; sem:orderKey "2" .
+  ?lossyBadge a c:Badge ; c:label ?lossyWords ; sty:tone sty:Warning ; sem:orderKey "3" .
+  ?dateSpan a rdfhtml:Span ; rdfhtml:class "sem-date" ; sem:orderKey "4" ; rdfhtml:hasChild ?dateText .
+  ?dateText a rdfhtml:Text ; rdfhtml:data ?dateWords .
+  ?issueLink a c:Link ; c:href ?issueHref ; c:label ?issueWords ; sem:orderKey ?issueOrder .
+  ?commitLink a c:Link ; c:href ?commitHref ; c:label ?commitWords ; sem:orderKey "6" .
+  ?affects a rdfhtml:Div ; rdfhtml:class "sem-change-affects" ; sem:orderKey "3" ; rdfhtml:hasChild ?affectsLabel , ?affected , ?retiresLabel , ?retired .
+  ?affectsLabel a c:Text ; sty:textStyle sty:Overline ; c:label ?affectsWords ; sem:orderKey "1" .
+  ?affected a c:Link ; c:to ?t ; c:label ?affectedWords ; sem:orderKey ?affectedOrder .
+  ?retiresLabel a c:Text ; sty:textStyle sty:Overline ; c:label ?retiresWords ; sem:orderKey "3" .
+  ?retired a c:Tag ; c:label ?retiredName ; sty:tone sty:Danger ; sty:size sty:Small ; sem:orderKey ?retiredOrder .
+  ?block a ?blockClass ; c:label ?blockWords ; c:level ?blockLevel ; c:block ?blockIsCode ; c:language ?blockLanguage ; c:help ?blockHelp ; sty:tone ?blockTone ; sem:orderKey ?blockOrder .
+  ?migrationCard a c:Card ; c:label ?migrationLabel ; c:badge ?migrationKind ; c:content ?migrationView ; sem:orderKey ?migrationOrder .
+  ?migrationView a c:MigrationView ; c:of ?m .
+}
+WHERE {
+  $this a c:ChangeEntry .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { {
+    # Its name, release, kind, date, issue and commit.
+    $this a c:ChangeEntry ; c:of ?change . ?change a chg:Change .
+    OPTIONAL { ?labelAt l10n:of ?change ; l10n:name ?label0 }
+    OPTIONAL { SELECT ?change (MIN(STR(?anyLabel)) AS ?label1) WHERE { ?change a chg:Change ; rdfs:label ?anyLabel } GROUP BY ?change }
+    BIND(COALESCE(STR(?label0), ?label1, REPLACE(STR(?change), "^.*[#/]", "")) AS ?label)
+    OPTIONAL { ?change chg:releasedIn ?release . OPTIONAL { ?release chg:version ?version } }
+    OPTIONAL { ?unreleasedAt l10n:of c:UnreleasedPhrase ; l10n:name ?unreleased0 } OPTIONAL { c:UnreleasedPhrase rdfs:label ?unreleased1 FILTER(langMatches(lang(?unreleased1), "en")) }
+    BIND(COALESCE(STR(?version), STR(COALESCE(?unreleased0, ?unreleased1))) AS ?releaseName)
+    BIND(IF(BOUND(?version), sty:Success, sty:Neutral) AS ?releaseTone)
+    BIND(EXISTS { ?change chg:migrations ?migrations FILTER(?migrations != rdf:nil) } AS ?migrates)
+    BIND(EXISTS { ?change chg:migrations/rdf:rest*/rdf:first/mig:loses ?lost } AS ?lossy)
+    OPTIONAL { ?migratesAt l10n:of c:MigratesKindPhrase ; l10n:name ?migrates0 } OPTIONAL { c:MigratesKindPhrase rdfs:label ?migrates1 FILTER(langMatches(lang(?migrates1), "en")) }
+    OPTIONAL { ?meaningAt l10n:of c:MeaningKindPhrase ; l10n:name ?meaning0 } OPTIONAL { c:MeaningKindPhrase rdfs:label ?meaning1 FILTER(langMatches(lang(?meaning1), "en")) }
+    OPTIONAL { ?lossyAt l10n:of c:LossyKindPhrase ; l10n:name ?lossy0 } OPTIONAL { c:LossyKindPhrase rdfs:label ?lossy1 FILTER(langMatches(lang(?lossy1), "en")) }
+    BIND(IF(?migrates, STR(COALESCE(?migrates0, ?migrates1)), STR(COALESCE(?meaning0, ?meaning1))) AS ?kindWords)
+    BIND(IF(?migrates, sty:Accent, sty:Info) AS ?kindTone)
+    BIND(IF(?lossy, STR(COALESCE(?lossy0, ?lossy1)), ?unbound) AS ?lossyWords)
+    OPTIONAL { ?change chg:recorded ?recorded }
+    BIND(STR(?recorded) AS ?dateWords)
+    OPTIONAL { ?change chg:issue ?issue FILTER(isIRI(?issue)) }
+    BIND(STR(?issue) AS ?issueHref)
+    BIND(IF(BOUND(?issue), CONCAT("#", REPLACE(STR(?issue), "^.*/", "")), ?unbound) AS ?issueWords)
+    BIND(CONCAT("5 ", STR(?issue)) AS ?issueOrder)
+    OPTIONAL { ?change chg:commit ?commit FILTER(isIRI(?commit)) }
+    BIND(STR(?commit) AS ?commitHref)
+    BIND(IF(BOUND(?commit), SUBSTR(REPLACE(STR(?commit), "^.*/", ""), 1, 7), ?unbound) AS ?commitWords)
+    BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
+    BIND(IRI(CONCAT(STR($this), "/~facts")) AS ?facts)
+    BIND(IRI(CONCAT(STR($this), "/~release")) AS ?releaseBadge)
+    BIND(IRI(CONCAT(STR($this), "/~kind")) AS ?kindBadge)
+    BIND(IF(?lossy, IRI(CONCAT(STR($this), "/~lossy")), ?unbound) AS ?lossyBadge)
+    BIND(IF(BOUND(?recorded), IRI(CONCAT(STR($this), "/~date")), ?unbound) AS ?dateSpan)
+    BIND(IF(BOUND(?recorded), IRI(CONCAT(STR($this), "/~date-text")), ?unbound) AS ?dateText)
+    BIND(IF(BOUND(?issue), IRI(CONCAT(STR($this), "/~issue-", SUBSTR(MD5(STR(?issue)), 1, 8))), ?unbound) AS ?issueLink)
+    BIND(IF(BOUND(?commit), IRI(CONCAT(STR($this), "/~commit")), ?unbound) AS ?commitLink)
+  } UNION {
+    # The components it steps, from a version to the next, each a link to the term.
+    $this a c:ChangeEntry ; c:of ?change . ?change a chg:Change ; chg:affects ?t FILTER(isIRI(?t))
+    BIND(REPLACE(STR(?t), "[^#/]*$", "") AS ?tns)
+    BIND(REPLACE(STR(?t), "^.*[#/]", "") AS ?tlocal)
+    OPTIONAL { { SELECT ?tns (MIN(?tp0) AS ?tpfx) WHERE { ?td sh:prefix ?tp0 ; sh:namespace ?tn0 BIND(STR(?tn0) AS ?tns) } GROUP BY ?tns } }
+    BIND(IF(BOUND(?tpfx) && REGEX(?tlocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?tpfx), ":", ?tlocal), CONCAT("<", STR(?t), ">")) AS ?name)
+    OPTIONAL { SELECT ?change ?t (MAX(?v0) AS ?v) WHERE { ?step a chg:Step ; chg:of ?t ; sem:changedBy ?change ; sem:version ?v0 } GROUP BY ?change ?t }
+    BIND(IF(BOUND(?v), CONCAT(?name, " ", STR(?v - 1), " → ", STR(?v)), ?name) AS ?affectedWords)
+    BIND(CONCAT("2 ", ?name) AS ?affectedOrder)
+    OPTIONAL { ?affectsAt l10n:of c:AffectsPhrase ; l10n:name ?affects0 } OPTIONAL { c:AffectsPhrase rdfs:label ?affects1 FILTER(langMatches(lang(?affects1), "en")) }
+    BIND(STR(COALESCE(?affects0, ?affects1)) AS ?affectsWords)
+    BIND(IRI(CONCAT(STR($this), "/~affects")) AS ?affects)
+    BIND(IRI(CONCAT(STR($this), "/~affects-label")) AS ?affectsLabel)
+    BIND(IRI(CONCAT(STR($this), "/~affects-", SUBSTR(MD5(STR(?t)), 1, 8))) AS ?affected)
+  } UNION {
+    # The terms it retires.
+    $this a c:ChangeEntry ; c:of ?change . ?change a chg:Change ; chg:retires ?r FILTER(isIRI(?r))
+    BIND(REPLACE(STR(?r), "[^#/]*$", "") AS ?tns)
+    BIND(REPLACE(STR(?r), "^.*[#/]", "") AS ?tlocal)
+    OPTIONAL { { SELECT ?tns (MIN(?tp0) AS ?tpfx) WHERE { ?td sh:prefix ?tp0 ; sh:namespace ?tn0 BIND(STR(?tn0) AS ?tns) } GROUP BY ?tns } }
+    BIND(IF(BOUND(?tpfx) && REGEX(?tlocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?tpfx), ":", ?tlocal), CONCAT("<", STR(?r), ">")) AS ?retiredName)
+    BIND(CONCAT("4 ", ?retiredName) AS ?retiredOrder)
+    OPTIONAL { ?retiresAt l10n:of c:RetiresPhrase ; l10n:name ?retires0 } OPTIONAL { c:RetiresPhrase rdfs:label ?retires1 FILTER(langMatches(lang(?retires1), "en")) }
+    BIND(STR(COALESCE(?retires0, ?retires1)) AS ?retiresWords)
+    BIND(IRI(CONCAT(STR($this), "/~affects")) AS ?affects)
+    BIND(IRI(CONCAT(STR($this), "/~retires-label")) AS ?retiresLabel)
+    BIND(IRI(CONCAT(STR($this), "/~retires-", SUBSTR(MD5(STR(?r)), 1, 8))) AS ?retired)
+  } UNION {
+    # The headings: why, what, and how to move each way.
+    $this a c:ChangeEntry ; c:of ?change . ?change a chg:Change .
+    VALUES (?part ?blockOrder ?blockLevel ?phrase) {
+      ("why-heading" "4" 2 c:WhyPhrase) ("what-heading" "6" 2 c:WhatChangedPhrase) ("moving-heading" "8" 2 c:MovingPhrase)
+      ("forward-heading" "10" 3 c:ForwardPhrase) ("back-heading" "13" 3 c:BackPhrase)
+    }
+    OPTIONAL { ?phraseAt l10n:of ?phrase ; l10n:name ?phrase0 } OPTIONAL { ?phrase rdfs:label ?phrase1 FILTER(langMatches(lang(?phrase1), "en")) }
+    BIND(STR(COALESCE(?phrase0, ?phrase1)) AS ?blockWords)
+    BIND(c:Heading AS ?blockClass)
+    BIND(IRI(CONCAT(STR($this), "/~", ?part)) AS ?block)
+  } UNION {
+    # The prose, on one line each: why, what, and the guide for each way.
+    $this a c:ChangeEntry ; c:of ?change . ?change a chg:Change .
+    VALUES (?part ?blockOrder ?property) { ("why" "5" chg:motivation) ("what" "7" chg:substance) ("forward" "12" chg:forwardGuide) ("back" "15" chg:backwardGuide) }
+    ?change ?property ?prose .
+    BIND(REPLACE(STR(?prose), "[ \\t\\r\\n]+", " ") AS ?blockWords)
+    BIND(c:Text AS ?blockClass)
+    BIND(IRI(CONCAT(STR($this), "/~", ?part)) AS ?block)
+  } UNION {
+    # A change of meaning or behaviour alone: nothing in a project's files to rewrite.
+    $this a c:ChangeEntry ; c:of ?change . ?change a chg:Change .
+    FILTER NOT EXISTS { ?change chg:migrations ?migrations4 FILTER(?migrations4 != rdf:nil) }
+    OPTIONAL { ?meaningAt l10n:of c:MeaningKindPhrase ; l10n:name ?meaning0 } OPTIONAL { c:MeaningKindPhrase rdfs:label ?meaning1 FILTER(langMatches(lang(?meaning1), "en")) }
+    OPTIONAL { ?noteAt l10n:of c:MeaningNotePhrase ; l10n:name ?note0 } OPTIONAL { c:MeaningNotePhrase rdfs:label ?note1 FILTER(langMatches(lang(?note1), "en")) }
+    BIND(STR(COALESCE(?meaning0, ?meaning1)) AS ?blockWords)
+    BIND(STR(COALESCE(?note0, ?note1)) AS ?blockHelp)
+    BIND(c:Alert AS ?blockClass)
+    BIND(sty:Info AS ?blockTone)
+    BIND("9" AS ?blockOrder)
+    BIND(IRI(CONCAT(STR($this), "/~meaning")) AS ?block)
+  } UNION {
+    # The command for each way, from and to the release before this change's.
+    $this a c:ChangeEntry ; c:of ?change . ?change a chg:Change .
+    VALUES (?part ?blockOrder) { ("forward-command" "11") ("back-command" "14") }
+    BIND(EXISTS { ?change chg:migrations ?migrations5 FILTER(?migrations5 != rdf:nil) } AS ?migrates)
+    BIND(EXISTS { ?change chg:migrations/rdf:rest*/rdf:first/mig:loses ?lost5 } AS ?lossy)
+    OPTIONAL { ?change chg:releasedIn/chg:previous/chg:version ?previous }
+    BIND(IF(BOUND(?previous), CONCAT(" --from ", STR(?previous)), "") AS ?from)
+    BIND(IF(?part = "forward-command", CONCAT("semblance migrate --check", IF(?migrates, CONCAT("\\nsemblance migrate", ?from), ?from)),
+         CONCAT("semblance migrate --to ", COALESCE(STR(?previous), "<release>"), IF(?lossy, " --accept-loss", ""))) AS ?blockWords)
+    BIND(c:Code AS ?blockClass)
+    BIND(true AS ?blockIsCode)
+    BIND("shell" AS ?blockLanguage)
+    BIND(IRI(CONCAT(STR($this), "/~", ?part)) AS ?block)
+  } UNION {
+    # Its migrations, in order: a card each, named by the step it makes.
+    $this a c:ChangeEntry ; c:of ?change . ?change a chg:Change ; chg:migrations ?head .
+    ?head rdf:rest* ?cell . ?cell rdf:first ?m .
+    { SELECT ?change ?cell (COUNT(DISTINCT ?mid) AS ?position) WHERE { ?change a chg:Change ; chg:migrations ?head2 . ?head2 rdf:rest* ?mid . ?mid rdf:rest* ?cell } GROUP BY ?change ?cell }
+    OPTIONAL { ?m mig:of ?of }
+    OPTIONAL { ?m mig:from ?fromVersion }
+    OPTIONAL { ?m mig:to ?toVersion }
+    BIND(REPLACE(STR(?of), "[^#/]*$", "") AS ?tns)
+    BIND(REPLACE(STR(?of), "^.*[#/]", "") AS ?tlocal)
+    OPTIONAL { { SELECT ?tns (MIN(?tp0) AS ?tpfx) WHERE { ?td sh:prefix ?tp0 ; sh:namespace ?tn0 BIND(STR(?tn0) AS ?tns) } GROUP BY ?tns } }
+    BIND(IF(BOUND(?tpfx) && REGEX(?tlocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?tpfx), ":", ?tlocal), CONCAT("<", STR(?of), ">")) AS ?ofName)
+    BIND(CONCAT(?ofName, IF(BOUND(?fromVersion) && BOUND(?toVersion), CONCAT(" ", STR(?fromVersion), " → ", STR(?toVersion)), "")) AS ?migrationLabel)
+    BIND(EXISTS { ?m mig:renames ?anyRename } && NOT EXISTS { ?m mig:forward ?anyForward } AS ?renameOnly)
+    OPTIONAL { ?renameAt l10n:of c:RenameKindPhrase ; l10n:name ?rename0 } OPTIONAL { c:RenameKindPhrase rdfs:label ?rename1 FILTER(langMatches(lang(?rename1), "en")) }
+    OPTIONAL { ?shapeAt l10n:of c:ShapeKindPhrase ; l10n:name ?shape0 } OPTIONAL { c:ShapeKindPhrase rdfs:label ?shape1 FILTER(langMatches(lang(?shape1), "en")) }
+    OPTIONAL { ?lossyAt l10n:of c:LossyKindPhrase ; l10n:name ?lossy0 } OPTIONAL { c:LossyKindPhrase rdfs:label ?lossy1 FILTER(langMatches(lang(?lossy1), "en")) }
+    BIND(CONCAT(IF(?renameOnly, STR(COALESCE(?rename0, ?rename1)), STR(COALESCE(?shape0, ?shape1))), IF(EXISTS { ?m mig:loses ?loss }, CONCAT(" · ", STR(COALESCE(?lossy0, ?lossy1))), "")) AS ?migrationKind)
+    BIND(STR(100 + ?position) AS ?migrationOrder)
+    BIND(IRI(CONCAT(STR($this), "/~migration-", STR(?position))) AS ?migrationCard)
+    BIND(IRI(CONCAT(STR(?migrationCard), "-view")) AS ?migrationView)
+  } UNION {
+    # How many migrations, as a heading over them.
+    $this a c:ChangeEntry ; c:of ?change .
+    { SELECT ?change (COUNT(DISTINCT ?anyCell) AS ?count) WHERE { ?change a chg:Change ; chg:migrations ?head3 . ?head3 rdf:rest* ?anyCell . ?anyCell rdf:first ?anyMigration } GROUP BY ?change }
+    FILTER(?count > 0)
+    OPTIONAL { ?countAt l10n:of c:MigrationsCountPhrase ; l10n:name ?count0 } OPTIONAL { c:MigrationsCountPhrase rdfs:label ?count1 FILTER(langMatches(lang(?count1), "en")) }
+    BIND(REPLACE(STR(COALESCE(?count0, ?count1)), "\\\\{n\\\\}", STR(?count)) AS ?blockWords)
+    BIND(c:Heading AS ?blockClass)
+    BIND(2 AS ?blockLevel)
+    BIND("16" AS ?blockOrder)
+    BIND(IRI(CONCAT(STR($this), "/~migrations-heading")) AS ?block)
+  } }
+}""" .
+
+# --- one migration ---------------------------------------------------------------------------------------
+c:MigrationViewRendering a sem:Rendering ; sem:targets c:MigrationView ; sem:stratum 0 .
+c:MigrationViewRendering-fn a sem:Rule ; sem:implements c:MigrationViewRendering ; sem:function "changes:migration" .
+c:MigrationViewRendering-sparql a sem:Rule ;
+    sem:implements c:MigrationViewRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?loses , ?table , ?part .
+  ?loses a c:Alert ; sty:tone sty:Warning ; c:label ?losesWords ; c:help ?losesText ; sem:orderKey "1" .
+  ?table a rdfhtml:Table ; rdfhtml:class "sem-renames" ; sem:orderKey "2" ; rdfhtml:hasChild ?thead , ?tbody .
+  ?thead a rdfhtml:Thead ; rdfhtml:hasChild ?headRow ; ord:immediatelyPrecedes ?tbody .
+  ?headRow a rdfhtml:Tr ; rdfhtml:hasChild ?oldHead , ?newHead .
+  ?oldHead a rdfhtml:Th ; rdfhtml:hasChild ?oldHeadText ; ord:immediatelyPrecedes ?newHead .
+  ?oldHeadText a rdfhtml:Text ; rdfhtml:data ?oldWords .
+  ?newHead a rdfhtml:Th ; rdfhtml:hasChild ?newHeadText .
+  ?newHeadText a rdfhtml:Text ; rdfhtml:data ?newWords .
+  ?tbody a rdfhtml:Tbody ; rdfhtml:hasChild ?row .
+  ?row a rdfhtml:Tr ; sem:orderKey ?oldName ; rdfhtml:hasChild ?oldCell , ?newCell .
+  ?oldCell a rdfhtml:Td ; rdfhtml:hasChild ?oldCode ; ord:immediatelyPrecedes ?newCell .
+  ?oldCode a rdfhtml:Code ; rdfhtml:hasChild ?oldText .
+  ?oldText a rdfhtml:Text ; rdfhtml:data ?oldName .
+  ?newCell a rdfhtml:Td ; rdfhtml:hasChild ?newCode .
+  ?newCode a rdfhtml:Code ; rdfhtml:hasChild ?newText .
+  ?newText a rdfhtml:Text ; rdfhtml:data ?newName .
+  ?part a ?partClass ; c:label ?partWords ; sty:textStyle ?partStyle ; c:block ?partIsCode ; c:language ?partLanguage ; c:items ?partItems ; sem:orderKey ?partOrder .
+}
+WHERE {
+  $this a c:MigrationView .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { {
+    # What going back loses.
+    $this a c:MigrationView ; c:of ?m . ?m mig:loses ?lost .
+    OPTIONAL { ?losesAt l10n:of c:LosesPhrase ; l10n:name ?loses0 } OPTIONAL { c:LosesPhrase rdfs:label ?loses1 FILTER(langMatches(lang(?loses1), "en")) }
+    BIND(STR(COALESCE(?loses0, ?loses1)) AS ?losesWords)
+    BIND(REPLACE(STR(?lost), "[ \\\\t\\\\r\\\\n]+", " ") AS ?losesText)
+    BIND(IRI(CONCAT(STR($this), "/~loses")) AS ?loses)
+  } UNION {
+    # The renames' header.
+    $this a c:MigrationView ; c:of ?m . FILTER EXISTS { ?m mig:renames ?anyRename }
+    OPTIONAL { ?oldAt l10n:of c:OldNamePhrase ; l10n:name ?old0 } OPTIONAL { c:OldNamePhrase rdfs:label ?old1 FILTER(langMatches(lang(?old1), "en")) }
+    OPTIONAL { ?newAt l10n:of c:NewNamePhrase ; l10n:name ?new0 } OPTIONAL { c:NewNamePhrase rdfs:label ?new1 FILTER(langMatches(lang(?new1), "en")) }
+    BIND(STR(COALESCE(?old0, ?old1)) AS ?oldWords)
+    BIND(STR(COALESCE(?new0, ?new1)) AS ?newWords)
+    BIND(IRI(CONCAT(STR($this), "/~renames")) AS ?table)
+    BIND(IRI(CONCAT(STR($this), "/~renames-head")) AS ?thead)
+    BIND(IRI(CONCAT(STR($this), "/~renames-head-row")) AS ?headRow)
+    BIND(IRI(CONCAT(STR($this), "/~renames-old")) AS ?oldHead)
+    BIND(IRI(CONCAT(STR($this), "/~renames-old-text")) AS ?oldHeadText)
+    BIND(IRI(CONCAT(STR($this), "/~renames-new")) AS ?newHead)
+    BIND(IRI(CONCAT(STR($this), "/~renames-new-text")) AS ?newHeadText)
+    BIND(IRI(CONCAT(STR($this), "/~renames-body")) AS ?tbody)
+  } UNION {
+    # Each rename: a term by its prefixed name, a slug in quotes.
+    $this a c:MigrationView ; c:of ?m . ?m mig:renames ?rename . ?rename mig:old ?old ; mig:new ?new .
+    BIND(REPLACE(STR(?old), "[^#/]*$", "") AS ?ons)
+    BIND(REPLACE(STR(?old), "^.*[#/]", "") AS ?olocal)
+    OPTIONAL { { SELECT ?ons (MIN(?op0) AS ?opfx) WHERE { ?od sh:prefix ?op0 ; sh:namespace ?on0 BIND(STR(?on0) AS ?ons) } GROUP BY ?ons } }
+    BIND(IF(isIRI(?old), IF(BOUND(?opfx) && REGEX(?olocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?opfx), ":", ?olocal), CONCAT("<", STR(?old), ">")), CONCAT("\\"", STR(?old), "\\"")) AS ?oldName)
+    BIND(REPLACE(STR(?new), "[^#/]*$", "") AS ?nns)
+    BIND(REPLACE(STR(?new), "^.*[#/]", "") AS ?nlocal)
+    OPTIONAL { { SELECT ?nns (MIN(?np0) AS ?npfx) WHERE { ?nd sh:prefix ?np0 ; sh:namespace ?nn0 BIND(STR(?nn0) AS ?nns) } GROUP BY ?nns } }
+    BIND(IF(isIRI(?new), IF(BOUND(?npfx) && REGEX(?nlocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?npfx), ":", ?nlocal), CONCAT("<", STR(?new), ">")), CONCAT("\\"", STR(?new), "\\"")) AS ?newName)
+    BIND(SUBSTR(MD5(CONCAT(STR(?old), " ", STR(?new))), 1, 8) AS ?rk)
+    BIND(IRI(CONCAT(STR($this), "/~renames-body")) AS ?tbody)
+    BIND(IRI(CONCAT(STR($this), "/~rename-", ?rk)) AS ?row)
+    BIND(IRI(CONCAT(STR(?row), "-old")) AS ?oldCell)
+    BIND(IRI(CONCAT(STR(?row), "-old-code")) AS ?oldCode)
+    BIND(IRI(CONCAT(STR(?row), "-old-text")) AS ?oldText)
+    BIND(IRI(CONCAT(STR(?row), "-new")) AS ?newCell)
+    BIND(IRI(CONCAT(STR(?row), "-new-code")) AS ?newCode)
+    BIND(IRI(CONCAT(STR(?row), "-new-text")) AS ?newText)
+  } UNION {
+    # The property that keeps which term each instance was.
+    $this a c:MigrationView ; c:of ?m . ?m mig:discriminator ?d FILTER(isIRI(?d))
+    BIND(REPLACE(STR(?d), "[^#/]*$", "") AS ?tns)
+    BIND(REPLACE(STR(?d), "^.*[#/]", "") AS ?tlocal)
+    OPTIONAL { { SELECT ?tns (MIN(?tp0) AS ?tpfx) WHERE { ?td sh:prefix ?tp0 ; sh:namespace ?tn0 BIND(STR(?tn0) AS ?tns) } GROUP BY ?tns } }
+    BIND(IF(BOUND(?tpfx) && REGEX(?tlocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?tpfx), ":", ?tlocal), CONCAT("<", STR(?d), ">")) AS ?dName)
+    OPTIONAL { ?discAt l10n:of c:DiscriminatorPhrase ; l10n:name ?disc0 } OPTIONAL { c:DiscriminatorPhrase rdfs:label ?disc1 FILTER(langMatches(lang(?disc1), "en")) }
+    BIND(REPLACE(STR(COALESCE(?disc0, ?disc1)), "\\\\{term\\\\}", ?dName) AS ?partWords)
+    BIND(c:Text AS ?partClass)
+    BIND(sty:Caption AS ?partStyle)
+    BIND("3" AS ?partOrder)
+    BIND(IRI(CONCAT(STR($this), "/~discriminator")) AS ?part)
+  } UNION {
+    # Each example, as a diff.
+    $this a c:MigrationView ; c:of ?m . ?m mig:exampleDiff ?diff . ?diff mig:lines ?partItems .
+    OPTIONAL { ?diff sem:order ?n0 }
+    OPTIONAL { ?exampleAt l10n:of c:ExamplePhrase ; l10n:name ?example0 } OPTIONAL { c:ExamplePhrase rdfs:label ?example1 FILTER(langMatches(lang(?example1), "en")) }
+    BIND(STR(COALESCE(?example0, ?example1)) AS ?partWords)
+    BIND(c:DiffView AS ?partClass)
+    BIND(STR(40 + COALESCE(?n0, 0)) AS ?partOrder)
+    BIND(IRI(CONCAT(STR($this), "/~example-", STR(COALESCE(?n0, 0)))) AS ?part)
+  } UNION {
+    # The SPARQL Updates, forward and back: a caption over each.
+    $this a c:MigrationView ; c:of ?m .
+    VALUES (?direction ?update ?phrase ?captionOrder ?codeOrder) { ("forward" mig:forward c:ForwardUpdatePhrase "60" "61") ("backward" mig:backward c:BackwardUpdatePhrase "62" "63") }
+    ?m ?update ?sparql .
+    OPTIONAL { ?phraseAt l10n:of ?phrase ; l10n:name ?phrase0 } OPTIONAL { ?phrase rdfs:label ?phrase1 FILTER(langMatches(lang(?phrase1), "en")) }
+    VALUES ?which { "caption" "code" }
+    BIND(IF(?which = "caption", c:Text, c:Code) AS ?partClass)
+    BIND(IF(?which = "caption", STR(COALESCE(?phrase0, ?phrase1)), STR(?sparql)) AS ?partWords)
+    BIND(IF(?which = "caption", sty:Overline, ?unbound) AS ?partStyle)
+    BIND(IF(?which = "code", true, ?unbound) AS ?partIsCode)
+    BIND(IF(?which = "code", "sparql", ?unbound) AS ?partLanguage)
+    BIND(IF(?which = "caption", ?captionOrder, ?codeOrder) AS ?partOrder)
+    BIND(IRI(CONCAT(STR($this), "/~", ?direction, "-", ?which)) AS ?part)
+  } }
+}""" .
+
+# --- a component's versions ------------------------------------------------------------------------------
+c:ComponentHistoryRendering a sem:Rendering ; sem:targets c:ComponentHistory ; sem:stratum 0 ; sem:follows c:bindFrom .
+c:ComponentHistoryRendering-fn a sem:Rule ; sem:implements c:ComponentHistoryRendering ; sem:function "changes:history" .
+c:ComponentHistoryRendering-sparql a sem:Rule ;
+    sem:implements c:ComponentHistoryRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?card , ?empty .
+  ?empty a c:Text ; c:label ?emptyWords .
+  ?card a c:Card ; c:label ?versionWords ; c:badge ?badge ; c:content ?body ; sem:orderKey ?cardOrder .
+  ?body a ?bodyClass ; c:to ?change ; c:label ?bodyWords ; sty:textStyle ?bodyStyle .
+}
+WHERE {
+  $this a c:ComponentHistory .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { {
+    # Each version step, newest first.
+    $this a c:ComponentHistory .
+    { $this c:of ?component } UNION { $this c:bindFrom ?from ; c:bindProperty ?bp . ?from ?bp ?component }
+    ?step a chg:Step ; chg:of ?component ; sem:version ?version .
+    OPTIONAL { ?step chg:recorded ?recorded }
+    OPTIONAL { ?step chg:releasedIn ?release . OPTIONAL { ?release chg:version ?releaseVersion } }
+    OPTIONAL { ?step sem:changedBy ?change . ?change a chg:Change .
+      OPTIONAL { ?changeLabelAt l10n:of ?change ; l10n:name ?changeLabel0 }
+      OPTIONAL { SELECT ?change (MIN(STR(?anyLabel)) AS ?changeLabel1) WHERE { ?change a chg:Change ; rdfs:label ?anyLabel } GROUP BY ?change } }
+    OPTIONAL { ?step sem:internal ?internal }
+    OPTIONAL { ?versionAt l10n:of c:VersionPhrase ; l10n:name ?versionP0 } OPTIONAL { c:VersionPhrase rdfs:label ?versionP1 FILTER(langMatches(lang(?versionP1), "en")) }
+    OPTIONAL { ?unreleasedAt l10n:of c:UnreleasedPhrase ; l10n:name ?unreleased0 } OPTIONAL { c:UnreleasedPhrase rdfs:label ?unreleased1 FILTER(langMatches(lang(?unreleased1), "en")) }
+    OPTIONAL { ?newAt l10n:of c:NewComponentPhrase ; l10n:name ?new0 } OPTIONAL { c:NewComponentPhrase rdfs:label ?new1 FILTER(langMatches(lang(?new1), "en")) }
+    BIND(REPLACE(STR(COALESCE(?versionP0, ?versionP1)), "\\\\{n\\\\}", STR(?version)) AS ?versionWords)
+    BIND(CONCAT(COALESCE(STR(?releaseVersion), STR(COALESCE(?unreleased0, ?unreleased1))), IF(BOUND(?recorded), CONCAT(" · ", STR(?recorded)), "")) AS ?badge)
+    BIND(STR(0 - ?version) AS ?cardOrder)
+    BIND(IF(BOUND(?change), c:Link, c:Text) AS ?bodyClass)
+    BIND(IF(BOUND(?change), COALESCE(STR(?changeLabel0), ?changeLabel1, REPLACE(STR(?change), "^.*[#/]", "")),
+         IF(STR(?internal) = "new", STR(COALESCE(?new0, ?new1)), REPLACE(STR(?internal), "[ \\\\t\\\\r\\\\n]+", " "))) AS ?bodyWords)
+    BIND(IF(BOUND(?change), ?unbound, sty:Caption) AS ?bodyStyle)
+    BIND(IRI(CONCAT(STR($this), "/~version-", STR(?version))) AS ?card)
+    BIND(IRI(CONCAT(STR(?card), "-body")) AS ?body)
+  } UNION {
+    # A component without recorded versions.
+    $this a c:ComponentHistory .
+    FILTER NOT EXISTS { { $this c:of ?c1 } UNION { $this c:bindFrom ?f1 ; c:bindProperty ?p1 . ?f1 ?p1 ?c1 } ?s1 a chg:Step ; chg:of ?c1 }
+    OPTIONAL { ?emptyAt l10n:of c:NoVersionsPhrase ; l10n:name ?empty0 } OPTIONAL { c:NoVersionsPhrase rdfs:label ?empty1 FILTER(langMatches(lang(?empty1), "en")) }
+    BIND(STR(COALESCE(?empty0, ?empty1)) AS ?emptyWords)
+    BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+  } }
+}""" .

@@ -15,6 +15,7 @@ import { privacyFunctions } from './layers/privacy.ts'
 import { functions as workbenchFunctions } from './components/workbench.ts'
 import { exampleFunctions } from './examples/index.ts'
 import { functions as referenceFunctions } from './components/reference.ts'
+import { functions as changesFunctions } from './components/changes.ts'
 import { VIEW_GRAPH, ViewRuntime } from './view/runtime.ts'
 import { viewFunctions } from './view/functions.ts'
 import { applyEffective, Consolidation } from './view/input.ts'
@@ -383,7 +384,7 @@ export class Runtime {
       // A rule maintained as a view (iv:strategy iv:Incremental): one hosted view per rule and projection.
       maintain: (rule, query) => this.views.hostRule(mint(rule.iri, 'view-' + name), query),
       ...opts,
-      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...retentionFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
+      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...retentionFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...changesFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
     const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase(), opts.policy)
     engine.watchdog = this.watchdog

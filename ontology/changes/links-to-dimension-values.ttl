@@ -1,0 +1,33 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix nav: <https://semblance.dev/ns/navigation#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:links-to-dimension-values a chg:Change ;
+    rdfs:label "A link to a value of a dimension goes where that value is shown; a key is sem:slug unless stated"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/564> ;
+    chg:motivation """A link (c:to) reached a component that is shown, or a term that a dimension of terms shows (the
+Reference). A resource that is neither, but is a value a dimension holds (a change on the Changes page, whose
+values are the instances of its property's range rather than the cases of a switch), had no address, so a link
+to it rendered nothing. And the SPARQL rules spelled a value by its nav:keyProperty, which, when a dimension did
+not state one, matched any property of the value (its sem:order, a date) instead of the documented sem:slug: the
+function twins already took sem:slug.""" ;
+    chg:substance """c:LinkDestination and c:AppBarDestination (SPARQL and their twin, addressOf in src/navigation.ts),
+and the destinations a walkthrough's c:Mention spells: a resource that no component shows and that is not a term,
+but is an instance of the rdfs:range of a dimension's nav:property (a dimension that does not show terms and is
+not the target), gets the address that sets that dimension to it, with the values its parents need (nav:when),
+as a term does on a dimension of terms. The term branch now applies only to terms, so a value is never also
+spelled as a term. nav:Location's spelling and the destinations take sem:slug as the key property when a
+dimension states no nav:keyProperty, as its comment and the function twins say. Links to shown components and to
+terms are spelled as before, and so is every dimension that states its key property.""" ;
+    chg:forwardGuide """Nothing to move. A link to a value of a dimension that rendered nothing (no nav:href) now has its
+address: if that was relied on, point it at something else. A dimension without nav:keyProperty is spelled by
+the values' sem:slug in the SPARQL rules too; state nav:keyProperty to spell it by another property.""" ;
+    chg:backwardGuide """Going back, a link to a value no component shows has no address again, and a dimension without
+nav:keyProperty is spelled, in the SPARQL rules only, by whichever literal property of the value comes first.""" ;
+    chg:affects c:Link , c:AppBar , c:Mention , nav:Location .
