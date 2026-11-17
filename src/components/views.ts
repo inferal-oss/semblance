@@ -117,13 +117,17 @@ const appbar: FnRule = (ctx, focus) => {
     o.t(toggle, C_FOLDS, focus)
     group.push(o.el('more', 'Div', { class: 'sem-more', 'data-open': String(open) }, [toggle, o.el('more-body', 'Div', { class: 'sem-more-body', id: body.value }, more)]))
   }
-  // The end actions: a group of their own after the actions and the More button, the bar's corner.
+  // The end actions: a group of their own after the actions and the More button, the bar's corner. The actions
+  // and the end actions are one group after the brand: the bar wraps the brand and that group, and the group
+  // keeps the end actions at its end.
   const end = rdfList(ctx, ctx.object(focus, C_END_ACTIONS)).filter(named)
   o.renders(
     o.el('root', 'Header', {}, [
       brand,
-      o.el('actions', 'Div', { class: 'sem-actions' }, [...actions, ...group]),
-      ...(end.length ? [o.el('end', 'Div', { class: 'sem-end' }, end)] : []),
+      o.el('tools', 'Div', { class: 'sem-tools' }, [
+        o.el('actions', 'Div', { class: 'sem-actions' }, [...actions, ...group]),
+        ...(end.length ? [o.el('end', 'Div', { class: 'sem-end' }, end)] : []),
+      ]),
     ]),
   )
   return o.quads

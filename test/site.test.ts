@@ -108,7 +108,7 @@ describe('the site', () => {
 
   it.each(['sparql', 'function'] as const)('links to its source from the app bar\'s corner, the GitHub mark named for assistive technology (%s)', (prefer) => {
     const h = mountSite('oxigraph', prefer)
-    const source = () => h.document.querySelector('[data-sem-c=app-bar] > .sem-end > [data-sem-c=link]')!
+    const source = () => h.document.querySelector('[data-sem-c=app-bar] > .sem-tools > .sem-end > [data-sem-c=link]')!
     const link = source()
     expect(link.localName).toBe('a')
     expect(link.getAttribute('href')).toBe('https://github.com/inferal-oss/semblance')
@@ -124,7 +124,7 @@ describe('the site', () => {
     expect(mark.getAttribute('aria-hidden')).toBe('true')
     expect(mark.getAttribute('viewBox')).toBe('0 0 16 16')
     expect(mark.querySelector('path')!.getAttribute('fill')).toBe('currentColor')
-    // In the corner (c:endActions): the bar's last part, after the actions and the folded tools; and
+    // In the corner (c:endActions): the last part of the bar's tools, after the actions and the folded ones; and
     // still there on another page.
     const end = link.parentElement!
     expect([...end.children]).toEqual([link])

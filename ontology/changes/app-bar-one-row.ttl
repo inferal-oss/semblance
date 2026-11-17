@@ -1,0 +1,37 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:app-bar-one-row a chg:Change ;
+    rdfs:label "An app bar is one row while it fits: its actions and end actions in one group after the brand"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/570> ;
+    chg:motivation """A bar with c:endActions was two rows on every screen wider than medium, however wide: a grid
+gave the brand a row of its own, so a desktop bar had a first row of the logo and the name with the rest of its
+width empty. The grid was there to keep the end actions in line with the actions, which a plain wrapping row
+cannot promise for three groups; one group of the actions and the end actions can.""" ;
+    chg:substance """c:AppBar renders its actions and its end actions in one group after the brand: a div with
+class sem-tools holding the actions' div (sem-actions) and, when there are c:endActions, the end actions' div
+(sem-end). The header's children are the brand and that group; before, they were the brand, the actions and the
+end actions. The text rendering is unchanged.
+
+Styles: on a screen wider than medium the bar wraps by its content, with no breakpoint for it: one row while the
+brand and the group fit (the brand, then the actions, then the end actions at the row's inline end); the group on
+a row of its own below the brand when they do not, the end actions at that row's inline end, in line with the
+actions' first line, the actions wrapping within their own room. The grid is gone. A bar without end actions
+lays out as before #565 (the actions after the brand, at the row's end while they share it). On a compact or
+medium screen the bar is the one row as before, the end actions after the More button; a theme that lays the
+actions' children out in the header itself (Semblance's page strip) sets the group to display: contents too.""" ;
+    chg:forwardGuide """Nothing in the graph moves. A style of your own that selects the bar's parts as the
+header's children moves one level down: [data-sem-c=app-bar] > .sem-actions becomes
+[data-sem-c=app-bar] > .sem-tools > .sem-actions, and > .sem-end becomes > .sem-tools > .sem-end. A theme that
+gives the actions display: contents to place their children among the header's gives the sem-tools group
+display: contents as well.""" ;
+    chg:backwardGuide """Nothing in the graph moves. Selectors of your own written against sem-tools go back to the
+header's children (drop the > .sem-tools step); the bar is again two rows wherever it has end actions on a
+screen wider than medium.""" ;
+    chg:affects c:AppBar .
