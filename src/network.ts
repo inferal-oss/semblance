@@ -2,16 +2,18 @@
 // what the page does on the network — fetch exchanges, WebSocket connections
 // and their frames — plus the events and spans the application reports, as
 // members of net:Capture in the network graph projections read. The stream is
-// bounded by its view's retention policy (ldes:amount); bodies are cut at
+// bounded by its view's retention policies, as every retained stream is (the
+// shared retention module, src/retention/offload.ts: dropped or offloaded as
+// they say), each entry with the nodes minted under it; bodies are cut at
 // net:previewLimit; net:recording false on net:Capture pauses it. Writes are
 // coalesced: everything that happens in one task lands as one change.
 import type { NamedNode, Quad } from '@rdfjs/types'
 import { NETWORK_GRAPH, NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
+import type { RetainedStream } from './retention/offload.ts'
 import type { Runtime } from './runtime.ts'
 
 const NET = NS.net
 const HTTP = NS.http
-const LDES = NS.ldes
 const TREE = NS.tree
 const XSD_DOUBLE = NS.xsd + 'double'
 /** Where entries are minted; their nodes are `<entry>/~<local>`. */
@@ -36,14 +38,22 @@ export interface EventDetail {
   correlation?: string
 }
 
+/**
+ * The captures over each runtime: its net:Capture stream has one host (the first capture's), and an
+ * entry that retires is let go by whichever capture began it.
+ */
+const capturesOf = new WeakMap<Runtime, Set<NetworkCapture>>()
+
 export class NetworkCapture {
   private readonly f
   private readonly now: () => number
   private seq = 0
-  /** Retained entries in capture order, with every subject that belongs to each. */
-  private readonly entries: { entry: NamedNode; subjects: NamedNode[] }[] = []
-  /** The retained entries' IRIs: what arrives late for one retired (or cleared) is dropped. */
-  private readonly alive = new Set<string>()
+  /**
+   * The retained entries, by IRI, with every subject that belongs to each (the entry, its response,
+   * its headers): what arrives late for one retired (or cleared) is dropped.
+   */
+  private readonly alive = new Map<string, NamedNode[]>()
+  private retained?: RetainedStream
   private pending: { add: Quad[]; remove: Quad[] } | undefined
   private readonly restore: (() => void)[] = []
 
@@ -53,6 +63,9 @@ export class NetworkCapture {
   ) {
     this.f = runtime.store.factory
     this.now = opts.now ?? (() => performance.now())
+    let captures = capturesOf.get(runtime)
+    if (!captures) capturesOf.set(runtime, (captures = new Set()))
+    captures.add(this)
   }
 
   /** Start recording the target's fetches and sockets. Returns a function that stops it. */
@@ -107,9 +120,9 @@ export class NetworkCapture {
   clear(): void {
     const g = this.nn(NETWORK_GRAPH)
     const store = this.runtime.store
-    for (const { entry, subjects } of this.entries.splice(0)) {
-      this.alive.delete(entry.value)
-      this.batch().remove.push(...store.match(this.nn(NET + 'Capture'), this.nn(TREE + 'member'), entry, g))
+    for (const [entry, subjects] of [...this.alive]) {
+      this.alive.delete(entry)
+      this.batch().remove.push(...store.match(this.nn(NET + 'Capture'), this.nn(TREE + 'member'), this.nn(entry), g))
       for (const s of subjects) this.batch().remove.push(...store.match(s, null, null, g))
     }
   }
@@ -253,33 +266,23 @@ export class NetworkCapture {
     if (!this.recording()) return
     const n = ++this.seq
     const e = this.nn(`urn:semblance:net:${Date.now().toString(36)}-${n}`)
-    this.entries.push({ entry: e, subjects: [e] })
-    this.alive.add(e.value)
+    this.alive.set(e.value, [e])
     this.add(e, RDF_TYPE, this.nn(type))
     this.add(e, NET + 'kind', this.nn(kind))
     this.add(e, NET + 'label', this.f.literal(label))
     this.add(e, NET + 'sequence', this.integer(n))
     this.add(e, NET + 'startedAt', this.double(at))
     this.add(this.nn(NET + 'Capture'), TREE + 'member', e)
-    const keep = this.amount()
-    while (this.entries.length > keep) {
-      const { entry, subjects } = this.entries.shift()!
-      this.alive.delete(entry.value)
-      const b = this.batch()
-      b.add = b.add.filter((q) => !q.object.equals(entry))
-      b.remove.push(this.f.quad(this.nn(NET + 'Capture'), this.nn(TREE + 'member'), entry))
-      for (const s of subjects) {
-        b.add = b.add.filter((q) => !q.subject.equals(s))
-        b.remove.push(...this.runtime.store.match(s, null, null, this.nn(NETWORK_GRAPH)))
-      }
-    }
+    // Bounded by its policies in the graph (net:CaptureView), as every retained stream is (docs/RETENTION.md).
+    const leaving = this.stream().append({ iri: e.value, seq: n, at: Date.now() })
+    if (leaving.length) this.batch().remove.push(...leaving)
     return e
   }
 
   /** A node that belongs to an entry (its response, a header), retired with it. */
   private mint(entry: NamedNode, local: string): NamedNode {
     const n = this.nn(`${entry.value}/~${local}`)
-    this.entries.find((x) => x.entry.equals(entry))?.subjects.push(n)
+    this.alive.get(entry.value)?.push(n)
     return n
   }
 
@@ -288,14 +291,45 @@ export class NetworkCapture {
     return q.every((x) => x.object.value !== 'false')
   }
 
-  private amount(): number {
-    const store = this.runtime.store
-    for (const view of store.match(this.nn(NET + 'Capture'), this.nn(TREE + 'view'), null))
-      for (const p of store.match(view.object as NamedNode, this.nn(LDES + 'retentionPolicy'), null)) {
-        const amount = store.match(p.object as NamedNode, this.nn(LDES + 'amount'), null)[0]
-        if (amount) return Number(amount.object.value)
-      }
-    return Infinity
+  /** net:Capture as a retained stream (src/retention/offload.ts): what its policies retire, and how. */
+  private stream(): RetainedStream {
+    const g = this.nn(NETWORK_GRAPH)
+    const runtime = this.runtime
+    const store = runtime.store
+    const capture = this.nn(NET + 'Capture')
+    return (this.retained ??= runtime.retention.stream(NET + 'Capture', {
+      graph: NETWORK_GRAPH,
+      // An entry leaves with every node minted under it, and with what is still to be written about
+      // them in this task; from then on nothing more is written about it.
+      closure: (m) => {
+        const out = store.match(capture, this.nn(TREE + 'member'), m, g)
+        let subjects: NamedNode[] = [m]
+        for (const c of capturesOf.get(runtime) ?? []) {
+          const left = c.letGo(m)
+          if (!left) continue
+          subjects = left.subjects
+          out.push(...left.pending)
+        }
+        for (const s of subjects) out.push(...store.match(s, null, null, g))
+        return out
+      },
+      write: (d) => runtime.write(NETWORK_GRAPH, d),
+    }))
+  }
+
+  /** An entry of this capture retires: its subjects, and what was still to be written about them (taken out). */
+  private letGo(m: NamedNode): { subjects: NamedNode[]; pending: Quad[] } | undefined {
+    const subjects = this.alive.get(m.value)
+    if (!subjects) return undefined
+    this.alive.delete(m.value)
+    const b = this.pending
+    if (!b) return { subjects, pending: [] }
+    const g = this.nn(NETWORK_GRAPH)
+    const mine = new Set(subjects.map((s) => s.value))
+    const theirs = (q: Quad) => mine.has(q.subject.value) || (q.predicate.value === TREE + 'member' && q.object.equals(m))
+    const pending = b.add.filter(theirs).map((q) => this.f.quad(q.subject, q.predicate, q.object, g))
+    b.add = b.add.filter((q) => !theirs(q))
+    return { subjects, pending }
   }
 
   /** net:previewLimit, in characters (undefined: none given). */

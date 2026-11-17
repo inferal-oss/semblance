@@ -413,9 +413,9 @@ Tracked in #530, linked from the Plan (#8).
 | Undo on the change log, bigger bound, recalled past it | `beh:UndoRetention`, `src/behaviour/events.ts` | built |
 | The memory budget, pressure, eviction of hidden renderings, `onRetention` | `src/retention/pressure.ts`, `Engine.evict`, `Runtime.evict` | built |
 | The Memory tool | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
-| The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime) | their own pull request | separate |
+| The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime), and network capture on the shared module | #537 | separate |
 | Engine compaction: giving wasm memory back | the engine (#9) | separate; the pressure effect calls `store.compact()` when a store has it |
-| Cold graphs offloaded or unloaded under pressure; network capture on the shared module; `per:retention` as `ret:Within`; toasts that wait for acknowledgement | | not yet |
+| Cold graphs offloaded or unloaded under pressure; `per:retention` as `ret:Within`; toasts that wait for acknowledgement | | not yet |
 
 ## 8. Using retention
 

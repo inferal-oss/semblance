@@ -77,10 +77,12 @@ describe('network capture', () => {
   })
 
   it('keeps only what the retention policy keeps, with everything that belongs to it', async () => {
-    const { target, capture, members, store, g } = setup('@prefix net: <https://semblance.dev/ns/network#> . @prefix ldes: <https://w3id.org/ldes#> . net:CaptureRetention ldes:amount 3 .')
+    const { target, capture, members, store, g, runtime } = setup('@prefix net: <https://semblance.dev/ns/network#> . @prefix ldes: <https://w3id.org/ldes#> . net:CaptureRetention ldes:amount 3 .')
     for (let i = 0; i < 6; i++) await target.fetch!(`/r${i}`)
     capture.flush()
     expect(members()).toHaveLength(3)
+    // Retired by the shared retention module, as the other logs are.
+    expect(runtime.retention.get(NET + 'Capture')).toBeDefined()
     const subjects = new Set(store.match(null, null, null, g).map((q) => q.subject.value))
     // Only the capture stream and the three entries (and their minted nodes) remain.
     expect([...subjects].filter((s) => !s.includes('/~') && s !== NET + 'Capture')).toHaveLength(3)
