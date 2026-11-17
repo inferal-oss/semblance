@@ -279,9 +279,9 @@ Memory is bounded and retention is not forever, but nothing a person owns disapp
 ([docs/RETENTION.md](docs/RETENTION.md)). Data (what the app or the person owns) is never dropped by
 retention. History (logs, undo) is bounded by policies in the graph (`ret:`,
 `ontology/layers/retention.ttl`, one module in `src/retention/` for every stream). What it lets go is
-offloaded to IndexedDB and recalled into the live graph on request (`ret:recall`), and each stream's
-horizon (`ret:Horizon`, `c:HorizonList`) says what is in memory, offloaded and no longer kept; the
-first crossing is announced. Derived state is evicted under a memory budget (`ret:MemoryBudget`,
+offloaded to IndexedDB, as Jelly, and recalled into the live graph on request (`ret:recall`), and
+each stream's horizon (`ret:Horizon`, `c:HorizonList`) says what is in memory, offloaded and no
+longer kept; the first crossing is announced. Derived state is evicted under a memory budget (`ret:MemoryBudget`,
 mount's `maxMemory`). The pressure effect measures the engines' memory and the JS heap, and answers in
 order: it evicts hidden renderings, compacts, offloads, raises `ret:Pressure` for the app's
 reactions, and last asks the host (`onRetention`). The Tools window's Memory tab shows it and
