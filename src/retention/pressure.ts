@@ -67,8 +67,8 @@ export interface PressureOptions {
 
 /** The engines' WebAssembly memory and, where the browser reports it, the JS heap. */
 export function measure(runtime: Runtime): Sample {
-  const store = runtime.store as unknown as { memoryBytes?: () => number; engine?: { x?: { memory?: WebAssembly.Memory } } }
-  const wasmBytes = store.memoryBytes?.() ?? store.engine?.x?.memory?.buffer.byteLength ?? 0
+  const store = runtime.store
+  const wasmBytes = store.memoryBytes?.() ?? (store as unknown as { engine?: { x?: { memory?: WebAssembly.Memory } } }).engine?.x?.memory?.buffer.byteLength ?? 0
   const memory = (globalThis.performance as unknown as { memory?: { usedJSHeapSize: number } } | undefined)?.memory
   return { wasmBytes, heapBytes: memory?.usedJSHeapSize }
 }
@@ -174,7 +174,9 @@ export class MemoryPressure {
       // 1, 2, 3: evict, compact, offload.
       const derived = this.derived()
       this.evict(level === 'critical' ? Infinity : Math.ceil(derived * 0.25))
-      ;(store as unknown as { compact?: () => void }).compact?.()
+      // A compaction copies the whole store: only when live state is below most of the memory
+      // (after the eviction above), so lasting pressure does not copy a store that cannot shrink.
+      store.compact?.({ below: level === 'critical' ? 0.9 : 0.75 })
       this.offload(level)
       if (level === 'critical') this.escalation++
       // 4: the app's reactions, once a crossing.
