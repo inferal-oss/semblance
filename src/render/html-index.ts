@@ -11,6 +11,15 @@ import { allowsCustomElement, allowsElement, allowsHostComponent, ATTRIBUTE_NAME
 export const REFUSED_TAG = 'sem-refused'
 export const REFUSED_ATTRIBUTE = 'data-sem-refused'
 
+/** The empty collections every node starts with; never added to (see HtmlIndex.node). */
+const NONE: Set<string> = new Set()
+const NO_PROPS: Map<string, Set<string>> = new Map()
+/** A node's own set, made on its first addition. */
+function own(n: HNode, k: 'attrNodes' | 'children' | 'parents'): Set<string> {
+  if (n[k] === NONE) n[k] = new Set()
+  return n[k]
+}
+
 export interface HNode {
   /** RDF/HTML class local name ("Button", "Text"...). */
   cls?: string
@@ -599,7 +608,10 @@ export class HtmlIndex {
 
   private node(key: string): HNode {
     let n = this.nodes.get(key)
-    if (!n) this.nodes.set(key, (n = { props: new Map(), attrNodes: new Set(), children: new Set(), parents: new Set() }))
+    // A node's collections start as the shared empty ones, made its own on the first addition: most
+    // nodes have no attribute nodes, a leaf no children (#554: the index of a visited site holds 124k
+    // nodes, four collections each).
+    if (!n) this.nodes.set(key, (n = { props: NO_PROPS, attrNodes: NONE, children: NONE, parents: NONE }))
     return n
   }
 
@@ -645,10 +657,10 @@ export class HtmlIndex {
       case H.hasChild:
       case H.childOf: {
         const [parent, child] = p === H.hasChild ? [s, o] : [o, s]
-        if (sign > 0) this.node(parent).children.add(child)
-        else this.node(parent).children.delete(child)
-        if (sign > 0) this.node(child).parents.add(parent)
-        else this.node(child).parents.delete(parent)
+        const pn = this.node(parent)
+        const cn = this.node(child)
+        if (sign > 0) own(pn, 'children').add(child), own(cn, 'parents').add(parent)
+        else pn.children.delete(child), cn.parents.delete(parent)
         this.mark('children', parent)
         this.visibility++
         return
@@ -665,7 +677,7 @@ export class HtmlIndex {
       }
       case H.attribute: {
         const a = this.attr(o)
-        if (sign > 0) a.owners.add(s), this.node(s).attrNodes.add(o)
+        if (sign > 0) a.owners.add(s), own(this.node(s), 'attrNodes').add(o)
         else a.owners.delete(s), this.node(s).attrNodes.delete(o)
         this.mark('attrs', s)
         return
@@ -754,7 +766,9 @@ export class HtmlIndex {
         const name = ATTRIBUTE_NAMES[p.slice(H.ns.length)]
         if (!name) return
         if (name === 'hidden') this.visibility++
-        inc(this.node(s).props, name, o, sign)
+        const n = this.node(s)
+        if (sign > 0 && n.props === NO_PROPS) n.props = new Map()
+        inc(n.props, name, o, sign)
         this.mark('attrs', s)
       }
     }

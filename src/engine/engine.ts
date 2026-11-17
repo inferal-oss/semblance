@@ -137,6 +137,48 @@ function sameRule(a: Rule, b: Rule): boolean {
  */
 const ruleField = (k: string, v: unknown) => (v instanceof Set ? [...v] : k === 'queryParts' && Array.isArray(v) ? [String(v[0]).replace(/^(?:\s*PREFIX\s+[^\n]*\n)*/i, ''), ...v.slice(1)] : v)
 
+/** A derived triple in the store: the quad, how many pairs derive it, and its hash (quadHash). */
+interface Ref {
+  q: Quad
+  n: number
+  h: number
+}
+
+/** FNV-1a over a string, continuing `h`. */
+function mixString(h: number, s: string): number {
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+  return Math.imul(h ^ 0x1f, 0x01000193)
+}
+
+/**
+ * A hash of what quadKey says (subject, predicate, object; not the graph), as a small integer: the
+ * engine holds its derived triples by it rather than by their key strings, which cost ~170 bytes a
+ * triple (#554). Triples whose hashes meet are told apart by sameTriple.
+ */
+function quadHash(q: Quad): number {
+  let h = 0x811c9dc5
+  h = Math.imul(h ^ q.subject.termType.charCodeAt(0), 0x01000193)
+  h = mixString(h, q.subject.value)
+  h = mixString(h, q.predicate.value)
+  const o = q.object
+  h = Math.imul(h ^ o.termType.charCodeAt(0), 0x01000193)
+  h = mixString(h, o.value)
+  if (o.termType === 'Literal') h = mixString(h, o.language || o.datatype.value)
+  return (h >>> 0) & 0x3fffffff
+}
+
+/** Whether two quads have one quadKey (the graph aside). */
+function sameTriple(a: Quad, b: Quad): boolean {
+  if (a === b) return true
+  const ao = a.object
+  const bo = b.object
+  if (a.subject.termType !== b.subject.termType || a.subject.value !== b.subject.value || a.predicate.value !== b.predicate.value) return false
+  if (ao.termType !== bo.termType || ao.value !== bo.value) return false
+  if (ao.termType !== 'Literal') return true
+  const bl = bo as typeof ao
+  return ao.language ? ao.language === bl.language : !bl.language && ao.datatype.value === bl.datatype.value
+}
+
 export class Engine {
   readonly graph: NamedNode
   /** The PROV-O software agent standing for this projection. */
@@ -205,7 +247,11 @@ export class Engine {
   private targets = new Map<string, Set<string>>()
   /** object -> followed predicate -> subjects */
   private links = new Map<string, Map<string, Set<string>>>()
-  private outputs = new Map<Rule, Map<string, Map<string, Quad>>>()
+  /**
+   * Each pair's output: its derived triples, as the entries `refs` holds them in (a derived triple
+   * costs one entry and one quad however many pairs derive it, and no key string).
+   */
+  private outputs = new Map<Rule, Map<string, Ref[]>>()
   /** Traced reads of function rules: subject -> rule -> focus -> predicates read ('*' = any). */
   private readers = new Map<string, Map<Rule, Map<string, Set<string>>>>()
   /** The inverse, to retract a pair's previous reads: rule -> focus -> subjects. */
@@ -225,7 +271,9 @@ export class Engine {
    * schedules refresh() then.
    */
   onStale?: () => void
-  private refs = new Map<string, { q: Quad; n: number }>()
+  /** The derived triples by quadHash (several, where their hashes meet), and how many there are. */
+  private refs = new Map<number, Ref | Ref[]>()
+  private refCount = 0
   private dirty = new Map<number, Map<Rule, Set<string>>>()
   /** Member-wise rules: rule -> focus -> member keys with output (to retract them). */
   private memberKeys = new Map<Rule, Map<string, Set<string>>>()
@@ -411,7 +459,7 @@ export class Engine {
 
   /** Number of distinct derived triples currently asserted. */
   get derivedSize(): number {
-    return this.refs.size
+    return this.refCount
   }
 
   /** Sizes of the engine's bookkeeping, for leak checks: all must stay bounded by what is derived. */
@@ -429,7 +477,7 @@ export class Engine {
     for (const byFocus of this.queryFollowers.values()) following += byFocus.size
     let memberReaders = 0
     for (const byRule of this.memberReaders.values()) for (const keys of byRule.values()) memberReaders += keys.size
-    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, memberReaders, types: this.types.size, links: this.links.size, following, stale: this.stale.size, inputPairOwners: this.inputPairs.size, inputPairRules: this.inputPairsByRule.size, inputPairs: this.inputPairCount, names: this.ctx.footprint?.().names ?? 0, exactDeps: ruleDepsCached(this.store.factory) }
+    return { refs: this.refCount, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, memberReaders, types: this.types.size, links: this.links.size, following, stale: this.stale.size, inputPairOwners: this.inputPairs.size, inputPairRules: this.inputPairsByRule.size, inputPairs: this.inputPairCount, names: this.ctx.footprint?.().names ?? 0, exactDeps: ruleDepsCached(this.store.factory) }
   }
 
   onChange(listener: Listener): () => void {
@@ -582,7 +630,7 @@ export class Engine {
       if (!reads) continue
       for (const [focus, out] of this.outputs.get(rule) ?? []) {
         // nav:TopDimensions: only the foci whose output says they keep a dimension that changed (nav:keeps).
-        if (reads === 'top' && ![...out.values()].some((q) => q.predicate.value === keeps && changed.has(q.object.value))) continue
+        if (reads === 'top' && !out.some(({ q }) => q.predicate.value === keeps && changed.has(q.object.value))) continue
         this.markDirty(rule, focus)
       }
     }
@@ -626,8 +674,8 @@ export class Engine {
     if (!hidden.length) return 0
     const at = (owner: string) => this.shownAt.get(owner) ?? 0
     hidden.sort((a, b) => at(a.owner) - at(b.owner) || (a.owner < b.owner ? -1 : a.owner > b.owner ? 1 : 0))
-    const before = this.refs.size
-    for (let i = 0; i < hidden.length && before - this.refs.size < limit; ) {
+    const before = this.refCount
+    for (let i = 0; i < hidden.length && before - this.refCount < limit; ) {
       const owner = hidden[i]!.owner
       for (; i < hidden.length && hidden[i]!.owner === owner; i++) {
         const { rule, key } = hidden[i]!
@@ -641,7 +689,7 @@ export class Engine {
     }
     // What read the released output follows (parked, being hidden too, or run if shown).
     this.run()
-    return before - this.refs.size
+    return before - this.refCount
   }
 
   /** Whether any undemanded work is parked. */
@@ -914,7 +962,7 @@ export class Engine {
       const seen = new Set<string>()
       for (const [key, out] of byFocus) {
         const focus = focusOf(key)
-        if (out.size && !seen.has(focus)) seen.add(focus), yield { rule, focus }
+        if (out.length && !seen.has(focus)) seen.add(focus), yield { rule, focus }
       }
     }
   }
@@ -924,7 +972,7 @@ export class Engine {
     for (let focus = owningFocus(node); ; focus = owningFocus(focus)) {
       for (const [rule, byFocus] of this.outputs) {
         const keys = rule.forEach ? [...(this.memberKeys.get(rule)?.get(focus) ?? [])] : [focus]
-        for (const key of keys) for (const q of byFocus.get(key)?.values() ?? []) if (q.subject.value === node) return { rule: rule.iri, focus }
+        for (const key of keys) for (const { q } of byFocus.get(key) ?? []) if (q.subject.value === node) return { rule: rule.iri, focus }
       }
       if (owningFocus(focus) === focus) return undefined
     }
@@ -934,8 +982,9 @@ export class Engine {
   dispose(): void {
     for (const m of this.maintained.values()) m.stop(), m.dispose()
     this.maintained.clear()
-    for (const { q } of this.refs.values()) this.store.delete(q)
+    for (const e of this.refs.values()) for (const { q } of Array.isArray(e) ? e : [e]) this.store.delete(q)
     this.refs.clear()
+    this.refCount = 0
     this.outputs.clear()
     // Nor what it kept to re-run them: nothing it holds outlives it.
     this.readers.clear()
@@ -967,6 +1016,7 @@ export class Engine {
 
   /** What this engine states about its viewer (l10n:Viewer), by quad key. */
   private viewer = new Map<string, Quad>()
+  private viewerRefs = new Map<string, Ref>()
 
   /**
    * State the viewer's languages as graph data, in this engine's derived graph, so SPARQL
@@ -999,8 +1049,8 @@ export class Engine {
       put(f.quad(node, nn(SEM.prefixName), f.literal(prefix), g))
       put(f.quad(node, nn(SEM.namespace), f.literal(ns), g))
     }
-    for (const [k, q] of this.viewer) if (!next.has(k)) this.release(k, q)
-    for (const [k, q] of next) if (!this.viewer.has(k)) this.retain(k, q)
+    for (const k of this.viewer.keys()) if (!next.has(k)) this.release(this.viewerRefs.get(k)!), this.viewerRefs.delete(k)
+    for (const [k, q] of next) if (!this.viewer.has(k)) this.viewerRefs.set(k, this.retain(q))
     this.viewer = next
   }
 
@@ -2044,7 +2094,7 @@ export class Engine {
     let byFocus = this.outputs.get(rule)
     if (!byFocus) this.outputs.set(rule, (byFocus = new Map()))
     const prev = byFocus.get(focus)
-    const next = new Map<string, Quad>()
+    const fresh: Quad[] = []
     const f = this.store.factory
     for (const q of quads) {
       // A rule mints IRIs, never blank nodes. It may point at a blank node the data already has (an
@@ -2053,17 +2103,33 @@ export class Engine {
       if (q.subject.termType === 'BlankNode' || (q.object.termType === 'BlankNode' && !this.inStore(q.object))) {
         throw new Error(`Rule <${rule.iri}> emitted a blank node for <${focus}>; mint IRIs instead`)
       }
-      next.set(quadKey(q), q)
+      fresh.push(q)
     }
-    if (this.provenance && next.size) for (const p of this.provenanceOf(rule, focus, quads)) next.set(quadKey(p), p)
+    if (this.provenance && fresh.length) fresh.push(...this.provenanceOf(rule, focus, quads))
+    // What the pair keeps of its last output, and what it adds: released first, then retained.
+    const had = prev && new Set(prev)
+    const kept = new Set<Ref>()
+    const adds: [number, Quad][] = []
+    for (const q of fresh) {
+      const h = quadHash(q)
+      const ref = had && this.findRef(h, q)
+      if (ref && had.has(ref)) kept.add(ref)
+      else adds.push([h, q])
+    }
     this.committing = { rule, focus }
     try {
-      if (prev) for (const [k, q] of prev) if (!next.has(k)) this.release(k, q)
-      for (const [k, q] of next) if (!prev?.has(k)) this.retain(k, q)
+      if (prev) for (const ref of prev) if (!kept.has(ref)) this.release(ref)
+      for (const [h, q] of adds) {
+        const found = this.findRef(h, q)
+        // (The same triple twice in one output counts once.)
+        if (found && kept.has(found)) continue
+        kept.add(this.retain(q, h, found))
+      }
     } finally {
       this.committing = undefined
     }
-    if (next.size) byFocus.set(focus, next)
+    const next = [...kept]
+    if (next.length) byFocus.set(focus, next)
     else {
       byFocus.delete(focus)
       // A pair with nothing to show no longer needs to hear about what it read,
@@ -2076,7 +2142,7 @@ export class Engine {
       if (!byOwner) this.memberKeys.set(rule, (byOwner = new Map()))
       const owner = focusOf(focus)
       let keys = byOwner.get(owner)
-      if (next.size) {
+      if (next.length) {
         if (!keys) byOwner.set(owner, (keys = new Set()))
         keys.add(focus)
       } else if (keys) {
@@ -2222,12 +2288,17 @@ export class Engine {
     const outside = this.current === -Infinity
     for (const [rule, byFocus] of this.outputs) {
       for (const [focus, next] of byFocus) {
-        const quads = [...next.values()]
+        const quads = next.map((r) => r.q)
         this.committing = { rule, focus }
         try {
+          const has = new Set(next)
           for (const p of this.provenanceOf(rule, focus, quads)) {
-            const k = quadKey(p)
-            if (!next.has(k)) next.set(k, p), this.retain(k, p)
+            const h = quadHash(p)
+            const found = this.findRef(h, p)
+            if (found && has.has(found)) continue
+            const ref = this.retain(p, h, found)
+            has.add(ref)
+            next.push(ref)
           }
         } finally {
           this.committing = undefined
@@ -2298,26 +2369,49 @@ export class Engine {
     console.warn(`[semblance] A rule produced ${term}, which has gone${this.retired.renames.has(term) ? `: it is now ${this.retired.renames.get(term)}` : ''}. semblance migrate moves the source.`)
   }
 
-  private retain(key: string, q: Quad) {
-    const ref = this.refs.get(key)
-    if (ref) return void ref.n++
+  /** The entry of a derived triple, if the engine holds it. */
+  private findRef(h: number, q: Quad): Ref | undefined {
+    const e = this.refs.get(h)
+    if (!e) return undefined
+    if (!Array.isArray(e)) return sameTriple(e.q, q) ? e : undefined
+    for (const r of e) if (sameTriple(r.q, q)) return r
+    return undefined
+  }
+
+  /** One more pair derives this triple: its entry (`found`, when known), else it goes into the store. */
+  private retain(q: Quad, h = quadHash(q), found = this.findRef(h, q)): Ref {
+    if (found) return found.n++, found
     const f = this.store.factory
     const stored = q.graph.equals(this.graph) ? q : f.quad(q.subject, q.predicate, q.object, this.graph)
     this.reportRetired(q)
     this.store.add(stored)
-    this.refs.set(key, { q: stored, n: 1 })
+    const ref: Ref = { q: stored, n: 1, h }
+    const e = this.refs.get(h)
+    if (!e) this.refs.set(h, ref)
+    else if (Array.isArray(e)) e.push(ref)
+    else this.refs.set(h, [e, ref])
+    this.refCount++
     this.stats.derivedAdded++
+    const key = quadKey(stored)
     if (!this.pending.remove.delete(key)) this.pending.add.set(key, stored)
     this.propagate(stored, 1)
+    return ref
   }
 
-  private release(key: string, _q: Quad) {
-    const ref = this.refs.get(key)!
+  /** One pair fewer derives this triple: with the last, it leaves the store. */
+  private release(ref: Ref) {
     if (--ref.n) return
     this.store.delete(ref.q)
-    this.refs.delete(key)
+    const e = this.refs.get(ref.h)
+    if (Array.isArray(e)) {
+      e.splice(e.indexOf(ref), 1)
+      if (e.length === 1) this.refs.set(ref.h, e[0]!)
+    } else this.refs.delete(ref.h)
+    this.refCount--
     this.stats.derivedRemoved++
+    const key = quadKey(ref.q)
     if (!this.pending.add.delete(key)) this.pending.remove.set(key, ref.q)
     this.propagate(ref.q, -1)
   }
+
 }
