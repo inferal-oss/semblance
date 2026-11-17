@@ -31,6 +31,8 @@ c:byteLength a rdf:Property ; rdfs:range xsd:nonNegativeInteger ;
   rdfs:comment "Width in bytes, when known. A variable field can use a hint instead." .
 c:byteExtent a rdf:Property ; rdfs:domain c:ByteLayout ; rdfs:range xsd:positiveInteger ;
   rdfs:comment "Total bytes of a zero-based fixed layout. Without a scale, the strip is schematic." .
+c:byteWrap a owl:DatatypeProperty ; rdfs:domain c:ByteLayout ; rdfs:range xsd:boolean ;
+  rdfs:comment "In a browser, flow whole fields onto additional rows when the column narrows. Offsets and spans continue across rows." .
 c:byteMark a rdf:Property ; rdfs:domain c:ByteField ; rdfs:range c:ByteMark ;
   rdfs:comment "A highlighted span within the field." .
 c:byteSpan a rdf:Property ; rdfs:domain c:ByteLayout ; rdfs:range c:ByteSpan ;
@@ -63,12 +65,13 @@ c:inLayout a owl:ObjectProperty ; rdfs:domain c:ByteCell ; rdfs:range c:ByteLayo
 # Width: 132 units a field, at least 528 (three fields fit a column of 600px), plus 18 on each side. The cells read the same numbers.
 
 c:ByteLayoutRendering a sem:Rendering ; sem:targets c:ByteLayout ; sem:stratum 0 ;
-  sem:watches rdf:type, c:label, l10n:label, c:byteField, c:byteSpan, c:byteLayoutStyle, c:byteAxisLabel .
+  sem:watches rdf:type, c:label, l10n:label, c:byteField, c:byteSpan, c:byteLayoutStyle, c:byteAxisLabel, c:byteWrap .
 c:ByteLayoutFunction a sem:Rule ; sem:implements c:ByteLayoutRendering ; sem:function "byte-layout:render" .
 c:ByteLayoutScreen a sem:Rule ; sem:modality mod:Screen ; sem:implements c:ByteLayoutRendering ;
   sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class "sem-byte-layout" ; rdfhtml:hasChild ?plot ; rdfhtml:attribute ?appearanceAttr .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class "sem-byte-layout" ; rdfhtml:hasChild ?plot ; rdfhtml:attribute ?appearanceAttr, ?wrapAttr .
+  ?wrapAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-byte-wrap" ; rdfhtml:attributeValue "true" .
   ?appearanceAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-layout-appearance" ; rdfhtml:attributeValue ?appearance .
   ?plot a svg:Svg ; rdfhtml:hasChild ?rail, ?axis, ?fields .
   ?rail a svg:Path ; sem:orderKey "\\u0001n0" .
@@ -92,6 +95,7 @@ WHERE {
   BIND(COALESCE(STR(?axis0), "") AS ?axisLabel)
   BIND(IF(?count * 132 > 528, ?count * 132, 528) AS ?extent)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(EXISTS { $this c:byteWrap true }, IRI(CONCAT(STR($this), "/~root-data-byte-wrap")), ?none) AS ?wrapAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-data-layout-appearance")) AS ?appearanceAttr)
   BIND(IRI(CONCAT(STR($this), "/~plot")) AS ?plot)
   BIND(IRI(CONCAT(STR($this), "/~rail")) AS ?rail)
@@ -343,10 +347,11 @@ WHERE {
   BIND(IRI(CONCAT(STR(?group), "-caption")) AS ?caption)
   BIND(IRI(CONCAT(STR(?caption), "-text")) AS ?captionText)
   BIND(CONCAT("\\u0001n3\\u0001n", STR(?first), "\\u0001n", STR(?last), "\\u0001s", STR($member)) AS ?key)
-  VALUES (?part ?name) { ("bracket" "d") ("bracket" "class") ("caption" "x") ("caption" "y") ("caption" "class") ("caption" "text-anchor") }
-  BIND(IF(?part = "bracket", ?bracket, ?caption) AS ?element)
+  VALUES (?part ?name) { ("group" "data-byte-first") ("group" "data-byte-last") ("bracket" "d") ("bracket" "class") ("caption" "x") ("caption" "y") ("caption" "class") ("caption" "text-anchor") }
+  BIND(IF(?part = "group", ?group, IF(?part = "bracket", ?bracket, ?caption)) AS ?element)
   BIND(IRI(CONCAT(STR(?element), "-a-", ?name)) AS ?att)
-  BIND(IF(?part = "bracket", IF(?name = "d", CONCAT("M", STR(xsd:integer(?x)), " 93v7H", STR(xsd:integer(?end)), "v-7"), "bracket"),
-    IF(?name = "x", STR(xsd:integer(FLOOR((?x + ?end) / 2))), IF(?name = "y", "116", IF(?name = "class", "annotation", "middle")))) AS ?val)
+  BIND(IF(?part = "group", STR(IF(?name = "data-byte-first", ?first, ?last)),
+    IF(?part = "bracket", IF(?name = "d", CONCAT("M", STR(xsd:integer(?x)), " 93v7H", STR(xsd:integer(?end)), "v-7"), "bracket"),
+    IF(?name = "x", STR(xsd:integer(FLOOR((?x + ?end) / 2))), IF(?name = "y", "116", IF(?name = "class", "annotation", "middle"))))) AS ?val)
 }
 """ .

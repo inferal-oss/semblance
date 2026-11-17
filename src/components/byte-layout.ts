@@ -77,10 +77,11 @@ const render: FnRule = (ctx, focus) => {
   for (const child of [rail, axis, fields]) o.t(plot, H('hasChild'), child)
   o.t(root, RDF_TYPE, ctx.nn(H('Div'))).t(root, H('class'), 'sem-byte-layout').t(root, H('hasChild'), plot)
   o.attr(root, 'data-layout-appearance', appearance)
+  if (isTrue(ctx.object(focus, C('byteWrap')))) o.attr(root, 'data-byte-wrap', 'true')
   o.renders(root)
   return o.quads
 }
-render.watches = () => new Set([RDF_TYPE, C('label'), NS.l10n + 'label', C('byteField'), C('byteSpan'), C('byteLayoutStyle'), C('byteAxisLabel')])
+render.watches = () => new Set([RDF_TYPE, C('label'), NS.l10n + 'label', C('byteField'), C('byteSpan'), C('byteLayoutStyle'), C('byteAxisLabel'), C('byteWrap')])
 
 /** One c:ByteCell per field, in the list of fields by its index. */
 const field: FnRule = (ctx, focus, member) => {
@@ -174,7 +175,7 @@ const span: FnRule = (ctx, focus, member) => {
   if (Number.isNaN(x) || Number.isNaN(end)) return []
   const o = ctx.out(focus)
   const local = 'span-' + encodeForUri(member.value)
-  const group = svg(o, local, 'G', {}, `\u0001n3\u0001n${first}\u0001n${last}\u0001s${member.value}`)
+  const group = svg(o, local, 'G', { 'data-byte-first': first, 'data-byte-last': last }, `\u0001n3\u0001n${first}\u0001n${last}\u0001s${member.value}`)
   const bracket = svg(o, local + '-bracket', 'Path', { d: `M${x} 93v7H${end}v-7`, class: 'bracket' }, '\u0001n0')
   const caption = textEl(o, local + '-caption', label(ctx, member), { x: Math.floor((x + end) / 2), y: 116, class: 'annotation', 'text-anchor': 'middle' }, '\u0001n1')
   o.t(group, H('hasChild'), bracket).t(group, H('hasChild'), caption)

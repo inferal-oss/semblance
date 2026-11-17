@@ -69,3 +69,11 @@
     sty:declares [ sty:property "fill" ; sty:raw "currentColor" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "svg .variable" ;
     sty:declares [ sty:property "stroke-dasharray" ; sty:raw "4 2" ] .
+
+# Until the browser has measured the column, the strip is still scrollable.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "> svg[data-byte-wrapped]" ;
+    sty:declares [ sty:property "min-inline-size" ; sty:raw "0 !important" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ;
+    sty:part "> svg[data-byte-wrapped] > :is(.rail, g[data-byte-first])" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0" ],
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .

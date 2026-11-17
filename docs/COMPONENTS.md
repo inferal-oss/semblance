@@ -711,7 +711,11 @@ omit a field's length to show it as variable and use `c:byteSizeLabel` to descri
 Marks use the same offset origin as their enclosing field. Span indices are inclusive.
 `c:byteAxisLabel` optionally names the offset origin. Choose `c:ByteRuler` (default),
 `c:ByteRecord` (separate rounded fields), or `c:ByteOutline` (monochrome outlines).
-The gallery uses `c:Segmented` to change the style in RDF.
+The gallery uses `c:Segmented` to change the style in RDF. Set `c:byteWrap true` to flow fields
+onto additional rows according to the width of the mounted component. Fields retain their
+drawing width when it fits a row. A field wider than the entire row takes that row's width;
+long labels wrap at their regular font size. A bracket spanning a line break is drawn on both
+rows with open ends at the break. The server renders a scrollable strip before the browser measures it.
 
 The diagram is a figure named by its caption; its fields are a list whose items are named by their
 Text line (`@4 · ChunkSize · uint32 LE · 4 B`, the unit from `c:BytesPhrase` in the viewer's

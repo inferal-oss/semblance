@@ -1,0 +1,13 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+
+change:byte-layout-wrap a chg:Change ;
+    rdfs:label "Let byte layouts flow across rows"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/568> ;
+    chg:motivation "Long byte diagrams require horizontal panning in narrow columns." ;
+    chg:substance "A ByteLayout with c:byteWrap true flows fields onto additional rows in a browser. Each row retains its byte offsets and spanning brackets continue across row breaks. A field wider than the column uses the full row and long labels wrap at their normal font size. The same SVG field nodes remain available to application reactions." ;
+    chg:forwardGuide "Set c:byteWrap true on diagrams that should wrap. The browser measures the available column after mounting." ;
+    chg:backwardGuide "Remove c:byteWrap to return a diagram to the single scrollable strip." ;
+    chg:affects c:ByteLayout .
