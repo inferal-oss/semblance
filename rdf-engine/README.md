@@ -43,7 +43,10 @@ keep their labels, which a Jelly or Turtle load would replace), swaps it in and 
 the term objects it handed out stay valid, re-tagged with their new ids, and prepared queries are
 prepared again as they run. `maintain` compacts when live state is below half the memory and the
 memory is above 64 MiB (`compaction: { below, floor }`, `setCompaction`), never while a fetch or a
-Jelly stream is in flight. On the site after a visit of every page (`test/site-compaction.test.ts`),
+Jelly stream is in flight. Memory grows by half (WAT) or a quarter (Rust) at a time, an eighth past
+64 MiB, so the slack a grow leaves stays small (#555). The old instance's memory goes when V8 next
+collects: Chromium 151 and later do not count WebAssembly memory toward when they collect, so on a
+busy page that is seconds after the swap (8–13 s measured on the site), not at once. On the site after a visit of every page (`test/site-compaction.test.ts`),
 the memory goes from 506 to 337 MiB with every quad kept; what is left above live state is the
 engines' own growth (WAT grows by half its memory, Rust's size classes keep the blocks of outgrown
 vectors).
