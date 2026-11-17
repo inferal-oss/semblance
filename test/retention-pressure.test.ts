@@ -123,6 +123,38 @@ describe('the memory budget (ret:MemoryBudget)', () => {
     expect(Number(h.figure('compactedMiB'))).toBeGreaterThan(0)
   })
 
+  it('compacts a slice at a time at Elevated and all at once at Critical', async () => {
+    const h = mounted()
+    const f = h.f
+    const grow = () => {
+      const junk = Array.from({ length: 60_000 }, (_, i) => f.quad(f.namedNode(`https://example.org/junk#${i}`), f.namedNode('https://example.org/junk#p'), f.literal('a value long enough to take room ' + i)))
+      for (const q of junk) h.store.add(q)
+      for (const q of junk) h.store.delete(q)
+    }
+    const store = h.store as typeof h.store & { compactStep?: (ms: number, o?: { below?: number }) => unknown }
+    expect(typeof store.compactStep).toBe('function')
+    const steps: number[] = []
+    const compactStep = store.compactStep!.bind(store)
+    store.compactStep = (ms, o) => (steps.push(ms), compactStep(ms, o))
+    grow()
+    h.use(85)
+    for (let i = 0; i < 20 && Number(h.figure('compactedMiB') ?? 0) === 0; i++) await h.pressure.step()
+    expect(steps.length).toBeGreaterThan(0)
+    expect(steps.every((ms) => ms <= 8)).toBe(true)
+    expect(Number(h.figure('compactedMiB'))).toBeGreaterThan(0)
+    // Critical finishes one in a single step.
+    const before = Number(h.figure('compactedMiB'))
+    grow()
+    steps.length = 0
+    // Idle upkeep frees the junk's terms (and does not compact itself), so live state is well below the memory.
+    ;(h.store as unknown as { setCompaction(p: { below: number }): void }).setCompaction({ below: 0 })
+    h.store.maintain?.(1000)
+    h.use(150)
+    await h.pressure.step()
+    expect(steps).toHaveLength(0)
+    expect(Number(h.figure('compactedMiB'))).toBeGreaterThan(before)
+  })
+
   it('raises ret:Pressure for reactions after its own steps, then asks the host, once a crossing', async () => {
     const h = mounted()
     h.use(150)

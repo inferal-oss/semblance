@@ -1641,7 +1641,8 @@ class PartState {
       for (const [k, key] of this.anchoredAll(anchors, unknown)) touched.set(k, key)
       return touched
     }
-    // A stream part written as functions: membership, or a triple of the member or of a node minted under it.
+    // A stream part written as functions: membership, a triple of the member or of a node minted under
+    // it, or one that names the member (the log says it was undone: beh:undone).
     const s = p.stream!
     for (const q of [...changes.remove, ...changes.add]) {
       if (q.predicate.value === TREE_MEMBER && q.object.termType === 'NamedNode' && (!s.stream || q.subject.value === s.stream)) {
@@ -1649,6 +1650,7 @@ class PartState {
         touched.set(keyString(key), key)
         continue
       }
+      if (q.object.termType === 'NamedNode') for (const k of this.byMember.get(q.object.value) ?? []) touched.set(k, this.partitions.get(k)!.key)
       if (q.subject.termType !== 'NamedNode') continue
       for (let x = q.subject.value; ; ) {
         for (const k of this.byMember.get(x) ?? []) touched.set(k, this.partitions.get(k)!.key)

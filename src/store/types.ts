@@ -97,10 +97,17 @@ export interface GraphStore {
   /**
    * Give back what the memory holds beyond live state (Semblance's engines: copy into a fresh
    * instance). With `below`, only when liveBytes is below that fraction of memoryBytes (when it
-   * would win). Undefined when it did not: it would not win, or a fetch is in flight. Optional, as
-   * memoryBytes.
+   * would win). Undefined when it did not: it would not win, or a fetch is in flight. In one step:
+   * a store that compacts in slices in idle time (`maintain`) finishes the one in flight now.
+   * Optional, as memoryBytes.
    */
   compact?(opts?: { below?: number }): StoreCompaction | undefined
+  /**
+   * Compact a slice at a time: start one (by `below`, as compact) when none is in flight, then copy
+   * for about `budgetMs`; idle time (`maintain`) continues it. The compaction in the step that
+   * finished it, else undefined. Optional, as compact.
+   */
+  compactStep?(budgetMs: number, opts?: { below?: number }): StoreCompaction | undefined
   /** Sizes of what the store keeps beside its quads (term tables, host caches), for leak checks. Optional. */
   footprint?(): Record<string, number>
   /**
@@ -178,5 +185,13 @@ export interface StoreCompaction {
   after: number
   quads: number
   terms: number
+  /** The time it worked, over all its slices. */
   ms: number
+  /** A compaction in slices (Semblance's engines): how many, the longest, the swap's own time, the changes journaled meanwhile and replayed, and the time from its start to the swap. */
+  slices?: number
+  longestMs?: number
+  swapMs?: number
+  journal?: number
+  journalMs?: number
+  elapsedMs?: number
 }

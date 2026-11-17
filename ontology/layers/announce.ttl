@@ -8,6 +8,7 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix iv: <https://semblance.dev/ns/view#> .
+@prefix ret: <https://semblance.dev/ns/retention#> .
 
 # Announcements layer. A reaction may say what it means to the person who
 # triggered it (ann:announces "Todo added", optionally ann:tone). A
@@ -19,6 +20,11 @@
 # without SPARQL) the layer walks the log from its head (beh:latest /
 # beh:previous) a bounded number of steps. Toasts are minted before components
 # render (stratum -5) and hosted by the region (c:hosts); dismissing one closes it.
+#
+# An announcement that matters (older history no longer kept, memory under pressure) waits for a
+# person: its reaction names a ret:UntilAcknowledged policy (ann:retention). Its toast is not pushed
+# out by newer ones: the region's c:limit counts only the others, and the change log keeps the event
+# (the policy is on its view) until the toast is dismissed, which acknowledges it (ret:acknowledged).
 
 <https://semblance.dev/ns/announce> a owl:Ontology ;
     rdfs:label "Semblance announcements layer"@en .
@@ -31,19 +37,24 @@ ann:announcesFrom a owl:ObjectProperty ; rdfs:domain beh:Reaction ; rdfs:range r
     rdfs:comment "What the reaction's effect means is said by the event itself: its value of this property (e.g. a refused drop's reason), else ann:announces."@en .
 ann:tone a owl:ObjectProperty ; rdfs:domain beh:Reaction ; rdfs:range sty:Tone .
 ann:from a owl:ObjectProperty ; rdfs:domain c:ToastRegion ; rdfs:comment "The change log whose announcing events the region shows."@en .
+ann:retention a owl:ObjectProperty ; rdfs:domain beh:Reaction ; rdfs:range ret:Policy ;
+    rdfs:comment "How long what the reaction announces stays. A ret:UntilAcknowledged policy on the log's view (the change log's is beh:AnnouncementRetention): its toast stays until it is dismissed, besides the region's c:limit of the others, and the log keeps its event until then."@en .
+ann:event a owl:ObjectProperty ; rdfs:domain c:Toast ;
+    rdfs:comment "On a toast the layer shows: the event (a member of the change log) it announces."@en .
 
 ann:RecentAnnouncements a iv:View ;
     iv:targets c:ToastRegion ;
     iv:materialize iv:Graph ;
     iv:parameter [ iv:variable "limit" ; iv:property c:limit ; iv:default 3 ] ;
     rdfs:label "recent announcements"@en ;
-    rdfs:comment "Per region: the newest members of its change log (ann:from) that a reaction announces, at most c:limit."@en ;
+    rdfs:comment "Per region: the newest members of its change log (ann:from) that a reaction announces, at most c:limit; not those that wait for acknowledgement (ann:retention), which the region shows besides."@en ;
     sem:select """
 SELECT DISTINCT ?m ?seq WHERE {
   $this ann:from ?stream .
   ?stream tree:member ?m .
   ?m beh:sequence ?seq ; beh:handledBy ?reaction .
   FILTER(EXISTS { ?reaction ann:announces ?said } || EXISTS { ?reaction ann:announcesFrom ?p . ?m ?p ?told })
+  FILTER NOT EXISTS { ?m beh:handledBy ?waits . ?waits ann:retention ?policy . ?policy a ret:UntilAcknowledged }
 }
 ORDER BY DESC(?seq)
 LIMIT $limit""" .
@@ -57,16 +68,18 @@ ann:Toasts-fn a sem:Rule ; sem:implements ann:Toasts ; sem:function "announce:to
 # The members the region's maintained view (ann:RecentAnnouncements) holds, as its rows in the views
 # graph (rs:, under the region: sem:readsMinted re-runs it when they change), as the function reads
 # them; without the view, the announcing events among the log's newest 50 sequence numbers, the
-# region's c:limit (default 3) newest of them. What each says, in the viewer's language.
+# region's c:limit (default 3) newest of them. Besides them, every announcement that waits for
+# acknowledgement and has none yet. What each says, in the viewer's language.
 ann:Toasts-sparql a sem:Rule ;
     sem:implements ann:Toasts ;
     sem:follows ann:from ;
     sem:watches rdf:type , ann:from , c:limit , beh:latest ;
+    sem:watchesAnywhere ret:acknowledged ;
     sem:readsMinted true ;
     sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?toast a c:Toast ; c:label ?said ; sty:tone ?tone .
+  ?toast a c:Toast ; c:label ?said ; sty:tone ?tone ; ann:event ?m .
   $this c:hosts ?toast .
 }
 WHERE {
@@ -86,18 +99,27 @@ WHERE {
       ?stream tree:member ?m . ?m beh:sequence ?seq . FILTER(?seq > ?top - 50)
       ?m beh:handledBy ?reaction .
       FILTER(EXISTS { ?reaction ann:announces ?a FILTER(NOT EXISTS { ?l10nAt l10n:of ?reaction ; l10n:announcement ?l10nPick } || EXISTS { ?l10nAt l10n:of ?reaction ; l10n:announcement ?l10nPick FILTER(STR(?l10nPick) = STR(?a)) }) } || EXISTS { ?reaction ann:announcesFrom ?from . ?m ?from ?b })
+      FILTER NOT EXISTS { ?m beh:handledBy ?waits . ?waits ann:retention ?policy . ?policy a ret:UntilAcknowledged }
     } }
     # The newest c:limit of them.
     { SELECT ?m (COUNT(DISTINCT ?newer) AS ?rank) WHERE {
       $this ann:from ?stream . ?stream beh:latest ?head . ?head beh:sequence ?top .
       ?stream tree:member ?m . ?m beh:sequence ?seq ; beh:handledBy ?r . FILTER(?seq > ?top - 50)
       FILTER(EXISTS { ?r ann:announces ?a FILTER(NOT EXISTS { ?l10nAt l10n:of ?r ; l10n:announcement ?l10nPick } || EXISTS { ?l10nAt l10n:of ?r ; l10n:announcement ?l10nPick FILTER(STR(?l10nPick) = STR(?a)) }) } || EXISTS { ?r ann:announcesFrom ?from . ?m ?from ?b })
+      FILTER NOT EXISTS { ?m beh:handledBy ?waits . ?waits ann:retention ?policy . ?policy a ret:UntilAcknowledged }
       OPTIONAL {
         ?stream tree:member ?newer . ?newer beh:sequence ?ns ; beh:handledBy ?nr . FILTER(?ns > ?seq)
         FILTER(EXISTS { ?nr ann:announces ?na FILTER(NOT EXISTS { ?l10nAt l10n:of ?nr ; l10n:announcement ?l10nPick } || EXISTS { ?l10nAt l10n:of ?nr ; l10n:announcement ?l10nPick FILTER(STR(?l10nPick) = STR(?na)) }) } || EXISTS { ?nr ann:announcesFrom ?nf . ?newer ?nf ?nb })
+        FILTER NOT EXISTS { ?newer beh:handledBy ?nwaits . ?nwaits ann:retention ?npolicy . ?npolicy a ret:UntilAcknowledged }
       }
     } GROUP BY ?m }
     FILTER(?rank < ?limit)
+  } UNION {
+    # Those that wait for acknowledgement, every one that has none yet: from the few reactions that say so.
+    ?reaction ann:retention ?policy . ?policy a ret:UntilAcknowledged .
+    FILTER(EXISTS { ?reaction ann:announces ?wa } || EXISTS { ?reaction ann:announcesFrom ?wf })
+    ?m beh:handledBy ?reaction . ?stream tree:member ?m . ?m beh:sequence ?seq .
+    FILTER NOT EXISTS { ?m ret:acknowledged ?seen FILTER(STR(?seen) = "true") }
   }
   OPTIONAL { ?reaction ann:announcesFrom ?saidBy FILTER(isIRI(?saidBy)) }
   LATERAL { OPTIONAL { SELECT ?m ?reaction ?saidBy ?fromEvent WHERE {
@@ -137,3 +159,17 @@ WHERE {
   BIND(SUBSTR(CONCAT("0000000000", STR(?seq)), STRLEN(STR(?seq)) + 1) AS ?key)
   BIND(IRI(CONCAT(STR($this), "/~ann-", ?key)) AS ?toast)
 }""" .
+
+# Dismissing a toast that waits for acknowledgement acknowledges its event: the log may let it go, and
+# the region shows it no more (its c:open false then goes as any dismissed toast's does, c:ToastUnhost).
+ann:Acknowledge a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Toast ;
+    beh:inserts """CONSTRUCT { ?m ret:acknowledged true }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . $this ann:event ?m .
+  FILTER EXISTS { ?m beh:handledBy ?reaction . ?reaction ann:retention ?policy . ?policy a ret:UntilAcknowledged }
+  FILTER NOT EXISTS { $this c:dismissible ?dismissValue FILTER(STR(?dismissValue) = "false") }
+  FILTER NOT EXISTS { ?m ret:acknowledged ?seen FILTER(STR(?seen) = "true") }
+}""" ;
+    sem:function "announce:acknowledge" .

@@ -23,7 +23,7 @@
 
 beh:Event sem:version 1 ; sem:closure "e8f8fb8453af662e" ; sem:internal "new" .
 beh:Redoer sem:version 2 ; sem:closure "163ddd66877412c2" ; sem:internal "undo and redo skip a member whose recorded statements are not whole, as the function twins did" .
-beh:Undoer sem:version 2 ; sem:closure "c29597ec3b08aab1" ; sem:internal "undo and redo skip a member whose recorded statements are not whole, as the function twins did" .
+beh:Undoer sem:version 3 ; sem:closure "a62762de8064cabe" ; sem:changedBy change:toasts-undo-horizon .
 blk:Addressed sem:version 1 ; sem:closure "4b3da75a70258007" ; sem:internal "new" .
 blk:Block sem:version 1 ; sem:closure "85a314ea8893f962" ; sem:internal "new" .
 blk:BlockHandle sem:version 1 ; sem:closure "715d23a308630149" ; sem:internal "new" .
@@ -280,8 +280,8 @@ c:TimeAxis sem:version 1 ; sem:closure "36c9d179091af936" ; sem:internal "new" .
 c:TimeField sem:version 1 ; sem:closure "05cb18c1bf7a074e" ; sem:internal "new" .
 c:Timeline sem:version 1 ; sem:closure "58583010e792680e" ; sem:internal "new" .
 c:TimelineItem sem:version 1 ; sem:closure "30590a3437d90986" ; sem:internal "new" .
-c:Toast sem:version 3 ; sem:closure "494ea23df4d22c87" ; sem:internal "a dismissal forgets c:open of toasts its region no longer derives (c:dismissedToast notes them); what is shown is unchanged" .
-c:ToastRegion sem:version 1 ; sem:closure "a792d7916c9fcc5d" ; sem:internal "new" .
+c:Toast sem:version 4 ; sem:closure "259aab9cc084e892" ; sem:changedBy change:toasts-undo-horizon .
+c:ToastRegion sem:version 2 ; sem:closure "57fffcd4eddafaa9" ; sem:changedBy change:toasts-undo-horizon .
 c:Toggle sem:version 1 ; sem:closure "c9a471ad760c2c20" ; sem:internal "new" .
 c:ToggleSwitch sem:version 1 ; sem:closure "c2f934e05b0a5bd7" ; sem:internal "new" .
 c:Toolbar sem:version 1 ; sem:closure "f014ec119dc8b7fc" ; sem:internal "new" .
@@ -314,5 +314,5 @@ lc:WithParts sem:version 1 ; sem:closure "55f5674640084adb" ; sem:internal "new"
 nav:ContainmentProperty sem:version 1 ; sem:closure "6107f25c832848e4" ; sem:internal "new" .
 nav:Location sem:version 1 ; sem:closure "ebe2918971db016a" ; sem:internal "new" .
 per:Policy sem:version 1 ; sem:closure "0d9f7744daa6ef90" ; sem:internal "new" .
-ret:MemoryBudget sem:version 1 ; sem:closure "89fd76aeb3d15db7" ; sem:internal "new" .
+ret:MemoryBudget sem:version 2 ; sem:closure "5dc3ff6020796e95" ; sem:changedBy change:toasts-undo-horizon .
 src:Source sem:version 1 ; sem:closure "0a4d62fbc46c87e5" ; sem:internal "new" .

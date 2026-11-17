@@ -44,6 +44,10 @@ ret:Latest a owl:Class ; rdfs:subClassOf ret:Policy ;
     rdfs:comment "Keeps the ldes:amount most recent members (by the stream's sequence path)."@en .
 ret:Within a owl:Class ; rdfs:subClassOf ret:Policy ;
     rdfs:comment "Keeps the members appended within a duration (tree:value, an xsd:duration) of now. As a remembered state's retention (per:retention), the stored triples stored within it."@en .
+ret:UntilAcknowledged a owl:Class ; rdfs:subClassOf ret:Policy ;
+    rdfs:comment "Keeps a member that awaits a person's acknowledgement until it has one (ret:acknowledged true), whatever its age or number; then the stream's other policies decide. On the change log it keeps the events whose announcing reaction names it (ann:retention): their toasts wait to be dismissed."@en .
+ret:acknowledged a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a member (in the input graph): a person acknowledged it, by dismissing its toast. It leaves with the member, and is offloaded with it."@en .
 beh:LatestMembersPolicy rdfs:subClassOf ret:Latest .
 ldes:DurationAgoPolicy rdfs:subClassOf ret:Within .
 
@@ -117,6 +121,7 @@ ret:AnnounceDropped a beh:Reaction ;
     ann:announces "Older history is no longer kept"@en , "Старіша історія більше не зберігається"@uk ,
         "Älterer Verlauf wird nicht mehr aufbewahrt"@de , "لم يعد السجل الأقدم محفوظًا"@ar ;
     ann:tone sty:Warning ;
+    ann:retention beh:AnnouncementRetention ;
     sem:function "retention:crossed-dropped" .
 
 # --- the memory budget -----------------------------------------------------------------------------------
@@ -226,6 +231,7 @@ ret:AnnouncePressure a beh:Reaction ;
         "Diese Seite braucht viel Speicher: verborgene Ansichten wurden geleert, älterer Verlauf ausgelagert"@de ,
         "تستخدم هذه الصفحة ذاكرة كثيرة: أُفرغت العروض المخفية ونُقل السجل الأقدم إلى التخزين"@ar ;
     ann:tone sty:Warning ;
+    ann:retention beh:AnnouncementRetention ;
     sem:function "retention:pressure-warned" .
 
 # --- the streams' policies -------------------------------------------------------------------------------
@@ -234,7 +240,7 @@ ret:AnnouncePressure a beh:Reaction ;
 # undoable change beyond them, so undo reaches far back while what aggregates the log stays small.
 # What either lets go is offloaded to the browser's storage, where Show older and an Undo past the
 # horizon find it again.
-beh:ChangeLogView ldes:retentionPolicy beh:UndoRetention .
+beh:ChangeLogView ldes:retentionPolicy beh:UndoRetention , beh:AnnouncementRetention .
 beh:ChangeLogRetention ret:onExpiry ret:Offload ; ret:storageAmount 5000 ; ret:announce true .
 beh:UndoRetention a beh:LatestMembersPolicy ;
     ldes:amount 1000 ;
@@ -242,6 +248,8 @@ beh:UndoRetention a beh:LatestMembersPolicy ;
     ret:onExpiry ret:Offload ;
     ret:storageAmount 10000 ;
     ret:announce true .
+# And the announcements that wait for a person (ann:retention), until their toast is dismissed.
+beh:AnnouncementRetention a ret:UntilAcknowledged .
 
 # Names short enough for a list of horizons, in the viewer's language.
 beh:ChangeLog c:label "Change log"@en , "Журнал змін"@uk , "Änderungsprotokoll"@de , "سجل التغييرات"@ar .

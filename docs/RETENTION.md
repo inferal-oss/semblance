@@ -103,7 +103,7 @@ option in code. "-" means nothing bounds it.
 | WAT and Rust wasm memory | peak live state | high-water mark | - | **Never shrinks.** WAT's allocator only grows, and Rust's heap says so. Free lists reuse space but never return it. |
 | Engine term dictionary | distinct terms | collected in idle at `termCount > 1.5 × live + 1000` | host | Never collected on the server: `src/server/warm.ts` never calls `maintain`, and query text from URLs becomes literals. So it grows with each distinct URL served. |
 | Host term caches (`rdf-engine/host/store.ts` `iris`, `literals`) | terms looked up | entries dropped by freed id | host | An IRI looked up without interning that the engine does not know keeps its entry forever. |
-| N3 entity dictionary (`n3` `_ids`/`_entities`) | distinct terms | - | - | N3 never frees ids. This is the N3 store and the hybrid's mirror, which is never rebuilt. |
+| N3 entity dictionary (`n3` `_ids`/`_entities`) | distinct terms | copied in idle at `terms > 1.5 × live + 5,000`; `compact()` at once | host | N3 never frees ids. This is the N3 store and the hybrid's mirror. The shell soak measured some 130 new terms an event before the copy. |
 | Oxigraph and hybrid dead versions | deletions | rebuild at 5,000 or half of live, hybrid **only in idle** | host | With no idle time, unbounded. |
 | `RuleContext.names` (`src/engine/context.ts`) | IRIs a function rule read | until rules change | host | Grows with every subject ever read, retired members included. |
 | `Runtime.ownWarmth` | nodes walked in idle | cleared on `sem:warm` changes | host | Keys of nodes that are gone stay. |
@@ -253,7 +253,7 @@ Derived state is evicted, not asked about:
 | Undo | its own history per document (§6, question 1), `ret:Latest 500` steps | compact (a checkpoint) | Undo disabled, with where history starts | the amount, and whether it is remembered |
 | Change log | `ret:Latest 200` | drop; archive when the app says so | the log view's horizon line; download | amount, duration, archive target |
 | Inspection logs (`net:`, state, sync, stall) | as today | drop | horizon line in their views | amount |
-| Announcements | errors `ret:UntilAcknowledged`, others `ret:Latest` | drop | errors stay until seen | which `ann:` severities need acknowledgement |
+| Announcements | those that matter `ret:UntilAcknowledged` (`ann:retention`), others the region's `c:limit` | drop | those that matter stay until dismissed | which reactions' announcements wait (`ann:retention`) |
 | Derived renderings | `ret:Budget` per projection | evict | none; a slower first show | the budget; `sem:warm` and `c:keptHidden` exempt |
 | Engine and caches | high-water rule, caps | rebuild, evict | none | none (host) |
 
@@ -435,10 +435,14 @@ Tracked in #530, linked from the Plan (#8).
 | The memory budget, pressure, eviction of hidden renderings, `onRetention` | `src/retention/pressure.ts`, `Engine.evict`, `Runtime.evict` | built |
 | The Memory tool, with usage by graph, class and host structure, the engines' live estimate and Compact now | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
 | The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime), and network capture on the shared module | #537 | built |
-| Engine compaction: giving wasm memory back | the engine (#9), `EngineStore.compact` | built; the pressure effect compacts when it would win, and `ret:CompactNow` asks for it |
+| Engine compaction: giving wasm memory back, in idle time a slice at a time (changes made meanwhile journaled and replayed) | `rdf-engine/host/store.ts` (`compact`, `compactStep`), the engine (#9) | built; the pressure effect compacts when it would win, which finishes a compaction in flight at once, and `ret:CompactNow` asks for it |
+| Soaks: the footprint with terms, wasm bytes and host caches; the site within a budget; N3 and hybrid | `test/soak*.test.ts` | built |
+| N3's dictionary copied once it outgrows what is stored (the N3 store and the hybrid's mirror) | `src/store/n3.ts`, `src/store/hybrid.ts` | built |
+| Toasts that wait for acknowledgement (`ret:UntilAcknowledged`, `ann:retention`) | `ontology/layers/announce.ttl`, `src/retention/policy.ts`, `src/layers/announce.ts` | built |
+| A disabled Undo says where history starts (`beh:UndoHorizon`, `beh:UndoableCounts`) | `ontology/layers/behaviour.ttl`, `src/behaviour/undo.ts` | built |
 | Remembered state by `ret:Within`: `per:retention` measured from each stored triple's age, set aside (or dropped where the policy says so), on a horizon, announced, recalled | `src/persistence.ts`, `ontology/layers/persistence.ttl`; §8.9 | built |
 | Nothing owned lost across a reload: settings, the site's look, a kept file and the remembered change log, under critical pressure and a refusing storage, with each run's streams conserved | `test/reload-owned.test.ts` | built |
-| Cold graphs offloaded or unloaded under pressure; toasts that wait for acknowledgement | | not yet |
+| Cold graphs offloaded or unloaded under pressure; remembered state that could not be saved announced and waiting | | not yet |
 
 ## 8. Using retention
 
@@ -520,6 +524,13 @@ change, besides the log's 200 newest, and offloads past that. Raise or lower its
   a step.
 - **No repeats.** An undone member is stored without its recorded change, so a recall never offers
   to undo it twice.
+- **Where history starts.** With nothing in memory to undo, a `beh:Undoer` is disabled and says why,
+  as its tooltip and its accessible description: "Nothing to undo", or, once the log's horizon has
+  dropped members, "History starts here: 1,240 older changes were not kept" (`beh:HistoryStarts`,
+  in the viewer's language and number format). What it counts is `beh:undoableCount` on the log, a
+  maintained view (`beh:UndoableCounts`) of the members in memory with a recorded change not undone,
+  so a step costs what it changes. Storage needs no count of its own: Undo recalls ahead of need, so
+  what storage holds is back in memory before the last step there is undone.
 
 ### 8.4 Horizons and announcements
 
@@ -538,6 +549,25 @@ The first time in a session that a person-facing policy (`ret:announce true`) of
 the effect raises one event on the stream: `ret:Offloaded` or `ret:Dropped`. Its reaction
 announces it ("Older history moved to this browser's storage", "Older history is no longer kept"),
 in the viewer's language, as a toast.
+
+An announcement that matters waits for a person. Its reaction names a `ret:UntilAcknowledged` policy
+(`ann:retention`); the change log's view carries one, `beh:AnnouncementRetention`, and
+`ret:AnnounceDropped` and `ret:AnnouncePressure` name it:
+
+- **No limit pushes it out.** The region's `c:limit` counts only the other toasts; every waiting one
+  not yet acknowledged is shown besides them, oldest first.
+- **No bound retires it.** The log holds its event back, whatever its age or number, while it waits.
+- **Dismissing it acknowledges it.** The ✕ states `ret:acknowledged true` on the event
+  (`ann:Acknowledge`); the log then lets the event go as it would have, and the statement goes with
+  it (into storage, when it is offloaded, so a recall does not show the toast again).
+
+Toasts have no timeout: the others leave as newer ones arrive or the log retires their events.
+
+```turtle
+ex:SyncFailed a beh:Reaction ; beh:when ex:Failed ;
+    ann:announces "Your changes could not be sent"@en ; ann:tone sty:Danger ;
+    ann:retention beh:AnnouncementRetention .   # stays until dismissed
+```
 
 ### 8.5 The memory budget
 
@@ -565,7 +595,9 @@ order:
    is parked as if never shown, and a page shown again renders exactly as on a fresh visit. While
    pressure is above Normal, idle time evaluates nothing hidden ahead of time.
 2. **Compact the engines,** when the store can and it would win: when the live estimate is below
-   three quarters of the memory at Elevated, nine tenths at Critical (`store.compact({ below })`).
+   three quarters of the memory at Elevated, nine tenths at Critical. At Elevated a step starts or
+   continues one a slice at a time (`store.compactStep`, 8 ms), which idle time carries on; at
+   Critical it finishes now (`store.compact({ below })`).
 3. **Offload history.** What was recalled goes back to storage, and at Critical so does the oldest
    half of what `ret:having` policies hold.
 4. **Raise `ret:Pressure`** on the budget, for the app's reactions to answer: raise the budget, close
@@ -648,6 +680,37 @@ and Measure usage shows where what is left is.
   (`RetainedStream.figures()`), and `dropped` stays 0 where the app promises it.
 - **Bound the soak.** A soak test that measures "once the log is at its bound" must pass every bound,
   `beh:UndoRetention`'s too; `test/soak.test.ts` sets it smaller to do so.
+- **Sample live state, not garbage.** Term dictionaries are collected only once they have grown by
+  half (the engines in idle time, N3 by a copy), so a sample between collections sees garbage rising,
+  not growth. Call `store.compact()` before each sample: the terms are then the live ones.
+- **WebAssembly memory is a high-water mark.** It never shrinks without a compaction. Assert that it
+  stops growing (the same figure over the second half of a soak), not that it is flat.
+- **Soak within a budget.** Put the budget in the graph (`ret:maxMiB` on the app's `ret:MemoryBudget`
+  wins over a slider), step the effect between interactions as idle time would, and choose a budget
+  that makes eviction and compaction act. Assert the memory once a step has run, and allow the overshoot
+  of one interaction before it: the next step is what measures it.
+- **Compare a page with its first visit.** Shown again after eviction, it must render byte for byte as
+  then. Let the views that follow their queries refresh first (a macrotask), or a live figure still
+  says "Measuring…" on one visit and not the other.
+
+The soaks, and what they measured:
+
+- `test/soak.test.ts`: the shell on WAT, 3,528 events. The graph (188k triples), the live terms (79k),
+  the engine's bookkeeping, the index, the DOM, the views, the runtime's and the store's caches, the
+  rendered state and the retained streams stay flat; the WebAssembly memory reaches its high-water mark
+  (67 MiB) in the first measured period and stays there.
+- `test/soak-stores.test.ts`: the same session on N3 (function rules; the site's reactions written in
+  SPARQL only are left out, as N3 cannot answer them), 3,528 events, and on the hybrid (function rules
+  preferred), 2,520 events. Both stay flat, N3's dictionary included (71k terms). Before the dictionary
+  was copied, it grew from 170k to 271k terms over 756 events, some 130 terms an event.
+- `test/soak-site.test.ts`: every page of the site in three passes on WAT, within 200 MiB. Unbounded, a
+  visit of every page reaches 337 MiB of WebAssembly memory and 1,109k triples (464 MiB as the effect
+  counts it, 120 bytes a triple standing in for the heap that Node does not report). Within the budget,
+  each pass reaches Elevated 4 to 8 times and Critical 1 to 3 times, on the heaviest pages, and
+  compacts 7 to 9 times. The memory stays at 100 to 120 MiB of WebAssembly memory and 470k triples at
+  most: 154 MiB at most once a step has run, and 206 MiB before it (the heaviest page adds 58 MiB). Every
+  page shown again is byte-identical to its first visit, nothing owned is lost, and a pass takes some
+  12 s, against 8 s unbounded (and 1 s once everything is kept).
 
 - **Reload over the same storage.** Mount again with the same persistence backends, file store and
   offload storage, and compare what every enabled policy covers (`persistence.collect(policy)`)

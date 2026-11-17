@@ -44,9 +44,30 @@ the term objects it handed out stay valid, re-tagged with their new ids, and pre
 prepared again as they run. `maintain` compacts when live state is below half the memory and the
 memory is above 64 MiB (`compaction: { below, floor }`, `setCompaction`), never while a fetch or a
 Jelly stream is in flight. On the site after a visit of every page (`test/site-compaction.test.ts`),
-the memory goes from 506 to 337 MiB in 340–560 ms with every quad kept; what is left above live
-state is the engines' own growth (WAT grows by half its memory, Rust's size classes keep the blocks
-of outgrown vectors).
+the memory goes from 506 to 337 MiB with every quad kept; what is left above live state is the
+engines' own growth (WAT grows by half its memory, Rust's size classes keep the blocks of outgrown
+vectors).
+
+Idle time compacts **in slices** (`compactStep(budgetMs)`, which `maintain` uses). The quads the
+store held when it started are copied a chunk of 1024 at a time until the slice's budget is spent;
+the store keeps answering and changing from the old instance meanwhile. Every add and delete made
+in the meantime goes into a journal (in old ids: nothing is collected while a compaction is in
+flight, so they stay valid), replayed into the copy once it is whole; the swap comes in the step
+that finds both done, so it never waits on a change. The swap only switches instances: the term
+objects were tagged with their new ids as the copy met them, and a sweep of the term caches in
+later slices tags the rest and drops those whose term no quad uses. What the engine changes on its
+own cannot be journaled: an update, a Turtle or Jelly load or a Jelly reader abandons the copy (the
+store stays as it is), and so does a journal that outgrows the store (`compaction.journal`, 1×
+its quads), since starting again would then cost less than catching up. Idle time starts again
+after 2 s, doubling with each abandonment up to a minute. `compact()` still runs in one step, and
+finishes a compaction in flight (pressure at Critical wants the memory now).
+
+On the site, in slices of 8 ms: 32–35 slices, 260–300 ms of work over about a second, the swap
+0.1 ms. A slice overruns its budget by the chunk it started last, 0.1–3.3 ms with the garbage
+collections it meets, and by up to 13 ms in the few slices where the new instance's memory grows
+(WAT's last step is 150 to 337 MiB); one step on the same store takes 340–460 ms. A change made
+while a compaction is in flight costs 0.01–0.03 µs more (0.17–0.20 µs in all), and its replay
+0.35–0.42 µs.
 
 ## Parity guard
 

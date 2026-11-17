@@ -70,4 +70,37 @@ describe('host caches', () => {
     expect(projections() - before).toBeLessThanOrEqual(4)
     h.runtime.apply({ add: [h.store.factory.quad(h.store.factory.namedNode('urn:test:x'), h.store.factory.namedNode('urn:test:p'), h.store.factory.literal('y'))], remove: [] })
   })
+
+  // N3 numbers every term it is given and never frees a number: the store copies itself once the
+  // dictionary has outgrown what is stored, in idle time a slice at a time, writes going to both.
+  for (const kind of ['n3', 'hybrid'] as const)
+    it(`the ${kind} store's dictionary follows what is stored`, () => {
+      const store = createStore(kind)
+      const f = store.factory
+      const p = f.namedNode('urn:p')
+      store.loadTurtle('<urn:a> <urn:p> "kept" .')
+      const terms = () => store.footprint!().terms!
+      store.maintain!(0) // the first upkeep measures the dictionary
+      const start = terms()
+      // Events come and go: each brings terms of its own, and the log keeps its latest 10.
+      const quad = (i: number) => f.quad(f.namedNode(`urn:event:${i}`), p, f.literal(`value ${i}`))
+      for (let i = 0; i < 30_000; i++) {
+        store.add(quad(i))
+        if (i >= 10) store.delete(quad(i - 10))
+        // Idle time, in slices too short to copy everything at once: the copy spans writes.
+        if (i % 100 === 0) store.maintain!(0.05)
+      }
+      while (store.maintain!(5));
+      expect(terms()).toBeLessThan(start + 3 * 5_000)
+      // What is stored is all there, in both copies.
+      expect(store.size!()).toBe(11)
+      expect(store.match(null, p, null).map((q) => q.object.value).sort()).toEqual(['kept', ...Array.from({ length: 10 }, (_, k) => `value ${29_990 + k}`)].sort())
+      if (kind === 'hybrid') expect(store.select('SELECT (COUNT(*) AS ?n) WHERE { ?s ?p ?o }', [f.defaultGraph()])[0]!.get('n')!.value).toBe('11')
+      // compact() copies at once.
+      for (let i = 0; i < 20_000; i++) store.add(f.quad(f.namedNode(`urn:more:${i}`), p, f.literal('x')))
+      for (let i = 0; i < 20_000; i++) store.delete(f.quad(f.namedNode(`urn:more:${i}`), p, f.literal('x')))
+      expect(store.compact!()!.terms).toBeLessThan(start + 100)
+      expect(terms()).toBeLessThan(start + 100)
+      expect(store.size!()).toBe(11)
+    })
 })
