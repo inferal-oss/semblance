@@ -132,7 +132,10 @@ c:AppBar a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """The application's top bar: a logo, a name (c:label), a c:subtitle, a c:byline, c:actions and
 c:moreActions. With c:to (a resource: the app's home, found as a c:Link finds its target) or c:href, the
-logo and the name are a link there. Where there is room the more actions follow the others; on a
+logo and the name are a link there. A c:Link among the actions (the app's source, its docs) stands with
+the buttons as a control in the bar's text colour: its c:logo beside its label, or a c:Emblem as its
+c:content alone (its c:label then its name) as a square control; on a compact screen a link with a logo
+shows the logo alone, its label kept as its name. Where there is room the more actions follow the others; on a
 compact or medium screen (sty:CompactWidth, sty:MediumWidth) they fold behind a More button, shown while the bar is c:expanded; Escape or a
 press outside closes them."""@en ;
     sem:slug "app-bar" .
@@ -143,7 +146,7 @@ c:moreLabel a owl:DatatypeProperty ; rdfs:domain c:AppBar ;
 c:byline a owl:ObjectProperty ; rdfs:domain c:AppBar ;
     rdfs:comment "A component after an app bar's name and subtitle: who makes or sponsors it."@en .
 c:logo a owl:ObjectProperty ;
-    rdfs:comment "A component drawn before a name: the app bar's logo, a link's logo (c:AppBar, c:Link)."@en .
+    rdfs:comment "A component drawn before a name: the app bar's logo, a link's or a button's logo (c:AppBar, c:Link, c:Button)."@en .
 c:AppBarRendering a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 .
 c:AppBarRendering-fn a sem:Rule ; sem:implements c:AppBarRendering ; sem:function "appbar" .
 

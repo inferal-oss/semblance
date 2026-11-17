@@ -65,7 +65,7 @@ import { functions as stallFunctions } from './stall.ts'
 import { diffFunctions } from './diff.ts'
 import { mint } from '../rdf.ts'
 import { matchTokens } from '../sparql-tokens.ts'
-import { encodeForUri, isA, isTrue, labelOf, nodes, RDFS_LABEL, rdfList, str, text } from './util.ts'
+import { encodeForUri, isA, isTrue, labelOf, named, nodes, RDFS_LABEL, rdfList, str, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
 
 // --- components ----------------------------------------------------------------
@@ -102,7 +102,9 @@ const buttonScreen: FnRule = (ctx, focus) => {
   if (label === undefined) return []
   const o = ctx.out(focus)
   const disabled = isTrue(ctx.object(focus, C.disabled)) ? '' : undefined
-  o.renders(o.el('root', 'Button', { type: 'button', disabled }, [o.text('label', label)]))
+  // A logo (c:logo, a component) comes before the label.
+  const logo = ctx.object(focus, C.logo)
+  o.renders(o.el('root', 'Button', { type: 'button', disabled }, [...(named(logo) ? [logo] : []), o.text('label', label)]))
   return o.quads
 }
 

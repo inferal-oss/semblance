@@ -1769,6 +1769,11 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "color" ; sty:raw "#000" ] ,
                  [ sty:property "padding" ; sty:raw "2px 10px" ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px var(--bv-dark), inset 1px 1px 0 1px #fff6b8" ] .
+# On a phone the name's tab is slimmer, so the bar's actions keep their room.
+[] a sty:StyleRule ; sty:when sty:Tracker ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=app-bar] .sem-brand strong:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:declares [ sty:property "padding" ; sty:raw "2px 4px" ] ,
+                 [ sty:property "font-size" ; sty:raw "14px" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
     sty:part "[data-sem-c=card] > header p:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "padding-inline-start" ; sty:raw "var(--sem-space-4)" ] ,

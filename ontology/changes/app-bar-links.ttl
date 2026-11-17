@@ -1,0 +1,34 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:app-bar-links a chg:Change ;
+    rdfs:label "Links and buttons with a logo in an app bar; a button's c:logo"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/550> ;
+    chg:motivation """An app bar holds links as well as buttons (the app's source, its docs, a profile), but a c:Link
+among its c:actions was styled as a link in running text: accent coloured, shorter than the buttons beside it,
+and on a phone as wide as its label. A phone's bar has no room for another labelled action: an action needs to
+be able to show a mark alone there, a button as well as a link.""" ;
+    chg:substance """c:Button renders its c:logo (a component, e.g. a c:Emblem) before its label, as c:Link does: the
+logo's own rendering is the button's first child. A button without c:logo renders as before.
+
+c:AppBar's styles: a c:Link among its c:actions or c:moreActions is a control (a control's height and inset, the
+bar's text colour, no underline, a hover background and the focus ring), its c:logo beside its label at 1.25em.
+A link whose only part is a c:Emblem (its c:content, with c:label as its accessible name) is a square control
+with a 20px mark. On a compact screen (sty:CompactWidth) a c:Link or c:Button among c:actions whose first part
+is a c:Emblem shows that emblem alone in a square control: its text is set at font-size 0 and clipped past the
+square's edge, its other parts visually hidden, so its accessible name is unchanged. On a compact screen the
+More button is 36px (was 40px) and the byline 10px (was 11px), and in the Tracker theme the name's tab is
+slimmer (2px 4px, 14px), so the page switcher keeps its room.""" ;
+    chg:forwardGuide """Nothing to move. A c:Button that carried a c:logo for another purpose now shows it: remove the
+c:logo if that is not wanted. An app that styled a link in its bar itself may drop that rule, or keep it (an
+app's own rules sit in a later cascade layer). To keep a link's or a button's label visible on a phone, give it
+no c:logo.""" ;
+    chg:backwardGuide """Going back, a button's c:logo is ignored (it shows its label alone), and a link among an app
+bar's actions is a link in running text again, its label shown at every width; nothing in the graph changes.""" ;
+    chg:affects c:AppBar , c:Button .

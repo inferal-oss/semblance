@@ -6,7 +6,7 @@
 
 c:Button a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment "An actionable control. What it does is a behaviour-layer binding."@en ;
+    rdfs:comment "An actionable control: its c:label, after an optional c:logo (a component, e.g. a c:Emblem). What it does is a behaviour-layer binding."@en ;
     sem:slug "button" .
 
 # --- screen ---------------------------------------------------------------------
@@ -21,7 +21,8 @@ c:ButtonOnScreen-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Button ; sem:renders $this ; rdfhtml:type "button" ; rdfhtml:disabled ?disabled ;
-        rdfhtml:hasChild ?text .
+        rdfhtml:hasChild ?logo, ?text .
+  ?logo ord:immediatelyPrecedes ?text .
   ?text a rdfhtml:Text ; rdfhtml:data ?label .
 }
 WHERE {
@@ -33,6 +34,8 @@ WHERE {
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL { $this c:disabled true . BIND("" AS ?disabled) }
+  # A logo (c:logo, a component) comes before the label.
+  OPTIONAL { $this c:logo ?logo FILTER(isIRI(?logo)) }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .
