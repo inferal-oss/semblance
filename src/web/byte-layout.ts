@@ -11,6 +11,7 @@ interface Field {
   size: number
   x: number
   offset?: string | null
+  detail?: { box: SVGForeignObjectElement; plot: SVGSVGElement }
   labels: { element: SVGTextElement; lines: string[] }[]
 }
 
@@ -19,6 +20,7 @@ interface Row { fields: Field[]; width: number }
 const top = 38
 const bottom = 85
 const lineHeight = 14
+const detailInset = 10
 const viewBoxes = new WeakMap<SVGSVGElement, { source: string; wrapped: string }>()
 
 function svg<K extends keyof SVGElementTagNameMap>(parent: Element, name: K, attributes: Record<string, string | number>, text?: string) {
@@ -35,7 +37,7 @@ function byteRows(fields: Field[], available: number) {
   for (const field of fields) {
     // A field wider than a whole row gets a row of its own. Other fields keep
     // their original widths and break onto the next row when they no longer fit.
-    field.size = Math.min(available, Math.max(48, field.width))
+    field.size = field.detail ? available : Math.min(available, Math.max(48, field.width))
     if (!row || row.width + field.size > available) {
       row = { fields: [], width: 0 }
       rows.push(row)
@@ -124,16 +126,18 @@ export function wrapByteLayout(plot: SVGSVGElement, width: number, pen: CanvasRe
   const fields: Field[] = [...strip.querySelectorAll<SVGGElement>(":scope > g")].flatMap(node => {
     const bar = node.querySelector<SVGRectElement>(":scope > rect:first-child")
     if (!bar) return []
+    const box = node.querySelector<SVGForeignObjectElement>(':scope > foreignObject[data-byte-detail]')
+    const child = box?.querySelector<SVGSVGElement>(':scope > .sem-byte-layout > svg')
     return [{
-      node, bar, size: 0, x: 0, labels: [],
+      node, bar, size: 0, x: 0, labels: [], detail: box && child ? { box, plot: child } : undefined,
       start: Number(bar.getAttribute("x")), width: Number(bar.getAttribute("width")),
-      offset: node.querySelector(".offset")?.textContent,
+      offset: node.querySelector(":scope > .offset")?.textContent,
     }]
   })
   const offsetWidth = Math.max(0, ...[...strip.querySelectorAll<SVGTextElement>(":scope > g > .offset")].map(element => element.getComputedTextLength()))
-  const margin = Math.max(18, Math.min(Math.floor(width / 4), Math.ceil(offsetWidth / 2) + 4))
+  if (!fields.length || width < 48) return
+  const margin = Math.min(Math.floor((width - 48) / 2), Math.max(18, Math.ceil(offsetWidth / 2) + 4))
   const available = width - margin * 2
-  if (!fields.length || available < 64) return
   for (const child of plot.querySelectorAll(":scope > " + decoration + ", :scope > g[role=list] > g > " + decoration)) child.remove()
 
   const rows = byteRows(fields, available)
@@ -142,11 +146,11 @@ export function wrapByteLayout(plot: SVGSVGElement, width: number, pen: CanvasRe
     label: group.querySelector(".annotation")?.textContent ?? "",
   }))
   const finalField = fields.at(-1)!.node
-  const lastOffset = finalField.querySelectorAll<SVGTextElement>(".offset")
+  const lastOffset = finalField.querySelectorAll<SVGTextElement>(":scope > .offset")
   const extent = lastOffset.length > 1 ? lastOffset[1]?.textContent ?? undefined : undefined
   if (extent !== undefined) {
     lastOffset[1]!.style.opacity = "0"
-    const endTick = finalField.querySelectorAll<SVGPathElement>(".tick")[1]
+    const endTick = finalField.querySelectorAll<SVGPathElement>(":scope > .tick")[1]
     if (endTick) endTick.style.opacity = "0"
   }
   const drawing = svg(plot, "g", { "data-byte-wrap-decoration": "", "aria-hidden": "true" })
@@ -160,8 +164,23 @@ export function wrapByteLayout(plot: SVGSVGElement, width: number, pen: CanvasRe
         element, lines: textLines(element, field.size - 12, pen),
       }))
     }
-    const extra = Math.max(...row.fields.map(field =>
+    const labelExtra = Math.max(...row.fields.map(field =>
       lineHeight * field.labels.reduce((sum, { lines }) => sum + lines.length - 1, 0)))
+    // A detail fills its row. Lay it out first at the actual inner width so
+    // the containing field, later rows and brackets all use its new height.
+    const detailHeight = Math.max(0, ...row.fields.map(field => {
+      if (!field.detail) return 0
+      const { box, plot: child } = field.detail
+      const inset = Math.min(detailInset, Math.floor((field.size - 48) / 2))
+      const innerWidth = field.size - 2 * inset
+      box.setAttribute('x', String(field.start + inset))
+      box.setAttribute('y', String(bottom + labelExtra))
+      box.setAttribute('width', String(innerWidth))
+      const height = wrapByteLayout(child, innerWidth, pen) ?? 0
+      box.setAttribute('height', String(height))
+      return height + inset
+    }))
+    const extra = labelExtra + detailHeight
     svg(drawing, "path", { class: "rail", d: `M${margin} ${y + top - 1}H${rowEnd}` })
     let x = margin
     for (const field of row.fields) {
@@ -206,6 +225,7 @@ export function wrapByteLayout(plot: SVGSVGElement, width: number, pen: CanvasRe
   viewBoxes.set(plot, { source: previous && current === previous.wrapped ? previous.source : current, wrapped: viewBox })
   if (current !== viewBox) plot.setAttribute("viewBox", viewBox)
   plot.dataset.byteWrapped = ""
+  return y + 18
 }
 
 function restoreByteLayout(plot: SVGSVGElement) {
@@ -219,6 +239,15 @@ function restoreByteLayout(plot: SVGSVGElement) {
   for (const cell of plot.querySelectorAll<SVGGElement>(':scope > g[role=list] > g[data-byte-wrap-row]')) {
     delete cell.dataset.byteWrapRow
     cell.style.removeProperty('transform')
+    const detail = cell.querySelector<SVGForeignObjectElement>(':scope > foreignObject[data-byte-detail]')
+    const childPlot = detail?.querySelector<SVGSVGElement>(':scope > .sem-byte-layout > svg')
+    if (childPlot) restoreByteLayout(childPlot)
+    if (detail) {
+      detail.removeAttribute('x')
+      detail.removeAttribute('y')
+      detail.setAttribute('width', '0')
+      detail.setAttribute('height', '0')
+    }
     for (const child of cell.querySelectorAll<SVGElement>(':scope > :is(rect, text, path)')) {
       for (const prop of ['transform', 'width', 'height', 'opacity']) child.style.removeProperty(prop)
     }
@@ -233,6 +262,11 @@ export function attachByteLayouts(host: HTMLElement): () => void {
   let frame: number | undefined
   let pen: CanvasRenderingContext2D | null | undefined
   const schedule = (layout: HTMLElement) => {
+    for (;;) {
+      const parent = layout.parentElement?.closest<HTMLElement>(selector)
+      if (!parent || !host.contains(parent)) break
+      layout = parent
+    }
     pending.add(layout)
     frame ??= window.requestAnimationFrame(() => {
       frame = undefined
@@ -263,13 +297,15 @@ export function attachByteLayouts(host: HTMLElement): () => void {
     element.querySelectorAll<HTMLElement>(selector).forEach(visit)
   }
   const observe = (layout: HTMLElement) => {
-    resize.observe(layout)
+    if (!layout.closest('foreignObject[data-byte-detail]')) resize.observe(layout)
     schedule(layout)
   }
   const mutations = new window.MutationObserver(records => {
     for (const { target, addedNodes, removedNodes, attributeName } of records) {
       const parent = target.nodeType === 1 ? target as Element : target.parentElement
       if (!parent || parent.closest(decoration)) continue
+      // The wrapper writes its SVG viewport attributes during reflow.
+      if (attributeName && parent.matches('foreignObject[data-byte-detail]')) continue
       if (attributeName === 'data-byte-wrap') {
         const layout = parent as HTMLElement
         if (layout.matches(selector)) observe(layout)

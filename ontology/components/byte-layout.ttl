@@ -33,6 +33,8 @@ c:byteExtent a rdf:Property ; rdfs:domain c:ByteLayout ; rdfs:range xsd:positive
   rdfs:comment "Total bytes of a zero-based fixed layout. Without a scale, the strip is schematic." .
 c:byteWrap a owl:DatatypeProperty ; rdfs:domain c:ByteLayout ; rdfs:range xsd:boolean ;
   rdfs:comment "In a browser, flow whole fields onto additional rows when the column narrows. Offsets and spans continue across rows." .
+c:byteDetail a owl:ObjectProperty ; rdfs:domain c:ByteField ; rdfs:range c:ByteLayout ;
+  rdfs:comment "One nested diagram inside a field of a wrapping schematic. Each nested diagram has its own offsets and one containing field." .
 c:byteMark a rdf:Property ; rdfs:domain c:ByteField ; rdfs:range c:ByteMark ;
   rdfs:comment "A highlighted span within the field." .
 c:byteSpan a rdf:Property ; rdfs:domain c:ByteLayout ; rdfs:range c:ByteSpan ;
@@ -300,6 +302,34 @@ WHERE {
   BIND(CONCAT(IF(BOUND(?offset), CONCAT("@", STR(?offset), " · "), ""), ?label, " · ", ?metadata) AS ?spoken)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+}
+""" .
+
+# A nested layout is a normal component under an SVG/HTML integration point. The browser
+# sizes the box when it wraps the schematic; the zero-sized server box leaves the strip intact.
+c:ByteCellDetail a sem:Rendering ; sem:targets c:ByteCell ; sem:modality mod:Screen ; sem:stratum 0 ;
+  sem:follows c:of, c:inLayout, ( c:of c:byteDetail ) ;
+  sem:watches rdf:type, c:of, c:inLayout, c:byteDetail, c:byteField, c:byteWrap, c:byteExtent .
+c:ByteCellDetail-fn a sem:Rule ; sem:implements c:ByteCellDetail ; sem:function "byte-layout:detail" .
+c:ByteCellDetail-sparql a sem:Rule ; sem:implements c:ByteCellDetail ;
+  sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?box .
+  ?box a svg:ForeignObject ; sem:orderKey "\u0001n9" ; rdfhtml:hasChild ?detail ; rdfhtml:attribute ?att .
+  ?att a rdfhtml:Attribute ; rdfhtml:attributeName ?name ; rdfhtml:attributeValue ?val .
+}
+WHERE {
+  $this a c:ByteCell ; c:of ?field ; c:inLayout ?layout .
+  ?field c:byteDetail ?detail .
+  ?layout c:byteWrap true .
+  ?detail a c:ByteLayout ; c:byteWrap true .
+  FILTER(isIRI(?detail))
+  FILTER NOT EXISTS { ?layout c:byteExtent ?extent }
+  FILTER NOT EXISTS { ?detail (c:byteField/c:byteDetail)* ?layout }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~detail")) AS ?box)
+  VALUES (?name ?val) { ("data-byte-detail" "") ("width" "0") ("height" "0") }
+  BIND(IRI(CONCAT(STR(?box), "-a-", ?name)) AS ?att)
 }
 """ .
 

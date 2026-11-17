@@ -182,6 +182,57 @@ describe('ByteLayout', () => {
     }
   })
 
+  it('grows a detail field and moves later rows when the inner diagram wraps', () => {
+    const source = graph(`
+ex:chunk c:byteWrap true .
+ex:ck-size c:byteDetail ex:entry .
+ex:entry a c:ByteLayout ; c:label "Directory entry" ; c:byteWrap true ;
+  c:byteField ex:e0 , ex:e1 , ex:e2 , ex:e3 .
+ex:e0 c:byteIndex 0 ; c:label "Block offset" .
+ex:e1 c:byteIndex 1 ; c:label "Block length" .
+ex:e2 c:byteIndex 2 ; c:label "Checksum" .
+ex:e3 c:byteIndex 3 ; c:label "Bounds" .
+`)
+    const apps = (['sparql', 'function'] as const).map(prefer => mount('wat', prefer, ['en'], source))
+    try {
+      const pen = { font: '', measureText: (value: string) => ({ width: value.length * 7 }) } as CanvasRenderingContext2D
+      const result = apps.map(app => {
+        const plot = app.root('chunk').querySelector('svg') as unknown as SVGSVGElement
+        const box = plot.querySelector<SVGForeignObjectElement>('foreignObject[data-byte-detail]')!
+        expect(box).not.toBeNull()
+        expect(box.namespaceURI).toBe('http://www.w3.org/2000/svg')
+        expect(box.firstElementChild?.namespaceURI).toBe('http://www.w3.org/1999/xhtml')
+        expect(box.getAttribute('height')).toBe('0')
+        const child = box.querySelector<SVGSVGElement>('svg')!
+        const field = box.parentElement!
+        const rect = field.querySelector<SVGRectElement>('rect')!
+        const cells = [...child.querySelectorAll<SVGGElement>('g[role=list] > g')]
+        const after = plot.querySelector<SVGGElement>(':scope > g[role=list] > g:last-child')!
+        const heights = [800, 320, 800].map(width => {
+          wrapByteLayout(plot, width, pen)
+          expect(field.querySelector('foreignObject')).toBe(box)
+          expect(box.querySelector('svg')).toBe(child)
+          return {
+            field: parseFloat(rect.style.height),
+            rows: new Set(cells.map(cell => cell.dataset.byteWrapRow)).size,
+            afterY: Number(after.style.transform.split(', ')[1]?.replace('px)', '')),
+          }
+        })
+        expect(heights[0]).toEqual(heights[2])
+        expect(heights[1]!.rows).toBeGreaterThan(heights[0]!.rows)
+        expect(heights[1]!.field).toBeGreaterThan(heights[0]!.field)
+        expect(heights[1]!.afterY).toBeGreaterThan(heights[0]!.afterY)
+        const html = app.root('chunk').outerHTML
+        app.set('ck-size', 'byteDetail', undefined)
+        expect(app.root('chunk').querySelector('foreignObject')).toBeNull()
+        return html
+      })
+      expect(result[0]).toEqual(result[1])
+    } finally {
+      apps.forEach(app => app.dispose())
+    }
+  })
+
   it('says its unit in the viewer’s language', () => {
     for (const prefer of ['sparql', 'function'] as const) {
       const m = mount('wat', prefer, ['uk'])
