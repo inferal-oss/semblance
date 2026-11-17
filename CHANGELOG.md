@@ -36,6 +36,9 @@ Each entry states the engines' ABI version (`rdf-engine/ABI.md`).
   In an app bar a `c:Link` among the actions is a control beside its buttons (a control's height, the
   bar's text colour; an emblem alone is a square control), and on a phone a link or button with a
   logo shows the logo alone, its label kept as its name (#550). The site's bar links to its source.
+- `c:AppBar` takes `c:endActions`: actions pinned to the bar's inline end, after the More button on a
+  phone, at the end of the actions' row on a wider screen (follow-up to #550). The site's link to its
+  source is there.
 
 ## 0.1.0 (not yet published)
 

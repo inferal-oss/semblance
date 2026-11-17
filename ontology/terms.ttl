@@ -971,6 +971,7 @@ c:editsRow a sem:Term .
 c:emphasis a sem:Term .
 c:emptyText a sem:Term .
 c:end a sem:Term .
+c:endActions a sem:Term .
 c:endDate a sem:Term .
 c:endProperty a sem:Term .
 c:endValue a sem:Term .

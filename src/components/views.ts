@@ -21,6 +21,7 @@ const C_BYLINE = NS.c + 'byline'
 const NAV_HREF = NS.nav + 'href'
 const C_HREF = NS.c + 'href'
 const C_MORE_ACTIONS = NS.c + 'moreActions'
+const C_END_ACTIONS = NS.c + 'endActions'
 const C_MORE_LABEL = NS.c + 'moreLabel'
 const C_EXPANDED = NS.c + 'expanded'
 const C_FOLDS = NS.c + 'folds'
@@ -116,7 +117,15 @@ const appbar: FnRule = (ctx, focus) => {
     o.t(toggle, C_FOLDS, focus)
     group.push(o.el('more', 'Div', { class: 'sem-more', 'data-open': String(open) }, [toggle, o.el('more-body', 'Div', { class: 'sem-more-body', id: body.value }, more)]))
   }
-  o.renders(o.el('root', 'Header', {}, [brand, o.el('actions', 'Div', { class: 'sem-actions' }, [...actions, ...group])]))
+  // The end actions: a group of their own after the actions and the More button, the bar's corner.
+  const end = rdfList(ctx, ctx.object(focus, C_END_ACTIONS)).filter(named)
+  o.renders(
+    o.el('root', 'Header', {}, [
+      brand,
+      o.el('actions', 'Div', { class: 'sem-actions' }, [...actions, ...group]),
+      ...(end.length ? [o.el('end', 'Div', { class: 'sem-end' }, end)] : []),
+    ]),
+  )
   return o.quads
 }
 

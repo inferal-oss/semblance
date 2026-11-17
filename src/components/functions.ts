@@ -623,10 +623,10 @@ const watchControlled: FnRule['watches'] = (ctx, focus) => {
   return new Set([C.controls, C.property, C.label, C.options, ...(property ? [property.value] : [])])
 }
 
-/** A choice among a toolbar's children or an app bar's actions is placed inline (twin of c:ChoicesInlineInBars). */
+/** A choice among a toolbar's children or an app bar's actions (more, end) is placed inline (twin of c:ChoicesInlineInBars). */
 const choicesInlineInBars: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  for (const p of [C.children, NS.c + 'actions', NS.c + 'moreActions'])
+  for (const p of [C.children, NS.c + 'actions', NS.c + 'moreActions', NS.c + 'endActions'])
     for (const item of nodes(ctx, ctx.object(focus, p)))
       if (isA(ctx, item, NS.c + 'Choice')) o.t(item, NS.c + 'labelPlacement', ctx.nn(NS.c + 'LabelInline'))
   return o.quads
