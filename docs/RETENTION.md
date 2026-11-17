@@ -440,7 +440,9 @@ Tracked in #530, linked from the Plan (#8).
 | N3's dictionary copied once it outgrows what is stored (the N3 store and the hybrid's mirror) | `src/store/n3.ts`, `src/store/hybrid.ts` | built |
 | Toasts that wait for acknowledgement (`ret:UntilAcknowledged`, `ann:retention`) | `ontology/layers/announce.ttl`, `src/retention/policy.ts`, `src/layers/announce.ts` | built |
 | A disabled Undo says where history starts (`beh:UndoHorizon`, `beh:UndoableCounts`) | `ontology/layers/behaviour.ttl`, `src/behaviour/undo.ts` | built |
-| Cold graphs offloaded or unloaded under pressure; `per:retention` as `ret:Within`; remembered state that could not be saved announced and waiting | | not yet |
+| Remembered state by `ret:Within`: `per:retention` measured from each stored triple's age, set aside (or dropped where the policy says so), on a horizon, announced, recalled | `src/persistence.ts`, `ontology/layers/persistence.ttl`; §8.9 | built |
+| Nothing owned lost across a reload: settings, the site's look, a kept file and the remembered change log, under critical pressure and a refusing storage, with each run's streams conserved | `test/reload-owned.test.ts` | built |
+| Cold graphs offloaded or unloaded under pressure; remembered state that could not be saved announced and waiting | | not yet |
 
 ## 8. Using retention
 
@@ -649,7 +651,7 @@ It is called only when policies and reactions have not settled it:
   on the horizon and announced.
 
 Nothing here ever drops owned data. The default graph, remembered state and kept files are not
-retained streams.
+retained streams. Remembered state expires only by its own policy's `per:retention` (§8.9).
 
 ### 8.7 The Memory tool
 
@@ -713,8 +715,47 @@ The soaks, and what they measured:
   page shown again is byte-identical to its first visit, nothing owned is lost, and a pass takes some
   12 s, against 8 s unbounded (and 1 s once everything is kept).
 
-`test/retention.test.ts`, `test/retention-pressure.test.ts` and `test/retention-evict.test.ts` are
-worked examples of each.
+- **Reload over the same storage.** Mount again with the same persistence backends, file store and
+  offload storage, and compare what every enabled policy covers (`persistence.collect(policy)`)
+  before and after. Blank nodes get new labels, so compare them by what they say.
+
+`test/retention.test.ts`, `test/retention-pressure.test.ts`, `test/retention-evict.test.ts` and
+`test/reload-owned.test.ts` are worked examples of each.
+
+### 8.9 Remembered state
+
+Remembered state (`per:Policy`, [PERSISTENCE.md](../PERSISTENCE.md)) is data a person owns, so it is
+kept until its policy says otherwise. A policy that should not keep things forever names a
+`ret:Within` as its `per:retention`:
+
+```turtle
+ex:drafts a per:Policy ; per:scope per:Device ;
+    per:construct """CONSTRUCT { ?d ex:text ?t } WHERE { ?d a ex:Draft ; ex:text ?t }""" ;
+    per:retention [ a ret:Within ; tree:value "P30D" ;   # what was stored within 30 days
+        ret:onExpiry ret:Offload ;                       # the default: set aside, not dropped
+        ret:storageAmount 5000 ;                         # at most this many triples set aside
+        ret:announce true ] .                            # say so, once a session
+```
+
+- **Measured from the data's age.** Each stored triple carries when it was stored, or last changed
+  (the stored copy keeps the ages beside it, oldest first). A triple unchanged for longer than the
+  duration expires even when the policy was written since. It is measured when the state is restored.
+- **Set aside, by default.** What expires is not restored, and stays in the same storage beside the
+  policy's copy (`<key>~aside`). `ret:recall` on the policy (Show older on its horizon) brings back the
+  most recent of it, never over a value the graph holds now. Recalled, it keeps its age, so the next
+  load sets it aside again unless it changed.
+- **Dropped, only when the policy says so** (`ret:onExpiry ret:Drop`). A duration alone,
+  `per:retention "P30D"`, is short for a `ret:Within` of it with `ret:Drop`.
+- **Never silently.** The new copy is written before anything is removed. What cannot be set aside
+  (storage refused) is restored after all. Every expiry is a `per:Expire` member of `per:StateLog`.
+  The policy's horizon (`<policy>/~horizon`) has `ret:inMemory` (restored), `ret:offloaded` (set
+  aside), `ret:dropped` and `ret:oldestKept`, so `c:HorizonList` lists it beside the streams. With
+  `ret:announce`, the first time in a session that state is set aside or dropped raises `ret:Offloaded`
+  or `ret:Dropped` on the policy. Its reaction (`per:AnnounceSetAside`, `per:AnnounceExpired`)
+  announces it in the viewer's language. The host passes its bus for this:
+  `persistence.attach(runtime, { bus })`.
+
+`test/persistence-retention.test.ts` is the worked example.
 
 ## Appendix: the questions as they were asked
 

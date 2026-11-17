@@ -12,6 +12,7 @@
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix lc: <https://semblance.dev/ns/layout-constraints#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix ret: <https://semblance.dev/ns/retention#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix src: <https://semblance.dev/ns/source#> .
@@ -312,5 +313,6 @@ l10n:Viewer sem:version 2 ; sem:closure "f13ba1f3e29ae67d" ; sem:internal "l10n:
 lc:WithParts sem:version 1 ; sem:closure "55f5674640084adb" ; sem:internal "new" .
 nav:ContainmentProperty sem:version 1 ; sem:closure "6107f25c832848e4" ; sem:internal "new" .
 nav:Location sem:version 1 ; sem:closure "ebe2918971db016a" ; sem:internal "new" .
+per:Policy sem:version 1 ; sem:closure "0d9f7744daa6ef90" ; sem:internal "new" .
 ret:MemoryBudget sem:version 2 ; sem:closure "5dc3ff6020796e95" ; sem:changedBy change:toasts-undo-horizon .
 src:Source sem:version 1 ; sem:closure "0a4d62fbc46c87e5" ; sem:internal "new" .

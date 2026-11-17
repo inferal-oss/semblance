@@ -43,7 +43,7 @@ ret:Policy a owl:Class ; rdfs:subClassOf ldes:RetentionPolicy ;
 ret:Latest a owl:Class ; rdfs:subClassOf ret:Policy ;
     rdfs:comment "Keeps the ldes:amount most recent members (by the stream's sequence path)."@en .
 ret:Within a owl:Class ; rdfs:subClassOf ret:Policy ;
-    rdfs:comment "Keeps the members appended within a duration (tree:value, an xsd:duration) of now."@en .
+    rdfs:comment "Keeps the members appended within a duration (tree:value, an xsd:duration) of now. As a remembered state's retention (per:retention), the stored triples stored within it."@en .
 ret:UntilAcknowledged a owl:Class ; rdfs:subClassOf ret:Policy ;
     rdfs:comment "Keeps a member that awaits a person's acknowledgement until it has one (ret:acknowledged true), whatever its age or number; then the stream's other policies decide. On the change log it keeps the events whose announcing reaction names it (ann:retention): their toasts wait to be dismissed."@en .
 ret:acknowledged a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
@@ -60,7 +60,7 @@ recorded an undoable change (beh:asserted, beh:retracted) longer than the rest t
 ret:Exit a owl:Class ; rdfs:comment "What happens to a member a policy no longer keeps."@en .
 ret:Drop a ret:Exit ; rdfs:comment "It is removed (the default). The horizon counts it."@en .
 ret:Offload a ret:Exit ;
-    rdfs:comment "It is written to the browser's storage, then removed; it can be recalled into the live graph (ret:recall)."@en .
+    rdfs:comment "It is written to the browser's storage, then removed; it can be recalled into the live graph (ret:recall). For remembered state (per:retention), the default: it stays in the policy's storage, set aside, and is not restored."@en .
 ret:onExpiry a owl:ObjectProperty ; rdfs:domain ret:Policy ; rdfs:range ret:Exit .
 ret:storageAmount a owl:DatatypeProperty ; rdfs:domain ret:Policy ; rdfs:range xsd:integer ;
     rdfs:comment "How many offloaded members storage keeps for the policy; past it, the oldest are dropped (and counted)."@en .
@@ -76,7 +76,7 @@ ret:recallLimit a owl:DatatypeProperty ; rdfs:domain ldes:EventStream ; rdfs:ran
 ret:Horizon a owl:Class ;
     rdfs:label "History kept"@en , "Збережена історія"@uk , "Aufbewahrter Verlauf"@de , "السجل المحفوظ"@ar ;
     rdfs:comment "Where a retained stream's history stops: how much of it is in memory, offloaded, recalled, and no longer kept."@en .
-ret:of a owl:ObjectProperty ; rdfs:domain ret:Horizon ; rdfs:comment "The stream the horizon is of."@en .
+ret:of a owl:ObjectProperty ; rdfs:domain ret:Horizon ; rdfs:comment "The stream, or the remembered state's policy (per:Policy), the horizon is of."@en .
 ret:inMemory a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:integer ; rdfs:comment "Members in the graph."@en .
 ret:offloaded a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:integer ; rdfs:comment "Members in the browser's storage, recallable."@en .
 ret:pending a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:integer ;
@@ -89,9 +89,11 @@ ret:refused a owl:DatatypeProperty ; rdfs:domain ret:Horizon ; rdfs:range xsd:st
 
 # --- recalling ----------------------------------------------------------------------------------------
 
-ret:recall a owl:DatatypeProperty ; rdfs:domain ldes:EventStream ; rdfs:range xsd:integer ;
+ret:recall a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:comment """Written by a reaction on a stream (in the input graph): bring back this many of its most recent
-offloaded members, into the live graph. Performed and removed by the retention effect."""@en .
+offloaded members, into the live graph. Performed and removed by the retention effect. On a remembered state's
+policy (per:Policy), the persistence effect brings back this many of the most recent triples its retention set
+aside, never over a value the graph holds now."""@en .
 ret:recalls a owl:ObjectProperty ; rdfs:comment "On a rendered element: the stream whose offloaded members activating it recalls."@en .
 
 # --- announcing a horizon ------------------------------------------------------------------------------
@@ -99,11 +101,11 @@ ret:recalls a owl:ObjectProperty ; rdfs:comment "On a rendered element: the stre
 # The first time in a session a person-facing policy (ret:announce true) offloads or drops a member,
 # the effect raises one of these events on the stream; their reactions say so (ann:announces).
 ret:Offloaded a owl:Class ; rdfs:subClassOf beh:Event ;
-    rdfs:comment "A stream's person-facing policy offloaded members to storage for the first time this session."@en .
+    rdfs:comment "A stream's person-facing policy offloaded members to storage for the first time this session (or a remembered state's retention set stored triples aside: raised on its per:Policy)."@en .
 ret:Dropped a owl:Class ; rdfs:subClassOf beh:Event ;
-    rdfs:comment "A stream's person-facing policy stopped keeping members for the first time this session."@en .
-ret:crossed a owl:ObjectProperty ; rdfs:domain ldes:EventStream ; rdfs:range rdfs:Class ;
-    rdfs:comment "Which horizon events the stream announced this session (so each is announced once)."@en .
+    rdfs:comment "A stream's person-facing policy stopped keeping members for the first time this session (or a remembered state's retention dropped stored triples: raised on its per:Policy)."@en .
+ret:crossed a owl:ObjectProperty ; rdfs:range rdfs:Class ;
+    rdfs:comment "Which horizon events the stream (or the remembered state's policy) announced this session (so each is announced once)."@en .
 
 ret:AnnounceOffloaded a beh:Reaction ;
     beh:when ret:Offloaded ;

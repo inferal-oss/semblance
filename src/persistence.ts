@@ -14,13 +14,14 @@
 import type { Quad, Term } from '@rdfjs/types'
 import { migrateQuads, readRetired } from './retired.ts'
 import { Parser, Writer } from 'n3'
-import type { ReactionFn } from './behaviour/events.ts'
+import type { EventBus, ReactionFn } from './behaviour/events.ts'
 import type { FnRule } from './engine/context.ts'
 import { formatLocale } from './engine/context.ts'
-import { BEH, EVENTS_GRAPH, H, MOD, NS, PERSIST_GRAPH, RDF_TYPE, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
+import { BEH, EVENTS_GRAPH, H, MOD, NS, PERSIST_GRAPH, RDF_TYPE, RETENTION_GRAPH, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
 import { prefixesFor } from './prefixes.ts'
 import { type Delta, mint, parseDuration, quadKey } from './rdf.ts'
 import { logStream } from './retention/offload.ts'
+import { policyOf } from './retention/policy.ts'
 import type { ViewHandle } from './view/runtime.ts'
 import type { Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
@@ -134,7 +135,8 @@ interface Policy {
   enabled: boolean
   version: string
   graph?: string
-  retentionMs?: number
+  /** per:retention: what is restored, by each stored triple's age, and what leaves by. */
+  retention?: Within
   subject?: Term
   properties: string[]
   construct?: string
@@ -150,6 +152,23 @@ interface Policy {
   template?: Quad[]
 }
 
+/**
+ * A policy's retention (per:retention, a ret:Within): a stored triple is restored while it was stored
+ * (or last changed) within the duration. What is older leaves by the exit: set aside in storage,
+ * where a recall finds it (ret:Offload, the default: remembered state is owned), or removed
+ * (ret:Drop, only when the policy says so). Either is counted on the policy's horizon.
+ */
+interface Within {
+  withinMs: number
+  exit: 'drop' | 'offload'
+  announce: boolean
+  /** ret:storageAmount: how many triples set aside storage keeps; past it the oldest are dropped (counted). */
+  storageAmount?: number
+}
+
+/** Ages as runs over a list in order: `[at, n]`, the next n were stored at `at` (ms since the epoch). */
+type Runs = [number, number][]
+
 interface Blob {
   version: string
   savedAt: number
@@ -157,12 +176,67 @@ interface Blob {
   nt: string
   /** Changes written since, each its own entry (`<key>#<i>`, i from 1), applied in order. */
   chunks?: number
+  /** A policy with a retention: when each of nt's lines was stored, oldest first (without: savedAt). */
+  ages?: Runs
 }
 
 /** A change written on its own (see Blob.chunks). */
 interface Chunk {
   add: string
   remove: string
+  /** When it was written: the age of what it adds (without: the base's savedAt). */
+  at?: number
+}
+
+/** What a policy's retention set aside (`<key>~aside`): kept in storage, not restored, recallable. */
+interface Aside {
+  version: string
+  nt: string
+  ages: Runs
+}
+
+/** A stored triple and when it was stored. */
+interface Aged {
+  q: Quad
+  at: number
+}
+
+/** What restoring a policy changes, and what its retention no longer restores. */
+interface Change {
+  add: Quad[]
+  remove: Quad[]
+  /** Older than the policy's retention: not restored. */
+  expired: Aged[]
+  /** What stays in the base, aged (a policy with a retention). */
+  kept: Aged[]
+}
+
+/** A policy's horizon: what it restored, set aside and dropped (this session). */
+interface Horizon {
+  inMemory: number
+  aside: number
+  dropped: number
+  oldest?: number
+  /** Expiries not yet in the state log (restored before the runtime was there). */
+  unrecorded: number
+  /** Kinds crossed and not yet announced. */
+  crossing: Set<'offloaded' | 'dropped'>
+}
+
+const runs = (ages: number[]): Runs => {
+  const out: Runs = []
+  for (const at of ages) {
+    const last = out[out.length - 1]
+    if (last && last[0] === at) last[1]++
+    else out.push([at, 1])
+  }
+  return out
+}
+const unrun = (r: Runs | undefined, n: number, fallback: number): number[] => {
+  const out: number[] = []
+  for (const [at, k] of r ?? []) for (let i = 0; i < k; i++) out.push(at)
+  while (out.length < n) out.push(fallback)
+  return out
 }
 
 /** A policy kept by a view: what was last written (its tick), and the chunks and triples since the base. */
@@ -255,14 +329,14 @@ export class Persistence {
         const first = one(n, NS.rdf + 'first')
         if (first) properties.push(first.value)
       }
-      const duration = one(p, PER + 'retention')?.value
+      const retention = this.retentionOf(one(p, PER + 'retention'))
       return {
         iri: p.value,
         scope: one(p, PER + 'scope')?.value ?? PER + 'Session',
         enabled: enabled(p),
         version: one(p, PER + 'version')?.value ?? '1',
         graph: one(p, PER + 'graph')?.value,
-        retentionMs: duration ? parseDuration(duration) : undefined,
+        ...(retention && { retention }),
         subject: one(p, PER + 'subject'),
         properties,
         construct,
@@ -280,6 +354,21 @@ export class Persistence {
       return [{ iri: d.value, scope: scope.value, enabled: true, version: '1', subject, properties: [property], incremental: false, watches: new Set([property]), dimension: true }]
     })
     return [...policies, ...dimensions]
+  }
+
+  /**
+   * per:retention: a ret:Within (its duration in tree:value, its ret:onExpiry, by default ret:Offload),
+   * or a duration alone, short for a ret:Within of it with ret:onExpiry ret:Drop.
+   */
+  private retentionOf(t: Term | undefined): Within | undefined {
+    if (!t) return undefined
+    if (t.termType === 'Literal') {
+      const ms = parseDuration(t.value)
+      return ms === undefined ? undefined : { withinMs: ms, exit: 'drop', announce: false }
+    }
+    const r = policyOf(this.declared, t, 'offload')
+    if (r.withinMs === undefined) return undefined
+    return { withinMs: r.withinMs, exit: r.exit, announce: r.announce, ...(r.storageAmount !== undefined && { storageAmount: r.storageAmount }) }
   }
 
   /** IRIs a query mentions (full or prefixed), for deciding what changes concern it. */
@@ -320,7 +409,7 @@ export class Persistence {
     let total = 0
     for (const policy of this.policies()) {
       this.considered.add(policy.iri)
-      const change = await this.storedChange(policy)
+      const change = await this.restorable(policy)
       if (!change) continue
       for (const q of change.remove) this.store.delete(q)
       for (const q of change.add) if (!this.store.has(q)) this.store.add(q)
@@ -344,12 +433,13 @@ export class Persistence {
     for (const policy of this.policies()) {
       if (this.considered.has(policy.iri)) continue
       this.considered.add(policy.iri)
-      const c = await this.storedChange(policy)
+      const c = await this.restorable(policy)
       if (!c) continue
       change.add.push(...c.add)
       change.remove.push(...c.remove)
       this.restoredCounts.set(policy.iri, c.add.length)
       this.record(PER + 'Restore', policy, c.add.length)
+      this.reportExpiry(policy)
     }
     // Named graphs are input graphs too: each part goes where its policy keeps it.
     const byGraph = new Map<string, { add: Quad[]; remove: Quad[] }>()
@@ -365,24 +455,47 @@ export class Persistence {
     return change.add.length
   }
 
+  /**
+   * What restoring a policy changes, with its retention settled: what is older than it is set aside
+   * or dropped in storage first (write, then remove), and what could not be set aside is restored
+   * after all, so nothing leaves without a trace.
+   */
+  private async restorable(policy: Policy): Promise<Change | undefined> {
+    const change = await this.storedChange(policy)
+    if (!change || !policy.retention) return change
+    const back = await this.settle(policy, change)
+    if (back.length) {
+      // Restored after all: they replace the current values of their subjects and properties, as the rest do.
+      const add = back.map((e) => this.into(policy, e.q))
+      change.add.push(...add)
+      const keep = new Set(change.add.map(quadKey))
+      if (!policy.graph) for (const q of add) for (const x of this.store.match(q.subject, q.predicate, null, q.graph)) if (!keep.has(quadKey(x))) change.remove.push(x)
+    }
+    const h = this.horizonOf(policy)
+    h.inMemory = change.add.length
+    h.oldest = this.oldestOf(policy)
+    return change
+  }
+
   /** What restoring a policy changes: its stored triples, replacing the current values of their subjects and properties (none: nothing stored, or disabled). */
-  private async storedChange(policy: Policy): Promise<{ add: Quad[]; remove: Quad[] } | undefined> {
+  private async storedChange(policy: Policy): Promise<Change | undefined> {
     const f = this.store.factory
     if (!policy.enabled) return undefined
     const raw = await this.backend(policy.scope).get(this.key(policy.iri))
-    if (!raw) return undefined
+    if (!raw) {
+      if (policy.retention) await this.countAside(policy)
+      return undefined
+    }
     let blob: Blob
     try {
       blob = JSON.parse(raw)
     } catch {
       return undefined
     }
-    const expired = policy.retentionMs !== undefined && Date.now() - blob.savedAt > policy.retentionMs
-    if (blob.version !== policy.version || expired) {
+    if (blob.version !== policy.version) {
       await this.removeStored(policy)
       return undefined
     }
-    const g = policy.graph ? f.namedNode(policy.graph) : f.defaultGraph()
     const retired = readRetired(this.store)
     const remembered = migrateQuads(this.parse(blob.nt), retired, f)
     // A remembered triple that names a term which went without a new name cannot be carried over.
@@ -391,6 +504,12 @@ export class Persistence {
       return undefined
     }
     const held = new Map(remembered.map((q) => [quadKey(q), q]))
+    // When each was stored (a policy with a retention): the base's lines, then what each chunk added.
+    const born = new Map<string, number>()
+    if (policy.retention) {
+      const ages = unrun(blob.ages, remembered.length, blob.savedAt)
+      remembered.forEach((q, i) => born.set(quadKey(q), ages[i]!))
+    }
     for (let i = 1; i <= (blob.chunks ?? 0); i++) {
       const raw = await this.backend(policy.scope).get(this.key(policy.iri) + '#' + i)
       if (!raw) break
@@ -400,18 +519,224 @@ export class Persistence {
         await this.removeStored(policy)
         return undefined
       }
-      for (const q of removed) held.delete(quadKey(q))
-      for (const q of added) held.set(quadKey(q), q)
+      for (const q of removed) held.delete(quadKey(q)), born.delete(quadKey(q))
+      for (const q of added) {
+        held.set(quadKey(q), q)
+        if (policy.retention) born.set(quadKey(q), chunk.at ?? blob.savedAt)
+      }
     }
     // Only what the policy covers comes back: whatever else storage holds stays there.
-    const add = [...held.values()].filter((q) => this.covers(policy, q)).map((q) => f.quad(q.subject, q.predicate, q.object, g))
+    let covered = [...held.values()].filter((q) => this.covers(policy, q))
+    // Its retention: what was stored longer ago than it says is not restored.
+    const expired: Aged[] = []
+    const kept: Aged[] = []
+    if (policy.retention) {
+      const cut = Date.now() - policy.retention.withinMs
+      const age = (q: Quad) => born.get(quadKey(q)) ?? blob.savedAt
+      for (const q of held.values()) (age(q) < cut && this.covers(policy, q) ? expired : kept).push({ q, at: age(q) })
+      kept.sort((a, b) => a.at - b.at)
+      if (expired.length) covered = covered.filter((q) => age(q) >= cut)
+      this.ages.set(policy.iri, new Map(kept.map((e) => [quadKey(e.q), e.at])))
+    }
+    const add = covered.map((q) => this.into(policy, q))
     // What is restored replaces the current values of the same subject and property.
     // Keyed by the terms themselves (a remembered subject may be a blank node, not an IRI).
+    const g = policy.graph ? f.namedNode(policy.graph) : f.defaultGraph()
     const pairs = new Map(add.map((q) => [termKey(q.subject) + ' ' + termKey(q.predicate), q] as const))
     const keep = new Set(add.map(quadKey))
     const remove: Quad[] = []
     if (!policy.graph) for (const { subject, predicate } of pairs.values()) for (const q of this.store.match(subject, predicate, null, g)) if (!keep.has(quadKey(q))) remove.push(q)
-    return { add, remove }
+    return { add, remove, expired, kept }
+  }
+
+  /** A stored triple in the graph its policy restores into. */
+  private into(policy: Policy, q: Quad): Quad {
+    const f = this.store.factory
+    return f.quad(q.subject, q.predicate, q.object, policy.graph ? f.namedNode(policy.graph) : f.defaultGraph())
+  }
+
+  // --- retention (per:retention) ---------------------------------------------------------------------
+
+  /** When each stored triple of a policy with a retention was stored (by quadKey). */
+  private ages = new Map<string, Map<string, number>>()
+  private horizons = new Map<string, Horizon>()
+
+  private horizonOf(policy: Policy): Horizon {
+    let h = this.horizons.get(policy.iri)
+    if (!h) this.horizons.set(policy.iri, (h = { inMemory: 0, aside: 0, dropped: 0, unrecorded: 0, crossing: new Set() }))
+    return h
+  }
+
+  private oldestOf(policy: Policy): number | undefined {
+    let o: number | undefined
+    for (const at of this.ages.get(policy.iri)?.values() ?? []) if (o === undefined || at < o) o = at
+    return o
+  }
+
+  private asideKey(policy: Policy) {
+    return this.key(policy.iri) + '~aside'
+  }
+
+  /** What a policy's retention set aside, by quadKey (none when it does not parse or is of another version). */
+  private async readAside(policy: Policy): Promise<Map<string, Aged>> {
+    const out = new Map<string, Aged>()
+    const raw = await this.backend(policy.scope).get(this.asideKey(policy))
+    if (!raw) return out
+    try {
+      const a = JSON.parse(raw) as Aside
+      if (a.version !== policy.version) return out
+      const quads = migrateQuads(this.parse(a.nt), readRetired(this.store), this.store.factory) ?? []
+      const ages = unrun(a.ages, quads.length, 0)
+      quads.forEach((q, i) => out.set(quadKey(q), { q, at: ages[i]! }))
+    } catch {
+      return out
+    }
+    return out
+  }
+
+  private async writeAside(policy: Policy, aside: Map<string, Aged>) {
+    if (!aside.size) return this.backend(policy.scope).remove(this.asideKey(policy))
+    const sorted = [...aside.values()].sort((x, y) => x.at - y.at)
+    const value: Aside = { version: policy.version, nt: this.serialize(sorted.map((e) => e.q)), ages: runs(sorted.map((e) => e.at)) }
+    await this.set(policy, this.asideKey(policy), JSON.stringify(value), sorted.length)
+  }
+
+  private async countAside(policy: Policy) {
+    this.horizonOf(policy).aside = (await this.readAside(policy)).size
+  }
+
+  /**
+   * What a restore found older than the policy's retention leaves storage's live copy by its exit:
+   * set aside (written first, then the base without it) or dropped (the base without it). Returns
+   * what could not be set aside (storage refused): it is restored after all.
+   */
+  private async settle(policy: Policy, change: Change): Promise<Aged[]> {
+    const r = policy.retention!
+    const h = this.horizonOf(policy)
+    const aside = await this.readAside(policy)
+    h.aside = aside.size
+    if (!change.expired.length) return []
+    let dropped = 0
+    if (r.exit === 'offload') {
+      for (const e of change.expired) aside.set(quadKey(e.q), e)
+      // Past ret:storageAmount, the oldest set aside go, and are counted.
+      if (r.storageAmount !== undefined && aside.size > r.storageAmount) {
+        const oldest = [...aside.entries()].sort((x, y) => x[1].at - y[1].at)
+        for (const [k] of oldest.slice(0, aside.size - r.storageAmount)) aside.delete(k), dropped++
+      }
+      try {
+        await this.writeAside(policy, aside)
+      } catch (e) {
+        console.warn(`semblance: could not set aside what ${policy.iri} no longer restores; it is restored`, e)
+        const ages = this.ages.get(policy.iri)
+        for (const x of change.expired) ages?.set(quadKey(x.q), x.at)
+        return change.expired
+      }
+    } else dropped = change.expired.length
+    // The live copy without what left: the new base first, then the chunks it no longer counts. A
+    // refused write leaves it there (not restored), settled again at the next load or write.
+    try {
+      await this.writeBase(policy, change.kept)
+      const k = this.kept.get(policy.iri)
+      if (k) k.tick = -1
+    } catch (e) {
+      console.warn(`semblance: could not rewrite ${policy.iri} without what its retention let go`, e)
+    }
+    h.aside = aside.size
+    h.dropped += dropped
+    h.unrecorded += change.expired.length
+    if (r.announce) {
+      if (r.exit === 'offload' && aside.size) h.crossing.add('offloaded')
+      if (dropped) h.crossing.add('dropped')
+    }
+    return []
+  }
+
+  /** A base of these triples, oldest first, with their ages; then the chunks it replaces go. */
+  private async writeBase(policy: Policy, aged: Aged[]) {
+    const b = this.backend(policy.scope)
+    const before = this.storedChunks(await b.get(this.key(policy.iri)))
+    const blob: Blob = { version: policy.version, savedAt: Date.now(), nt: this.serialize(aged.map((e) => e.q)), ages: runs(aged.map((e) => e.at)) }
+    await this.set(policy, this.key(policy.iri), JSON.stringify(blob), aged.length)
+    for (let i = 1; i <= before; i++) await b.remove(this.key(policy.iri) + '#' + i)
+  }
+
+  /**
+   * A policy's horizon (`<policy>/~horizon`, in urn:semblance:retention), its expiries in the state
+   * log, and the first crossing announced: what its retention let go never goes unseen.
+   */
+  private reportExpiry(policy: Policy) {
+    const runtime = this.runtime
+    const h = this.horizons.get(policy.iri)
+    if (!runtime || !h || !policy.retention) return
+    const f = this.store.factory
+    const nn = (x: string) => f.namedNode(x)
+    const node = nn(mint(policy.iri, 'horizon'))
+    const g = nn(RETENTION_GRAPH)
+    const int = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
+    const want = [
+      f.quad(node, nn(RDF_TYPE), nn(NS.ret + 'Horizon'), g),
+      f.quad(node, nn(NS.ret + 'of'), nn(policy.iri), g),
+      f.quad(node, nn(NS.ret + 'inMemory'), int(h.inMemory), g),
+      f.quad(node, nn(NS.ret + 'offloaded'), int(h.aside), g),
+      f.quad(node, nn(NS.ret + 'dropped'), int(h.dropped), g),
+      ...(h.oldest !== undefined ? [f.quad(node, nn(NS.ret + 'oldestKept'), f.literal(new Date(h.oldest).toISOString(), nn(XSD_DATETIME)), g)] : []),
+    ]
+    const keys = new Set(want.map(quadKey))
+    const have = this.store.match(node, null, null, g)
+    const had = new Set(have.map(quadKey))
+    const remove = have.filter((q) => !keys.has(quadKey(q)))
+    const add = want.filter((q) => !had.has(quadKey(q)))
+    if (add.length || remove.length) runtime.write(RETENTION_GRAPH, { add, remove })
+    if (h.unrecorded) this.record(PER + 'Expire', policy, h.unrecorded), (h.unrecorded = 0)
+    const bus = this.bus
+    if (bus && h.crossing.size) {
+      const kinds = [...h.crossing]
+      h.crossing.clear()
+      // After the tick that restored them, not inside it; once a session (the reaction says so).
+      queueMicrotask(() => {
+        if (this.stopped || runtime.ended) return
+        for (const kind of kinds) bus.emit(NS.ret + (kind === 'offloaded' ? 'Offloaded' : 'Dropped'), policy.iri)
+      })
+    }
+  }
+
+  /**
+   * Bring back the `n` most recent triples a policy's retention set aside (`?policy ret:recall ?n`),
+   * as one change, never over a value the graph holds now. They are stored with the policy again,
+   * with their ages, and only then leave what was set aside. Returns how many came back.
+   */
+  async recall(policyIri: string, n: number): Promise<number> {
+    const runtime = this.runtime
+    const policy = this.policies().find((p) => p.iri === policyIri)
+    if (!runtime || !policy?.retention || !policy.enabled) return 0
+    const aside = await this.readAside(policy)
+    if (this.stopped) return 0
+    const f = this.store.factory
+    const g = policy.graph ? f.namedNode(policy.graph) : f.defaultGraph()
+    const free = (q: Quad) => !!policy.graph || !this.store.match(q.subject, q.predicate, null, g).length
+    const picked = [...aside.entries()].sort((x, y) => y[1].at - x[1].at).filter(([, e]) => free(e.q)).slice(0, n)
+    if (!picked.length) return 0
+    const add = picked.map(([, e]) => this.into(policy, e.q))
+    let ages = this.ages.get(policy.iri)
+    if (!ages) this.ages.set(policy.iri, (ages = new Map()))
+    for (const [k, e] of picked) ages.set(k, e.at)
+    if (policy.graph) runtime.write(policy.graph, { add, remove: [] })
+    else runtime.apply({ add, remove: [] })
+    this.dirty.add(policy.iri)
+    await this.flush()
+    const unsaved = this.store.match(f.namedNode(policy.iri), f.namedNode(PER + 'unsaved'), null, f.namedNode(PERSIST_GRAPH)).length > 0
+    if (this.stopped || unsaved) return picked.length
+    for (const [k] of picked) aside.delete(k)
+    try {
+      await this.writeAside(policy, aside)
+    } catch {
+      // Held in both: what was set aside still has it, and the policy's copy too.
+    }
+    // The write above counted them in memory.
+    this.horizonOf(policy).aside = aside.size
+    this.reportExpiry(policy)
+    return picked.length
   }
 
   /**
@@ -456,11 +781,18 @@ export class Persistence {
     return (this.restoredCounts.get(policy) ?? 0) > 0
   }
 
-  /** Follow input changes from now on; report restores in the state log. Returns a function that stops it (stop()). */
-  attach(runtime: Runtime): () => void {
+  /** Where a policy's retention announces what it let go (ret:Offloaded, ret:Dropped on the policy). */
+  private bus?: EventBus
+
+  /**
+   * Follow input changes from now on; report restores in the state log, and what policies' retentions
+   * let go on their horizons (announced on `bus`, when given). Returns a function that stops it (stop()).
+   */
+  attach(runtime: Runtime, opts: { bus?: EventBus } = {}): () => void {
     this.runtime = runtime
+    this.bus = opts.bus
     for (const [policy, n] of this.restoredCounts) this.record(PER + 'Restore', this.policies().find((p) => p.iri === policy)!, n)
-    for (const policy of this.policies()) this.report(policy)
+    for (const policy of this.policies()) this.report(policy), this.reportExpiry(policy)
     // Where we are may have come from the address since: storage-carried dimensions are written once.
     for (const policy of this.policies()) if (policy.dimension) this.dirty.add(policy.iri)
     if (this.dirty.size) this.schedule()
@@ -487,8 +819,9 @@ export class Persistence {
     const policy = this.policies().find((p) => p.acrossTabs && p.enabled && p.scope === scope && this.key(p.iri) === key)
     const runtime = this.runtime
     if (!policy || !runtime || this.stopped) return
-    const change = await this.storedChange(policy)
+    const change = await this.restorable(policy)
     if (!change || this.stopped) return
+    this.reportExpiry(policy)
     const add = change.add.filter((q) => !this.store.has(q))
     if (!add.length && !change.remove.length) return
     const dirty = this.dirty.has(policy.iri)
@@ -549,6 +882,11 @@ export class Persistence {
     const policies = this.policies()
     for (const q of [...delta.add, ...delta.remove]) {
       const p = q.predicate.value
+      // Show older on a policy's horizon: what its retention set aside comes back.
+      if (p === NS.ret + 'recall' && graph === undefined && delta.add.includes(q)) {
+        if (policies.some((x) => x.iri === q.subject.value && x.retention)) void this.recall(q.subject.value, Number(q.object.value) || 50)
+        continue
+      }
       if (p === PER + 'enabled' || p === PER + 'request') {
         const policy = policies.find((x) => x.iri === q.subject.value)
         if (policy) void this.control(policy, delta)
@@ -588,6 +926,7 @@ export class Persistence {
       if (k) k.tick = -1
       this.record(PER + 'Forget', policy, 0)
       this.report(policy, 0)
+      this.reportExpiry(policy)
     } else if (delta.add.some((q) => q.subject.value === policy.iri && q.predicate.value === PER + 'enabled')) {
       this.dirty.add(policy.iri)
       this.schedule()
@@ -634,13 +973,14 @@ export class Persistence {
     // leaves the earlier copy whole, and the chunks a new base no longer counts are never read.
     const b = this.backend(policy.scope)
     const before = this.storedChunks(await b.get(this.key(policy.iri)))
-    const blob: Blob = { version: policy.version, savedAt: Date.now(), nt: this.serialize(quads) }
+    const blob = this.blobOf(policy, quads)
     await this.set(policy, this.key(policy.iri), JSON.stringify(blob), quads.length)
     for (let i = 1; i <= before; i++) await b.remove(this.key(policy.iri) + '#' + i)
     if (this.stopped) return
     if (k) Object.assign(k, { tick, chunks: 0, chunkTriples: 0, baseTriples: quads.length })
     this.record(PER + 'Write', policy, quads.length)
     this.report(policy, quads.length)
+    this.reportExpiry(policy)
   }
 
   /** per:unsaved on a policy (the persistence graph): its last write failed, what is stored is older. */
@@ -675,10 +1015,11 @@ export class Persistence {
     const blob = JSON.parse(raw) as Blob
     const was = { tick: k.tick, chunks: k.chunks, chunkTriples: k.chunkTriples }
     k.tick = change.tick
+    const at = Date.now()
     try {
       // The chunk first, then the base that counts it: a failure of either leaves the base counting
       // only what was stored before, and the change is written again (from the same tick) next time.
-      await this.set(policy, this.key(policy.iri) + '#' + (k.chunks + 1), JSON.stringify({ add: this.serialize(add), remove: this.serialize(remove) } satisfies Chunk), n)
+      await this.set(policy, this.key(policy.iri) + '#' + (k.chunks + 1), JSON.stringify({ add: this.serialize(add), remove: this.serialize(remove), ...(policy.retention && { at }) } satisfies Chunk), n)
       await this.set(policy, this.key(policy.iri), JSON.stringify({ ...blob, savedAt: Date.now(), chunks: k.chunks + 1 } satisfies Blob), 0)
     } catch (e) {
       Object.assign(k, was)
@@ -686,11 +1027,25 @@ export class Persistence {
     }
     k.chunks++
     k.chunkTriples += n
+    // What it adds is stored now; the oldest changes only when what it removes held it.
+    let oldestGone = false
+    const ages = policy.retention && this.ages.get(policy.iri)
+    if (ages) {
+      const oldest = this.horizons.get(policy.iri)?.oldest
+      for (const q of remove) oldestGone ||= ages.get(quadKey(q)) === oldest, ages.delete(quadKey(q))
+      for (const q of add) if (!ages.has(quadKey(q))) ages.set(quadKey(q), at)
+    }
     // Stopped while the write was awaited: its store may be released.
     if (this.stopped) return true
     const size = k.view.quads().filter((q) => !this.isSensitive(q.predicate)).length
     this.record(PER + 'Write', policy, n)
     this.report(policy, size)
+    if (policy.retention) {
+      const h = this.horizonOf(policy)
+      h.inMemory = size
+      if (oldestGone || h.oldest === undefined) h.oldest = this.oldestOf(policy)
+      this.reportExpiry(policy)
+    }
     return true
   }
 
@@ -700,12 +1055,33 @@ export class Persistence {
     await this.backend(policy.scope).set(key, value)
   }
 
-  /** Remove what a policy stored: the base and its chunks. */
+  /** Remove what a policy stored: the base and its chunks, and what its retention set aside. */
   private async removeStored(policy: Policy) {
     const b = this.backend(policy.scope)
     const chunks = this.storedChunks(await b.get(this.key(policy.iri)))
     for (let i = 1; i <= chunks; i++) await b.remove(this.key(policy.iri) + '#' + i)
     await b.remove(this.key(policy.iri))
+    if (!policy.retention) return
+    await b.remove(this.asideKey(policy))
+    this.ages.delete(policy.iri)
+    const h = this.horizons.get(policy.iri)
+    if (h) Object.assign(h, { inMemory: 0, aside: 0, oldest: undefined })
+  }
+
+  /**
+   * A base blob of `quads`. A policy with a retention stores them oldest first, with when each was
+   * stored: what it held already keeps its age, what is new is stored now.
+   */
+  private blobOf(policy: Policy, quads: Quad[]): Blob {
+    const now = Date.now()
+    if (!policy.retention) return { version: policy.version, savedAt: now, nt: this.serialize(quads) }
+    const was = this.ages.get(policy.iri)
+    const aged = quads.map((q) => ({ q, k: quadKey(q), at: was?.get(quadKey(q)) ?? now })).sort((a, b) => a.at - b.at)
+    this.ages.set(policy.iri, new Map(aged.map((x) => [x.k, x.at])))
+    const h = this.horizonOf(policy)
+    h.inMemory = aged.length
+    h.oldest = aged[0]?.at
+    return { version: policy.version, savedAt: now, nt: this.serialize(aged.map((x) => x.q)), ages: runs(aged.map((x) => x.at)) }
   }
 
   /** How many chunks a stored base counts (0 for none, or one that does not parse). */

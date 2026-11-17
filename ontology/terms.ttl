@@ -2154,6 +2154,7 @@ ol:shows a sem:Term .
 <https://semblance.dev/ns/perf#totalMs> a sem:Term .
 per:Database a sem:Term .
 per:Device a sem:Term .
+per:Expire a sem:Term .
 per:Forget a sem:Term .
 per:Policy a sem:Term .
 per:Restore a sem:Term .

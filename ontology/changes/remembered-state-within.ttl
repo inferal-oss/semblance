@@ -1,0 +1,55 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:remembered-state-within a chg:Change ;
+    rdfs:label "per:retention is a ret:Within, measured from the data's age"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/530> ;
+    chg:motivation """Remembered state is data a person owns, yet its retention was a one-off: an xsd:duration on a
+per:Policy, measured from the policy's last write, all or nothing. A policy written every day never expired
+anything, however old; one left alone for longer than the duration lost everything at once, silently, and
+the expired blob stayed in storage, skipped but never removed. Every other bounded thing in Semblance says
+what it keeps with the ret: vocabulary (docs/RETENTION.md), with an exit for what leaves, a horizon that
+counts it and an announcement when a person-facing horizon is crossed.""" ;
+    chg:substance """per:retention now names a ret:Within (its duration in tree:value), and is measured from the data's
+age: each stored triple's own, when it was stored or last changed. A stored triple older than the duration is
+not restored at load, and leaves by the policy's ret:onExpiry:
+
+- ret:Offload, the default for remembered state: it is set aside in the same storage (the policy's key with
+  "~aside"), not restored, and comes back with ret:recall on the policy (Show older on its horizon), never
+  over a value the graph holds now. ret:storageAmount bounds what is set aside; past it the oldest are
+  dropped and counted.
+- ret:Drop: it is removed from storage, and counted. Only when the policy says so.
+
+Either way the storage's live copy is rewritten without it (the new copy written before anything is
+removed; what could not be set aside is restored after all), a per:Expire member records it in
+per:StateLog, and the policy's horizon (<policy>/~horizon, a ret:Horizon in urn:semblance:retention) says
+how much was restored, set aside and dropped. With ret:announce true, the first time in a session either
+happens is announced (ret:Offloaded or ret:Dropped raised on the policy; per:AnnounceSetAside and
+per:AnnounceExpired say so, in the viewer's language).
+
+A duration alone (per:retention "P30D") keeps working: it is short for a ret:Within of it with ret:onExpiry
+ret:Drop, as it dropped before. What changes for it is the age it is measured from: a triple unchanged for
+longer than the duration expires even when the policy was written since, and a policy left alone keeps what
+was changed recently. Stored state written before this change has no ages; each of its triples is taken to
+be as old as its last write, which is what was measured before. A policy with a retention now stores its
+base oldest first, with the ages beside it ("ages", run-length) and the time of each chunk ("at"); a policy
+without one stores what it did. The head script that shows remembered choices before the first paint skips
+the expired lines the same way.""" ;
+    chg:forwardGuide """Nothing to move in the graph: a per:retention duration means what it did, a dropping
+ret:Within, measured from each triple's age. To keep what expires instead of dropping it, write the
+retention as a node:
+
+    ex:draft a per:Policy ; per:retention [ a ret:Within ; tree:value "P30D" ; ret:onExpiry ret:Offload ; ret:announce true ] .
+
+A host that attaches Persistence passes its event bus (persistence.attach(runtime, { bus })) for the
+announcements; without one, the horizon and the state log still say what left.""" ;
+    chg:backwardGuide """A per:retention duration goes back to being measured from the policy's last write, so a
+policy written regularly stops expiring old triples. A per:retention that names a ret:Within node is not
+read by the earlier version: write its tree:value as the duration (per:retention "P30D") to keep a
+retention. What was set aside ("~aside" keys) is not read by the earlier version and stays in storage until
+the policy is forgotten; recall it first to keep it. Stored ages are ignored by the earlier version.""" ;
+    chg:affects per:Policy .

@@ -41,28 +41,34 @@ export interface Policy {
  */
 export function policiesOf(store: GraphStore, stream: Term): Policy[] {
   const f = store.factory
-  const nn = (iri: string) => f.namedNode(iri)
-  const one = (s: Term, p: string) => store.match(s as NamedNode, nn(p), null)[0]?.object
   const out: Policy[] = []
-  for (const view of store.match(stream as NamedNode, nn(LDES.view), null)) {
-    for (const q of store.match(view.object as NamedNode, nn(LDES.retentionPolicy), null)) {
-      const p = q.object
-      const amount = one(p, LDES.amount)
-      const duration = one(p, NS.tree + 'value') ?? one(p, LDES.fullLogDuration)
-      const storage = one(p, RET + 'storageAmount')
-      out.push({
-        iri: p.value,
-        amount: amount ? Number(amount.value) : undefined,
-        withinMs: duration && !amount ? parseDuration(duration.value) : undefined,
-        having: store.match(p as NamedNode, nn(RET + 'having'), null).map((x) => x.object.value),
-        exit: one(p, RET + 'onExpiry')?.value === RET + 'Offload' ? 'offload' : 'drop',
-        storageAmount: storage ? Number(storage.value) : undefined,
-        announce: one(p, RET + 'announce')?.value === 'true',
-        untilAcknowledged: store.match(p as NamedNode, nn(NS.rdf + 'type'), nn(RET + 'UntilAcknowledged')).length > 0 || undefined,
-      })
-    }
-  }
+  for (const view of store.match(stream as NamedNode, f.namedNode(LDES.view), null))
+    for (const q of store.match(view.object as NamedNode, f.namedNode(LDES.retentionPolicy), null)) out.push(policyOf(store, q.object))
   return out.sort((a, b) => (a.iri < b.iri ? -1 : a.iri > b.iri ? 1 : 0))
+}
+
+/**
+ * One retention policy node, as the graph states it. `exit` is what leaves by when it names no
+ * ret:onExpiry: ret:Drop for history, ret:Offload for remembered state (per:retention), which a
+ * person owns and which is never dropped unless its policy says so.
+ */
+export function policyOf(store: GraphStore, p: Term, exit: Exit = 'drop'): Policy {
+  const nn = (iri: string) => store.factory.namedNode(iri)
+  const one = (s: Term, x: string) => store.match(s as NamedNode, nn(x), null)[0]?.object
+  const amount = one(p, LDES.amount)
+  const duration = one(p, NS.tree + 'value') ?? one(p, LDES.fullLogDuration)
+  const storage = one(p, RET + 'storageAmount')
+  const onExpiry = one(p, RET + 'onExpiry')?.value
+  return {
+    iri: p.value,
+    amount: amount ? Number(amount.value) : undefined,
+    withinMs: duration && !amount ? parseDuration(duration.value) : undefined,
+    having: store.match(p as NamedNode, nn(RET + 'having'), null).map((x) => x.object.value),
+    exit: onExpiry === RET + 'Offload' ? 'offload' : onExpiry === RET + 'Drop' ? 'drop' : exit,
+    storageAmount: storage ? Number(storage.value) : undefined,
+    announce: one(p, RET + 'announce')?.value === 'true',
+    untilAcknowledged: store.match(p as NamedNode, nn(NS.rdf + 'type'), nn(RET + 'UntilAcknowledged')).length > 0 || undefined,
+  }
 }
 
 /** How many members a stream's policies keep at most, by count (Infinity when a policy keeps by age or none bounds it). */

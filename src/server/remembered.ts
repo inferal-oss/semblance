@@ -38,7 +38,7 @@ export function rememberedPolicies(store: GraphStore, root: string): RememberedP
       }
       return [{ subject: policy.subject!.value, property, attribute, values, root: policy.subject!.value === root, ...(Object.keys(schemes).length && { schemes }) }]
     })
-    if (hooks.length) out.push({ iri: policy.iri, storage, version: policy.version, ...(policy.retentionMs !== undefined && { retentionMs: policy.retentionMs }), ...(!policy.enabled && { off: true as const }), hooks })
+    if (hooks.length) out.push({ iri: policy.iri, storage, version: policy.version, ...(policy.retention && { retentionMs: policy.retention.withinMs }), ...(!policy.enabled && { off: true as const }), hooks })
   }
   return out
 }

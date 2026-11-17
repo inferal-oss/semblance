@@ -369,7 +369,7 @@ attachSnaps(document.getElementById('app')!)
 attachLightboxes(document.getElementById('app')!)
 attachAnchoredPopups(document.getElementById('app')!, node => !shell.inSlot(node))
 attachSizeHandles(shell)
-persistence.attach(runtime)
+persistence.attach(runtime, { bus })
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })
 network.attach()
