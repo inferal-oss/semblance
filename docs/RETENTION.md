@@ -414,7 +414,7 @@ Tracked in #530, linked from the Plan (#8).
 | The memory budget, pressure, eviction of hidden renderings, `onRetention` | `src/retention/pressure.ts`, `Engine.evict`, `Runtime.evict` | built |
 | The Memory tool | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
 | The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime), and network capture on the shared module | #537 | separate |
-| Engine compaction: giving wasm memory back | the engine (#9) | separate; the pressure effect calls `store.compact()` when a store has it |
+| Engine compaction: giving wasm memory back, in idle time a slice at a time (changes made meanwhile journaled and replayed) | `rdf-engine/host/store.ts` (`compact`, `compactStep`), the engine (#9) | built; the pressure effect calls `store.compact()` when a store has it, which finishes a compaction in flight at once |
 | Cold graphs offloaded or unloaded under pressure; `per:retention` as `ret:Within`; toasts that wait for acknowledgement | | not yet |
 
 ## 8. Using retention

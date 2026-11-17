@@ -8,6 +8,7 @@
 // state is well below the memory (`liveBytes` against `memoryBytes`), `compact` copies
 // the store into a fresh instance and drops the old one: the browser gets the difference
 // back. The term objects handed out stay valid (they are re-tagged with their new ids).
+// Idle time copies a slice at a time (`compactStep`), journaling the changes made meanwhile.
 import type { DefaultGraph, Literal, NamedNode, Quad, Term } from '@rdfjs/types'
 import type { Factory, GraphStore, QueryAnswer, StoreCompaction } from '../../src/store/types.ts'
 import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } from './engine.ts'
@@ -79,6 +80,25 @@ class TripleTerm extends Base {
   }
 }
 
+/** Ids of one engine instance to another's (0: none), in a typed array that grows as it is used. */
+class IdMap {
+  private a: Uint32Array
+  constructor(size: number) {
+    this.a = new Uint32Array(Math.max(1024, size))
+  }
+  get(id: number): number {
+    return id < this.a.length ? this.a[id]! : 0
+  }
+  set(id: number, to: number): void {
+    if (id >= this.a.length) {
+      const b = new Uint32Array(Math.max(id + 1, this.a.length * 2))
+      b.set(this.a)
+      this.a = b
+    }
+    this.a[id] = to
+  }
+}
+
 /** A store quad; distinct from triple terms only in being used as a statement. */
 const quad = (s: Term, p: Term, o: Term, g: Term) => new TripleTerm(s, p, o, g) as unknown as Quad
 
@@ -88,9 +108,14 @@ export interface CompactionPolicy {
   below?: number
   /** Not while the memory is smaller than this many bytes: small stores are not churned (default 64 MiB). */
   floor?: number
+  /**
+   * Abandon a compaction in flight when more changes wait in its journal than this many times the
+   * quads it copies (default 1): catching up would then cost more than starting again.
+   */
+  journal?: number
 }
 
-export const COMPACTION_DEFAULTS: Required<CompactionPolicy> = { below: 0.5, floor: 64 << 20 }
+export const COMPACTION_DEFAULTS: Required<CompactionPolicy> = { below: 0.5, floor: 64 << 20, journal: 1 }
 
 /** What one compaction did. */
 export type Compaction = StoreCompaction
@@ -106,9 +131,22 @@ export type EngineStore = GraphStore & {
    * Copy the store into a fresh engine instance and drop the old one, so its memory goes. Term
    * objects handed out before stay valid, prepared queries are prepared again as they are used.
    * With `below`, only when liveBytes is below that fraction of memoryBytes. Undefined when it did
-   * not: it would not win, or a fetch (SERVICE, LOAD) or a Jelly stream is in flight.
+   * not: it would not win, or a fetch (SERVICE, LOAD) or a Jelly stream is in flight. In one step:
+   * a compaction in flight (compactStep) is finished now, whatever `below` says.
    */
   compact(opts?: { below?: number }): Compaction | undefined
+  /**
+   * Compact a slice at a time (what `maintain` does): start a compaction (by `below`, as compact)
+   * when none is in flight, then copy for about `budgetMs`. Changes made between slices are
+   * journaled and replayed into the copy before the swap; an update, a Turtle or Jelly load or a
+   * Jelly stream abandons it (the store stays as it is), and so does a journal larger than the
+   * store (CompactionPolicy.journal). The Compaction in the step that swapped, else undefined.
+   */
+  compactStep(budgetMs: number, opts?: { below?: number }): Compaction | undefined
+  /** The compaction in flight: quads copied of those it started with, changes journaled and replayed. */
+  compacting(): { copied: number; quads: number; journal: number; replayed: number } | undefined
+  /** Why the last compaction in flight was abandoned. */
+  readonly abandoned: string | undefined
   /** When `maintain` compacts (the retention layer tightens it under pressure). */
   setCompaction(policy: CompactionPolicy): void
   /** Sizes of the host's caches over the engine (term objects, prepared queries, idle-compiled profiles), for leak checks. */
@@ -429,21 +467,67 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
   }
   const liveBytes = () => Math.round(emptyBytes + scale * rawLive(e.quadCount(), e.termCount()))
 
-  function compact(opts: { below?: number } = {}): Compaction | undefined {
-    if (fetchingOps || streams) return undefined
-    if (opts.below !== undefined && liveBytes() >= opts.below * e.memoryBytes()) return undefined
-    const t0 = performance.now()
+  /**
+   * A compaction in flight (compactStep): the old instance stays the store's, queried and changed as
+   * ever, while its quads are copied into `next` a slice at a time. Every add and delete made to the
+   * old one meanwhile goes into the journal, replayed into `next` after the copy; the swap comes in
+   * the step that finds both done, so it never waits on a change. Ids of the old instance stay valid
+   * throughout: nothing is collected while a compaction is in flight.
+   */
+  interface Pending {
+    old: Engine
+    next: Engine
+    /** When it started (performance.now()), and the old memory then. */
+    started: number
+    before: number
+    /** The old store's quads when it started, 4 ids each, and how far the copy has come. */
+    quads: Uint32Array
+    at: number
+    /** Changes since: [op, s, p, o, g] in old ids (op 1: add, 0: delete), and how far it is replayed. */
+    journal: number[]
+    replayed: number
+    /** Abandoned when the journal holds more changes than this: restarting would cost less than catching up. */
+    limit: number
+    /** Old ids to new, for every term a copied quad uses. */
+    map: IdMap
+    /** The next instance's tag, and its term objects by id, filled as terms are copied. */
+    tag: symbol
+    ids: (Term | undefined)[]
+    copy: (id: number) => number
+    slices: number
+    longest: number
+    work: number
+    replay: number
+  }
+  let pending: Pending | undefined
+  /**
+   * After a swap, the term caches are swept a slice at a time: an object with an old id gets its new
+   * one (the copy tagged most already), or leaves the cache when no quad uses its term any more, as
+   * collect would have it leave. Until then an untagged object is interned again as it is used.
+   */
+  let sweep: { tag: symbol; map: IdMap; caches: [Map<string, Base & Term>, Iterator<[string, Base & Term]>][] } | undefined
+  /** Idle time starts no compaction before this (performance.now()) after one was abandoned. */
+  let retryAt = 0
+  let abandons = 0
+  /** Why the last compaction was abandoned. */
+  let abandoned: string | undefined
+
+  function start(opts: { below?: number }): boolean {
+    if (fetchingOps || streams) return false
+    if (opts.below !== undefined && liveBytes() >= opts.below * e.memoryBytes()) return false
+    finishSweep()
     const old = e
-    const before = old.memoryBytes()
-    const quads = old.match(0, 0, 0, 0)
     const next = instance()
-    // Old ids to new: every term a quad uses, through the cached objects' values where there are
-    // some. Blank nodes keep their labels (a Jelly or Turtle load would give them fresh ones).
-    const map: number[] = []
-    map[DEFAULT_GRAPH] = DEFAULT_GRAPH
+    const map = new IdMap(old.termCount() * 2)
+    map.set(DEFAULT_GRAPH, DEFAULT_GRAPH)
+    const tag = Symbol('engine id')
+    const ids: (Term | undefined)[] = [undefined, defaultGraph]
     const oldXsd = old.lookupIri(XSD_STRING)
+    // Old ids to new: every term a quad uses, through the cached objects' values where there are
+    // some (those are tagged with their new id). Blank nodes keep their labels (a Jelly or Turtle
+    // load would give them fresh ones).
     const copy = (id: number): number => {
-      const done = map[id]
+      const done = map.get(id)
       if (done) return done
       const t = byId[id]
       let n: number
@@ -477,50 +561,196 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
         default:
           throw new Error(`compaction met unknown term id ${id}`)
       }
-      map[id] = n
+      map.set(id, n)
+      if (t) {
+        ;(t as Term & Tagged)[tag] = n
+        ids[n] ??= t
+      }
       return n
     }
-    const adds = new Uint32Array(quads.length)
-    for (let i = 0; i < quads.length; i++) adds[i] = copy(quads[i]!)
-    // In the order they were, a batch at a time (so the input buffer stays small).
-    const step = 4 * 16384
-    for (let i = 0; i < adds.length; i += step) next.apply([], adds.subarray(i, i + step))
-
-    // Swap: the shared term objects get their new ids under a new tag; those whose term no
-    // quad uses any more go, as collect would have them go. Triple terms re-intern as used.
-    old.dispose()
-    e = next
-    const tag = Symbol('engine id')
-    const ids: (Term | undefined)[] = [undefined, defaultGraph]
-    delete defaultGraph[ID]
-    defaultGraph[tag] = DEFAULT_GRAPH
-    const retag = <T extends Base & Term>(cache: Map<string, T>) => {
-      for (const [k, t] of cache) {
-        const was = t[ID]
-        if (was === undefined) continue
-        delete t[ID]
-        const n = map[was]
-        if (n) {
-          t[tag] = n
-          ids[n] ??= t
-        } else cache.delete(k)
-      }
+    const t0 = performance.now()
+    const quads = old.match(0, 0, 0, 0)
+    pending = {
+      old,
+      next,
+      started: t0,
+      before: old.memoryBytes(),
+      quads,
+      at: 0,
+      journal: [],
+      replayed: 0,
+      limit: compaction.journal * Math.max(quads.length / 4, 1024),
+      map,
+      tag,
+      ids,
+      copy,
+      slices: 0,
+      longest: 0,
+      work: 0,
+      replay: 0,
     }
-    retag(iris)
-    retag(literals)
-    retag(bnodes)
-    ID = tag
-    byId = ids
+    return true
+  }
+
+  /** Give up the compaction in flight: the store stays as it is (the old instance), the copy goes. */
+  function abandon(why: string) {
+    const p = pending
+    if (!p) return
+    pending = undefined
+    p.next.dispose()
+    abandoned = why
+    // Idle time tries again later, the later the more often it gave up (2 s, doubling, up to a minute).
+    abandons++
+    retryAt = performance.now() + Math.min(60_000, 1000 * 2 ** abandons)
+  }
+
+  /** Journal a change made to the old instance while a compaction is in flight. */
+  function journal(p: Pending, op: number, s: number, pr: number, o: number, g: number) {
+    p.journal.push(op, s, pr, o, g)
+    if (p.journal.length - p.replayed > 5 * p.limit) abandon('the store changed more while it was copied than it holds')
+  }
+
+  /** Quads (or journal entries) a slice copies before it looks at the clock again. */
+  const CHUNK = 1024
+  const chunk = new Uint32Array(4 * CHUNK)
+
+  /** Work on the compaction in flight until `until` (performance.now()), at least a chunk; the swap once all is copied. */
+  function step(until: number, t0 = performance.now()): Compaction | undefined {
+    const p = pending!
+    const { next, quads, journal: J, copy } = p
+    do {
+      if (p.at < quads.length) {
+        const end = Math.min(quads.length, p.at + 4 * CHUNK)
+        const n = end - p.at
+        for (let i = 0; i < n; i++) chunk[i] = copy(quads[p.at + i]!)
+        // In the order they were, a chunk at a time.
+        next.apply([], chunk.subarray(0, n))
+        p.at = end
+      } else if (p.replayed < J.length) {
+        const r0 = performance.now()
+        // The changes made meanwhile, in order: a quad holds as its last change left it.
+        const end = Math.min(J.length, p.replayed + 5 * CHUNK)
+        for (let i = p.replayed; i < end; i += 5) {
+          const s = copy(J[i + 1]!)
+          const pr = copy(J[i + 2]!)
+          const o = copy(J[i + 3]!)
+          const g = copy(J[i + 4]!)
+          if (J[i]) next.add(s, pr, o, g)
+          else next.remove(s, pr, o, g)
+        }
+        p.replayed = end
+        p.replay += performance.now() - r0
+      } else break
+    } while (performance.now() < until)
+    if (p.at < quads.length || p.replayed < J.length) {
+      const ms = performance.now() - t0
+      p.slices++
+      p.work += ms
+      p.longest = Math.max(p.longest, ms)
+      return undefined
+    }
+
+    // Swap: the next instance is the store's; the shared term objects carry their new ids under its
+    // tag (the copy tagged those it met, the sweep does the rest). Triple terms re-intern as used.
+    const t1 = performance.now()
+    pending = undefined
+    p.old.dispose()
+    e = next
+    ;(defaultGraph as unknown as Tagged)[p.tag] = DEFAULT_GRAPH
+    sweep = { tag: ID, map: p.map, caches: ([iris, literals, bnodes] as Map<string, Base & Term>[]).map((m) => [m, m.entries()]) }
+    ID = p.tag
+    byId = p.ids
     // Prepared queries (and compiled ones) were the old instance's: they are prepared again as they run.
     prepared.clear()
     unknown.clear()
     liveAfterCollect = e.termCount()
     const after = e.memoryBytes()
-    measuredAt = -1
     const terms = e.termCount()
+    // The mean term is the old dictionary's, measured within the last quarter of change: a walk of
+    // the new one would be the longest part of the swap. It is measured again as terms change.
+    if (measuredAt < 0) rawLive(p.quads.length / 4, terms)
+    measuredAt = terms
     const raw = rawLive(e.quadCount(), terms)
     if (raw > 0) scale = Math.max(0.5, (after - emptyBytes) / raw)
-    return { before, after, quads: quads.length / 4, terms, ms: performance.now() - t0 }
+    abandons = 0
+    retryAt = 0
+    const end = performance.now()
+    const ms = end - t0
+    p.slices++
+    p.work += ms
+    p.longest = Math.max(p.longest, ms)
+    return {
+      before: p.before,
+      after,
+      quads: quads.length / 4,
+      terms,
+      ms: p.work,
+      slices: p.slices,
+      longestMs: p.longest,
+      swapMs: end - t1,
+      journal: J.length / 5,
+      journalMs: p.replay,
+      elapsedMs: end - p.started,
+    }
+  }
+
+  /** Sweep the term caches after a swap until `until`; true when done. */
+  function sweepStep(until: number): boolean {
+    const w = sweep!
+    const now = ID
+    let n = 0
+    while (w.caches.length) {
+      const [cache, it] = w.caches[0]!
+      for (;;) {
+        if (++n % 1024 === 0 && performance.now() >= until) return false
+        const r = it.next()
+        if (r.done) break
+        const [key, t] = r.value
+        const was = t[w.tag]
+        if (was === undefined) continue
+        delete t[w.tag]
+        if (t[now] !== undefined) continue
+        const id = w.map.get(was)
+        if (id) {
+          t[now] = id
+          byId[id] ??= t
+        } else cache.delete(key)
+      }
+      w.caches.shift()
+    }
+    delete (defaultGraph as unknown as Tagged)[w.tag]
+    sweep = undefined
+    return true
+  }
+  function finishSweep() {
+    if (sweep) sweepStep(Infinity)
+  }
+
+  /**
+   * Compact a slice at a time: start a compaction (by `below`, as compact) when none is in flight,
+   * then work on it for about `budgetMs`. The Compaction in the step that swapped, else undefined
+   * (still in flight, or none started: see `compacting`).
+   */
+  function compactStep(budgetMs: number, opts: { below?: number } = {}): Compaction | undefined {
+    if (fetchingOps || streams) return undefined
+    // The slice is the whole call: the sweep of the last compaction, the start of this one.
+    const t0 = performance.now()
+    const until = t0 + budgetMs
+    if (sweep && !sweepStep(until)) return undefined
+    if (!pending && !start(opts)) return undefined
+    return step(until, t0)
+  }
+
+  /** Compact now, in one step: the compaction in flight, or a new one. */
+  function compact(opts: { below?: number } = {}): Compaction | undefined {
+    if (fetchingOps || streams) return undefined
+    const t0 = performance.now()
+    if (!pending && !start(opts)) return undefined
+    const c = step(Infinity, t0)!
+    const t1 = performance.now()
+    finishSweep()
+    c.ms += performance.now() - t1
+    return c
   }
 
   // --- SERVICE and LOAD (ABI.md, "Optional: fetching") ---------------------------------
@@ -610,14 +840,19 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     timeZone: options.timeZone,
     crossGraphMatch: true,
     add(q) {
-      e.add(idOf(q.subject, true), idOf(q.predicate, true), idOf(q.object, true), idOf(q.graph, true))
+      const s = idOf(q.subject, true)
+      const p = idOf(q.predicate, true)
+      const o = idOf(q.object, true)
+      const g = idOf(q.graph, true)
+      // While a compaction is in flight, what changed goes into its journal (what did not, need not).
+      if (e.add(s, p, o, g) && pending) journal(pending, 1, s, p, o, g)
     },
     delete(q) {
       const s = known(q.subject)
       const p = known(q.predicate)
       const o = known(q.object)
       const g = known(q.graph)
-      if (s && p && o && g) e.remove(s, p, o, g)
+      if (s && p && o && g && e.remove(s, p, o, g) && pending) journal(pending, 0, s, p, o, g)
     },
     has(q) {
       const s = known(q.subject)
@@ -689,6 +924,8 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     },
     update(text, opts = {}) {
       return fetchingOp(opts.policy, () => {
+        // What an update changes is the engine's own to know: a compaction in flight cannot journal it.
+        abandon('an update changed the store')
         e.update(text)
         // IRIs it added may be ones looked up as unknown before.
         unknown.clear()
@@ -699,13 +936,16 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     },
     loadTurtle(text) {
       unknown.clear()
+      abandon('Turtle was loaded')
       e.load(Format.Turtle, text)
     },
     loadJelly(bytes, graph) {
       unknown.clear()
+      abandon('Jelly was loaded')
       return e.loadBytes(Format.Jelly, bytes, graph ? idOf(graph, true) : DEFAULT_GRAPH)
     },
     jellyReader(graph) {
+      abandon('a Jelly stream was opened')
       const r = e.jellyReader(graph ? idOf(graph, true) : DEFAULT_GRAPH)
       let open = true
       streams++
@@ -770,33 +1010,56 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       freshIris.clear()
       freshLiterals.clear()
       unknown.clear()
+      pending?.next.dispose()
+      pending = sweep = undefined
       e.dispose()
     },
-    setDeadline: (at) => e.setDeadline((deadline = at)),
-    setFuel: (steps) => e.setFuel((fuel = steps)),
+    setDeadline: (at) => {
+      e.setDeadline((deadline = at))
+      pending?.next.setDeadline(at)
+    },
+    setFuel: (steps) => {
+      e.setFuel((fuel = steps))
+      pending?.next.setFuel(steps)
+    },
     get engine() {
       return e
     },
     idOf: (t) => idOf(t, false),
-    memoryBytes: () => e.memoryBytes(),
+    // While a compaction is in flight, the page holds both instances.
+    memoryBytes: () => e.memoryBytes() + (pending ? pending.next.memoryBytes() : 0),
     liveBytes,
     compact,
+    compactStep,
+    compacting: () => (pending ? { copied: pending.at / 4, quads: pending.quads.length / 4, journal: pending.journal.length / 5, replayed: pending.replayed / 5 } : undefined),
+    get abandoned() {
+      return abandoned
+    },
     setCompaction(policy) {
       compaction = { ...COMPACTION_DEFAULTS, ...policy }
     },
     maintain(budgetMs) {
       const t0 = performance.now()
-      // Collect once the dictionary has grown by half since the last collection.
-      // Not while a fetch is in flight: its answers' terms are in the engine's request table.
-      if (!fetchingOps && e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
-      // Compact when live state has fallen well below the memory (not for small stores): the
-      // copy cannot be split over slices, and it is rare (the memory must have outgrown it).
-      if (compaction.below > 0 && !fetchingOps && !streams) {
-        const memory = e.memoryBytes()
-        if (memory >= compaction.floor) compact({ below: compaction.below })
+      const until = t0 + budgetMs
+      // A compaction in flight, or the sweep after one, goes on a slice at a time. Neither while a
+      // fetch or a Jelly stream is in flight: their handles and ids are the instance's own.
+      if (!fetchingOps && !streams) {
+        if (sweep) sweepStep(until)
+        if (pending) step(until)
       }
+      // Collect once the dictionary has grown by half since the last collection. Not while a fetch
+      // is in flight (its answers' terms are in the engine's request table), nor while a compaction
+      // is (the copy and its journal hold ids of the old instance, the sweep ids of both).
+      if (!fetchingOps && !pending && !sweep && e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
+      // Start a compaction when live state has fallen well below the memory (not for small stores,
+      // nor soon after one was abandoned), and spend what is left of the budget on it.
+      if (!pending && !sweep && compaction.below > 0 && !fetchingOps && !streams && t0 >= retryAt && e.memoryBytes() >= compaction.floor) {
+        const s0 = performance.now()
+        if (start({ below: compaction.below })) step(until, s0)
+      }
+      const more = !!pending || !!sweep
       // What time is left compiles the queries that have run most (compiled: 'idle').
-      return e.compileIdle(budgetMs - (performance.now() - t0))
+      return e.compileIdle(until - performance.now()) || more
     },
   }
   engineStoreHooks.created?.(store)
