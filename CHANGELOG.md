@@ -13,6 +13,11 @@ Each entry states the engines' ABI version (`rdf-engine/ABI.md`).
   times instead of 11,222 (#248). Serve this release's own engine builds with it.
 - `semblance migrate` moves a project's Turtle across framework versions, forward and back, including the SPARQL it holds, and reports what it cannot reach; `semblance changes` says what changed and why, for people and agents ([docs/MIGRATIONS.md](docs/MIGRATIONS.md), `@semblance-dev/semblance/migrate`, #473).
 - Each component has a version, and a retired term is reported at run time, moved on the way in where it was renamed.
+- Retention: `ret:pinned true` on a stream's member keeps it whatever its policies say, and memory
+  pressure does not take it, until it is unpinned. LDES's `ldes:PointInTimePolicy` keeps what was
+  appended from its `ldes:pointInTime` on, and `ldes:LatestVersionSubset` keeps the `ldes:amount`
+  newest versions of each entity (`ldes:versionOfPath`); its amount was read before as the stream's
+  newest members, which let go of versions LDES keeps (#530, [docs/RETENTION.md](docs/RETENTION.md) §8.1).
 
 - A static build writes `semblance-graphs.json` beside its pages (the graphs each page names). A
   click while the rest of the graphs arrive takes in what the page reached names first, and the
