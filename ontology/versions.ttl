@@ -70,7 +70,7 @@ clip:Copier sem:version 1 ; sem:closure "328a88760cc35c28" ; sem:internal "new" 
 c:Accordion sem:version 1 ; sem:closure "aaf132b3a772efb8" ; sem:internal "new" .
 c:AccordionItem sem:version 1 ; sem:closure "9e05766282279f52" ; sem:internal "new" .
 c:Alert sem:version 1 ; sem:closure "82a51096882177ca" ; sem:internal "new" .
-c:AppBar sem:version 1 ; sem:closure "3783ab844980788c" ; sem:internal "new" .
+c:AppBar sem:version 2 ; sem:closure "9601a53919566776" ; sem:changedBy change:app-bar-links .
 c:AreaChart sem:version 1 ; sem:closure "4b2654c199af9555" ; sem:internal "new" .
 c:AreaPoint sem:version 2 ; sem:closure "1c32f78ae3dacea2" ; sem:changedBy change:charts-on-shared-parts .
 c:Avatar sem:version 1 ; sem:closure "f287dc13d1441263" ; sem:internal "new" .

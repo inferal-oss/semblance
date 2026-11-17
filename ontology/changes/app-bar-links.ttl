@@ -1,0 +1,27 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:app-bar-links a chg:Change ;
+    rdfs:label "A link among an app bar's actions is a control"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/550> ;
+    chg:motivation """An app bar holds links as well as buttons (the app's source, its docs, a profile), but a c:Link
+among its c:actions was styled as a link in running text: accent coloured, shorter than the buttons beside it,
+and on a phone as wide as its label, which pushed the More button onto a second row.""" ;
+    chg:substance """Styles only; the rendering is unchanged. A c:Link among an app bar's c:actions or c:moreActions
+is a control: a control's height and inset, the bar's text colour, no underline, a hover background and the focus
+ring, its c:logo (a c:Emblem) beside its label at 1.25em. A link whose only part is a c:Emblem (as its c:content,
+with c:label as its accessible name) is a square control with a 20px mark. On a compact screen
+(sty:CompactWidth) a link among c:actions whose first part is a c:Emblem shows that emblem alone: its text is set
+at font-size 0 and its other parts are visually hidden, so its name is unchanged for assistive technology.""" ;
+    chg:forwardGuide """Nothing to move. An app that styled a link in its bar itself (a sty:StyleRule on the link or on
+[data-sem-c=app-bar] [data-sem-c=link]) may drop that rule, or keep it: an app's own rules sit in a later cascade
+layer. To keep a link's label visible on a phone, give it no c:logo.""" ;
+    chg:backwardGuide """Going back, a link among an app bar's actions is a link in running text again, its label shown
+at every width; nothing in the graph changes.""" ;
+    chg:affects c:AppBar .

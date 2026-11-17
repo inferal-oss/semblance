@@ -970,6 +970,53 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] .
 
+# A link among the actions (a c:Link: the app's source, its docs, a profile) stands with the buttons
+# as a calm control - a control's height and inset, the bar's text colour, its logo beside its name -
+# rather than as a link in running text.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link], .sem-more-body > [data-sem-c=link]" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "justify-content" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "min-height" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
+                 [ sty:property "padding" ; sty:raw "0 var(--control-px, var(--sem-space-3))" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] ,
+                 [ sty:property "transition" ; sty:raw "background var(--sem-motion)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link]:hover, .sem-more-body > [data-sem-c=link]:hover" ;
+    sty:declares [ sty:property "background" ; sty:token tok:surface-hover ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link]:focus-visible, .sem-more-body > [data-sem-c=link]:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] , [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link] > [data-sem-c=emblem]" ;
+    sty:declares [ sty:property "height" ; sty:raw "1.25em" ] , [ sty:property "vertical-align" ; sty:raw "0" ] .
+# A link that is its logo alone (c:content a c:Emblem, its c:label its name) is a square control.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link]:has(> [data-sem-c=emblem]:only-child)" ;
+    sty:declares [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "min-width" ; sty:raw "var(--control-h, var(--sem-control-height))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link] > [data-sem-c=emblem]:only-child" ;
+    sty:declares [ sty:property "height" ; sty:raw "20px" ] .
+# On a phone a link with a logo is its logo alone, a square control; what it says stays its name
+# for assistive technology (its text at font-size 0, its other parts visually hidden: neither leaves
+# the accessibility tree).
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions > [data-sem-c=link]:has(> [data-sem-c=emblem]:first-child)" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "font-size" ; sty:raw "0" ] ,
+                 [ sty:property "gap" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "min-width" ; sty:raw "var(--control-h, var(--sem-control-height))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions > [data-sem-c=link]:has(> [data-sem-c=emblem]:first-child) > :not(:first-child)" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "width" ; sty:raw "1px" ] ,
+                 [ sty:property "height" ; sty:raw "1px" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions > [data-sem-c=link] > [data-sem-c=emblem]:first-child" ;
+    sty:declares [ sty:property "height" ; sty:raw "20px" ] .
+
 # The more actions (c:moreActions): where there is room they simply follow the others - the group
 # and its body take no part in layout and the More button is not shown.
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-more, .sem-more-body" ;

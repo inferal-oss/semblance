@@ -25,6 +25,10 @@ Each entry states the engines' ABI version (`rdf-engine/ABI.md`).
 - On a phone (`sty:CompactWidth`) a card's body, a surface's own inset, a specimen and its stage
   take one step less inset, and a dock panel's header wraps its actions below its title, so what
   they hold fits at 320px (#246).
+- A `c:Link` among an app bar's actions is a control beside its buttons: a control's height, the
+  bar's text colour, its logo beside its label, or an emblem alone as a square control; on a phone a
+  link with a logo shows the logo alone and keeps its label as its name (#550). The site links to
+  its source from the bar.
 
 ## 0.1.0 (not yet published)
 

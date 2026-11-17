@@ -22,7 +22,7 @@ const CLASSES = new Set([
 ])
 const NAMES = new Set([NS.c + 'label', NS.rdfs + 'label', NS.c + 'title'])
 // Names and symbols, the same in every language.
-const NOT_WORDS = new Set(['HTTP', 'URL', 'Semblance', 'Semblance WASM', 'Semblance Rust', 'Oxigraph', 'Inferal', 'ms', 'KB', 'Z', 'log–log', 'Turtle'])
+const NOT_WORDS = new Set(['HTTP', 'URL', 'Semblance', 'Semblance WASM', 'Semblance Rust', 'Oxigraph', 'Inferal', 'GitHub', 'ms', 'KB', 'Z', 'log–log', 'Turtle'])
 
 const ttl = (d: string): string[] => readdirSync(d).flatMap((f) => {
   const p = join(d, f)

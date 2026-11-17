@@ -106,6 +106,32 @@ describe('the site', () => {
     expect(document.body.textContent).not.toContain('an experiment in ontologically defined interfaces')
   })
 
+  it.each(['sparql', 'function'] as const)('links to its source from the app bar, the GitHub mark named for assistive technology (%s)', (prefer) => {
+    const h = mountSite('oxigraph', prefer)
+    const source = () => h.document.querySelector('[data-sem-c=app-bar] > .sem-actions > [data-sem-c=link]')!
+    const link = source()
+    expect(link.localName).toBe('a')
+    expect(link.getAttribute('href')).toBe('https://github.com/inferal-oss/semblance')
+    expect(link.getAttribute('aria-label')).toBe('Semblance on GitHub')
+    // The same tab, as the site's other link out; nothing to say about a new tab.
+    expect(link.hasAttribute('target')).toBe(false)
+    expect(link.hasAttribute('rel')).toBe(false)
+    expect(link.querySelector('.sem-sr, .sem-external')).toBeNull()
+    // The mark alone, hidden from assistive technology: the link's name says what it is.
+    expect([...link.children].map((c) => c.getAttribute('data-sem-c'))).toEqual(['emblem'])
+    const mark = link.querySelector('[data-sem-c=emblem]')!
+    expect(mark.localName).toBe('svg')
+    expect(mark.getAttribute('aria-hidden')).toBe('true')
+    expect(mark.getAttribute('viewBox')).toBe('0 0 16 16')
+    expect(mark.querySelector('path')!.getAttribute('fill')).toBe('currentColor')
+    // After the search, before the folded tools; and still there on another page.
+    expect(link.previousElementSibling!.getAttribute('data-sem-c')).toBe('button')
+    expect(link.nextElementSibling!.className).toBe('sem-more')
+    h.fire([...h.document.querySelectorAll('[data-sem-c=app-bar] [data-sem-c=segmented] button')].find((b) => b.textContent!.trim() === 'Docs')!, 'click')
+    expect(h.value(UI + 'page')).toBe(UI + 'Docs')
+    expect(source().getAttribute('href')).toBe('https://github.com/inferal-oss/semblance')
+  })
+
   it('picks the theme from the app bar, beside the colour scheme', () => {
     const { document, store, fire } = site()
     const picker = [...document.querySelectorAll('[data-sem-c=app-bar] [data-sem-c=choice]')].find((c) => c.querySelector('select'))!
