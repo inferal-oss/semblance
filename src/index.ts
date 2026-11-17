@@ -18,6 +18,7 @@ export { Persistence, memoryBackend, webStorageBackend, indexedDbBackend, type B
 export { Retention, RetainedStream, logStream, type OffloadBackend, type RetentionOptions, type StreamHost } from './retention/offload.ts'
 export { StreamRetention, policiesOf, type Policy, type Member, type Expiry } from './retention/policy.ts'
 export { MemoryPressure, measure, type Level, type OnRetention, type PressureReport, type RetentionAnswer, type Sample } from './retention/pressure.ts'
+export { ColdGraphs, coldGraphIri, type ColdGraphsOptions, type ColdState } from './retention/cold.ts'
 export { RemoteSources, httpTransport, type Endpoint, type RemoteSourcesOptions, type SourceTransport } from './remote.ts'
 export { concerns, fromNTriples, JELLY_MEDIA_TYPE, JellyEventWriter, jellySourceEvents, serverSentEvents, statementsOf, toNTriples, type DeltaMessage, type Pattern, type Snapshot, type SourceEvent, type WriteRequest, type WriteResult } from './source-protocol.ts'
 export { FrameSplitter, frames, JellyError, JellyReader, readJelly, type JellyFactory, type JellySink, type StreamOptions } from './jelly/decode.ts'

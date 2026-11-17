@@ -327,6 +327,20 @@ export class Runtime {
     return () => this.inputListeners.splice(this.inputListeners.indexOf(listener), 1)
   }
 
+  private readonly beforeApply: ((delta: Delta) => Quad[] | undefined)[] = []
+  /**
+   * Hear a change to the input graph before it is applied, and add triples to it: what it needs
+   * comes in the same change (cold graphs a place needs come back with the move to it,
+   * src/retention/cold.ts). Returns a function that stops listening.
+   */
+  onBeforeApply(listener: (delta: Delta) => Quad[] | undefined): () => void {
+    this.beforeApply.push(listener)
+    return () => {
+      const i = this.beforeApply.indexOf(listener)
+      if (i >= 0) this.beforeApply.splice(i, 1)
+    }
+  }
+
   /**
    * Where the app is served from (nav:base, setBase in src/navigation.ts): relative URLs in its data
    * resolve there, whatever the page's own path. Absent (an app in one document): they are as given.
@@ -688,6 +702,10 @@ export class Runtime {
   /** Apply a change to the input graph (default graph) and update every projection. */
   apply(delta: Delta): Delta {
     if (this.disposed) return { add: [], remove: [] }
+    for (const l of this.beforeApply) {
+      const more = l(delta)
+      if (more?.length) delta = { add: [...delta.add, ...more], remove: delta.remove }
+    }
     const effective = applyEffective(this.store, undefined, delta)
     this.changed(undefined, effective)
     return effective

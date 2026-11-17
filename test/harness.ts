@@ -11,6 +11,8 @@ import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { Navigation, type NavigationOptions } from '../src/navigation.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
 import { isExampleSource, recordSources } from '../src/sources.ts'
+import { ColdGraphs } from '../src/retention/cold.ts'
+import { isColdGraph } from '../demo/site.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { A11Y, ANN, FS, KEY, MOD, NS, SEM, ST, STY, VAL } from '../src/ns.ts'
@@ -45,6 +47,20 @@ export function mountShellPrepared(prepare: (store: GraphStore) => void, prefer:
 /** The site as a visitor first sees it: the landing page, tools closed (with `extra` Turtle loaded too). */
 export function mountSite(kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: Clock, extra: string[] = []) {
   return mount(sources(loadStore(kind, todoApp(5), appGraph, ...gallery, ...extra)), prefer, clock)
+}
+
+/**
+ * The site as its client loads it (demo/main.ts): the gallery's cold graphs (isColdGraph) through the
+ * cold-graph effect, which can unload them under pressure and load them again (`cold`), the rest as usual.
+ */
+export function mountSiteCold(kind: StoreKind = 'wat', prefer: 'sparql' | 'function' = 'sparql') {
+  const warm = Object.entries(galleryFiles).filter(([p]) => !isColdGraph(p)).map(([, t]) => t)
+  const store = sources(loadStore(kind, todoApp(5), appGraph, ...warm))
+  const cold = new ColdGraphs(store, { fetch: (n) => galleryFiles[n]! })
+  cold.load(Object.fromEntries(Object.keys(galleryFiles).filter(isColdGraph).map((n) => [n, cold.parse(n, galleryFiles[n]!)])))
+  const site = mount(store, prefer)
+  cold.attach(site.runtime)
+  return { ...site, cold }
 }
 
 /**

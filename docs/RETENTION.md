@@ -373,6 +373,53 @@ Cold graphs are the same mechanism, applied to graphs instead of stream members.
 for a while, under pressure, is offloaded (owned graphs) or unloaded (graphs the app can fetch
 again: its own Turtle) and comes back when a page that needs it is shown.
 
+How cold graphs are built (§8.6):
+
+- **Provenance by graph, in the default graph.** Every file's triples stay in the default graph,
+  where rules, reactions and effects read them. Moving files into named graphs would have changed
+  what every rule and effect reads. Instead, the effect keeps just enough to take one file's
+  triples out again:
+  - A cold graph's blank nodes are labelled by the graph and by their order in its text, so its
+    text read again gives the very triples the store holds.
+  - A triple stated by more than one graph (or already in the store when the graph came) is
+    counted, and leaves with the last graph that states it. On the site no gallery triple is stated
+    twice, so the count stays empty.
+- **What may be unloaded.** Only what the host registers as a cold graph, that is, a graph it can
+  fetch again. Owned data is never unloaded. A cold graph is kept when it states an instance of a
+  class, or uses a property, marked `ret:keepsGraph`:
+  - what a person owns: a `per:Policy`, a stream, `file:keepIn`, a memory budget;
+  - what the whole app reads wherever it is: `key:Command` and `key:shortcut`, which the command
+    palette lists.
+
+  The ontology files, which hold the rules, are not cold graphs. The engine reads its rules again
+  when a change adds or removes them, so their rules could leave, but every page needs most of them.
+  Offloading owned graphs to storage is not built: they are kept.
+- **What a page needs.** It is known in three ways:
+  - A graph is in use while a node it types is shown or placed in a projection, that is, while a
+    page that shows it is shown. This is read from the rendered tree and needs no declaration.
+  - A page that reads cold graphs without showing their nodes says so on its location value:
+    `ui:GroupData ret:needs ret:AllColdGraphs` (the Data page counts every component class's
+    instances). While where we are is that value (in effect, by `nav:parent` and `nav:when`), what
+    it needs stays.
+  - Where a static build wrote its index of the graphs each page needs, the host passes the shown
+    page's graphs (`needs`), and they stay too.
+
+  A graph read across pages but never shown on its own is simply not registered as cold.
+- **Coming back.** It happens in one of two ways, and neither shows an empty page:
+  - A change that moves to a place that needs a graph brings it back in that same change
+    (`Runtime.onBeforeApply`), so the page renders with it as on a fresh visit.
+  - A node of an unloaded graph placed in a projection (a switch case whose content it is, a tab, a
+    dialog) brings the graph back at the end of the change, before the host patches the page.
+
+  Where the text must be fetched, the graph comes back when it arrives.
+- **What a person changed stays.** Unloading removes only the graph's own statements that are
+  still there. What a person or an effect added about its nodes stays in the store. What they
+  removed is remembered and is not put back when the graph returns.
+- **Cost.** Unloading and loading again cost what the graph holds: a parse of its text and a look
+  at each of its triples. All that leaves at a step leaves as one change. An interaction pays only
+  a look at its added objects and at the rendered tree's new children. A graph that defines rules
+  or classes makes the engines read their rules again, which costs the app's rules.
+
 ### 6.3 Memory budget and pressure
 
 `ret:MemoryBudget` on the app (or a `mount` option, for the host) sets `ret:maxBytes`. A pressure
@@ -438,7 +485,8 @@ Tracked in #530, linked from the Plan (#8).
 | Engine compaction: giving wasm memory back, in idle time a slice at a time (changes made meanwhile journaled and replayed) | `rdf-engine/host/store.ts` (`compact`, `compactStep`), the engine (#9) | built; the pressure effect compacts when it would win, which finishes a compaction in flight at once, and `ret:CompactNow` asks for it |
 | Soaks: the footprint with terms, wasm bytes and host caches; the site within a budget; N3 and hybrid | `test/soak*.test.ts` | built |
 | N3's dictionary copied once it outgrows what is stored (the N3 store and the hybrid's mirror) | `src/store/n3.ts`, `src/store/hybrid.ts` | built |
-| Cold graphs offloaded or unloaded under pressure; `per:retention` as `ret:Within`; toasts that wait for acknowledgement | | not yet |
+| Cold graphs: unloaded under pressure while nothing shown needs them, back when a page needs them; kept when they state what a person owns | `ret:ColdGraph`, `src/retention/cold.ts`, `mount`'s `coldGraphs`, the site's gallery (`demo/site.ts` `isColdGraph`) | built; offloading owned graphs to storage is not (they are kept) |
+| `per:retention` as `ret:Within`; toasts that wait for acknowledgement | | not yet |
 
 ## 8. Using retention
 
@@ -568,8 +616,10 @@ order:
    three quarters of the memory at Elevated, nine tenths at Critical. At Elevated a step starts or
    continues one a slice at a time (`store.compactStep`, 8 ms), which idle time carries on; at
    Critical it finishes now (`store.compact({ below })`).
-3. **Offload history.** What was recalled goes back to storage, and at Critical so does the oldest
-   half of what `ret:having` policies hold.
+3. **Offload history and unload cold graphs.** What was recalled goes back to storage, and at
+   Critical so does the oldest half of what `ret:having` policies hold. Cold graphs nothing shown
+   needs leave the store (§8.6): at Elevated once nothing has needed them for `ret:coldAfter`
+   (default a minute), at Critical at once.
 4. **Raise `ret:Pressure`** on the budget, for the app's reactions to answer: raise the budget, close
    what the app can close. Its framework reaction announces it. This happens once per crossing into
    Critical, after the effect's own steps have run twice.
@@ -595,7 +645,79 @@ Measured on the site: a visit of every page holds 1,107k triples. Evicting at Cr
 (147k at start), and every page shown again is byte-identical to a fresh render
 (`test/retention-evict.test.ts`).
 
-### 8.6 The last line of defence: `onRetention`
+### 8.6 Cold graphs
+
+A graph the app can fetch again (its own Turtle, a page's file) can leave memory while no page that
+shows it is shown. Give `mount` the graphs by name, each a function that gives its Turtle:
+
+```ts
+mount(element, {
+  root, graphs: [appGraph],
+  coldGraphs: { 'pages/orders.ttl': () => fetch('/pages/orders.ttl').then((r) => r.text()) },
+})
+```
+
+A host of its own uses the effect directly, as the site does (`demo/main.ts`):
+
+```ts
+import { ColdGraphs, MemoryPressure } from '@semblance-dev/semblance'
+
+const cold = new ColdGraphs(store, { fetch: (name) => texts[name] ?? load(name) })
+cold.load({ [name]: cold.parse(name, text) })   // before the first projection: into the store, counted
+// or, around a change that adds them with other graphs: cold.prepare(byName, others); …; cold.arrived()
+cold.attach(runtime)                              // once the projections exist
+new MemoryPressure(runtime, { bus, cold }).attach()
+```
+
+- **Its state is graph state.** Each registered graph is a `ret:ColdGraph` at
+  `urn:semblance:graph:<name>`, in `urn:semblance:retention`, with `ret:source` (its name),
+  `ret:size` (its triples) and `ret:state`: `ret:Loaded`, `ret:Unloaded`, or `ret:Kept`. The budget
+  counts `ret:graphsUnloaded`.
+- **When it leaves.** In step 3 of pressure, when none of the following holds: a node it types is
+  shown or placed in a projection; where we are needs it (`ret:needs`); the host's `needs()` (a
+  static build's index of the graphs each page needs) names it. `ret:OffloadNow` unloads at once.
+- **When it is kept.** When it states an instance of a class, or uses a property, marked
+  `ret:keepsGraph`: `per:Policy`, `ldes:EventStream`, `file:keepIn`, `ret:MemoryBudget`,
+  `key:Command`, `key:shortcut`. Mark an app's own class the same way when what a graph says of it
+  must stay: `ex:Draft ret:keepsGraph true`.
+- **When it comes back.** In the change that moves to a place that needs it. Or at the end of the
+  change in which one of its nodes is placed in a projection again (a page that shows it is shown),
+  before the page is patched. Or when `needs()` names it. `cold.reload(name)` brings one back from
+  the host.
+- **What stays.** What a person or an effect added about its nodes stays while it is out. What they
+  removed is not put back when it returns.
+
+A page that reads cold graphs without showing their nodes (a list of everything of a kind, a count
+across the app) declares it on its location value, or it would render without them:
+
+```turtle
+ui:GroupData ret:needs ret:AllColdGraphs .            # or ret:needs <urn:semblance:graph:pages/orders.ttl>
+```
+
+Register as cold only graphs whose triples matter where their nodes are shown, or on the places that
+declare they need them. A graph read across pages (a list every page's menu shows, translations of
+the chrome) is not cold: nothing would bring it back. The site registers its examples' own files
+(`demo/site.ts` `isColdGraph`). It keeps the component groups (the Reference and links to their
+specimens read them), the docs, the home page, the list of examples, the translations and the tools.
+
+Measured on the site (WAT), at Critical on the home page after a visit of every page:
+
+- **What leaves.** 10 of the 21 example graphs are unloaded, which takes 6,511 of the 118,384 input
+  triples out of the store. 8 are kept for what they own or what the palette lists (a remembered
+  conversation, streams, kept files, shortcuts). 3 are in use because the home page shows them.
+- **Every page afterwards.** Each page shown again is the page of a site that never unloaded
+  anything and evicted the same renderings, attributes in name order aside
+  (`test/retention-cold.test.ts`). This holds for the page shown when the graphs left, for the pages
+  that bring one back, and for the Data page, which needs them all.
+- **Coming back.** In the browser, moving to the Data page brings the 10 graphs back in the same
+  change, which takes 0.6 s with the page's own render. A single example takes about what its first
+  visit takes.
+- **Memory.** The engines' memory moves by less than its noise from one page load to the next
+  (about 1 MiB for 6,500 triples, against a 45 to 67 MiB compacted store). Most of what a hidden page
+  costs is its renderings, which eviction (step 1) already releases. Unloading takes out the
+  triples themselves, and on a site whose pages own more of their data it takes out more.
+
+### 8.7 The last line of defence: `onRetention`
 
 ```ts
 mount(element, {
@@ -620,16 +742,17 @@ It is called only when policies and reactions have not settled it:
 Nothing here ever drops owned data. The default graph, remembered state and kept files are not
 retained streams.
 
-### 8.7 The Memory tool
+### 8.8 The Memory tool
 
 The site's Tools window (⌘.) has a **Memory** tab, which is a view of the same graph. It shows:
 
 - the level and the figures (`c:Metrics` of `ui:memoryBudget`);
 - the maximum, a slider the budget follows (`ret:maxFrom`);
 - a choice that simulates a level;
-- Evict hidden views, Offload history, Compact engine memory and Measure usage, which are
-  `c:Setter`s writing `ret:request`;
+- Evict hidden views, Offload history and unload graphs, Compact engine memory and Measure usage,
+  which are `c:Setter`s writing `ret:request`;
 - every stream's horizon, with Show older;
+- the cold graphs, each with its state and size (a `c:Table` over the `ret:ColdGraph` nodes);
 - what the last measurement found: tables by graph, by class and by host structure (`c:Table`s over
   the `ret:Usage` nodes).
 - remembered state the browser refused to store (`per:unsaved`), which stays the earlier copy until
@@ -639,7 +762,7 @@ Simulate Critical on a long visit to watch the derived triples fall and the anno
 After it, Engine memory against Engine live state shows what Compact engine memory would give back,
 and Measure usage shows where what is left is.
 
-### 8.8 Testing an app under pressure
+### 8.9 Testing an app under pressure
 
 - **Inject the measurement.** `new MemoryPressure(runtime, { sample: () => ({ wasmBytes, heapBytes }) })`,
   then `await pressure.step()`. Each step measures and acts once.

@@ -11,6 +11,8 @@
 @prefix net: <https://semblance.dev/ns/network#> .
 @prefix src: <https://semblance.dev/ns/source#> .
 @prefix ldes: <https://w3id.org/ldes#> .
+@prefix file: <https://semblance.dev/ns/file#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -127,6 +129,7 @@ ret:AnnounceDropped a beh:Reaction ;
 # projections; never what is shown or sem:warm sem:Eager), compacts the engines, offloads history
 # (what was recalled; at Critical, half of what ret:having policies hold), raises ret:Pressure for
 # reactions to answer, and last asks the host (mount's onRetention). Owned data is never dropped.
+# Step 3 also unloads cold graphs (ret:ColdGraph, below).
 ret:MemoryBudget a owl:Class ;
     rdfs:label "Memory"@en , "Пам’ять"@uk , "Arbeitsspeicher"@de , "الذاكرة"@ar ;
     rdfs:comment "How much memory the page may use, and what the pressure effect measures against it."@en .
@@ -167,6 +170,11 @@ ret:liveMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
 ret:compactedMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
     rdfs:label "Given back by compaction (MiB)"@en , "Повернено ущільненням (МіБ)"@uk , "Durch Verdichtung freigegeben (MiB)"@de , "المُعاد بالضغط (ميبيبايت)"@ar ;
     rdfs:comment "Engine memory compaction has given back this session, in all."@en .
+ret:graphsUnloaded a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Graphs unloaded"@en , "Вивантажено графів"@uk , "Entladene Graphen"@de , "الرسوم البيانية المُفرَّغة"@ar ;
+    rdfs:comment "How many cold graphs are unloaded now (ret:ColdGraph, ret:Unloaded)."@en .
+ret:coldAfter a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:duration ;
+    rdfs:comment "At Elevated, a cold graph is unloaded once nothing has needed it for this long (default PT1M); at Critical, as soon as nothing does."@en .
 ret:measuredAt a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:dateTime ;
     rdfs:comment "When the usage (ret:Usage) was last measured (ret:Measure)."@en .
 
@@ -225,6 +233,57 @@ ret:AnnouncePressure a beh:Reaction ;
         "تستخدم هذه الصفحة ذاكرة كثيرة: أُفرغت العروض المخفية ونُقل السجل الأقدم إلى التخزين"@ar ;
     ann:tone sty:Warning ;
     sem:function "retention:pressure-warned" .
+
+# --- cold graphs -------------------------------------------------------------------------------------------
+
+# Graphs the app can fetch again (its own Turtle: a page's file), registered by the host that loads
+# them (src/retention/cold.ts; mount's coldGraphs). Under pressure (step 3, beside offloading history)
+# a cold graph that nothing shown needs leaves the store: at Elevated once nothing has needed it for
+# ret:coldAfter, at Critical as soon as nothing does. It is in use while a node it types is shown or
+# placed in a projection, or while the host says the page shown needs it (a static build's index of
+# the graphs each page needs). It comes back in the same change in which one of its nodes is placed
+# again (a page that shows it is shown), before the page is patched, or when a page the host says
+# needs it is shown. What a person changed in it stays as they left it: what they added about its
+# nodes is not removed, and what they removed is not put back. Its rules and reactions leave and come
+# back with it. The effect writes one node per graph in urn:semblance:retention.
+ret:ColdGraph a owl:Class ;
+    rdfs:label "Cold graph"@en , "Холодний граф"@uk , "Kalter Graph"@de , "رسم بياني بارد"@ar ;
+    rdfs:comment "A graph the app can fetch again, unloaded under memory pressure while nothing shown needs it, and back when a page needs it."@en .
+ret:source a owl:DatatypeProperty ; rdfs:domain ret:ColdGraph ; rdfs:range xsd:string ;
+    rdfs:label "Graph"@en , "Граф"@uk , "Graph"@de , "الرسم البياني"@ar ;
+    rdfs:comment "The name the host fetches the graph by (a path)."@en .
+ret:size a owl:DatatypeProperty ; rdfs:domain ret:ColdGraph ; rdfs:range xsd:integer ;
+    rdfs:label "Triples"@en , "Трійки"@uk , "Tripel"@de , "الثلاثيات"@ar ;
+    rdfs:comment "The triples the graph holds when it is loaded."@en .
+ret:state a owl:ObjectProperty ; rdfs:domain ret:ColdGraph ; rdfs:range ret:GraphState ;
+    rdfs:label "State"@en , "Стан"@uk , "Zustand"@de , "الحالة"@ar .
+ret:GraphState a owl:Class ; rdfs:comment "Whether a cold graph's triples are in the store."@en .
+ret:Loaded a ret:GraphState ; sem:order 2 ; rdfs:label "Loaded"@en , "Завантажено"@uk , "Geladen"@de , "محمَّل"@ar .
+ret:Unloaded a ret:GraphState ; sem:order 1 ; rdfs:label "Unloaded"@en , "Вивантажено"@uk , "Entladen"@de , "مُفرَّغ"@ar ;
+    rdfs:comment "Its triples left the store; it comes back when a page needs it."@en .
+ret:Kept a ret:GraphState ; sem:order 3 ; rdfs:label "Kept"@en , "Утримано"@uk , "Behalten"@de , "محتفَظ به"@ar ;
+    rdfs:comment "It states what a person owns, or what the whole app reads (ret:keepsGraph): never unloaded."@en .
+
+# What a place needs: a location value (a page, a section) whose page reads cold graphs without showing
+# their nodes (a list of every class and how many instances it has, the validation of the whole graph).
+# While where we are is that value (in effect: nav:parent, nav:when) they are not unloaded, and a change
+# that moves there brings those that are out back in the same change, so the page renders with them.
+ret:needs a owl:ObjectProperty ; rdfs:range ret:ColdGraph ;
+    rdfs:comment "On a location value (a page): the cold graphs its page reads, kept while it is where we are and brought back with the move to it; ret:AllColdGraphs for every one."@en .
+ret:AllColdGraphs a owl:NamedIndividual ;
+    rdfs:comment "ret:needs every cold graph: the place reads across all of them."@en .
+
+# What keeps a cold graph loaded, whatever is shown: what a person owns (what is remembered, a stream's
+# history, files kept in the browser, a memory budget) and what the whole app reads wherever it is (a
+# command, a shortcut: the command palette lists them).
+ret:keepsGraph a owl:AnnotationProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a class or a property: a cold graph that states an instance of the class, or uses the property, is never unloaded."@en .
+per:Policy ret:keepsGraph true .
+ldes:EventStream ret:keepsGraph true .
+ret:MemoryBudget ret:keepsGraph true .
+file:keepIn ret:keepsGraph true .
+key:Command ret:keepsGraph true .
+key:shortcut ret:keepsGraph true .
 
 # --- the streams' policies -------------------------------------------------------------------------------
 

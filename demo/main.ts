@@ -11,6 +11,7 @@ import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { MemoryPressure } from '../src/retention/pressure.ts'
+import { ColdGraphs } from '../src/retention/cold.ts'
 import { Navigation, rendererReveal, setBase, windowScroll } from '../src/navigation.ts'
 import { anticipate, attachIntent } from '../src/intent.ts'
 import { type IdleDeadline, whenIdle } from '../src/idle.ts'
@@ -19,7 +20,7 @@ import { Sandboxes } from '../src/sandbox.ts'
 import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
 import { graphLanguages } from '../src/server/render.ts'
 import { indexedPageGraphs, PAGE_GRAPHS_INDEX, type PageGraphsIndex, pageGraphs, serverRendered, serverStyled, takeOver } from '../src/web/takeover.ts'
-import { carryInFragment, type CompileMode, prepareSite, recordSiteSources, ROOT, siteLayers, siteNamedGraphs, siteSources } from './site.ts'
+import { carryInFragment, type CompileMode, isColdGraph, prepareSite, recordSiteSources, ROOT, siteLayers, siteNamedGraphs, siteSources } from './site.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -80,9 +81,30 @@ const loadGallery = (names: string[]) => Promise.all(names.map(async (n) => void
 await Promise.all([initWeb(kind, { ontology: false }), loadOntology(ONTOLOGY_NAMES.filter(wanted)), loadGallery(Object.keys(galleryLoaders).filter(wanted))])
 performance.mark('sem:wasm')
 const storeOptions = { compiled: compile === 'idle' ? ('idle' as const) : compile === 'run' }
-const store = loadStoreOf(kind, storeOptions, ONTOLOGY_NAMES.filter(wanted), ...Object.values(siteNamedGraphs(appGraph, galleryFiles)))
+/** The build's index of the graphs each page needs, once fetched (a static build only). */
+let pageIndex: PageGraphsIndex | undefined
+const pageNeeds = new Map<string, string[] | undefined>()
+
+const siteGraphs = siteNamedGraphs(appGraph, galleryFiles)
+const store = loadStoreOf(kind, storeOptions, ONTOLOGY_NAMES.filter(wanted), ...Object.entries(siteGraphs).filter(([n]) => !isColdGraph(n)).map(([, t]) => t))
+// The examples' own graphs are cold graphs (isColdGraph): under memory pressure, while no page that
+// shows them or needs them is shown, they leave the store, and they come back when one is (docs/
+// RETENTION.md §6.2). Their texts stay at hand (the modules they came in).
+const cold = new ColdGraphs(store, {
+  // Where the build wrote which graphs each page needs: those of the page shown stay, and come back.
+  needs: () => {
+    if (!pageIndex) return undefined
+    const path = location.pathname
+    if (!pageNeeds.has(path)) pageNeeds.set(path, indexedPageGraphs(pageIndex, path))
+    return pageNeeds.get(path)
+  },
+  fetch: (n) => galleryFiles[n] ?? galleryLoaders[n]!().then((t) => (galleryFiles[n] = t)),
+  onChange: () => flush(),
+})
+cold.load(Object.fromEntries(Object.keys(siteGraphs).filter(isColdGraph).map((n) => [n, cold.parse(n, siteGraphs[n]!)])))
 performance.mark('sem:store', { detail: { graphs: firstGraphs?.length } })
-// The examples show their own source, recorded as data (c:SourceText).
+// The examples show their own source, recorded as data (c:SourceText), whether their graphs are loaded
+// or not: other pages show it too.
 recordSiteSources(store, galleryFiles)
 // One file is one page: where we are goes in the fragment.
 if (import.meta.env.MODE === 'single') carryInFragment(store)
@@ -130,6 +152,8 @@ const languages = graphLanguages(store, ROOT)
 const screen = runtime.project({ modality: MOD.Screen, layers: enabledLayers(), prefer, provenance: 'onDemand', languages, name: 'screen', roots: [ROOT] })
 const text = runtime.project({ modality: MOD.Text, prefer, provenance: 'onDemand', languages, name: 'text', roots: [EX + 'page'] })
 performance.mark('sem:rules')
+// The cold graphs follow the projections: a node of one that was unloaded, placed on a page, brings it back.
+cold.attach(runtime)
 
 // The keyboard layer shows ⌘ / ⌥ glyphs on Apple platforms, Ctrl / Alt elsewhere (a page rendered
 // beforehand has marked the platform in its head already).
@@ -350,7 +374,7 @@ const short = (iri: string) => compactIri(iri, prefixes)
 const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer })
 // The memory budget (ui:memoryBudget): measured in idle time; above it, hidden pages' renderings are
 // evicted and history offloaded; the Memory tool shows it and simulates pressure (docs/RETENTION.md).
-new MemoryPressure(runtime, { bus, onChange: () => flush() }).attach()
+new MemoryPressure(runtime, { bus, cold, onChange: () => flush() }).attach()
 // Pointing at a navigation item or a tab evaluates what it would show (sem:OnIntent).
 attachIntent(runtime, shell, { flush: () => flush() })
 // Walkthroughs: the step in view is reported to the graph; arrows follow what it mentions.
@@ -587,6 +611,12 @@ async function loadRest() {
   const read = new Map<string, Quad[]>()
   const parse = (n: string) => {
     if (read.has(n)) return
+    // A cold graph is read as the effect reads it again (its blank nodes are its own); its source
+    // apart, since it stays when the graph is unloaded.
+    if (isColdGraph(n)) {
+      read.set(n + '#source', sourceQuads(store.factory, siteSources({ [n]: galleryFiles[n]! })))
+      return void read.set(n, cold.parse(n, galleryFiles[n]!))
+    }
     const gallerySource = galleryFiles[n] !== undefined ? sourceQuads(store.factory, siteSources({ [n]: galleryFiles[n]! })) : []
     read.set(n, [...parseTurtle(ontologyText(n) ?? galleryFiles[n]!, store.factory), ...gallerySource])
   }
@@ -623,7 +653,12 @@ async function loadRest() {
     }
     return tests.get(path)!
   }
+  // The cold graphs among them: what they share with the rest is counted before it all arrives.
+  const isCold = ([n]: [string, Quad[]]) => isColdGraph(n)
+  cold.prepare(Object.fromEntries([...read].filter(isCold)), [...read].filter((e) => !isCold(e)).flatMap(([, q]) => q))
   await arrive(slices, { runtime, idle: nextIdle, task: nextTask, urgent, flush })
+  cold.arrived()
+  pageIndex = index
   await persistence.restoreAdded().catch((e) => console.warn('[semblance] could not restore remembered state', e))
   allGraphsLoaded()
   flush()

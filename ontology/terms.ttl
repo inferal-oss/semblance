@@ -2299,7 +2299,9 @@ rnd:width a sem:Term .
 rnd:within a sem:Term .
 rnd:x a sem:Term .
 rnd:y a sem:Term .
+ret:AllColdGraphs a sem:Term .
 ret:ClassUsage a sem:Term .
+ret:ColdGraph a sem:Term .
 ret:CompactNow a sem:Term .
 ret:Critical a sem:Term .
 ret:DefaultGraph a sem:Term .
@@ -2308,10 +2310,13 @@ ret:Dropped a sem:Term .
 ret:Elevated a sem:Term .
 ret:Evict a sem:Term .
 ret:Exit a sem:Term .
+ret:GraphState a sem:Term .
 ret:GraphUsage a sem:Term .
 ret:Horizon a sem:Term .
+ret:Kept a sem:Term .
 ret:Latest a sem:Term .
 ret:Level a sem:Term .
+ret:Loaded a sem:Term .
 ret:Measure a sem:Term .
 ret:Measured a sem:Term .
 ret:MemoryBudget a sem:Term .
@@ -2322,10 +2327,12 @@ ret:Offloaded a sem:Term .
 ret:Policy a sem:Term .
 ret:Pressure a sem:Term .
 ret:StructureUsage a sem:Term .
+ret:Unloaded a sem:Term .
 ret:Usage a sem:Term .
 ret:Within a sem:Term .
 ret:announce a sem:Term .
 ret:class a sem:Term .
+ret:coldAfter a sem:Term .
 ret:compactedMiB a sem:Term .
 ret:crossed a sem:Term .
 ret:derivedTriples a sem:Term .
@@ -2334,10 +2341,12 @@ ret:elevatedAt a sem:Term .
 ret:entries a sem:Term .
 ret:evicted a sem:Term .
 ret:graph a sem:Term .
+ret:graphsUnloaded a sem:Term .
 ret:having a sem:Term .
 ret:heapMiB a sem:Term .
 ret:inMemory a sem:Term .
 ret:instances a sem:Term .
+ret:keepsGraph a sem:Term .
 ret:level a sem:Term .
 ret:liveMiB a sem:Term .
 ret:maxBytes a sem:Term .
@@ -2345,6 +2354,7 @@ ret:maxFrom a sem:Term .
 ret:maxMiB a sem:Term .
 ret:measuredAt a sem:Term .
 ret:name a sem:Term .
+ret:needs a sem:Term .
 ret:of a sem:Term .
 ret:offloaded a sem:Term .
 ret:oldestKept a sem:Term .
@@ -2357,6 +2367,9 @@ ret:recalls a sem:Term .
 ret:refused a sem:Term .
 ret:request a sem:Term .
 ret:simulate a sem:Term .
+ret:size a sem:Term .
+ret:source a sem:Term .
+ret:state a sem:Term .
 ret:storageAmount a sem:Term .
 ret:structure a sem:Term .
 ret:triples a sem:Term .

@@ -32,6 +32,14 @@ export function siteSources(gallery: Record<string, string>, loaded?: ReadonlySe
   return Object.fromEntries(Object.entries(gallery).filter(([p]) => isExampleSource(p) && (!loaded || loaded.has(p))))
 }
 
+/**
+ * The site's cold graphs (docs/RETENTION.md §6.2): the examples' own files, which the client unloads
+ * under memory pressure while no page that shows them is shown, and loads again when one is. The
+ * other files are read across pages: the component groups' specimens by the Reference and by links
+ * to them, the docs, the home page, the list of examples, the translations of the chrome, the tools.
+ */
+export const isColdGraph = (path: string) => /^demo\/gallery\/_ex-[\w-]+\.ttl$/.test(path)
+
 /** The graphs every page loads first, bundled with the client: the todo example's and app.ttl. */
 export const FIRST_GRAPHS = ['src/examples/todo.ts', 'demo/app.ttl']
 

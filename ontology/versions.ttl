@@ -306,11 +306,11 @@ file:Receiver sem:version 1 ; sem:closure "bab956f4a283f613" ; sem:internal "new
 ext:Hosted sem:version 1 ; sem:closure "7b1090fd6f5f4aeb" ; sem:internal "new" .
 ext:Island sem:version 1 ; sem:closure "c092bb53b7b10c6c" ; sem:internal "new" .
 fs:Fullscreenable sem:version 1 ; sem:closure "d7256845e53ee530" ; sem:internal "new" .
-key:Command sem:version 1 ; sem:closure "0a246ca552288591" ; sem:internal "new" .
+key:Command sem:version 2 ; sem:closure "eb415b28b17d55de" ; sem:internal "Cold graphs (#530): marked ret:keepsGraph, so a cold graph that states one stays loaded; the cold-graph terms are additions" .
 l10n:Dated sem:version 1 ; sem:closure "eb4435e8a3b227d1" ; sem:internal "new" .
 l10n:Viewer sem:version 1 ; sem:closure "e788d6f14cf3377e" ; sem:internal "new" .
 lc:WithParts sem:version 1 ; sem:closure "55f5674640084adb" ; sem:internal "new" .
 nav:ContainmentProperty sem:version 1 ; sem:closure "6107f25c832848e4" ; sem:internal "new" .
 nav:Location sem:version 1 ; sem:closure "ebe2918971db016a" ; sem:internal "new" .
-ret:MemoryBudget sem:version 1 ; sem:closure "89fd76aeb3d15db7" ; sem:internal "new" .
+ret:MemoryBudget sem:version 2 ; sem:closure "6e0934dd8fd90c48" ; sem:internal "Cold graphs (#530): marked ret:keepsGraph, so a cold graph that states one stays loaded; the cold-graph terms are additions" .
 src:Source sem:version 1 ; sem:closure "0a4d62fbc46c87e5" ; sem:internal "new" .

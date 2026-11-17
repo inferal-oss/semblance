@@ -9,6 +9,7 @@ import { RenderedState } from '../rendered.ts'
 import { indexedDbBackend } from '../persistence.ts'
 import type { OffloadBackend } from '../retention/offload.ts'
 import { MemoryPressure, type OnRetention } from '../retention/pressure.ts'
+import { ColdGraphs } from '../retention/cold.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import { configureFetching, doesNotFetch, type FetchPolicy, type GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
@@ -39,6 +40,13 @@ export interface MountOptions {
   root: string
   /** Turtle to load besides Semblance's own ontology: your app's components, your component classes and their rules. */
   graphs?: string[]
+  /**
+   * Graphs the app can fetch again, by name (a path): each a function that gives its Turtle. They are
+   * loaded with `graphs`, and under memory pressure, while no node they type is shown, they leave the
+   * store; a page that shows one brings it back before it is patched (docs/RETENTION.md §6.2).
+   * A graph that states what a person owns (ret:keepsGraph: a per:Policy, a stream) is never unloaded.
+   */
+  coldGraphs?: Record<string, () => string | Promise<string>>
   /**
    * Turtle from an untrusted author (a person, a page, a model), loaded after `graphs`: the root is
    * then rendered as authored content (src/safety.ts, docs/SAFETY.md). What the policy refuses
@@ -156,6 +164,8 @@ export interface MountedApp {
   sources?: RemoteSources
   /** The memory budget's effect (docs/RETENTION.md): `step()` measures and acts now. */
   pressure: MemoryPressure
+  /** The cold graphs' effect, when `coldGraphs` was given: each graph's state, `unload` and `reload`. */
+  cold?: ColdGraphs
   /**
    * When content is authored: a store of the ontology and `graphs` alone, where the effects read
    * their configuration (sources, locations, uploads, modules), so the author cannot reconfigure
@@ -205,6 +215,13 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   })
   const store = configureFetching(load(...(opts.graphs ?? []), ...(authoredNow ?? [])), opts.fetchPolicy)
   const config = trusted ?? store
+  // The graphs the app can fetch again: loaded with the rest, through the effect that can unload them.
+  const coldGraphs = opts.coldGraphs
+  const cold = coldGraphs && new ColdGraphs(store, { fetch: (n) => coldGraphs[n]!() })
+  if (cold && coldGraphs) {
+    const texts = await Promise.all(Object.entries(coldGraphs).map(async ([n, load]) => [n, await load()] as const))
+    cold.load(Object.fromEntries(texts.map(([n, t]) => [n, cold.parse(n, t)])))
+  }
   // Where we are, before the first projection: the address (a server rendered the same one).
   const declared = config.match(null, config.factory.namedNode(NS.nav + 'root'), config.factory.namedNode(opts.root)).length > 0
   const located = !!(opts.navigation && opts.navigation.location) || 'location' in globalThis
@@ -374,7 +391,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const detachSources = sources?.attach()
   // The memory budget: measured in idle time, answered by eviction, compaction, offloading, the app's
   // reactions and last the host (docs/RETENTION.md).
-  const pressure = new MemoryPressure(runtime, { bus, maxBytes: opts.maxMemory, onRetention: opts.onRetention, onChange: flush })
+  const detachCold = cold?.attach(runtime)
+  const pressure = new MemoryPressure(runtime, { bus, cold, maxBytes: opts.maxMemory, onRetention: opts.onRetention, onChange: flush })
   const detachPressure = pressure.attach()
   // What the visitor did before now (a click, typing) happens now, on the adopted nodes.
   const takeover = adopted && { nodes: adopted.nodes, mismatches: adopted.mismatches, replayed: adopted.replay() }
@@ -389,6 +407,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     navigation,
     takeover,
     pressure,
+    cold,
     islands,
     rendered,
     sources,
@@ -413,6 +432,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachNavigation?.()
       detachSources?.()
       detachPressure()
+      detachCold?.()
       if (sheet) dropSheet(shadow ?? doc, sheet)
       renderer.dispose()
       runtime.dispose()

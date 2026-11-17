@@ -469,9 +469,9 @@ ui:memoryBudget a ret:MemoryBudget ; ret:maxFrom ui:memoryLimit ; ret:simulate r
 ui:memoryTab a c:Tab ; c:label "Memory" , "Пам’ять"@uk , "Speicher"@de , "الذاكرة"@ar ; c:content ui:memoryCard .
 ui:memoryCard a c:Flippable ; c:front ui:memoryPanel .
 ui:memoryPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:memoryMetrics ui:memoryLimit ui:memorySimulate ui:memoryActions ui:memoryHorizons ui:memoryUnsaved ui:memoryGraphs ui:memoryClasses ui:memoryStructures ) .
+    c:children ( ui:memoryMetrics ui:memoryLimit ui:memorySimulate ui:memoryActions ui:memoryHorizons ui:memoryUnsaved ui:memoryColdGraphs ui:memoryGraphs ui:memoryClasses ui:memoryStructures ) .
 ui:memoryMetrics a c:Metrics ; c:of ui:memoryBudget ;
-    c:fields ( ret:level ret:usedMiB ret:heapMiB ret:wasmMiB ret:liveMiB ret:compactedMiB ret:triples ret:derivedTriples ret:evicted ) .
+    c:fields ( ret:level ret:usedMiB ret:heapMiB ret:wasmMiB ret:liveMiB ret:compactedMiB ret:triples ret:derivedTriples ret:evicted ret:graphsUnloaded ) .
 ui:memoryLimit a c:Slider ; c:min 64 ; c:max 4096 ; c:step 64 ; c:value 2048 ; c:unit "MiB" , "МіБ"@uk , "MiB"@de , "ميبيبايت"@ar ;
     c:label "Maximum memory" , "Найбільше пам’яті"@uk , "Höchster Speicher"@de , "أقصى ذاكرة"@ar .
 # What the effect does at each level, without waiting for the page to grow: As measured, or one forced.
@@ -481,7 +481,7 @@ ui:memoryActions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
 ui:memoryEvict a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:Evict ;
     c:label "Evict hidden views" , "Витіснити приховані подання"@uk , "Verborgene Ansichten verdrängen"@de , "إخلاء العروض المخفية"@ar .
 ui:memoryOffload a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:OffloadNow ;
-    c:label "Offload history" , "Вивантажити історію"@uk , "Verlauf auslagern"@de , "تفريغ السجل"@ar .
+    c:label "Offload history and unload graphs" , "Вивантажити історію та графи"@uk , "Verlauf auslagern, Graphen entladen"@de , "تفريغ السجل والرسوم البيانية"@ar .
 ui:memoryCompact a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:CompactNow ;
     c:label "Compact engine memory" , "Ущільнити пам’ять рушія"@uk , "Engine-Speicher verdichten"@de , "ضغط ذاكرة المحرك"@ar .
 ui:memoryMeasure a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:Measure ;
@@ -506,6 +506,25 @@ SELECT ?policy ?stored ?written WHERE {
   ?policy per:unsaved true .
   OPTIONAL { ?policy per:storedSize ?stored } OPTIONAL { ?policy per:lastWritten ?written }
 }""" .
+
+# The pages' own graphs (cold graphs, demo/site.ts isColdGraph): loaded, unloaded under pressure while
+# no page that shows them is shown (they come back when one is), or kept for what a person owns in them.
+ui:memoryColdGraphs a c:Table ; c:query ui:memoryColdRows ; c:dataset ui:memoryBudget ;
+    c:label "Cold graphs" , "Холодні графи"@uk , "Kalte Graphen"@de , "الرسوم البيانية الباردة"@ar ;
+    c:tableColumns ( ui:memory-col-source ui:memory-col-state ui:memory-col-size ) .
+ui:memory-col-source a c:Column ; c:variable "source" ; c:format "code" ;
+    c:label "Graph" , "Граф"@uk , "Graph"@de , "الرسم البياني"@ar .
+ui:memory-col-state a c:Column ; c:variable "state" ;
+    c:label "State" , "Стан"@uk , "Zustand"@de , "الحالة"@ar .
+ui:memory-col-size a c:Column ; c:variable "size" ; c:align "end" ; c:format "number" ;
+    c:label "Triples" , "Трійки"@uk , "Tripel"@de , "الثلاثيات"@ar .
+ui:memoryColdRows a sem:View ; rdfs:label "the cold graphs and their state"@en , "холодні графи та їхній стан"@uk , "die kalten Graphen und ihr Zustand"@de , "الرسوم البيانية الباردة وحالتها"@ar ;
+    sem:select """
+SELECT ?source ?state ?size WHERE {
+  ?g a ret:ColdGraph ; ret:source ?source ; ret:state ?state ; ret:size ?size .
+  ?state sem:order ?order .
+}
+ORDER BY ?order DESC(?size)""" .
 
 # What memory holds, by graph, by class and by the host's own structures: measured when Measure usage
 # is pressed (it counts everything, so not on every sample), as ret:Usage nodes the tables read.
@@ -668,6 +687,9 @@ ui:galleryGroup rdfs:label "Components" ; rdfs:range ui:GalleryGroup .
 # specimen on the page of its classes' group (sem:group). Foundations, Layers and Themes show
 # tokens, layers and themes rather than components.
 ui:componentGroup a owl:ObjectProperty ; rdfs:domain ui:GalleryGroup ; rdfs:range sem:ComponentGroup .
+# The Data page reads across every example (each component class, with how many instances it has): it
+# needs every cold graph (docs/RETENTION.md §6.2).
+ui:GroupData ret:needs ret:AllColdGraphs .
 ui:GroupFoundations a ui:GalleryGroup ; rdfs:label "Foundations" ; sem:order 1 ; ui:key "foundations" .
 ui:GroupLayout a ui:GalleryGroup ; rdfs:label "Layout" ; sem:order 2 ; ui:key "layout" ; ui:componentGroup c:LayoutGroup .
 ui:GroupType a ui:GalleryGroup ; rdfs:label "Type" ; sem:order 3 ; ui:key "type" ; ui:componentGroup c:TypeGroup .

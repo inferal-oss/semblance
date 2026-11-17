@@ -3,7 +3,8 @@
 //
 //   1. evict derived state: the renderings of what is hidden (Runtime.evict, both projections);
 //   2. compact the engines (a store that can, GraphStore.compact);
-//   3. offload history: what was recalled, and at Critical half of what ret:having policies hold;
+//   3. offload history (what was recalled, and at Critical half of what ret:having policies hold) and
+//      unload cold graphs (graphs the app can fetch again that nothing shown needs: src/retention/cold.ts);
 //   4. raise ret:Pressure on the budget, for the app's reactions to answer (announced);
 //   5. ask the host (onRetention), the last line of defence.
 //
@@ -14,6 +15,8 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { EventBus } from '../behaviour/events.ts'
 import { NS, RETENTION_GRAPH } from '../ns.ts'
 import { compactIri, declaredPrefixes } from '../prefixes.ts'
+import { parseDuration } from '../rdf.ts'
+import type { ColdGraphs } from './cold.ts'
 import type { Runtime } from '../runtime.ts'
 
 const RET = NS.ret
@@ -72,6 +75,8 @@ export interface PressureOptions {
   every?: number
   /** After a step changed the graph (to patch the DOM). */
   onChange?: () => void
+  /** The graphs the app can fetch again: unloaded in step 3 when nothing shown needs them. */
+  cold?: ColdGraphs
 }
 
 /** The engines' WebAssembly memory and, where the browser reports it, the JS heap. */
@@ -164,7 +169,7 @@ export class MemoryPressure {
     // Requests first: a person asked for a step now.
     for (const q of store.match(b, f.namedNode(RET + 'request'), null, f.defaultGraph())) {
       if (q.object.value === RET + 'Evict') this.evict(Infinity)
-      if (q.object.value === RET + 'OffloadNow') this.offload('critical')
+      if (q.object.value === RET + 'OffloadNow') this.offload('critical'), await this.unloadCold(b, 'critical')
       if (q.object.value === RET + 'CompactNow') this.compact()
       if (q.object.value === RET + 'Measure') this.measureUsage(b)
       this.runtime.apply({ add: [], remove: [q] })
@@ -194,6 +199,8 @@ export class MemoryPressure {
       if (level === 'critical') this.compact({ below: 0.9 })
       else this.compactSlice({ below: 0.75 })
       this.offload(level)
+      await this.unloadCold(b, level)
+      if (this.runtime.ended) return this.level
       if (level === 'critical') this.escalation++
       // 4: the app's reactions, once a crossing.
       if (level === 'critical' && this.escalation >= 2 && !this.raised && this.opts.bus) {
@@ -319,6 +326,14 @@ export class MemoryPressure {
     return out
   }
 
+  /** Unload the cold graphs nothing shown needs: at Critical all of them, at Elevated those unneeded for ret:coldAfter (default a minute). */
+  private async unloadCold(b: Term, level: Level) {
+    const cold = this.opts.cold
+    if (!cold || level === 'normal') return
+    const after = parseDuration(this.one(b, RET + 'coldAfter')?.value ?? '') ?? 60_000
+    await cold.unload(level, after)
+  }
+
   /** Offload what retention holds beyond its policies: what was recalled, and at Critical half of what ret:having policies keep. */
   private offload(level: Level) {
     for (const s of this.runtime.retention.all()) s.relieve(level === 'critical' ? 0.5 : 0)
@@ -338,6 +353,7 @@ export class MemoryPressure {
       [RET + 'evicted', int(this.evicted)],
       [RET + 'compactedMiB', mib(this.compacted)],
     ])
+    if (this.opts.cold) want.set(RET + 'graphsUnloaded', int(this.opts.cold.unloadedCount))
     if (x.heap !== undefined) want.set(RET + 'heapMiB', mib(x.heap))
     const live = this.runtime.store.liveBytes?.()
     if (live !== undefined) want.set(RET + 'liveMiB', mib(live))
