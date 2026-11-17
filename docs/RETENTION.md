@@ -605,6 +605,8 @@ The site's Tools window (⌘.) has a **Memory** tab, which is a view of the same
 - every stream's horizon, with Show older;
 - what the last measurement found: tables by graph, by class and by host structure (`c:Table`s over
   the `ret:Usage` nodes).
+- remembered state the browser refused to store (`per:unsaved`), which stays the earlier copy until
+  a later write succeeds.
 
 Simulate Critical on a long visit to watch the derived triples fall and the announcement arrive.
 After it, Engine memory against Engine live state shows what Compact engine memory would give back,

@@ -469,7 +469,7 @@ ui:memoryBudget a ret:MemoryBudget ; ret:maxFrom ui:memoryLimit ; ret:simulate r
 ui:memoryTab a c:Tab ; c:label "Memory" , "Пам’ять"@uk , "Speicher"@de , "الذاكرة"@ar ; c:content ui:memoryCard .
 ui:memoryCard a c:Flippable ; c:front ui:memoryPanel .
 ui:memoryPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:memoryMetrics ui:memoryLimit ui:memorySimulate ui:memoryActions ui:memoryHorizons ui:memoryGraphs ui:memoryClasses ui:memoryStructures ) .
+    c:children ( ui:memoryMetrics ui:memoryLimit ui:memorySimulate ui:memoryActions ui:memoryHorizons ui:memoryUnsaved ui:memoryGraphs ui:memoryClasses ui:memoryStructures ) .
 ui:memoryMetrics a c:Metrics ; c:of ui:memoryBudget ;
     c:fields ( ret:level ret:usedMiB ret:heapMiB ret:wasmMiB ret:liveMiB ret:compactedMiB ret:triples ret:derivedTriples ret:evicted ) .
 ui:memoryLimit a c:Slider ; c:min 64 ; c:max 4096 ; c:step 64 ; c:value 2048 ; c:unit "MiB" , "МіБ"@uk , "MiB"@de , "ميبيبايت"@ar ;
@@ -487,6 +487,25 @@ ui:memoryCompact a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property
 ui:memoryMeasure a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:Measure ;
     c:label "Measure usage" , "Виміряти використання"@uk , "Nutzung messen"@de , "قياس الاستخدام"@ar .
 ui:memoryHorizons a c:HorizonList .
+
+# Remembered state the browser refused to store (per:unsaved, while a write fails, e.g. on a full
+# storage): what is stored is the earlier copy, and the next change retries.
+ui:memoryUnsaved a c:Table ; c:query ui:memoryUnsavedRows ; c:dataset ui:memoryBudget ;
+    c:label "Remembered state not saved" , "Не збережений запам’ятований стан"@uk , "Nicht gespeicherter gemerkter Zustand"@de , "حالة محفوظة لم تُخزَّن"@ar ;
+    c:tableColumns ( ui:memory-col-policy ui:memory-col-stored ui:memory-col-written ) ;
+    c:emptyText "Everything remembered is saved." , "Усе запам’ятоване збережено."@uk , "Alles Gemerkte ist gespeichert."@de , "كل ما يُتذكَّر محفوظ."@ar .
+ui:memory-col-policy a c:Column ; c:variable "policy" ; c:format "code" ;
+    c:label "Policy" , "Політика"@uk , "Richtlinie"@de , "السياسة"@ar .
+ui:memory-col-stored a c:Column ; c:variable "stored" ; c:align "end" ; c:format "number" ;
+    c:label "Triples stored" , "Збережено трійок"@uk , "Gespeicherte Tripel"@de , "الثلاثيات المخزنة"@ar .
+ui:memory-col-written a c:Column ; c:variable "written" ; c:format "time" ;
+    c:label "Last saved" , "Востаннє збережено"@uk , "Zuletzt gespeichert"@de , "آخر حفظ"@ar .
+ui:memoryUnsavedRows a sem:View ; rdfs:label "remembered state not saved"@en , "не збережений запам’ятований стан"@uk , "nicht gespeicherter gemerkter Zustand"@de , "حالة محفوظة لم تُخزَّن"@ar ;
+    sem:select """
+SELECT ?policy ?stored ?written WHERE {
+  ?policy per:unsaved true .
+  OPTIONAL { ?policy per:storedSize ?stored } OPTIONAL { ?policy per:lastWritten ?written }
+}""" .
 
 # What memory holds, by graph, by class and by the host's own structures: measured when Measure usage
 # is pressed (it counts everything, so not on every sample), as ret:Usage nodes the tables read.
