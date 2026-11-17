@@ -93,6 +93,38 @@ describe('persistence (per:Policy)', () => {
     expect(a.store.match(null, f.namedNode(NS.c + 'entryFor'), f.namedNode(UI + 'blankItem'))).toHaveLength(1)
   })
 
+  it('a write that storage refuses keeps the earlier copy, says it is unsaved, and retries', async () => {
+    const storage = browser()
+    const session = storage[PER + 'Session']!
+    let full = false
+    const quota = () => Object.assign(new Error('The quota has been exceeded.'), { name: 'QuotaExceededError' })
+    storage[PER + 'Session'] = { ...session, set: async (k, v) => (full ? Promise.reject(quota()) : session.set(k, v)) }
+    const a = await mountRemembering(storage)
+    const key = 'semblance:' + UI + 'rememberInspector'
+    pressZ(a) // paused
+    await a.persistence.flush()
+    const earlier = await session.get(key)
+    expect(earlier).toContain('Paused')
+    const f = a.store.factory
+    const unsaved = () => a.store.match(f.namedNode(UI + 'rememberInspector'), f.namedNode(PER + 'unsaved'), null, f.namedNode('urn:semblance:persistence')).map((q) => q.object.value)
+    expect(unsaved()).toEqual([])
+
+    full = true
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    pressZ(a) // running again: this write is refused
+    await a.persistence.flush()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+    expect(await session.get(key)).toBe(earlier) // not removed before a write that failed
+    expect(unsaved()).toEqual(['true'])
+
+    full = false
+    await a.persistence.flush() // still dirty: the next flush writes it
+    expect(await session.get(key)).not.toBe(earlier)
+    expect(await session.get(key)).not.toContain('Paused')
+    expect(unsaved()).toEqual([])
+  })
+
   it('stopped, it drops a write waiting for its delay: none runs against a store released since', async () => {
     const storage = browser()
     const a = await mountRemembering(storage)

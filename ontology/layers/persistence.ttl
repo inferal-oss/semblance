@@ -71,6 +71,8 @@ per:request a owl:DatatypeProperty ; rdfs:domain per:Policy ;
 per:storedSize a owl:DatatypeProperty ; rdfs:domain per:Policy ; rdfs:comment "Triples currently stored."@en .
 per:lastWritten a owl:DatatypeProperty ; rdfs:domain per:Policy ; rdfs:range xsd:dateTime .
 per:restored a owl:DatatypeProperty ; rdfs:domain per:Policy ; rdfs:comment "Triples restored at the last load."@en .
+per:unsaved a owl:DatatypeProperty ; rdfs:domain per:Policy ; rdfs:range xsd:boolean ;
+    rdfs:comment "True while the policy's last write failed (a full storage): what is stored is the earlier copy, kept whole, and the next change retries."@en .
 
 # --- the state log: an LDES of writes and restores ------------------------------------------------
 
