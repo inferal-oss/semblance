@@ -469,19 +469,87 @@ ui:memoryBudget a ret:MemoryBudget ; ret:maxFrom ui:memoryLimit ; ret:simulate r
 ui:memoryTab a c:Tab ; c:label "Memory" , "Пам’ять"@uk , "Speicher"@de , "الذاكرة"@ar ; c:content ui:memoryCard .
 ui:memoryCard a c:Flippable ; c:front ui:memoryPanel .
 ui:memoryPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:memoryMetrics ui:memoryLimit ui:memorySimulate ui:memoryActions ui:memoryHorizons ) .
+    c:children ( ui:memoryMetrics ui:memoryLimit ui:memorySimulate ui:memoryActions ui:memoryHorizons ui:memoryUnsaved ui:memoryGraphs ui:memoryClasses ui:memoryStructures ) .
 ui:memoryMetrics a c:Metrics ; c:of ui:memoryBudget ;
-    c:fields ( ret:level ret:usedMiB ret:heapMiB ret:wasmMiB ret:triples ret:derivedTriples ret:evicted ) .
+    c:fields ( ret:level ret:usedMiB ret:heapMiB ret:wasmMiB ret:liveMiB ret:compactedMiB ret:triples ret:derivedTriples ret:evicted ) .
 ui:memoryLimit a c:Slider ; c:min 64 ; c:max 4096 ; c:step 64 ; c:value 2048 ; c:unit "MiB" , "МіБ"@uk , "MiB"@de , "ميبيبايت"@ar ;
     c:label "Maximum memory" , "Найбільше пам’яті"@uk , "Höchster Speicher"@de , "أقصى ذاكرة"@ar .
 # What the effect does at each level, without waiting for the page to grow: As measured, or one forced.
 ui:memorySimulate a c:Segmented ; c:controls ui:memoryBudget ; c:property ret:simulate .
-ui:memoryActions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:memoryEvict ui:memoryOffload ) .
+ui:memoryActions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:memoryEvict ui:memoryOffload ui:memoryCompact ui:memoryMeasure ) .
 ui:memoryEvict a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:Evict ;
     c:label "Evict hidden views" , "Витіснити приховані подання"@uk , "Verborgene Ansichten verdrängen"@de , "إخلاء العروض المخفية"@ar .
 ui:memoryOffload a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:OffloadNow ;
     c:label "Offload history" , "Вивантажити історію"@uk , "Verlauf auslagern"@de , "تفريغ السجل"@ar .
+ui:memoryCompact a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:CompactNow ;
+    c:label "Compact engine memory" , "Ущільнити пам’ять рушія"@uk , "Engine-Speicher verdichten"@de , "ضغط ذاكرة المحرك"@ar .
+ui:memoryMeasure a c:Button , c:Setter ; c:controls ui:memoryBudget ; c:property ret:request ; c:value ret:Measure ;
+    c:label "Measure usage" , "Виміряти використання"@uk , "Nutzung messen"@de , "قياس الاستخدام"@ar .
 ui:memoryHorizons a c:HorizonList .
+
+# Remembered state the browser refused to store (per:unsaved, while a write fails, e.g. on a full
+# storage): what is stored is the earlier copy, and the next change retries.
+ui:memoryUnsaved a c:Table ; c:query ui:memoryUnsavedRows ; c:dataset ui:memoryBudget ;
+    c:label "Remembered state not saved" , "Не збережений запам’ятований стан"@uk , "Nicht gespeicherter gemerkter Zustand"@de , "حالة محفوظة لم تُخزَّن"@ar ;
+    c:tableColumns ( ui:memory-col-policy ui:memory-col-stored ui:memory-col-written ) ;
+    c:emptyText "Everything remembered is saved." , "Усе запам’ятоване збережено."@uk , "Alles Gemerkte ist gespeichert."@de , "كل ما يُتذكَّر محفوظ."@ar .
+ui:memory-col-policy a c:Column ; c:variable "policy" ; c:format "code" ;
+    c:label "Policy" , "Політика"@uk , "Richtlinie"@de , "السياسة"@ar .
+ui:memory-col-stored a c:Column ; c:variable "stored" ; c:align "end" ; c:format "number" ;
+    c:label "Triples stored" , "Збережено трійок"@uk , "Gespeicherte Tripel"@de , "الثلاثيات المخزنة"@ar .
+ui:memory-col-written a c:Column ; c:variable "written" ; c:format "time" ;
+    c:label "Last saved" , "Востаннє збережено"@uk , "Zuletzt gespeichert"@de , "آخر حفظ"@ar .
+ui:memoryUnsavedRows a sem:View ; rdfs:label "remembered state not saved"@en , "не збережений запам’ятований стан"@uk , "nicht gespeicherter gemerkter Zustand"@de , "حالة محفوظة لم تُخزَّن"@ar ;
+    sem:select """
+SELECT ?policy ?stored ?written WHERE {
+  ?policy per:unsaved true .
+  OPTIONAL { ?policy per:storedSize ?stored } OPTIONAL { ?policy per:lastWritten ?written }
+}""" .
+
+# What memory holds, by graph, by class and by the host's own structures: measured when Measure usage
+# is pressed (it counts everything, so not on every sample), as ret:Usage nodes the tables read.
+ui:memoryGraphs a c:Table ; c:query ui:memoryGraphRows ; c:dataset ui:memoryBudget ;
+    c:label "By graph" , "За графом"@uk , "Nach Graph"@de , "حسب الرسم البياني"@ar ;
+    c:tableColumns ( ui:memory-col-graph ui:memory-col-triples ) ;
+    c:emptyText "Press Measure usage to count what each graph holds." , "Натисніть «Виміряти використання», щоб порахувати, що містить кожен граф."@uk ,
+        "„Nutzung messen“ zählt, was jeder Graph enthält."@de , "اضغط «قياس الاستخدام» لعدّ ما يحويه كل رسم بياني."@ar .
+ui:memory-col-graph a c:Column ; c:variable "graph" ; c:format "code" ;
+    c:label "Graph" , "Граф"@uk , "Graph"@de , "الرسم البياني"@ar .
+ui:memory-col-triples a c:Column ; c:variable "triples" ; c:align "end" ; c:format "number" ;
+    c:label "Triples" , "Трійки"@uk , "Tripel"@de , "الثلاثيات"@ar .
+ui:memoryGraphRows a sem:View ; rdfs:label "what each graph holds"@en , "що містить кожен граф"@uk , "was jeder Graph enthält"@de , "ما يحويه كل رسم بياني"@ar ;
+    sem:select """
+SELECT ?graph ?triples WHERE {
+  ?u a ret:GraphUsage ; ret:usageOf ui:memoryBudget ; ret:graph ?graph ; ret:triples ?triples .
+}
+ORDER BY DESC(?triples)""" .
+ui:memoryClasses a c:Table ; c:query ui:memoryClassRows ; c:dataset ui:memoryBudget ;
+    c:label "Classes with the most instances" , "Класи з найбільшою кількістю екземплярів"@uk , "Klassen mit den meisten Instanzen"@de , "الأصناف ذات أكثر النسخ"@ar ;
+    c:tableColumns ( ui:memory-col-class ui:memory-col-instances ) .
+ui:memory-col-class a c:Column ; c:variable "name" ; c:format "code" ;
+    c:label "Class" , "Клас"@uk , "Klasse"@de , "الصنف"@ar .
+ui:memory-col-instances a c:Column ; c:variable "instances" ; c:align "end" ; c:format "number" ;
+    c:label "Instances" , "Екземпляри"@uk , "Instanzen"@de , "النسخ"@ar .
+ui:memoryClassRows a sem:View ; rdfs:label "the classes with the most instances"@en , "класи з найбільшою кількістю екземплярів"@uk , "die Klassen mit den meisten Instanzen"@de , "الأصناف ذات أكثر النسخ"@ar ;
+    sem:select """
+SELECT ?name ?instances WHERE {
+  ?u a ret:ClassUsage ; ret:usageOf ui:memoryBudget ; ret:name ?name ; ret:instances ?instances .
+}
+ORDER BY DESC(?instances)""" .
+ui:memoryStructures a c:Table ; c:query ui:memoryStructureRows ; c:dataset ui:memoryBudget ;
+    c:label "Host structures" , "Структури хоста"@uk , "Strukturen des Hosts"@de , "بنى المضيف"@ar ;
+    c:tableColumns ( ui:memory-col-structure ui:memory-col-entries ) .
+ui:memory-col-structure a c:Column ; c:variable "structure" ; c:format "code" ;
+    c:label "Structure" , "Структура"@uk , "Struktur"@de , "البنية"@ar .
+ui:memory-col-entries a c:Column ; c:variable "entries" ; c:align "end" ; c:format "number" ;
+    c:label "Entries" , "Записи"@uk , "Einträge"@de , "المدخلات"@ar .
+ui:memoryStructureRows a sem:View ; rdfs:label "the sizes of the host's structures"@en , "розміри структур хоста"@uk , "die Größen der Strukturen des Hosts"@de , "أحجام بنى المضيف"@ar ;
+    sem:select """
+SELECT ?structure ?entries WHERE {
+  ?u a ret:StructureUsage ; ret:usageOf ui:memoryBudget ; ret:structure ?structure ; ret:entries ?entries .
+}
+ORDER BY DESC(?entries)""" .
 
 # Where the log's history is: in memory, offloaded to this browser's storage (Show older brings it back),
 # or no longer kept (docs/RETENTION.md).

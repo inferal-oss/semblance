@@ -433,9 +433,9 @@ Tracked in #530, linked from the Plan (#8).
 | Offloaded history as Jelly frames (§6.2), bytes in IndexedDB, base64 in web storage | `src/retention/chunk.ts` | built |
 | Undo on the change log, bigger bound, recalled past it | `beh:UndoRetention`, `src/behaviour/events.ts` | built |
 | The memory budget, pressure, eviction of hidden renderings, `onRetention` | `src/retention/pressure.ts`, `Engine.evict`, `Runtime.evict` | built |
-| The Memory tool | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
-| The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime), and network capture on the shared module | #537 | separate |
-| Engine compaction: giving wasm memory back | the engine (#9) | separate; the pressure effect calls `store.compact()` when a store has it |
+| The Memory tool, with usage by graph, class and host structure, the engines' live estimate and Compact now | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
+| The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime), and network capture on the shared module | #537 | built |
+| Engine compaction: giving wasm memory back | the engine (#9), `EngineStore.compact` | built; the pressure effect compacts when it would win, and `ret:CompactNow` asks for it |
 | Cold graphs offloaded or unloaded under pressure; `per:retention` as `ret:Within`; toasts that wait for acknowledgement | | not yet |
 
 ## 8. Using retention
@@ -551,8 +551,10 @@ effect (`src/retention/pressure.ts`, attached by `mount`) measures in idle time,
 - otherwise, an estimate from the store's size.
 
 It writes `ret:level` (`ret:Normal`, `ret:Elevated` from `ret:elevatedAt`, default 0.8, `ret:Critical`
-from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:triples`,
-`ret:derivedTriples`, `ret:evicted`) into `urn:semblance:retention`. Each level is answered in this
+from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:liveMiB`,
+`ret:compactedMiB`, `ret:triples`, `ret:derivedTriples`, `ret:evicted`) into
+`urn:semblance:retention`. `ret:liveMiB` is the store's estimate of what its live state needs
+(`liveBytes`): against `ret:wasmMiB`, it says what a compaction would give back. Each level is answered in this
 order:
 
 1. **Evict derived state.** What is hidden loses its renderings in both projections, screen and
@@ -560,7 +562,8 @@ order:
    evicted: what is shown, what is `sem:warm sem:Eager`, and what is always evaluated. Evicted work
    is parked as if never shown, and a page shown again renders exactly as on a fresh visit. While
    pressure is above Normal, idle time evaluates nothing hidden ahead of time.
-2. **Compact the engines,** when the store can (`store.compact()`).
+2. **Compact the engines,** when the store can and it would win: when the live estimate is below
+   three quarters of the memory at Elevated, nine tenths at Critical (`store.compact({ below })`).
 3. **Offload history.** What was recalled goes back to storage, and at Critical so does the oldest
    half of what `ret:having` policies hold.
 4. **Raise `ret:Pressure`** on the budget, for the app's reactions to answer: raise the budget, close
@@ -569,8 +572,20 @@ order:
 5. **Ask the host** (`onRetention`) once per crossing, after a third step.
 
 `ret:simulate` on the budget (`ret:Normal`, `ret:Elevated`, `ret:Critical`, or `ret:Measured`, the
-default) makes the effect act as if a level held. `ret:request ret:Evict` or `ret:request
-ret:OffloadNow` asks for that step once, now.
+default) makes the effect act as if a level held. `ret:request` asks for one step once, now:
+`ret:Evict`, `ret:OffloadNow`, `ret:CompactNow` (whatever it would win), or `ret:Measure`.
+
+**Usage** is measured only when `ret:Measure` asks, since it counts everything. The store's own
+SPARQL does the counting, so nothing is copied out of it. Each measurement replaces the last with
+`ret:Usage` nodes minted under the budget:
+
+- `ret:GraphUsage`: the triples of each graph (`ret:graph`, `ret:DefaultGraph` for the default one);
+- `ret:ClassUsage`: the classes with the most instances, in every graph (`ret:class`, `ret:name` its
+  prefixed name, `ret:instances`; `ret:usageLimit` of them, default 25);
+- `ret:StructureUsage`: the entries of each host structure by name (`screen.engine.refs`,
+  `text.index.nodes`, `views.refs`, and the runtime's and store's where they report a `footprint()`).
+
+`ret:measuredAt` says when. An app's own view reads them like any other triples.
 
 Measured on the site: a visit of every page holds 1,107k triples. Evicting at Critical leaves 180k
 (147k at start), and every page shown again is byte-identical to a fresh render
@@ -608,10 +623,17 @@ The site's Tools window (⌘.) has a **Memory** tab, which is a view of the same
 - the level and the figures (`c:Metrics` of `ui:memoryBudget`);
 - the maximum, a slider the budget follows (`ret:maxFrom`);
 - a choice that simulates a level;
-- Evict hidden views and Offload history, which are `c:Setter`s writing `ret:request`;
-- every stream's horizon, with Show older.
+- Evict hidden views, Offload history, Compact engine memory and Measure usage, which are
+  `c:Setter`s writing `ret:request`;
+- every stream's horizon, with Show older;
+- what the last measurement found: tables by graph, by class and by host structure (`c:Table`s over
+  the `ret:Usage` nodes).
+- remembered state the browser refused to store (`per:unsaved`), which stays the earlier copy until
+  a later write succeeds.
 
 Simulate Critical on a long visit to watch the derived triples fall and the announcement arrive.
+After it, Engine memory against Engine live state shows what Compact engine memory would give back,
+and Measure usage shows where what is left is.
 
 ### 8.8 Testing an app under pressure
 

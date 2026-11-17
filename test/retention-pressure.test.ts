@@ -74,6 +74,55 @@ describe('the memory budget (ret:MemoryBudget)', () => {
     expect(h.store.match(h.f.namedNode(BUDGET), h.f.namedNode(RET + 'request'), null)).toHaveLength(0)
   })
 
+  it('measures usage by graph, class and host structure on request, replacing the last measurement', async () => {
+    const h = mounted()
+    const f = h.f
+    const g = f.namedNode(RETENTION_GRAPH)
+    const usage = (kind: string) =>
+      h.store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(RET + kind), g).map((q) => {
+        const one = (p: string) => h.store.match(q.subject, f.namedNode(RET + p), null, g)[0]?.object
+        return { of: (one('graph') ?? one('class') ?? one('structure'))!.value, n: Number((one('triples') ?? one('instances') ?? one('entries'))!.value) }
+      })
+    await h.pressure.step()
+    expect(usage('GraphUsage')).toHaveLength(0)
+    h.set('request', f.namedNode(RET + 'Measure'))
+    await h.pressure.step()
+    expect(h.store.match(f.namedNode(BUDGET), f.namedNode(RET + 'request'), null)).toHaveLength(0)
+    const graphs = usage('GraphUsage')
+    const triples = (iri: string) => graphs.find((u) => u.of === iri)?.n ?? 0
+    // The default graph holds the ontology and the app; the events graph what was raised; the budget's figures are in the retention graph.
+    expect(triples(RET + 'DefaultGraph')).toBeGreaterThan(1000)
+    expect(triples(RETENTION_GRAPH)).toBeGreaterThan(0)
+    expect(graphs.every((u) => u.n > 0)).toBe(true)
+    const classes = usage('ClassUsage')
+    expect(classes.length).toBeGreaterThan(0)
+    expect(classes.length).toBeLessThanOrEqual(25)
+    expect(classes.map((c) => c.n)).toEqual([...classes.map((c) => c.n)].sort((a, b) => b - a))
+    expect(usage('StructureUsage').map((u) => u.of)).toContain('screen.engine.refs')
+    expect(h.figure('measuredAt')).toMatch(/^\d{4}-\d\d-\d\dT/)
+    // Measured again: the same nodes, replaced, not added to.
+    const nodes = h.store.match(null, f.namedNode(RET + 'usageOf'), null, g).length
+    h.set('request', f.namedNode(RET + 'Measure'))
+    await h.pressure.step()
+    expect(h.store.match(null, f.namedNode(RET + 'usageOf'), null, g).length).toBe(nodes)
+    expect(usage('GraphUsage').filter((u) => u.of === RET + 'DefaultGraph')).toHaveLength(1)
+  })
+
+  it('compacts the engine on request and says what it gave back, beside the live estimate', async () => {
+    const h = mounted()
+    const f = h.f
+    // Grow the engine's memory with what then goes: compaction has something to give back.
+    const junk = Array.from({ length: 60_000 }, (_, i) => f.quad(f.namedNode(`https://example.org/junk#${i}`), f.namedNode('https://example.org/junk#p'), f.literal('a value long enough to take room ' + i)))
+    for (const q of junk) h.store.add(q)
+    for (const q of junk) h.store.delete(q)
+    await h.pressure.step()
+    expect(Number(h.figure('liveMiB'))).toBeGreaterThan(0)
+    expect(h.figure('compactedMiB')).toBe('0.0')
+    h.set('request', f.namedNode(RET + 'CompactNow'))
+    await h.pressure.step()
+    expect(Number(h.figure('compactedMiB'))).toBeGreaterThan(0)
+  })
+
   it('raises ret:Pressure for reactions after its own steps, then asks the host, once a crossing', async () => {
     const h = mounted()
     h.use(150)
