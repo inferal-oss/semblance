@@ -68,6 +68,29 @@ describe('the reference source server', () => {
     expect(got).toHaveLength(2)
   })
 
+  it('answers a write sent again as it did, without applying it twice', () => {
+    const s = new SourceServer({ writeIds: 2 })
+    s.load(PREFIX + `ex:a rdfs:label "A" .`)
+    const { got } = follow(s, TODOS.concat({ subject: EX + 'a' }))
+    const w = { id: 'w1', add: nt(`ex:a ex:seen true`), remove: '' }
+    const first = s.write(w)
+    // Another client takes it out; the page, which never heard the answer, sends the write again.
+    s.change({ add: [], remove: ttl(`ex:a ex:seen true`) })
+    expect(s.write(w)).toEqual(first)
+    expect(s.store.getQuads(f.namedNode(EX + 'a'), f.namedNode(EX + 'seen'), null, null)).toHaveLength(0)
+    expect(got.filter((m) => m.data.write === 'w1')).toHaveLength(1)
+    // A refused write changed nothing: sent again, it is judged again.
+    const stale = { id: 'w2', add: nt(`ex:a rdfs:label "B"`), remove: nt(`ex:a rdfs:label "Z"`) }
+    expect(s.write(stale).ok).toBe(false)
+    s.change({ add: ttl(`ex:a rdfs:label "Z"`), remove: [] })
+    expect(s.write(stale).ok).toBe(true)
+    // It remembers the latest `writeIds` ids: an older one is a new write again.
+    s.write({ id: 'w3', add: nt(`ex:a ex:n 3`), remove: '' })
+    s.write({ id: 'w4', add: nt(`ex:a ex:n 4`), remove: '' })
+    expect(s.write(w)).not.toEqual(first)
+    expect(s.store.getQuads(f.namedNode(EX + 'a'), f.namedNode(EX + 'seen'), null, null)).toHaveLength(1)
+  })
+
   it('refuses what its validation refuses', () => {
     const s = new SourceServer({ validate: ({ add }) => (add.some((q) => q.object.value.length > 3) ? 'too long' : undefined) })
     s.load(PREFIX + `ex:a rdfs:label "A" .`)

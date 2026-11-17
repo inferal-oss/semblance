@@ -134,7 +134,7 @@ storage). It also has a back side, like every view.
   (`<prefix>~declared`). Only keys under the effect's own prefix are swept, and
   of those only what is remembered state: the prefix is the app's namespace
   (two apps on one origin give each its own `prefix`). `sweep: false` turns it
-  off. See docs/RETENTION.md §8.10.
+  off. See docs/RETENTION.md §8.11.
 
 ## Open questions for you
 

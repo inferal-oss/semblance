@@ -1,4 +1,4 @@
-// Which pages of this browser are open (docs/RETENTION.md §8.10). A sweep of stored keys must leave
+// Which pages of this browser are open (docs/RETENTION.md §8.11). A sweep of stored keys must leave
 // what a page that is still open uses: another tab of the app, maybe of another version. Each page
 // marks itself open, under a name of its owner's (a prefix) and its run, for as long as it lives;
 // a page about to remove what another page wrote reads the marks first. In a browser the marks are

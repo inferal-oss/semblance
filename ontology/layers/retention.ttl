@@ -10,6 +10,8 @@
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix net: <https://semblance.dev/ns/network#> .
 @prefix src: <https://semblance.dev/ns/source#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix ldes: <https://w3id.org/ldes#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -49,7 +51,22 @@ ret:UntilAcknowledged a owl:Class ; rdfs:subClassOf ret:Policy ;
 ret:acknowledged a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "On a member (in the input graph): a person acknowledged it, by dismissing its toast. It leaves with the member, and is offloaded with it."@en .
 beh:LatestMembersPolicy rdfs:subClassOf ret:Latest .
+
+# LDES's own policies (LDES 1.0, §4.4), read as LDES defines them. Only the duration is a ret:Within;
+# the other two keep by other measures, so they are policies of their own, not ret:Latest or ret:Within.
 ldes:DurationAgoPolicy rdfs:subClassOf ret:Within .
+ldes:PointInTimePolicy rdfs:subClassOf ret:Policy ;
+    rdfs:comment "Keeps the members appended from its ldes:pointInTime (an xsd:dateTime) on."@en .
+ldes:LatestVersionSubset rdfs:subClassOf ret:Policy ;
+    rdfs:comment """Keeps the ldes:amount (default 1) most recent members of each entity: the value of the stream's
+ldes:versionOfPath on a member names the entity it is a version of; without one, each member is its own. Not a
+ret:Latest, whose ldes:amount counts members of the stream."""@en .
+
+ret:pinned a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "Pinned"@en , "Закріплено"@uk , "Angeheftet"@de , "مثبّت"@ar ;
+    rdfs:comment """On a member (in the input graph): a person keeps it. No policy and no memory pressure lets it go
+while ret:pinned true is stated; once that statement goes, it leaves as the stream's policies would have let it
+go. A pinned member counts as in memory on its horizon."""@en .
 
 ret:having a owl:ObjectProperty ; rdfs:domain ret:Policy ; rdfs:range rdf:Property ;
     rdfs:comment """The policy keeps only members that have one of these properties (on the member, in the
@@ -95,6 +112,34 @@ offloaded members, into the live graph. Performed and removed by the retention e
 policy (per:Policy), the persistence effect brings back this many of the most recent triples its retention set
 aside, never over a value the graph holds now."""@en .
 ret:recalls a owl:ObjectProperty ; rdfs:comment "On a rendered element: the stream whose offloaded members activating it recalls."@en .
+
+# --- references to a member ----------------------------------------------------------------------------
+
+# A member that leaves memory takes with it the statements elsewhere that point at it, through the
+# properties marked here: left behind, they would point at nothing and keep the member's name and
+# their own triples alive. Each is found by the store's match on (?, property, member), so retiring a
+# member costs what refers to it, never a scan. One that is offloaded keeps those of its stream's graph
+# with it in storage, and a recall brings each back where the member it is on is in memory again (a
+# walk from the log's head, beh:previous, goes on into what came back). Those of other graphs (state,
+# provenance in another log) go for good.
+ret:Reference a owl:Class ; rdfs:subClassOf rdf:Property ;
+    rdfs:comment """A property whose object can be a member of a retained stream. When a member leaves memory, dropped or
+offloaded, every statement of such a property that points at it leaves too, in whatever graph it is. Offloaded, those
+in the stream's graph are stored with it, and recalled with it where the member they are on is in memory."""@en .
+
+# The framework's own. An app marks its own properties the same way.
+beh:previous a ret:Reference .        # a member's predecessor in its log
+beh:raisedBy a ret:Reference .        # a raised event's raiser
+beh:continued a ret:Reference .       # the member a continuing step's change was recorded on
+beh:undone a ret:Reference .          # on a log (input graph): an undone member, whose redo leaves with it
+dnd:refusedBy a ret:Reference .       # on a draggable (input graph): the refusal of its last drop
+c:refusedBy a ret:Reference .         # the same, on a board's card
+sem:lastHang a ret:Reference .        # on a watchdog (input graph): the latest sem:Unresponsive event
+sem:about a ret:Reference .           # on a stall event: its record, a member of the stall log
+sem:startedBy a ret:Reference .       # on a stall record: the change-log member that started the turn
+prov:wasInformedBy a ret:Reference .  # on a state or sync log member: the change-log member that led to it
+src:of a ret:Reference .              # on a sync log's src:Confirmed or src:Refused: the src:Write it answers
+net:connection a ret:Reference .      # on a captured WebSocket frame: its connection's entry
 
 # --- announcing a horizon ------------------------------------------------------------------------------
 

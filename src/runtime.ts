@@ -101,7 +101,8 @@ export class Runtime {
 
   constructor(readonly store: GraphStore) {
     this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH, RETENTION_GRAPH], functions: viewFunctions })
-    this.retention = new Retention(store, (d) => void this.write(RETENTION_GRAPH, d), { run: this.run, pages: () => this.pages, loaded: () => this.graphsLoaded })
+    // References to a leaving member in other graphs (ret:Reference) leave through the runtime, as any change does.
+    this.retention = new Retention(store, (d) => void this.write(RETENTION_GRAPH, d), { run: this.run, pages: () => this.pages, loaded: () => this.graphsLoaded }, (graph, d) => void (graph === undefined ? this.apply(d) : this.write(graph, d)))
     this.onEnd(() => this.retention.stop())
     // A reaction asks for offloaded history back (`?stream ret:recall ?n`, Show older): the request is
     // performed, then removed.

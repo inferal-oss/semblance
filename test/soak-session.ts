@@ -2,6 +2,7 @@ import { appendFileSync } from 'node:fs'
 import type { StoreKind } from '../src/node/load.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { mountShellPrepared } from './harness.ts'
+import { dangling, watchRetired } from './retired.ts'
 
 /**
  * The shell soak's session (test/soak.test.ts, test/soak-stores.test.ts): the demo's whole
@@ -20,6 +21,8 @@ export function shellSoak(kind: StoreKind, prefer: 'sparql' | 'function', { warm
   const amount = f.namedNode('https://w3id.org/ldes#amount')
   for (const q of h.store.match(undo, amount, null)) h.store.delete(q)
   h.store.add(f.quad(undo, amount, f.literal('60', f.namedNode('http://www.w3.org/2001/XMLSchema#integer'))))
+  // Every member the streams let go, to find what still points at one at the end (ret:Reference).
+  const retired = watchRetired(h.runtime)
   const button = (text: string) => {
     const all = [...document.querySelectorAll('button, [role=tab]')]
     return (all.find((b) => b.textContent!.trim() === text) ?? all.find((b) => b.textContent!.trim().endsWith(text))) as HTMLElement
@@ -120,7 +123,7 @@ export function shellSoak(kind: StoreKind, prefer: 'sparql' | 'function', { warm
     const pick = (x: Record<string, number>) => `${x.triples} triples, ${x.terms ?? x['store.terms']} terms, ${x['engine.refs']} refs, ${x['index.nodes']} index nodes`
     appendFileSync(process.env.SOAK_LOG, `${kind} (${prefer}), ${(warmUp + measured) * PERIOD} events: after warm-up ${pick(warm)}; at the end ${pick(after)}; ms per event ${early.toFixed(1)} -> ${late.toFixed(1)}${wasmByPeriod.length ? `; wasm MiB by period ${mib(wasmWarm!)} | ${wasmByPeriod.map(mib).join(' ')}` : ''}\n`)
   }
-  return { h, warm, after, grew, early, late, wasmWarm, wasmByPeriod, events: (warmUp + measured) * PERIOD }
+  return { h, warm, after, grew, early, late, wasmWarm, wasmByPeriod, events: (warmUp + measured) * PERIOD, retired, dangling: () => dangling(h.store, retired) }
 }
 
 /**

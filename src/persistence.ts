@@ -878,7 +878,7 @@ export class Persistence {
   }
 
   /**
-   * Remove what policies no longer declared left in storage (docs/RETENTION.md §8.10). Once per page
+   * Remove what policies no longer declared left in storage (docs/RETENTION.md §8.11). Once per page
    * load, once every declared graph has loaded (the runtime's graphsLoaded: a graph loaded later may
    * declare a policy whose state is stored), in idle time. Resolves to the keys removed.
    *

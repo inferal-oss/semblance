@@ -1,4 +1,4 @@
-// Stale storage keys are swept once every declared graph has loaded (docs/RETENTION.md §8.10): what a
+// Stale storage keys are swept once every declared graph has loaded (docs/RETENTION.md §8.11): what a
 // policy no longer declared left in storage, kept files no graph names, and what closed pages
 // offloaded (test/retention.test.ts). Nothing is swept before a graph loaded later is in (it may
 // declare what is stored), nothing another open page may use, and nothing under the prefix that is

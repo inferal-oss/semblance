@@ -121,7 +121,7 @@ prepareSite(store, { kind, prefer, compile })
 const runtime = new Runtime(store)
 // The graphs the page did not need first come later (loadRest): until they are in and their
 // remembered state is back, nothing sweeps storage of what no graph declares (kept files, remembered
-// state, offloaded history; docs/RETENTION.md §8.10).
+// state, offloaded history; docs/RETENTION.md §8.11).
 const graphsIn = firstGraphs ? runtime.holdGraphs() : undefined
 // History the graph's retention policies let go (the change log past its bounds) goes to IndexedDB, and
 // comes back on Show older or an undo past it (docs/RETENTION.md).

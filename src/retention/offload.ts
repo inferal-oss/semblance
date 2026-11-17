@@ -4,10 +4,13 @@
 // removes it in the same write. What leaves by ret:Offload is taken at once (its triples, as terms)
 // and written to storage in chunks, each one Jelly stream (./chunk.ts), off the interaction; until
 // a write succeeds it is held (ret:pending), so a refused write loses nothing. A recall reads chunks
-// back, newest first, and the stream puts their members back into the live graph.
+// back, newest first, and the stream puts their members back into the live graph. A member that
+// leaves takes with it the statements elsewhere that point at it (ret:Reference): those of its
+// stream's graph go to storage with it and come back with it, the others go for good.
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import { NS, RETENTION_GRAPH } from '../ns.ts'
 import type { Delta } from '../rdf.ts'
+import { applyEffective } from '../view/input.ts'
 import type { Backend } from '../persistence.ts'
 import type { GraphStore } from '../store/types.ts'
 import { whenIdle } from '../idle.ts'
@@ -108,6 +111,11 @@ export class Retention {
     /** Write a change to the retention graph (the horizons). */
     readonly report: (delta: Delta) => void,
     readonly opts: RetentionOptions = {},
+    /**
+     * Write a change to any graph (undefined: the default graph): references to a leaving member in
+     * other graphs than its stream's leave this way (a runtime's write and apply).
+     */
+    readonly write: (graph: string | undefined, delta: Delta) => void = (graph, delta) => void applyEffective(store, graph, delta),
   ) {
     this.prefix = opts.prefix ?? 'semblance:ret:'
     this.run = opts.run ?? newRun()
@@ -141,6 +149,19 @@ export class Retention {
     let s = this.streams.get(iri)
     if (!s) this.streams.set(iri, (s = new RetainedStream(this, iri, host)))
     return s
+  }
+
+  /**
+   * The properties whose statements leave with the member they point at (ret:Reference), read from
+   * the graph, so an app's own marks apply at once.
+   */
+  references(): NamedNode[] {
+    const f = this.store.factory
+    const seen = new Set<string>()
+    const out: NamedNode[] = []
+    for (const q of this.store.match(null, f.namedNode(RDF_TYPE), f.namedNode(RET + 'Reference')))
+      if (q.subject.termType === 'NamedNode' && !seen.has(q.subject.value)) seen.add(q.subject.value), out.push(q.subject)
+    return out
   }
 
   get(iri: string): RetainedStream | undefined {
@@ -256,6 +277,11 @@ export class RetainedStream {
         const p = f.namedNode(policy.iri)
         return store.match(m, f.namedNode(NS.beh + 'handledBy'), null, g).some((q) => store.match(q.object as NamedNode, said, p).length > 0)
       },
+      // A member stated ret:pinned true (in any graph: a person's reaction writes it in the input
+      // graph) is kept whatever the policies say, until that statement goes.
+      (member) => store.match(f.namedNode(member), f.namedNode(RET + 'pinned'), null).some((q) => q.object.value === 'true'),
+      // A member's entity, for ldes:LatestVersionSubset: the stream's ldes:versionOfPath on it.
+      (member, path) => store.match(f.namedNode(member), f.namedNode(path), null, g)[0]?.object.value,
     )
   }
 
@@ -281,27 +307,56 @@ export class RetainedStream {
     return this.leave(this.retention.load(members, now))
   }
 
+  /**
+   * Members leave: their closures, and the statements that point at them through a ret:Reference
+   * property (found by the store's match on each, so it costs what refers to them). Those in the
+   * stream's graph go in the caller's write, and with an offloaded member into storage; those in
+   * other graphs are written away here, once what is stored was taken.
+   */
   private leave(expired: Expiry[]): Quad[] {
     if (!expired.length) {
       this.report()
       return []
     }
-    const f = this.owner.store.factory
+    const store = this.owner.store
+    const f = store.factory
+    const g = this.host.graph
+    const references = this.owner.references()
+    const leaving = new Set(expired.map((e) => e.member.iri))
+    const elsewhere = new Map<string | undefined, Quad[]>()
     const out: Quad[] = []
     for (const { member, policy } of expired) {
-      const closure = this.host.closure(f.namedNode(member.iri))
+      const m = f.namedNode(member.iri)
+      const closure = this.host.closure(m)
       out.push(...closure)
+      const inbound: Quad[] = []
+      for (const p of references)
+        for (const q of store.match(null, p, m, null)) {
+          const here = q.graph.termType === 'NamedNode' && q.graph.value === g
+          // On a member leaving with it, it is that member's own, in its closure.
+          if (here && leaving.has(q.subject.value)) continue
+          if (here) {
+            inbound.push(q)
+            continue
+          }
+          const graph = q.graph.termType === 'DefaultGraph' ? undefined : q.graph.value
+          let qs = elsewhere.get(graph)
+          if (!qs) elsewhere.set(graph, (qs = []))
+          qs.push(q)
+        }
+      out.push(...inbound)
       if (policy?.exit === 'offload' && this.owner.backend) {
         let p = this.pending.get(policy.iri)
         if (!p) this.pending.set(policy.iri, (p = { policy, members: [], closures: [] }))
         p.members.push(member)
-        p.closures.push(this.host.storable ? this.host.storable(f.namedNode(member.iri), closure) : closure)
+        p.closures.push([...(this.host.storable ? this.host.storable(m, closure) : closure), ...inbound])
         if (policy.announce) this.cross('offloaded')
       } else {
         this.dropped++
         if (policy?.announce) this.cross('dropped')
       }
     }
+    for (const [graph, quads] of elsewhere) this.owner.write(graph, { add: [], remove: quads })
     this.schedule()
     this.report()
     return out
@@ -351,7 +406,11 @@ export class RetainedStream {
           this.refused = undefined
           p.members.splice(0, members.length)
           p.closures.splice(0, members.length)
-          this.chunks.push({ key, policy: iri, first: members[0]!.seq, count: members.length })
+          // In the stream's order, whenever it was written (what memory pressure sends back is older
+          // than what left since), so a recall finds the most recent and a trim the oldest.
+          const chunk = { key, policy: iri, first: Math.min(...members.map((m) => m.seq)), count: members.length }
+          const at = this.chunks.findIndex((c) => c.first > chunk.first)
+          this.chunks.splice(at < 0 ? this.chunks.length : at, 0, chunk)
           this.offloaded += members.length
           await this.trim(p.policy)
         }
@@ -408,7 +467,7 @@ export class RetainedStream {
    * policies keep (0: none). Removed from the graph now; written to storage as any offload is.
    */
   relieve(share: number): void {
-    const leaving = this.leave([...this.retention.releaseRecalled(), ...(share > 0 ? this.retention.shrink(share) : [])])
+    const leaving = this.leave([...this.retention.releaseRecalled(), ...(share > 0 ? this.retention.shrink(share) : [])].sort((a, b) => a.member.seq - b.member.seq))
     if (leaving.length) this.host.write({ add: [], remove: leaving })
   }
 
@@ -420,8 +479,18 @@ export class RetainedStream {
   /**
    * Bring back at least `n` of the most recent offloaded members (of one policy, or any), into the
    * live graph. Returns how many came back. What no longer fits beside them goes back to storage.
+   * One recall at a time: two at once (Undo pressed again before the first came back) would pick
+   * the same chunks and bring their members back twice.
    */
-  async recall(n: number, policy?: string): Promise<number> {
+  recall(n: number, policy?: string): Promise<number> {
+    const run = (this.recalling ?? Promise.resolve()).then(() => this.recallNow(n, policy))
+    this.recalling = run.catch(() => undefined)
+    return run
+  }
+
+  private recalling?: Promise<unknown>
+
+  private async recallNow(n: number, policy?: string): Promise<number> {
     await this.flush()
     const b = this.owner.backend
     if (!b) return 0
@@ -437,6 +506,9 @@ export class RetainedStream {
     // Newest first in storage order: recall them oldest first, as they were appended.
     picked.sort((a, b) => a.first - b.first)
     const policies = new Map(this.policies().map((p) => [p.iri, p]))
+    // References come back once every chunk is in, where both ends are members in memory then.
+    const references = new Set(this.owner.references().map((p) => p.value))
+    const referring: Quad[] = []
     let back = 0
     for (const c of picked) {
       const raw = await loadChunk(b, c.key).catch(() => undefined)
@@ -454,15 +526,25 @@ export class RetainedStream {
         await b.remove(c.key).catch(() => undefined)
         continue
       }
-      const quads = stored.quads
+      // Its key goes before its members come back: one that leaves again at once is written under
+      // the same key (its first member's), and must not be removed with this chunk.
+      await b.remove(c.key).catch(() => undefined)
+      if (this.owner.stopped) return back
+      const quads = stored.quads.filter((q) => !references.has(q.predicate.value) || (referring.push(q), false))
       const f = this.owner.store.factory
       const g = f.namedNode(this.host.graph)
       const links = stored.members.map((m) => f.quad(f.namedNode(this.iri), f.namedNode(NS.tree + 'member'), f.namedNode(m.iri), g))
       // Recalled members beyond the limit leave again (back to storage), in the same write.
       const leaving = this.leave(this.retention.recall(stored.members, policies.get(c.policy)))
       this.host.write({ add: [...quads, ...links], remove: leaving })
-      await b.remove(c.key).catch(() => undefined)
       back += c.count
+    }
+    if (referring.length && !this.owner.stopped) {
+      const store = this.owner.store
+      const member = store.factory.namedNode(NS.tree + 'member')
+      const present = (t: Term) => t.termType === 'NamedNode' && store.match(null, member, t).length > 0
+      const restored = referring.filter((q) => present(q.subject) && present(q.object))
+      if (restored.length) this.host.write({ add: restored, remove: [] })
     }
     this.report()
     return back
