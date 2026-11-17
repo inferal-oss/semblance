@@ -131,7 +131,8 @@ export interface MountOptions {
   onRetention?: OnRetention
   /**
    * Remote sources (src:Source, docs/REMOTE.md): each source's store, by the source's IRI. The graph
-   * says what a page binds to; the host, here, says where it is and with what credentials.
+   * says what a page binds to; the host, here, says where it is and with what credentials. Writes
+   * a store has not answered are kept in `retention.storage` (by default) for the next page.
    */
   sources?: Omit<RemoteSourcesOptions, 'bus' | 'onChange' | 'trusted'>
 }
@@ -370,7 +371,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const scroll = win && !(opts.navigation && opts.navigation.location) ? windowScroll(win) : undefined
   const detachNavigation = navigation?.attach(runtime, { bus, links: host, onNavigate: flush, reveal: rendererReveal(renderer), scroll })
   // Remote sources: their part of the graph is loaded, follows the stores, and is written back.
-  const sources = opts.sources && new RemoteSources(runtime, { ...opts.sources, trusted, bus, onChange: () => (flush(), scheduleWarmup()) })
+  // Writes the stores have not answered wait in the same storage as offloaded history, for the next page.
+  const sources = opts.sources && new RemoteSources(runtime, { storage: offload ?? false, ...opts.sources, trusted, bus, onChange: () => (flush(), scheduleWarmup()) })
   const detachSources = sources?.attach()
   // The memory budget: measured in idle time, answered by eviction, compaction, offloading, the app's
   // reactions and last the host (docs/RETENTION.md).

@@ -5,18 +5,27 @@
 // statements back as writes, one at a time, in order. A refused write is repaired with what the
 // store holds. The graph never names an endpoint: the host maps each source to one.
 //
+// A write the store has not answered is the person's own change, so it outlives the page: it is
+// kept in the host's storage before it is sent, and removed once the store answers it. The next
+// page sends what is still there first, in order, under the same ids, and the store recognises a
+// write it took already. Memory holds the statements of the latest few (src:PendingWrites); the
+// older ones wait in storage alone and are read back to be sent.
+//
 // What the effect knows is graph data in urn:semblance:sources (src:state, src:cursor,
-// src:pending, src:attempts, src:lastError) and members of src:SyncLog; what a page should do
-// about it is reactions to src:WentLive, src:Lost and src:WriteRefused, targeted at the source.
+// src:pending, src:unsaved, src:attempts, src:lastError) and members of src:SyncLog; what a page
+// should do about it is reactions to src:WentLive, src:Lost and src:WriteRefused, targeted at the
+// source.
 import type { Quad, Term } from '@rdfjs/types'
 import { readRetired, type Retired, retiredIn } from './retired.ts'
 import type { EventBus } from './behaviour/events.ts'
 import { BEH, NS, RDF_TYPE, SOURCES_GRAPH, XSD_INTEGER } from './ns.ts'
+import type { Backend } from './persistence.ts'
 import { type Delta, quadKey } from './rdf.ts'
 import { logStream } from './retention/offload.ts'
+import { amountOf, policiesOf } from './retention/policy.ts'
 import type { Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
-import { concerns, type DeltaMessage, fromNTriples, heldOf, type Pattern, type Snapshot, statementsOf, toNTriples, type WriteRequest, type WriteResult } from './source-protocol.ts'
+import { concerns, type DeltaMessage, fromNTriples, heldOf, type Pattern, type Snapshot, statementsOf, toNTriples, type WriteResult } from './source-protocol.ts'
 import { type Endpoint, httpTransport, type SourceTransport } from './remote-transport.ts'
 
 export { httpTransport, type Endpoint, type SourceTransport } from './remote-transport.ts'
@@ -26,6 +35,11 @@ const PROV = NS.prov
 const ST_BUSY = NS.st + 'busy'
 const XSD_BOOLEAN = NS.xsd + 'boolean'
 const XSD_DATETIME = NS.xsd + 'dateTime'
+
+/** What the stored keys of writes waiting for a store start with; then the source's IRI (encoded), `|` and the write's place in order. */
+export const PENDING_PREFIX = 'semblance:src:'
+/** How many waiting writes' statements memory holds, when the graph's src:PendingWrites says nothing. */
+const IN_MEMORY = 100
 
 export interface RemoteSourcesOptions {
   /** Each source's store, by the source's IRI. A source without one stays src:Unbound. */
@@ -44,13 +58,43 @@ export interface RemoteSourcesOptions {
    * cannot widen a source the host bound; the runtime's store otherwise.
    */
   trusted?: GraphStore
+  /**
+   * Where writes the store has not answered are kept, so the next page sends them (it needs `keys`):
+   * by default the runtime's retention storage (mount gives this browser's IndexedDB); false keeps
+   * them in memory only, and a reload loses them.
+   */
+  storage?: Backend | false
 }
 
+/** A write waiting for the store: sent, or not yet. */
 interface Queued {
   id: string
   member: Term
-  add: Quad[]
-  remove: Quad[]
+  /** Its statements as they are sent, while memory holds them; past src:PendingWrites's bound they are read back from storage. */
+  nt?: { add: string; remove: string }
+  added: number
+  removed: number
+  /** When it was made (ms). */
+  at: number
+  /** Its place in the queue: less Bound.shifted, its index. */
+  n: number
+  /** Its key in storage, and the write that puts it there (false: storage refused it). */
+  key?: string
+  saved?: Promise<boolean>
+  stored?: boolean
+  unsaved?: boolean
+}
+
+/** A waiting write as storage keeps it. */
+interface StoredWrite {
+  v: 1
+  id: string
+  member: string
+  at: number
+  add: string
+  remove: string
+  added: number
+  removed: number
 }
 
 interface Bound {
@@ -67,6 +111,13 @@ interface Bound {
   lastError?: string
   batch?: { add: Quad[]; remove: Quad[] }
   queue: Queued[]
+  /** Writes taken off the head of the queue (less those an earlier page left, put before it). */
+  shifted: number
+  /** Waiting writes storage refused: in memory alone. */
+  unsaved: number
+  /** Reading back what an earlier page left waiting; nothing is sent before it is done. */
+  restored?: Promise<void>
+  restoring?: boolean
   sending?: Promise<void>
 }
 
@@ -80,6 +131,12 @@ export class RemoteSources {
   private applying = 0
   private stopped = false
   private seq = 0
+  /** This page's own, so its write ids differ from every other page's. */
+  private readonly run = globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36) + Math.random().toString(36).slice(2)
+  private stamp = 0
+  private storage?: Backend
+  /** How many waiting writes' statements memory holds (src:PendingWrites). */
+  private inMemory = IN_MEMORY
   private readonly members: Term[] = []
   private readonly controller = new AbortController()
   private detach?: () => void
@@ -99,18 +156,22 @@ export class RemoteSources {
   /** Bind every src:Source in the graph and start following them. Returns a function that stops it (stop()). */
   attach(): () => void {
     this.bound = this.read()
+    const storage = this.opts.storage === false ? undefined : (this.opts.storage ?? this.runtime.retention.backend)
+    this.storage = storage?.keys ? storage : undefined
+    // Pending writes are owned: a policy bounds only what memory holds of them, whatever its exit says.
+    this.inMemory = amountOf(policiesOf(this.opts.trusted ?? this.runtime.store, this.nn(SRC + 'PendingWrites')), IN_MEMORY)
     const stopInput = this.runtime.onInput((graph, delta) => this.changed(graph, delta))
     const stopEnd = this.runtime.onEnd(() => this.stop())
     this.detach = () => (stopInput(), stopEnd())
     for (const s of this.bound) {
       if (!s.transport) this.report(s, SRC + 'Unbound')
-      else this.report(s, SRC + 'Loading'), void this.follow(s)
+      else this.report(s, SRC + 'Loading'), (s.restored = this.restore(s)), void this.follow(s)
     }
     this.opts.onChange?.()
     return () => this.stop()
   }
 
-  /** Stop following and sending: what is waiting stays unsent. */
+  /** Stop following and sending: what is waiting stays unsent, and in storage for the next page. */
   stop(): void {
     if (this.stopped) return
     this.stopped = true
@@ -122,9 +183,9 @@ export class RemoteSources {
   async settled(): Promise<void> {
     for (;;) {
       await Promise.resolve()
-      const busy = this.bound.filter((s) => s.batch || s.sending)
+      const busy = this.bound.filter((s) => s.batch || s.sending || s.restoring)
       if (!busy.length || this.stopped) return
-      await Promise.all(busy.map((s) => s.sending))
+      await Promise.all(busy.map((s) => s.sending ?? s.restored))
     }
   }
 
@@ -153,6 +214,8 @@ export class RemoteSources {
         transport: endpoint === undefined ? undefined : isTransport(endpoint) ? endpoint : httpTransport(endpoint),
         attempts: 0,
         queue: [],
+        shifted: 0,
+        unsaved: 0,
       }
     })
   }
@@ -293,30 +356,127 @@ export class RemoteSources {
     const removed = new Map(batch.remove.map((q) => [quadKey(q), q]))
     for (const k of [...added.keys()]) if (removed.delete(k)) added.delete(k)
     if (!added.size && !removed.size) return
-    const id = `${Date.now().toString(36)}-${++this.seq}`
+    // Unique to the write across pages and reloads: the store recognises one it took already.
+    const id = `${this.run}-${++this.seq}`
     const member = this.record(SRC + 'Write', s, { added: added.size, removed: removed.size, cause: true })
-    s.queue.push({ id, member, add: [...added.values()], remove: [...removed.values()] })
+    const nt = { add: toNTriples(added.values()), remove: toNTriples(removed.values()) }
+    const w: Queued = { id, member, nt, added: added.size, removed: removed.size, at: Date.now(), n: s.shifted + s.queue.length }
+    s.queue.push(w)
+    this.save(s, w)
+    this.release(s, s.queue[s.queue.length - 1 - this.inMemory])
     this.report(s)
     this.send(s)
   }
 
+  /** The stored keys of a source's waiting writes start with this. */
+  private prefixOf(s: Bound) {
+    return `${PENDING_PREFIX}${encodeURIComponent(s.iri)}|`
+  }
+
+  /** Keep a write in storage before it is sent: one key per write, so it costs the write, not what waits. */
+  private save(s: Bound, w: Queued) {
+    const b = this.storage
+    if (!b) return
+    // In order: the time (never going back within the page), the page's own count, the page.
+    this.stamp = Math.max(this.stamp, w.at)
+    w.key = `${this.prefixOf(s)}${this.stamp.toString(36).padStart(10, '0')}-${this.seq.toString(36).padStart(8, '0')}-${this.run}`
+    const kept: StoredWrite = { v: 1, id: w.id, member: w.member.value, at: w.at, add: w.nt!.add, remove: w.nt!.remove, added: w.added, removed: w.removed }
+    w.saved = b.set(w.key, JSON.stringify(kept)).then(
+      () => {
+        w.stored = true
+        if (s.queue.length - 1 - (w.n - s.shifted) >= this.inMemory) this.release(s, w)
+        return true
+      },
+      () => {
+        // A full storage (a quota): the write waits in memory alone, and the page says so (src:unsaved).
+        w.key = undefined
+        w.unsaved = true
+        s.unsaved++
+        if (!this.stopped) this.report(s), this.opts.onChange?.()
+        return false
+      },
+    )
+  }
+
+  /** Memory lets a stored write's statements go once more writes than src:PendingWrites keeps wait behind it. */
+  private release(s: Bound, w: Queued | undefined) {
+    if (w?.stored && w !== s.queue[0]) w.nt = undefined
+  }
+
+  /** A write's statements: in memory, or read back from storage (undefined: gone, another page of the app had it answered). */
+  private async statements(w: Queued): Promise<{ add: string; remove: string } | undefined> {
+    if (w.nt) return w.nt
+    const v = w.key ? await this.storage?.get(w.key).catch(() => undefined) : undefined
+    const kept = v ? parseStored(v) : undefined
+    return kept && { add: kept.add, remove: kept.remove }
+  }
+
+  /** What an earlier page left waiting for this source: put before what this page has queued, in the order it was made. */
+  private async restore(s: Bound): Promise<void> {
+    const b = this.storage
+    if (!b || !s.writable) return
+    s.restoring = true
+    try {
+      const keys = (await b.keys!(this.prefixOf(s))).sort()
+      const values = await Promise.all(keys.map((k) => b.get(k).catch(() => undefined)))
+      if (this.stopped) return
+      const found: Queued[] = []
+      keys.forEach((key, i) => {
+        const kept = values[i] ? parseStored(values[i]!) : undefined
+        if (kept) found.push({ id: kept.id, member: this.nn(kept.member), nt: { add: kept.add, remove: kept.remove }, added: kept.added, removed: kept.removed, at: kept.at, n: 0, key, stored: true })
+      })
+      if (!found.length) return
+      s.shifted -= found.length
+      found.forEach((w, i) => (w.n = s.shifted + i))
+      s.queue.unshift(...found)
+      // Each is a src:Write of this page's log again, under the IRI it had: its answer names it.
+      for (const w of found) this.record(SRC + 'Write', s, { added: w.added, removed: w.removed, member: w.member, at: w.at })
+      // Memory holds the latest src:PendingWrites keeps; the rest are read back when they are sent.
+      found.forEach((w, i) => s.queue.length - 1 - i >= this.inMemory && this.release(s, w))
+      this.report(s)
+      this.opts.onChange?.()
+    } catch {
+      // A storage that cannot be read: nothing is sent again (what it holds stays there).
+    } finally {
+      s.restoring = false
+      if (s.queue.length && !this.stopped) this.send(s)
+    }
+  }
+
+  /** The head of the queue was answered (or is gone): off the queue, and out of storage. */
+  private shift(s: Bound) {
+    const w = s.queue.shift()!
+    s.shifted++
+    if (w.unsaved) s.unsaved--
+    if (w.key) void this.storage?.remove(w.key).catch(() => {})
+  }
+
   /** Send a source's writes one at a time, in order; one the store cannot be reached for waits and is sent again. */
   private send(s: Bound) {
-    if (s.sending) return
+    if (s.sending || s.restoring) return
     s.sending = (async () => {
       let failures = 0
       while (s.queue.length && !this.stopped) {
         const w = s.queue[0]!
+        // Kept in storage before it is attempted (a storage that refuses it does not hold it up).
+        if (w.saved) await w.saved
+        const nt = await this.statements(w)
+        if (this.stopped) return
+        if (!nt) {
+          this.shift(s)
+          this.report(s)
+          continue
+        }
         let result: WriteResult
         try {
-          result = await s.transport!.write({ id: w.id, add: toNTriples(w.add), remove: toNTriples(w.remove) }, this.controller.signal)
+          result = await s.transport!.write({ id: w.id, add: nt.add, remove: nt.remove }, this.controller.signal)
         } catch {
           if (this.stopped) return
           await this.delay(++failures)
           continue
         }
         failures = 0
-        s.queue.shift()
+        this.shift(s)
         if (this.stopped) return
         if (result.ok) {
           this.record(SRC + 'Confirmed', s, { of: w.member, cursor: result.cursor })
@@ -340,12 +500,13 @@ export class RemoteSources {
     const store = this.runtime.store
     const g = this.nn(SOURCES_GRAPH)
     const int = (n: number) => f.literal(String(n), this.nn(XSD_INTEGER))
-    const props = ['state', 'cursor', 'pending', 'attempts', 'lastError'].map((p) => SRC + p)
+    const props = ['state', 'cursor', 'pending', 'unsaved', 'attempts', 'lastError'].map((p) => SRC + p)
     const remove = props.flatMap((p) => store.match(s.node, this.nn(p), null, g))
     const add: Quad[] = []
     if (state) add.push(f.quad(s.node, this.nn(SRC + 'state'), this.nn(state)))
     if (s.cursor !== undefined) add.push(f.quad(s.node, this.nn(SRC + 'cursor'), int(s.cursor)))
     add.push(f.quad(s.node, this.nn(SRC + 'pending'), int(s.queue.length + (s.batch ? 1 : 0))))
+    if (s.unsaved) add.push(f.quad(s.node, this.nn(SRC + 'unsaved'), int(s.unsaved)))
     add.push(f.quad(s.node, this.nn(SRC + 'attempts'), int(s.attempts)))
     if (s.lastError) add.push(f.quad(s.node, this.nn(SRC + 'lastError'), f.literal(s.lastError)))
     const keep = new Set(add.map(quadKey))
@@ -367,17 +528,18 @@ export class RemoteSources {
   }
 
   /** A member of src:SyncLog (bounded by its policies in the graph, or by the host's logSize). */
-  private record(kind: string, s: Bound, about: { added?: number; removed?: number; cursor?: number; reset?: boolean; of?: Term; reason?: string; cause?: boolean }): Term {
+  private record(kind: string, s: Bound, about: { added?: number; removed?: number; cursor?: number; reset?: boolean; of?: Term; reason?: string; cause?: boolean; member?: Term; at?: number }): Term {
     const f = this.f
     const store = this.runtime.store
     const g = this.nn(SOURCES_GRAPH)
     const int = (n: number) => f.literal(String(n), this.nn(XSD_INTEGER))
-    const m = this.nn(`${s.iri}/~sync-${Date.now().toString(36)}-${++this.seq}`)
+    const at = about.at ?? Date.now()
+    const m = about.member ?? this.nn(`${s.iri}/~sync-${Date.now().toString(36)}-${++this.seq}`)
     const log = this.nn(SRC + 'SyncLog')
     const add = [
       f.quad(m, this.nn(RDF_TYPE), this.nn(kind)),
       f.quad(m, this.nn(SRC + 'source'), s.node),
-      f.quad(m, this.nn(PROV + 'generatedAtTime'), f.literal(new Date().toISOString(), this.nn(XSD_DATETIME))),
+      f.quad(m, this.nn(PROV + 'generatedAtTime'), f.literal(new Date(at).toISOString(), this.nn(XSD_DATETIME))),
       f.quad(log, this.nn(NS.tree + 'member'), m),
     ]
     if (about.added !== undefined) add.push(f.quad(m, this.nn(SRC + 'added'), int(about.added)))
@@ -401,7 +563,7 @@ export class RemoteSources {
       // Bounded by its policies in the graph (src:SyncLogView), as every retained stream is (docs/RETENTION.md).
       const runtime = this.runtime
       const stream = logStream(runtime.retention, SRC + 'SyncLog', SOURCES_GRAPH, (d) => runtime.write(SOURCES_GRAPH, d))
-      remove.push(...stream.append({ iri: m.value, seq: this.seq, at: Date.now() }))
+      remove.push(...stream.append({ iri: m.value, seq: ++this.seq, at }))
     }
     this.applying++
     try {
@@ -422,5 +584,15 @@ export class RemoteSources {
       console.error(`[semblance] a reaction to <${type}> of <${s.iri}> failed`, e)
     }
     this.opts.onChange?.()
+  }
+}
+
+/** A waiting write as storage gave it back, or undefined when it is not one. */
+function parseStored(v: string): StoredWrite | undefined {
+  try {
+    const w = JSON.parse(v) as StoredWrite
+    return w?.v === 1 && typeof w.id === 'string' && typeof w.member === 'string' && typeof w.add === 'string' && typeof w.remove === 'string' ? w : undefined
+  } catch {
+    return undefined
   }
 }
