@@ -106,9 +106,9 @@ describe('the site', () => {
     expect(document.body.textContent).not.toContain('an experiment in ontologically defined interfaces')
   })
 
-  it.each(['sparql', 'function'] as const)('links to its source from the app bar, the GitHub mark named for assistive technology (%s)', (prefer) => {
+  it.each(['sparql', 'function'] as const)('links to its source from the app bar\'s corner, the GitHub mark named for assistive technology (%s)', (prefer) => {
     const h = mountSite('oxigraph', prefer)
-    const source = () => h.document.querySelector('[data-sem-c=app-bar] > .sem-actions > [data-sem-c=link]')!
+    const source = () => h.document.querySelector('[data-sem-c=app-bar] > .sem-end > [data-sem-c=link]')!
     const link = source()
     expect(link.localName).toBe('a')
     expect(link.getAttribute('href')).toBe('https://github.com/inferal-oss/semblance')
@@ -124,9 +124,13 @@ describe('the site', () => {
     expect(mark.getAttribute('aria-hidden')).toBe('true')
     expect(mark.getAttribute('viewBox')).toBe('0 0 16 16')
     expect(mark.querySelector('path')!.getAttribute('fill')).toBe('currentColor')
-    // After the search, before the folded tools; and still there on another page.
-    expect(link.previousElementSibling!.getAttribute('data-sem-c')).toBe('button')
-    expect(link.nextElementSibling!.className).toBe('sem-more')
+    // In the corner (c:endActions): the bar's last part, after the actions and the folded tools; and
+    // still there on another page.
+    const end = link.parentElement!
+    expect([...end.children]).toEqual([link])
+    expect(end.parentElement!.lastElementChild).toBe(end)
+    expect(end.previousElementSibling!.className).toBe('sem-actions')
+    expect(end.previousElementSibling!.lastElementChild!.className).toBe('sem-more')
     h.fire([...h.document.querySelectorAll('[data-sem-c=app-bar] [data-sem-c=segmented] button')].find((b) => b.textContent!.trim() === 'Docs')!, 'click')
     expect(h.value(UI + 'page')).toBe(UI + 'Docs')
     expect(source().getAttribute('href')).toBe('https://github.com/inferal-oss/semblance')

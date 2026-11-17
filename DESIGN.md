@@ -74,7 +74,8 @@ and the theme styles it once for every component that has it.
   (641–1099px) or `sty:RegularWidth` (and with several, at any of them) is compiled inside that
   `sty:WidthClass`'s media condition, after its layer's other rules. On a compact or medium
   screen the app bar is one row and folds its `c:moreActions` behind a More button (open while
-  the bar is `c:expanded`; Escape or a press outside closes it). On a compact screen a segmented control or nav list with
+  the bar is `c:expanded`; Escape or a press outside closes it), its `c:endActions` after the More button at
+  the row's end (on a wider screen, at the end of the actions' row). On a compact screen a segmented control or nav list with
   `c:compactAs c:Picker` becomes a native select of its options, the status bar is one
   scrolling line, a split view stacks and a bottom-docked frame keeps to half the screen.
 - **Fields** — every labelled field has one anatomy: its label, its control (the single-line
