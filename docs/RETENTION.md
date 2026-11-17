@@ -340,14 +340,34 @@ history starts.
 
 1. **Writes before it removes.** What leaves goes to an IndexedDB store of the app (a `per:Database`
    scope) as Jelly frames, keyed by the retained thing and a range (sequence numbers for a stream,
-   a graph name for a cold graph). The triples leave the store only after that write succeeds. A
-   refused write is `ret:Pressure` (§6.3), never a silent drop.
+   a graph name for a cold graph). Until that write succeeds, what left waits in memory
+   (`ret:pending`). A refused write is `ret:Pressure` (§6.3), never a silent drop.
 2. **Records what it offloaded.** `ret:Horizon` gains `ret:offloaded` (a count) and the ranges
    held. Views read them, so a log view can say "1,240 older events in this browser · Show".
 3. **Loads back on demand.** A `ret:Recall` request names a range, written by a reaction (Show,
    Undo past the horizon, a navigation to a cold graph's page) or by the host. The effect reads the
    frames and applies them as an ordinary input delta. The recalled members are subject to the same
    policies, so recalling does not unbound memory: something colder is offloaded to make room.
+
+As built (`src/retention/chunk.ts`), a stored chunk is one Jelly stream of triples, written by the
+TypeScript codec (`src/jelly/`), so every store writes and reads it alike, N3 and Oxigraph included.
+It holds up to 64 members' closures in order, and the members themselves (IRI, sequence number,
+time) in its last frame's metadata (`semblance:members`: each IRI as what it shares with the one
+before plus the rest, sequence and time as differences). Its lookups name each IRI prefix, name and
+datatype once, so a change-log chunk of 64 members (1,215 triples) takes 14,307 bytes where it took
+167,864 as JSON with N-Triples, about a twelfth (`test/retention-jelly.test.ts`). IndexedDB holds
+it as bytes (`Backend.setBytes`); a storage of strings only (web storage) gets base64, a third
+more. Blank nodes keep their labels on the way back: an offloaded member is a minted IRI, but what
+it recorded (an undo's `rdf:Statement`, whose object is any term of the app's graph) can be a blank
+node, and a reader that scoped labels to the chunk (as an engine's `loadJelly` does) would bring
+back a different node, which the undo would then not find.
+
+A stored value says what it is, so no format marker is added: bytes, or text that is not JSON, are
+a Jelly stream (whose stream options carry the Jelly version); text that starts with `{` is a chunk
+of the earlier layout (`{ members, nt }`, the closures as N-Triples), which is still read. Chunks
+never outlive their run (a new page sweeps the keys of earlier runs), so the two only meet in a
+storage an earlier version wrote to. A chunk that cannot be read is counted as dropped, as one the
+storage lost is.
 
 Cold graphs are the same mechanism, applied to graphs instead of stream members. A graph not shown
 for a while, under pressure, is offloaded (owned graphs) or unloaded (graphs the app can fetch
@@ -410,11 +430,12 @@ Tracked in #530, linked from the Plan (#8).
 | piece | where | state |
 |---|---|---|
 | Retention policies for every stream, offload to IndexedDB, recall, horizons, announcements | `ontology/layers/retention.ttl`, `src/retention/` | built |
+| Offloaded history as Jelly frames (§6.2), bytes in IndexedDB, base64 in web storage | `src/retention/chunk.ts` | built |
 | Undo on the change log, bigger bound, recalled past it | `beh:UndoRetention`, `src/behaviour/events.ts` | built |
 | The memory budget, pressure, eviction of hidden renderings, `onRetention` | `src/retention/pressure.ts`, `Engine.evict`, `Runtime.evict` | built |
-| The Memory tool | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
-| The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime), and network capture on the shared module | #537 | separate |
-| Engine compaction: giving wasm memory back, in idle time a slice at a time (changes made meanwhile journaled and replayed) | `rdf-engine/host/store.ts` (`compact`, `compactStep`), the engine (#9) | built; the pressure effect calls `store.compact()` when a store has it, which finishes a compaction in flight at once |
+| The Memory tool, with usage by graph, class and host structure, the engines' live estimate and Compact now | the site's Tools window (`demo/app.ttl`, `ui:memoryTab`) | built |
+| The losses and leaks of §3 (remembered state on a full storage, kept files, toasts, network capture, host caches, the server's warm runtime), and network capture on the shared module | #537 | built |
+| Engine compaction: giving wasm memory back, in idle time a slice at a time (changes made meanwhile journaled and replayed) | `rdf-engine/host/store.ts` (`compact`, `compactStep`), the engine (#9) | built; the pressure effect compacts when it would win, which finishes a compaction in flight at once, and `ret:CompactNow` asks for it |
 | Cold graphs offloaded or unloaded under pressure; `per:retention` as `ret:Within`; toasts that wait for acknowledgement | | not yet |
 
 ## 8. Using retention
@@ -461,15 +482,17 @@ does.
 
 What leaves by `ret:Offload` goes through three stages:
 
-1. It is serialized as it leaves the graph, in the same write.
-2. It is written to storage in chunks of 64 members (N-Triples), off the interaction.
-3. Until a write succeeds, it waits in memory as text (`ret:pending`), so a refused write loses
-   nothing.
+1. Its triples are taken as it leaves the graph, in the same write.
+2. It is written to storage in chunks of 64 members, each one Jelly stream (§6.2), off the
+   interaction.
+3. Until a write succeeds, it waits in memory, its triples as they left (`ret:pending`), so a
+   refused write loses nothing.
 
 The storage is `mount`'s `retention.storage`. By default it is this browser's IndexedDB (database
-`semblance-offload`); `false` turns offloading off, and then `ret:Offload` drops and counts. Keys
-start with `semblance:ret:<run>|`. A new page sweeps what earlier pages offloaded, because history
-goes with the page that kept it.
+`semblance-offload`); `false` turns offloading off, and then `ret:Offload` drops and counts. Any
+`Backend` serves: one with `getBytes`/`setBytes` holds the chunks as bytes, any other as base64
+text. Keys start with `semblance:ret:<run>|`. A new page sweeps what earlier pages offloaded,
+because history goes with the page that kept it.
 
 To bring history back into the live graph:
 
@@ -528,8 +551,10 @@ effect (`src/retention/pressure.ts`, attached by `mount`) measures in idle time,
 - otherwise, an estimate from the store's size.
 
 It writes `ret:level` (`ret:Normal`, `ret:Elevated` from `ret:elevatedAt`, default 0.8, `ret:Critical`
-from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:triples`,
-`ret:derivedTriples`, `ret:evicted`) into `urn:semblance:retention`. Each level is answered in this
+from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:liveMiB`,
+`ret:compactedMiB`, `ret:triples`, `ret:derivedTriples`, `ret:evicted`) into
+`urn:semblance:retention`. `ret:liveMiB` is the store's estimate of what its live state needs
+(`liveBytes`): against `ret:wasmMiB`, it says what a compaction would give back. Each level is answered in this
 order:
 
 1. **Evict derived state.** What is hidden loses its renderings in both projections, screen and
@@ -537,7 +562,8 @@ order:
    evicted: what is shown, what is `sem:warm sem:Eager`, and what is always evaluated. Evicted work
    is parked as if never shown, and a page shown again renders exactly as on a fresh visit. While
    pressure is above Normal, idle time evaluates nothing hidden ahead of time.
-2. **Compact the engines,** when the store can (`store.compact()`).
+2. **Compact the engines,** when the store can and it would win: when the live estimate is below
+   three quarters of the memory at Elevated, nine tenths at Critical (`store.compact({ below })`).
 3. **Offload history.** What was recalled goes back to storage, and at Critical so does the oldest
    half of what `ret:having` policies hold.
 4. **Raise `ret:Pressure`** on the budget, for the app's reactions to answer: raise the budget, close
@@ -546,8 +572,20 @@ order:
 5. **Ask the host** (`onRetention`) once per crossing, after a third step.
 
 `ret:simulate` on the budget (`ret:Normal`, `ret:Elevated`, `ret:Critical`, or `ret:Measured`, the
-default) makes the effect act as if a level held. `ret:request ret:Evict` or `ret:request
-ret:OffloadNow` asks for that step once, now.
+default) makes the effect act as if a level held. `ret:request` asks for one step once, now:
+`ret:Evict`, `ret:OffloadNow`, `ret:CompactNow` (whatever it would win), or `ret:Measure`.
+
+**Usage** is measured only when `ret:Measure` asks, since it counts everything. The store's own
+SPARQL does the counting, so nothing is copied out of it. Each measurement replaces the last with
+`ret:Usage` nodes minted under the budget:
+
+- `ret:GraphUsage`: the triples of each graph (`ret:graph`, `ret:DefaultGraph` for the default one);
+- `ret:ClassUsage`: the classes with the most instances, in every graph (`ret:class`, `ret:name` its
+  prefixed name, `ret:instances`; `ret:usageLimit` of them, default 25);
+- `ret:StructureUsage`: the entries of each host structure by name (`screen.engine.refs`,
+  `text.index.nodes`, `views.refs`, and the runtime's and store's where they report a `footprint()`).
+
+`ret:measuredAt` says when. An app's own view reads them like any other triples.
 
 Measured on the site: a visit of every page holds 1,107k triples. Evicting at Critical leaves 180k
 (147k at start), and every page shown again is byte-identical to a fresh render
@@ -585,10 +623,17 @@ The site's Tools window (⌘.) has a **Memory** tab, which is a view of the same
 - the level and the figures (`c:Metrics` of `ui:memoryBudget`);
 - the maximum, a slider the budget follows (`ret:maxFrom`);
 - a choice that simulates a level;
-- Evict hidden views and Offload history, which are `c:Setter`s writing `ret:request`;
-- every stream's horizon, with Show older.
+- Evict hidden views, Offload history, Compact engine memory and Measure usage, which are
+  `c:Setter`s writing `ret:request`;
+- every stream's horizon, with Show older;
+- what the last measurement found: tables by graph, by class and by host structure (`c:Table`s over
+  the `ret:Usage` nodes).
+- remembered state the browser refused to store (`per:unsaved`), which stays the earlier copy until
+  a later write succeeds.
 
 Simulate Critical on a long visit to watch the derived triples fall and the announcement arrive.
+After it, Engine memory against Engine live state shows what Compact engine memory would give back,
+and Measure usage shows where what is left is.
 
 ### 8.8 Testing an app under pressure
 

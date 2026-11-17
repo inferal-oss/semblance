@@ -13,11 +13,18 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { EventBus } from '../behaviour/events.ts'
 import { NS, RETENTION_GRAPH } from '../ns.ts'
+import { compactIri, declaredPrefixes } from '../prefixes.ts'
 import type { Runtime } from '../runtime.ts'
 
 const RET = NS.ret
 const RDF_TYPE = NS.rdf + 'type'
 const MIB = 2 ** 20
+// A short stable key for a minted node's local name (FNV-1a, base 36).
+const hash = (s: string) => {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(36)
+}
 
 export type Level = 'normal' | 'elevated' | 'critical'
 
@@ -78,6 +85,8 @@ export class MemoryPressure {
   private raised = false
   private asked = false
   private evicted = 0
+  private compacted = 0
+  private usage = new Set<string>()
   private written = new Map<string, string>()
   private timer?: ReturnType<typeof setInterval>
   level: Level = 'normal'
@@ -154,6 +163,8 @@ export class MemoryPressure {
     for (const q of store.match(b, f.namedNode(RET + 'request'), null, f.defaultGraph())) {
       if (q.object.value === RET + 'Evict') this.evict(Infinity)
       if (q.object.value === RET + 'OffloadNow') this.offload('critical')
+      if (q.object.value === RET + 'CompactNow') this.compact()
+      if (q.object.value === RET + 'Measure') this.measureUsage(b)
       this.runtime.apply({ add: [], remove: [q] })
     }
     const maxBytes = this.maxBytes(b)
@@ -176,7 +187,7 @@ export class MemoryPressure {
       this.evict(level === 'critical' ? Infinity : Math.ceil(derived * 0.25))
       // A compaction copies the whole store: only when live state is below most of the memory
       // (after the eviction above), so lasting pressure does not copy a store that cannot shrink.
-      store.compact?.({ below: level === 'critical' ? 0.9 : 0.75 })
+      this.compact({ below: level === 'critical' ? 0.9 : 0.75 })
       this.offload(level)
       if (level === 'critical') this.escalation++
       // 4: the app's reactions, once a crossing.
@@ -219,6 +230,80 @@ export class MemoryPressure {
     this.evicted += this.runtime.evict(limit)
   }
 
+  /** Compact the store where it can, and count what it gave back. */
+  private compact(opts?: { below?: number }) {
+    const done = this.runtime.store.compact?.(opts)
+    if (done) this.compacted += Math.max(0, done.before - done.after)
+  }
+
+  /**
+   * ret:Measure: what each graph holds, the classes with the most instances and the host's
+   * structures, as ret:Usage nodes under the budget (replacing the last measurement). Counted by the
+   * store's own SPARQL, so nothing is copied out of it; on request only, as it reads everything.
+   */
+  measureUsage(b: NamedNode): void {
+    const store = this.runtime.store
+    const f = this.f
+    const nn = (iri: string) => f.namedNode(iri)
+    const int = (n: number) => f.literal(String(n), nn(NS.xsd + 'integer'))
+    const g = nn(RETENTION_GRAPH)
+    const add: Quad[] = []
+    const fresh = new Set<string>()
+    const node = (kind: string, key: string, of: [string, Term], n: [string, number], extra: Quad[] = []) => {
+      const u = nn(`${b.value}/~${kind}-${hash(key)}`)
+      fresh.add(u.value)
+      add.push(f.quad(u, nn(RDF_TYPE), nn(RET + kind[0]!.toUpperCase() + kind.slice(1) + 'Usage'), g), f.quad(u, nn(RET + 'usageOf'), b, g), f.quad(u, nn(of[0]), of[1] as NamedNode, g), f.quad(u, nn(n[0]), int(n[1]), g), ...extra.map((q) => f.quad(u, q.predicate as NamedNode, q.object as NamedNode, g)))
+    }
+    const count = (rows: Map<string, Term>[], v = 'n') => Number(rows[0]?.get(v)?.value ?? 0)
+    const dg = [f.defaultGraph()]
+    const run = (q: string) => {
+      try {
+        return store.select(q, dg)
+      } catch {
+        return []
+      }
+    }
+    node('graph', '', [RET + 'graph', nn(RET + 'DefaultGraph')], [RET + 'triples', count(run('SELECT (COUNT(*) AS ?n) WHERE { ?s ?p ?o }'))])
+    for (const r of run('SELECT ?g (COUNT(*) AS ?n) WHERE { GRAPH ?g { ?s ?p ?o } } GROUP BY ?g')) {
+      const graph = r.get('g')
+      if (graph?.termType === 'NamedNode') node('graph', graph.value, [RET + 'graph', graph], [RET + 'triples', Number(r.get('n')?.value ?? 0)])
+    }
+    const limit = Number(this.one(b, RET + 'usageLimit')?.value ?? 25)
+    const classes = run(`SELECT ?c (COUNT(?s) AS ?n) WHERE { { ?s a ?c } UNION { GRAPH ?g { ?s a ?c } } } GROUP BY ?c ORDER BY DESC(?n) LIMIT ${Math.max(1, Math.floor(limit))}`)
+    // Labels repeat across vocabularies (h:Button, c:Button): a class is shown by its prefixed name.
+    const prefixes = { ...NS, ...declaredPrefixes(store) } as Record<string, string>
+    for (const r of classes) {
+      const c = r.get('c')
+      if (c?.termType === 'NamedNode') node('class', c.value, [RET + 'class', c], [RET + 'instances', Number(r.get('n')?.value ?? 0)], [f.quad(c, nn(RET + 'name'), f.literal(compactIri(c.value, prefixes)))])
+    }
+    for (const [name, entries] of Object.entries(this.structures())) node('structure', name, [RET + 'structure', f.literal(name)], [RET + 'entries', entries])
+    const remove = [...this.usage].filter((u) => !fresh.has(u)).flatMap((u) => store.match(nn(u), null, null, g))
+    for (const u of fresh) remove.push(...store.match(nn(u), null, null, g))
+    const at = nn(RET + 'measuredAt')
+    remove.push(...store.match(b, at, null, g))
+    add.push(f.quad(b, at, f.literal(new Date().toISOString(), nn(NS.xsd + 'dateTime')), g))
+    this.usage = fresh
+    this.runtime.write(RETENTION_GRAPH, { add, remove })
+  }
+
+  /** The host's structures by name: each projection's engine and index, the views, and the runtime's and store's own where they report one. */
+  private structures(): Record<string, number> {
+    const out: Record<string, number> = {}
+    const put = (prefix: string, fp: Record<string, number> | undefined) => {
+      for (const [k, n] of Object.entries(fp ?? {})) if (Number.isFinite(n)) out[prefix + k] = (out[prefix + k] ?? 0) + n
+    }
+    for (const p of this.runtime.projections) {
+      const m = p.engine.modality.slice(p.engine.modality.lastIndexOf('#') + 1).toLowerCase()
+      put(`${m}.engine.`, p.engine.footprint())
+      put(`${m}.index.`, p.index.footprint())
+    }
+    put('views.', this.runtime.views.footprint())
+    const own = (x: unknown) => (x as { footprint?: () => Record<string, number> }).footprint?.()
+    put('runtime.', own(this.runtime))
+    put('store.', own(this.runtime.store))
+    return out
+  }
+
   /** Offload what retention holds beyond its policies: what was recalled, and at Critical half of what ret:having policies keep. */
   private offload(level: Level) {
     for (const s of this.runtime.retention.all()) s.relieve(level === 'critical' ? 0.5 : 0)
@@ -236,8 +321,11 @@ export class MemoryPressure {
       [RET + 'triples', int(x.triples)],
       [RET + 'derivedTriples', int(x.derived)],
       [RET + 'evicted', int(this.evicted)],
+      [RET + 'compactedMiB', mib(this.compacted)],
     ])
     if (x.heap !== undefined) want.set(RET + 'heapMiB', mib(x.heap))
+    const live = this.runtime.store.liveBytes?.()
+    if (live !== undefined) want.set(RET + 'liveMiB', mib(live))
     const g = nn(RETENTION_GRAPH)
     const store = this.runtime.store
     const add: Quad[] = []

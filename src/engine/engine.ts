@@ -404,6 +404,11 @@ export class Engine {
     return this.rules.filter((r) => (this.outputs.get(r)?.size ?? 0) > 0)
   }
 
+  /** The modality this engine projects into (mod:Screen, mod:Text). */
+  get modality(): string {
+    return this.selection.modality
+  }
+
   /** Number of distinct derived triples currently asserted. */
   get derivedSize(): number {
     return this.refs.size

@@ -48,11 +48,25 @@ export interface Backend {
   watch?(listener: (key: string) => void): () => void
   /** The keys stored that start with `prefix` (for sweeping what nothing declares any more). */
   keys?(prefix: string): Promise<string[]>
+  /**
+   * Binary values, held as they are (IndexedDB, memory). A storage of strings only (web storage)
+   * leaves these out, and a caller with bytes writes them as text (base64). `get` returns strings
+   * only, `getBytes` bytes only.
+   */
+  getBytes?(key: string): Promise<Uint8Array | undefined>
+  setBytes?(key: string, value: Uint8Array): Promise<void>
 }
 
 export function memoryBackend(): Backend {
-  const m = new Map<string, string>()
-  return { get: async (k) => m.get(k), set: async (k, v) => void m.set(k, v), remove: async (k) => void m.delete(k), keys: async (prefix) => [...m.keys()].filter((k) => k.startsWith(prefix)) }
+  const m = new Map<string, string | Uint8Array>()
+  return {
+    get: async (k) => (typeof m.get(k) === 'string' ? (m.get(k) as string) : undefined),
+    set: async (k, v) => void m.set(k, v),
+    remove: async (k) => void m.delete(k),
+    keys: async (prefix) => [...m.keys()].filter((k) => k.startsWith(prefix)),
+    getBytes: async (k) => (ArrayBuffer.isView(m.get(k)) ? (m.get(k) as Uint8Array) : undefined),
+    setBytes: async (k, v) => void m.set(k, v.slice()),
+  }
 }
 
 /** `events` hears the `storage` events other tabs' writes to it fire (the window, in a browser). */
@@ -97,9 +111,18 @@ export function indexedDbBackend(name = 'semblance'): Backend {
       r.onerror = () => reject(r.error)
     })
   }
+  const read = (k: string) => tx<unknown>('readonly', (s) => s.get(k))
   return {
-    get: async (k) => (await tx<string | undefined>('readonly', (s) => s.get(k) as IDBRequest<string | undefined>)) ?? undefined,
+    get: async (k) => {
+      const v = await read(k)
+      return typeof v === 'string' ? v : undefined
+    },
     set: async (k, v) => void (await tx('readwrite', (s) => s.put(v, k))),
+    getBytes: async (k) => {
+      const v = await read(k)
+      return ArrayBuffer.isView(v) ? new Uint8Array(v.buffer, v.byteOffset, v.byteLength) : undefined
+    },
+    setBytes: async (k, v) => void (await tx('readwrite', (s) => s.put(v, k))),
     remove: async (k) => void (await tx('readwrite', (s) => s.delete(k))),
     keys: async (prefix) => ((await tx<IDBValidKey[]>('readonly', (s) => s.getAllKeys(IDBKeyRange.bound(prefix, prefix + '\uffff')))) as string[]).filter((k) => typeof k === 'string'),
   }
