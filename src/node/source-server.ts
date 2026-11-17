@@ -23,6 +23,11 @@ export interface SourceServerOptions {
   validate?: (change: { add: Quad[]; remove: Quad[] }, store: Store) => string | undefined
   /** How often an open subscription hears the cursor when nothing concerns it (ms, default 15000). */
   heartbeatMs?: number
+  /**
+   * How many ids of the writes it took it remembers (default 10000), so a write sent again - by a
+   * page that reloaded before it heard the answer - is answered as it was and not applied twice.
+   */
+  writeIds?: number
 }
 
 /** One step of the store, with what it takes to tell, later, which subscriptions it concerns. */
@@ -54,6 +59,8 @@ export class SourceServer {
   readonly work = { checks: 0 }
   private readonly log: Step[] = []
   private readonly subscriptions = new Set<Subscription>()
+  /** The cursor each write it took was taken at, by the write's id (the latest `writeIds`). */
+  private readonly taken = new Map<string, number>()
 
   constructor(readonly opts: SourceServerOptions = {}) {}
 
@@ -94,8 +101,14 @@ export class SourceServer {
     return this.cursor
   }
 
-  /** A page's write: taken as one step, or refused - stale (a statement it removes is not here) or by validation. */
+  /**
+   * A page's write: taken as one step, or refused - stale (a statement it removes is not here) or by
+   * validation. A write whose id it took already is answered as it was, and not applied again; a
+   * refused one changed nothing, so it is judged again.
+   */
   write(req: WriteRequest): WriteResult {
+    const again = req.id ? this.taken.get(req.id) : undefined
+    if (again !== undefined) return { ok: true, cursor: again }
     const add = fromNTriples(req.add, f)
     const remove = fromNTriples(req.remove, f)
     const stale = remove.some((q) => !this.store.has(q))
@@ -108,7 +121,12 @@ export class SourceServer {
         repair: { add: toNTriples(remove.filter((q) => this.store.has(q))), remove: toNTriples(add.filter((q) => !this.store.has(q))) },
       }
     }
-    return { ok: true, cursor: this.change({ add, remove }, req.id) }
+    const cursor = this.change({ add, remove }, req.id)
+    if (req.id) {
+      this.taken.set(req.id, cursor)
+      if (this.taken.size > (this.opts.writeIds ?? 10_000)) this.taken.delete(this.taken.keys().next().value!)
+    }
+    return { ok: true, cursor }
   }
 
   /** The part of the store the patterns cover, now. */

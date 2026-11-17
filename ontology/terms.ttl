@@ -2361,6 +2361,7 @@ ret:offloaded a sem:Term .
 ret:oldestKept a sem:Term .
 ret:onExpiry a sem:Term .
 ret:pending a sem:Term .
+ret:pinned a sem:Term .
 ret:recall a sem:Term .
 ret:recallLimit a sem:Term .
 ret:recalled a sem:Term .
@@ -2410,6 +2411,8 @@ src:Live a sem:Term .
 src:Loading a sem:Term .
 src:Lost a sem:Term .
 src:Pattern a sem:Term .
+src:PendingWrites a sem:Term .
+src:PendingWritesView a sem:Term .
 src:Received a sem:Term .
 src:Reconnecting a sem:Term .
 src:Refused a sem:Term .
@@ -2440,6 +2443,7 @@ src:reset a sem:Term .
 src:source a sem:Term .
 src:state a sem:Term .
 src:subject a sem:Term .
+src:unsaved a sem:Term .
 src:writable a sem:Term .
 sx:Json a sem:Term .
 sx:Locale a sem:Term .

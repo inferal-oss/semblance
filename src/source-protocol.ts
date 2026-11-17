@@ -37,7 +37,11 @@ export interface DeltaMessage {
   write?: string
 }
 
-/** A write: what a page changed, under an id of its own. */
+/**
+ * A write: what a page changed, under an id unique to it across pages and reloads. A page that did
+ * not hear the answer sends it again, under the same id; a store that took a write with that id
+ * answers as it did then (`{ ok: true, cursor }`), and does not apply it twice.
+ */
 export interface WriteRequest {
   id: string
   add: string

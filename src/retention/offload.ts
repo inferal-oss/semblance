@@ -238,6 +238,11 @@ export class RetainedStream {
         const p = f.namedNode(policy.iri)
         return store.match(m, f.namedNode(NS.beh + 'handledBy'), null, g).some((q) => store.match(q.object as NamedNode, said, p).length > 0)
       },
+      // A member stated ret:pinned true (in any graph: a person's reaction writes it in the input
+      // graph) is kept whatever the policies say, until that statement goes.
+      (member) => store.match(f.namedNode(member), f.namedNode(RET + 'pinned'), null).some((q) => q.object.value === 'true'),
+      // A member's entity, for ldes:LatestVersionSubset: the stream's ldes:versionOfPath on it.
+      (member, path) => store.match(f.namedNode(member), f.namedNode(path), null, g)[0]?.object.value,
     )
   }
 

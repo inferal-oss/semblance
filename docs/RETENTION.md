@@ -88,7 +88,7 @@ option in code. "-" means nothing bounds it.
 | Remembered state (`per:Policy`, `src/persistence.ts`) | use: `ui:rememberChat` grows with the conversation | the browser's quota | - | **A full storage deletes the remembered state.** A whole write calls `removeStored` before `set`. `set` can throw `QuotaExceededError`; it is not caught, and `dirty` is already cleared. The state stays in memory until reload, then it is gone. |
 | `per:retention` | - | time since the **last write** (not the data's age), all or nothing per policy | graph | Expired blobs are skipped by the pre-paint script but not deleted. Keys of policies no longer declared are never swept. |
 | Kept files (`src/files.ts` `restoreKept`) | uploads kept in IndexedDB | SHACL caps on `fx:store`; none on `blk:Uploads` | graph | **Suspected loss**: `restoreKept` frees every stored file whose node is not in the store when Files attaches. On a server-rendered page whose first graphs do not include the files graphs, the nodes arrive later (`loadRest`, `restoreAdded`). Needs a test to confirm. |
-| Remote write queue (`src/remote.ts`) | ticks while the store is unreachable | - | - | Pending writes are owned data. They are held in memory only, retried forever, and lost on reload. |
+| Remote write queue (`src/remote.ts`) | ticks while the store is unreachable | the person's own writes; in memory, `src:PendingWrites` (`ret:Latest 100`) | graph | Pending writes are owned data. Each is stored before it is sent and removed once answered; the next page sends what is left first (the store recognises a write's id). Memory holds the latest 100's statements, storage the rest. A write storage refuses waits in memory and is counted (`src:unsaved`). Built: §7. |
 | Owned mints from events (blocks `~b-<event>`, marks, files, todos) | person's actions | the person's deletions | - | Correctly **not** removed when the event that minted them retires. Any future "closure of a member" must not reach them by IRI prefix. |
 
 ### 3.3 Derived: engine, index, views, stores
@@ -144,7 +144,8 @@ Each was bounded to one per node, but each dangled. A retirement now takes them 
 5. **Kept files treat "not loaded yet" as "gone"** (§3.2, suspected).
 6. **Rendered pages are derived but kept like data**: never evicted, so a long visit holds the whole
    site's renderings (§2).
-7. **Pending remote writes are data held like a cache**: in memory, never persisted.
+7. **Pending remote writes are data held like a cache**: in memory, never persisted. (Fixed: they
+   are kept in storage until the store answers them, §7.)
 
 ## 5. Design
 
@@ -174,6 +175,20 @@ ret:otherwise a owl:ObjectProperty .   # what ret:Ask does when nobody answers
 # What the person and the app can see: maintained by the effect that retires, one node per retained thing.
 ret:Horizon .  ret:dropped , ret:archived (counts) ; ret:oldestKept (time) ; ret:archivedTo .
 ```
+
+As built (§7, §8.1), the vocabulary differs from this sketch where the decisions of §6 or the code
+found a better place for a term:
+
+| designed | built |
+|---|---|
+| `ret:Latest`, `ret:Within`, `ret:UntilAcknowledged`, `ret:onExpiry`, `ret:Drop`, `ret:Horizon` | as sketched |
+| `ret:Archive` | `ret:Offload`: what leaves goes to this browser's storage and is recalled into the live graph (§6.2) |
+| `ret:pinned` | as sketched, on a stream's member (§8.1) |
+| `ret:members` (a shape) | **not added.** `ret:having` (a member has one of the given properties) is the selection the one policy that needed it uses: `beh:UndoRetention`, whose shape (§6.1) was "has `beh:asserted` or `beh:retracted`". A selection by class or value is a property the stream's owner states on the member as it appends it (ground rule 2: put the input in the graph), then `ret:having` it. A shape would need a SHACL evaluator over the store, where today shapes are checked by rules, and an evaluation per member. |
+| `ret:Budget` (`ret:maxTriples`, `ret:maxBytes`) | **not added.** The memory a page may use is `ret:MemoryBudget`, measured and answered by the pressure effect (§6.3); §6 decided that the renderings' budget is part of it, which was `ret:Budget`'s place on a projection. A size bound on one stream is not one either: a member's size changes after it is appended (a network entry gains its response, a change-log member its recorded change in the same write), so it could only be kept by measuring the members' closures again, against constant cost. A stream is bounded by count (`ret:Latest`), and a member's size by its owner (network previews are capped at 16,384 characters). `iv:maxState` (`docs/IVM.md` §8.1), when built, bounds a view's own state. |
+| `ret:Compact` | **not added.** What it stood for is built under other names: for undo, the checkpoint is where history starts (`beh:HistoryStarts`, a disabled Undo says so, §8.3); for remembered state, the base and its chunks are the persistence effect's own storage; and the summary of what left a stream is its horizon (`ret:dropped`, `ret:offloaded`, `ret:oldestKept`). A fold of a stream's own figures over what left is a maintained view's or a reaction's work, not an exit. |
+| `ret:Ask`, `ret:otherwise` | **not added.** §6 decided that callbacks are the last line of defence: a policy decides, then reactions to `ret:Pressure`, then `onRetention`. The history that must be asked about is offloaded history the browser refuses to store, and that is asked (`onRetention`, `reason: 'storage'`, §8.6), with the default stated there (the oldest of what waits beyond twice the bound is dropped, counted and announced). A policy that asks would leave its decision to the host, the reverse of that order. |
+| `ret:policy` | `ldes:retentionPolicy`, on a stream's view, as LDES has it |
 
 What this would replace or absorb:
 
@@ -329,8 +344,9 @@ beh:UndoRetention a ret:Latest ; ldes:amount 1000 ; ret:members beh:UndoableMemb
     ret:onExpiry ret:Offload .
 ```
 
-`ret:members` narrows a policy to the members that conform to a shape. The views that aggregate the
-log keep their constant cost, because a retirement is a −1 delta whichever policy let the member go.
+`ret:members` narrows a policy to the members that conform to a shape. As built, `ret:having` does it
+(`ret:having beh:asserted , beh:retracted`, §8.3), and `ret:members` was not added (§5.1). The views that
+aggregate the log keep their constant cost, because a retirement is a −1 delta whichever policy let the member go.
 Undo past 1,000 steps loads the offloaded members back, live, so in practice undo is bounded by
 storage, not memory. When storage refuses, the horizon is announced and a disabled Undo says where
 history starts.
@@ -444,7 +460,12 @@ Tracked in #530, linked from the Plan (#8).
 | Remembered state by `ret:Within`: `per:retention` measured from each stored triple's age, set aside (or dropped where the policy says so), on a horizon, announced, recalled | `src/persistence.ts`, `ontology/layers/persistence.ttl`; §8.9 | built |
 | Nothing owned lost across a reload: settings, the site's look, a kept file and the remembered change log, under critical pressure and a refusing storage, with each run's streams conserved | `test/reload-owned.test.ts` | built |
 | References to a retired member leave with it, in every graph; those of its stream's graph are stored with an offloaded member and come back with a recall | `ret:Reference` (`ontology/layers/retention.ttl`), `RetainedStream.leave` and `recall` (`src/retention/offload.ts`); §8.10 | built |
-| Cold graphs offloaded or unloaded under pressure; remembered state that could not be saved announced and waiting | | not yet |
+| `ret:pinned`: a member a person keeps, never let go by a policy or by pressure until unpinned | `ontology/layers/retention.ttl`, `src/retention/policy.ts` | built |
+| LDES's own policies as LDES defines them: `ldes:DurationAgoPolicy` a `ret:Within`, `ldes:PointInTimePolicy` from a point in time, `ldes:LatestVersionSubset` the newest versions of each entity (before, its `ldes:amount` was read as the stream's newest members) | `ontology/layers/retention.ttl`, `src/retention/policy.ts` | built |
+| `ret:Budget`, `ret:members`, `ret:Compact`, `ret:Ask` | §5.1 | decided: not added, each expressed by what is built |
+| Remote writes the store has not answered survive a reload: stored before they are sent, sent first by the next page, applied once (the store recognises a write's id); memory holds the latest `src:PendingWrites` keeps, storage the rest; a refused storage counted (`src:unsaved`) | `src/remote.ts`, `src/node/source-server.ts`, `test/remote.test.ts`; [REMOTE.md](REMOTE.md#writes-that-wait) | built |
+| Cold graphs offloaded or unloaded under pressure | #545 (closed, its notes kept) | decided: not built; about 1 MiB on the site, against a hook on every change |
+| Remembered state that could not be saved announced and waiting | | not yet |
 
 ## 8. Using retention
 
@@ -466,6 +487,20 @@ ex:KeepRecent a ret:Latest ;          # or beh:LatestMembersPolicy, its subclass
 - **`ret:Within`** (or `ldes:DurationAgoPolicy`) keeps by age: `tree:value "PT10M"`.
 - **`ret:having`** narrows a policy to members with one of the given properties. It extends the
   others: a member they let go is offered to it.
+- **`ldes:PointInTimePolicy`** keeps what was appended from its `ldes:pointInTime` (an `xsd:dateTime`) on.
+- **`ldes:LatestVersionSubset`** keeps the `ldes:amount` (default 1) newest members of each entity: the
+  stream's `ldes:versionOfPath` names, on a member, the entity it is a version of (without one, each
+  member is its own). It is a policy of its own, not a `ret:Latest`, whose amount counts the stream's
+  members. A member's entity is read at the next append, once the write that appended it has put its
+  triples in the graph; what only this policy keeps is set aside out of the others' way, so a member
+  costs what it retires.
+- **`ret:pinned true`** on a member (a reaction writes it, in the input graph) keeps it whatever the
+  policies say, and memory pressure does not take it either. It counts as in memory on the horizon.
+  Once the statement goes, the member leaves at the next append, by the exit of the policy that let it
+  go. Each append looks at each pinned member once, so pins are for what a person keeps, not for a
+  policy's work. A pinned change that is undoable keeps its member, not the history around it: once
+  the steps between it and what memory holds were dropped, an Undo that reaches it undoes it if it
+  still applies.
 - **`ret:recallLimit`** on the stream bounds how many recalled members memory holds besides what the
   policies keep (default 1,000).
 - **No policy** means the stream keeps everything, as LDES says. Every stream Semblance itself writes
@@ -669,6 +704,10 @@ It is called only when policies and reactions have not settled it:
 
 Nothing here ever drops owned data. The default graph, remembered state and kept files are not
 retained streams. Remembered state expires only by its own policy's `per:retention` (§8.9).
+Remote writes the store has not answered are not retained streams either: their policy
+(`src:PendingWrites`) bounds only what memory holds of them, and the rest wait in storage until the
+store answers ([REMOTE.md](REMOTE.md#writes-that-wait)). One storage refuses stays in memory,
+counted by `src:unsaved`.
 
 ### 8.7 The Memory tool
 
@@ -736,8 +775,8 @@ The soaks, and what they measured:
   offload storage, and compare what every enabled policy covers (`persistence.collect(policy)`)
   before and after. Blank nodes get new labels, so compare them by what they say.
 
-`test/retention.test.ts`, `test/retention-pressure.test.ts`, `test/retention-evict.test.ts` and
-`test/reload-owned.test.ts` are worked examples of each.
+`test/retention.test.ts`, `test/retention-policies.test.ts`, `test/retention-pressure.test.ts`,
+`test/retention-evict.test.ts` and `test/reload-owned.test.ts` are worked examples of each.
 
 ### 8.9 Remembered state
 
