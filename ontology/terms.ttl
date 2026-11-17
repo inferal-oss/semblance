@@ -2347,6 +2347,7 @@ ret:having a sem:Term .
 ret:heapMiB a sem:Term .
 ret:inMemory a sem:Term .
 ret:instances a sem:Term .
+ret:keepDerived a sem:Term .
 ret:level a sem:Term .
 ret:liveMiB a sem:Term .
 ret:maxBytes a sem:Term .

@@ -573,6 +573,7 @@ ex:SyncFailed a beh:Reaction ; beh:when ex:Failed ;
 
 ```turtle
 ex:memory a ret:MemoryBudget ; ret:maxMiB 512 .       # or ret:maxBytes, or ret:maxFrom a slider
+ex:memory ret:keepDerived 300000 .                     # derived triples kept, at every level
 ```
 
 `mount(element, { maxMemory: 512 * 2 ** 20 })` declares one for a graph that has none. The pressure
@@ -585,6 +586,11 @@ effect (`src/retention/pressure.ts`, attached by `mount`) measures in idle time,
 - otherwise (WebKit, Firefox, Node), an estimate from the store's triples: 600 bytes of JS a derived
   triple and 250 a loaded one, as measured on the site (`HEAP_ESTIMATE`, #552).
 
+The level is judged on what is retained: the engines' memory, and of the JS heap its lowest figure
+of the last 20 seconds. Between V8's major collections the heap figure also holds garbage, several
+times what is retained (on the site's examples, Chrome 157: ~150 MB retained, ~690 MB just before a
+collection), and pressure must not evict for garbage that is about to go (#553).
+
 It writes `ret:level` (`ret:Normal`, `ret:Elevated` from `ret:elevatedAt`, default 0.8, `ret:Critical`
 from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:liveMiB`,
 `ret:compactedMiB`, `ret:triples`, `ret:derivedTriples`, `ret:evicted`) into
@@ -592,6 +598,12 @@ from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:liveM
 (`liveBytes`): against `ret:wasmMiB`, it says what a compaction would give back. Each level is answered in this
 order:
 
+0. **Keep derived state within its own budget,** at every level: `ret:keepDerived` on the budget, a
+   number of derived triples. Past it, what is hidden and was shown or prepared longest ago loses its
+   renderings, down to nine tenths of it, so a long visit keeps the last pages ready rather than every
+   page it ever showed. The site keeps 300k (a few pages beyond what its first page prepares): after a
+   walk of every example it holds ~250k derived triples instead of 637k, and a revisit of a page it let
+   go renders it again (~100–150 ms instead of ~50).
 1. **Evict derived state.** What is hidden loses its renderings in both projections, screen and
    text: a quarter of them at Elevated, all at Critical (`Runtime.evict`, `Engine.evict`). Never
    evicted: what is shown, what is `sem:warm sem:Eager`, and what is always evaluated. Evicted work

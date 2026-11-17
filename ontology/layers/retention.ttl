@@ -143,6 +143,9 @@ ret:maxMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xs
     rdfs:comment "The budget in mebibytes (2^20 bytes), for a person to set; ret:maxBytes wins when both are given."@en .
 ret:maxFrom a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ;
     rdfs:comment "A component whose c:value is the budget in MiB (a slider a person sets it with); ret:maxBytes and ret:maxMiB win."@en .
+ret:keepDerived a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:integer ;
+    rdfs:label "Derived triples kept"@en , "Похідних трійок зберігається"@uk , "Behaltene abgeleitete Tripel"@de , "الثلاثيات المشتقة المحفوظة"@ar ;
+    rdfs:comment "A budget for derived state at every level: past this many derived triples, idle time evicts the renderings of what is hidden and was shown or prepared longest ago, down to nine tenths of it. Never what is shown, sem:warm sem:Eager or always evaluated (docs/RETENTION.md §5.3)."@en .
 ret:elevatedAt a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:decimal ;
     rdfs:comment "The share of the budget above which pressure is elevated (default 0.8)."@en .
 
@@ -157,7 +160,8 @@ ret:Measured a ret:Level ; sem:order 0 ; rdfs:label "As measured"@en , "Як в�
 ret:level a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range ret:Level ;
     rdfs:label "Pressure"@en , "Тиск"@uk , "Druck"@de , "الضغط"@ar .
 ret:usedMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
-    rdfs:label "Used (MiB)"@en , "Використано (МіБ)"@uk , "Belegt (MiB)"@de , "المستخدم (ميبيبايت)"@ar .
+    rdfs:label "Used (MiB)"@en , "Використано (МіБ)"@uk , "Belegt (MiB)"@de , "المستخدم (ميبيبايت)"@ar ;
+    rdfs:comment "What the level is judged on: the engines' memory and what the JS heap retains, its lowest figure of the last 20 s (between collections it also holds garbage, ret:heapMiB)."@en .
 ret:wasmMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
     rdfs:label "Engine memory (MiB)"@en , "Пам’ять рушія (МіБ)"@uk , "Engine-Speicher (MiB)"@de , "ذاكرة المحرك (ميبيبايت)"@ar .
 ret:heapMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
