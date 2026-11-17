@@ -464,7 +464,13 @@ export class Persistence {
     const change = await this.storedChange(policy)
     if (!change || !policy.retention) return change
     const back = await this.settle(policy, change)
-    if (back.length) change.add.push(...back.map((e) => this.into(policy, e.q)))
+    if (back.length) {
+      // Restored after all: they replace the current values of their subjects and properties, as the rest do.
+      const add = back.map((e) => this.into(policy, e.q))
+      change.add.push(...add)
+      const keep = new Set(change.add.map(quadKey))
+      if (!policy.graph) for (const q of add) for (const x of this.store.match(q.subject, q.predicate, null, q.graph)) if (!keep.has(quadKey(x))) change.remove.push(x)
+    }
     const h = this.horizonOf(policy)
     h.inMemory = change.add.length
     h.oldest = this.oldestOf(policy)
