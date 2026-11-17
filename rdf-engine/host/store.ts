@@ -3,8 +3,13 @@
 // to them, and the factory hands out those same objects. Terms from other
 // factories are looked up by value. In idle time (`maintain`) the engine frees
 // terms nothing uses any more; the adapter then forgets their ids.
+//
+// WebAssembly memory never shrinks, so what the engine frees stays the page's. When live
+// state is well below the memory (`liveBytes` against `memoryBytes`), `compact` copies
+// the store into a fresh instance and drops the old one: the browser gets the difference
+// back. The term objects handed out stay valid (they are re-tagged with their new ids).
 import type { DefaultGraph, Literal, NamedNode, Quad, Term } from '@rdfjs/types'
-import type { Factory, GraphStore, QueryAnswer } from '../../src/store/types.ts'
+import type { Factory, GraphStore, QueryAnswer, StoreCompaction } from '../../src/store/types.ts'
 import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } from './engine.ts'
 import { narrowPolicy, withFetching, type FetchPolicy } from './fetching.ts'
 
@@ -77,9 +82,35 @@ class TripleTerm extends Base {
 /** A store quad; distinct from triple terms only in being used as a statement. */
 const quad = (s: Term, p: Term, o: Term, g: Term) => new TripleTerm(s, p, o, g) as unknown as Quad
 
+/** When idle time (`maintain`) compacts the store: see EngineStore.compact. */
+export interface CompactionPolicy {
+  /** Compact when the estimate of live bytes is below this fraction of the memory (default 0.5; 0: never in idle time). */
+  below?: number
+  /** Not while the memory is smaller than this many bytes: small stores are not churned (default 64 MiB). */
+  floor?: number
+}
+
+export const COMPACTION_DEFAULTS: Required<CompactionPolicy> = { below: 0.5, floor: 64 << 20 }
+
+/** What one compaction did. */
+export type Compaction = StoreCompaction
+
 /** A GraphStore with the engine's own counters, for tests and benchmarks. */
 export type EngineStore = GraphStore & {
   termCount(): number
+  /** The engine's WebAssembly memory, in bytes: its high-water mark, since that memory never shrinks. */
+  memoryBytes(): number
+  /** An estimate of the memory a fresh instance holding the same quads and terms would need. */
+  liveBytes(): number
+  /**
+   * Copy the store into a fresh engine instance and drop the old one, so its memory goes. Term
+   * objects handed out before stay valid, prepared queries are prepared again as they are used.
+   * With `below`, only when liveBytes is below that fraction of memoryBytes. Undefined when it did
+   * not: it would not win, or a fetch (SERVICE, LOAD) or a Jelly stream is in flight.
+   */
+  compact(opts?: { below?: number }): Compaction | undefined
+  /** When `maintain` compacts (the retention layer tightens it under pressure). */
+  setCompaction(policy: CompactionPolicy): void
   /** A deadline for queries, on the Date.now() clock: one running past it throws an error with `interrupted` (undefined: none). */
   setDeadline(at: number | undefined): void
   /** A step budget for each query, as setDeadline (undefined: unlimited). */
@@ -103,25 +134,46 @@ export interface EngineStoreOptions {
   timeZone?: string
   /** What `query` and `update` may fetch for SERVICE and LOAD (docs/FETCHING.md; default: nothing). setFetchPolicy replaces it. */
   fetchPolicy?: FetchPolicy
+  /** When idle time compacts the store (COMPACTION_DEFAULTS); setCompaction replaces it. */
+  compaction?: CompactionPolicy
 }
 
 /** The host's policy as it is now: later changes to the object it gave do not reach the store. */
 const snapshot = (p: FetchPolicy | undefined): FetchPolicy => (p ? { ...p, endpoints: { ...p.endpoints }, documents: { ...p.documents } } : {})
 
+/**
+ * What a fresh instance of each build spends per quad and per term (beyond the term's own bytes),
+ * fitted to stores copied into fresh instances (quads over few terms, terms with short and long
+ * values). Rust's per term includes the blocks its size-class heap keeps from outgrown vectors.
+ */
+const FRESH_BYTES: Record<string, [perQuad: number, perTerm: number]> = { wat: [163, 148], rust: [157, 400] }
+
 /** Called with every engine store made (benchmarks use it to watch queries). */
 export const engineStoreHooks: { created?: (store: EngineStore) => void } = {}
 
 export function engineStore(module: WebAssembly.Module, kind: string, options: EngineStoreOptions = {}): EngineStore {
-  const e = new Engine(module)
-  e.autoCompile = typeof options.compile === 'number' ? options.compile : 0
-  e.idleCompile = options.compile === 'idle'
-  e.timeZone = options.timeZone
-  // This store's tag: term objects of another store (another engine) carry ids that mean nothing here.
-  const ID = Symbol('engine id')
+  let deadline: number | undefined
+  let fuel: number | undefined
+  /** An instance of the engine, as this store sets it up (again on compaction). */
+  const instance = () => {
+    const x = new Engine(module)
+    x.autoCompile = typeof options.compile === 'number' ? options.compile : 0
+    x.idleCompile = options.compile === 'idle'
+    x.timeZone = options.timeZone
+    x.setDeadline(deadline)
+    x.setFuel(fuel)
+    return x
+  }
+  let e = instance()
+  /** The memory of an empty instance: what no state needs. */
+  const emptyBytes = e.memoryBytes()
+  // This store's tag: term objects of another store (another engine) carry ids that mean nothing
+  // here. A compaction replaces it, so that no object keeps an id of the instance it dropped.
+  let ID = Symbol('engine id')
   const defaultGraph = new Default()
   defaultGraph[ID] = DEFAULT_GRAPH
   /** Term objects by id, filled as ids come back from the engine. */
-  const byId: (Term | undefined)[] = [undefined, defaultGraph]
+  let byId: (Term | undefined)[] = [undefined, defaultGraph]
   /** Shared term objects by value, so the factory and results agree. */
   const iris = new Map<string, Iri>()
   const xsdString = namedNode(XSD_STRING)
@@ -162,12 +214,14 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
   /** The engine id of a term: interned when `intern`, else 0 if the engine has never seen it. */
   function idOf(t: Term, intern: boolean): number {
     const tagged = t as Term & Tagged
-    if (tagged[ID] !== undefined) return tagged[ID]
+    const has = tagged[ID]
+    if (has !== undefined) return has
     let id: number
     switch (t.termType) {
       case 'NamedNode': {
         const shared = namedNode(t.value)
-        if (shared[ID] !== undefined) return shared[ID]
+        const sharedId = shared[ID]
+        if (sharedId !== undefined) return sharedId
         id = intern ? e.iri(t.value) : e.lookupIri(t.value)
         if (id) {
           shared[ID] = id
@@ -179,23 +233,25 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
         return DEFAULT_GRAPH
       case 'BlankNode': {
         const shared = blankNode(t.value)
-        if (shared[ID] === undefined) {
-          shared[ID] = e.bnode(t.value)
-          byId[shared[ID]] ??= shared
+        let sharedId = shared[ID]
+        if (sharedId === undefined) {
+          shared[ID] = sharedId = e.bnode(t.value)
+          byId[sharedId] ??= shared
         }
-        return shared[ID]
+        return sharedId
       }
       case 'Literal': {
         const l = t as Literal
         const lang = l.language.toLowerCase()
         const direction = (l.direction ?? '') as '' | 'ltr' | 'rtl'
         const shared = sharedLiteral(l.value, lang, direction, l.datatype.value)
-        if (shared[ID] === undefined) {
+        let sharedId = shared[ID]
+        if (sharedId === undefined) {
           const dir = direction === 'ltr' ? 1 : direction === 'rtl' ? 2 : 0
-          shared[ID] = lang ? e.langLiteral(l.value, lang, dir) : e.literal(l.value, l.datatype.value === XSD_STRING ? 0 : idOf(l.datatype, true))
-          byId[shared[ID]] ??= shared
+          shared[ID] = sharedId = lang ? e.langLiteral(l.value, lang, dir) : e.literal(l.value, l.datatype.value === XSD_STRING ? 0 : idOf(l.datatype, true))
+          byId[sharedId] ??= shared
         }
-        return shared[ID]
+        return sharedId
       }
       case 'Quad': {
         const q = t as unknown as Quad
@@ -271,7 +327,8 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
   function known(t: Term): number {
     if (t.termType !== 'NamedNode' || (t as Term & Tagged)[ID] !== undefined) return idOf(t, false)
     const shared = namedNode(t.value)
-    if (shared[ID] !== undefined) return shared[ID]
+    const sharedId = shared[ID]
+    if (sharedId !== undefined) return sharedId
     if (unknown.has(t.value)) return 0
     const id = idOf(t, false)
     if (!id) {
@@ -321,11 +378,129 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     liveAfterCollect = e.termCount()
   }
 
+  // --- compaction ----------------------------------------------------------------------
+
+  /** Jelly readers and writers open on the engine: their handles are the instance's own. */
+  let streams = 0
+  let compaction = { ...COMPACTION_DEFAULTS, ...options.compaction }
+  /**
+   * The live estimate: the memory of an empty instance, and per quad and per term what a fresh
+   * instance of this build spends (FRESH_BYTES), with the term's own bytes from the dictionary's
+   * mean (measured again when the terms have changed by a quarter, and by every compaction).
+   * `scale` is what the last compaction found the memory to be against the estimate: the engine's
+   * growth in steps and size classes, at this store's size.
+   */
+  const [PER_QUAD, PER_TERM] = FRESH_BYTES[kind] ?? FRESH_BYTES.wat!
+  let meanTermBytes = 0
+  let measuredAt = -1
+  let scale = 1
+  function rawLive(quads: number, terms: number): number {
+    if (measuredAt < 0 || Math.abs(terms - measuredAt) > measuredAt / 4) {
+      meanTermBytes = terms ? e.termBytes() / terms : 0
+      measuredAt = terms
+    }
+    return quads * PER_QUAD + terms * (PER_TERM + meanTermBytes)
+  }
+  const liveBytes = () => Math.round(emptyBytes + scale * rawLive(e.quadCount(), e.termCount()))
+
+  function compact(opts: { below?: number } = {}): Compaction | undefined {
+    if (fetchingOps || streams) return undefined
+    if (opts.below !== undefined && liveBytes() >= opts.below * e.memoryBytes()) return undefined
+    const t0 = performance.now()
+    const old = e
+    const before = old.memoryBytes()
+    const quads = old.match(0, 0, 0, 0)
+    const next = instance()
+    // Old ids to new: every term a quad uses, through the cached objects' values where there are
+    // some. Blank nodes keep their labels (a Jelly or Turtle load would give them fresh ones).
+    const map: number[] = []
+    map[DEFAULT_GRAPH] = DEFAULT_GRAPH
+    const oldXsd = old.lookupIri(XSD_STRING)
+    const copy = (id: number): number => {
+      const done = map[id]
+      if (done) return done
+      const t = byId[id]
+      let n: number
+      switch (old.kind(id)) {
+        case Kind.Iri: {
+          n = next.iri(t instanceof Iri ? t.value : old.value(id))
+          break
+        }
+        case Kind.BlankNode: {
+          n = next.bnode(t instanceof Blank ? t.value : old.value(id))
+          break
+        }
+        case Kind.Literal: {
+          const v = t instanceof Lit ? t.value : old.value(id)
+          const lang = t instanceof Lit ? t.language : old.lang(id)
+          if (lang) n = next.langLiteral(v, lang, old.direction(id))
+          else {
+            const dt = old.datatype(id)
+            n = next.literal(v, dt === oldXsd ? 0 : copy(dt))
+          }
+          break
+        }
+        case Kind.Triple: {
+          const [a, b, c] = old.tripleParts(id)
+          n = next.triple(copy(a), copy(b), copy(c))
+          break
+        }
+        case Kind.DefaultGraph:
+          n = DEFAULT_GRAPH
+          break
+        default:
+          throw new Error(`compaction met unknown term id ${id}`)
+      }
+      map[id] = n
+      return n
+    }
+    const adds = new Uint32Array(quads.length)
+    for (let i = 0; i < quads.length; i++) adds[i] = copy(quads[i]!)
+    // In the order they were, a batch at a time (so the input buffer stays small).
+    const step = 4 * 16384
+    for (let i = 0; i < adds.length; i += step) next.apply([], adds.subarray(i, i + step))
+
+    // Swap: the shared term objects get their new ids under a new tag; those whose term no
+    // quad uses any more go, as collect would have them go. Triple terms re-intern as used.
+    old.dispose()
+    e = next
+    const tag = Symbol('engine id')
+    const ids: (Term | undefined)[] = [undefined, defaultGraph]
+    delete defaultGraph[ID]
+    defaultGraph[tag] = DEFAULT_GRAPH
+    const retag = <T extends Base & Term>(cache: Map<string, T>) => {
+      for (const [k, t] of cache) {
+        const was = t[ID]
+        if (was === undefined) continue
+        delete t[ID]
+        const n = map[was]
+        if (n) {
+          t[tag] = n
+          ids[n] ??= t
+        } else cache.delete(k)
+      }
+    }
+    retag(iris)
+    retag(literals)
+    retag(bnodes)
+    ID = tag
+    byId = ids
+    // Prepared queries (and compiled ones) were the old instance's: they are prepared again as they run.
+    prepared.clear()
+    unknown.clear()
+    liveAfterCollect = e.termCount()
+    const after = e.memoryBytes()
+    measuredAt = -1
+    const terms = e.termCount()
+    const raw = rawLive(e.quadCount(), terms)
+    if (raw > 0) scale = Math.max(0.5, (after - emptyBytes) / raw)
+    return { before, after, quads: quads.length / 4, terms, ms: performance.now() - t0 }
+  }
+
   // --- SERVICE and LOAD (ABI.md, "Optional: fetching") ---------------------------------
 
   /** Fetching operations in flight: the engine's request table is theirs, and nothing is collected. */
   let fetchingOps = 0
-  let deadline: number | undefined
   /** Fetching operations run one at a time: they share the engine's request table. */
   let queue: Promise<unknown> = Promise.resolve()
   /** A synchronous call (a rule's, a view's) that would fetch is refused, and fetches nothing. */
@@ -506,12 +681,22 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     },
     jellyReader(graph) {
       const r = e.jellyReader(graph ? idOf(graph, true) : DEFAULT_GRAPH)
+      let open = true
+      streams++
       return {
         frame(bytes) {
           unknown.clear()
           return r.add(bytes)
         },
-        end: () => (r.finish(), r.release()),
+        end: () => {
+          try {
+            return r.finish()
+          } finally {
+            r.release()
+            if (open) streams--
+            open = false
+          }
+        },
       }
     },
     *jellyFrames(graph, options = {}) {
@@ -520,6 +705,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       const ids = graph && !g ? new Uint32Array(0) : e.match(0, 0, 0, g)
       const w = e.jellyWriter({ ...options, physical: 2 })
       const step = 4 * (options.frameRows ?? 4096)
+      streams++
       try {
         for (let i = 0; i < ids.length; i += step) {
           const out = w.write(ids.subarray(i, i + step))
@@ -527,6 +713,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
         }
         yield w.flush()
       } finally {
+        streams--
         w.release()
       }
     },
@@ -556,14 +743,28 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       e.dispose()
     },
     setDeadline: (at) => e.setDeadline((deadline = at)),
-    setFuel: (steps) => e.setFuel(steps),
-    engine: e,
+    setFuel: (steps) => e.setFuel((fuel = steps)),
+    get engine() {
+      return e
+    },
     idOf: (t) => idOf(t, false),
+    memoryBytes: () => e.memoryBytes(),
+    liveBytes,
+    compact,
+    setCompaction(policy) {
+      compaction = { ...COMPACTION_DEFAULTS, ...policy }
+    },
     maintain(budgetMs) {
       const t0 = performance.now()
       // Collect once the dictionary has grown by half since the last collection.
       // Not while a fetch is in flight: its answers' terms are in the engine's request table.
       if (!fetchingOps && e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
+      // Compact when live state has fallen well below the memory (not for small stores): the
+      // copy cannot be split over slices, and it is rare (the memory must have outgrown it).
+      if (compaction.below > 0 && !fetchingOps && !streams) {
+        const memory = e.memoryBytes()
+        if (memory >= compaction.floor) compact({ below: compaction.below })
+      }
       // What time is left compiles the queries that have run most (compiled: 'idle').
       return e.compileIdle(budgetMs - (performance.now() - t0))
     },

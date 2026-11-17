@@ -491,6 +491,23 @@ export class Engine {
     this.assertNotInClock()
     return this.x.term_count()
   }
+  /** The byte length of the instance's linear memory: its high-water mark, since WebAssembly memory never shrinks. */
+  memoryBytes(): number {
+    return this.x.memory.buffer.byteLength
+  }
+  /** The UTF-8 bytes of every live term's value and language tag, by a walk of the dictionary (O(terms)). */
+  termBytes(): number {
+    this.assertNotInClock()
+    const x = this.x
+    let live = x.term_count()
+    let bytes = 0
+    for (let id = 1; live > 0; id++) {
+      if (!x.term_kind(id)) continue
+      live--
+      bytes += x.term_value_len(id) + x.term_lang_len(id)
+    }
+    return bytes
+  }
 
   // --- store ----------------------------------------------------------------
 
