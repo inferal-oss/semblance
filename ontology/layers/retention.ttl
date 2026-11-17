@@ -161,15 +161,54 @@ ret:derivedTriples a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
     rdfs:label "Derived triples"@en , "Похідні трійки"@uk , "Abgeleitete Tripel"@de , "الثلاثيات المشتقة"@ar .
 ret:evicted a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
     rdfs:label "Derived triples evicted"@en , "Витіснено похідних трійок"@uk , "Verdrängte abgeleitete Tripel"@de , "الثلاثيات المشتقة المُخلاة"@ar .
+ret:liveMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Engine live state (MiB)"@en , "Живий стан рушія (МіБ)"@uk , "Lebender Engine-Zustand (MiB)"@de , "الحالة الحية للمحرك (ميبيبايت)"@ar ;
+    rdfs:comment "What the engines' live state needs (a store's liveBytes), against ret:wasmMiB: what a compaction would leave."@en .
+ret:compactedMiB a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ;
+    rdfs:label "Given back by compaction (MiB)"@en , "Повернено ущільненням (МіБ)"@uk , "Durch Verdichtung freigegeben (MiB)"@de , "المُعاد بالضغط (ميبيبايت)"@ar ;
+    rdfs:comment "Engine memory compaction has given back this session, in all."@en .
+ret:measuredAt a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:dateTime ;
+    rdfs:comment "When the usage (ret:Usage) was last measured (ret:Measure)."@en .
+
+# Usage, measured on request (ret:Measure), not every sample: what each graph holds, the classes with
+# the most instances, and the sizes of the host's own structures (the engines', the indexes', the
+# views', and the runtime's and store's where they report a footprint). Each is a node minted under the
+# budget, in urn:semblance:retention, replaced by the next measurement.
+ret:Usage a owl:Class ; rdfs:comment "One measured part of what memory holds (ret:usageOf the budget)."@en .
+ret:GraphUsage a owl:Class ; rdfs:subClassOf ret:Usage ; rdfs:comment "The triples of one graph (ret:graph)."@en .
+ret:ClassUsage a owl:Class ; rdfs:subClassOf ret:Usage ; rdfs:comment "The instances of one class (ret:class), in every graph."@en .
+ret:StructureUsage a owl:Class ; rdfs:subClassOf ret:Usage ; rdfs:comment "The entries of one host structure (ret:structure, a name such as screen.engine.refs)."@en .
+ret:usageOf a owl:ObjectProperty ; rdfs:domain ret:Usage ; rdfs:range ret:MemoryBudget .
+ret:graph a owl:ObjectProperty ; rdfs:domain ret:GraphUsage ;
+    rdfs:label "Graph"@en , "Граф"@uk , "Graph"@de , "الرسم البياني"@ar .
+ret:DefaultGraph a owl:NamedIndividual ;
+    rdfs:label "The default graph"@en , "Типовий граф"@uk , "Der Standardgraph"@de , "الرسم البياني الافتراضي"@ar ;
+    rdfs:comment "ret:graph of the default graph's usage (it has no name of its own)."@en .
+ret:class a owl:ObjectProperty ; rdfs:domain ret:ClassUsage ;
+    rdfs:label "Class"@en , "Клас"@uk , "Klasse"@de , "الصنف"@ar .
+ret:name a owl:DatatypeProperty ; rdfs:domain ret:ClassUsage ;
+    rdfs:comment "The class as a prefixed name (labels repeat across vocabularies)."@en .
+ret:structure a owl:DatatypeProperty ; rdfs:domain ret:StructureUsage ;
+    rdfs:label "Structure"@en , "Структура"@uk , "Struktur"@de , "البنية"@ar .
+ret:instances a owl:DatatypeProperty ; rdfs:domain ret:ClassUsage ;
+    rdfs:label "Instances"@en , "Екземпляри"@uk , "Instanzen"@de , "النسخ"@ar .
+ret:entries a owl:DatatypeProperty ; rdfs:domain ret:StructureUsage ;
+    rdfs:label "Entries"@en , "Записи"@uk , "Einträge"@de , "المدخلات"@ar .
+ret:usageLimit a owl:DatatypeProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range xsd:integer ;
+    rdfs:comment "How many classes a measurement keeps, those with the most instances first (default 25)."@en .
 
 # Set by a person or a reaction, in the input graph, on the budget.
 ret:simulate a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ; rdfs:range ret:Level ;
     rdfs:label "Simulate"@en , "Імітувати"@uk , "Simulieren"@de , "محاكاة"@ar ;
     rdfs:comment "Act as if the level were this one, whatever is measured (the Memory tool, tests)."@en .
 ret:request a owl:ObjectProperty ; rdfs:domain ret:MemoryBudget ;
-    rdfs:comment "Written by a reaction: do this once now (ret:Evict, ret:OffloadNow). Performed and removed by the pressure effect."@en .
+    rdfs:comment "Written by a reaction: do this once now (ret:Evict, ret:OffloadNow, ret:CompactNow, ret:Measure). Performed and removed by the pressure effect."@en .
 ret:Evict a owl:NamedIndividual ; rdfs:label "Evict now"@en , "Витіснити зараз"@uk , "Jetzt verdrängen"@de , "إخلاء الآن"@ar .
 ret:OffloadNow a owl:NamedIndividual ; rdfs:label "Offload now"@en , "Вивантажити зараз"@uk , "Jetzt auslagern"@de , "التفريغ الآن"@ar .
+ret:CompactNow a owl:NamedIndividual ; rdfs:label "Compact now"@en , "Ущільнити зараз"@uk , "Jetzt verdichten"@de , "الضغط الآن"@ar ;
+    rdfs:comment "Copy the engines' live state into fresh memory now (a store's compact), whatever it would win."@en .
+ret:Measure a owl:NamedIndividual ; rdfs:label "Measure usage"@en , "Виміряти використання"@uk , "Nutzung messen"@de , "قياس الاستخدام"@ar ;
+    rdfs:comment "Measure what each graph, class and host structure holds now (ret:Usage)."@en .
 
 # Pressure the effect's own steps did not relieve: raised on the budget, for reactions to answer (raise
 # the budget, close what the app can close). Once per crossing into Critical.

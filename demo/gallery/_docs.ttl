@@ -1251,7 +1251,7 @@ ui:doc-rt-ask-ts a c:Code ; c:block true ; c:language "typescript" ; c:label """
 })""" .
 ui:doc-rt-ask-2 a c:Text ; c:label "Without an answer, memory keeps what it holds, and history storage refused is dropped past its bound, counted on its horizon and announced. Owned data is never dropped." .
 ui:doc-rt-tool-h a c:Heading ; c:level 2 ; c:label "The Memory tool" .
-ui:doc-rt-tool-1 a c:Text ; c:label "The Tools window (⌘.) has a Memory tab: the level and what was measured, the maximum, a choice that simulates a level, buttons that evict hidden views and offload history now, and every stream's horizon with Show older. Simulate critical after visiting a few pages to watch the derived triples fall." .
+ui:doc-rt-tool-1 a c:Text ; c:label "The Tools window (⌘.) has a Memory tab: the level and what was measured (the engines' memory beside what their live state needs), the maximum, a choice that simulates a level, buttons that evict hidden views, offload history, compact engine memory and measure usage now, every stream's horizon with Show older, and what the last measurement found by graph, by class and by host structure. Simulate critical after visiting a few pages to watch the derived triples fall, then measure to see where what is left is." .
 
 # --- Remote data --- (docs/REMOTE.md says the same, at more length)
 ui:doc-remote a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
