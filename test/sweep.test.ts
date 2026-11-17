@@ -50,8 +50,11 @@ function device() {
   set(P + X + 'unknown', copy('e', 'unknown'))
   // Not remembered state, under the same prefix: another owner's.
   set(P + 'ret:run|stream|policy|000000000001', 'offloaded')
+  // A remote write the store has not answered (a person's unsent change): owned, never swept, even
+  // when it looks like a stored copy and the record says nothing declared it for long.
+  set(P + 'src:' + X + 'source|place', copy('f', 'unsent'))
   set(P + 'other', 'kept')
-  set(P + '~declared', JSON.stringify({ [X + 'gone']: Date.now() - 40 * DAY, [X + 'recent']: Date.now() - DAY, [X + 'kept']: Date.now() - 40 * DAY }))
+  set(P + '~declared', JSON.stringify({ ['src:' + X + 'source|place']: Date.now() - 40 * DAY, [X + 'gone']: Date.now() - 40 * DAY, [X + 'recent']: Date.now() - DAY, [X + 'kept']: Date.now() - 40 * DAY }))
   return b
 }
 

@@ -795,6 +795,11 @@ reads what is stored, not what the app holds.
 | Offloaded history (`src/retention/offload.ts`) | `mount`'s `retention.storage`, by default IndexedDB `semblance-offload` | `semblance:ret:<run>\|<stream>\|<policy>\|<seq>` | the page whose run it is, while it is open |
 | Kept files (`src/files.ts`, `src/file-store.ts`) | IndexedDB `semblance-files`, store `files` | the `file:handle` | a node with that `file:handle` and a `file:keptIn` in the graph (itself remembered state), or the page that kept it, while it is open |
 
+Remote writes a store has not answered yet (`src/remote.ts`, keys `semblance:src:<source>\|<place>`
+in the retention storage, #560) are a person's unsent changes: owned data, never swept, even when no
+writable `src:Source` declares them any more. The remembered-state sweep leaves them, as it leaves
+offloaded history (`semblance:ret:`), under the same default prefix.
+
 Nothing else writes to storage: the pre-paint script (`src/web/remembered.ts`) reads remembered state,
 navigation keeps its storage-carried dimensions through the persistence effect, and sandboxes keep
 nothing.
@@ -803,7 +808,8 @@ Remembered state is swept by name, within the effect's prefix: the prefix is the
 (two apps on one origin already need their own, since their switches share `<prefix>enabled`). Of the
 keys under it, only those that are remembered state are its: a name the record below knows, or a key
 that holds a policy's copy, with its chunks and what it set aside. Another owner's keys under the
-same prefix (offloaded history in the same storage) are left.
+same prefix are left, and `semblance:ret:` and `semblance:src:` are never read as remembered state
+at all, whatever they hold.
 
 **Never what another page may still use.** Two tabs of the app may be open on different versions,
 and an older version, or a page not visited for a while, declares what this one does not. So:

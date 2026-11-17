@@ -49,6 +49,12 @@ export const SWEEP_GRACE_MS = 30 * 86_400_000
 const DECLARED = '~declared'
 /** What a page's mark as open is named after the prefix (src/pages.ts): `<prefix>open|<run>`. */
 const OPEN = 'open|'
+/**
+ * Other owners' keys that may share a storage and the default prefix, never swept as remembered state:
+ * offloaded history (`semblance:ret:`, swept by its own rule) and remote writes the store has not
+ * answered (`semblance:src:`, a person's unsent changes: owned, never swept).
+ */
+const OTHER_OWNERS = ['ret:', 'src:']
 
 /** Where a scope keeps its strings. Asynchronous, so IndexedDB fits too. */
 export interface Backend {
@@ -910,7 +916,7 @@ export class Persistence {
     for (const [b, declared] of declaredIn) {
       if (!b.keys || this.stopped) continue
       const ledgerKey = prefix + DECLARED
-      const keys = (await b.keys(prefix)).filter((k) => k !== ledgerKey)
+      const keys = (await b.keys(prefix)).filter((k) => k !== ledgerKey && !OTHER_OWNERS.some((o) => k.startsWith(prefix + o)))
       const ledger = readLedger(await b.get(ledgerKey))
       const now = Date.now()
       // Keys by the name they are stored under: a policy's copy, its chunks (#i) and what it set aside (~aside).
