@@ -253,6 +253,7 @@ beh:UndoLatest a beh:Reaction ;
       OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
       ?log tree:member ?m . ?m beh:sequence ?n .
       FILTER EXISTS { ?m beh:asserted|beh:retracted ?anything }
+      FILTER NOT EXISTS { ?m beh:asserted|beh:retracted ?part FILTER NOT EXISTS { ?part rdf:subject ?partS ; rdf:predicate ?partP ; rdf:object ?partO } }
       FILTER NOT EXISTS { ?log beh:undone ?m }
       FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . FILTER NOT EXISTS { ?as ?ap ?ao } }
       FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . ?rs ?rp ?ro }
@@ -271,6 +272,7 @@ beh:UndoLatest a beh:Reaction ;
       OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
       ?log tree:member ?m . ?m beh:sequence ?n .
       FILTER EXISTS { ?m beh:asserted|beh:retracted ?anything }
+      FILTER NOT EXISTS { ?m beh:asserted|beh:retracted ?part FILTER NOT EXISTS { ?part rdf:subject ?partS ; rdf:predicate ?partP ; rdf:object ?partO } }
       FILTER NOT EXISTS { ?log beh:undone ?m }
       FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . FILTER NOT EXISTS { ?as ?ap ?ao } }
       FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . ?rs ?rp ?ro }
@@ -296,6 +298,7 @@ beh:RedoLatest a beh:Reaction ;
       $this a beh:Redoer .
       OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
       ?log beh:undone ?m . ?m beh:sequence ?n .
+      FILTER NOT EXISTS { ?m beh:asserted|beh:retracted ?part FILTER NOT EXISTS { ?part rdf:subject ?partS ; rdf:predicate ?partP ; rdf:object ?partO } }
       FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . ?as ?ap ?ao }
       FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . FILTER NOT EXISTS { ?rs ?rp ?ro } }
   } GROUP BY ?log }
@@ -307,6 +310,7 @@ beh:RedoLatest a beh:Reaction ;
       $this a beh:Redoer .
       OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
       ?log beh:undone ?m . ?m beh:sequence ?n .
+      FILTER NOT EXISTS { ?m beh:asserted|beh:retracted ?part FILTER NOT EXISTS { ?part rdf:subject ?partS ; rdf:predicate ?partP ; rdf:object ?partO } }
       FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . ?as ?ap ?ao }
       FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . FILTER NOT EXISTS { ?rs ?rp ?ro } }
   } GROUP BY ?log }

@@ -715,8 +715,11 @@ WHERE { ?run c:recentOf ui:palette ; c:entryFor ?item ; c:recentRank ?rank }""" 
 ui:rememberChangeLog a per:Policy ; per:scope per:Session ; per:enabled false ; per:graph "urn:semblance:events" ; iv:strategy iv:Incremental ;
     rdfs:label "The change log" , "Журнал змін"@uk , "Das Änderungsprotokoll"@de , "سجل التغييرات"@ar ;
     per:construct """
-CONSTRUCT { beh:ChangeLog tree:member ?m ; beh:latest ?latest . ?m ?p ?o }
-WHERE { { beh:ChangeLog tree:member ?m . ?m ?p ?o } UNION { beh:ChangeLog tree:member ?m } UNION { beh:ChangeLog beh:latest ?latest } }""" .
+CONSTRUCT { beh:ChangeLog tree:member ?m ; beh:latest ?latest . ?m ?p ?o . ?st ?sp ?so }
+WHERE {
+  { beh:ChangeLog tree:member ?m . ?m ?p ?o } UNION { beh:ChangeLog tree:member ?m } UNION { beh:ChangeLog beh:latest ?latest }
+  UNION { beh:ChangeLog tree:member ?m . ?m beh:asserted ?st . ?st ?sp ?so } UNION { beh:ChangeLog tree:member ?m . ?m beh:retracted ?st . ?st ?sp ?so }
+}""" .
 
 ui:rememberLogSwitch a c:ToggleSwitch ; c:controls ui:rememberChangeLog ; c:property per:enabled ;
     c:label "Keep the change log across reloads (this tab)" , "Зберігати журнал змін між перезавантаженнями (ця вкладка)"@uk ,

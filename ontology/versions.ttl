@@ -21,8 +21,8 @@
 # Read by the tooling, not loaded with the framework's ontology.
 
 beh:Event sem:version 1 ; sem:closure "e8f8fb8453af662e" ; sem:internal "new" .
-beh:Redoer sem:version 1 ; sem:closure "ebc984e789a51ed9" ; sem:internal "new" .
-beh:Undoer sem:version 1 ; sem:closure "1dcec6fa0410d401" ; sem:internal "new" .
+beh:Redoer sem:version 2 ; sem:closure "163ddd66877412c2" ; sem:internal "undo and redo skip a member whose recorded statements are not whole, as the function twins did" .
+beh:Undoer sem:version 2 ; sem:closure "c29597ec3b08aab1" ; sem:internal "undo and redo skip a member whose recorded statements are not whole, as the function twins did" .
 blk:Addressed sem:version 1 ; sem:closure "4b3da75a70258007" ; sem:internal "new" .
 blk:Block sem:version 1 ; sem:closure "85a314ea8893f962" ; sem:internal "new" .
 blk:BlockHandle sem:version 1 ; sem:closure "715d23a308630149" ; sem:internal "new" .

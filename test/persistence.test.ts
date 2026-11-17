@@ -68,6 +68,43 @@ describe('persistence (per:Policy)', () => {
     expect(seq(b)).toBe(last + 1)
   })
 
+  it.each(['sparql', 'function'] as const)('a remembered change log keeps what undo needs, and undo agrees on both sides when it is missing (%s)', async (prefer) => {
+    const storage = browser()
+    const a = await mountRemembering(storage, undefined, [], 'oxigraph', prefer)
+    const f = a.store.factory
+    const nn = (iri: string) => f.namedNode(iri)
+    const policy = nn(UI + 'rememberChangeLog')
+    a.runtime.apply({ remove: a.store.match(policy, nn(PER + 'enabled'), null), add: [f.quad(policy, nn(PER + 'enabled'), f.literal('true', nn(NS.xsd + 'boolean')))] })
+    // An undoable change: a card added to the board.
+    a.runtime.apply({ remove: [], add: [f.quad(nn(UI + 'ex-kanban-new'), nn(NS.c + 'value'), f.literal('Remembered card'))] })
+    a.bus.emit(NS.beh + 'Click', UI + 'ex-kanban-add')
+    const KB = 'https://semblance.dev/demo/kanban#'
+    const card = (h: typeof a) => h.store.match(null, nn(KB + 'title'), f.literal('Remembered card'), f.defaultGraph())[0]?.subject
+    const node = card(a)!
+    expect(node).toBeDefined()
+    const state = [...a.store.match(node, null, null, f.defaultGraph()), ...a.store.match(null, null, node, f.defaultGraph())]
+    await a.persistence.flush()
+    const undone = (h: typeof a) => h.store.match(nn(NS.beh + 'ChangeLog'), nn(NS.beh + 'undone'), null).length
+
+    // A reload: the board's own state is not remembered here, so it is put back as it was.
+    const b = await mountRemembering(storage, undefined, [], 'oxigraph', prefer)
+    b.runtime.apply({ remove: [], add: state })
+    b.bus.emit(NS.beh + 'Click', UI + 'ex-kanban-undo')
+    expect(card(b)).toBeUndefined() // the remembered member's statements came back with it
+    expect(undone(b)).toBe(1)
+
+    // A member whose statements are missing (stored before they were): neither side marks it undone.
+    const c = await mountRemembering(storage, undefined, [], 'oxigraph', prefer)
+    c.runtime.apply({ remove: [], add: state })
+    const g = nn('urn:semblance:events')
+    const statements = c.store.match(null, nn(NS.rdf + 'subject'), null, g).map((q) => q.subject)
+    expect(statements.length).toBeGreaterThan(0)
+    c.runtime.log({ remove: statements.flatMap((st) => c.store.match(st, null, null, g)), add: [] })
+    c.bus.emit(NS.beh + 'Click', UI + 'ex-kanban-undo')
+    expect(card(c)).toBeDefined()
+    expect(undone(c)).toBe(0)
+  })
+
   it('forgets on request, and when a policy is turned off', async () => {
     const storage = browser()
     const a = await mountRemembering(storage)
