@@ -14,6 +14,10 @@ const HTTP = NS.http
 const LDES = NS.ldes
 const TREE = NS.tree
 const XSD_DOUBLE = NS.xsd + 'double'
+/** Where entries are minted; their nodes are `<entry>/~<local>`. */
+const ENTRY = 'urn:semblance:net:'
+/** How much of a body is read without a net:previewLimit (the graph's own default). */
+const PREVIEW_FALLBACK = 16_384
 
 export interface CaptureOptions {
   /** Where fetch and WebSocket live (globalThis by default). */
@@ -38,6 +42,8 @@ export class NetworkCapture {
   private seq = 0
   /** Retained entries in capture order, with every subject that belongs to each. */
   private readonly entries: { entry: NamedNode; subjects: NamedNode[] }[] = []
+  /** The retained entries' IRIs: what arrives late for one retired (or cleared) is dropped. */
+  private readonly alive = new Set<string>()
   private pending: { add: Quad[]; remove: Quad[] } | undefined
   private readonly restore: (() => void)[] = []
 
@@ -102,6 +108,7 @@ export class NetworkCapture {
     const g = this.nn(NETWORK_GRAPH)
     const store = this.runtime.store
     for (const { entry, subjects } of this.entries.splice(0)) {
+      this.alive.delete(entry.value)
       this.batch().remove.push(...store.match(this.nn(NET + 'Capture'), this.nn(TREE + 'member'), entry, g))
       for (const s of subjects) this.batch().remove.push(...store.match(s, null, null, g))
     }
@@ -146,14 +153,48 @@ export class NetworkCapture {
     const type = response.headers.get('content-type')
     if (type) this.add(r, NET + 'contentType', this.f.literal(type))
     let size = Number(response.headers.get('content-length') ?? NaN)
-    try {
-      const body = await response.clone().text()
-      if (Number.isNaN(size)) size = new TextEncoder().encode(body).length
-      this.add(r, NET + 'body', this.f.literal(this.cut(body)))
-    } catch {}
+    const body = await this.preview(response)
+    if (body) {
+      if (Number.isNaN(size) && body.whole) size = body.bytes
+      this.add(r, NET + 'body', this.f.literal(this.cut(body.text)))
+    }
     if (!Number.isNaN(size)) this.add(e, NET + 'size', this.integer(size))
     this.set(e, NET + 'status', this.nn(response.ok ? NET + 'Complete' : NET + 'Failed'))
     this.add(e, NET + 'endedAt', this.double(this.now()))
+  }
+
+  /**
+   * The start of a response's body, read from a clone up to net:previewLimit characters and no
+   * further: a stream (server-sent events, Jelly) is never buffered whole, and its reading is
+   * cancelled once the preview is full. `whole` when the body ended within it.
+   */
+  private async preview(response: Response): Promise<{ text: string; whole: boolean; bytes: number } | undefined> {
+    let body: ReadableStream<Uint8Array> | null
+    try {
+      body = response.clone().body
+    } catch {
+      return undefined
+    }
+    if (!body) return { text: '', whole: true, bytes: 0 }
+    const limit = this.limit() ?? PREVIEW_FALLBACK
+    const reader = body.getReader()
+    const decoder = new TextDecoder()
+    let text = ''
+    let bytes = 0
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) return { text: text + decoder.decode(), whole: true, bytes }
+        bytes += value.byteLength
+        text += decoder.decode(value, { stream: true })
+        if (text.length > limit) {
+          void reader.cancel().catch(() => {})
+          return { text, whole: false, bytes }
+        }
+      }
+    } catch {
+      return undefined
+    }
   }
 
   private socket(socket: WebSocket, url: string) {
@@ -213,6 +254,7 @@ export class NetworkCapture {
     const n = ++this.seq
     const e = this.nn(`urn:semblance:net:${Date.now().toString(36)}-${n}`)
     this.entries.push({ entry: e, subjects: [e] })
+    this.alive.add(e.value)
     this.add(e, RDF_TYPE, this.nn(type))
     this.add(e, NET + 'kind', this.nn(kind))
     this.add(e, NET + 'label', this.f.literal(label))
@@ -222,6 +264,7 @@ export class NetworkCapture {
     const keep = this.amount()
     while (this.entries.length > keep) {
       const { entry, subjects } = this.entries.shift()!
+      this.alive.delete(entry.value)
       const b = this.batch()
       b.add = b.add.filter((q) => !q.object.equals(entry))
       b.remove.push(this.f.quad(this.nn(NET + 'Capture'), this.nn(TREE + 'member'), entry))
@@ -255,10 +298,22 @@ export class NetworkCapture {
     return Infinity
   }
 
-  private cut(text: string): string {
+  /** net:previewLimit, in characters (undefined: none given). */
+  private limit(): number | undefined {
     const limit = this.runtime.store.match(this.nn(NET + 'Capture'), this.nn(NET + 'previewLimit'), null)[0]
-    const n = limit ? Number(limit.object.value) : Infinity
+    return limit ? Number(limit.object.value) : undefined
+  }
+
+  private cut(text: string): string {
+    const n = this.limit() ?? Infinity
     return text.length > n ? text.slice(0, n) + '…' : text
+  }
+
+  /** Whether a node may still be written: not one of an entry retired (or cleared) since it began. */
+  private live(s: NamedNode): boolean {
+    if (!s.value.startsWith(ENTRY)) return true
+    const i = s.value.indexOf('/~')
+    return this.alive.has(i < 0 ? s.value : s.value.slice(0, i))
   }
 
   // --- writing -----------------------------------------------------------------------------------
@@ -281,11 +336,13 @@ export class NetworkCapture {
   }
 
   private add(s: NamedNode, p: string, o: Quad['object']) {
+    if (!this.live(s)) return
     this.batch().add.push(this.f.quad(s, this.nn(p), o))
   }
 
   /** Replace a single-valued property (from the graph and from what is pending). */
   private set(s: NamedNode, p: string, o: Quad['object']) {
+    if (!this.live(s)) return
     const b = this.batch()
     const pred = this.nn(p)
     b.add = b.add.filter((q) => !(q.subject.equals(s) && q.predicate.equals(pred)))

@@ -89,6 +89,64 @@ describe('network capture', () => {
     expect(store.match(null, null, null, g)).toHaveLength(0)
   })
 
+  it('drops what arrives for an entry retired while it was in flight', async () => {
+    const { members, store, g, f, runtime, detach, original } = setup('@prefix net: <https://semblance.dev/ns/network#> . @prefix ldes: <https://w3id.org/ldes#> . net:CaptureRetention ldes:amount 2 .')
+    detach()
+    let answer!: (r: Response) => void
+    const target = { fetch: ((input: RequestInfo | URL, init?: RequestInit) => (String(input) === '/slow' ? new Promise<Response>((r) => (answer = r)) : original!(input, init))) as typeof fetch }
+    const capture2 = new NetworkCapture(runtime, { target })
+    capture2.attach()
+    const slow = target.fetch!('/slow')
+    for (let i = 0; i < 3; i++) await target.fetch!(`/r${i}`)
+    capture2.flush()
+    expect(members()).toHaveLength(2)
+    answer(new Response('late', { status: 200, headers: { 'content-type': 'text/plain', 'x-late': '1' } }))
+    await slow
+    await new Promise((r) => setTimeout(r, 0))
+    capture2.flush()
+    // Every subject left belongs to a retained entry: nothing of the retired one came back.
+    const kept = new Set(members())
+    const owners = new Set(store.match(null, null, null, g).map((q) => q.subject.value.split('/~')[0]).filter((s) => s !== NET + 'Capture'))
+    expect([...owners].every((s) => kept.has(s))).toBe(true)
+    expect(store.match(null, f.namedNode(NET + 'body'), f.literal('late'), g)).toHaveLength(0)
+    capture2.clear()
+    capture2.flush()
+    expect(store.match(null, null, null, g)).toHaveLength(0)
+  })
+
+  it('reads a streaming body only up to net:previewLimit', async () => {
+    const { members, value, runtime, detach } = setup('@prefix net: <https://semblance.dev/ns/network#> . net:Capture net:previewLimit 10 .')
+    detach()
+    let pulled = 0
+    let cancelled = false
+    // A stream that never ends (server-sent events): a chunk whenever asked.
+    const stream = () =>
+      new ReadableStream<Uint8Array>({
+        pull: (c) => void (pulled++, c.enqueue(new TextEncoder().encode('data: tick\n\n'))),
+        cancel: () => void (cancelled = true),
+      })
+    const target = { fetch: (async () => new Response(stream(), { headers: { 'content-type': 'text/event-stream' } })) as typeof fetch }
+    const c = new NetworkCapture(runtime, { target })
+    c.attach()
+    const response = await target.fetch('/events')
+    await new Promise((r) => setTimeout(r, 10))
+    c.flush()
+    const [e] = members()
+    const body = value(value(e, HTTP + 'resp'), NET + 'body')
+    expect(body).toBe('data: tick…')
+    expect(value(e, NET + 'status')).toBe(NET + 'Complete')
+    expect(value(e, NET + 'size')).toBeUndefined() // not read to its end: its size is not known
+    // The page's own reading goes on; the capture's stopped, so nothing is buffered for it.
+    const reader = response.body!.getReader()
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe('data: tick\n\n')
+    const before = pulled
+    await new Promise((r) => setTimeout(r, 10))
+    expect(pulled - before).toBeLessThan(4)
+    void reader.cancel()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(cancelled).toBe(true)
+  })
+
   it('pauses while net:recording is false, and stops on detach', async () => {
     const { target, capture, members, runtime, f, detach, original } = setup()
     runtime.apply({ remove: [], add: [f.quad(f.namedNode(NET + 'Capture'), f.namedNode(NET + 'recording'), f.literal('false', f.namedNode(NS.xsd + 'boolean')))] })
