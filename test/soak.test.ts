@@ -11,8 +11,11 @@ describe('soak', () => {
   it('keeps every structure and the time per event bounded over 3,500 events', () => {
     // The site's store (Semblance's WAT engine), past the change log's bounds (200 events, and 60
     // undoable ones before them) in 3 periods, then 11 more.
-    const { h, grew, early, late, wasmByPeriod } = shellSoak('wat', 'sparql', { warmUp: 3, measured: 11 })
+    const { h, grew, early, late, wasmByPeriod, retired, dangling } = shellSoak('wat', 'sparql', { warmUp: 3, measured: 11 })
     expect(grew).toEqual([])
+    // Nothing in any graph points at a member the streams let go (ret:Reference), nor is about one.
+    expect(retired.size).toBeGreaterThan(2000)
+    expect(dangling()).toEqual([])
     // The memory's high-water mark is reached within the first half of the measured periods.
     const half = wasmByPeriod.length >> 1
     expect(wasmByPeriod.slice(half).every((w) => w === wasmByPeriod[half - 1]), `${wasmByPeriod.map((w) => w >> 20).join(', ')} MiB`).toBe(true)

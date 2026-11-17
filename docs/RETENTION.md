@@ -118,10 +118,11 @@ option in code. "-" means nothing bounds it.
 
 Hover, focus, pointer, drag (`dnd:Current`), rendered geometry (`rnd:`, at most 1,000 records,
 forgotten on unmount), validation results, timers, clipboard and pick requests: all are replaced, not
-accumulated. What remains are small leftovers. Retirement does not clean references that other nodes
-hold to a retired member: `beh:previous` on the oldest member, `beh:raisedBy`, `beh:continued`,
-`beh:undone` (cleaned lazily), `dnd:refusedBy`, `sem:lastHang`, and `prov:wasInformedBy` on the sync
-and state logs. Each is bounded to one per node, but each dangles.
+accumulated. What remained were small leftovers: retirement did not clean the references other nodes
+held to a retired member (`beh:previous` on the oldest member, `beh:raisedBy`, `beh:continued`,
+`beh:undone`, `dnd:refusedBy`, `sem:lastHang`, and `prov:wasInformedBy` on the sync and state logs).
+Each was bounded to one per node, but each dangled. A retirement now takes them with the member
+(`ret:Reference`, §8.10).
 
 ## 4. Where the code confuses the classes
 
@@ -202,7 +203,7 @@ What this would replace or absorb:
 
 One effect enforces it for every stream: "retire what the policies no longer keep", fed by appends
 and the clock. That is the operator `docs/IVM.md` §7.2 already describes. Retirement also removes
-references to the member it retires (§3.4).
+references to the member it retires (§3.4, built as `ret:Reference`, §8.10).
 
 ### 5.2 Never "my data disappeared"
 
@@ -458,6 +459,7 @@ Tracked in #530, linked from the Plan (#8).
 | A disabled Undo says where history starts (`beh:UndoHorizon`, `beh:UndoableCounts`) | `ontology/layers/behaviour.ttl`, `src/behaviour/undo.ts` | built |
 | Remembered state by `ret:Within`: `per:retention` measured from each stored triple's age, set aside (or dropped where the policy says so), on a horizon, announced, recalled | `src/persistence.ts`, `ontology/layers/persistence.ttl`; §8.9 | built |
 | Nothing owned lost across a reload: settings, the site's look, a kept file and the remembered change log, under critical pressure and a refusing storage, with each run's streams conserved | `test/reload-owned.test.ts` | built |
+| References to a retired member leave with it, in every graph; those of its stream's graph are stored with an offloaded member and come back with a recall | `ret:Reference` (`ontology/layers/retention.ttl`), `RetainedStream.leave` and `recall` (`src/retention/offload.ts`); §8.10 | built |
 | `ret:pinned`: a member a person keeps, never let go by a policy or by pressure until unpinned | `ontology/layers/retention.ttl`, `src/retention/policy.ts` | built |
 | LDES's own policies as LDES defines them: `ldes:DurationAgoPolicy` a `ret:Within`, `ldes:PointInTimePolicy` from a point in time, `ldes:LatestVersionSubset` the newest versions of each entity (before, its `ldes:amount` was read as the stream's newest members) | `ontology/layers/retention.ttl`, `src/retention/policy.ts` | built |
 | `ret:Budget`, `ret:members`, `ret:Compact`, `ret:Ask` | §5.1 | decided: not added, each expressed by what is built |
@@ -543,7 +545,10 @@ To bring history back into the live graph:
 - **From the person:** `c:HorizonList`'s Show older button.
 
 Recalled members are members again. Views over the stream see them, and memory holds them up to
-`ret:recallLimit`.
+`ret:recallLimit`. Recalls of a stream run one at a time, in order: Undo pressed again before the
+last recall came back waits for it, rather than bringing the same chunks back twice. Storage keeps
+its chunks in the stream's order, whenever each was written, so a recall takes the most recent and
+`ret:storageAmount` drops the oldest, also of what memory pressure sent back later.
 
 ### 8.3 Undo
 
@@ -807,6 +812,66 @@ ex:drafts a per:Policy ; per:scope per:Device ;
   `persistence.attach(runtime, { bus })`.
 
 `test/persistence-retention.test.ts` is the worked example.
+
+### 8.10 References to a member
+
+A member that leaves memory takes with it the statements elsewhere that point at it. Left behind,
+they would point at nothing, and keep the member's IRI and their own triples alive. The graph says
+which properties these are: a `ret:Reference` is a property whose object can be a member.
+
+```turtle
+ex:cause a ret:Reference .   # an app's own: ?s ex:cause ?member leaves with ?member
+```
+
+The retirement path (`RetainedStream.leave`, which every stream's append, recall, pressure relief
+and load goes through) acts on it. For each member leaving, dropped or offloaded:
+
+- **Finding them.** One match per marked property: the store's match on (?, property, member), in
+  any graph. A retirement costs what refers to the member, never a scan. A reference on a member
+  that leaves in the same step is that member's own, and leaves with its closure.
+- **In the stream's graph** (a log member naming another: `beh:previous`, `src:of`), the statement is
+  removed in the same write as the member. When the member is offloaded, the statement is stored
+  with it.
+- **In other graphs** (state in the input graph, a link from another log), it is removed through the
+  runtime, in the same transaction where there is one. It is not stored, so it does not come back.
+- **Recalled**, the stored references come back once the recall has brought every chunk in, each
+  where both its ends are members in memory then. A walk from the log's head (`beh:latest`, then
+  `beh:previous`) goes on into what came back, and a reference to what is still in storage, or no
+  longer kept anywhere, stays out.
+
+So no statement in the store points at a member that is no longer in memory. The framework's own
+references, and why each is removed rather than kept:
+
+| property | on | points at | graph | why it goes, and what a recall does |
+|---|---|---|---|---|
+| `beh:previous` | a log member | the member before it | the log's | The readers (`c:Timeline`, `c:StreamMembers`, announcements, `EventBus.recent`) stop where a predecessor is not a member, so nothing reads it past the horizon. Stored with an offloaded member and restored with it, so a walk from the head reaches what a recall brought back. |
+| `beh:raisedBy` | a raised event | the event whose reaction raised it | the log's | Read once, when the raised event is recorded. Restored with a recall. |
+| `beh:continued` | a continuing step | the member its change was recorded on | the log's | Read only on the newest member, by the next step of a run. Restored with a recall. |
+| `src:of` | `src:Confirmed`, `src:Refused` | the `src:Write` it answers | the sync log's | Inspection. Restored with a recall. |
+| `net:connection` | a WebSocket frame | its connection's entry | the capture's | Inspection: a frame whose connection left shows none. |
+| `sem:about` | a stall event (change log) | its stall record (stall log) | the change log's | Inspection; the stall log keeps its own record or not. |
+| `sem:startedBy` | a stall record | the change-log member that started the turn | the performance graph | Inspection; `sem:eventType` still says what kind of event it was. |
+| `prov:wasInformedBy` | a state or sync log member | the change-log member that led to it | the persistence or sources graph | Provenance into another log, which is retained by its own policies. Not restored when that member is recalled. |
+| `beh:undone` | the log (input graph) | an undone member | default | An undone member is stored without its recorded change, so it has no redo to offer once it left; a recall must not offer to undo it again either. Undo past the horizon recalls by sequence and is unaffected. (`beh:UndoLatest` still forgets one that is not a member, for a log restored without it.) |
+| `dnd:refusedBy`, `c:refusedBy` | a draggable, a board's card | the refusal of its last drop | default | State that makes it shake: the shake has run long before its event leaves. Picked up again, it is cleared anyway. |
+| `sem:lastHang` | a watchdog | the latest `sem:Unresponsive` | default | Nothing reads it after the announcement. |
+
+What points at members and needs no mark:
+
+- `tree:member` and the closures: they are the member, and leave as its closure.
+- `beh:latest` on a log, and `sem:stall` on a watchdog: they name the newest member, which no policy
+  retires.
+- `ret:acknowledged` on a member (input graph) is about the member, not a reference to it; the change
+  log's host takes it with the member, and stores it with it.
+- Renderings and views (`ann:event` on a toast, a view's rows, `iv:deltaLog` ticks): derived, they
+  follow the member out as any derived state follows its input. A view's delta log is its own output,
+  bounded by the view, not by this path.
+- `src:SyncLog` with the host's `logSize` instead of the graph's policy retires outside this path,
+  as a host bound does.
+
+`test/retention-references.test.ts` drives the change log through raises, undos, recalls and memory
+pressure, and an app's own streams across graphs; `test/soak.test.ts` checks, after 3,500 events,
+that nothing in any graph points at a member the streams let go.
 
 ## Appendix: the questions as they were asked
 
