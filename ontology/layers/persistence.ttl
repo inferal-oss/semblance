@@ -6,6 +6,8 @@
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ret: <https://semblance.dev/ns/retention#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix ldes: <https://w3id.org/ldes#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
@@ -58,8 +60,15 @@ per:construct a owl:DatatypeProperty ; rdfs:domain per:Policy ;
     rdfs:comment "General form: a SPARQL CONSTRUCT over the input and derived graphs; its result is remembered and restored into per:graph."@en .
 per:graph a owl:DatatypeProperty ; rdfs:domain per:Policy ;
     rdfs:comment "The named graph restored triples go to (default: the default input graph), e.g. the change log's."@en .
-per:retention a owl:DatatypeProperty ; rdfs:domain per:Policy ; rdfs:range xsd:duration ;
-    rdfs:comment "Stored state older than this is dropped instead of restored."@en .
+per:retention a rdf:Property ; rdfs:domain per:Policy ; rdfs:range ret:Policy ;
+    rdfs:comment """How long stored state is restored: a ret:Within (its duration in tree:value), measured from the
+data's age, each stored triple's own: when it was stored, or last changed. A triple older than that is not
+restored, and leaves by the policy's ret:onExpiry. ret:Offload, the default, sets it aside in the same
+storage, counted on the policy's horizon (<policy>/~horizon, a ret:Horizon), from where ret:recall on the
+policy brings it back; ret:Drop removes it, counted too, and only when the policy says so: remembered state
+is owned. ret:announce announces the first time in a session either happens (ret:Offloaded, ret:Dropped on
+the policy), and ret:storageAmount bounds what is set aside. A duration alone (\"P30D\") is short for a
+ret:Within of it with ret:onExpiry ret:Drop."""@en .
 per:version a owl:DatatypeProperty ; rdfs:domain per:Policy ;
     rdfs:comment "Stored with every write; a policy whose version changed discards what was stored under another."@en .
 per:sensitive a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
@@ -84,8 +93,33 @@ per:StateLogView a tree:Node ; ldes:retentionPolicy [ a beh:LatestMembersPolicy 
 per:Write a owl:Class ; rdfs:comment "A policy's triples were stored."@en .
 per:Restore a owl:Class ; rdfs:comment "A policy's stored triples were put back at load."@en .
 per:Forget a owl:Class ; rdfs:comment "A policy's stored triples were dropped."@en .
+per:Expire a owl:Class ; rdfs:comment "A policy's retention let stored triples go at load (per:size of them): set aside, or dropped where it says so."@en .
 per:policy a owl:ObjectProperty ; rdfs:range per:Policy .
 per:size a owl:DatatypeProperty ; rdfs:range xsd:integer .
+
+# --- what a retention let go, announced ------------------------------------------------------------
+
+# The first time in a session a policy's retention (per:retention, with ret:announce true) sets stored
+# state aside or drops it, the persistence effect raises ret:Offloaded or ret:Dropped on the policy.
+per:AnnounceSetAside a beh:Reaction ;
+    beh:when ret:Offloaded ;
+    beh:sourceClass per:Policy ;
+    beh:inserts """CONSTRUCT { $this ret:crossed ret:Offloaded } WHERE { FILTER NOT EXISTS { $this ret:crossed ret:Offloaded } }""" ;
+    ann:announces "Older remembered state was set aside in this browser's storage"@en ,
+        "Старіший збережений стан відкладено в сховищі браузера"@uk ,
+        "Älterer gespeicherter Zustand wurde im Browserspeicher zurückgelegt"@de ,
+        "نُحّيت الحالة المحفوظة الأقدم جانبًا في تخزين المتصفح"@ar ;
+    sem:function "retention:crossed-offloaded" .
+per:AnnounceExpired a beh:Reaction ;
+    beh:when ret:Dropped ;
+    beh:sourceClass per:Policy ;
+    beh:inserts """CONSTRUCT { $this ret:crossed ret:Dropped } WHERE { FILTER NOT EXISTS { $this ret:crossed ret:Dropped } }""" ;
+    ann:announces "Older remembered state is no longer kept"@en ,
+        "Старіший збережений стан більше не зберігається"@uk ,
+        "Älterer gespeicherter Zustand wird nicht mehr aufbewahrt"@de ,
+        "لم تعد الحالة المحفوظة الأقدم محفوظة"@ar ;
+    ann:tone sty:Warning ;
+    sem:function "retention:crossed-dropped" .
 
 # --- what is remembered, before the first paint -----------------------------------------------------
 

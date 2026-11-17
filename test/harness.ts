@@ -83,7 +83,7 @@ export async function mountRemembering(backends: Record<string, Backend>, clock?
   const persistence = new Persistence(store, backends, { delayMs: 60_000 })
   await persistence.restore()
   const shell = mount(store, prefer, clock)
-  persistence.attach(shell.runtime)
+  persistence.attach(shell.runtime, { bus: shell.bus })
   return { ...shell, persistence, later: held.map((h) => galleryFiles['demo/gallery/' + h]!) }
 }
 
@@ -98,7 +98,7 @@ export async function mountNavigating(opts: NavigationOptions, backends?: Record
   const navigation = new Navigation(store, { root: UI + 'shell', ...opts, persistence })
   await navigation.restore()
   const shell = mount(store, prefer)
-  persistence?.attach(shell.runtime)
+  persistence?.attach(shell.runtime, { bus: shell.bus })
   navigation.attach(shell.runtime, { bus: shell.bus, onNavigate: () => shell.shell.flush() })
   return { ...shell, persistence, navigation }
 }
@@ -116,7 +116,7 @@ export async function mountSiteKeeping(backends: Record<string, Backend>, kept: 
   // With graphs held back, the host says when they have all come (loadLater), as demo/main.ts does after loadRest.
   let graphsLoaded: (() => void) | undefined
   const shell = mount(store, prefer, undefined, kept, held.length ? new Promise<void>((r) => (graphsLoaded = r)) : undefined)
-  persistence.attach(shell.runtime)
+  persistence.attach(shell.runtime, { bus: shell.bus })
   if (!held.length) await shell.files.ready
   shell.shell.flush()
   /** The held graphs arrive, their remembered state is put back, and the host says every graph is there. */

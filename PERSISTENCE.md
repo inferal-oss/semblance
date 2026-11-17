@@ -26,7 +26,7 @@ change log records what was remembered and why.
 | `per:subject` + `per:properties` | The simple form: these properties of this node. Restoring brings back these and nothing else that storage holds. |
 | `per:construct` | The general form: a SPARQL CONSTRUCT over the input and derived graphs whose result is remembered. Restoring writes it back to the input graph, the same contract as a reaction's `beh:inserts`. Only what its template can produce comes back: name the predicates (`?n c:ratio ?r`), since a variable one (`?n ?p ?o`) covers any triple. |
 | `per:forgets` | Optional CONSTRUCT of what to remove before restoring (default: the current values of what is restored). |
-| `per:retention` | Optional `xsd:duration` (e.g. `"P30D"`) after which stored state is dropped. |
+| `per:retention` | Optional `ret:Within` (`tree:value "P30D"`), measured from each stored triple's age: what was stored (or last changed) longer ago is not restored. Its `ret:onExpiry` says where it goes: `ret:Offload` (the default) sets it aside in the same storage, counted on the policy's horizon and brought back by `ret:recall` (Show older); `ret:Drop` removes it, counted too. `ret:announce true` announces the first of either in a session. A duration alone (`"P30D"`) is short for a `ret:Within` with `ret:Drop`. See [docs/RETENTION.md](docs/RETENTION.md) §8.6. |
 | `per:sensitive` | On a property: never remembered (password values, tokens). A shape rejects a policy covering one. |
 | `per:version` | Stored with each write. A policy whose shape or version changed discards stale state instead of applying it. |
 

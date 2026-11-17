@@ -216,6 +216,16 @@ describe('the head script', () => {
     const expired = stored({ ...blob, savedAt: Date.now() - 2 * DAY })
     new Function('document', 'localStorage', 'MutationObserver', 'globalThis', script)(held, expired, observerStub().MutationObserver, { sessionStorage: session, localStorage: expired })
     expect(held.getElementById('app')!.firstElementChild!.getAttribute('data-sem-theme')).toBe('semblance')
+    // Measured from each line's age (per:retention as a ret:Within): written since, but stored long ago.
+    const lines = String(blob.nt).split('\n').filter(Boolean).length
+    const aged = (at: number) => {
+      const doc = parseHTML(page).document
+      const s = stored({ ...blob, savedAt: Date.now(), ages: [[at, lines]] })
+      new Function('document', 'localStorage', 'MutationObserver', 'globalThis', script)(doc, s, observerStub().MutationObserver, { sessionStorage: session, localStorage: s })
+      return doc.getElementById('app')!.firstElementChild!.getAttribute('data-sem-theme')
+    }
+    expect(aged(Date.now() - 2 * DAY)).toBe('semblance')
+    expect(aged(Date.now() - DAY / 2)).toBe('classic')
   })
 
   it('paints how it looks in a new tab, but not private mode, which stays with its tab (#361)', async () => {
