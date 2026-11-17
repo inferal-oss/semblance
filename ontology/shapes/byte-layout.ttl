@@ -9,6 +9,7 @@ c:ByteLayoutShape a sh:NodeShape ; sh:targetClass c:ByteLayout ;
                 [ sh:path c:byteField ; sh:minCount 1 ; sh:nodeKind sh:IRI ; sh:node c:ByteFieldShape ] ,
                 [ sh:path c:byteSpan ; sh:nodeKind sh:IRI ; sh:node c:ByteSpanShape ] ,
                 [ sh:path c:byteExtent ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ] ,
+                [ sh:path c:byteWrap ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
                 [ sh:path c:byteLayoutStyle ; sh:maxCount 1 ; sh:in ( c:ByteRuler c:ByteRecord c:ByteOutline ) ] .
 
 c:ByteFieldShape a sh:NodeShape ;

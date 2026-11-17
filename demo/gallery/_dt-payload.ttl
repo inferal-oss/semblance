@@ -113,8 +113,8 @@ ui:dt-image-spec a c:Specimen ; c:demonstrates c:ImageView ; c:label "Image view
 ui:dt-byte-layout a c:Flippable ; c:front ui:dt-byte-spec .
 ui:dt-byte-spec a c:Specimen ; c:demonstrates c:ByteLayout ;
     c:label "Byte layout"@en, "Розкладка байтів"@uk, "Byte-Layout"@de, "تخطيط البايتات"@ar ;
-    c:help "The fields of a binary format from RDF: each c:byteField has an index, a label, an offset and a length, an encoding, highlighted bytes (c:byteMark), and c:byteSpan brackets group fields. With c:byteExtent the widths are to scale; without it the fields are equal cells and one of variable length breaks off. Ruler, Record and Outline are styles of the same graph (c:byteLayoutStyle), written here by the switch. Offsets run left to right in every language." ;
-    c:children ( ui:dt-byte-style ui:dt-byte-riff ui:dt-byte-chunk ) .
+    c:help "The fields of a binary format from RDF: each c:byteField has an index, a label, an offset and a length, an encoding, highlighted bytes (c:byteMark), and c:byteSpan brackets group fields. With c:byteExtent the widths are to scale; without it the fields are equal cells and one of variable length breaks off. Ruler, Record and Outline are styles of the same graph (c:byteLayoutStyle), written here by the switch. Offsets run left to right in every language. In a narrow column, the LDLS directory entry uses c:byteWrap true to move whole fields and continue its bracket on the next row." ;
+    c:children ( ui:dt-byte-style ui:dt-byte-riff ui:dt-byte-chunk ui:dt-segment-directory ui:dt-segment-entry ) .
 ui:dt-byte-style a c:Segmented ; c:controls ui:dt-byte-riff ; c:property c:byteLayoutStyle ;
     c:label "Layout style"@en, "Стиль розкладки"@uk, "Layoutstil"@de, "نمط التخطيط"@ar .
 ui:dt-byte-riff a c:ByteLayout ; c:label "RIFF/WAVE" ; c:byteExtent 12 ; c:byteLayoutStyle c:ByteRuler ;
@@ -133,3 +133,22 @@ ui:dt-byte-chunk-id c:byteIndex 0 ; c:label "ckID" ; c:byteLength 4 ; c:byteEnco
 ui:dt-byte-chunk-size c:byteIndex 1 ; c:label "ckSize" ; c:byteLength 4 ; c:byteEncoding "uint32 LE" .
 ui:dt-byte-chunk-data c:byteIndex 2 ; c:label "ckData" ; c:byteSizeLabel "ckSize bytes" ; c:byteEmphasis true .
 ui:dt-byte-chunk-header c:firstByteIndex 0 ; c:lastByteIndex 1 ; c:label "Header" .
+
+# The root directory of an LDLS segment, followed by the structure of one
+# entry. The entry's six fields and its count-and-prefix bracket reflow on a phone.
+ui:dt-segment-directory a c:ByteLayout ; c:label "LDLS root directory" ; c:byteWrap true ;
+    c:byteField ui:dt-segment-count, ui:dt-segment-entries .
+ui:dt-segment-count c:byteIndex 0 ; c:label "Block count" ; c:byteOffset 0 ; c:byteLength 4 ; c:byteEncoding "u32 LE" .
+ui:dt-segment-entries c:byteIndex 1 ; c:label "Block entries" ; c:byteOffset 4 ; c:byteSizeLabel "One record per block" .
+ui:dt-segment-entry a c:ByteLayout ; c:label "LDLS root directory entry" ; c:byteWrap true ;
+    c:byteAxisLabel "Offsets from the start of the entry" ;
+    c:byteField ui:dt-segment-offset, ui:dt-segment-length, ui:dt-segment-checksum,
+        ui:dt-segment-quads, ui:dt-segment-first, ui:dt-segment-last ;
+    c:byteSpan ui:dt-segment-bounds .
+ui:dt-segment-offset c:byteIndex 0 ; c:label "Block offset" ; c:byteOffset 0 ; c:byteLength 8 ; c:byteEncoding "u64 LE" .
+ui:dt-segment-length c:byteIndex 1 ; c:label "Block length" ; c:byteOffset 8 ; c:byteLength 4 ; c:byteEncoding "u32 LE" .
+ui:dt-segment-checksum c:byteIndex 2 ; c:label "CRC-32C" ; c:byteOffset 12 ; c:byteLength 4 ; c:byteEncoding "u32 LE" .
+ui:dt-segment-quads c:byteIndex 3 ; c:label "Quad count" ; c:byteOffset 16 ; c:byteLength 4 ; c:byteEncoding "u32 LE" .
+ui:dt-segment-first c:byteIndex 4 ; c:label "First prefix" ; c:byteOffset 20 ; c:byteSizeLabel "LEB128 length + bytes" .
+ui:dt-segment-last c:byteIndex 5 ; c:label "Last prefix" ; c:byteSizeLabel "LEB128 length + bytes" .
+ui:dt-segment-bounds c:firstByteIndex 3 ; c:lastByteIndex 5 ; c:label "Count and key bounds" .

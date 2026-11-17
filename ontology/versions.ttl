@@ -92,7 +92,7 @@ c:Breadcrumbs sem:version 1 ; sem:closure "72b94c0e925d68a0" ; sem:internal "new
 c:Button sem:version 2 ; sem:closure "f41cf9f89aa030ca" ; sem:changedBy change:app-bar-links .
 c:ButtonGroup sem:version 1 ; sem:closure "dee63b1d4c75c511" ; sem:internal "new" .
 c:ByteCell sem:version 1 ; sem:closure "9d27558d114e2806" ; sem:internal "new" .
-c:ByteLayout sem:version 1 ; sem:closure "9bb64e51e5728b78" ; sem:internal "new" .
+c:ByteLayout sem:version 2 ; sem:closure "d02588e117f2c01e" ; sem:changedBy change:byte-layout-wrap .
 c:Calendar sem:version 1 ; sem:closure "fd8ca49460639de0" ; sem:internal "new" .
 c:CalendarEntry sem:version 1 ; sem:closure "56748a3c2cae2fdb" ; sem:internal "new" .
 c:Canvas sem:version 1 ; sem:closure "69eab156284dc6d5" ; sem:internal "new" .

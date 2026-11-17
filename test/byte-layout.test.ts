@@ -10,6 +10,7 @@ import { A11Y, MOD, NS, STY, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
+import { wrapByteLayout } from '../src/web/byte-layout.ts'
 import { implementationGaps } from './implementations.ts'
 
 const EX = 'https://example.org/bytes#'
@@ -36,6 +37,9 @@ ${layouts}`
 
 function mount(kind: StoreKind, prefer: 'sparql' | 'function', languages: string[] = [], source = graph()) {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+  Object.defineProperty(window, 'getComputedStyle', {
+    configurable: true, value: () => ({ fontWeight: '600', fontSize: '12px', fontFamily: 'monospace' }),
+  })
   const store = loadStore(kind, source)
   const runtime = new Runtime(store)
   const screen = runtime.project({ modality: MOD.Screen, layers: [A11Y.Layer, STY.Layer], prefer, languages, name: 'screen', roots: [EX + 'page'] }, (e) => {
@@ -69,7 +73,7 @@ function mount(kind: StoreKind, prefer: 'sparql' | 'function', languages: string
     runtime.apply({ remove: [], add: triples.map(([s, p, o]) => f.quad(n(s), c(p), o)) })
     dom.flush()
   }
-  return { store, runtime, screen, root, click, option, seen, set, add, f, n, c, int, dispose: () => (runtime.dispose(), store.dispose?.()) }
+  return { store, runtime, screen, window, root, click, option, seen, set, add, f, n, c, int, dispose: () => (runtime.dispose(), store.dispose?.()) }
 }
 
 describe('ByteLayout', () => {
@@ -131,6 +135,52 @@ describe('ByteLayout', () => {
       fn!.dispose()
     }, 120_000)
   }
+
+  it('wraps whole fields and brackets without replacing an interactive cell', () => {
+    const apps = (['sparql', 'function'] as const).map(prefer =>
+      mount('oxigraph', prefer, ['en'], graph('ex:record c:byteWrap true .')))
+    const pen = { font: '', measureText: (value: string) => ({ width: value.length * 7 }) } as CanvasRenderingContext2D
+    try {
+      const screenshots = apps.map(app => {
+        const root = app.root('record')
+        expect(root.getAttribute('data-byte-wrap')).toBe('true')
+        expect(app.root('chunk').hasAttribute('data-byte-wrap')).toBe(false)
+        const plot = root.querySelector('svg') as unknown as SVGSVGElement
+        for (const offset of plot.querySelectorAll<SVGTextElement>('.offset')) {
+          offset.getComputedTextLength = () => (offset.textContent ?? '').length * 7
+        }
+        const cells = [...plot.querySelectorAll<SVGGElement>('g[role=list] > g')]
+        const payload = cells[2]!
+        // A consumer makes the cell a keyboard target, as a byte inspector does.
+        payload.setAttribute('role', 'button')
+        payload.setAttribute('tabindex', '0')
+        let activations = 0
+        payload.addEventListener('keydown', event => { if ((event as KeyboardEvent).key === 'Enter') activations++ })
+        const widths = () => cells.map(cell => cell.querySelector<SVGRectElement>('rect')!.style.width)
+        wrapByteLayout(plot, 620, pen)
+        expect(cells.map(cell => cell.dataset.byteWrapRow)).toEqual(['0', '0', '0'])
+        const wide = widths()
+        wrapByteLayout(plot, 301, pen)
+        expect(cells.map(cell => cell.dataset.byteWrapRow)).toEqual(['0', '1', '2'])
+        expect(widths()).toEqual(wide)
+        expect(plot.querySelectorAll('text[textLength]')).toHaveLength(0)
+        expect(plot.querySelectorAll(':scope > [data-byte-wrap-decoration] .bracket')).toHaveLength(3)
+        const [first, second] = plot.querySelectorAll(':scope > [data-byte-wrap-decoration] .bracket')
+        expect(first?.getAttribute('d')).not.toMatch(/v-5$/)
+        expect(second?.getAttribute('d')).toMatch(/^M[\d.]+ [\d.]+H.*v-5$/)
+        expect(plot.querySelector('g[role=button]')).toBe(payload)
+        expect(payload.getAttribute('tabindex')).toBe('0')
+        const keydown = new app.window.Event('keydown', { bubbles: true })
+        Object.defineProperty(keydown, 'key', { value: 'Enter' })
+        payload.dispatchEvent(keydown)
+        expect(activations).toBe(1)
+        return root.outerHTML
+      })
+      expect(screenshots[0]).toBe(screenshots[1])
+    } finally {
+      apps.forEach(app => app.dispose())
+    }
+  })
 
   it('says its unit in the viewer’s language', () => {
     for (const prefer of ['sparql', 'function'] as const) {

@@ -19,6 +19,7 @@ import { Files, type FilesOptions } from '../files.ts'
 import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
 import { type IdleDeadline, whenIdle } from '../idle.ts'
 import { attachConnectors } from './connectors.ts'
+import { attachByteLayouts } from './byte-layout.ts'
 import { attachSnaps } from './snap.ts'
 import { attachLightboxes } from './lightbox.ts'
 import { attachAnchoredPopups } from './anchored-popups.ts'
@@ -296,6 +297,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   scheduleWarmup()
   // Connectors are drawn where their ends are (nothing to do while there is none).
   const connectors = attachConnectors(host)
+  const byteLayouts = attachByteLayouts(host)
   // Files: a file:Pick opens the system picker, files dropped on a file drop's zone arrive, and
   // accepted files are uploaded as their drop says; each reports back as events on the bus.
   const files =
@@ -406,6 +408,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachStall?.()
       hosts?.dispose()
       connectors.dispose()
+      byteLayouts()
       snaps.dispose()
       lightboxes.dispose()
       popups()
