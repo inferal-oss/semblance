@@ -838,6 +838,7 @@ c:branchClass a sem:Term .
 c:branchOf a sem:Term .
 c:byline a sem:Term .
 c:byteAxisLabel a sem:Term .
+c:byteDetail a sem:Term .
 c:byteEmphasis a sem:Term .
 c:byteEncoding a sem:Term .
 c:byteExtent a sem:Term .
@@ -2564,6 +2565,7 @@ sty:when a sem:Term .
 svg:Circle a sem:Term .
 svg:Defs a sem:Term .
 svg:Element a sem:Term .
+svg:ForeignObject a sem:Term .
 svg:G a sem:Term .
 svg:Line a sem:Term .
 svg:LinearGradient a sem:Term .

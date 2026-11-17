@@ -717,6 +717,25 @@ drawing width when it fits a row. A field wider than the entire row takes that r
 long labels wrap at their regular font size. A bracket spanning a line break is drawn on both
 rows with open ends at the break. The server renders a scrollable strip before the browser measures it.
 
+A field of a wrapping schematic can point to a wrapping `c:ByteLayout` with
+`c:byteDetail`. The field takes a row, and its height, following rows, and brackets
+adjust when the detail wraps. The detail has its own offset origin and appearance.
+Give each detail a single containing field. Nesting can continue across levels,
+and cyclic links are ignored. Mounted layouts resize the detail; the server
+renders the outer strip until the browser measures it.
+
+```turtle
+ex:directory a c:ByteLayout ; c:label "Root directory" ; c:byteWrap true ;
+  c:byteField ex:count, ex:entries .
+ex:count c:byteIndex 0 ; c:label "Block count" ; c:byteOffset 0 ; c:byteLength 4 .
+ex:entries c:byteIndex 1 ; c:label "Block entries" ; c:byteOffset 4 ;
+  c:byteDetail ex:entry .
+ex:entry a c:ByteLayout ; c:label "Directory entry" ; c:byteWrap true ;
+  c:byteField ex:offset, ex:length .
+ex:offset c:byteIndex 0 ; c:label "Block offset" ; c:byteOffset 0 ; c:byteLength 8 .
+ex:length c:byteIndex 1 ; c:label "Block length" ; c:byteOffset 8 ; c:byteLength 4 .
+```
+
 The diagram is a figure named by its caption; its fields are a list whose items are named by their
 Text line (`@4 · ChunkSize · uint32 LE · 4 B`, the unit from `c:BytesPhrase` in the viewer's
 language). Offsets run left to right in every language, as in a hex dump: in a right-to-left page the

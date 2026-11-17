@@ -156,6 +156,31 @@ const cell: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** An HTML component embedded in a wrapping schematic field's SVG group. */
+const detail: FnRule = (ctx, focus) => {
+  const field = ctx.object(focus, C('of'))
+  const layout = ctx.object(focus, C('inLayout'))
+  const child = field && ctx.object(field, C('byteDetail'))
+  if (!layout || child?.termType !== 'NamedNode' || !isTrue(ctx.object(layout, C('byteWrap'))) ||
+      ctx.object(layout, C('byteExtent')) !== undefined || !isTrue(ctx.object(child, C('byteWrap'))) ||
+      !ctx.match(child, RDF_TYPE, ctx.nn(C('ByteLayout'))).length) return []
+  const stack: Term[] = [child]
+  const seen = new Set<string>()
+  while (stack.length) {
+    const current = stack.pop()!
+    if (current.equals(layout)) return []
+    if (seen.has(current.value)) continue
+    seen.add(current.value)
+    for (const member of fieldsOf(ctx, current)) {
+      for (const next of ctx.objects(member, C('byteDetail'))) stack.push(next)
+    }
+  }
+  const o = ctx.out(focus)
+  const box = svg(o, 'detail', 'ForeignObject', { 'data-byte-detail': '', width: 0, height: 0 }, '\u0001n9')
+  o.t(o.node('root'), H('hasChild'), box).t(box, H('hasChild'), child)
+  return o.quads
+}
+
 /** A bracket under the fields from its first to its last index, with its label. */
 const span: FnRule = (ctx, focus, member) => {
   if (!member || member.termType !== 'NamedNode') return []
@@ -188,5 +213,6 @@ export const functions = {
   'byte-layout:render': render,
   'byte-layout:field': field,
   'byte-layout:cell': cell,
+  'byte-layout:detail': detail,
   'byte-layout:span': span,
 }

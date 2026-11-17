@@ -20,6 +20,7 @@ c:ByteFieldShape a sh:NodeShape ;
                 [ sh:path c:byteSizeLabel ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
                 [ sh:path c:byteEncoding ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
                 [ sh:path c:byteEmphasis ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path c:byteDetail ; sh:maxCount 1 ; sh:nodeKind sh:IRI ; sh:class c:ByteLayout ] ,
                 [ sh:path c:byteMark ; sh:node c:ByteMarkShape ] .
 c:ByteMarkShape a sh:NodeShape ;
     sh:property [ sh:path c:byteOffset ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] ,

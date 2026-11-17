@@ -91,8 +91,8 @@ c:BoxPoint sem:version 1 ; sem:closure "921592796c4e94df" ; sem:internal "new" .
 c:Breadcrumbs sem:version 1 ; sem:closure "72b94c0e925d68a0" ; sem:internal "new" .
 c:Button sem:version 2 ; sem:closure "f41cf9f89aa030ca" ; sem:changedBy change:app-bar-links .
 c:ButtonGroup sem:version 1 ; sem:closure "dee63b1d4c75c511" ; sem:internal "new" .
-c:ByteCell sem:version 1 ; sem:closure "9d27558d114e2806" ; sem:internal "new" .
-c:ByteLayout sem:version 2 ; sem:closure "d02588e117f2c01e" ; sem:changedBy change:byte-layout-wrap .
+c:ByteCell sem:version 2 ; sem:closure "18d23265555b48ea" ; sem:changedBy change:byte-layout-detail .
+c:ByteLayout sem:version 3 ; sem:closure "bdea79fb0d40978d" ; sem:changedBy change:byte-layout-detail .
 c:Calendar sem:version 1 ; sem:closure "fd8ca49460639de0" ; sem:internal "new" .
 c:CalendarEntry sem:version 1 ; sem:closure "56748a3c2cae2fdb" ; sem:internal "new" .
 c:Canvas sem:version 1 ; sem:closure "69eab156284dc6d5" ; sem:internal "new" .
