@@ -8,7 +8,9 @@
 //   … --passes 2 --gc            # force a full GC before each reading (what is retained, not transient)
 //   … --settle 60                # seconds to sample after the walk
 //   … --graphs                   # triples by graph at each step (a SPARQL count: costs a little)
-//   … --snapshot out.heapsnapshot   # heap snapshots after the idle baseline (out.base.heapsnapshot) and at the end, after a GC
+//   … --gc-final                 # a full GC before the last reading only
+//   … --snapshot out.heapsnapshot   # a heap snapshot at the end, after a GC (--snapshot-base: also after the idle baseline,
+//                                   # out.base.heapsnapshot)
 //                                   # (scripts/heap-summary.ts summarises them by constructor)
 //   … --sampling                 # allocation sampling over the walk: the functions that allocate most
 //   … --channel chrome            # the installed Chrome (default: Playwright's Chromium, 143)
@@ -231,7 +233,7 @@ const readings: Reading[] = []
 async function read(name: string, graphs = opt('graphs') === 'true') {
   const s = await pageState(page)
   const r: Reading = { label: name, t: Math.round(s.t), heap: s.heap, wasm: s.wasm, memories: s.memories, ...(await v8(cdp)) }
-  if (forceGc) {
+  if (forceGc || (name === 'final' && opt('gc-final') === 'true')) {
     await cdp.send('HeapProfiler.collectGarbage')
     await cdp.send('HeapProfiler.collectGarbage')
     const g = await pageState(page)
@@ -261,7 +263,7 @@ await read('baseline (graphs loaded, quiet)')
 // Idle warming and anticipation run on: wait for the heap to stop moving.
 await sleep(Number(opt('warm', '10')) * 1000)
 await read('baseline + idle')
-if (opt('snapshot')) await snapshot(opt('snapshot')!.replace(/(\.heapsnapshot)?$/, '.base.heapsnapshot'))
+if (opt('snapshot') && opt('snapshot-base') === 'true') await snapshot(opt('snapshot')!.replace(/(\.heapsnapshot)?$/, '.base.heapsnapshot'))
 
 const list = page.locator('[data-sem-c=nav-list]').filter({ visible: true }).first()
 const names = (await list.getByRole('button').allTextContents()).map((n) => n.trim()).slice(0, limit)
