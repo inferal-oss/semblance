@@ -3,6 +3,7 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix st: <https://semblance.dev/ns/status#> .
 @prefix ldes: <https://w3id.org/ldes#> .
+@prefix ret: <https://semblance.dev/ns/retention#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
@@ -23,9 +24,11 @@
 #   ex:list src:awaits ex:stock .        # st:busy while the source loads or reconnects
 #
 # What the effect knows about each source is graph data in urn:semblance:sources (src:state,
-# src:cursor, src:pending, src:attempts, src:lastError), and what happens - snapshots, changes
-# received, writes and their outcome - is a bounded LDES, src:SyncLog. What a page should do
-# about it is reactions to its events: src:WentLive, src:Lost, src:WriteRefused.
+# src:cursor, src:pending, src:unsaved, src:attempts, src:lastError), and what happens - snapshots,
+# changes received, writes and their outcome - is a bounded LDES, src:SyncLog. What a page should
+# do about it is reactions to its events: src:WentLive, src:Lost, src:WriteRefused. Writes the
+# store has not answered are the person's own: kept in the host's storage until it answers, and
+# sent first by the next page (src:PendingWrites).
 
 <https://semblance.dev/ns/source> a owl:Ontology ;
     rdfs:label "Semblance remote sources"@en .
@@ -60,7 +63,9 @@ src:Reconnecting a src:State ; rdfs:comment "The connection broke; trying again 
 src:cursor a owl:DatatypeProperty ; rdfs:domain src:Source ; rdfs:range xsd:integer ;
     rdfs:comment "The store's step the page has followed up to."@en .
 src:pending a owl:DatatypeProperty ; rdfs:domain src:Source ; rdfs:range xsd:integer ;
-    rdfs:comment "Writes sent or waiting, not yet answered."@en .
+    rdfs:comment "Writes sent or waiting, not yet answered: this page's, and those an earlier page left in storage."@en .
+src:unsaved a owl:DatatypeProperty ; rdfs:domain src:Source ; rdfs:range xsd:integer ;
+    rdfs:comment "Of the pending writes, those the host's storage refused (a quota): they wait in memory alone, and a reload would lose them. Absent when there are none."@en .
 src:attempts a owl:DatatypeProperty ; rdfs:domain src:Source ; rdfs:range xsd:integer .
 src:lastError a owl:DatatypeProperty ; rdfs:domain src:Source .
 
@@ -71,6 +76,14 @@ src:SyncLog a ldes:EventStream ;
     ldes:timestampPath prov:generatedAtTime ;
     tree:view src:SyncLogView .
 src:SyncLogView a tree:Node ; ldes:retentionPolicy [ a beh:LatestMembersPolicy ; ldes:amount 100 ] .
+
+# --- writes the store has not answered: the person's own, never dropped ---------------------------
+
+src:PendingWrites a ldes:EventStream ;
+    rdfs:label "A source's writes the store has not answered"@en ;
+    rdfs:comment "Owned data, held by the remote-sources effect rather than the graph: each write is kept in the host's storage before it is sent and removed once the store answers, and the next page sends what is left first, under the same ids. Its policies bound only what memory holds of the writes' statements; the older ones wait in storage alone and are read back to be sent. None is dropped, whatever a policy's exit."@en ;
+    tree:view src:PendingWritesView .
+src:PendingWritesView a tree:Node ; ldes:retentionPolicy [ a ret:Latest ; ldes:amount 100 ; ret:onExpiry ret:Offload ] .
 src:Snapshot a owl:Class ; rdfs:comment "The source's part of the store was loaded (src:reset: in place of what the page held)."@en .
 src:Received a owl:Class ; rdfs:comment "A change from the store was applied."@en .
 src:Write a owl:Class ; rdfs:comment "The page's change was sent to the store (prov:wasInformedBy the change-log member of the event that made it)."@en .

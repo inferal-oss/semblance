@@ -98,7 +98,8 @@ Without `mount`, the effect is `new RemoteSources(runtime, { endpoints, bus, onC
 What the effect knows is graph data in `urn:semblance:sources`:
 
 - on each source: `src:state` (`src:Unbound`, `src:Loading`, `src:Live`, `src:Reconnecting`),
-  `src:cursor`, `src:pending` (writes not yet answered), `src:attempts` and `src:lastError`;
+  `src:cursor`, `src:pending` (writes not yet answered, an earlier page's among them), `src:unsaved`
+  (those storage refused, [below](#writes-that-wait)), `src:attempts` and `src:lastError`;
 - `src:SyncLog`, a bounded LDES (`logSize`, default 100) of what happened:
   - `src:Snapshot` (with `src:reset` when it replaced what the page held);
   - `src:Received`;
@@ -180,6 +181,20 @@ that the store does not hold (`remove`), and those it removed that the store sti
 (`add`). Applying it puts the page back in step with the store. A change from elsewhere that
 made the write stale is kept.
 
+**A write's id.** The page gives each write an id unique to it, across pages and reloads (the
+effect's is a random id of the page, then a count). A page that never heard a write's answer (the
+connection broke, or the page was closed or reloaded) sends it again under the same id. The store
+remembers the ids of the writes it took, and answers one sent again as it answered it the first
+time (`200 { ok: true, cursor }`, with the cursor it was taken at), without applying it again. A
+refused write changed nothing, so the store need not remember it: sent again, it is judged again,
+against what the store holds then.
+
+Compare-and-set alone would not make a resend safe. A write that removes a statement would be
+refused as stale the second time: the page would show a refusal of a change the store in fact took.
+A write that only adds would be applied twice, and bring back a statement another client removed
+in between. `SourceServer` keeps the ids of its latest 10 000 writes (`writeIds`). A store should
+keep them at least as long as a page may hold a write unanswered.
+
 ## The reference server
 
 `SourceServer` (`src/node/source-server.ts`, exported from `@semblance-dev/semblance/node`) is an
@@ -227,6 +242,8 @@ the same:
    local change is shown at once (optimistic). A refused write's `repair` is applied as a change
    from the store. A write that cannot reach the server waits and is sent when the server answers
    again. Local changes made meanwhile keep queueing behind it.
+4. **It keeps what waits** ([below](#writes-that-wait)). Each write is stored before it is sent,
+   and removed once the store answers it. The next page sends what is still stored first.
 
 Each step costs what it handles. The page's engine sees a change from the store as one input
 change. Matching a local change against the patterns is a lookup per statement. `test/remote.test.ts`
@@ -246,7 +263,45 @@ and of 63 todos.
   of one property) until the refusal repairs it. That is the window optimism opens, and it closes
   with the answer.
 - Writes made while the store is unreachable stay applied in the page, wait in order, and meet
-  the same check when they are sent.
+  the same check when they are sent. They outlive the page: the next one sends them first, and the
+  store's id check keeps a write it took already from being applied twice.
+
+## Writes that wait
+
+A write the store has not answered is the person's own change. It is data, not history
+([RETENTION.md](RETENTION.md)), so a reload, or a tab closed while the store cannot be reached, does
+not lose it:
+
+- **Kept before it is sent.** Each write is one key in the host's storage, written before the
+  write is first attempted and removed once the store answers it, taken or refused. Storage is
+  the one offloaded history goes to: `mount` gives this browser's IndexedDB (`retention.storage`).
+  `new RemoteSources(runtime, { storage })` takes any storage with `get`, `set`, `remove` and
+  `keys` (`indexedDbBackend`, `webStorageBackend`, `memoryBackend`), and `storage: false` keeps
+  writes in memory only. Keys are `semblance:src:` with the source's IRI and the write's place in
+  order, apart from the keys of offloaded history, which a new page sweeps.
+- **Sent first by the next page.** On `attach`, the effect reads back what is stored for each
+  writable source, puts it before anything the new page has changed meanwhile, and sends it in the
+  order it was made, under the ids it had. Nothing is sent before that is done. `src:pending`
+  counts them, and each is a `src:Write` of the new page's `src:SyncLog` again, under the member it
+  had, so its `src:Confirmed` or `src:Refused` names it.
+- **Shown when the store takes it.** The new page shows what the store holds. A write that waited
+  reaches it as the store's delta when the store takes it, or not at all when the store refuses it:
+  then it goes through the refused path (`src:Refused`, `src:WriteRefused`, the repair) like any
+  other. A write the store took before the old page heard its answer is answered as before, and
+  the snapshot has it already.
+- **Bounded in memory, never dropped.** `src:PendingWrites` (`ontology/layers/source.ttl`) says
+  how many waiting writes memory holds the statements of: the latest 100 (`ret:Latest`). The
+  older ones wait in storage alone and are read back, one at a time, to be sent. None is dropped,
+  whatever its policy's exit says. A change costs one storage write, however many wait.
+- **What gives way.** A write storage refuses (a full quota) still waits, in memory alone, and is
+  sent as any other. `src:unsaved` on the source counts those: a reload would lose them, and a page
+  can say "Not saved on this device". The `src:Write` members of `src:SyncLog` are history and
+  retire by its own policy while their writes wait. A source no longer writable leaves what it
+  stored where it is.
+
+Two open pages of one app share the storage, so a new page sends what another page still waits
+on too. The store's id check makes that safe: whichever page sends a write first, the store
+applies it once.
 
 ## A store simulated in a live example
 

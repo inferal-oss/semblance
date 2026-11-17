@@ -88,7 +88,7 @@ option in code. "-" means nothing bounds it.
 | Remembered state (`per:Policy`, `src/persistence.ts`) | use: `ui:rememberChat` grows with the conversation | the browser's quota | - | **A full storage deletes the remembered state.** A whole write calls `removeStored` before `set`. `set` can throw `QuotaExceededError`; it is not caught, and `dirty` is already cleared. The state stays in memory until reload, then it is gone. |
 | `per:retention` | - | time since the **last write** (not the data's age), all or nothing per policy | graph | Expired blobs are skipped by the pre-paint script but not deleted. Keys of policies no longer declared are never swept. |
 | Kept files (`src/files.ts` `restoreKept`) | uploads kept in IndexedDB | SHACL caps on `fx:store`; none on `blk:Uploads` | graph | **Suspected loss**: `restoreKept` frees every stored file whose node is not in the store when Files attaches. On a server-rendered page whose first graphs do not include the files graphs, the nodes arrive later (`loadRest`, `restoreAdded`). Needs a test to confirm. |
-| Remote write queue (`src/remote.ts`) | ticks while the store is unreachable | - | - | Pending writes are owned data. They are held in memory only, retried forever, and lost on reload. |
+| Remote write queue (`src/remote.ts`) | ticks while the store is unreachable | the person's own writes; in memory, `src:PendingWrites` (`ret:Latest 100`) | graph | Pending writes are owned data. Each is stored before it is sent and removed once answered; the next page sends what is left first (the store recognises a write's id). Memory holds the latest 100's statements, storage the rest. A write storage refuses waits in memory and is counted (`src:unsaved`). Built: §7. |
 | Owned mints from events (blocks `~b-<event>`, marks, files, todos) | person's actions | the person's deletions | - | Correctly **not** removed when the event that minted them retires. Any future "closure of a member" must not reach them by IRI prefix. |
 
 ### 3.3 Derived: engine, index, views, stores
@@ -143,7 +143,8 @@ and state logs. Each is bounded to one per node, but each dangles.
 5. **Kept files treat "not loaded yet" as "gone"** (§3.2, suspected).
 6. **Rendered pages are derived but kept like data**: never evicted, so a long visit holds the whole
    site's renderings (§2).
-7. **Pending remote writes are data held like a cache**: in memory, never persisted.
+7. **Pending remote writes are data held like a cache**: in memory, never persisted. (Fixed: they
+   are kept in storage until the store answers them, §7.)
 
 ## 5. Design
 
@@ -442,6 +443,7 @@ Tracked in #530, linked from the Plan (#8).
 | A disabled Undo says where history starts (`beh:UndoHorizon`, `beh:UndoableCounts`) | `ontology/layers/behaviour.ttl`, `src/behaviour/undo.ts` | built |
 | Remembered state by `ret:Within`: `per:retention` measured from each stored triple's age, set aside (or dropped where the policy says so), on a horizon, announced, recalled | `src/persistence.ts`, `ontology/layers/persistence.ttl`; §8.9 | built |
 | Nothing owned lost across a reload: settings, the site's look, a kept file and the remembered change log, under critical pressure and a refusing storage, with each run's streams conserved | `test/reload-owned.test.ts` | built |
+| Remote writes the store has not answered survive a reload: stored before they are sent, sent first by the next page, applied once (the store recognises a write's id); memory holds the latest `src:PendingWrites` keeps, storage the rest; a refused storage counted (`src:unsaved`) | `src/remote.ts`, `src/node/source-server.ts`, `test/remote.test.ts`; [REMOTE.md](REMOTE.md#writes-that-wait) | built |
 | Cold graphs offloaded or unloaded under pressure; remembered state that could not be saved announced and waiting | | not yet |
 
 ## 8. Using retention
@@ -664,6 +666,10 @@ It is called only when policies and reactions have not settled it:
 
 Nothing here ever drops owned data. The default graph, remembered state and kept files are not
 retained streams. Remembered state expires only by its own policy's `per:retention` (§8.9).
+Remote writes the store has not answered are not retained streams either: their policy
+(`src:PendingWrites`) bounds only what memory holds of them, and the rest wait in storage until the
+store answers ([REMOTE.md](REMOTE.md#writes-that-wait)). One storage refuses stays in memory,
+counted by `src:unsaved`.
 
 ### 8.7 The Memory tool
 

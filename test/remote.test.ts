@@ -1,6 +1,7 @@
 // The remote-sources effect (src/remote.ts, docs/REMOTE.md) over the example's page
 // (examples/remote) and the reference server: the initial load, changes from the store and
-// to it, a refused write, reconnecting after a gap, and what a change from the store costs.
+// to it, a refused write, reconnecting after a gap, what a change from the store costs, and
+// writes the store has not answered outliving the page that made them.
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -11,10 +12,12 @@ import { EventBus } from '../src/behaviour/events.ts'
 import { loadStore } from '../src/node/load.ts'
 import { SourceServer } from '../src/node/source-server.ts'
 import { MOD, NS, SOURCES_GRAPH } from '../src/ns.ts'
-import { type Endpoint, httpTransport, RemoteSources, type SourceTransport } from '../src/remote.ts'
+import { type Backend, memoryBackend } from '../src/persistence.ts'
+import { type Endpoint, httpTransport, PENDING_PREFIX, RemoteSources, type SourceTransport } from '../src/remote.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
 import type { Pattern } from '../src/source-protocol.ts'
+import type { GraphStore } from '../src/store/types.ts'
 import { DEFAULT_LAYERS } from '../src/web/mount.ts'
 
 const EX = 'https://example.org/remote#'
@@ -47,10 +50,16 @@ function store(opts: { extra?: number; more?: number; logSize?: number } = {}) {
   return server
 }
 
-/** The server in-process, as a transport that can be cut off (down) and whose stream can be dropped. */
+/**
+ * The server in-process, as a transport that can be cut off (down) and whose stream can be dropped.
+ * `loseAnswer`: the next write reaches the store, and then the store cannot be reached (its answer is lost).
+ */
 function local(server: SourceServer) {
   const t = {
     down: false,
+    loseAnswer: false,
+    /** The writes that reached the store, in order: their ids and the labels they add. */
+    sent: [] as { id: string; labels: string[] }[],
     follow(patterns: Pattern[], after: number | undefined, on: (event: string, data: unknown) => void, signal: AbortSignal) {
       return new Promise<void>((resolve, reject) => {
         if (t.down) return reject(new Error('unreachable'))
@@ -62,14 +71,22 @@ function local(server: SourceServer) {
     async write(req: Parameters<SourceTransport['write']>[0]) {
       await Promise.resolve()
       if (t.down) throw new Error('unreachable')
-      return server.write(req)
+      t.sent.push({ id: req.id, labels: [...req.add.matchAll(/label> "([^"]*)"/g)].map((m) => m[1]!) })
+      const result = server.write(req)
+      if (t.loseAnswer) {
+        t.loseAnswer = false
+        t.down = true
+        throw new Error('the answer was lost')
+      }
+      return result
     },
   }
   return t
 }
 
-function mount(endpoint: Endpoint | SourceTransport | undefined, kind: 'wat' | 'oxigraph' = 'wat', extra = '') {
+function mount(endpoint: Endpoint | SourceTransport | undefined, kind: 'wat' | 'oxigraph' = 'wat', extra = '', opts: { storage?: Backend; before?: (s: GraphStore) => void } = {}) {
   const s = loadStore(kind, app, extra)
+  opts.before?.(s)
   const runtime = new Runtime(s)
   const screen = runtime.project({ modality: MOD.Screen, layers: DEFAULT_LAYERS, name: 'screen', roots: [EX + 'page'] }, (e) => {
     throw e
@@ -79,7 +96,7 @@ function mount(endpoint: Endpoint | SourceTransport | undefined, kind: 'wat' | '
   renderer.flush()
   const bus = new EventBus(runtime, screen)
   bus.attach(renderer, () => renderer.flush())
-  const sources = new RemoteSources(runtime, { endpoints: endpoint ? { [EX + 'store']: endpoint } : {}, bus, onChange: () => renderer.flush(), backoff: { minMs: 1, maxMs: 5 } })
+  const sources = new RemoteSources(runtime, { endpoints: endpoint ? { [EX + 'store']: endpoint } : {}, bus, onChange: () => renderer.flush(), backoff: { minMs: 1, maxMs: 5 }, storage: opts.storage })
   sources.attach()
   const f = s.factory
   const nn = (x: string) => f.namedNode(x)
@@ -101,7 +118,8 @@ function mount(endpoint: Endpoint | SourceTransport | undefined, kind: 'wat' | '
   const state = () => s.match(nn(EX + 'store'), nn(SRC + 'state'), null, nn(SOURCES_GRAPH))[0]?.object.value
   const members = (kind: string) => s.match(null, nn(NS.rdf + 'type'), nn(SRC + kind), nn(SOURCES_GRAPH)).map((q) => q.subject)
   const badge = () => document.querySelector('[data-sem-c=badge]')!.textContent
-  return { store: s, runtime, screen, document, sources, labels, add, tick, button, fire, state, members, badge, nn }
+  const reported = (p: string) => s.match(nn(EX + 'store'), nn(SRC + p), null, nn(SOURCES_GRAPH))[0]?.object.value
+  return { store: s, runtime, screen, document, sources, labels, add, tick, button, fire, state, members, badge, nn, reported }
 }
 
 /** Let the effect's promises and timers run. */
@@ -328,5 +346,161 @@ describe('a store written against an older framework', () => {
     const error = h.store.match(h.nn(EX + 'store'), h.nn(SRC + 'lastError'), null, h.nn(SOURCES_GRAPH))[0]?.object.value
     expect(error).toContain('semblance migrate --update')
     expect(h.store.match(null, h.nn(EX + 'done'), null)).toHaveLength(0)
+  })
+})
+
+/** A storage that counts what it is asked, and can refuse to store (a full quota). */
+function counted(inner: Backend = memoryBackend()) {
+  const n = { set: 0, get: 0, remove: 0, refuse: false }
+  const backend: Backend = {
+    get: (k) => (n.get++, inner.get(k)),
+    set: (k, v) => (n.set++, n.refuse ? Promise.reject(new Error('QuotaExceededError')) : inner.set(k, v)),
+    remove: (k) => (n.remove++, inner.remove(k)),
+    keys: (prefix) => inner.keys!(prefix),
+  }
+  return { backend, n, waiting: () => inner.keys!(PENDING_PREFIX) }
+}
+
+const serverLabels = (server: SourceServer) => server.store.getQuads(null, n3.namedNode(LABEL), null, null).map((q) => q.object.value)
+const doneOf = (server: SourceServer, todo: string) => server.store.getQuads(n3.namedNode(EX + todo), n3.namedNode(EX + 'done'), null, null).map((q) => q.object.value)
+
+describe('writes the store has not answered', () => {
+  it('survive a reload, go first, in order, and reach the store once', async () => {
+    const server = store()
+    const storage = counted()
+    // The store cannot be reached: the page shows its own changes, and they wait.
+    const t1 = local(server)
+    t1.down = true
+    const page1 = mount(t1, 'wat', '', { storage: storage.backend })
+    page1.add('Buy milk')
+    await turn(3)
+    page1.add('Call home')
+    await until(() => page1.reported('pending') === '2')
+    await until(() => storage.n.set === 2)
+    expect(page1.labels()).toEqual(['Buy milk', 'Call home'])
+    // The tab closes. A new page, over the same storage, while the store is still away.
+    page1.sources.stop()
+    page1.runtime.end()
+    expect(await storage.waiting()).toHaveLength(2)
+    const t2 = local(server)
+    t2.down = true
+    const page2 = mount(t2, 'wat', '', { storage: storage.backend })
+    await until(() => page2.reported('pending') === '2')
+    // The earlier page's writes are in this page's log again, under their own members.
+    expect(page2.members('Write')).toHaveLength(2)
+    await turn(3)
+    page2.add('Water plants')
+    await until(() => page2.reported('pending') === '3')
+    // The store comes back: what waited goes first, in order, then this page's.
+    t2.down = false
+    await until(() => page2.state() === SRC + 'Live')
+    await page2.sources.settled()
+    expect(t2.sent.map((w) => w.labels)).toEqual([['Buy milk'], ['Call home'], ['Water plants']])
+    for (const l of ['Buy milk', 'Call home', 'Water plants']) expect(serverLabels(server).filter((x) => x === l)).toHaveLength(1)
+    // The page and the store agree, and nothing waits any more, in memory or in storage.
+    expect(new Set(page2.labels())).toEqual(new Set(serverLabels(server)))
+    expect(page2.labels()).toHaveLength(6)
+    expect(page2.reported('pending')).toBe('0')
+    expect(page2.members('Confirmed')).toHaveLength(3)
+    expect(await storage.waiting()).toHaveLength(0)
+    page2.sources.stop()
+  })
+
+  it('are not applied twice when the store took one before its answer was lost', async () => {
+    const server = store()
+    const storage = counted()
+    const t1 = local(server)
+    const page1 = mount(t1, 'wat', '', { storage: storage.backend })
+    // The tick reaches the store, the answer does not, and the store goes away; an add waits behind it.
+    t1.loseAnswer = true
+    page1.tick('Sketch the style layer')
+    await until(() => t1.down)
+    page1.add('Buy milk')
+    await until(() => storage.n.set === 2)
+    expect(doneOf(server, 't2')).toEqual(['true'])
+    page1.sources.stop()
+    page1.runtime.end()
+    // Meanwhile another client puts it back. The tick sent again without its id recognised would
+    // undo that: it removes `done false`, which the store holds again.
+    server.change({ add: ttl(`ex:t2 ex:done false`), remove: ttl(`ex:t2 ex:done true`) })
+    const page2 = mount(local(server), 'wat', '', { storage: storage.backend })
+    await until(() => page2.members('Confirmed').length === 2)
+    await page2.sources.settled()
+    // The store recognised the tick and answered as it did then; the add was new.
+    expect(page2.members('Refused')).toHaveLength(0)
+    expect(doneOf(server, 't2')).toEqual(['false'])
+    expect(serverLabels(server).filter((l) => l === 'Buy milk')).toHaveLength(1)
+    expect(page2.store.match(page2.nn(EX + 't2'), page2.nn(EX + 'done'), null, page2.store.factory.defaultGraph()).map((q) => q.object.value)).toEqual(['false'])
+    expect(new Set(page2.labels())).toEqual(new Set(serverLabels(server)))
+    expect(page2.reported('pending')).toBe('0')
+    expect(await storage.waiting()).toHaveLength(0)
+    page2.sources.stop()
+  })
+
+  it('go through the refused path when the store refuses one sent after a reload', async () => {
+    const server = store()
+    const storage = counted()
+    const t1 = local(server)
+    t1.down = true
+    const page1 = mount(t1, 'wat', '', { storage: storage.backend })
+    page1.add('This label is certainly far longer than forty characters')
+    await until(() => storage.n.set === 1)
+    page1.sources.stop()
+    page1.runtime.end()
+    const page2 = mount(local(server), 'wat', '', { storage: storage.backend })
+    await until(() => page2.members('Refused').length === 1)
+    await page2.sources.settled()
+    expect(page2.badge()).toBe('A todo is at most 40 characters.')
+    expect(serverLabels(server)).toHaveLength(3)
+    expect(page2.labels()).toEqual(['Write the core ontology', 'Sketch the style layer', 'Wire up behaviour'])
+    expect(await storage.waiting()).toHaveLength(0)
+    page2.sources.stop()
+  })
+
+  it('cost one storage write a change, hold the latest in memory, and say what storage refused', async () => {
+    const server = store()
+    const storage = counted()
+    const t = local(server)
+    t.down = true
+    // Memory holds the statements of the latest 2 waiting writes (src:PendingWrites), instead of 100.
+    const AMOUNT = 'https://w3id.org/ldes#amount'
+    const before = (s: GraphStore) => {
+      const f = s.factory
+      const view = s.match(f.namedNode(SRC + 'PendingWritesView'), f.namedNode('https://w3id.org/ldes#retentionPolicy'), null)[0]!.object
+      const old = s.match(view, f.namedNode(AMOUNT), null)[0]!
+      s.delete(old)
+      s.add(f.quad(old.subject, old.predicate, f.literal('2', f.namedNode(NS.xsd + 'integer')), old.graph))
+    }
+    const h = mount(t, 'wat', '', { storage: storage.backend, before })
+    const writes: { set: number; get: number }[] = []
+    for (let i = 0; i < 10; i++) {
+      const was = { set: storage.n.set, get: storage.n.get }
+      h.add(`Todo ${i}`)
+      await until(() => storage.n.set === was.set + 1)
+      await turn(3)
+      writes.push({ set: storage.n.set - was.set, get: storage.n.get - was.get })
+    }
+    // Each change is one storage write, and reads nothing, however many wait.
+    expect(writes[9]).toEqual(writes[2])
+    expect(writes[9]).toEqual({ set: 1, get: 0 })
+    expect(h.reported('pending')).toBe('10')
+    expect(h.reported('unsaved')).toBe(undefined)
+    // A full storage: the write waits in memory alone, and the page says so.
+    storage.n.refuse = true
+    h.add('Not kept on this device')
+    await until(() => h.reported('unsaved') === '1')
+    expect(h.reported('pending')).toBe('11')
+    // The store comes back: the writes memory let go are read back to be sent (all but the first
+    // and the latest two), each once, in order; the refused one is sent from memory.
+    t.down = false
+    await until(() => h.state() === SRC + 'Live')
+    await h.sources.settled()
+    expect(t.sent.map((w) => w.labels[0])).toEqual([...Array.from({ length: 10 }, (_, i) => `Todo ${i}`), 'Not kept on this device'])
+    expect(storage.n.get).toBe(11 - 2 - 1)
+    expect(h.reported('pending')).toBe('0')
+    expect(h.reported('unsaved')).toBe(undefined)
+    expect(new Set(h.labels())).toEqual(new Set(serverLabels(server)))
+    expect(await storage.waiting()).toHaveLength(0)
+    h.sources.stop()
   })
 })

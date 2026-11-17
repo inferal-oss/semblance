@@ -244,7 +244,8 @@ export function buildSandbox(
       const transport = localTransport(opts.store, opts.written)
       const endpoints: Record<string, SourceTransport> = {}
       for (const q of store.match(null, f.namedNode(RDF_TYPE), f.namedNode(NS.src + 'Source'), f.defaultGraph())) endpoints[q.subject.value] = transport
-      remote = new RemoteSources(runtime, { endpoints, bus, onChange: () => hooks.changed?.() })
+      // The store lives as long as the example: its writes are not kept for a later page.
+      remote = new RemoteSources(runtime, { endpoints, bus, onChange: () => hooks.changed?.(), storage: false })
       remote.attach()
       if (runtime.held) {
         problems.push(stallProblem(runtime, sources, budgetMs))
