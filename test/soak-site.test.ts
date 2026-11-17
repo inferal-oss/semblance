@@ -15,7 +15,7 @@ const PAGE = '#app > [data-sem-c=stack] > [data-sem-c=switch] > :not([hidden])'
 // heap, which Node does not report). At 200 MiB pressure reaches Critical on the heaviest pages, so
 // eviction (a quarter at Elevated, all at Critical) and compaction both act on every pass.
 const BUDGET_MIB = 200
-const PASSES = 3
+const PASSES = Number(process.env.SOAK_PASSES ?? 3)
 // A page's own rendering is measured at the next idle step, so it may pass the budget until then: the
 // heaviest page adds some 58 MiB.
 const OVERSHOOT = 1.1
@@ -124,9 +124,11 @@ describe('a site soak within the memory budget', () => {
     for (const x of passes.slice(1)) {
       expect(x.settled, figures).toBeLessThanOrEqual(BUDGET_MIB)
       expect(x.peak, figures).toBeLessThanOrEqual(BUDGET_MIB * OVERSHOOT)
-      // And no higher than on the second pass: nothing accumulates from pass to pass.
-      expect(x.wasm, figures).toBeLessThanOrEqual(passes[1]!.wasm * 1.05)
+      // Nothing accumulates from pass to pass: the triples stay within 5% of the second pass's. The
+      // WebAssembly memory's high-water mark moves with where in a pass the compactions land (100 to
+      // 120 MiB over six passes), so it is held to the budget and a quarter over the second pass's.
       expect(x.triples, figures).toBeLessThanOrEqual(passes[1]!.triples * 1.05)
+      expect(x.wasm, figures).toBeLessThanOrEqual(Math.min(BUDGET_MIB, passes[1]!.wasm * 1.25))
     }
     // Pages shown again render byte for byte as on their first visit; a first visit as on a fresh
     // mount, but for the order of attributes.
