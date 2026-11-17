@@ -5,6 +5,7 @@ import { BEH, EVENTS_GRAPH, LDES, MOD, NS, RETENTION_GRAPH, SEM } from '../src/n
 import { toHTML, toText } from '../src/render/serialize.ts'
 import { type Member, type Policy, StreamRetention } from '../src/retention/policy.ts'
 import type { OffloadBackend } from '../src/retention/offload.ts'
+import { memoryPages, newRun } from '../src/pages.ts'
 import { SCREEN_LAYERS, setup } from './helpers.ts'
 import { todoReactions } from '../src/examples/todo.ts'
 
@@ -253,13 +254,39 @@ describe('the change log, bounded and offloaded', () => {
     expect(x.inMemory + x.offloaded + x.pending + x.dropped).toBe(40 + 2)
   })
 
-  it('sweeps what earlier pages offloaded', async () => {
-    const h = mounted()
-    h.backend.map.set('semblance:ret:earlier|' + BEH.ChangeLog + '|x|000000000001', '{}')
+  it('sweeps what pages that have closed offloaded, once every graph has loaded, and leaves an open page\'s', async () => {
+    const h = mounted(undefined, undefined, undefined, false)
+    // Two earlier pages of this browser: one still open (another tab), one closed.
+    const pages = memoryPages()
+    h.runtime.pages = pages
+    pages.open('semblance:ret:open|tab')
+    const key = (run: string) => `semblance:ret:${run}|${BEH.ChangeLog}|x|000000000001`
+    h.backend.map.set(key('tab'), '{}')
+    h.backend.map.set(key('closed'), '{}')
     h.backend.map.set('semblance:other', 'kept')
-    h.runtime.retention.use(h.backend)
+    // A graph is still to come: nothing is swept before it is in.
+    const release = h.runtime.holdGraphs()
+    const swept = h.runtime.retention.use(h.backend)
     await h.settle()
-    expect([...h.backend.map.keys()]).toEqual(['semblance:other'])
+    expect([...h.backend.map.keys()].sort()).toEqual([key('closed'), key('tab'), 'semblance:other'].sort())
+    release()
+    await swept
+    expect([...h.backend.map.keys()].sort()).toEqual([key('tab'), 'semblance:other'].sort())
+    // This page is marked open while it offloads, for the next page's sweep.
+    expect(await pages.marked('semblance:ret:open|')).toEqual(['semblance:ret:open|tab', 'semblance:ret:open|' + h.runtime.run])
+  })
+
+  it('without marks of open pages, keeps a run\'s chunks for a day after it started', async () => {
+    const h = mounted(undefined, undefined, undefined, false)
+    h.runtime.pages = undefined
+    const DAY = 86_400_000
+    const key = (run: string) => `semblance:ret:${run}|${BEH.ChangeLog}|x|000000000001`
+    const old = newRun(Date.now() - 2 * DAY)
+    const recent = newRun(Date.now() - DAY / 2)
+    for (const run of [old, recent, 'unnamed']) h.backend.map.set(key(run), '{}')
+    await h.runtime.retention.use(h.backend)
+    // A run whose name does not say when it started is kept: whether its page is open is not known.
+    expect([...h.backend.map.keys()].sort()).toEqual([key(recent), key('unnamed')].sort())
   })
 })
 

@@ -28,6 +28,7 @@ import type { GraphStore } from './store/types.ts'
 import { labelOf, named, RDFS_LABEL, str, text } from './components/util.ts'
 import { md5Key } from './components/data.ts'
 import { TUPLE } from './render/order-key.ts'
+import { whenIdle } from './idle.ts'
 import { dateOf, formatDateTime, formatNumber, numberOf, sortKey } from '../rdf-engine/host/intl.ts'
 
 const PER = NS.per
@@ -39,6 +40,15 @@ const termKey = (t: Term) => t.termType + ':' + t.value
 
 /** What a stored key starts with, unless Persistence is told otherwise. */
 export const STORAGE_PREFIX = 'semblance:'
+/**
+ * How long a stored name no page declares is kept before a sweep removes it (30 days): since the
+ * last time a page of the app declared it, or since a page first found it undeclared.
+ */
+export const SWEEP_GRACE_MS = 30 * 86_400_000
+/** The key, after the prefix, of the record of when each stored name was last declared (sweep). */
+const DECLARED = '~declared'
+/** What a page's mark as open is named after the prefix (src/pages.ts): `<prefix>open|<run>`. */
+const OPEN = 'open|'
 
 /** Where a scope keeps its strings. Asynchronous, so IndexedDB fits too. */
 export interface Backend {
@@ -223,6 +233,29 @@ interface Horizon {
   crossing: Set<'offloaded' | 'dropped'>
 }
 
+/** The record of when each stored name was last declared (sweep): a name's time, in ms since the epoch. */
+function readLedger(raw: string | undefined): Record<string, number> {
+  if (!raw) return {}
+  try {
+    const v = JSON.parse(raw) as unknown
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {}
+    return Object.fromEntries(Object.entries(v).filter(([, at]) => typeof at === 'number'))
+  } catch {
+    return {}
+  }
+}
+
+/** Whether a stored value is a policy's copy (a Blob): what a sweep may take as remembered state. */
+function isStoredCopy(raw: string | undefined): boolean {
+  if (!raw || raw[0] !== '{') return false
+  try {
+    const v = JSON.parse(raw) as Partial<Blob>
+    return typeof v.version === 'string' && typeof v.savedAt === 'number' && typeof v.nt === 'string'
+  } catch {
+    return false
+  }
+}
+
 const runs = (ages: number[]): Runs => {
   const out: Runs = []
   for (const at of ages) {
@@ -283,7 +316,17 @@ export class Persistence {
      * content (mount's `trusted`), so an author cannot add a policy or pick a storage key; the store
      * otherwise. Whether a policy is on (per:enabled) is state, read from the store.
      */
-    readonly opts: { prefix?: string; delayMs?: number; onFollowed?: () => void; trusted?: GraphStore } = {},
+    readonly opts: {
+      prefix?: string
+      delayMs?: number
+      onFollowed?: () => void
+      trusted?: GraphStore
+      /**
+       * Sweeping what nothing declares any more (sweep): on unless false; `graceMs`, how long an
+       * undeclared name is kept (SWEEP_GRACE_MS).
+       */
+      sweep?: { graceMs?: number } | false
+    } = {},
   ) {
     created?.(this)
   }
@@ -291,6 +334,8 @@ export class Persistence {
   /** Stop following changes and drop a write waiting for its delay (flush first to keep it). */
   stop(): void {
     this.stopped = true
+    this.mark?.()
+    this.mark = undefined
     if (this.timer) clearTimeout(this.timer), (this.timer = undefined)
     this.detachInput?.()
     this.detachInput = undefined
@@ -801,6 +846,11 @@ export class Persistence {
     const unwatch = Object.entries(this.backends).flatMap(([scope, b]) => (b.watch ? [b.watch((key) => void this.follow(scope, key))] : []))
     // The runtime ending (a web mount's unmount) releases the store: a waiting write must not run.
     const unend = runtime.onEnd(() => this.stop())
+    // Open, for other pages' sweeps; this page's own runs once every declared graph has loaded.
+    if (this.opts.sweep !== false) {
+      this.mark ??= runtime.pages?.open(this.prefix + OPEN + runtime.run)
+      void this.sweep()
+    }
     this.detachInput = () => {
       stop()
       unend()
@@ -809,6 +859,95 @@ export class Persistence {
       this.kept.clear()
     }
     return () => this.stop()
+  }
+
+  // --- sweeping what nothing declares --------------------------------------------------------------
+
+  /** This page's mark as open (src/pages.ts), from attach to stop. */
+  private mark?: () => void
+  private swept?: Promise<string[]>
+
+  private get prefix() {
+    return this.opts.prefix ?? STORAGE_PREFIX
+  }
+
+  /**
+   * Remove what policies no longer declared left in storage (docs/RETENTION.md §8.10). Once per page
+   * load, once every declared graph has loaded (the runtime's graphsLoaded: a graph loaded later may
+   * declare a policy whose state is stored), in idle time. Resolves to the keys removed.
+   *
+   * In each storage it reads the keys under the prefix and a record of when each stored name (a
+   * policy's or a storage-carried dimension's IRI, with its chunks and what its retention set aside)
+   * was last declared, `<prefix>~declared`. What this page declares is stamped now. A name no page has
+   * declared for the grace period goes, unless another page of the app is open (its mark under the
+   * prefix): it may be of another version, which declares it. A name the record does not know is
+   * stamped now when its key holds a policy's stored copy, and is left alone otherwise: it is not
+   * remembered state (another owner's key under the same prefix). Costs what is stored.
+   */
+  sweep(): Promise<string[]> {
+    const runtime = this.runtime
+    if (!runtime || this.opts.sweep === false) return Promise.resolve([])
+    return (this.swept ??= runtime.graphsLoaded
+      .then(() => new Promise<void>((resolve) => whenIdle(() => resolve())))
+      .then(() => this.sweepNow(runtime))
+      .catch((e) => (console.warn('semblance: could not sweep remembered state', e), [])))
+  }
+
+  private async sweepNow(runtime: Runtime): Promise<string[]> {
+    if (this.stopped) return []
+    const prefix = this.prefix
+    const graceMs = (this.opts.sweep || {}).graceMs ?? SWEEP_GRACE_MS
+    const mine = prefix + OPEN + runtime.run
+    const others = runtime.pages ? (await runtime.pages.marked(prefix + OPEN)).filter((n) => n !== mine) : []
+    // Each storage once, with the names declared in it.
+    const declaredIn = new Map<Backend, Set<string>>()
+    const names = (b: Backend) => declaredIn.get(b) ?? declaredIn.set(b, new Set()).get(b)!
+    for (const scope of Object.keys(this.backends)) names(this.backend(scope))
+    this.cachedPolicies = undefined
+    for (const p of this.policies()) names(this.backend(p.scope)).add(p.iri)
+    names(this.backend(PER + 'Device')).add('enabled')
+    const removed: string[] = []
+    for (const [b, declared] of declaredIn) {
+      if (!b.keys || this.stopped) continue
+      const ledgerKey = prefix + DECLARED
+      const keys = (await b.keys(prefix)).filter((k) => k !== ledgerKey)
+      const ledger = readLedger(await b.get(ledgerKey))
+      const now = Date.now()
+      // Keys by the name they are stored under: a policy's copy, its chunks (#i) and what it set aside (~aside).
+      const stored = new Set(keys.map((k) => k.slice(prefix.length)))
+      const known = (n: string) => declared.has(n) || Object.hasOwn(ledger, n)
+      const families = new Map<string, string[]>()
+      for (const k of keys) {
+        const name = k.slice(prefix.length)
+        const base = /^(.*)(?:#\d+|~aside)$/.exec(name)?.[1]
+        const of = known(name) || base === undefined || !(known(base) || stored.has(base)) ? name : base
+        families.get(of)?.push(k) ?? families.set(of, [k])
+      }
+      const stamps: Record<string, number> = {}
+      const gone = new Set<string>()
+      for (const [name, family] of families) {
+        if (declared.has(name)) stamps[name] = now
+        else if (Object.hasOwn(ledger, name)) {
+          if (now - ledger[name]! < graceMs || others.length) stamps[name] = ledger[name]!
+          else gone.add(name)
+        } else if (stored.has(name) && isStoredCopy(await b.get(prefix + name))) stamps[name] = now
+      }
+      if (this.stopped) return removed
+      for (const name of gone) {
+        // The chunks and what was set aside first, the copy that counts them last.
+        const family = families.get(name)!.sort((x, y) => Number(x === prefix + name) - Number(y === prefix + name))
+        for (const k of family) await b.remove(k), removed.push(k)
+      }
+      // Written over what another page may have stamped since: the later stamp of each name wins.
+      const fresh = readLedger(await b.get(ledgerKey))
+      for (const [name, at] of Object.entries(fresh)) if (Object.hasOwn(stamps, name) && at > stamps[name]!) stamps[name] = at
+      if (this.stopped) return removed
+      if (JSON.stringify(stamps) !== JSON.stringify(ledger)) {
+        if (Object.keys(stamps).length) await b.set(ledgerKey, JSON.stringify(stamps))
+        else await b.remove(ledgerKey)
+      }
+    }
+    return removed
   }
 
   /**
