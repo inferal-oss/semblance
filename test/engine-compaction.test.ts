@@ -129,6 +129,33 @@ describe.skipIf(!built.length).each(built)('%s engine store compaction', (kind) 
     s.dispose!()
   })
 
+  it('starts no compaction in slices within the interval after the last swap; compact() does not wait', () => {
+    const s = grown()
+    const f = s.factory
+    let c: ReturnType<EngineStore['compactStep']>
+    while (!(c = s.compactStep(50))) {}
+    expect(c.after).toBeLessThan(c.before)
+    // Grown again past twice what it holds: in slices, nothing starts within the interval (30 s).
+    const iri = (x: string) => f.namedNode(EX + x)
+    for (let i = 0; i < 60_000; i++) s.add(f.quad(iri('again/' + i), iri('text'), f.literal('a passing literal of some length, number ' + i), iri('graph/again')))
+    for (const q of s.match(null, null, null, iri('graph/again'))) s.delete(q)
+    expect(s.compactStep(50)).toBeUndefined()
+    expect(s.compacting()).toBeUndefined()
+    s.setCompaction({ floor: 0 })
+    s.maintain!(10)
+    expect(s.compacting()).toBeUndefined()
+    // compact() does not wait; without an interval, slices start again too.
+    const now = s.compact({ below: 0.5 })!
+    expect(now.after).toBeLessThan(now.before)
+    for (let i = 0; i < 60_000; i++) s.add(f.quad(iri('third/' + i), iri('text'), f.literal('a passing literal of some length, number ' + i), iri('graph/third')))
+    for (const q of s.match(null, null, null, iri('graph/third'))) s.delete(q)
+    s.setCompaction({ floor: 0, interval: 0 })
+    let again: ReturnType<EngineStore['compactStep']>
+    while (!(again = s.compactStep(50))) {}
+    expect(again.after).toBeLessThan(again.before)
+    s.dispose!()
+  })
+
   it('compacts in slices, with the changes made between them', () => {
     const s = grown(20_000)
     const f = s.factory

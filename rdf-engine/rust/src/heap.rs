@@ -2,7 +2,7 @@
 //! class, a bump pointer for fresh blocks, `memory.grow` when it runs out.
 //! Freed blocks are reused for the same class only; memory is never returned.
 //! The block at the top of the bump region grows and shrinks in place, and
-//! memory grows by at least a quarter at a time, so a growing vector neither
+//! memory grows by at least a quarter at a time (an eighth past 64 MiB), so a growing vector neither
 //! copies nor calls `memory.grow` on every doubling.
 
 use core::alloc::{GlobalAlloc, Layout};
@@ -11,6 +11,8 @@ use core::cell::UnsafeCell;
 use core::ptr::{copy_nonoverlapping, null_mut};
 
 const PAGE: usize = 65536;
+/// Past this, memory grows by an eighth at a time rather than a quarter.
+const LARGE: usize = 64 << 20;
 
 struct State {
     free: [usize; 32],
@@ -43,7 +45,10 @@ impl State {
     /// Move the bump pointer to `stop`, growing memory if needed.
     fn bump(&mut self, stop: usize) -> bool {
         if stop > self.end {
-            let pages = (stop - self.end).div_ceil(PAGE).max(self.end / PAGE / 4).max(16);
+            // A quarter of the memory at a time, an eighth past 64 MiB: the slack a grow leaves
+            // stays small on a large store (#555).
+            let step = if self.end > LARGE { self.end / PAGE / 8 } else { self.end / PAGE / 4 };
+            let pages = (stop - self.end).div_ceil(PAGE).max(step).max(16);
             if wasm32::memory_grow(0, pages) == usize::MAX {
                 let pages = (stop - self.end).div_ceil(PAGE);
                 if wasm32::memory_grow(0, pages) == usize::MAX {

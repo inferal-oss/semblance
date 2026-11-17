@@ -42,7 +42,7 @@ ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:s
     c:children ( ui:docsSide ui:docPages ) .
 # The side column stays in view while the page scrolls (the column, not the list in it).
 ui:docsSide a c:Stack ; pos:direction pos:Column ; pos:sticky pos:StickToTop ; c:children ( ui:docsNav ) .
-ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker ; sem:anticipatesNear 4 .
+ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker ; sem:anticipatesNear 2 .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
     c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-safety ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-retention ui:dcs-remote ui:dcs-fetching ui:dcs-navigation ui:dcs-views ui:dcs-jelly ui:dcs-tools ui:dcs-performance ui:dcs-migrations ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
@@ -1400,7 +1400,7 @@ ui:doc-re-pat-2 a c:Text ; c:label "A changed statement is matched by its predic
 ui:doc-re-see-h a c:Heading ; c:level 2 ; c:label "What the page can see" .
 ui:doc-re-see-1 a c:Text ; c:label "What the effect knows is graph data in urn:semblance:sources:" .
 ui:doc-re-see a c:DescriptionList ; c:of ui:doc-re-see-items ; c:fields ( ui:re-s-state ui:re-s-log ui:re-s-events ) .
-ui:doc-re-see-items ui:re-s-state "On each source: src:state (src:Unbound, src:Loading, src:Live, src:Reconnecting), src:cursor, src:pending (writes not yet answered), src:attempts and src:lastError." ;
+ui:doc-re-see-items ui:re-s-state "On each source: src:state (src:Unbound, src:Loading, src:Live, src:Reconnecting), src:cursor, src:pending (writes not yet answered, an earlier page's among them), src:unsaved (those this browser's storage refused), src:attempts and src:lastError." ;
     ui:re-s-log "src:SyncLog, a bounded LDES (logSize, 100 by default) of what happened: src:Snapshot (with src:reset when it replaced what the page held), src:Received, src:Write (prov:wasInformedBy the change-log member of the event that made it), src:Confirmed and src:Refused (src:of the write, with src:reason)." ;
     ui:re-s-events "Events targeted at the source, for the page's reactions: src:WentLive, src:Lost (with src:lastError) and src:WriteRefused (with src:reason)." .
 ui:re-s-state rdfs:label "State" . ui:re-s-log rdfs:label "The sync log" . ui:re-s-events rdfs:label "Events" .
@@ -1461,7 +1461,7 @@ ui:doc-re-con a c:DescriptionList ; c:of ui:doc-re-con-items ; c:fields ( ui:re-
 ui:doc-re-con-items ui:re-c-order "The store's cursor orders everything: deltas are applied in cursor order, and a page resumes from the cursor it last saw." ;
     ui:re-c-optimistic "Local changes are optimistic. A write is compare-and-set on the statements it removes: one made from a stale state is refused, and the page is repaired to what the store holds. When two pages change one value at once, the first write the store takes wins, and the other page shows it." ;
     ui:re-c-window "Between a local change and its answer, a change from elsewhere can show beside it (two values of one property) until the refusal repairs it. That is the window optimism opens, and the answer closes it." ;
-    ui:re-c-offline "Writes made while the store is unreachable stay applied in the page, wait in order, and meet the same check when they are sent." .
+    ui:re-c-offline "Writes made while the store is unreachable stay applied in the page, wait in order, and meet the same check when they are sent. They are the person's own, so they outlive the page: each is kept in this browser's storage until the store answers it, and the next page sends what is left first, under the same ids, which the store recognises, so none is applied twice." .
 ui:re-c-order rdfs:label "Order" . ui:re-c-optimistic rdfs:label "Optimism" . ui:re-c-window rdfs:label "The window" . ui:re-c-offline rdfs:label "Offline" .
 
 ui:doc-re-safe-h a c:Heading ; c:level 2 ; c:label "Safety" .

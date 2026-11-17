@@ -1,6 +1,7 @@
 // Memory pressure (docs/RETENTION.md): a budget in the graph (ret:MemoryBudget), measured in idle
 // time, answered in a fixed order, cheapest and safest first.
 //
+//   0. at every level, past ret:keepDerived: evict the renderings hidden longest, down to the budget;
 //   1. evict derived state: the renderings of what is hidden (Runtime.evict, both projections);
 //   2. compact the engines (a store that can, GraphStore.compact);
 //   3. offload history: what was recalled, and at Critical half of what ret:having policies hold;
@@ -21,6 +22,8 @@ const RDF_TYPE = NS.rdf + 'type'
 const MIB = 2 ** 20
 // What one step of pressure spends on a compaction in slices (ms); idle time carries it on.
 const SLICE_MS = 8
+// How far back the lowest JS heap figure stands for what the heap retains (ms).
+const RETAINED_MS = 20_000
 // A short stable key for a minted node's local name (FNV-1a, base 36).
 const hash = (s: string) => {
   let h = 0x811c9dc5
@@ -125,6 +128,8 @@ export class MemoryPressure {
   private compacted = 0
   private usage = new Set<string>()
   private written = new Map<string, string>()
+  /** The JS heap figures of the last RETAINED_MS, for what is retained of it. */
+  private heapSeen: { at: number; js: number }[] = []
   private timer?: ReturnType<typeof setInterval>
   level: Level = 'normal'
 
@@ -210,20 +215,37 @@ export class MemoryPressure {
     // Each counted once (Chromium's heap figure holds the engines' memory); without a heap figure
     // (outside Chromium), the store's triples stand in for what the heap holds.
     const u = usage(x, triples, this.derived())
-    const used = u.used
+    // The JS heap figure holds what V8 has not collected yet: between major collections it grows to
+    // several times what is retained (a walk of the site's examples, Chrome 157: ~150 MB retained,
+    // ~690 MB before the collection, #553). The level follows what is retained, the heap's lowest
+    // figure of the last RETAINED_MS, which a major collection sets, not the garbage in between.
+    const now = performance.now()
+    if (!u.estimated) this.heapSeen.push({ at: now, js: u.js })
+    while (this.heapSeen.length && this.heapSeen[0]!.at < now - RETAINED_MS) this.heapSeen.shift()
+    const retained = u.estimated || !this.heapSeen.length ? u.js : Math.min(...this.heapSeen.map((h) => h.js))
+    const used = retained + u.wasm
     const elevatedAt = Number(this.one(b, RET + 'elevatedAt')?.value ?? 0.8)
     const measured: Level = used >= maxBytes ? 'critical' : used >= maxBytes * elevatedAt ? 'elevated' : 'normal'
     const simulated = this.one(b, RET + 'simulate')?.value
     const level: Level = simulated === RET + 'Critical' ? 'critical' : simulated === RET + 'Elevated' ? 'elevated' : simulated === RET + 'Normal' ? 'normal' : measured
     this.level = level
     this.runtime.pressure = level
+    // A budget for derived state (ret:keepDerived), at every level: past it, what is hidden and was
+    // shown or prepared longest ago loses its renderings, down to nine tenths of it, so that a long
+    // visit keeps the last pages ready, not every page it ever showed.
+    const keep = Number(this.one(b, RET + 'keepDerived')?.value ?? Infinity)
+    const derived = this.derived()
+    const excess = Number.isFinite(keep) && derived > keep ? derived - Math.floor(keep * 0.9) : 0
     if (level === 'normal') {
       this.escalation = 0
       this.raised = this.asked = false
+      if (excess) this.evict(excess)
+      // The store's own upkeep a slice at a time (compaction, collection), also once idle warming
+      // has stopped: a compaction it put off (the store's interval after a swap) comes on a quiet page.
+      store.maintain?.(SLICE_MS)
     } else {
       // 1, 2, 3: evict, compact, offload.
-      const derived = this.derived()
-      this.evict(level === 'critical' ? Infinity : Math.ceil(derived * 0.25))
+      this.evict(level === 'critical' ? Infinity : Math.max(Math.ceil(derived * 0.25), excess))
       // A compaction copies the whole store: only when live state is below most of the memory
       // (after the eviction above), so lasting pressure does not copy a store that cannot shrink.
       // At Elevated it starts (or continues) one a slice at a time, which idle time carries on;

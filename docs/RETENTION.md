@@ -88,7 +88,7 @@ option in code. "-" means nothing bounds it.
 | Remembered state (`per:Policy`, `src/persistence.ts`) | use: `ui:rememberChat` grows with the conversation | the browser's quota | - | **A full storage deletes the remembered state.** A whole write calls `removeStored` before `set`. `set` can throw `QuotaExceededError`; it is not caught, and `dirty` is already cleared. The state stays in memory until reload, then it is gone. |
 | `per:retention` | - | time since the **last write** (not the data's age), all or nothing per policy | graph | Expired blobs are skipped by the pre-paint script but not deleted. Keys of policies no longer declared are never swept. |
 | Kept files (`src/files.ts` `restoreKept`) | uploads kept in IndexedDB | SHACL caps on `fx:store`; none on `blk:Uploads` | graph | **Suspected loss**: `restoreKept` frees every stored file whose node is not in the store when Files attaches. On a server-rendered page whose first graphs do not include the files graphs, the nodes arrive later (`loadRest`, `restoreAdded`). Needs a test to confirm. |
-| Remote write queue (`src/remote.ts`) | ticks while the store is unreachable | - | - | Pending writes are owned data. They are held in memory only, retried forever, and lost on reload. |
+| Remote write queue (`src/remote.ts`) | ticks while the store is unreachable | the person's own writes; in memory, `src:PendingWrites` (`ret:Latest 100`) | graph | Pending writes are owned data. Each is stored before it is sent and removed once answered; the next page sends what is left first (the store recognises a write's id). Memory holds the latest 100's statements, storage the rest. A write storage refuses waits in memory and is counted (`src:unsaved`). Built: §7. |
 | Owned mints from events (blocks `~b-<event>`, marks, files, todos) | person's actions | the person's deletions | - | Correctly **not** removed when the event that minted them retires. Any future "closure of a member" must not reach them by IRI prefix. |
 
 ### 3.3 Derived: engine, index, views, stores
@@ -143,7 +143,8 @@ and state logs. Each is bounded to one per node, but each dangles.
 5. **Kept files treat "not loaded yet" as "gone"** (§3.2, suspected).
 6. **Rendered pages are derived but kept like data**: never evicted, so a long visit holds the whole
    site's renderings (§2).
-7. **Pending remote writes are data held like a cache**: in memory, never persisted.
+7. **Pending remote writes are data held like a cache**: in memory, never persisted. (Fixed: they
+   are kept in storage until the store answers them, §7.)
 
 ## 5. Design
 
@@ -460,7 +461,9 @@ Tracked in #530, linked from the Plan (#8).
 | `ret:pinned`: a member a person keeps, never let go by a policy or by pressure until unpinned | `ontology/layers/retention.ttl`, `src/retention/policy.ts` | built |
 | LDES's own policies as LDES defines them: `ldes:DurationAgoPolicy` a `ret:Within`, `ldes:PointInTimePolicy` from a point in time, `ldes:LatestVersionSubset` the newest versions of each entity (before, its `ldes:amount` was read as the stream's newest members) | `ontology/layers/retention.ttl`, `src/retention/policy.ts` | built |
 | `ret:Budget`, `ret:members`, `ret:Compact`, `ret:Ask` | §5.1 | decided: not added, each expressed by what is built |
-| Cold graphs offloaded or unloaded under pressure; remembered state that could not be saved announced and waiting | | not yet |
+| Remote writes the store has not answered survive a reload: stored before they are sent, sent first by the next page, applied once (the store recognises a write's id); memory holds the latest `src:PendingWrites` keeps, storage the rest; a refused storage counted (`src:unsaved`) | `src/remote.ts`, `src/node/source-server.ts`, `test/remote.test.ts`; [REMOTE.md](REMOTE.md#writes-that-wait) | built |
+| Cold graphs offloaded or unloaded under pressure | #545 (closed, its notes kept) | decided: not built; about 1 MiB on the site, against a hook on every change |
+| Remembered state that could not be saved announced and waiting | | not yet |
 
 ## 8. Using retention
 
@@ -605,6 +608,7 @@ ex:SyncFailed a beh:Reaction ; beh:when ex:Failed ;
 
 ```turtle
 ex:memory a ret:MemoryBudget ; ret:maxMiB 512 .       # or ret:maxBytes, or ret:maxFrom a slider
+ex:memory ret:keepDerived 300000 .                     # derived triples kept, at every level
 ```
 
 `mount(element, { maxMemory: 512 * 2 ** 20 })` declares one for a graph that has none. The pressure
@@ -617,6 +621,11 @@ effect (`src/retention/pressure.ts`, attached by `mount`) measures in idle time,
 - otherwise (WebKit, Firefox, Node), an estimate from the store's triples: 600 bytes of JS a derived
   triple and 250 a loaded one, as measured on the site (`HEAP_ESTIMATE`, #552).
 
+The level is judged on what is retained: the engines' memory, and of the JS heap its lowest figure
+of the last 20 seconds. Between V8's major collections the heap figure also holds garbage, several
+times what is retained (on the site's examples, Chrome 157: ~150 MB retained, ~690 MB just before a
+collection), and pressure must not evict for garbage that is about to go (#553).
+
 It writes `ret:level` (`ret:Normal`, `ret:Elevated` from `ret:elevatedAt`, default 0.8, `ret:Critical`
 from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:liveMiB`,
 `ret:compactedMiB`, `ret:triples`, `ret:derivedTriples`, `ret:evicted`) into
@@ -624,6 +633,12 @@ from 1) and the figures (`ret:usedMiB`, `ret:heapMiB`, `ret:wasmMiB`, `ret:liveM
 (`liveBytes`): against `ret:wasmMiB`, it says what a compaction would give back. Each level is answered in this
 order:
 
+0. **Keep derived state within its own budget,** at every level: `ret:keepDerived` on the budget, a
+   number of derived triples. Past it, what is hidden and was shown or prepared longest ago loses its
+   renderings, down to nine tenths of it, so a long visit keeps the last pages ready rather than every
+   page it ever showed. The site keeps 300k (a few pages beyond what its first page prepares): after a
+   walk of every example it holds ~250k derived triples instead of 637k, and a revisit of a page it let
+   go renders it again (~100–150 ms instead of ~50).
 1. **Evict derived state.** What is hidden loses its renderings in both projections, screen and
    text: a quarter of them at Elevated, all at Critical (`Runtime.evict`, `Engine.evict`). Never
    evicted: what is shown, what is `sem:warm sem:Eager`, and what is always evaluated. Evicted work
@@ -684,6 +699,10 @@ It is called only when policies and reactions have not settled it:
 
 Nothing here ever drops owned data. The default graph, remembered state and kept files are not
 retained streams. Remembered state expires only by its own policy's `per:retention` (§8.9).
+Remote writes the store has not answered are not retained streams either: their policy
+(`src:PendingWrites`) bounds only what memory holds of them, and the rest wait in storage until the
+store answers ([REMOTE.md](REMOTE.md#writes-that-wait)). One storage refuses stays in memory,
+counted by `src:unsaved`.
 
 ### 8.7 The Memory tool
 

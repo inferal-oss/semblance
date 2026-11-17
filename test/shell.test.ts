@@ -230,17 +230,19 @@ describe('the order of anticipation (#436)', () => {
     return seen
   }
 
-  it('prepares the pages near the current one of a section before the other sections', async () => {
-    // On the first example: the next three examples, then the section before Examples (Reference, one away).
+  it('prepares what is nearest first, across the section list and the sections, and nothing further (#553)', async () => {
+    // On the first example: the next example and the section before Examples (Reference), each one
+    // away, then the example two away. Not the third example, nor Components (two sections away).
     const h = mountShell()
-    expect(await order(h, ['exp-network', 'exp-signin', 'exp-kanban', 'reference', 'gallery'])).toEqual(['exp-network', 'exp-signin', 'exp-kanban', 'reference', 'gallery'])
+    expect(await order(h, ['exp-network', 'exp-signin', 'exp-kanban', 'reference', 'gallery'])).toEqual(['exp-network', 'reference', 'exp-signin'])
   })
 
-  it('prepares the next section first, then the pages near the current one', async () => {
-    // On Components: Reference (the next section), then the groups near Foundations, then Docs.
+  it('prepares the next page first, then the next section, the one before, and what is two away', async () => {
+    // On Components: the group after Foundations, Reference (the next section), Docs (the one
+    // before), then the group two away.
     const h = mountShell()
     h.showPage('Components')
-    expect(await order(h, ['reference', 'gallery-layout', 'gallery-type', 'docs'])).toEqual(['reference', 'gallery-layout', 'gallery-type', 'docs'])
+    expect(await order(h, ['reference', 'gallery-layout', 'gallery-type', 'docs'])).toEqual(['gallery-layout', 'reference', 'docs', 'gallery-type'])
   })
 })
 
@@ -391,13 +393,15 @@ describe('anticipation (sem:anticipates)', () => {
     const headings = (doc: Document) => [...doc.querySelectorAll('h1, h2')].map((h) => h.textContent!.trim())
     // What the docs page holds, rendered whether or not it is in the document (a hidden case's content is set aside).
     const built = (shell: ReturnType<typeof mountShell>) => headings(parseHTML(`<!doctype html><html><body>${toHTML(shell.screen.index, 'https://semblance.dev/demo#docs')}</body></html>`).document)
-    // Without it, the first click evaluates the page.
+    // Without it, the first click evaluates the page. (From Components: Docs is the section before.)
     const cold = mountShell()
+    cold.showPage('Components')
     let before = cold.screen.engine.stats.ruleRuns
     cold.fire(button(cold.document, 'Docs'), 'click')
     const coldRuns = cold.screen.engine.stats.ruleRuns - before
     // With it, the page is there (built, set aside) before the click.
     const h = mountShell()
+    h.showPage('Components')
     // Idle time as it comes: after the click, not in it (what is near the docs page it shows then
     // is prepared in idle time too).
     const steps: ((budgetMs: number) => void)[] = []
@@ -405,6 +409,8 @@ describe('anticipation (sem:anticipates)', () => {
     while (steps.length) steps.shift()!(1_000)
     expect(built(h)).toContain('Overview')
     expect(headings(h.document)).not.toContain('Overview')
+    // Only the sections next to the one shown (sem:anticipatesNear 1): Home, two away, stays parked.
+    expect(toHTML(h.screen.index, 'https://semblance.dev/demo#home')).toBe('')
     // What the click would show, not every page under the section: the other docs pages stay parked.
     expect(toHTML(h.screen.index, 'https://semblance.dev/demo#doc-ru-h')).toBe('')
     before = h.screen.engine.stats.ruleRuns
@@ -430,20 +436,20 @@ describe('anticipation (sem:anticipates)', () => {
       }
     }
     idle()
-    // ui:galleryNav reaches four places from Foundations, the nearest first; Data, six away, stays parked.
-    expect(order).toEqual(['layout', 'type', 'actions', 'inputs'])
-    // So does the section next to Components (ui:nav anticipates every section)...
+    // ui:galleryNav reaches two places from Foundations, the nearest first; Actions, three away, stays parked.
+    expect(order).toEqual(['layout', 'type'])
+    // So does the section next to Components (ui:nav anticipates the sections next to the one shown)...
     expect(h.screen.index.rootOf(UI + 'reference')).toBeDefined()
     // ...but not what a hidden section's own list is near: the docs pages after the first.
     expect(toHTML(h.screen.index, UI + 'doc-ru-h')).toBe('')
     // A first click on a near page costs a switch.
     const nav = (name: string) => [...h.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === name)!
     const before = h.screen.engine.stats.ruleRuns
-    h.fire(nav('Inputs'), 'click')
+    h.fire(nav('Type'), 'click')
     expect(h.screen.engine.stats.ruleRuns - before).toBeLessThan(60)
-    // It follows the choice: what is near Inputs now is prepared (Disclosure, five away, is not).
+    // It follows the choice: what is near Type now is prepared (Feedback, three away, is not).
     idle()
-    expect(order).toEqual(['layout', 'type', 'actions', 'inputs', 'feedback', 'data', 'navigation', 'overlays'])
-    expect(built('disclosure')).toBe(false)
+    expect(order).toEqual(['layout', 'type', 'actions', 'inputs'])
+    expect(built('feedback')).toBe(false)
   })
 })

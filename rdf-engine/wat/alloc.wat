@@ -57,9 +57,10 @@
   (global.set $top (i32.add (local.get $p) (call $class_size (i32.shr_u (local.get $head) (i32.const 2)))))
   (local.set $pages (memory.size))
   (if (i32.gt_u (global.get $top) (i32.shl (local.get $pages) (i32.const 16))) (then
-    ;; grow by what is needed, or by half the memory when that is more
+    ;; grow by what is needed, or by half the memory when that is more (an eighth past 64 MiB,
+    ;; 1024 pages: the slack a grow leaves stays small on a large store, #555)
     (local.set $need (i32.shr_u (i32.add (i32.sub (global.get $top) (i32.shl (local.get $pages) (i32.const 16))) (i32.const 0xffff)) (i32.const 16)))
-    (local.set $pages (i32.shr_u (local.get $pages) (i32.const 1)))
+    (local.set $pages (i32.shr_u (local.get $pages) (select (i32.const 3) (i32.const 1) (i32.gt_u (local.get $pages) (i32.const 1024)))))
     (if (i32.lt_s (memory.grow (select (local.get $pages) (local.get $need) (i32.gt_u (local.get $pages) (local.get $need)))) (i32.const 0))
       (then (if (i32.lt_s (memory.grow (local.get $need)) (i32.const 0)) (then unreachable))))))
   (local.get $p))

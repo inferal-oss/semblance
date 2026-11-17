@@ -2347,6 +2347,7 @@ ret:having a sem:Term .
 ret:heapMiB a sem:Term .
 ret:inMemory a sem:Term .
 ret:instances a sem:Term .
+ret:keepDerived a sem:Term .
 ret:level a sem:Term .
 ret:liveMiB a sem:Term .
 ret:maxBytes a sem:Term .
@@ -2409,6 +2410,8 @@ src:Live a sem:Term .
 src:Loading a sem:Term .
 src:Lost a sem:Term .
 src:Pattern a sem:Term .
+src:PendingWrites a sem:Term .
+src:PendingWritesView a sem:Term .
 src:Received a sem:Term .
 src:Reconnecting a sem:Term .
 src:Refused a sem:Term .
@@ -2439,6 +2442,7 @@ src:reset a sem:Term .
 src:source a sem:Term .
 src:state a sem:Term .
 src:subject a sem:Term .
+src:unsaved a sem:Term .
 src:writable a sem:Term .
 sx:Json a sem:Term .
 sx:Locale a sem:Term .
