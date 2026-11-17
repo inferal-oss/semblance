@@ -89,6 +89,21 @@ describe('the memory budget (ret:MemoryBudget)', () => {
     h.runtime.dispose()
   })
 
+  it("judges the level by what the JS heap retains, not the garbage before V8's next collection", async () => {
+    const h = setup('wat', {}, 5, [FIXTURE])
+    let x: Sample = { wasmBytes: 10 * MIB, heapBytes: 30 * MIB }
+    const pressure = new MemoryPressure(h.runtime, { sample: () => x })
+    expect(await pressure.step()).toBe('normal')
+    // Garbage: the figure climbs past the budget (100 MiB) between collections. What is retained
+    // (its lowest figure of the last 20 s) has not.
+    x = { wasmBytes: 10 * MIB, heapBytes: 120 * MIB }
+    expect(await pressure.step()).toBe('normal')
+    // The engines' memory is not garbage: it counts at once.
+    x = { wasmBytes: 95 * MIB, heapBytes: 120 * MIB }
+    expect(await pressure.step()).toBe('critical')
+    h.runtime.dispose()
+  })
+
   it('acts as if a level held when one is simulated, and performs requests', async () => {
     const h = mounted()
     h.set('simulate', h.f.namedNode(RET + 'Critical'))
@@ -248,6 +263,45 @@ describe('memory pressure on the whole site', () => {
     expect(after).toBeLessThan(before / 2)
     for (let i = 0; i < 20; i++) site.runtime.warm(50)
     expect(derived()).toBe(after)
+    site.runtime.dispose()
+  }, 600_000)
+
+  it('keeps derived state within ret:keepDerived at Normal: the pages left longest ago lose their renderings first, what is shown none', async () => {
+    const site = mountSite('wat')
+    const f = site.store.factory
+    const examples = sitePages().examples
+    const app = f.namedNode('https://semblance.dev/demo#app')
+    const show = ({ page, dimension, value }: Page) => {
+      const set = (p: string, o: string) => site.runtime.apply({ remove: site.store.match(app, f.namedNode('https://semblance.dev/demo#' + p), null), add: [f.quad(app, f.namedNode('https://semblance.dev/demo#' + p), f.namedNode(o))] })
+      if (dimension && value) set(dimension, value)
+      set('page', 'https://semblance.dev/demo#' + page)
+      site.shell.flush()
+    }
+    const derived = () => site.runtime.projections.reduce((n, p) => n + p.engine.derivedSize, 0)
+    const html = () => site.document.body.innerHTML
+    const pressure = new MemoryPressure(site.runtime, { sample: () => ({ wasmBytes: 0, heapBytes: 0 }) })
+    // Every example once, a step after each (as idle time steps), with no derived budget: everything stays.
+    const budget = f.namedNode('https://semblance.dev/demo#memoryBudget')
+    site.runtime.apply({ remove: site.store.match(budget, f.namedNode(RET + 'keepDerived'), null), add: [] })
+    for (const p of examples) show(p), await pressure.step()
+    const all = derived()
+    // A budget below that: the step evicts, at Normal, down to nine tenths of it.
+    const keep = Math.floor(all * 0.6)
+    site.runtime.apply({ remove: site.store.match(budget, f.namedNode(RET + 'keepDerived'), null), add: [f.quad(budget, f.namedNode(RET + 'keepDerived'), f.literal(String(keep), f.namedNode(NS.xsd + 'integer')))] })
+    const shown = html()
+    expect(await pressure.step()).toBe('normal')
+    expect(derived()).toBeLessThanOrEqual(keep)
+    expect(html()).toBe(shown)
+    // The page left last is still ready: showing it again derives next to nothing; the first one
+    // left lost its renderings and derives them again, as on a first visit.
+    let before = derived()
+    show(examples.at(-2)!)
+    const kept = derived() - before
+    before = derived()
+    show(examples[0]!)
+    const again = derived() - before
+    expect(again).toBeGreaterThan(1000)
+    expect(kept).toBeLessThan(again / 10)
     site.runtime.dispose()
   }, 600_000)
 })

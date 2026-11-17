@@ -588,16 +588,20 @@ export class Engine {
     }
   }
 
-  /** When each focus with output was last seen shown (by evict's scans), to evict the oldest first. */
+  /**
+   * When each focus with output was last seen shown (by evict's scans), prepared ahead (warm) or
+   * shown with parked work (resume), on one clock: evict releases the oldest first.
+   */
   private shownAt = new Map<string, number>()
   private scans = 0
 
   /**
    * Drop the output of hidden work (docs/RETENTION.md): derived state, rebuilt when it is shown again.
    * Pairs whose focus is not demanded, not always evaluated and not kept (`keep`: sem:warm sem:Eager)
-   * lose their output and are parked again, as if never shown, a focus at a time: those seen shown
-   * longest ago first (never seen shown: first of all), until about `limit` derived triples are released.
-   * Returns how many were. Costs a look at every pair with output: for idle time under memory pressure.
+   * lose their output and are parked again, as if never shown, a focus at a time: those seen shown or
+   * prepared longest ago first (never seen: first of all), until about `limit` derived triples are
+   * released. Returns how many were. Costs a look at every pair with output: for idle time, under
+   * memory pressure or past a derived budget (ret:keepDerived).
    */
   evict(limit = Infinity, keep?: (focus: string) => boolean): number {
     if (!this.demand || limit <= 0) return 0
@@ -617,6 +621,8 @@ export class Engine {
         else hidden.push({ rule, key, owner })
       }
     }
+    // What has no output any more needs no stamp (the map stays as large as what has output).
+    for (const owner of this.shownAt.keys()) if (!shown.has(owner)) this.shownAt.delete(owner)
     if (!hidden.length) return 0
     const at = (owner: string) => this.shownAt.get(owner) ?? 0
     hidden.sort((a, b) => at(a.owner) - at(b.owner) || (a.owner < b.owner ? -1 : a.owner > b.owner ? 1 : 0))
@@ -672,6 +678,8 @@ export class Engine {
       })
     this.warming = true
     this.warmUntil = until
+    // What is prepared now counts as seen now, for eviction (not after what is shown at the next scan).
+    const stamp = ++this.scans
     try {
       // Mostly nothing parked may be warmed (lazy parts): that costs a look per focus, not per pair.
       while (performance.now() < until && this.hasWarmable(allowed)) {
@@ -690,7 +698,7 @@ export class Engine {
             const pairs = foci.flatMap((x) => this.deferred.take(x))
             pairs.sort((a, b) => a[2] - b[2] || a[3] - b[3])
             for (const [r, key] of pairs) this.markDirty(r, key)
-            for (const x of foci) this.startWarming(x)
+            for (const x of foci) this.startWarming(x), this.shownAt.set(x, stamp)
             if ((picked += pairs.length) >= slice) break
           }
           if (picked >= slice) break
@@ -756,8 +764,9 @@ export class Engine {
     // pairs that stopped being instances. Pairs resume in the order they were parked.
     const resumed: [Rule, string, number, number][] = []
     const check = this.retypedAll ? undefined : this.retyped
+    let stamp = 0
     for (const owner of this.deferred.foci()) {
-      if (this.demand(owner)) resumed.push(...this.deferred.take(owner))
+      if (this.demand(owner)) resumed.push(...this.deferred.take(owner)), this.shownAt.set(owner, (stamp ||= ++this.scans))
       else if (!check || check.has(owner)) resumed.push(...this.deferred.take(owner, (rule, key) => !this.isInstance(key, rule)))
     }
     this.retyped.clear()
