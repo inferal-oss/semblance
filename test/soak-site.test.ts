@@ -54,7 +54,7 @@ const canonical = (html: string, site: Site) => {
 }
 
 /**
- * The whole site within a memory budget (docs/RETENTION.md §8.5, §8.8): every page visited in
+ * The whole site within a memory budget (docs/RETENTION.md §8.5, §8.9): every page visited in
  * passes, with the pressure effect stepped between pages as idle time would. After the first pass the
  * memory stays within the budget, pages shown again render as on their first visit (and that as on a
  * fresh mount), and nothing the app owns is lost.

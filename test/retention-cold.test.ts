@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { parseHTML } from 'linkedom'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mount, type MountedApp } from '../src/web/mount.ts'
 import { NS } from '../src/ns.ts'
 import { loadStore } from '../src/node/load.ts'
 import { ColdGraphs, coldGraphIri } from '../src/retention/cold.ts'
@@ -199,4 +202,51 @@ describe('cold graphs', () => {
     expect(dg()).toBe(base + a + b - 1 + 1)
     runtime.dispose()
   })
+
+  it('works through mount: a cold graph leaves, and a page that shows it brings it back', async () => {
+    const { document, window } = parseHTML('<!doctype html><html><body><main id="app"></main></body></html>')
+    document.adoptedStyleSheets = []
+    class Sheet { replaceSync() {} }
+    Object.defineProperty(window, 'CSSStyleSheet', { value: Sheet, configurable: true })
+    Object.defineProperty(window, 'requestAnimationFrame', { value: () => 1, configurable: true })
+    Object.defineProperty(window, 'cancelAnimationFrame', { value: () => {}, configurable: true })
+    vi.stubGlobal('requestIdleCallback', () => 0)
+    vi.stubGlobal('fetch', async () => new Response(readFileSync(new URL('../rdf-engine/build/wat.wasm', import.meta.url)), { headers: { 'Content-Type': 'application/wasm' } }))
+    const element = document.getElementById('app')!
+    const EX = 'https://example.org/cold#'
+    const prefixes = `@prefix ex: <${EX}> . @prefix c: <${NS.c}> .`
+    const app = `${prefixes}
+ex:app ex:page ex:Home .
+ex:root a c:Switch ; c:controls ex:app ; c:property ex:page ; c:cases ( ex:home-case ex:orders-case ) .
+ex:home-case c:when ex:Home ; c:content ex:home .
+ex:orders-case c:when ex:Orders ; c:content ex:orders .
+ex:home a c:Text ; c:label "Home" .`
+    const orders = `${prefixes}
+ex:orders a c:Text ; c:label "Your orders" .`
+    const mounted = await mount(element, { root: EX + 'root', graphs: [app], coldGraphs: { 'pages/orders.ttl': () => orders }, store: 'wat', files: false, fullscreen: false })
+    apps.push(mounted)
+    const f = mounted.store.factory
+    const go = (page: string) => {
+      const s = f.namedNode(EX + 'app')
+      const p = f.namedNode(EX + 'page')
+      mounted.runtime.apply({ remove: mounted.store.match(s, p, null), add: [f.quad(s, p, f.namedNode(EX + page))] })
+      mounted.renderer.flush()
+    }
+    go('Orders')
+    const shownOrders = element.innerHTML
+    expect(shownOrders).toContain('Your orders')
+    go('Home')
+    expect(await mounted.cold!.unload('critical')).toBeGreaterThan(0)
+    expect(mounted.cold!.list()).toEqual([{ name: 'pages/orders.ttl', state: 'unloaded', size: 2 }])
+    go('Orders')
+    expect(mounted.cold!.list()[0]!.state).toBe('loaded')
+    expect(element.innerHTML).toBe(shownOrders)
+  })
+})
+
+const apps: MountedApp[] = []
+afterEach(() => {
+  for (const app of apps.splice(0)) app.unmount()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
