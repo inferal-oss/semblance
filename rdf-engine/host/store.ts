@@ -109,13 +109,20 @@ export interface CompactionPolicy {
   /** Not while the memory is smaller than this many bytes: small stores are not churned (default 64 MiB). */
   floor?: number
   /**
+   * Not in idle time (nor a slice at a time, compactStep) within this many ms of the last swap
+   * (default 30 s). The old instance's memory is freed when the host's collector next runs, which
+   * for WebAssembly memory can be many seconds (#555): compactions closer together than that hold
+   * several dead copies at once. compact() (at Critical) does not wait.
+   */
+  interval?: number
+  /**
    * Abandon a compaction in flight when more changes wait in its journal than this many times the
    * quads it copies (default 1): catching up would then cost more than starting again.
    */
   journal?: number
 }
 
-export const COMPACTION_DEFAULTS: Required<CompactionPolicy> = { below: 0.5, floor: 64 << 20, journal: 1 }
+export const COMPACTION_DEFAULTS: Required<CompactionPolicy> = { below: 0.5, floor: 64 << 20, interval: 30_000, journal: 1 }
 
 /** What one compaction did. */
 export type Compaction = StoreCompaction
@@ -508,6 +515,8 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
   let sweep: { tag: symbol; map: IdMap; caches: [Map<string, Base & Term>, Iterator<[string, Base & Term]>][] } | undefined
   /** Idle time starts no compaction before this (performance.now()) after one was abandoned. */
   let retryAt = 0
+  /** When the last compaction swapped (performance.now()): idle time starts none within compaction.interval of it. */
+  let swappedAt = -Infinity
   let abandons = 0
   /** Why the last compaction was abandoned. */
   let abandoned: string | undefined
@@ -674,6 +683,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     if (raw > 0) scale = Math.max(0.5, (after - emptyBytes) / raw)
     abandons = 0
     retryAt = 0
+    swappedAt = performance.now()
     const end = performance.now()
     const ms = end - t0
     p.slices++
@@ -737,7 +747,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     const t0 = performance.now()
     const until = t0 + budgetMs
     if (sweep && !sweepStep(until)) return undefined
-    if (!pending && !start(opts)) return undefined
+    if (!pending && (t0 < swappedAt + compaction.interval || !start(opts))) return undefined
     return step(until, t0)
   }
 
@@ -1053,7 +1063,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       if (!fetchingOps && !pending && !sweep && e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
       // Start a compaction when live state has fallen well below the memory (not for small stores,
       // nor soon after one was abandoned), and spend what is left of the budget on it.
-      if (!pending && !sweep && compaction.below > 0 && !fetchingOps && !streams && t0 >= retryAt && e.memoryBytes() >= compaction.floor) {
+      if (!pending && !sweep && compaction.below > 0 && !fetchingOps && !streams && t0 >= retryAt && t0 >= swappedAt + compaction.interval && e.memoryBytes() >= compaction.floor) {
         const s0 = performance.now()
         if (start({ below: compaction.below })) step(until, s0)
       }
