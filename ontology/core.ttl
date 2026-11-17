@@ -103,6 +103,11 @@ something only about a node with two values or more of one (l10n:Terms and l10n:
 in the input to such a node's values, a graph loaded later among them, makes each of its foci dirty. A change to a node with one
 value does not, so editing a text costs nothing here. The rule is evaluated over the whole graph: an addition that arrives in
 slices (Runtime.arriving) evaluates it once, after the last."""@en .
+sem:leavesTo a owl:ObjectProperty ; rdfs:range sem:Rendering ;
+    rdfs:comment """On a rendering with sem:watchesManyValued: another rendering that derives, per focus, part of what this one would,
+so this one leaves it out (l10n:Terms leaves a component's own c:label to l10n:Labels). A change to the values of a predicate the
+other watches (sem:watches), on an instance of the class it targets, makes this rendering nothing due: a reaction or a view that
+changes a component's translated label costs it nothing."""@en .
 sem:inverse a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment "In a sem:follows path: a step against this predicate (from a class to its instances: [ sem:inverse rdf:type ])."@en .
 sem:inverseVia a owl:ObjectProperty ;

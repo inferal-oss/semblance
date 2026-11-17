@@ -131,4 +131,32 @@ describe('the reader example', () => {
     expect(ran.map(([k]) => k.replace(/^.*[#/]/, '')).filter((r) => /Heading|Text|Stack/.test(r))).toEqual([])
     expect(runs).toBeLessThan(40)
   })
+
+  // The bar's words, in every language, change with each scroll and each visit: they are the bar's
+  // own label (l10n:Labels), so neither costs l10n:Terms, which reads every translated text there is (#547).
+  it('a scroll or a visit costs what it changes: no evaluation over the whole graph', () => {
+    const h = reader()
+    h.scrollTo(0)
+    const terms = () => h.screen.engine.stats.byRule.get('https://semblance.dev/ns/l10n#Terms-sparql')?.runs ?? 0
+    const before = terms()
+    h.scrollTo(400)
+    h.scrollTo(EXTENT - PANE.height)
+    expect(h.progress()).toEqual(['100', 'Read to the end'])
+    const visible = (el: Element | null | undefined) => !!el && !el.closest('[hidden]')
+    const go = (name: string) => {
+      h.fire([...h.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === name && visible(b))!, 'click')
+      h.shell.flush()
+      h.rendered.flush()
+      h.shell.flush()
+    }
+    // Away and back: the sections' rendered state goes with them and is written again.
+    go('Chat')
+    const ran = h.screen.engine.stats.ruleRuns
+    go('Reader')
+    h.scrollTo(400)
+    expect(h.progress()).toEqual(['33', '33% read'])
+    expect(terms()).toBe(before)
+    // The page shown again and its rendered state written again: some 50 rule runs, the whole graph's would be thousands.
+    expect(h.screen.engine.stats.ruleRuns - ran).toBeLessThan(60)
+  })
 })
