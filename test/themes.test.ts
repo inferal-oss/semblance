@@ -420,6 +420,12 @@ describe('long labels', () => {
     expect(offending.filter((l) => !l.startsWith('  [data-sem-c="segmented"] button, '))).toEqual([])
   })
 
+  it('wraps long radio option labels and notes within their padding', () => {
+    const selector = '[data-sem-c="radio-group"] .sem-option-text'
+    expect(layerOf(selector)).toBe('sem.components')
+    expect(block(selector).get('overflow-wrap')).toBe('anywhere')
+  })
+
   it('align text logically, so it follows the writing direction (RTL)', () => {
     expect(lines.filter((l) => /text-align: (left|right)\b/.test(l))).toEqual([])
   })

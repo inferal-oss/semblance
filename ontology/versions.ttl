@@ -211,7 +211,7 @@ c:QueryEditor sem:version 1 ; sem:closure "87abc3a0a40e6af1" ; sem:internal "new
 c:QueryResultView sem:version 1 ; sem:closure "8b3100c0bd012ffa" ; sem:internal "new" .
 c:QueryView sem:version 2 ; sem:closure "8638da55fcc6bfc8" ; sem:changedBy change:code-says-its-language .
 c:QueryWorkbench sem:version 2 ; sem:closure "bd506d48cbd5de2d" ; sem:internal "Each sx:matches joins its group again instead of sitting in its own LATERAL, now that compiled Rust passes a BIND's value into a magic relation (#281); the same rows and HTML" .
-c:RadioGroup sem:version 1 ; sem:closure "5cfbedd6dee84039" ; sem:internal "new" .
+c:RadioGroup sem:version 2 ; sem:closure "0c482a85e0a3952c" ; sem:changedBy change:radio-option-wrapping .
 c:Raisable sem:version 1 ; sem:closure "88bcf9c2effe9e18" ; sem:internal "new" .
 c:RdfDropRow sem:version 1 ; sem:closure "da73dbbbe08b9a74" ; sem:internal "new" .
 c:RdfEditor sem:version 2 ; sem:closure "f7d1503fda4621c3" ; sem:changedBy change:rdf-editor-entry-pages .
