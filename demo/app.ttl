@@ -432,8 +432,8 @@ um:FindingCounts iv:whileShown ui:inspectorViews .
 um:CategoryCounts iv:whileShown ui:unmanagedCategories .
 ui:unmanagedPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:unmanagedBar ui:unmanagedCategories ui:unmanagedSplit ui:unmanagedHighlight ui:unmanagedDocs ) .
-ui:unmanagedBar a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:unmanagedFind ui:unmanagedFigures ) .
-ui:unmanagedFind a c:Button , c:Setter ; c:controls ui:unmanaged ; c:property um:request ; c:value um:Run ; sty:size sty:Small ;
+ui:unmanagedBar a c:Stack ; pos:direction pos:Column ; pos:align pos:Start ; pos:gap tok:space-2 ; c:children ( ui:unmanagedFind ui:unmanagedFigures ) .
+ui:unmanagedFind a c:Button , c:Setter ; c:controls ui:unmanaged ; c:property um:request ; c:value um:Run ; sty:intent sty:Primary ; sty:size sty:Small ;
     c:label "Find on this page" , "Знайти на цій сторінці"@uk , "Auf dieser Seite suchen"@de , "ابحث في هذه الصفحة"@ar .
 # How it works, the guard that checks every page in CI, and how to allow an exception.
 ui:unmanagedDocs a c:Link ; c:href "https://github.com/inferal-oss/semblance/blob/main/docs/UNMANAGED.md" ;
