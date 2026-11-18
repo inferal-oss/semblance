@@ -7,6 +7,7 @@ import type { SafetyPolicy } from './safety.ts'
 import type { GraphStore } from './store/types.ts'
 import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, NS, PERF_GRAPH, PERSIST_GRAPH, RENDERED_GRAPH, RETENTION_GRAPH, SEM } from './ns.ts'
 import { Retention } from './retention/offload.ts'
+import { defaultPages, newRun, type OpenPages } from './pages.ts'
 import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
 import { retentionFunctions } from './layers/retention.ts'
@@ -87,13 +88,24 @@ export class Runtime {
    * that append to a stream ask it what retires. A host gives it storage (`retention.use`).
    */
   readonly retention: Retention
+  /**
+   * This page's run: when it started and four random characters. What the page stores under a name
+   * of its own (offloaded history, kept files) carries it, so a later page can tell whose it is.
+   */
+  readonly run = newRun()
+  /**
+   * Which pages of this browser are open (src/pages.ts): Web Locks in a page, none on a server. The
+   * effects that sweep storage mark this page open and leave what another open page may use. A host
+   * or a test may give its own before attaching them.
+   */
+  pages: OpenPages | undefined = defaultPages()
   /** The open transaction: every effective change since it began, by graph and quad (net weight). */
   private tx?: Consolidation
 
   constructor(readonly store: GraphStore) {
     this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH, RETENTION_GRAPH], functions: viewFunctions })
     // References to a leaving member in other graphs (ret:Reference) leave through the runtime, as any change does.
-    this.retention = new Retention(store, (d) => void this.write(RETENTION_GRAPH, d), {}, (graph, d) => void (graph === undefined ? this.apply(d) : this.write(graph, d)))
+    this.retention = new Retention(store, (d) => void this.write(RETENTION_GRAPH, d), { run: this.run, pages: () => this.pages, loaded: () => this.graphsLoaded }, (graph, d) => void (graph === undefined ? this.apply(d) : this.write(graph, d)))
     this.onEnd(() => this.retention.stop())
     // A reaction asks for offloaded history back (`?stream ret:recall ?n`, Show older): the request is
     // performed, then removed.
@@ -151,6 +163,52 @@ export class Runtime {
 
   private disposed = false
   private readonly endListeners: (() => void)[] = []
+
+  private graphHolds = 0
+  private graphsArmed = false
+  private graphsIn?: () => void
+  private graphsDone?: Promise<void>
+
+  /**
+   * Hold "every declared graph has loaded" open: a host that loads graphs after start (the rest of a
+   * site in idle time, a page's own graph when it is visited) holds it before its first await after
+   * making the runtime, and releases it once they are in and their remembered state is restored
+   * (Persistence.restoreAdded). A load that fails is never released: nothing waiting on it runs.
+   * Returns the release (calling it again does nothing).
+   */
+  holdGraphs(): () => void {
+    this.graphHolds++
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      this.graphHolds--
+      this.settleGraphs()
+    }
+  }
+
+  /**
+   * Resolves once every graph the app declares has loaded: no hold is open (holdGraphs), and no
+   * sooner than a task after it was first asked for, so a host holding in the task that made the
+   * runtime is waited for. What sweeps storage of what nothing declares any more (remembered state,
+   * kept files, offloaded history) waits for it: a graph loaded later may declare what is stored.
+   */
+  get graphsLoaded(): Promise<void> {
+    if (!this.graphsDone) {
+      this.graphsDone = new Promise<void>((resolve) => (this.graphsIn = resolve))
+      setTimeout(() => {
+        this.graphsArmed = true
+        this.settleGraphs()
+      }, 0)
+    }
+    return this.graphsDone
+  }
+
+  private settleGraphs() {
+    if (!this.graphsArmed || this.graphHolds > 0 || !this.graphsIn) return
+    this.graphsIn()
+    this.graphsIn = undefined
+  }
 
   /** Whether the runtime has ended (end, dispose): it no longer ticks, applies or writes. */
   get ended(): boolean {

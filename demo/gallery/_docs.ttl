@@ -1211,7 +1211,7 @@ ui:doc-pe-to-remote a c:Link , c:Setter ; c:label "Remote data" ; c:href "/docs/
 ui:doc-retention a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:doc-rt-h ui:doc-rt-1 ui:doc-rt-2
                  ui:doc-rt-pol-h ui:doc-rt-pol-1 ui:doc-rt-pol-ttl ui:doc-rt-pol-2
-                 ui:doc-rt-off-h ui:doc-rt-off-1 ui:doc-rt-off-2
+                 ui:doc-rt-off-h ui:doc-rt-off-1 ui:doc-rt-off-2 ui:doc-rt-off-3
                  ui:doc-rt-undo-h ui:doc-rt-undo-1
                  ui:doc-rt-mem-h ui:doc-rt-mem-1 ui:doc-rt-mem-ttl ui:doc-rt-mem-2 ui:doc-rt-mem-3
                  ui:doc-rt-ask-h ui:doc-rt-ask-1 ui:doc-rt-ask-ts ui:doc-rt-ask-2
@@ -1232,6 +1232,7 @@ ui:doc-rt-pol-2 a c:Text ; c:label "Each retained stream has a horizon (ret:Hori
 ui:doc-rt-off-h a c:Heading ; c:level 2 ; c:label "Offloading and recalling" .
 ui:doc-rt-off-1 a c:Text ; c:label "What leaves by ret:Offload is serialized as it leaves the graph and written to IndexedDB in chunks, off the interaction. Until storage takes it, it waits in memory as text, so a refused write loses nothing. mount's retention.storage chooses the storage; by default it is this browser's IndexedDB." .
 ui:doc-rt-off-2 a c:Text ; c:label "A reaction brings offloaded history back into the live graph by writing ?stream ret:recall 50; the effect performs it and removes the request. Recalled members are members again: every view over the stream sees them." .
+ui:doc-rt-off-3 a c:Text ; c:label "What nothing declares any more is swept from storage once every graph the app declares has loaded (runtime.graphsLoaded; a host loading graphs later holds it with runtime.holdGraphs()), in idle time, once per page load: offloaded history of pages that have closed, kept files no graph names whose page has closed, and remembered state of policies no page has declared for 30 days. Nothing goes that another open tab may use: pages mark themselves open with Web Locks." .
 ui:doc-rt-undo-h a c:Heading ; c:level 2 ; c:label "Undo" .
 ui:doc-rt-undo-1 a c:Text ; c:label "Undo lives on the change log, with a bigger bound: besides its 200 newest members, the log keeps the 1,000 most recent that recorded an undoable change (beh:UndoRetention), and offloads past that. An undo that nears the oldest of those recalls more, so undo reaches back as far as storage holds. What memory holds of undo history is always one contiguous run, so an undo never skips a step." .
 ui:doc-rt-mem-h a c:Heading ; c:level 2 ; c:label "The memory budget" .

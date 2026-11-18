@@ -5,8 +5,8 @@
 // in the graph it is restored to; under simulated critical memory pressure too, and with a storage
 // that refuses the last writes (the earlier copy comes back, and the policy said it was unsaved).
 // Each run's retained streams conserve what they were given: appended + loaded = in memory +
-// offloaded + pending + dropped. Offloaded history goes with the page that kept it: a new page
-// sweeps an earlier one's chunks, by design (§8.2), so it is not owned and does not come back.
+// offloaded + pending + dropped. Offloaded history goes with the page that kept it: once that page
+// has closed, a new page sweeps its chunks, by design (§8.2), so it is not owned and does not come back.
 import type { Quad, Term } from '@rdfjs/types'
 import { afterAll, describe, expect, it } from 'vitest'
 import type { FileLike } from '../src/files.ts'
@@ -14,6 +14,7 @@ import { type FileStoreBackend, memoryFileStore } from '../src/file-store.ts'
 import { BEH, EVENTS_GRAPH, LDES, NS, PERSIST_GRAPH } from '../src/ns.ts'
 import { type Backend, memoryBackend } from '../src/persistence.ts'
 import { RetainedStream } from '../src/retention/offload.ts'
+import { memoryPages, type OpenPages } from '../src/pages.ts'
 import { MemoryPressure } from '../src/retention/pressure.ts'
 import { mountSiteKeeping } from './harness.ts'
 
@@ -43,16 +44,19 @@ interface Browser {
   kept: FileStoreBackend
   /** Offloaded history (IndexedDB in a browser). */
   offload: Backend
+  /** Which of its pages are open (Web Locks in a browser). */
+  pages: OpenPages
 }
 const browser = (): Browser => ({
   backends: { [PER + 'Session']: memoryBackend(), [PER + 'Device']: memoryBackend(), [PER + 'Database']: memoryBackend() },
   kept: memoryFileStore(),
   offload: memoryBackend(),
+  pages: memoryPages(),
 })
 
 /** The site over a browser's storage, as the host runs it, with offloaded history written at once. */
 async function visit(b: Browser) {
-  const h = await mountSiteKeeping(b.backends, b.kept)
+  const h = await mountSiteKeeping(b.backends, b.kept, 'sparql', [], b.pages)
   Object.assign(h.runtime.retention.opts, { schedule: (run: () => void) => run() })
   await h.runtime.retention.use(b.offload)
   const f = h.store.factory
@@ -156,7 +160,8 @@ describe('nothing a person owns is lost across a reload', () => {
     for (const x of a.conservation()) expect(x.accounted, x.stream).toBe(x.given)
     const offloadedKeys = await b.offload.keys!('semblance:ret:')
     expect(offloadedKeys.length).toBeGreaterThan(0)
-    a.persistence.stop()
+    // The page is closed: the next one sweeps what it offloaded.
+    a.runtime.end()
 
     const c = await visit(b)
     expect(c.missing(before)).toEqual([])
@@ -191,7 +196,8 @@ describe('nothing a person owns is lost across a reload', () => {
     for (const x of a.conservation()) expect(x.accounted, x.stream).toBe(x.given)
     const remembered = a.owned()
     pressure.stop()
-    a.persistence.stop()
+    // The page is closed: the next one sweeps what it offloaded.
+    a.runtime.end()
 
     const c = await visit(b)
     expect(c.missing(data, 'data')).toEqual([])
@@ -224,7 +230,8 @@ describe('nothing a person owns is lost across a reload', () => {
     }
     expect(a.unsaved(UI + 'rememberExampleSettings')).toEqual(['true'])
     expect(a.unsaved(UI + 'rememberChangeLog')).toEqual(['true'])
-    a.persistence.stop()
+    // The page is closed: the next one sweeps what it offloaded.
+    a.runtime.end()
 
     full = false
     const c = await visit(b)

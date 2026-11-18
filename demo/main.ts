@@ -121,6 +121,10 @@ const appValues = (p: string) => store.match(app, nn(p), null, dg).map((q) => q.
 prepareSite(store, { kind, prefer, compile })
 
 const runtime = new Runtime(store)
+// The graphs the page did not need first come later (loadRest): until they are in and their
+// remembered state is back, nothing sweeps storage of what no graph declares (kept files, remembered
+// state, offloaded history; docs/RETENTION.md §8.11).
+const graphsIn = firstGraphs ? runtime.holdGraphs() : undefined
 // History the graph's retention policies let go (the change log past its bounds) goes to IndexedDB, and
 // comes back on Show older or an undo past it (docs/RETENTION.md).
 void runtime.retention.use(indexedDbBackend('semblance-offload'))
@@ -498,13 +502,10 @@ const demoUpload: Uploader = (file, ctx) =>
     ctx.signal.addEventListener('abort', () => clearInterval(timer), { once: true })
   })
 // Files kept in the browser (file:keepIn: the file explorer) go to IndexedDB; their previews are
-// made in a worker, so decoding a large photo never holds up the page. A page that loads the rest of
-// its graphs later says when they are all there: a kept file whose node they bring is not freed first.
-let allGraphsLoaded = () => {}
-const graphsLoaded = firstGraphs ? new Promise<void>((r) => (allGraphsLoaded = r)) : undefined
+// made in a worker, so decoding a large photo never holds up the page. A kept file whose node the
+// graphs loaded later bring is not freed first (the runtime's graphsLoaded, held above).
 new Files(bus, {
   handlers: { demo: demoUpload },
-  graphsLoaded,
   thumbnail: workerThumbnails(() => new Worker(scriptURL(thumbnailWorker), { type: 'module' })),
   onHandled: () => {
     syncSettings()
@@ -631,7 +632,7 @@ async function loadRest() {
   }
   await arrive(slices, { runtime, idle: nextIdle, task: nextTask, urgent, flush })
   await persistence.restoreAdded().catch((e) => console.warn('[semblance] could not restore remembered state', e))
-  allGraphsLoaded()
+  graphsIn?.()
   flush()
   scheduleWarmup()
   performance.mark('sem:graphs')

@@ -15,6 +15,10 @@ export interface KeptFile {
   contents: Blob | FileLike
   /** A small picture of it (images only), if one could be made. */
   preview?: Blob
+  /** The run of the page that kept it (Runtime.run): while that page is open, no other frees it. */
+  keptBy?: string
+  /** When it was kept (ms since the epoch). */
+  keptAt?: number
 }
 
 /** Where kept files live. Asynchronous, so IndexedDB fits; a memory stand-in for tests. */

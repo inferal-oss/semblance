@@ -37,6 +37,10 @@ import { DND, FILE, FILES_GRAPH, NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
 import { mint, type Delta } from './rdf.ts'
 import type { DomRenderer } from './render/dom.ts'
 import type { GraphStore } from './store/types.ts'
+import { whenIdle } from './idle.ts'
+
+/** What a page's mark as open is named, before its run, once it keeps files (src/pages.ts). */
+const KEPT_OPEN = 'semblance-files:open|'
 
 const XSD_DATETIME = NS.xsd + 'dateTime'
 const XSD_ANYURI = NS.xsd + 'anyURI'
@@ -99,9 +103,15 @@ export interface FilesOptions {
    * Resolves once every graph that may name a kept file has loaded and its remembered state is back
    * (a page that loads graphs after its first paint: demo/main.ts loadRest, Persistence.restoreAdded).
    * Until then a kept file whose node is not in the graph is held, not freed: its node may yet come.
-   * By default every graph is there when the effect attaches.
+   * By default the runtime's (Runtime.graphsLoaded: a host loading graphs later holds it, holdGraphs).
    */
   graphsLoaded?: Promise<unknown>
+  /**
+   * Without a way to tell which pages are open (no Web Locks), how long a kept file no graph names is
+   * held after it was kept, before it is freed (a day): another tab may have kept it and not yet
+   * remembered its node. With Web Locks, a file is held exactly while the page that kept it is open.
+   */
+  graceMs?: number
   /** How image previews are made (default: in this thread, decoded small; workerThumbnails for a worker); null: none. */
   thumbnail?: Thumbnailer | null
   /** How contents become addresses in this page (default URL.createObjectURL and revokeObjectURL); a stand-in for tests. */
@@ -171,16 +181,24 @@ export class Files {
   /** Perform requests and uploads from now on, and, given the renderer, take files dropped on its zones. Returns a function that stops it. */
   attach(renderer?: DomRenderer): () => void {
     const off = this.bus.runtime.onInput((graph, delta) => this.changed(graph, delta))
+    // The page ends (its runtime): it is no longer open for what it kept.
+    const unend = this.bus.runtime.onEnd(() => {
+      this.mark?.()
+      this.mark = undefined
+    })
     const unlisten = renderer ? this.listen(renderer) : () => {}
     this.doc = renderer?.host.ownerDocument
     this.backend = this.opts.keep !== undefined ? this.opts.keep : (globalThis as { indexedDB?: unknown }).indexedDB ? indexedDbFileStore() : null
     this.detach = () => {
       off()
+      unend()
       unlisten()
       for (const c of this.uploads.values()) c.abort()
       this.uploads.clear()
       for (const k of this.kept.values()) for (const u of k.urls) this.urls.revoke(u)
       this.unclaimed.clear()
+      this.mark?.()
+      this.mark = undefined
       this.detach = undefined
     }
     this.ready = this.track(this.restoreKept())
@@ -380,7 +398,10 @@ export class Files {
     const work = Promise.resolve().then(async () => {
       if (!backend) throw new Error('This browser cannot keep files.')
       const preview = contents.type.startsWith('image/') && thumbnail ? await thumbnail(contents, PREVIEW_SIZE).catch(() => undefined) : undefined
-      await backend.put(handle, { store: storeIri, name: contents.name, type: contents.type, size: k.size, contents, preview })
+      // Who kept it, and when: another page leaves it while that page is open (restoreKept).
+      const runtime = this.bus.runtime
+      this.mark ??= runtime.pages?.open(KEPT_OPEN + runtime.run)
+      await backend.put(handle, { store: storeIri, name: contents.name, type: contents.type, size: k.size, contents, preview, keptBy: runtime.run, keptAt: Date.now() })
       return preview
     })
     this.track(
@@ -421,9 +442,14 @@ export class Files {
     void this.backend?.remove(k.handle).catch(() => {})
   }
 
+  /** This page's mark as open (src/pages.ts), once it keeps a file: others leave what it kept. */
+  private mark?: () => void
+
   /**
    * The files kept by an earlier page, back: counted, given addresses. One whose node is not in the
-   * graph is held until every graph has loaded (opts.graphsLoaded), then freed: it was never remembered.
+   * graph is held until every graph has loaded (opts.graphsLoaded), then, in idle time, freed: it was
+   * never remembered. Unless the page that kept it is still open (another tab, which may not have
+   * remembered its node yet): it stays held, and is claimed if its node comes.
    */
   private async restoreKept() {
     // Every store is counted from the start, empty or not, so its cap's shapes have totals to read.
@@ -448,12 +474,24 @@ export class Files {
       if (node?.termType === 'NamedNode' && keptIn?.termType === 'NamedNode') this.claim(node, keptIn.value)
     }
     this.flushGraph()
-    await this.opts.graphsLoaded
+    await (this.opts.graphsLoaded ?? this.bus.runtime.graphsLoaded)
+    await new Promise<void>((resolve) => whenIdle(() => resolve()))
     if (!this.detach) return
     // A store declared by a graph that came later is counted too.
     this.countStores()
-    for (const handle of this.unclaimed.keys()) void backend.remove(handle).catch(() => {})
-    this.unclaimed.clear()
+    const runtime = this.bus.runtime
+    const open = runtime.pages && new Set((await runtime.pages.marked(KEPT_OPEN)).map((n) => n.slice(KEPT_OPEN.length)))
+    if (!this.detach) return
+    const now = Date.now()
+    const graceMs = this.opts.graceMs ?? 86_400_000
+    // Held while the page that kept it is open (a file kept before pages said so: while any other
+    // page that keeps files is); without marks, for the grace after it was kept.
+    const held = (r: KeptFile) => (open ? (r.keptBy ? open.has(r.keptBy) : [...open].some((run) => run !== runtime.run)) : r.keptAt !== undefined && now - r.keptAt < graceMs)
+    for (const [handle, record] of [...this.unclaimed]) {
+      if (held(record)) continue
+      this.unclaimed.delete(handle)
+      void backend.remove(handle).catch(() => {})
+    }
     this.flushGraph()
   }
 

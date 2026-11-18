@@ -125,6 +125,16 @@ storage). It also has a back side, like every view.
 - **Turning a policy off** clears its storage. The `per:enabled` triple
   itself lives in a meta-policy at `per:Device`, so the switch's own state is
   remembered.
+- **A policy no longer declared** (renamed, removed, or on a page that is gone)
+  leaves its keys behind. Once every graph the app declares has loaded
+  (`runtime.graphsLoaded`), in idle time, once per page load, the effect sweeps
+  them: a name no page of the app has declared for 30 days (`SWEEP_GRACE_MS`,
+  `sweep: { graceMs }`) goes, unless another page of the app is open. Each
+  storage keeps a record of when each stored name was last declared
+  (`<prefix>~declared`). Only keys under the effect's own prefix are swept, and
+  of those only what is remembered state: the prefix is the app's namespace
+  (two apps on one origin give each its own `prefix`). `sweep: false` turns it
+  off. See docs/RETENTION.md §8.11.
 
 ## Open questions for you
 

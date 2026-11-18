@@ -40,6 +40,14 @@ export interface MountOptions {
   /** Turtle to load besides Semblance's own ontology: your app's components, your component classes and their rules. */
   graphs?: string[]
   /**
+   * Graphs the app loads after mount (`runtime.load`, a page's own graph when it is visited):
+   * resolves once they are all in and their remembered state is restored (`persistence.restoreAdded()`).
+   * Until then nothing sweeps storage of what no graph declares (kept files, offloaded history,
+   * remembered state: `runtime.graphsLoaded`, docs/RETENTION.md §8.11); a promise that rejects never
+   * lets them. Without it, every graph is there at mount.
+   */
+  graphsLoaded?: Promise<unknown>
+  /**
    * Turtle from an untrusted author (a person, a page, a model), loaded after `graphs`: the root is
    * then rendered as authored content (src/safety.ts, docs/SAFETY.md). What the policy refuses
    * (script, event handler attributes, javascript: URLs, CSS that loads a resource, …) is left out and
@@ -220,6 +228,11 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   if (shadow) shadow.replaceChildren(host)
   const ssr = !shadow && serverRendered(element)
   const runtime = new Runtime(store)
+  // Graphs that come later: what sweeps storage waits for them.
+  if (opts.graphsLoaded) {
+    const release = runtime.holdGraphs()
+    opts.graphsLoaded.then(release, () => {})
+  }
   // History its policies let go is offloaded to this browser's storage, from where it can come back.
   const offload = opts.retention?.storage === false ? undefined : (opts.retention?.storage ?? (typeof indexedDB === 'undefined' ? undefined : indexedDbBackend('semblance-offload')))
   if (offload) void runtime.retention.use(offload)

@@ -382,7 +382,7 @@ back a different node, which the undo would then not find.
 A stored value says what it is, so no format marker is added: bytes, or text that is not JSON, are
 a Jelly stream (whose stream options carry the Jelly version); text that starts with `{` is a chunk
 of the earlier layout (`{ members, nt }`, the closures as N-Triples), which is still read. Chunks
-never outlive their run (a new page sweeps the keys of earlier runs), so the two only meet in a
+never outlive their run (a new page sweeps the keys of runs whose pages have closed, §8.11), so the two only meet in a
 storage an earlier version wrote to. A chunk that cannot be read is counted as dropped, as one the
 storage lost is.
 
@@ -459,6 +459,7 @@ Tracked in #530, linked from the Plan (#8).
 | A disabled Undo says where history starts (`beh:UndoHorizon`, `beh:UndoableCounts`) | `ontology/layers/behaviour.ttl`, `src/behaviour/undo.ts` | built |
 | Remembered state by `ret:Within`: `per:retention` measured from each stored triple's age, set aside (or dropped where the policy says so), on a horizon, announced, recalled | `src/persistence.ts`, `ontology/layers/persistence.ttl`; §8.9 | built |
 | Nothing owned lost across a reload: settings, the site's look, a kept file and the remembered change log, under critical pressure and a refusing storage, with each run's streams conserved | `test/reload-owned.test.ts` | built |
+| Stale storage keys swept once every declared graph has loaded: remembered state no policy declares, kept files no graph names, what closed pages offloaded; never what another open page may use (§8.11) | `Runtime.graphsLoaded`, `holdGraphs`, `src/pages.ts`, `Persistence.sweep`, `Retention.sweep`, `src/files.ts` `restoreKept`; `test/sweep.test.ts` | built |
 | References to a retired member leave with it, in every graph; those of its stream's graph are stored with an offloaded member and come back with a recall | `ret:Reference` (`ontology/layers/retention.ttl`), `RetainedStream.leave` and `recall` (`src/retention/offload.ts`); §8.10 | built |
 | `ret:pinned`: a member a person keeps, never let go by a policy or by pressure until unpinned | `ontology/layers/retention.ttl`, `src/retention/policy.ts` | built |
 | LDES's own policies as LDES defines them: `ldes:DurationAgoPolicy` a `ret:Within`, `ldes:PointInTimePolicy` from a point in time, `ldes:LatestVersionSubset` the newest versions of each entity (before, its `ldes:amount` was read as the stream's newest members) | `ontology/layers/retention.ttl`, `src/retention/policy.ts` | built |
@@ -534,8 +535,9 @@ What leaves by `ret:Offload` goes through three stages:
 The storage is `mount`'s `retention.storage`. By default it is this browser's IndexedDB (database
 `semblance-offload`); `false` turns offloading off, and then `ret:Offload` drops and counts. Any
 `Backend` serves: one with `getBytes`/`setBytes` holds the chunks as bytes, any other as base64
-text. Keys start with `semblance:ret:<run>|`. A new page sweeps what earlier pages offloaded,
-because history goes with the page that kept it.
+text. Keys start with `semblance:ret:<run>|`. A new page sweeps what pages that have closed
+offloaded, because history goes with the page that kept it; a page still open (another tab) keeps
+its own (§8.11).
 
 To bring history back into the live graph:
 
@@ -873,6 +875,74 @@ What points at members and needs no mark:
 pressure, and an app's own streams across graphs; `test/soak.test.ts` checks, after 3,500 events,
 that nothing in any graph points at a member the streams let go.
 
+### 8.11 Sweeping what nothing declares
+
+What an app stores outlives what declares it. A policy renamed or removed, a page that declared one
+and is gone, a kept file whose node nobody remembered, the history of a page that has closed: their
+keys would stay in the browser for good. They are swept, by the effect that wrote them, under three
+rules.
+
+**Not before every declared graph has loaded.** A graph loaded later (the rest of a server-rendered
+site, a page's own graph when it is visited) may declare what is stored. The runtime knows when they
+are all in: `runtime.graphsLoaded` resolves once no hold is open, no sooner than a task after it was
+first asked for. A host that loads graphs after start holds it (`runtime.holdGraphs()`) in the task
+that made the runtime, and releases it once they are in and their remembered state is restored
+(`persistence.restoreAdded()`). `mount({ graphsLoaded })` takes a promise for this. A load that fails
+never releases it, and nothing is swept. Each sweep then runs once per page load, in idle time, and
+reads what is stored, not what the app holds.
+
+**Only the owner's own keys, and only what nothing declares.**
+
+| owner | where | keys | declared by |
+|---|---|---|---|
+| Remembered state (`src/persistence.ts`) | each scope's storage: `per:Session` (sessionStorage), `per:Device` (localStorage), `per:Database` (IndexedDB `semblance`, store `state`) | `<prefix><policy>` (the copy), `<prefix><policy>#<i>` (chunks), `<prefix><policy>~aside` (set aside by its retention), `<prefix>enabled` (the switches, on the device), `<prefix>~declared` (the record below); `<prefix>` is `semblance:` unless the host gives one | a `per:Policy`, or a `nav:Dimension` carried by a `per:Scope`, in the trusted graphs |
+| Offloaded history (`src/retention/offload.ts`) | `mount`'s `retention.storage`, by default IndexedDB `semblance-offload` | `semblance:ret:<run>\|<stream>\|<policy>\|<seq>` | the page whose run it is, while it is open |
+| Kept files (`src/files.ts`, `src/file-store.ts`) | IndexedDB `semblance-files`, store `files` | the `file:handle` | a node with that `file:handle` and a `file:keptIn` in the graph (itself remembered state), or the page that kept it, while it is open |
+
+Remote writes a store has not answered yet (`src/remote.ts`, keys `semblance:src:<source>\|<place>`
+in the retention storage, #560) are a person's unsent changes: owned data, never swept, even when no
+writable `src:Source` declares them any more. The remembered-state sweep leaves them, as it leaves
+offloaded history (`semblance:ret:`), under the same default prefix.
+
+Nothing else writes to storage: the pre-paint script (`src/web/remembered.ts`) reads remembered state,
+navigation keeps its storage-carried dimensions through the persistence effect, and sandboxes keep
+nothing.
+
+Remembered state is swept by name, within the effect's prefix: the prefix is the app's namespace
+(two apps on one origin already need their own, since their switches share `<prefix>enabled`). Of the
+keys under it, only those that are remembered state are its: a name the record below knows, or a key
+that holds a policy's copy, with its chunks and what it set aside. Another owner's keys under the
+same prefix are left, and `semblance:ret:` and `semblance:src:` are never read as remembered state
+at all, whatever they hold.
+
+**Never what another page may still use.** Two tabs of the app may be open on different versions,
+and an older version, or a page not visited for a while, declares what this one does not. So:
+
+- *Open pages are marked* (`src/pages.ts`): each page marks itself open, under its owner's prefix and
+  its run (`Runtime.run`), for as long as it lives. In a browser the marks are Web Locks: the browser
+  releases them when the page closes or crashes, and `navigator.locks.query()` lists those of every
+  page of the origin. A host or a test gives its own (`runtime.pages = memoryPages()`).
+- *Remembered state is swept only while no other page of the app is open*, and only names no page
+  has declared for the grace period: each storage keeps `<prefix>~declared`, when each stored name
+  was last declared. A page stamps what it declares; a name the record does not know (stored before
+  there was one) starts its clock when a page first finds it. A name unstamped for 30 days
+  (`SWEEP_GRACE_MS`; `new Persistence(…, { sweep: { graceMs } })`) goes, its copy last; `sweep: false`
+  turns sweeping off. The record is written over what another page stamped meanwhile, the later
+  stamp of each name winning, so a lost write only delays a sweep.
+- *A run's offloaded history is swept once its page has closed* (its mark is gone). Without marks
+  (no Web Locks) a run keeps it for a day after it started (`graceMs` of the retention options).
+- *A kept file no graph names is freed once the page that kept it has closed*: a record says who
+  kept it (`keptBy`, the run) and when (`keptAt`). One kept before records said so is held while any
+  other page that keeps files is open. Without marks, a file is held for a day after it was kept
+  (`graceMs` of the files options).
+
+`test/sweep.test.ts` is the worked example: an undeclared policy past its grace goes, with its
+chunks and what it set aside, only after a graph loaded later is in, while the policy that graph
+declares is restored; one within its grace, one the record did not know and another owner's keys
+stay; nothing goes while another page is open, or when the late graph never loads. Files and
+offloaded history are held for an open page and freed for a closed one (`test/retention.test.ts`,
+`test/reload-owned.test.ts`).
+
 ## Appendix: the questions as they were asked
 
 1. **Undo.** Should it get its own history per document (recommended), or stay on the change log with
@@ -886,6 +956,8 @@ that nothing in any graph points at a member the streams let go.
    is never dropped. Is there any history the person must be asked about?
 5. **Stale storage keys** of undeclared policies. Sweep them, or keep them, since they may be owned
    data of a graph not loaded yet? The proposal: never sweep data scopes; list them in the inspector.
+   (Decided: swept, once every declared graph has loaded, after a grace and never while another page
+   of the app is open; §6, §8.11.)
 6. **Is the change log person-facing?** Should crossing its horizon announce, or only show in the log's
    own view?
 7. **The server's warm runtime.** Should it run `maintain` between requests, recycle, or both?

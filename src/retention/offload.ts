@@ -13,10 +13,15 @@ import type { Delta } from '../rdf.ts'
 import { applyEffective } from '../view/input.ts'
 import type { Backend } from '../persistence.ts'
 import type { GraphStore } from '../store/types.ts'
+import { whenIdle } from '../idle.ts'
+import { newRun, type OpenPages, runStartedAt } from '../pages.ts'
 import { decodeChunk, encodeChunk, loadChunk, storeChunk } from './chunk.ts'
 import { type Expiry, type Member, type Policy, policiesOf, StreamRetention } from './policy.ts'
 
 const RET = NS.ret
+/** What a page's mark as open is named after its prefix (OpenPages): `<prefix>open|<run>`. */
+const OPEN = 'open|'
+const DAY_MS = 86_400_000
 const RDF_TYPE = NS.rdf + 'type'
 const XSD = NS.xsd
 
@@ -58,8 +63,17 @@ interface Pending {
 export interface RetentionOptions {
   /** Where offloaded members go (IndexedDB in a browser); without one, ret:Offload drops (and says so). */
   backend?: OffloadBackend
-  /** This page's run: offloaded chunks of other runs are swept at start. */
+  /** This page's run: offloaded chunks of runs whose pages have closed are swept (sweep). */
   run?: string
+  /** Which pages are open (the runtime's): a run whose page is open keeps its chunks. */
+  pages?: () => OpenPages | undefined
+  /** Resolves once every declared graph has loaded (the runtime's graphsLoaded): the sweep waits for it. */
+  loaded?: () => Promise<unknown>
+  /**
+   * Without a way to tell which pages are open (no Web Locks), how long after a run started its
+   * chunks are kept (a day): a page open longer than that may lose what it offloaded.
+   */
+  graceMs?: number
   /** What stored keys start with. */
   prefix?: string
   /** Members per stored chunk. */
@@ -104,7 +118,7 @@ export class Retention {
     readonly write: (graph: string | undefined, delta: Delta) => void = (graph, delta) => void applyEffective(store, graph, delta),
   ) {
     this.prefix = opts.prefix ?? 'semblance:ret:'
-    this.run = opts.run ?? Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+    this.run = opts.run ?? newRun()
     created?.(this)
   }
 
@@ -113,10 +127,16 @@ export class Retention {
   }
 
   private storage?: OffloadBackend
-  /** Offload to this storage from now on (a host gives IndexedDB once it has it), and sweep earlier pages' keys. */
+  /** This page's mark as open (OpenPages), while it offloads. */
+  private mark?: () => void
+  /**
+   * Offload to this storage from now on (a host gives IndexedDB once it has it), with this page
+   * marked open; sweep what closed pages left once every declared graph has loaded (sweep).
+   */
   use(backend: OffloadBackend): Promise<void> {
     this.storage = backend
     this.swept = undefined
+    if (!this.mark && !this.stopped) this.mark = this.opts.pages?.()?.open(this.prefix + OPEN + this.run)
     return this.sweep()
   }
 
@@ -152,19 +172,38 @@ export class Retention {
     return [...this.streams.values()]
   }
 
-  /** Remove what earlier pages offloaded (their runs' keys): history goes with the page that kept it. */
+  /**
+   * Remove what pages that have closed offloaded (their runs' keys): history goes with the page that
+   * kept it. Once per storage given, once every declared graph has loaded, in idle time. A run whose
+   * page is still open (another tab, of this version or another) keeps its chunks; without a way to
+   * tell (no Web Locks), a run keeps them for `graceMs` after it started. It reads the keys under the
+   * prefix, nothing else: it costs what is stored.
+   */
   sweep(): Promise<void> {
     const b = this.backend
     if (!b?.keys) return Promise.resolve()
-    return (this.swept ??= b
-      .keys(this.prefix)
-      .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(this.prefix + this.run + '|')).map((k) => b.remove(k))))
-      .then(() => undefined)
+    return (this.swept ??= Promise.resolve(this.opts.loaded?.())
+      .then(() => new Promise<void>((resolve) => whenIdle(() => resolve())))
+      .then(async () => {
+        if (this.stopped || this.backend !== b) return
+        const own = this.prefix + this.run + '|'
+        const keys = (await b.keys!(this.prefix)).filter((k) => !k.startsWith(own))
+        if (!keys.length) return
+        const pages = this.opts.pages?.()
+        const marks = this.prefix + OPEN
+        const open = pages && new Set((await pages.marked(marks)).map((n) => n.slice(marks.length)))
+        const cut = this.now() - (this.opts.graceMs ?? DAY_MS)
+        const closed = (run: string) => (open ? !open.has(run) : (runStartedAt(run) ?? Infinity) < cut)
+        if (this.stopped) return
+        await Promise.all(keys.filter((k) => closed(k.slice(this.prefix.length).split('|')[0]!)).map((k) => b.remove(k)))
+      })
       .catch(() => undefined))
   }
 
   stop(): void {
     this.stopped = true
+    this.mark?.()
+    this.mark = undefined
   }
 
   /** Write every stream's pending members now. */
