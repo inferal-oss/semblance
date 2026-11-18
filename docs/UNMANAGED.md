@@ -40,6 +40,51 @@ and a box of more than a pixel (a visually hidden live region is not UI). Where 
 It is one walk of the DOM with each renderer's own map, no query per element; it reads layout, so it
 runs on demand.
 
+## The guard: every page, in a browser
+
+```bash
+npm run check:unmanaged                                   # a dev server of this checkout, every English page
+npm run check:unmanaged -- --pages /,/components/layout/  # some pages
+npm run check:unmanaged -- --build                        # a production build (dist-guard/), as CI runs it
+```
+
+`scripts/unmanaged-check.ts` visits every address of the site (`semblance.config.ts`'s routes; `--langs
+en,ar` for more languages, `--terms N` for some of the Reference's term pages) in a headless Chromium,
+scrolls each through (a live example builds its sandbox once seen) and, on the home page, opens the
+Tools on each tab, the command palette and a tooltip. On each it asks the page what it did not make
+(`window.semblance.unmanaged`, in a build with `VITE_SEMBLANCE_HANDLE=1`). It fails on
+
+- a finding whose category is not allowed by kind (`um:allowed`: foreign on purpose) and that no
+  exception allows, and
+- an exception that matched nothing on any page (stale), on a full run.
+
+A failure reads:
+
+```
+  /
+    host-code (inside a rendered element): header[data-sem-c=app-bar] > div.promo-banner
+    1 visible element; nearest Semblance component: https://semblance.dev/demo#appBar
+```
+
+The "Made by Semblance" workflow (`.github/workflows/unmanaged.yml`) runs it on every pull request that
+touches `src/`, `ontology/` or `demo/`.
+
+### Exceptions
+
+What a site allows though Semblance did not make it is in its graph, each entry with its reason and,
+where it is meant to go away, the issue that removes it (`demo/app.ttl`):
+
+```turtle
+ui:allowAnchoredSurface a um:Exception ; um:category um:HostCode ; um:selector ".sem-tooltip[data-sem-anchor]" ;
+    rdfs:label "Tooltip surface" ;
+    um:because "Tooltips and drop reasons are shown on a surface src/web/anchored-surface.ts draws by hand." ;
+    um:issue <https://github.com/inferal-oss/semblance/issues/584> .
+```
+
+An exception allows a finding when all it states holds: its element matches `um:selector`, it is in the
+host-owned slot `um:slot`, it is of `um:category`. The Inspector's grid shows which exception allows each
+finding (`um:exceptedBy`).
+
 ## In tests
 
 `notMadeBySemblance(root)` in `test/harness.ts` lists the findings as `category reason: path`:

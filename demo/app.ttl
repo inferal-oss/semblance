@@ -431,10 +431,14 @@ ui:unmanaged a um:Survey , ui:InspectorView ; sem:order 2 ;
 um:FindingCounts iv:whileShown ui:inspectorViews .
 um:CategoryCounts iv:whileShown ui:unmanagedCategories .
 ui:unmanagedPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:unmanagedBar ui:unmanagedCategories ui:unmanagedSplit ui:unmanagedHighlight ) .
+    c:children ( ui:unmanagedBar ui:unmanagedCategories ui:unmanagedSplit ui:unmanagedHighlight ui:unmanagedDocs ) .
 ui:unmanagedBar a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:unmanagedFind ui:unmanagedFigures ) .
 ui:unmanagedFind a c:Button , c:Setter ; c:controls ui:unmanaged ; c:property um:request ; c:value um:Run ; sty:size sty:Small ;
     c:label "Find on this page" , "Знайти на цій сторінці"@uk , "Auf dieser Seite suchen"@de , "ابحث في هذه الصفحة"@ar .
+# How it works, the guard that checks every page in CI, and how to allow an exception.
+ui:unmanagedDocs a c:Link ; c:href "https://github.com/inferal-oss/semblance/blob/main/docs/UNMANAGED.md" ;
+    c:label "How it is found, and the guard every page passes" , "Як це знаходять, і перевірка, яку проходить кожна сторінка"@uk ,
+        "Wie es gefunden wird, und die Prüfung, die jede Seite besteht"@de , "كيف يُعثر عليه، والفحص الذي تجتازه كل صفحة"@ar .
 ui:unmanagedFigures a c:Metrics ; c:of ui:unmanaged ; c:fields ( um:share um:unmanagedElements um:visibleElements ) .
 ui:unmanagedCategory a c:ValueFilter ; c:filterProperty um:category ; c:filterValue c:AnyValue .
 ui:unmanagedCategories a c:Segmented ; c:controls ui:unmanagedCategory ; c:property c:filterValue ; c:compactAs c:Picker ;
@@ -452,21 +456,35 @@ ui:um-col-elements a c:GridColumn ; c:cellProperty um:elements ; c:align "end" ;
     c:label "Visible" , "Видимих"@uk , "Sichtbar"@de , "مرئية"@ar .
 ui:um-col-reason a c:GridColumn ; c:cellProperty um:reason ; c:width 200 ;
     c:label "Why" , "Чому"@uk , "Warum"@de , "السبب"@ar .
+ui:um-col-allowed a c:GridColumn ; c:cellProperty um:exceptedBy ; c:width 160 ;
+    c:label "Allowed by" , "Дозволено"@uk , "Erlaubt durch"@de , "مسموح بموجب"@ar .
 ui:unmanagedGrid a c:DataGrid ; c:collection ui:unmanaged ; c:sequenceProperty um:order ; c:pageSize 200 ;
     c:label "Not made by Semblance" , "Зроблено не Semblance"@uk , "Nicht von Semblance"@de , "لم يصنعه Semblance"@ar ;
-    c:gridColumns ( ui:um-col-element ui:um-col-category ui:um-col-elements ui:um-col-reason ) ;
+    c:gridColumns ( ui:um-col-element ui:um-col-category ui:um-col-elements ui:um-col-reason ui:um-col-allowed ) ;
     c:filteredBy ui:unmanagedCategory ;
     c:emptyText "Press Find on this page: every visible element no rendering made is listed here, by the subtree it heads." ,
         "Натисніть «Знайти на цій сторінці»: тут з’явиться кожен видимий елемент, якого не зробило жодне відображення, за піддеревом, яке він очолює."@uk ,
         "„Auf dieser Seite suchen“ listet hier jedes sichtbare Element, das kein Rendering gemacht hat, nach dem Teilbaum, den es anführt."@de ,
         "اضغط «ابحث في هذه الصفحة»: يُدرج هنا كل عنصر مرئي لم يصنعه أي عرض، بحسب الشجرة الفرعية التي يتصدرها."@ar .
 ui:unmanagedDetails a c:DescriptionList ; c:bindFrom ui:unmanagedGrid ; c:bindProperty c:selectedRow ;
-    c:fields ( um:category um:reason um:element um:path um:elements um:nearComponent um:near ) ;
+    c:fields ( um:category um:reason um:exceptedBy um:element um:path um:elements um:nearComponent um:near ) ;
     c:emptyText "Select a finding to outline it on the page and highlight the nearest element Semblance made." ,
         "Виберіть знахідку, щоб обвести її на сторінці й підсвітити найближчий елемент, зроблений Semblance."@uk ,
         "Wählen Sie einen Fund, um ihn auf der Seite zu umranden und das nächste von Semblance gemachte Element hervorzuheben."@de ,
         "حدّد نتيجة لتحيطها في الصفحة وتبرز أقرب عنصر صنعه Semblance."@ar .
 ui:unmanagedHighlight a c:Highlight ; c:bindFrom ui:unmanagedGrid ; c:bindProperty c:selectedRow ; c:via um:near .
+
+# What is allowed on the site though Semblance did not make it (um:Exception). The guard
+# (scripts/unmanaged-check.ts) walks every page in a browser and fails on any other finding of host
+# code, a third party or unknown origin, and on an exception here that no longer matches anything.
+# Each says why, and the issue that removes it where it is meant to go away.
+ui:allowHostSlotSpecimen a um:Exception ; um:category um:HostCode ; um:slot "gallery-host" ;
+    rdfs:label "Host slot specimen" , "Зразок слота хоста"@uk , "Muster eines Host-Slots"@de , "عيّنة منفذ المضيف"@ar ;
+    um:because "The c:HostSlot specimen on the Layout page shows content the host owns: a native slider demo/main.ts mounts in the slot, which Semblance never touches. That is the specimen's point." .
+ui:allowAnchoredSurface a um:Exception ; um:category um:HostCode ; um:selector ".sem-tooltip[data-sem-anchor]" ;
+    rdfs:label "Tooltip surface" , "Поверхня підказки"@uk , "Tooltip-Fläche"@de , "سطح التلميح"@ar ;
+    um:because "Tooltips and drop reasons are shown on a surface src/web/anchored-surface.ts draws by hand." ;
+    um:issue <https://github.com/inferal-oss/semblance/issues/584> .
 
 ui:qElement a sem:Query ; rdfs:label "rendered element (RDF/HTML)" ;
     sem:construct """CONSTRUCT { $node ?p ?o . ?attr ?ap ?ao }

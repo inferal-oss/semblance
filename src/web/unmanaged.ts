@@ -52,6 +52,8 @@ export interface UnmanagedFinding {
   near?: { element: Element; key: string; renderer: DomRenderer }
   /** A short selector-like path to it from `near` (or from the document). */
   path: string
+  /** The host-owned slot it is in, if it is in one. */
+  slot?: string
 }
 
 /** What a walk found: the findings, in document order, and how many visible elements there are. */
@@ -171,7 +173,7 @@ export function surveyUnmanaged(root: ParentNode = document, opts: UnmanagedOpti
     out.unmanaged += elements
     const [category, reason] = classify(el, ctx)
     if (wanted && !wanted.has(category)) return
-    out.findings.push({ element: el, category, reason, elements, near: ctx.near, path: pathOf(el, ctx.near?.element) })
+    out.findings.push({ element: el, category, reason, elements, near: ctx.near, path: pathOf(el, ctx.near?.element), slot: ctx.slot })
   }
 
   const top = root.nodeType === 9 ? (root as Document).documentElement : (root as Element)
@@ -241,6 +243,62 @@ function pathOf(el: Element, from: Element | undefined): string {
   return head + (steps.length > 4 ? ['…', ...steps.slice(-3)] : steps).join(' > ')
 }
 
+// --- what is allowed: categories by kind, the rest by an exception that says why ------------------
+
+/** A site's exception (um:Exception): what it allows, and why. */
+export interface UnmanagedException {
+  iri: string
+  label?: string
+  selector?: string
+  slot?: string
+  category?: UnmanagedCategory
+  because?: string
+  issue?: string
+}
+
+/** What a store says is allowed: the categories allowed by kind (um:allowed), and the exceptions. */
+export function readAllowed(store: Pick<Runtime['store'], 'match' | 'factory'>): { categories: Set<UnmanagedCategory>; exceptions: UnmanagedException[] } {
+  const f = store.factory
+  const nn = (iri: string) => f.namedNode(iri)
+  const dg = f.defaultGraph()
+  const one = (s: Quad['subject'], p: string) => store.match(s as NamedNode, nn(p), null, dg)[0]?.object
+  const byIri = Object.fromEntries(Object.entries(CATEGORY_IRI).map(([k, v]) => [v, k as UnmanagedCategory]))
+  const categories = new Set<UnmanagedCategory>()
+  for (const [iri, c] of Object.entries(byIri)) if (one(nn(iri), UM + 'allowed')?.value === 'true') categories.add(c)
+  const exceptions = store.match(null, nn(RDF_TYPE), nn(UM + 'Exception'), dg).map((q) => ({
+    iri: q.subject.value,
+    label: one(q.subject, NS.rdfs + 'label')?.value,
+    selector: one(q.subject, UM + 'selector')?.value,
+    slot: one(q.subject, UM + 'slot')?.value,
+    category: byIri[one(q.subject, UM + 'category')?.value ?? ''],
+    because: one(q.subject, UM + 'because')?.value,
+    issue: one(q.subject, UM + 'issue')?.value,
+  }))
+  return { categories, exceptions }
+}
+
+/** The exception that allows a finding: all it states holds (one that states neither a selector nor a slot allows nothing). */
+export function exceptionFor(finding: UnmanagedFinding, exceptions: readonly UnmanagedException[]): UnmanagedException | undefined {
+  return exceptions.find((x) => {
+    if (x.selector === undefined && x.slot === undefined) return false
+    if (x.category && x.category !== finding.category) return false
+    if (x.slot !== undefined && x.slot !== finding.slot) return false
+    if (x.selector !== undefined) {
+      try {
+        if (!finding.element.matches(x.selector)) return false
+      } catch {
+        return false
+      }
+    }
+    return true
+  })
+}
+
+/** A finding the guard fails on: not of a category allowed by kind, and no exception allows it. */
+export function unexcused(survey: UnmanagedSurvey, allowed: ReturnType<typeof readAllowed>): UnmanagedFinding[] {
+  return survey.findings.filter((f) => !allowed.categories.has(f.category) && !exceptionFor(f, allowed.exceptions))
+}
+
 // --- the effect: findings in the graph, on request -------------------------------------------------
 
 export interface UnmanagedHost {
@@ -308,6 +366,7 @@ export function attachUnmanaged(runtime: Runtime, host: UnmanagedHost): () => vo
     const doc = renderers[0]?.host.ownerDocument ?? (globalThis.document as Document | undefined)
     if (!doc) return
     const found = surveyUnmanaged(host.root?.() ?? doc, host.options)
+    const allowed = readAllowed(runtime.store)
     const int = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
     const add: Quad[] = []
     const t = (s: NamedNode, p: string, o: Quad['object']) => add.push(f.quad(s, nn(p), o, g))
@@ -329,6 +388,8 @@ export function attachUnmanaged(runtime: Runtime, host: UnmanagedHost): () => vo
       t(m, UM + 'element', f.literal(x.element.localName))
       t(m, UM + 'path', f.literal(x.path))
       t(m, UM + 'elements', int(x.elements))
+      const excused = exceptionFor(x, allowed.exceptions)
+      if (excused) t(m, UM + 'exceptedBy', nn(excused.iri))
       // The nearest element one of these renderers made: a node of this graph (a sandbox's are its own).
       for (let a: Element | null = x.element.parentElement; a; a = a.parentElement) {
         const r = renderers.find((r) => r.keyOf(a!) !== undefined)

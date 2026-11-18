@@ -3,7 +3,7 @@
 // with its findings, counts and marks in the graph and the DOM, in both rule implementations.
 import { describe, expect, it } from 'vitest'
 import { DomRenderer } from '../src/render/dom.ts'
-import { attachUnmanaged, surveyUnmanaged } from '../src/web/unmanaged.ts'
+import { attachUnmanaged, exceptionFor, readAllowed, surveyUnmanaged, unexcused } from '../src/web/unmanaged.ts'
 import { mountShell, notMadeBySemblance } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -100,6 +100,37 @@ describe('the finder', () => {
   })
 })
 
+describe('what a site allows', () => {
+  it('allows foreign content by kind and host code by an exception that says why, in the graph', () => {
+    const h = mountShell()
+    const doc = h.document
+    const allowed = readAllowed(h.store)
+    expect([...allowed.categories]).toEqual(['sanctioned'])
+    const surface = allowed.exceptions.find((x) => x.iri === UI + 'allowAnchoredSurface')!
+    expect(surface).toMatchObject({ category: 'host-code', selector: '.sem-tooltip[data-sem-anchor]', issue: 'https://github.com/inferal-oss/semblance/issues/584' })
+    expect(surface.because).toBeTruthy()
+    for (const x of allowed.exceptions) expect(x.because, x.iri).toBeTruthy()
+    const tip = doc.createElement('div')
+    tip.className = 'sem-tooltip'
+    tip.setAttribute('data-sem-anchor', '')
+    doc.body.append(tip)
+    const frame = doc.createElement('iframe')
+    doc.querySelector('#app [data-sem-c]')!.append(frame)
+    const hack = doc.createElement('div')
+    hack.className = 'promo-banner'
+    doc.querySelector('#app [data-sem-c]')!.append(hack)
+    const s = surveyUnmanaged(doc)
+    const of = (el: Element) => s.findings.find((f) => f.element === el)!
+    expect(exceptionFor(of(tip), allowed.exceptions)?.iri).toBe(UI + 'allowAnchoredSurface')
+    expect(exceptionFor(of(hack), allowed.exceptions)).toBeUndefined()
+    expect(exceptionFor(of(frame), allowed.exceptions)).toBeUndefined()
+    // The guard fails on the hack alone: the media is allowed by kind, the surface by its exception.
+    expect(unexcused(s, allowed).map((f) => f.element)).toEqual([hack])
+    // A category the exception does not name is not allowed by it.
+    expect(exceptionFor({ ...of(tip), category: 'unknown' }, allowed.exceptions)).toBeUndefined()
+  })
+})
+
 describe.each(['sparql', 'function'] as const)('the Inspector: not made by Semblance (%s)', (prefer) => {
   it('finds on request, counts by category, filters, and marks the selected finding and its nearest Semblance element', async () => {
     const h = shellWithSurvey(prefer)
@@ -119,6 +150,8 @@ describe.each(['sparql', 'function'] as const)('the Inspector: not made by Sembl
     expect(h.found(UM + 'HostCode')).toBe(1)
     expect(h.found(UM + 'ThirdParty')).toBe(1)
     expect(h.rows()).toHaveLength(2)
+    // Neither is allowed: no row says by what.
+    expect(h.store.match(null, h.nn(UM + 'exceptedBy'), null)).toHaveLength(0)
     // The count beside the view and beside each category.
     const segmented = (has: string) => [...doc.querySelectorAll('[data-sem-c=segmented]')].find((e) => e.textContent?.includes(has))!
     const views = segmented('Not made by Semblance')

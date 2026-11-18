@@ -72,8 +72,9 @@ um:Finding a owl:Class ;
     rdfs:comment "A visible subtree of the page that Semblance did not make, by its topmost element."@en .
 um:order a owl:DatatypeProperty ; rdfs:domain um:Finding ; rdfs:range xsd:integer ;
     rdfs:comment "Its place in document order (1 first): the members' sequence."@en .
-um:category a owl:ObjectProperty ; rdfs:domain um:Finding ; rdfs:range um:Category ;
-    rdfs:label "category"@en , "категорія"@uk , "Kategorie"@de , "الفئة"@ar .
+um:category a owl:ObjectProperty ; rdfs:range um:Category ;
+    rdfs:label "category"@en , "категорія"@uk , "Kategorie"@de , "الفئة"@ar ;
+    rdfs:comment "A finding's category; on a um:Exception, the category of the findings it allows."@en .
 um:reason a owl:DatatypeProperty ; rdfs:domain um:Finding ;
     rdfs:label "why"@en , "чому"@uk , "warum"@de , "السبب"@ar ;
     rdfs:comment "What put it in its category: \"embedded media\", \"hosted component\", \"host-owned slot <name>\", the framework mark it bears (data-sem-anchor), \"inside a rendered element\", \"undefined custom element\", \"outside <body>\"."@en .
@@ -110,6 +111,34 @@ um:Sanctioned a um:Category ; sem:order 3 ; sem:slug "sanctioned" ; sty:tone sty
 um:Unknown a um:Category ; sem:order 4 ; sem:slug "unknown" ; sty:tone sty:Neutral ;
     rdfs:label "Unknown"@en , "Невідоме"@uk , "Unbekannt"@de , "غير معروف"@ar ;
     rdfs:comment "Outside every renderer, with nothing to say who made it."@en .
+
+# --- what is allowed: by kind, or by an exception that says why --------------------------------------
+# A guard (scripts/unmanaged-check.ts, AGENTS.md) walks every page of a site in a browser and fails on a
+# finding that is neither of a kind that is allowed (um:allowed: foreign on purpose) nor matched by one of
+# the site's exceptions. An exception says what it allows (um:selector, um:slot, um:category: all it
+# states must hold), why (um:because) and, where it is meant to go away, the issue that removes it
+# (um:issue). An exception that matches nothing on any page is stale and fails the guard too, so the
+# list only shrinks as what it excuses becomes renderings.
+
+um:allowed a owl:DatatypeProperty ; rdfs:domain um:Category ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a category: its findings need no exception (foreign by design)."@en .
+um:Sanctioned um:allowed true .
+
+um:Exception a owl:Class ;
+    rdfs:label "Exception"@en , "Виняток"@uk , "Ausnahme"@de , "استثناء"@ar ;
+    rdfs:comment "Allows findings that are not made by Semblance, for a stated reason: those whose element matches um:selector, in the host-owned slot um:slot, of um:category (all that it states)."@en .
+um:selector a owl:DatatypeProperty ; rdfs:domain um:Exception ;
+    rdfs:comment "A CSS selector the finding's topmost element matches."@en .
+um:slot a owl:DatatypeProperty ; rdfs:domain um:Exception ;
+    rdfs:comment "The name of the host-owned slot (sem:slot) the finding is in."@en .
+um:because a owl:DatatypeProperty ; rdfs:domain um:Exception ;
+    rdfs:label "because"@en , "бо"@uk , "weil"@de , "لأن"@ar ;
+    rdfs:comment "Why it is allowed."@en .
+um:issue a owl:ObjectProperty ; rdfs:domain um:Exception ;
+    rdfs:comment "The issue that makes what it allows a rendering, after which the exception goes."@en .
+um:exceptedBy a owl:ObjectProperty ; rdfs:domain um:Finding ; rdfs:range um:Exception ;
+    rdfs:label "allowed by"@en , "дозволено"@uk , "erlaubt durch"@de , "مسموح بموجب"@ar ;
+    rdfs:comment "Written by the survey effect: the exception that allows the finding."@en .
 
 # --- the counts: maintained, so a filter shows how many of each there are ---------------------------
 

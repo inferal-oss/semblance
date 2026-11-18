@@ -37,7 +37,7 @@ import { attachLightboxes } from '../src/web/lightbox.ts'
 import { attachAnchoredPopups } from '../src/web/anchored-popups.ts'
 import { attachSizeHandles } from '../src/web/size-handles.ts'
 import { attachStickyTop } from '../src/web/sticky-top.ts'
-import { attachUnmanaged } from '../src/web/unmanaged.ts'
+import { attachUnmanaged, exceptionFor, readAllowed, surveyUnmanaged } from '../src/web/unmanaged.ts'
 import { RenderedState } from '../src/rendered.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
@@ -645,4 +645,23 @@ setInterval(() => void recordMemory(), 3000)
 
 // A handle for poking at the graph from the console (dev builds only, and a production build made
 // with VITE_SEMBLANCE_HANDLE=1 for measuring it: scripts/memory-walk.ts).
-if (import.meta.env.DEV || import.meta.env.VITE_SEMBLANCE_HANDLE) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls, rendered } })
+/** What on the page Semblance did not make, as the guard reads it (scripts/unmanaged-check.ts): each finding, and what allows it. */
+function unmanaged() {
+  const survey = surveyUnmanaged(document)
+  const allowed = readAllowed(store)
+  return {
+    visible: survey.visible,
+    managed: survey.managed,
+    exceptions: allowed.exceptions.map((x) => x.iri),
+    findings: survey.findings.map((f) => ({
+      category: f.category,
+      reason: f.reason,
+      path: f.path,
+      elements: f.elements,
+      near: f.near && (f.near.renderer.index.focusOf(f.near.key) ?? f.near.key),
+      exception: exceptionFor(f, allowed.exceptions)?.iri,
+      allowed: allowed.categories.has(f.category),
+    })),
+  }
+}
+if (import.meta.env.DEV || import.meta.env.VITE_SEMBLANCE_HANDLE) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls, rendered, unmanaged } })

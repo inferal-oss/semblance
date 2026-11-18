@@ -2781,6 +2781,7 @@ tok:warning-6 a sem:Term .
 tok:warning-9 a sem:Term .
 um:Category a sem:Term .
 um:CategoryCounts a sem:Term .
+um:Exception a sem:Term .
 um:Finding a sem:Term .
 um:FindingCounts a sem:Term .
 um:HostCode a sem:Term .
@@ -2789,10 +2790,14 @@ um:Sanctioned a sem:Term .
 um:Survey a sem:Term .
 um:ThirdParty a sem:Term .
 um:Unknown a sem:Term .
+um:allowed a sem:Term .
+um:because a sem:Term .
 um:category a sem:Term .
 um:element a sem:Term .
 um:elements a sem:Term .
+um:exceptedBy a sem:Term .
 um:found a sem:Term .
+um:issue a sem:Term .
 um:managedElements a sem:Term .
 um:near a sem:Term .
 um:nearComponent a sem:Term .
@@ -2800,7 +2805,9 @@ um:order a sem:Term .
 um:path a sem:Term .
 um:reason a sem:Term .
 um:request a sem:Term .
+um:selector a sem:Term .
 um:share a sem:Term .
+um:slot a sem:Term .
 um:surveyedAt a sem:Term .
 um:unmanagedElements a sem:Term .
 um:visibleElements a sem:Term .
