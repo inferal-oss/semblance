@@ -636,10 +636,11 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow-raised ] .
 
+# At the inline end: the top right, the top left right to left, where a row's start does not run under it.
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part ".sem-face-bar" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "top" ; sty:token tok:space-3 ] ,
-                 [ sty:property "right" ; sty:token tok:space-3 ] ,
+                 [ sty:property "inset-inline-end" ; sty:token tok:space-3 ] ,
                  [ sty:property "z-index" ; sty:raw "3" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part ".sem-flip" ;

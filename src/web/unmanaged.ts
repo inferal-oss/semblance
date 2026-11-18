@@ -291,7 +291,12 @@ export function attachUnmanaged(runtime: Runtime, host: UnmanagedHost): () => vo
     }
     if (marked && marked !== next) marked.removeAttribute('data-sem-unmanaged')
     if (next && category) {
-      if (next !== marked) next.scrollIntoView?.({ block: 'center', inline: 'nearest' })
+      // Into the upper part of the viewport: below what sticks to the top, above a window docked to the bottom.
+      if (next !== marked && next.scrollIntoView) {
+        next.scrollIntoView({ block: 'start', inline: 'nearest' })
+        const view = next.ownerDocument.defaultView
+        view?.scrollBy?.(0, -Math.round(view.innerHeight / 4))
+      }
       next.setAttribute('data-sem-unmanaged', category)
     }
     marked = next

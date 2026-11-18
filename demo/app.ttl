@@ -317,7 +317,7 @@ ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c
 ui:inspects rdfs:label "Inspect" , "Оглядати"@uk , "Untersuchen"@de , "فحص"@ar ; rdfs:range ui:InspectorView .
 ui:ElementView a ui:InspectorView ; sem:order 1 ;
     rdfs:label "Element" , "Елемент"@uk , "Element"@de , "العنصر"@ar .
-ui:inspectorViews a c:Segmented ; c:controls ui:app ; c:property ui:inspects ; c:options ( ui:ElementView ui:unmanaged ) ;
+ui:inspectorViews a c:Segmented ; c:controls ui:app ; c:property ui:inspects ; c:options ( ui:ElementView ui:unmanaged ) ; c:compactAs c:Picker ;
     c:countProperty um:found ; c:countLabel "found" , "знайдено"@uk , "gefunden"@de , "تم العثور عليها"@ar .
 ui:inspectorPanes a c:Switch ; c:controls ui:app ; c:property ui:inspects ; c:cases ( ui:elementCase ui:unmanagedCase ) .
 ui:elementCase c:when ui:ElementView ; c:content ui:elementPanes .
@@ -432,7 +432,7 @@ um:FindingCounts iv:whileShown ui:inspectorViews .
 um:CategoryCounts iv:whileShown ui:unmanagedCategories .
 ui:unmanagedPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:unmanagedBar ui:unmanagedCategories ui:unmanagedSplit ui:unmanagedHighlight ) .
-ui:unmanagedBar a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ; c:children ( ui:unmanagedFind ui:unmanagedFigures ) .
+ui:unmanagedBar a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:unmanagedFind ui:unmanagedFigures ) .
 ui:unmanagedFind a c:Button , c:Setter ; c:controls ui:unmanaged ; c:property um:request ; c:value um:Run ; sty:size sty:Small ;
     c:label "Find on this page" , "Знайти на цій сторінці"@uk , "Auf dieser Seite suchen"@de , "ابحث في هذه الصفحة"@ar .
 ui:unmanagedFigures a c:Metrics ; c:of ui:unmanaged ; c:fields ( um:share um:unmanagedElements um:visibleElements ) .

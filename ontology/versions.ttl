@@ -144,7 +144,7 @@ c:Field sem:version 2 ; sem:closure "af34197898d23ad2" ; sem:changedBy change:fi
 c:FileDrop sem:version 1 ; sem:closure "f2c7729f9a3622d2" ; sem:internal "new" .
 c:FileItem sem:version 1 ; sem:closure "199f2f7c6fb68bcf" ; sem:internal "new" .
 c:FindingList sem:version 1 ; sem:closure "c8144e603a866da6" ; sem:internal "new" .
-c:Flippable sem:version 1 ; sem:closure "8c246bcfd21db5c7" ; sem:internal "new" .
+c:Flippable sem:version 2 ; sem:closure "569a8dbc76c763b3" ; sem:changedBy change:not-made-by-semblance .
 c:Foldable sem:version 1 ; sem:closure "bae05976000f751f" ; sem:internal "new" .
 c:Frame sem:version 1 ; sem:closure "eb077eda24debc34" ; sem:internal "new" .
 c:Gallery sem:version 1 ; sem:closure "aeb5418d48ea8529" ; sem:internal "new" .

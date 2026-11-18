@@ -21,9 +21,13 @@ c:via it marks what is held, as before.
 New, beside it: the um: vocabulary (um:Survey, um:Finding, um:Category and its four individuals, the survey's
 figures, the maintained views um:FindingCounts and um:CategoryCounts), the survey effect and the finder
 (attachUnmanaged, surveyUnmanaged and unmanagedElements from the web entry), and the style of its mark
-(data-sem-unmanaged, outlined while a c:Highlight is shown).""" ;
+(data-sem-unmanaged, outlined while a c:Highlight is shown).
+
+c:Flippable's control (Source) sits at the inline end of its face: the top left right to left, where it sat on the
+start of the face's first row, not the top right.""" ;
     chg:forwardGuide """Nothing to move: a highlight without c:via marks what it marked. To mark a node one hop away, add
 c:via with the property that leads to it.""" ;
     chg:backwardGuide """Remove c:via from every c:Highlight that has one; such a highlight then marks what is held (a
-finding), which is not an element, so it marks nothing.""" ;
-    chg:affects c:Highlight .
+finding), which is not an element, so it marks nothing. A flippable's control goes back to the top right in every
+direction.""" ;
+    chg:affects c:Highlight , c:Flippable .
