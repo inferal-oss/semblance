@@ -77,6 +77,46 @@ describe('llms.txt', () => {
     expect(files.get('llms/examples/kanban.md')).toContain('## To do (3)')
   })
 
+  it('has an index of changes, by release, and a page per change, in Markdown', () => {
+    const index = files.get('llms/changes.md')!
+    expect(index).toMatch(/^# Changes\n\n> /)
+    expect(index).toContain('\n## Unreleased\n')
+    const items = index.split('\n').filter((l) => l.startsWith('- '))
+    const pages = [...files.keys()].filter((p) => p.startsWith('llms/changes/'))
+    expect(items.length).toBe(pages.length)
+    // A line per change: its page, its date (when it is recorded), its issue and what it affects, as code.
+    for (const item of items) expect(item, item).toMatch(/^- \[[^\n]+\]\(https:\/\/semblance\.dev\/llms\/changes\/[\w-]+\.md\): (\d{4}-\d\d-\d\d · )?\[#\d+\]\([^)]+\) · (meaning|migrates(, lossy back)?) · `[\w-]+:\w+`(, `[\w-]+:\w+`)*$/)
+    expect(index).toContain('- [An app bar is one row while it fits: its actions and end actions in one group after the brand](https://semblance.dev/llms/changes/app-bar-one-row.md): 2026-11-17 · [#570](https://github.com/inferal-oss/semblance/issues/570) · meaning · `c:AppBar`')
+    const page = files.get('llms/changes/app-bar-one-row.md')!
+    expect(page).toMatch(/^# An app bar is one row while it fits[^\n]*\n\n> On the site: https:\/\/semblance\.dev\/changes\/app-bar-one-row\/\n/)
+    expect(page).toContain('\n## Why\n')
+    expect(page).toContain('```shell\nsemblance migrate --check\n```')
+    // What it affects links that component's own page here.
+    expect(page).toContain('[c:AppBar 4 → 5](https://semblance.dev/llms/components/app-bar.md)')
+    for (const [path, md] of files) if (path.startsWith('llms/changes')) expect(md, path).not.toMatch(/──|‹|›|\]\(\/|<\/[a-z]/)
+  })
+
+  it('stays the same size however many changes there are: llms.txt links the index of changes only', () => {
+    const fixture = readFileSync(new URL('test/fixtures/changes.ttl', root), 'utf8')
+    const tags = [
+      { version: '0.1.0', commit: '0b050bb', date: '2026-11-11' },
+      { version: '0.2.0', commit: '7b19fcf', date: '2026-11-16' },
+    ]
+    const more = generateLlms({ changes: { tags, extra: [fixture] } })
+    expect(more.get('llms.txt')).toBe(files.get('llms.txt'))
+    expect(files.get('llms.txt')).not.toContain('llms/changes/')
+    // The index has them, by release, the unreleased first.
+    const index = more.get('llms/changes.md')!
+    expect(index.match(/^## .*/gm)).toEqual(['## Unreleased', '## 0.2.0', '## 0.1.0'])
+    expect(index).toContain('Since 0.2.0, not released yet.')
+    expect(index).toContain('Released 2026-11-11 as `v0.1.0`. 1 change.')
+    for (const slug of ['example-label-hidden', 'example-window-size', 'example-radio-into-choice']) {
+      expect(index).toContain(`(https://semblance.dev/llms/changes/${slug}.md)`)
+      expect(more.has(`llms/changes/${slug}.md`), slug).toBe(true)
+    }
+    expect(index).toMatch(/\[a radio group is a c:Choice\]\([^)]+\): [^\n]* · migrates, lossy back · `c:Choice`, `c:RadioGroup`/)
+  }, 120_000)
+
   it('links only to generated files, site routes and files of the repository', () => {
     const f = store.factory
     const r = { f, match: (s: never, p: string | null, o: never) => store.match(s, p ? f.namedNode(p) : null, o) }
@@ -92,7 +132,7 @@ describe('llms.txt', () => {
           if (!files.has(url.slice(SITE.length))) bad.push(`${path}: ${url}`)
         } else if (url.startsWith(`${REPO}/blob/main/`)) {
           if (!existsSync(new URL(url.slice(`${REPO}/blob/main/`.length).replace(/#.*$/, ''), root))) bad.push(`${path}: ${url}`)
-        } else if (url !== REPO && !url.startsWith('https://www.npmjs.com/package/')) bad.push(`${path}: ${url}`)
+        } else if (url !== REPO && !/^https:\/\/github\.com\/inferal-oss\/semblance\/(issues|pull|commit)\/\w+$/.test(url) && !url.startsWith('https://www.npmjs.com/package/')) bad.push(`${path}: ${url}`)
       }
     }
     expect(bad).toEqual([])

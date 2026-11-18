@@ -10,6 +10,7 @@ import { changeRecords, compareVersions, lineDiff } from '../src/changes/records
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
+import { toMarkdown } from '../src/render/markdown.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
 
@@ -57,7 +58,7 @@ function mount(kind: StoreKind, prefer: 'function' | 'sparql', language?: string
   const text = runtime.project({ modality: MOD.Text, layers: DEFAULT_LAYERS, roots: [UI + 'root'], prefer, languages, name: 'text' })
   const renderer = new DomRenderer(screen.index, document.querySelector('main')!, UI + 'root')
   renderer.flush()
-  return { document, html: () => toHTML(screen.index, UI + 'root'), text: () => toText(text.index, UI + 'root') }
+  return { document, html: () => toHTML(screen.index, UI + 'root'), text: () => toText(text.index, UI + 'root'), markdown: (focus: string) => toMarkdown(screen.index, UI + focus) }
 }
 
 describe('the change log, from the records', () => {
@@ -90,6 +91,12 @@ for (const kind of ['wat', 'oxigraph'] as const)
       const sparql = mount(kind, 'sparql')
       expect(sparql.html()).toBe(fn.html())
       expect(sparql.text()).toBe(fn.text())
+    })
+
+    it('reads the same as Markdown by SPARQL and by function', () => {
+      const fn = mount(kind, 'function')
+      const sparql = mount(kind, 'sparql')
+      for (const entry of ['rename', 'shape', 'converge', 'meaning', 'log']) expect(sparql.markdown(entry), entry).toBe(fn.markdown(entry))
     })
 
     it('renders the same in Arabic', () => {
@@ -128,6 +135,27 @@ describe('changes as a page: what it shows', () => {
     expect(converge!.querySelector('[data-sem-c=tag]')!.textContent).toContain('c:columns')
     expect(meaning!.textContent).toContain('nothing in your files to rewrite')
     expect(meaning!.querySelector('[data-sem-c=migration-view]')).toBeNull()
+  })
+
+  it('reads as Markdown: headings, links, a table of renames, a diff, fenced code, what going back loses', () => {
+    const { markdown } = mount(kind, 'sparql')
+    const [rename, shape, converge, meaning] = ['rename', 'shape', 'converge', 'meaning'].map(markdown)
+    for (const md of [rename, shape, converge, meaning]) {
+      expect(md).toMatch(/^# \S/)
+      // The text projection's own marks are not Markdown.
+      expect(md).not.toMatch(/──|‹|›|^[A-Z ]{6,}$/m)
+      expect(md).toContain('\n## Why\n')
+    }
+    expect(rename).toContain('| Old | New |\n| --- | --- |\n| `"hide-label"` | `"label-hidden"` |\n| `c:hideLabel` | `c:labelHidden` |')
+    expect(rename).toContain('```shell\nsemblance migrate --check\nsemblance migrate --from 0.3.0\n```')
+    expect(rename).toContain('[c:Field 2 → 3](')
+    expect(shape).toContain('- Removed: `c:width 760 ;`\n- Removed: `c:height 400 ;`\n- Added: `c:size <https://example.org/x#tools/~size> ;`')
+    expect(shape).toContain('```sparql\nDELETE { ?f c:width ?w ; c:height ?h }')
+    expect(converge).toContain('> **Going back loses this**\n>\n> A radio group')
+    expect(meaning).toContain('> **meaning**\n>\n> A change of meaning or behaviour: nothing in your files to rewrite.')
+    // A link that opens a new tab says so to a screen reader, not in Markdown.
+    expect(meaning).toMatch(/\[#166\]\(https:\/\/github\.com\/inferal-oss\/semblance\/issues\/166\)/)
+    expect(meaning).not.toContain('new tab')
   })
 
   it("shows a component's versions, newest first", () => {

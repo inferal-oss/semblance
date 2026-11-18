@@ -44,6 +44,30 @@ describe('the files the site links to', () => {
     for (const path of files) expect(emitted.has(path.slice(1)) || existsSync(new URL('demo/public' + path, root)), path).toBe(true)
   })
 
+  it('are all reached from llms.txt through Markdown links, each link to a file the build writes', () => {
+    const SITE = 'https://semblance.dev/'
+    const linksOf = (md: string) => [...md.matchAll(/\]\((https:\/\/semblance\.dev\/[^)\s]+)\)/g)].map((m) => m[1]!.replace(/#.*$/, ''))
+    const reached = new Set<string>(['llms.txt'])
+    const todo = ['llms.txt']
+    const broken: string[] = []
+    while (todo.length) {
+      const path = todo.pop()!
+      for (const url of linksOf(emitted.get(path)!)) {
+        const file = url.slice(SITE.length)
+        if (!/^llms[/.-]/.test(file)) continue
+        if (!emitted.has(file)) broken.push(`${path}: ${url}`)
+        else if (!reached.has(file)) reached.add(file), todo.push(file)
+      }
+    }
+    expect(broken).toEqual([])
+    const llms = [...emitted.keys()].filter((p) => /^llms[/.-]/.test(p))
+    expect(llms.length).toBeGreaterThan(400)
+    expect(llms.filter((p) => !reached.has(p))).toEqual([])
+    // llms.txt itself does not list the changes one by one: its index does.
+    const listed = emitted.get('llms.txt')!.split('\n## Changes\n')[1]!.split('\n## ')[0]!
+    expect(listed.trim().split('\n')).toEqual([expect.stringMatching(/^- \[Changes\]\(https:\/\/semblance\.dev\/llms\/changes\.md\): /)])
+  })
+
   it('is told apart from a page by its path', () => {
     for (const page of ['/', '/changes/', '/changes/app-bar-one-row/', '/reference/c:Button/', '/index.html', '/docs/index.htm']) expect(namesFile(page), page).toBe(false)
     for (const file of ['/changes.atom', '/llms/changes.md', '/llms.txt', '/demo/app.ttl', '/data.json', '/export.jelly']) expect(namesFile(file), file).toBe(true)

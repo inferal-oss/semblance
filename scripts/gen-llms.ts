@@ -2,8 +2,11 @@
 // (ONTOLOGY_FILES) and the site (demo/app.ttl, demo/gallery/*.ttl). Besides /llms.txt and
 // /llms-full.txt it writes one Markdown page per component, layer, doc section and example under
 // /llms/, which a crawler reads as Markdown (the site's own pages are rendered at build time too).
-// Every page body is Semblance's own text projection of that part of the graph (toText of a
-// mod:Text projection); site routes come from the navigation model (addressOf).
+// A page body is the site's own projection of that part of the graph: its text projection (toText
+// of a mod:Text projection, in a fence), or, for a page of the site read as a document (a change),
+// its screen projection as Markdown (toMarkdown), its links to pages that have a Markdown page here
+// going to that page. An index (llms.txt, the changes) is written here from the graph, one line per
+// entry. Site routes come from the navigation model (addressOf).
 //
 // The Vite build emits the files (vite.config.ts) and the dev server serves them; run it alone
 // to write them into a directory: `npx tsx scripts/gen-llms.ts [outDir]` (default dist/).
@@ -13,10 +16,11 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { todoApp } from '../src/examples/todo.ts'
-import { changeRecords } from '../src/changes/records.ts'
+import { changeRecords, type RecordsOptions } from '../src/changes/records.ts'
 import { addressOf } from '../src/navigation.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { MOD, NS } from '../src/ns.ts'
+import { markdownText, toMarkdown } from '../src/render/markdown.ts'
 import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
 import { isExampleSource, recordSources, turtleSpans } from '../src/sources.ts'
@@ -46,6 +50,8 @@ const GUIDES: [string, string, string][] = [
 export interface LlmsOptions {
   /** The store to load the graph into (the site's default, Semblance's WASM engine). */
   store?: StoreKind
+  /** The change log's records (default: this checkout's change files, history and tags). */
+  changes?: RecordsOptions
 }
 
 /** Every generated file, by its path in the site (`llms.txt`, `llms/components/button.md`, ...). */
@@ -59,7 +65,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
   )
   const siteFiles: Record<string, string> = { 'demo/app.ttl': read('demo/app.ttl'), ...galleryFiles }
   // The change log (src/changes/records.ts), as the site loads it with its graphs.
-  const store = loadStore(options.store ?? 'wat', todoApp(5), ...Object.values(siteFiles), changeRecords())
+  const store = loadStore(options.store ?? 'wat', todoApp(5), ...Object.values(siteFiles), changeRecords(options.changes))
   // As the host does: the examples' own files as c:SourceText, which their pages show.
   recordSources(store, { 'src/examples/todo.ts': todoApp(5), ...Object.fromEntries(Object.entries(galleryFiles).filter(([p]) => isExampleSource(p))) })
   const g = graph(store)
@@ -120,7 +126,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
   const changes = g
     .instances(NS.chg + 'Change')
     .filter((t) => store.match(t as never, f.namedNode(NS.chg + 'releasedIn'), null).length > 0)
-    .map((t) => ({ term: t, slug: g.literal(t, NS.sem + 'slug')!, label: g.label(t) }))
+    .map((t) => ({ term: t, slug: g.literal(t, NS.sem + 'slug')!, label: g.label(t), order: Number(g.literal(t, NS.sem + 'order') ?? 0) }))
     .filter((x) => x.slug)
     .sort((a, b) => a.slug.localeCompare(b.slug))
   const changeEntries = new Map<string, string>()
@@ -130,10 +136,12 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
     store.add(f.quad(f.namedNode(entry), f.namedNode(NS.c + 'of'), x.term as never))
     changeEntries.set(x.slug, entry)
   }
-  const changesPage = UI + 'changesMain'
-  const roots = [...docs.map((d) => d.content.value), ...examples.map((e) => e.content.value), ...[...specimens.values()].flat().map((s) => s.value), ...classDocs.values(), changesPage, ...changeEntries.values()]
-  const projection = new Runtime(store).project({ modality: MOD.Text, name: 'llms', roots: [...new Set(roots)] })
+  const roots = [...docs.map((d) => d.content.value), ...examples.map((e) => e.content.value), ...[...specimens.values()].flat().map((s) => s.value), ...classDocs.values()]
+  const runtime = new Runtime(store)
+  const projection = runtime.project({ modality: MOD.Text, name: 'llms', roots: [...new Set(roots)] })
   const text = (focus: string) => tidy(toText(projection.index, focus))
+  // The pages read as documents, as the site shows them (a change's page), for Markdown.
+  const screen = runtime.project({ modality: MOD.Screen, name: 'llms-screen', roots: [...changeEntries.values()] })
 
   // --- links --------------------------------------------------------------------------------------
   const page = (path: string) => SITE + path
@@ -174,6 +182,8 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
     return `${ticks}${lang}\n${body}\n${ticks}`
   }
   const generated = `This page is generated from the graph that runs ${SITE} (scripts/gen-llms.ts): its body is the site's text projection.`
+  const generatedMarkdown = `This page is generated from the graph that runs ${SITE} (scripts/gen-llms.ts): its body is the site's page, as Markdown.`
+  const generatedIndex = `This page is generated from the graph that runs ${SITE} (scripts/gen-llms.ts): the change log of the framework (ontology/changes/).`
 
   type ComponentInfo = { term: Term; name: string; pname: string; comment: string; group: Term; gallery?: string; reference?: string; path: string }
   const info: ComponentInfo[] = components.map((c) => ({
@@ -334,16 +344,83 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       })
       .join('\n'),
   ]
-  // What changed in the components, for whoever has to move with it (docs/MIGRATIONS.md): the Changes
-  // page's own text, release by release (the change log, src/changes/records.ts), and a page per change.
-  out.set('llms/changes.md', text(changesPage) + '\n')
-  for (const [slug, entry] of changeEntries) out.set(`llms/changes/${slug}.md`, text(entry) + '\n')
+  // What changed in the components, for whoever has to move with it (docs/MIGRATIONS.md): the index of
+  // changes, release by release as the Changes page lists them (the change log, src/changes/records.ts),
+  // a line per change; and each change's own page, as the site shows it. llms.txt links the index only,
+  // so it stays the same size however many changes there are.
+  const twins = new Map<string, string>([[SITE + 'changes/', 'llms/changes.md']])
+  for (const c of info) if (c.reference) twins.set(c.reference, c.path)
+  for (const l of layers) {
+    const at = route(l)
+    if (at) twins.set(at, layerPage(l))
+  }
+  for (const [list, dir] of [[docs, 'docs'], [examples, 'examples']] as const)
+    for (const x of list) {
+      const at = route(x.content)
+      if (at) twins.set(at, `llms/${dir}/${x.key}.md`)
+    }
+  for (const x of changes) {
+    const at = route(x.term)
+    if (at) twins.set(at, `llms/changes/${x.slug}.md`)
+  }
+  /** A link in a page read as Markdown: to the Markdown page of what it links to, when there is one; else to the site. */
+  const link = (href: string) => {
+    const u = new URL(href, SITE)
+    if (u.origin !== new URL(SITE).origin) return u.href
+    const twin = twins.get(u.origin + u.pathname)
+    return twin ? page(twin) : u.href
+  }
+  const markdownPage = (body: string, at: string | undefined) => {
+    const [title, ...rest] = body.split('\n\n')
+    return [title, at ? `> On the site: ${at}` : '', ...rest, '---', generatedMarkdown].filter(Boolean).join('\n\n') + '\n'
+  }
+  for (const x of changes) out.set(`llms/changes/${x.slug}.md`, markdownPage(toMarkdown(screen.index, changeEntries.get(x.slug)!, { link }), route(x.term)))
+
+  const releases = g
+    .instances(NS.chg + 'Release')
+    .map((t) => ({
+      term: t,
+      order: Number(g.literal(t, NS.sem + 'order') ?? 0),
+      version: g.literal(t, NS.chg + 'version'),
+      date: g.literal(t, NS.chg + 'date'),
+      tag: g.literal(t, NS.chg + 'tag'),
+      previous: g.object(t, NS.chg + 'previous'),
+    }))
+    .sort((a, b) => a.order - b.order)
+  const code = (t: Term) => '`' + g.pname(t) + '`'
+  const changeLine = (x: (typeof changes)[number]) => {
+    const t = x.term
+    const date = g.literal(t, NS.chg + 'recorded')
+    const issue = g.object(t, NS.chg + 'issue')
+    const migrations = g.object(t, NS.chg + 'migrations')
+    const steps: Term[] = []
+    for (let l = migrations; l && l.value !== NS.rdf + 'nil'; l = g.object(l, NS.rdf + 'rest')) steps.push(g.object(l, NS.rdf + 'first')!)
+    const kind = steps.length ? (steps.some((m) => g.object(m, NS.mig + 'loses')) ? 'migrates, lossy back' : 'migrates') : 'meaning'
+    const affects = g.objects(t, NS.chg + 'affects').map(code).sort()
+    const number = issue && /\/(?:issues|pull)\/(\d+)$/.exec(issue.value)?.[1]
+    const facts = [date, issue ? `[${number ? '#' + number : issue.value}](${issue.value})` : '', kind, affects.join(', ')]
+    return `- [${markdownText(x.label)}](${page(`llms/changes/${x.slug}.md`)}): ${facts.filter(Boolean).join(' · ')}`
+  }
+  const released = (r: (typeof releases)[number]) =>
+    r.version ? `Released ${r.date ?? ''}${r.tag ? ` as \`${r.tag}\`` : ''}.` : r.previous ? `Since ${g.literal(r.previous, NS.chg + 'version')}, not released yet.` : 'Not released yet.'
+  out.set(
+    'llms/changes.md',
+    [
+      '# Changes',
+      '> Every change to a component, release by release: the unreleased first, then from the latest release to the earliest. Each links its own page: why, what changed, and how to move forward and back with `semblance migrate`.',
+      `On the site: ${SITE}changes/. As an Atom feed: ${SITE}changes.atom. Moving an app across versions: [Migrations](${repo('docs/MIGRATIONS.md')}).`,
+      ...releases.flatMap((r) => {
+        const members = changes.filter((x) => g.object(x.term, NS.chg + 'releasedIn')?.equals(r.term)).sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug))
+        const count = members.length === 1 ? '1 change' : `${members.length} changes`
+        return [`## ${r.version ?? 'Unreleased'}`, `${released(r)} ${members.length ? count + '.' : 'No component changes in this release.'}`, ...(members.length ? [members.map(changeLine).join('\n')] : [])]
+      }),
+      '---',
+      generatedIndex,
+    ].join('\n\n') + '\n',
+  )
   const changesSection = [
     '## Changes',
-    [
-      `- [Changes](${page('llms/changes.md')}): every change to a component, release by release (the unreleased first, then from the latest release to the earliest), with how to move forward and back with semblance migrate; on the site at ${SITE}changes/, and as an Atom feed at ${SITE}changes.atom`,
-      ...changes.map((x) => `- [${x.label.replace(/[[\]]/g, "")}](${page(`llms/changes/${x.slug}.md`)})`),
-    ].join('\n'),
+    `- [Changes](${page('llms/changes.md')}): the index of every change to a component, release by release (the unreleased first, then from the latest release to the earliest), each with its page on how to move forward and back with semblance migrate; on the site at ${SITE}changes/, and as an Atom feed at ${SITE}changes.atom`,
   ]
   const optional = [
     '## Optional',
