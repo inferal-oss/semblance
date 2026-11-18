@@ -1,0 +1,24 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:choice-labels-wrap a chg:Change ;
+    rdfs:label "Radio, check box and switch labels wrap inside their box"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/583> ;
+    chg:motivation """A long unbroken string in a label, such as an email address, could not break: it spilled into
+a radio option's padding or out of its border, and a check box's or a switch's label ran off the page
+at phone width.""" ;
+    chg:substance """A radio option's text (its label and note), a check box's label and a switch's label now use
+overflow-wrap: anywhere. They wrap at their normal break points first, and break a long string where it
+would not otherwise fit. A long label is therefore taller instead of wider: a row of radio options, a
+check box or a switch no longer grows past its container for it. Nothing else about the three
+components changed.""" ;
+    chg:forwardGuide """Nothing to change in the graph. Remove any rule of your own that was added only to wrap
+these labels.""" ;
+    chg:backwardGuide """Nothing to change in the graph. To keep the wrapping on the earlier version, add
+overflow-wrap: anywhere to [data-sem-c="radio-group"] .sem-option-text, [data-sem-c="checkbox"] > .sem-row > label
+and [data-sem-c="toggle-switch"] > button in a stylesheet of your own.""" ;
+    chg:affects c:RadioGroup , c:Checkbox , c:ToggleSwitch .

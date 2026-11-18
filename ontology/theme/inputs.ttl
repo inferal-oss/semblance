@@ -103,6 +103,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Checkbox ; sty:part "> .sem-row > label" ;
     sty:declares [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "line-height" ; sty:raw "1.35" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Checkbox ; sty:part "> .sem-row:has(> input:disabled)" ;
@@ -196,6 +197,7 @@
                  [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "font" ; sty:raw "500 var(--control-font, 14px)/1.35 var(--sem-font)" ] ,
                  [ sty:property "text-align" ; sty:raw "start" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ToggleSwitch ; sty:part "> button:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] .
