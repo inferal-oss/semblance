@@ -65,3 +65,68 @@ describe('Markdown of a screen projection', () => {
     expect(markdownText('a [b] *c* `d` <e> f_g _h_')).toBe('a \\[b\\] \\*c\\* \\`d\\` \\<e> f_g \\_h\\_')
   })
 })
+
+// A page with controls and what they hold: a code editor, tabs, a mention in running text, fields.
+const controls = `@prefix ex: <${EX}> . @prefix c: <${NS.c}> .
+ex:page a c:Stack ; c:children ( ex:h ex:editor ex:tabs ex:said ex:name ex:agree ex:go ) .
+ex:h a c:Heading ; c:level 1 ; c:label "Controls" .
+ex:editor a c:CodeEditor ; c:label "app.ttl" ; c:language "Turtle" ; c:value """ex:a a c:Button ;
+    c:label "Go" .""" .
+ex:tabs a c:Tabs ; c:tabs ( ex:t1 ex:t2 ) .
+ex:t1 a c:Tab ; c:label "First" ; c:content ex:p1 .
+ex:t2 a c:Tab ; c:label "Second" ; c:content ex:p2 .
+ex:p1 a c:Text ; c:label "In the first tab." .
+ex:p2 a c:Text ; c:label "In the second tab." .
+ex:said a c:Text ; c:children ( "A card such as " ex:m " is data." ) .
+ex:m a c:Mention ; c:label "kb:c4" ; c:mentions ex:c4 .
+ex:name a c:TextField ; c:label "Your name" ; c:value "Ada" .
+ex:agree a c:Checkbox ; c:label "I agree" ; c:checked true .
+ex:go a c:Button ; c:label "Go" .`
+
+function controlsMarkdown(prefer: 'sparql' | 'function', opts?: MarkdownOptions, hidden: 'wait' | 'render' = 'render') {
+  const runtime = new Runtime(loadStore('wat', controls))
+  live.push(runtime)
+  const screen = runtime.project({ modality: MOD.Screen, layers: DEFAULT_LAYERS, roots: [EX + 'page'], prefer, hidden })
+  return toMarkdown(screen.index, EX + 'page', opts)
+}
+
+describe('Markdown of a page with controls', () => {
+  it('is the same by SPARQL and by function', () => {
+    expect(controlsMarkdown('sparql')).toBe(controlsMarkdown('function'))
+    expect(controlsMarkdown('sparql', { controls: true })).toBe(controlsMarkdown('function', { controls: true }))
+  })
+
+  it('reads a code editor as a code block in its language, without its keys hint', () => {
+    const md = controlsMarkdown('sparql')
+    expect(md).toContain('\n\n```turtle\nex:a a c:Button ;\n    c:label "Go" .\n```')
+    expect(md).not.toMatch(/accepts a suggestion/)
+  })
+
+  it('reads every tab panel under its tab, the hidden ones too, when the projection renders what is hidden', () => {
+    const md = controlsMarkdown('sparql')
+    expect(md).toContain('**First**\n\nIn the first tab.')
+    expect(md).toContain('**Second**\n\nIn the second tab.')
+    // A projection that parks what is hidden has nothing in the other panel yet.
+    expect(controlsMarkdown('sparql', {}, 'wait')).not.toContain('In the second tab.')
+  })
+
+  it('keeps a mention in running text as its words, and leaves controls and their labels out', () => {
+    const md = controlsMarkdown('sparql')
+    expect(md).toContain('A card such as kb:c4 is data.')
+    // After the code block: no field, no label, no button.
+    expect(md.split('```').at(-1)).not.toMatch(/Your name|Ada|I agree|\bGo\b/)
+  })
+
+  it('reads controls as their words when they are what a page shows', () => {
+    const md = controlsMarkdown('sparql', { controls: true })
+    expect(md).toContain('Your name')
+    expect(md).toContain('Ada')
+    expect(md).toContain('☑ I agree')
+    expect(md).toMatch(/\n\nGo$/)
+  })
+
+  it('moves headings under the page that holds them', () => {
+    expect(controlsMarkdown('sparql', { headings: 3 })).toMatch(/^### Controls\n\n/)
+    expect(controlsMarkdown('sparql', { headings: 1 })).toMatch(/^# Controls\n\n/)
+  })
+})

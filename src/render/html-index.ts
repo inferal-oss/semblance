@@ -374,6 +374,12 @@ export class HtmlIndex {
     return this.shownFrom(focus, roots)
   }
 
+  /** Whether a component instance is placed under one of `roots`, shown or hidden (a whole page read as a document). */
+  isPlaced(focus: string, roots: ReadonlySet<string>): boolean {
+    this.seen.clear()
+    return this.shownFrom(focus, roots, true)
+  }
+
   /** The keys an isShown walk has visited (one walk at a time; reused). */
   private seen = new Set<string>()
 
@@ -403,17 +409,17 @@ export class HtmlIndex {
     return chained !== undefined && this.underFrom(chained, contents)
   }
 
-  private shownFrom(key: string, roots: ReadonlySet<string>): boolean {
+  private shownFrom(key: string, roots: ReadonlySet<string>, hidden = false): boolean {
     if (roots.has(key)) return true
     if (this.seen.has(key)) return false
     this.seen.add(key)
     const n = this.nodes.get(key)
-    if (n?.props.has('hidden')) return false
+    if (!hidden && n?.props.has('hidden')) return false
     const placedAs = this.focusByRoot.get(key)
-    if (placedAs !== undefined && this.shownFrom(placedAs, roots)) return true
-    if (n) for (const p of n.parents) if (this.shownFrom(p, roots)) return true
+    if (placedAs !== undefined && this.shownFrom(placedAs, roots, hidden)) return true
+    if (n) for (const p of n.parents) if (this.shownFrom(p, roots, hidden)) return true
     const chained = this.chainParent.get(key)
-    return chained !== undefined && this.shownFrom(chained, roots)
+    return chained !== undefined && this.shownFrom(chained, roots, hidden)
   }
 
   /** The renderable node for a child slot: component instances resolve to their root. */

@@ -375,11 +375,12 @@ WHERE {
 
 
 c:CodeEditorRendering a sem:Rendering ; sem:targets c:CodeEditor ; sem:stratum 0 ; sem:follows c:suggested , ( c:suggested c:suggestionItem ) ;
-    sem:watches rdf:type , c:value , c:original , c:caret , c:label , rdfs:label , c:activeSuggestion , c:suggested , c:suggestionItem ,
+    sem:watches rdf:type , c:value , c:original , c:caret , c:label , rdfs:label , c:language , c:activeSuggestion , c:suggested , c:suggestionItem ,
       c:replaceFrom , c:replaceTo , c:suggestionLine , c:suggestionColumn , c:suggestionSort , c:completion , c:suggestionKind , c:suggestionDetail .
 c:CodeEditorRendering-fn a sem:Rule ; sem:implements c:CodeEditorRendering ; sem:function "workbench:editor" .
 # The editor: on screen its lines' numbers, its highlighted text (the line blocks fill it) under the text
 # area, the suggestions placed at the word, the keys' hint; as text its numbered lines and the suggestions.
+# The text area names its language as a <code> does (language-…), for what reads it as code (Markdown).
 c:CodeEditorRendering-sparql-screen a sem:Rule ;
     sem:implements c:CodeEditorRendering ;
     sem:modality mod:Screen ;
@@ -423,6 +424,8 @@ WHERE {
   BIND(IF(?caret1 < 0, 0, IF(?caret1 > STRLEN(?value), STRLEN(?value), ?caret1)) AS ?caret)
   OPTIONAL { ?keysAt l10n:of c:EditorKeysPhrase ; l10n:name ?kp0 } OPTIONAL { FILTER(!BOUND(?kp0)) c:EditorKeysPhrase rdfs:label ?kp1 }
   BIND(COALESCE(STR(COALESCE(?kp0, ?kp1)), "Tab or Enter accepts a suggestion · Esc closes") AS ?keysPhrase)
+  OPTIONAL { $this c:language ?language0 }
+  BIND(REPLACE(LCASE(STR(COALESCE(?language0, IF(EXISTS { $this a c:QueryEditor }, "sparql", "text")))), " +", "-") AS ?language)
   # The line numbers: 1 to the line count.
   OPTIONAL { SELECT (GROUP_CONCAT(STR(?ln); separator="\\n") AS ?numbers0) WHERE {
       { SELECT ?ln WHERE {
@@ -440,7 +443,7 @@ WHERE {
       ("suggestions" rdfhtml:Ul "sem-suggestions" "root" "hint") ("hint" rdfhtml:P "sem-hint" "root" UNDEF)
     }
     FILTER(?local != "suggestions" || ?open)
-    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(IF(?local = "input", CONCAT(?cls0, " language-", ?language), ?cls0) AS ?cls)
     BIND(IRI(CONCAT(?me, "/~", ?parentLocal)) AS ?parent)
     BIND(IF(?afterLocal = "next", IRI(CONCAT(?me, IF(?open, "/~suggestions", "/~hint"))), IF(BOUND(?afterLocal), IRI(CONCAT(?me, "/~", ?afterLocal)), ?unset)) AS ?after)
     BIND(IF(?local IN ("input", "suggestions", "hint"), CONCAT(?me, "/~", ?local), ?unset) AS ?id)

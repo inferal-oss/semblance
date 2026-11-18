@@ -289,7 +289,7 @@ const queryview: FnRule = (ctx, focus) => {
     if (error) return message(`Query ${text(ctx, q, RDFS_LABEL) ?? q.value.replace(/^.*[#/]/, '')} failed: ${error.value}`)
   }
   if (!ctx.objects(focus, NS.iv + 'run').some((r) => ctx.objects(r, RS + 'solution').length)) return message(text(ctx, focus, C.emptyText) ?? 'No results.')
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }))
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle language-turtle' }))
   return o.quads
 }
 
@@ -385,7 +385,9 @@ const sourceView: FnRule = (ctx, focus) => {
     o.t(row, NS.c + 'line', number(i + 1))
     return row
   })
-  o.renders(o.el('root', 'Figure', {}, [head, o.el('code', 'Pre', { class: 'sem-turtle sem-source' }, rows)]))
+  // The code names its language as a <code> does (language-…), for what reads it as code (Markdown).
+  const language = str(ctx.object(source!, NS.c + 'language'))?.toLowerCase().replace(/ +/g, '-')
+  o.renders(o.el('root', 'Figure', {}, [head, o.el('code', 'Pre', { class: `sem-turtle sem-source${language !== undefined ? ` language-${language}` : ''}` }, rows)]))
   return o.quads
 }
 
@@ -503,7 +505,7 @@ const streammembers: FnRule = (ctx, focus) => {
 const triplesview: FnRule = (ctx, focus) => {
   if (!ctx.objects(focus, C.of).some(named)) return []
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }))
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle language-turtle' }))
   return o.quads
 }
 

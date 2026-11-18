@@ -1357,7 +1357,7 @@ WHERE {
     FILTER((?state = "rows" || ?state = "answer") && !?nothing)
     VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
       ("summary-bar" rdfhtml:Div "sem-result-bar" "root" 0) ("summary" rdfhtml:P "sem-summary" UNDEF 0) ("actions" rdfhtml:Div "sem-actions" "summary-bar" 1)
-      ("code" rdfhtml:Pre "sem-turtle" "root" 1)
+      ("code" rdfhtml:Pre "sem-turtle language-turtle" "root" 1)
     }
     FILTER(IF(?local = "summary-bar" || ?local = "actions", ?bar, true))
     BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
@@ -1445,7 +1445,7 @@ WHERE {
     FILTER((?state = "rows" || ?state = "answer") && !?nothing)
     VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
       ("summary-bar" rdfhtml:Div "sem-result-bar" "root" 0) ("summary" rdfhtml:P "sem-summary" UNDEF 0) ("actions" rdfhtml:Div "sem-actions" "summary-bar" 1)
-      ("code" rdfhtml:Pre "sem-turtle" "root" 1)
+      ("code" rdfhtml:Pre "sem-turtle language-turtle" "root" 1)
     }
     FILTER(IF(?local = "summary-bar" || ?local = "actions", false, ?local = "code"))
     BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)

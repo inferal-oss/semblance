@@ -2,11 +2,12 @@
 // (ONTOLOGY_FILES) and the site (demo/app.ttl, demo/gallery/*.ttl). Besides /llms.txt and
 // /llms-full.txt it writes one Markdown page per component, layer, doc section and example under
 // /llms/, which a crawler reads as Markdown (the site's own pages are rendered at build time too).
-// A page body is the site's own projection of that part of the graph: its text projection (toText
-// of a mod:Text projection, in a fence), or, for a page of the site read as a document (a change),
-// its screen projection as Markdown (toMarkdown), its links to pages that have a Markdown page here
-// going to that page. An index (llms.txt, the changes) is written here from the graph, one line per
-// entry. Site routes come from the navigation model (addressOf).
+// A page body is the site's own page for that part of the graph (a doc section, an example, a
+// component's ontology and specimens, a change), its screen projection read as Markdown (toMarkdown,
+// src/render/markdown.ts): its headings, lists, tables and code, the sources of its live examples as
+// code blocks, its links going to the Markdown page here of what they link to when there is one. An
+// index (llms.txt, the changes) is written here from the graph, one line per entry. Site routes come
+// from the navigation model (addressOf).
 //
 // The Vite build emits the files (vite.config.ts) and the dev server serves them; run it alone
 // to write them into a directory: `npx tsx scripts/gen-llms.ts [outDir]` (default dist/).
@@ -17,11 +18,10 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { todoApp } from '../src/examples/todo.ts'
 import { changeRecords, type RecordsOptions } from '../src/changes/records.ts'
-import { addressOf } from '../src/navigation.ts'
+import { addressOf, linkAddress, readAddress, readLocations, spellAddress } from '../src/navigation.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { MOD, NS } from '../src/ns.ts'
 import { markdownText, toMarkdown } from '../src/render/markdown.ts'
-import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
 import { isExampleSource, recordSources, turtleSpans } from '../src/sources.ts'
 import type { GraphStore } from '../src/store/types.ts'
@@ -112,7 +112,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
   unique(components.map((c) => componentPage(c.term)))
   unique(layers.map(layerPage))
 
-  // --- one text projection of everything the pages show ----------------------------------------
+  // --- one projection of everything the pages show, as the site shows it ------------------------
   const f = store.factory
   const classDocs = new Map<string, string>()
   for (const t of [...components.map((c) => c.term), ...layers]) {
@@ -136,12 +136,16 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
     store.add(f.quad(f.namedNode(entry), f.namedNode(NS.c + 'of'), x.term as never))
     changeEntries.set(x.slug, entry)
   }
-  const roots = [...docs.map((d) => d.content.value), ...examples.map((e) => e.content.value), ...[...specimens.values()].flat().map((s) => s.value), ...classDocs.values()]
+  const roots = [
+    ...docs.map((d) => d.content.value),
+    ...examples.map((e) => e.content.value),
+    ...[...specimens.values()].flat().map((s) => s.value),
+    ...classDocs.values(),
+    ...changeEntries.values(),
+  ]
   const runtime = new Runtime(store)
-  const projection = runtime.project({ modality: MOD.Text, name: 'llms', roots: [...new Set(roots)] })
-  const text = (focus: string) => tidy(toText(projection.index, focus))
-  // The pages read as documents, as the site shows them (a change's page), for Markdown.
-  const screen = runtime.project({ modality: MOD.Screen, name: 'llms-screen', roots: [...changeEntries.values()] })
+  // Read whole, as a document is: what is hidden is rendered too (a live example's other sources, under their tabs).
+  const screen = runtime.project({ modality: MOD.Screen, name: 'llms', roots: [...new Set(roots)], hidden: 'render' })
 
   // --- links --------------------------------------------------------------------------------------
   const page = (path: string) => SITE + path
@@ -155,6 +159,47 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
     const m = one.match(/^(.+?[.!?])(\s|$)/)
     return m ? m[1]! : one
   }
+
+  const twins = new Map<string, string>([[SITE + 'changes/', 'llms/changes.md']])
+  for (const c of components) {
+    const at = route(c.term)
+    if (at) twins.set(at, componentPage(c.term))
+  }
+  for (const l of layers) {
+    const at = route(l)
+    if (at) twins.set(at, layerPage(l))
+  }
+  for (const [list, dir] of [[docs, 'docs'], [examples, 'examples']] as const)
+    for (const x of list) {
+      const at = route(x.content)
+      if (at) twins.set(at, `llms/${dir}/${x.key}.md`)
+    }
+  for (const x of changes) {
+    const at = route(x.term)
+    if (at) twins.set(at, `llms/changes/${x.slug}.md`)
+  }
+  // The site's location: an address it reads is spelled back the same (a route it has).
+  const location = readLocations(g.reader).find((l) => l.iri === UI + 'location')
+  const routed = (address: string) => !location || linkAddress(spellAddress(g.reader, location, readAddress(g.reader, location, address))) === address
+  /**
+   * A link in a page read as Markdown: to the Markdown page of what it links to, when there is one;
+   * else to the site, where it has that route. A place in the page itself (`#…`), or an address the
+   * site does not have, keeps its words without the link.
+   */
+  const link = (href: string) => {
+    if (href.startsWith('#')) return undefined
+    const u = new URL(href, SITE)
+    if (u.origin !== new URL(SITE).origin) return u.href
+    const twin = twins.get(u.origin + u.pathname)
+    if (twin) return page(twin)
+    // A file the site serves (a feed, a graph) is not a route.
+    return /\.\w+$/.test(u.pathname) || routed(u.pathname + u.search + u.hash) ? u.href : undefined
+  }
+  /**
+   * The Markdown of what the site shows at `focus`, its headings from level `headings` down (or their
+   * own); the controls of a specimen or an example as their words (they are what it shows).
+   */
+  const md = (focus: string, headings?: number, controls = false) => tidy(toMarkdown(screen.index, focus, { link, controls, ...(headings ? { headings } : {}) }))
 
   /** The smallest statement in the site's own Turtle that makes an instance of `cls`, with its prefixes. */
   const spans = Object.entries(siteFiles).flatMap(([path, ttl]) => {
@@ -181,8 +226,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
     const ticks = '`'.repeat(Math.max(3, ...[...body.matchAll(/`+/g)].map((m) => m[0].length + 1)))
     return `${ticks}${lang}\n${body}\n${ticks}`
   }
-  const generated = `This page is generated from the graph that runs ${SITE} (scripts/gen-llms.ts): its body is the site's text projection.`
-  const generatedMarkdown = `This page is generated from the graph that runs ${SITE} (scripts/gen-llms.ts): its body is the site's page, as Markdown.`
+  const generated = `This page is generated from the graph that runs ${SITE} (scripts/gen-llms.ts): its body is the site's page, as Markdown.`
   const generatedIndex = `This page is generated from the graph that runs ${SITE} (scripts/gen-llms.ts): the change log of the framework (ontology/changes/).`
 
   type ComponentInfo = { term: Term; name: string; pname: string; comment: string; group: Term; gallery?: string; reference?: string; path: string }
@@ -222,7 +266,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       const lines = props.map((p) => {
         const range = g.objects(p, NS.rdfs + 'range').map((r) => '`' + g.pname(r) + '`')
         const comment = g.literal(p, NS.rdfs + 'comment')
-        return `- \`${g.pname(p)}\`${range.length ? ` (${range.join(', ')})` : ''}${comment ? `: ${comment.replace(/\s+/g, ' ').trim()}` : ''}`
+        return `- \`${g.pname(p)}\`${range.length ? ` (${range.join(', ')})` : ''}${comment ? `: ${markdownText(oneLine(comment))}` : ''}`
       })
       for (const k of constraints) {
         const path = g.object(k, NS.sh + 'path')
@@ -250,11 +294,11 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
   }
 
   for (const c of info) {
-    const sections = [`# ${c.name}`, `> ${oneLine(c.comment) || `The ${c.pname} component.`}`, ...componentDetails(c, '##')]
-    sections.push('## Ontology', 'Its class, properties, renderings, reactions and shape, as the Reference shows them (c:ClassDoc):', fence('turtle', text(classDocs.get(c.term.value)!)))
+    const sections = [`# ${c.name}`, `> ${markdownText(oneLine(c.comment)) || `The ${c.pname} component.`}`, ...componentDetails(c, '##')]
+    sections.push('## Ontology', 'Its class, properties, renderings, reactions and shape, as the Reference shows them (c:ClassDoc):', md(classDocs.get(c.term.value)!, 3))
     for (const s of specimens.get(c.term.value) ?? []) {
       const where = route(s)
-      sections.push(`## In the gallery: ${g.label(s)}`, where ? `As text (the site shows it at ${where}):` : 'As text:', fence('text', text(s.value)))
+      sections.push(`## In the gallery: ${g.label(s)}`, ...(where ? [`On the site: ${where}`] : []), md(s.value, 3, true))
     }
     sections.push('---', generated)
     out.set(c.path, sections.join('\n\n') + '\n')
@@ -267,11 +311,11 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       layerPage(l),
       [
         `# ${g.label(l)} (${g.pname(l)})`,
-        `> ${oneLine(comment) || `The ${g.pname(l)} layer.`}`,
+        `> ${markdownText(oneLine(comment)) || `The ${g.pname(l)} layer.`}`,
         reference ? `- Reference: ${reference}` : '',
         '## Ontology',
         'The layer and what it renders, as the Reference shows them (c:ClassDoc):',
-        fence('turtle', text(classDocs.get(l.value)!)),
+        md(classDocs.get(l.value)!, 3),
         '---',
         generated,
       ]
@@ -280,10 +324,14 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
     )
   }
 
-  const textPage = (title: string, at: string | undefined, body: string) =>
-    [`# ${title}`, at ? `> On the site: ${at}` : '', fence('text', body), '---', generated].filter(Boolean).join('\n\n') + '\n'
-  for (const d of docs) out.set(`llms/docs/${d.key}.md`, textPage(d.label, route(d.content), text(d.content.value)))
-  for (const e of examples) out.set(`llms/examples/${e.key}.md`, textPage(e.label, route(e.content), text(e.content.value)))
+  /** A page of the site as Markdown: its own title (its first heading, a level 1), or else `title`; where the site shows it. */
+  const markdownPage = (title: string, body: string, at: string | undefined) => {
+    const blocks = body.split('\n\n')
+    const [head, rest] = /^# /.test(blocks[0] ?? '') ? [blocks[0]!, blocks.slice(1)] : [`# ${markdownText(title)}`, blocks]
+    return [head, at ? `> On the site: ${at}` : '', ...rest, '---', generated].filter(Boolean).join('\n\n') + '\n'
+  }
+  for (const d of docs) out.set(`llms/docs/${d.key}.md`, markdownPage(d.label, md(d.content.value, 1), route(d.content)))
+  for (const e of examples) out.set(`llms/examples/${e.key}.md`, markdownPage(e.label, md(e.content.value, 2, true), route(e.content)))
 
   // --- llms.txt ---------------------------------------------------------------------------------
   const pkg = JSON.parse(read('package.json')) as { name: string; description: string }
@@ -300,13 +348,13 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       '',
       'Every component class is listed by its group (sem:group), with its page, its specimen in the gallery and its entry in the Reference; the layers and the complete examples follow.',
       '',
-      `Every page linked below is Markdown generated from the graph that runs ${SITE}: its body is the site's own text projection of that part of the graph. The site itself routes by path (\`/components/...\`); each of its pages is rendered at build time, so those links work without scripts too.`,
+      `Every page linked below is Markdown generated from the graph that runs ${SITE}: its body is the site's own page for that part of the graph, as Markdown. The site itself routes by path (\`/components/...\`); each of its pages is rendered at build time, so those links work without scripts too.`,
     ].join('\n'),
   ]
   const docsSection = [
     '## Docs',
     [
-      ...docs.map((d) => `- [${d.label}](${page(`llms/docs/${d.key}.md`)}): ${firstSentence(firstParagraph(text(d.content.value)))}`),
+      ...docs.map((d) => `- [${d.label}](${page(`llms/docs/${d.key}.md`)}): ${firstSentence(firstParagraph(md(d.content.value)))}`),
       ...GUIDES.map(([title, path, what]) => `- [${title} (repository)](${repo(path)}): ${what}`),
     ].join('\n'),
   ]
@@ -327,8 +375,8 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
     '## Components',
     ...grouped.flatMap((grp) => [
       `### ${grp.label}`,
-      oneLine(grp.comment),
-      ...grp.members.flatMap((c) => [`#### ${c.name}`, oneLine(c.comment), `- Page: ${page(c.path)}`, ...componentDetails(c, '#####')]),
+      markdownText(oneLine(grp.comment)),
+      ...grp.members.flatMap((c) => [`#### ${c.name}`, markdownText(oneLine(c.comment)), `- Page: ${page(c.path)}`, ...componentDetails(c, '#####')]),
     ]).filter(Boolean),
   ]
   const layersSection = [
@@ -340,7 +388,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
     examples
       .map((e) => {
         const at = route(e.content)
-        return `- [${e.label}](${page(`llms/examples/${e.key}.md`)}): ${firstSentence(firstParagraph(text(e.content.value))) || 'An example application.'}${at ? ` ([live](${at}))` : ''}`
+        return `- [${e.label}](${page(`llms/examples/${e.key}.md`)}): ${firstSentence(firstParagraph(md(e.content.value))) || 'An example application.'}${at ? ` ([live](${at}))` : ''}`
       })
       .join('\n'),
   ]
@@ -348,33 +396,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
   // changes, release by release as the Changes page lists them (the change log, src/changes/records.ts),
   // a line per change; and each change's own page, as the site shows it. llms.txt links the index only,
   // so it stays the same size however many changes there are.
-  const twins = new Map<string, string>([[SITE + 'changes/', 'llms/changes.md']])
-  for (const c of info) if (c.reference) twins.set(c.reference, c.path)
-  for (const l of layers) {
-    const at = route(l)
-    if (at) twins.set(at, layerPage(l))
-  }
-  for (const [list, dir] of [[docs, 'docs'], [examples, 'examples']] as const)
-    for (const x of list) {
-      const at = route(x.content)
-      if (at) twins.set(at, `llms/${dir}/${x.key}.md`)
-    }
-  for (const x of changes) {
-    const at = route(x.term)
-    if (at) twins.set(at, `llms/changes/${x.slug}.md`)
-  }
-  /** A link in a page read as Markdown: to the Markdown page of what it links to, when there is one; else to the site. */
-  const link = (href: string) => {
-    const u = new URL(href, SITE)
-    if (u.origin !== new URL(SITE).origin) return u.href
-    const twin = twins.get(u.origin + u.pathname)
-    return twin ? page(twin) : u.href
-  }
-  const markdownPage = (body: string, at: string | undefined) => {
-    const [title, ...rest] = body.split('\n\n')
-    return [title, at ? `> On the site: ${at}` : '', ...rest, '---', generatedMarkdown].filter(Boolean).join('\n\n') + '\n'
-  }
-  for (const x of changes) out.set(`llms/changes/${x.slug}.md`, markdownPage(toMarkdown(screen.index, changeEntries.get(x.slug)!, { link }), route(x.term)))
+  for (const x of changes) out.set(`llms/changes/${x.slug}.md`, markdownPage(x.label, md(changeEntries.get(x.slug)!), route(x.term)))
 
   const releases = g
     .instances(NS.chg + 'Release')
@@ -441,7 +463,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       ...layersSection,
       ...examplesSection,
       '## Docs, in full',
-      ...docs.flatMap((d) => [`### ${d.label}`, fence('text', text(d.content.value))]),
+      ...docs.map((d) => (/^#+ /.test(md(d.content.value)) ? md(d.content.value, 3) : [`### ${markdownText(d.label)}`, md(d.content.value, 4)].join('\n\n'))),
       ...optional,
     ].join('\n\n') + '\n',
   )
@@ -452,8 +474,8 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim()
 /** Trailing spaces off, runs of blank lines collapsed. */
 const tidy = (s: string) => s.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim()
-/** The first line of a projection that reads as a sentence (not a heading or a control). */
-const firstParagraph = (s: string) => s.split('\n').find((l) => /^[A-Z][^│|]*[a-z][.:]/.test(l.trim()) && l.trim().split(' ').length > 5)?.trim() ?? ''
+/** The first paragraph of a page's Markdown that reads as a sentence (not a heading, a list, a quote or code). */
+const firstParagraph = (s: string) => s.split('\n\n').find((b) => /^[A-Z]/.test(b) && !b.includes('\n') && /[a-z][.:]/.test(b) && b.split(' ').length > 5)?.trim() ?? ''
 
 /** Reading the store as terms. */
 function graph(store: GraphStore) {

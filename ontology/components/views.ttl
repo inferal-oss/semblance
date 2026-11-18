@@ -456,7 +456,7 @@ c:SourceViewRendering a sem:Rendering ;
     sem:targets c:SourceView ;
     sem:stratum 0 ;
     sem:follows c:of ;
-    sem:watches rdf:type , c:of , c:label , c:emptyText , c:text , c:path .
+    sem:watches rdf:type , c:of , c:label , c:emptyText , c:text , c:path , c:language .
 c:SourceViewRendering-fn a sem:Rule ; sem:implements c:SourceViewRendering ; sem:function "source-view" .
 # One row per line (c:line, its number), its tokens by the shared lexicon (c:SparqlLexicon), each
 # keyed by where it starts. Lines are tokenized one by one, so a long string that spans lines is
@@ -483,7 +483,7 @@ CONSTRUCT {
             rdfhtml:attribute ?fsKind , ?fsLabel .
   ?fsKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "screen" .
   ?fsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?fsPhrase .
-  ?code a rdfhtml:Pre ; rdfhtml:class "sem-turtle sem-source" ; rdfhtml:hasChild ?row .
+  ?code a rdfhtml:Pre ; rdfhtml:class ?codeClass ; rdfhtml:hasChild ?row .
   ?row a rdfhtml:Span ; rdfhtml:class "sem-line" ; c:line ?k ; rdfhtml:hasChild ?tok , ?nl ; ord:immediatelyPrecedes ?nextRow .
   ?nl a rdfhtml:Text ; rdfhtml:data "\\n" .
   ?tok a ?tokTag ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterTok .
@@ -493,6 +493,8 @@ WHERE {
   $this a c:SourceView .
   LATERAL { OPTIONAL { $this c:of ?source FILTER(isIRI(?source)) ?source c:text ?body0 } }
   LATERAL { OPTIONAL { $this c:of ?pathSource FILTER(isIRI(?pathSource)) ?pathSource c:path ?path0 } }
+  LATERAL { OPTIONAL { $this c:of ?languageSource FILTER(isIRI(?languageSource)) ?languageSource c:language ?language0 } }
+  BIND(CONCAT("sem-turtle sem-source", IF(BOUND(?language0), CONCAT(" language-", REPLACE(LCASE(STR(?language0)), " +", "-")), "")) AS ?codeClass)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   LATERAL {
     {
@@ -633,7 +635,7 @@ CONSTRUCT {
   ?nameText a rdfhtml:Text ; rdfhtml:data ?caption .
   ?path a rdfhtml:Code ; rdfhtml:class "sem-source-path" ; rdfhtml:hasChild ?pathText .
   ?pathText a rdfhtml:Text ; rdfhtml:data ?pathData .
-  ?code a rdfhtml:Pre ; rdfhtml:class "sem-turtle sem-source" ; rdfhtml:hasChild ?row .
+  ?code a rdfhtml:Pre ; rdfhtml:class ?codeClass ; rdfhtml:hasChild ?row .
   ?row a rdfhtml:Span ; rdfhtml:class "sem-line" ; c:line ?k ; rdfhtml:hasChild ?tok , ?nl ; ord:immediatelyPrecedes ?nextRow .
   ?nl a rdfhtml:Text ; rdfhtml:data "\\n" .
   ?tok a ?tokTag ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterTok .
@@ -643,6 +645,8 @@ WHERE {
   $this a c:SourceView .
   LATERAL { OPTIONAL { $this c:of ?source FILTER(isIRI(?source)) ?source c:text ?body0 } }
   LATERAL { OPTIONAL { $this c:of ?pathSource FILTER(isIRI(?pathSource)) ?pathSource c:path ?path0 } }
+  LATERAL { OPTIONAL { $this c:of ?languageSource FILTER(isIRI(?languageSource)) ?languageSource c:language ?language0 } }
+  BIND(CONCAT("sem-turtle sem-source", IF(BOUND(?language0), CONCAT(" language-", REPLACE(LCASE(STR(?language0)), " +", "-")), "")) AS ?codeClass)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   LATERAL {
     {
@@ -1059,7 +1063,7 @@ WHERE {
   BIND(EXISTS { $this iv:run ?anyRun . ?anyRun rs:solution ?anySolution FILTER NOT EXISTS { ?anyRun iv:error ?anyError } } AS ?results)
   BIND(IF(?binds && !?bound, COALESCE(?emptyText, "Nothing selected."), IF(BOUND(?failure), SUBSTR(?failure, 7), IF(?results, ?none, COALESCE(?emptyText, "No results.")))) AS ?text)
   BIND(IF(BOUND(?text), rdfhtml:Div, rdfhtml:Pre) AS ?element)
-  BIND(IF(BOUND(?text), "sem-empty", "sem-turtle") AS ?class)
+  BIND(IF(BOUND(?text), "sem-empty", "sem-turtle language-turtle") AS ?class)
   BIND(IF(BOUND(?text), IRI(CONCAT(STR($this), "/~empty")), ?none) AS ?message)
 }""" .
 
@@ -1361,5 +1365,5 @@ c:TriplesViewRendering-fn a sem:Rule ; sem:implements c:TriplesViewRendering ; s
 c:TriplesViewRendering-sparql a sem:Rule ;
     sem:implements c:TriplesViewRendering ;
     sem:construct """
-CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle" . }
+CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle language-turtle" . }
 WHERE { $this a/rdfs:subClassOf* c:TriplesView ; c:of ?s FILTER(isIRI(?s)) BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .
