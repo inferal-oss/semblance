@@ -711,18 +711,20 @@ omit a field's length to show it as variable and use `c:byteSizeLabel` to descri
 Marks use the same offset origin as their enclosing field. Span indices are inclusive.
 `c:byteAxisLabel` optionally names the offset origin. Choose `c:ByteRuler` (default),
 `c:ByteRecord` (separate rounded fields), or `c:ByteOutline` (monochrome outlines).
-The gallery uses `c:Segmented` to change the style in RDF. Set `c:byteWrap true` to flow fields
-onto additional rows according to the width of the mounted component. Fields retain their
-drawing width when it fits a row. A field wider than the entire row takes that row's width;
-long labels wrap at their regular font size. A bracket spanning a line break is drawn on both
-rows with open ends at the break. The server renders a scrollable strip before the browser measures it.
+The gallery uses `c:Segmented` to change the style in RDF. Set `c:byteWrap true` on a schematic (no
+`c:byteExtent`) to let its fields flow onto as many rows as its column needs. It is then drawn in HTML
+rather than as one SVG strip: a grid whose columns are at least one field's drawing width, where each
+field spans three of the grid's rows (its offsets, its box, its brackets), so the fields of a row share
+their height and long labels wrap at their regular size. A bracket is drawn in segments, one in each
+field it covers, closed at its first and last field and open where a row ends; its label is under its
+first field. Nothing is measured: the page breaks the rows, and the server's HTML is the final layout.
+A to-scale layout stays one scrollable strip, with `c:byteWrap` or without.
 
-A field of a wrapping schematic can point to a wrapping `c:ByteLayout` with
-`c:byteDetail`. The field takes a row, and its height, following rows, and brackets
-adjust when the detail wraps. The detail has its own offset origin and appearance.
-Give each detail a single containing field. Nesting can continue across levels,
-and cyclic links are ignored. Mounted layouts resize the detail; the server
-renders the outer strip until the browser measures it.
+A field of a wrapping schematic can hold another `c:ByteLayout` with `c:byteDetail`: the field takes a
+row of its own and grows with what is in it. The nested layout has its own offset origin and
+appearance, and wraps or not as it says. Give each nested layout one containing field; nesting can go
+on across levels, and a detail that leads back to its own layout is not drawn. In Text, the nested
+layout's lines follow its field's line.
 
 ```turtle
 ex:directory a c:ByteLayout ; c:label "Root directory" ; c:byteWrap true ;

@@ -10,7 +10,6 @@ import { A11Y, MOD, NS, STY, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
-import { wrapByteLayout } from '../src/web/byte-layout.ts'
 import { implementationGaps } from './implementations.ts'
 
 const EX = 'https://example.org/bytes#'
@@ -37,9 +36,6 @@ ${layouts}`
 
 function mount(kind: StoreKind, prefer: 'sparql' | 'function', languages: string[] = [], source = graph()) {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
-  Object.defineProperty(window, 'getComputedStyle', {
-    configurable: true, value: () => ({ fontWeight: '600', fontSize: '12px', fontFamily: 'monospace' }),
-  })
   const store = loadStore(kind, source)
   const runtime = new Runtime(store)
   const screen = runtime.project({ modality: MOD.Screen, layers: [A11Y.Layer, STY.Layer], prefer, languages, name: 'screen', roots: [EX + 'page'] }, (e) => {
@@ -65,7 +61,7 @@ function mount(kind: StoreKind, prefer: 'sparql' | 'function', languages: string
   const n = (local: string) => f.namedNode(EX + local)
   const c = (local: string) => f.namedNode(NS.c + local)
   const int = (v: number) => f.literal(String(v), f.namedNode(NS.xsd + 'integer'))
-  const set = (s: string, p: string, o: ReturnType<typeof int> | ReturnType<typeof n> | undefined) => {
+  const set = (s: string, p: string, o: ReturnType<typeof f.literal> | ReturnType<typeof n> | undefined) => {
     runtime.apply({ remove: store.match(n(s), c(p), null), add: o ? [f.quad(n(s), c(p), o)] : [] })
     dom.flush()
   }
@@ -136,102 +132,96 @@ describe('ByteLayout', () => {
     }, 120_000)
   }
 
-  it('wraps whole fields and brackets without replacing an interactive cell', () => {
-    const apps = (['sparql', 'function'] as const).map(prefer =>
-      mount('oxigraph', prefer, ['en'], graph('ex:record c:byteWrap true .')))
-    const pen = { font: '', measureText: (value: string) => ({ width: value.length * 7 }) } as CanvasRenderingContext2D
-    try {
-      const screenshots = apps.map(app => {
-        const root = app.root('record')
-        expect(root.getAttribute('data-byte-wrap')).toBe('true')
-        expect(app.root('chunk').hasAttribute('data-byte-wrap')).toBe(false)
-        const plot = root.querySelector('svg') as unknown as SVGSVGElement
-        for (const offset of plot.querySelectorAll<SVGTextElement>('.offset')) {
-          offset.getComputedTextLength = () => (offset.textContent ?? '').length * 7
-        }
-        const cells = [...plot.querySelectorAll<SVGGElement>('g[role=list] > g')]
-        const payload = cells[2]!
-        // A consumer makes the cell a keyboard target, as a byte inspector does.
-        payload.setAttribute('role', 'button')
-        payload.setAttribute('tabindex', '0')
-        let activations = 0
-        payload.addEventListener('keydown', event => { if ((event as KeyboardEvent).key === 'Enter') activations++ })
-        const widths = () => cells.map(cell => cell.querySelector<SVGRectElement>('rect')!.style.width)
-        wrapByteLayout(plot, 620, pen)
-        expect(cells.map(cell => cell.dataset.byteWrapRow)).toEqual(['0', '0', '0'])
-        const wide = widths()
-        wrapByteLayout(plot, 301, pen)
-        expect(cells.map(cell => cell.dataset.byteWrapRow)).toEqual(['0', '1', '2'])
-        expect(widths()).toEqual(wide)
-        expect(plot.querySelectorAll('text[textLength]')).toHaveLength(0)
-        expect(plot.querySelectorAll(':scope > [data-byte-wrap-decoration] .bracket')).toHaveLength(3)
-        const [first, second] = plot.querySelectorAll(':scope > [data-byte-wrap-decoration] .bracket')
-        expect(first?.getAttribute('d')).not.toMatch(/v-5$/)
-        expect(second?.getAttribute('d')).toMatch(/^M[\d.]+ [\d.]+H.*v-5$/)
-        expect(plot.querySelector('g[role=button]')).toBe(payload)
-        expect(payload.getAttribute('tabindex')).toBe('0')
-        const keydown = new app.window.Event('keydown', { bubbles: true })
-        Object.defineProperty(keydown, 'key', { value: 'Enter' })
-        payload.dispatchEvent(keydown)
-        expect(activations).toBe(1)
-        return root.outerHTML
-      })
-      expect(screenshots[0]).toBe(screenshots[1])
-    } finally {
-      apps.forEach(app => app.dispose())
-    }
-  })
-
-  it('grows a detail field and moves later rows when the inner diagram wraps', () => {
-    const source = graph(`
-ex:chunk c:byteWrap true .
-ex:ck-size c:byteDetail ex:entry .
-ex:entry a c:ByteLayout ; c:label "Directory entry" ; c:byteWrap true ;
-  c:byteField ex:e0 , ex:e1 , ex:e2 , ex:e3 .
-ex:e0 c:byteIndex 0 ; c:label "Block offset" .
-ex:e1 c:byteIndex 1 ; c:label "Block length" .
-ex:e2 c:byteIndex 2 ; c:label "Checksum" .
-ex:e3 c:byteIndex 3 ; c:label "Bounds" .
+  // A wrapping schematic (c:byteWrap, no c:byteExtent) is HTML whose grid the page breaks into rows:
+  // the same fields and brackets, member-wise, and a field's nested layout inside it. Both sides
+  // render it byte for byte alike after every step, on the screen and in Text; nothing is measured.
+  for (const kind of ['wat', 'oxigraph'] as const) {
+    it(`flows a wrapping schematic and nests a layout, by SPARQL as by function, step by step (${kind})`, () => {
+      const source = graph(`
+ex:chunk c:byteWrap true ; c:byteSpan ex:ck-head .
+ex:record c:byteWrap true .
+ex:ck-head c:firstByteIndex 0 ; c:lastByteIndex 1 ; c:label "Header" .
+ex:entry a c:ByteLayout ; c:label "Directory entry" ; c:byteWrap true ; c:byteAxisLabel "From the entry" ;
+  c:byteField ex:e0 , ex:e1 .
+ex:e0 c:byteIndex 0 ; c:label "Block offset" ; c:byteOffset 0 ; c:byteLength 8 ; c:byteEncoding "u64 LE" .
+ex:e1 c:byteIndex 1 ; c:label "Block length" ; c:byteOffset 8 ; c:byteLength 4 .
 `)
-    const apps = (['sparql', 'function'] as const).map(prefer => mount('wat', prefer, ['en'], source))
-    try {
-      const pen = { font: '', measureText: (value: string) => ({ width: value.length * 7 }) } as CanvasRenderingContext2D
-      const result = apps.map(app => {
-        const plot = app.root('chunk').querySelector('svg') as unknown as SVGSVGElement
-        const box = plot.querySelector<SVGForeignObjectElement>('foreignObject[data-byte-detail]')!
-        expect(box).not.toBeNull()
-        expect(box.namespaceURI).toBe('http://www.w3.org/2000/svg')
-        expect(box.firstElementChild?.namespaceURI).toBe('http://www.w3.org/1999/xhtml')
-        expect(box.getAttribute('height')).toBe('0')
-        const child = box.querySelector<SVGSVGElement>('svg')!
-        const field = box.parentElement!
-        const rect = field.querySelector<SVGRectElement>('rect')!
-        const cells = [...child.querySelectorAll<SVGGElement>('g[role=list] > g')]
-        const after = plot.querySelector<SVGGElement>(':scope > g[role=list] > g:last-child')!
-        const heights = [800, 320, 800].map(width => {
-          wrapByteLayout(plot, width, pen)
-          expect(field.querySelector('foreignObject')).toBe(box)
-          expect(box.querySelector('svg')).toBe(child)
-          return {
-            field: parseFloat(rect.style.height),
-            rows: new Set(cells.map(cell => cell.dataset.byteWrapRow)).size,
-            afterY: Number(after.style.transform.split(', ')[1]?.replace('px)', '')),
-          }
-        })
-        expect(heights[0]).toEqual(heights[2])
-        expect(heights[1]!.rows).toBeGreaterThan(heights[0]!.rows)
-        expect(heights[1]!.field).toBeGreaterThan(heights[0]!.field)
-        expect(heights[1]!.afterY).toBeGreaterThan(heights[0]!.afterY)
-        const html = app.root('chunk').outerHTML
-        app.set('ck-size', 'byteDetail', undefined)
-        expect(app.root('chunk').querySelector('foreignObject')).toBeNull()
-        return html
+      const [sparql, fn] = (['sparql', 'function'] as const).map((prefer) => mount(kind, prefer, [], source))
+      const both = (step: (m: ReturnType<typeof mount>) => void) => {
+        step(sparql!)
+        step(fn!)
+        const seen = sparql!.seen()
+        expect(seen).toEqual(fn!.seen())
+        return seen
+      }
+      const first = both(() => {})
+      // A to-scale layout stays one strip, c:byteWrap or not.
+      expect(first.record).toContain('<svg')
+      expect(first.record).not.toContain('data-byte-wrap')
+      // The schematic flows: no SVG, a figure, a list of three fields, each with its three rows.
+      expect(first.chunk).not.toContain('<svg')
+      expect(first.chunk).toContain('data-byte-wrap="true"')
+      expect(first.chunk).toContain('role="figure"')
+      expect(first.chunk.match(/role="listitem"/g)).toHaveLength(3)
+      expect(first.chunk.match(/class="ruler"/g)).toHaveLength(3)
+      expect(first.chunk).toContain('class="bar variable"')
+      expect(first.chunk).toContain('class="continuation"')
+      expect(first.chunk).toContain('aria-label="ckID · FourCC · 4 B"')
+      // The bracket over fields 0 and 1: closed at both, its label under the first.
+      expect([...first.chunk.matchAll(/class="(bracket(?: start)?(?: end)?)"/g)].map((m) => m[1])).toEqual(['bracket start', 'bracket end'])
+      expect(first.chunk.match(/class="annotation"/g)).toHaveLength(1)
+      expect(first.chunkText).toBe('Chunk\nckID · FourCC · 4 B\nckSize · 4 B\nckData · ckSize bytes')
+
+      // Offsets and marks: the start of each field, the end on the last, a mark's bytes as a share.
+      const placed = both((m) => {
+        m.set('ck-id', 'byteOffset', m.int(0)), m.set('ck-size', 'byteOffset', m.int(4)), m.set('ck-data', 'byteOffset', m.int(8)), m.set('ck-data', 'byteLength', m.int(4))
+        m.add([['ck-size', 'byteMark', m.n('ck-size-low')], ['ck-size-low', 'byteOffset', m.int(5)], ['ck-size-low', 'byteLength', m.int(2)]])
       })
-      expect(result[0]).toEqual(result[1])
-    } finally {
-      apps.forEach(app => app.dispose())
-    }
-  })
+      expect([...placed.chunk.matchAll(/class="offset">([^<]*)</g)].map((m) => m[1])).toEqual(['0', '4', '8'])
+      expect(placed.chunk).toContain('class="end">12<')
+      expect(placed.chunk).toContain('style="--at:1;--span:2;--of:4"')
+      expect(placed.chunk).not.toContain('class="continuation"')
+
+      // The bracket across a third field: a middle segment, open at both ends.
+      expect([...both((m) => m.set('ck-head', 'lastByteIndex', m.int(2))).chunk.matchAll(/class="(bracket(?: start)?(?: end)?)"/g)].map((m) => m[1])).toEqual(['bracket start', 'bracket', 'bracket end'])
+
+      // A nested layout in a field: the field takes a row (data-byte-detail) and holds it; its own
+      // offsets, its own flow; in Text, its lines under the field's.
+      const nested = both((m) => m.set('ck-size', 'byteDetail', m.n('entry')))
+      expect(nested.chunk).toContain('data-byte-detail=""')
+      expect(nested.chunk).toContain('class="detail"')
+      expect(nested.chunk.match(/role="figure"/g)).toHaveLength(2)
+      expect(nested.chunk).toContain('aria-label="Directory entry"')
+      expect(nested.chunk).toContain('class="axis-label">From the entry<')
+      expect(nested.chunk).toContain('aria-label="@0 · Block offset · u64 LE · 8 B"')
+      expect(nested.chunkText).toBe(
+        'Chunk\n@0 · ckID · FourCC · 4 B\n@4 · ckSize · 4 B\nDirectory entry\n@0 · Block offset · u64 LE · 8 B\n@8 · Block length · 4 B\n@8 · ckData · 4 B',
+      )
+      // The nested layout changes: a field added, a style.
+      const grown = both((m) => {
+        m.add([['entry', 'byteField', m.n('e2')], ['e2', 'byteIndex', m.int(2)], ['e2', 'label', m.f.literal('Checksum')], ['e2', 'byteOffset', m.int(12)], ['e2', 'byteLength', m.int(4)]])
+        m.set('entry', 'byteLayoutStyle', m.c('ByteRecord'))
+      })
+      expect(grown.chunk).toContain('data-layout-appearance="record"')
+      expect(grown.chunk).toContain('class="end">16<')
+      expect(grown.chunkText).toContain('@12 · Checksum · 4 B')
+      // A detail that leads back to its layout is not drawn, on either side of the cycle.
+      const cycle = both((m) => m.set('e1', 'byteDetail', m.n('chunk')))
+      expect(cycle.chunk).not.toContain('class="detail"')
+      expect(cycle.chunkText).not.toContain('Directory entry')
+      both((m) => m.set('e1', 'byteDetail', undefined))
+      // Wrapping taken away: the strip again, with its brackets; the nested layout is not shown in it.
+      const strip = both((m) => m.set('chunk', 'byteWrap', undefined))
+      expect(strip.chunk).toContain('<svg')
+      expect(strip.chunk).not.toContain('class="detail"')
+      expect(strip.chunk.match(/class="bracket"/g)).toHaveLength(1)
+      expect(strip.chunkText).not.toContain('Directory entry')
+      // And back.
+      expect(both((m) => m.set('chunk', 'byteWrap', m.f.literal('true', m.f.namedNode(NS.xsd + 'boolean')))).chunk).toContain('class="detail"')
+      sparql!.dispose()
+      fn!.dispose()
+    }, 120_000)
+  }
 
   it('says its unit in the viewer’s language', () => {
     for (const prefer of ['sparql', 'function'] as const) {

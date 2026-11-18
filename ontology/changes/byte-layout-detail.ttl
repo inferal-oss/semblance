@@ -6,8 +6,8 @@
 change:byte-layout-detail a chg:Change ;
     rdfs:label "Nest a byte layout inside a field"@en ;
     chg:issue <https://github.com/inferal-oss/semblance/issues/568> ;
-    chg:motivation "A field can stand for another record, such as an LDLS directory entry." ;
-    chg:substance "A field of a wrapping schematic can use c:byteDetail to place another wrapping ByteLayout inside it. The field takes a row and grows with the nested diagram. Each detail retains its own offsets and appearance. The browser moves later rows and brackets as details reflow." ;
-    chg:forwardGuide "Set c:byteWrap true on both diagrams and point the field's c:byteDetail at the child layout." ;
-    chg:backwardGuide "Remove c:byteDetail and display the child ByteLayout separately." ;
+    chg:motivation "A field can stand for another record, such as an LDLS directory entry, whose own layout belongs inside it." ;
+    chg:substance "A field of a wrapping schematic (c:byteWrap true, no c:byteExtent) can name another ByteLayout with c:byteDetail. The field then takes a row of its own and contains the nested layout, which keeps its own offsets and appearance and wraps or not as it says. The field grows with it, and the rows after it move down. A detail that leads back to its own layout is not drawn. In Text, a field with a detail is its line followed by the nested layout's lines. In a strip, c:byteDetail is not shown." ;
+    chg:forwardGuide "Set c:byteWrap true on the outer schematic and point the field's c:byteDetail at the nested layout. Leave the nested layout out of any other container: its field is where it is shown." ;
+    chg:backwardGuide "Remove c:byteDetail and show the nested ByteLayout on its own." ;
     chg:affects c:ByteLayout, c:ByteCell .

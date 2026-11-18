@@ -6,8 +6,8 @@
 change:byte-layout-wrap a chg:Change ;
     rdfs:label "Let byte layouts flow across rows"@en ;
     chg:issue <https://github.com/inferal-oss/semblance/issues/568> ;
-    chg:motivation "Long byte diagrams require horizontal panning in narrow columns." ;
-    chg:substance "A ByteLayout with c:byteWrap true flows fields onto additional rows in a browser. Each row retains its byte offsets and spanning brackets continue across row breaks. A field wider than the column uses the full row and long labels wrap at their normal font size. The same SVG field nodes remain available to application reactions." ;
-    chg:forwardGuide "Set c:byteWrap true on diagrams that should wrap. The browser measures the available column after mounting." ;
+    chg:motivation "A long byte diagram needs panning in a narrow column, on a phone above all." ;
+    chg:substance "A schematic ByteLayout (no c:byteExtent) with c:byteWrap true is drawn in HTML instead of one SVG strip: a grid as wide as its column whose columns are at least one field's drawing width (132px). Each field spans three of its rows (offsets, box, brackets), so the fields of a row share their height and long labels wrap at their regular size. Each field shows its start offset, and the last field also shows the layout's end. A bracket is a segment in each field it covers, closed at its first and last field and open where a row ends, labelled under its first field. The page breaks the rows; nothing is measured, and the server's HTML is final. The fields are still c:ByteCell nodes, a list of list items named by their Text line. Text is unchanged. A to-scale layout stays one strip." ;
+    chg:forwardGuide "Set c:byteWrap true on a schematic that should flow. Styles written against the strip's SVG (svg rect, svg text) do not reach a flowing layout: its parts are .ruler, .bar, .label, .meta, .brackets and .bracket, and are styled in theme/byte-layout.ttl." ;
     chg:backwardGuide "Remove c:byteWrap to return a diagram to the single scrollable strip." ;
     chg:affects c:ByteLayout .

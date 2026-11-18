@@ -13,7 +13,6 @@
 
 svg:Element a owl:Class .
 svg:Svg a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "svg" .
-svg:ForeignObject a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "foreignObject" .
 svg:G a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "g" .
 svg:Defs a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "defs" .
 svg:LinearGradient a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "linearGradient" .

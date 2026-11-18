@@ -2,7 +2,6 @@
 export const SVG_TAG_NAMES: Readonly<Record<string, string>> = {
   Svg: 'svg',
   G: 'g',
-  ForeignObject: 'foreignObject',
   Defs: 'defs',
   LinearGradient: 'linearGradient',
   Stop: 'stop',
