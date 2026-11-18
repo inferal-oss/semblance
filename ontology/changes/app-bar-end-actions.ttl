@@ -1,0 +1,32 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:app-bar-end-actions a chg:Change ;
+    rdfs:label "An app bar's end actions (c:endActions), pinned to its inline end"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/550> ;
+    chg:motivation """A bar's corner link (the app's source, an account) belongs at the bar's inline end, after
+everything else, as sites usually place it. Among c:actions it sat wherever the list put it: before the more
+actions where there is room, before the More button on a phone, and in the middle of the row when the actions
+wrap.""" ;
+    chg:substance """c:AppBar takes c:endActions, a list of components (at most one list, as c:actions and
+c:moreActions). They render in a group of their own, a div with class sem-end, after the actions' group (and
+so after the More button): the header's last child. A bar without c:endActions renders as before.
+
+Styles: on a compact or medium screen the bar stays one row and the end actions follow the More button at the
+row's inline end. On a wider screen a bar with both actions and end actions is a grid: the brand on the first
+row, then the actions with the end actions at the inline end of the same row, aligned with the actions' first
+line; the actions wrap within their own column, so the end actions never take a row of their own. A bar whose
+only actions are its end actions is the brand and them, one row. The link and logo styles of c:actions (a
+link as a control, a link that is an emblem alone as a square, a logo alone on a phone) apply to the end
+actions too. A c:Choice among the end actions is placed inline, as among the other actions.""" ;
+    chg:forwardGuide """Nothing to move. To pin an action to the bar's corner, take it out of c:actions (or
+c:moreActions) and list it in c:endActions.""" ;
+    chg:backwardGuide """Going back, c:endActions is not read: put its members back among c:actions, where they
+render among the other actions.""" ;
+    chg:affects c:AppBar .

@@ -13,6 +13,7 @@ import { TUPLE } from '../render/order-key.ts'
 import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text, declaredPrefixes } from './util.ts'
 import { hitToggles } from './actions.ts'
 import { md5 } from './data.ts'
+import { editorLanguage } from './editor.ts'
 import { formatLocale } from '../engine/context.ts'
 import { formatNumber as intlNumber, sortKey } from '../../rdf-engine/host/intl.ts'
 
@@ -518,7 +519,7 @@ const editor: FnRule = (ctx, focus) => {
   const input = o.el(
     'input',
     'Textarea',
-    { id: inputId, class: 'sem-input', value, rows: String(Math.max(1, lineCount)), spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', wrap: 'off' },
+    { id: inputId, class: `sem-input language-${editorLanguage(ctx, focus).replace(/ +/g, '-')}`, value, rows: String(Math.max(1, lineCount)), spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', wrap: 'off' },
     [o.text('input-text', value)],
   )
   o.attr(input, 'aria-label', label)
@@ -1352,7 +1353,7 @@ const turtleview: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [summary(o, line), o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.noResults, 'No results.'))])]))
     return o.quads
   }
-  const code = o.el('code', 'Pre', { class: 'sem-turtle' })
+  const code = o.el('code', 'Pre', { class: 'sem-turtle language-turtle' })
   o.renders(o.el('root', 'Div', {}, ctx.modality === MOD.Text ? [code] : [summaryBar(ctx, o, line), code]))
   return o.quads
 }

@@ -74,6 +74,14 @@ semblance migrate --verify
 It checks that no retired term is left, every file and query parses, and everything applied comes
 back. The text is for judgement; the check is what counts. It does not run SHACL shapes.
 
+The same changes are on [semblance.dev/changes](https://semblance.dev/changes/), release by release with
+the unreleased first, each with its migrations (renames, examples as a diff, the SPARQL Updates, what
+going back loses) and the command for each direction, and a component's versions are on its Reference
+entry (History). For agents, [llms/changes.md](https://semblance.dev/llms/changes.md) is that page as
+text, with a page per change, and there is an [Atom feed](https://semblance.dev/changes.atom). They are
+generated when the site is built (`src/changes/records.ts`): when a change was recorded is its file's
+first commit, and its release the earliest `v<version>` tag whose history holds that commit.
+
 ## Data outside your Turtle
 
 | data | what happens |

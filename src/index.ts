@@ -12,6 +12,7 @@ export { NS, SEM, MOD, C, STY, BEH, A11Y, VAL, KEY, ANN, ST, L10N, DND, CLIP, EX
 export { HtmlIndex, type HNode } from './render/html-index.ts'
 export { HOST_ELEMENT, hostedBy, type HostAdapter, type HostContext, type HostMount, type HostRenderer } from './render/hosts.ts'
 export { toHTML, toIndentedHTML, toText } from './render/serialize.ts'
+export { markdownText, toMarkdown, type MarkdownOptions } from './render/markdown.ts'
 export { compileStyles } from './style/compile.ts'
 export { EventBus, type Handled, type ReactionContext, type ReactionFn } from './behaviour/events.ts'
 export { Persistence, memoryBackend, webStorageBackend, indexedDbBackend, type Backend, SWEEP_GRACE_MS } from './persistence.ts'

@@ -53,3 +53,39 @@ chg:ChangeShape a sh:NodeShape ;
                 [ sh:path chg:forwardGuide ; sh:minCount 1 ] ,
                 [ sh:path chg:backwardGuide ; sh:minCount 1 ] ,
                 [ sh:path chg:affects ; sh:minCount 1 ] .
+
+# --- the record: what the repository says about each change, derived when the site is built ----------
+# A change file says what changed. When and where it shipped is in git: the commit that added the
+# file, the release tags (v<version>) whose history holds it, and the history of ontology/versions.ttl
+# (every version step of every component). src/changes/records.ts reads them into a change log (a
+# chg:Log) for the site to show (c:ChangeLog, ontology/components/changes.ttl); nothing here is
+# written by hand.
+
+chg:Log a owl:Class ;
+    rdfs:comment "A change log: the releases of a set of components (chg:log on each), the unreleased one first, and their changes (chg:releasedIn)."@en .
+chg:Release a owl:Class ;
+    rdfs:comment "A release of the packages (a v<version> tag), or the changes not released yet (chg:unreleased true). sem:order places it in its log: 0 for the unreleased, then from the latest release to the earliest."@en .
+chg:log a owl:ObjectProperty ; rdfs:domain chg:Release ; rdfs:range chg:Log ;
+    rdfs:comment "The log a release is in."@en .
+chg:version a owl:DatatypeProperty ; rdfs:domain chg:Release ;
+    rdfs:comment "The release's version (0.3.0)."@en .
+chg:tag a owl:DatatypeProperty ; rdfs:domain chg:Release ;
+    rdfs:comment "The git tag it was released from (v0.3.0)."@en .
+chg:date a owl:DatatypeProperty ; rdfs:domain chg:Release ; rdfs:range xsd:date ;
+    rdfs:comment "When it was released: the tag's date."@en .
+chg:unreleased a owl:DatatypeProperty ; rdfs:domain chg:Release ; rdfs:range xsd:boolean ;
+    rdfs:comment "True on the release that stands for what is not released yet."@en .
+chg:previous a owl:ObjectProperty ; rdfs:domain chg:Release ; rdfs:range chg:Release ;
+    rdfs:comment "The release before this one: what a project is written against when it moves across this one's changes."@en .
+chg:releasedIn a owl:ObjectProperty ; rdfs:range chg:Release ;
+    rdfs:comment "On a change or a version step: the release it shipped in (the change's chg:release when it states one, else the earliest tag whose history holds the commit that recorded it), or the unreleased one."@en .
+chg:recorded a owl:DatatypeProperty ; rdfs:range xsd:date ;
+    rdfs:comment "On a change or a version step: when it was recorded (the date of the commit that added it)."@en .
+chg:commit a owl:ObjectProperty ;
+    rdfs:comment "On a change, a version step or a release: the commit that recorded it."@en .
+
+chg:Step a owl:Class ;
+    rdfs:comment "One version step of a component (chg:of): its sem:version, what accounts for it (sem:changedBy a change, or sem:internal and why), and when it was recorded and released."@en .
+chg:of a owl:ObjectProperty ; rdfs:domain chg:Step ;
+    rdfs:comment "The component a version step is of."@en .
+

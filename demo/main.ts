@@ -19,7 +19,7 @@ import { Sandboxes } from '../src/sandbox.ts'
 import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
 import { graphLanguages } from '../src/server/render.ts'
 import { indexedPageGraphs, PAGE_GRAPHS_INDEX, type PageGraphsIndex, pageGraphs, serverRendered, serverStyled, takeOver } from '../src/web/takeover.ts'
-import { carryInFragment, type CompileMode, prepareSite, recordSiteSources, ROOT, siteLayers, siteNamedGraphs, siteSources } from './site.ts'
+import { CHANGES_GRAPH, carryInFragment, type CompileMode, prepareSite, recordSiteSources, ROOT, siteLayers, siteNamedGraphs, siteSources } from './site.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -74,6 +74,8 @@ const loadedAt = location.pathname
 const wanted = (name: string) => !firstGraphs || firstGraphs.includes(name)
 // The Components page: one graph per component group (demo/gallery/*.ttl), each a chunk of its own.
 const galleryLoaders = Object.fromEntries(Object.entries(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>).map(([p, load]) => ['demo/' + p.slice(2), load]))
+// The change log (src/changes/records.ts), made from the change files and git when the site is built.
+galleryLoaders[CHANGES_GRAPH] = () => import('virtual:semblance-changes').then((m) => m.default)
 const galleryFiles: Record<string, string> = {}
 const loadGallery = (names: string[]) => Promise.all(names.map(async (n) => void (galleryFiles[n] ??= await galleryLoaders[n]!())))
 // Only the chosen store's code and WASM are loaded, and the graphs the page needs, at once.

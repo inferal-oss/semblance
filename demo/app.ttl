@@ -26,6 +26,7 @@
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
+@prefix chg: <https://semblance.dev/ns/change#> .
 @prefix rnd: <https://semblance.dev/ns/rendered#> .
 @prefix lc: <https://semblance.dev/ns/layout-constraints#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -73,6 +74,7 @@ ui:Docs a ui:Page ; rdfs:label "Docs" ; sem:order 2 ; ui:key "docs" .
 ui:Components a ui:Page ; rdfs:label "Components" ; sem:order 3 ; ui:key "components" .
 ui:Reference a ui:Page ; rdfs:label "Reference" ; sem:order 4 ; ui:key "reference" .
 ui:Examples a ui:Page ; rdfs:label "Examples" ; sem:order 5 ; ui:key "examples" .
+ui:Changes a ui:Page ; rdfs:label "Changes" ; sem:order 6 ; ui:key "changes" .
 ui:inspectorMode rdfs:label "Inspector" ; rdfs:range ui:InspectorMode .
 ui:Live a ui:InspectorMode ; rdfs:label "Live" ; sem:symbol "●" ; sem:order 1 .
 ui:Paused a ui:InspectorMode ; rdfs:label "Paused" ; sem:symbol "❙❙" ; sem:order 2 .
@@ -90,7 +92,7 @@ ui:inspecting rdfs:label "inspecting" .
 # out of the address), and is also kept for this tab, so a page is found where it was left. A link
 # to a resource (c:to) adds what it points at, brought into view: /components/inputs/#inp-codes-spec.
 ui:location a nav:Location ; nav:root ui:shell ;
-    nav:dimensions ( ui:atLanguage ui:atPage ui:atDocSection ui:atExample ui:atGalleryGroup ui:atReferenceTerm ui:atTarget ) .
+    nav:dimensions ( ui:atLanguage ui:atPage ui:atDocSection ui:atExample ui:atGalleryGroup ui:atReferenceTerm ui:atChanges ui:atTarget ) .
 # The language leads the path, except the site's own (English): /uk/docs/rules/, /docs/rules/.
 # Links keep it, and it is also what the tab remembers (ui:rememberLanguage). The home page is /.
 ui:atLanguage a nav:Dimension ; nav:subject ui:app ; nav:property l10n:language ; nav:keyProperty l10n:code ;
@@ -106,6 +108,12 @@ ui:atGalleryGroup a nav:Dimension ; nav:subject ui:app ; nav:property ui:gallery
 # The Reference's selected term, as a prefixed name (its other state is ui:rememberReference's).
 ui:atReferenceTerm a nav:Dimension ; nav:subject ui:app ; nav:property ui:referenceSubject ; nav:spelling nav:PrefixedName ; nav:showsTerms true ;
     nav:parent ui:atPage ; nav:when ui:Reference ; nav:carriedBy nav:Path ; nav:rendersInPlace true ; nav:history nav:MakesHistory .
+# The Changes page (demo/gallery/_changes.ttl): the change log, or one change by its slug
+# (/changes/field-row-cells/). Its values are the log's changes (a chg:Change, the property's range),
+# so a link to a change (c:to) goes here though no component shows it until it is chosen.
+ui:changesAt rdfs:label "Change" , "Зміна"@uk , "Änderung"@de , "التغيير"@ar ; rdfs:range chg:Change .
+ui:atChanges a nav:Dimension ; nav:subject ui:app ; nav:property ui:changesAt ; nav:keyProperty sem:slug ;
+    nav:parent ui:atPage ; nav:when ui:Changes ; nav:carriedBy nav:Path ; nav:rendersInPlace true ; nav:history nav:MakesHistory .
 # What a followed link points at: where to look, not a place of its own.
 ui:atTarget a nav:TargetDimension ; nav:subject ui:app ; nav:property nav:target ;
     nav:carriedBy nav:Fragment ; nav:history nav:NoHistory .
@@ -183,16 +191,17 @@ ui:searchMark a c:Emblem ; c:decorative true ; c:viewBox "0 0 16 16" ;
     c:pathData "M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z" .
 
 # The page switcher first; the tools and the display settings after it, folded behind a More
-# button on a phone (c:moreActions), so the bar is one row there.
+# button on a phone (c:moreActions), so the bar is one row there; the source in the corner (c:endActions).
 ui:appBar a c:AppBar ;
     c:label "Semblance" ;
     c:to ui:home ;
     c:byline ui:sponsorLine ;
     c:logo ui:logo ;
-    c:actions ( ui:nav ui:paletteButton ui:sourceLink ) ;
+    c:actions ( ui:nav ui:paletteButton ) ;
     c:moreActions ( ui:toolsToggle ui:theme ui:themePicker ) ;
+    c:endActions ( ui:sourceLink ) ;
     c:moreLabel "Tools and display" , "Інструменти та вигляд"@uk , "Werkzeuge und Darstellung"@de , "الأدوات والعرض"@ar .
-# The source, in the bar on every page and at every width: the GitHub mark alone, named for assistive
+# The source, in the bar's corner on every page and at every width: the GitHub mark alone, named for assistive
 # technology in the viewer's language, opening in the same tab as the site's other link out
 # (ui:inferalLink).
 ui:sourceLink a c:Link ; c:href "https://github.com/inferal-oss/semblance" ; c:external false ; c:content ui:githubMark ;
@@ -211,20 +220,22 @@ ui:theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
 ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page ; c:compactAs c:Picker ; sem:anticipatesNear 1 .
 
 # The site: a landing page, the docs, the component gallery and complete examples
-# (demo/gallery/_home.ttl, _docs.ttl, _examples.ttl). Each page is evaluated when
+# and the changes (demo/gallery/_home.ttl, _docs.ttl, _examples.ttl, _changes.ttl). Each page is evaluated when
 # its navigation item is pointed at or focused, so it is ready by the time it is clicked.
 ui:pages a c:Switch ; c:controls ui:app ; c:property ui:page ;
-    c:cases ( ui:homeCase ui:docsCase ui:componentsCase ui:referenceCase ui:examplesCase ) .
+    c:cases ( ui:homeCase ui:docsCase ui:componentsCase ui:referenceCase ui:examplesCase ui:changesCase ) .
 ui:homeCase c:when ui:Home ; c:content ui:home .
 ui:docsCase c:when ui:Docs ; c:content ui:docs .
 ui:componentsCase c:when ui:Components ; c:content ui:gallery .
 ui:referenceCase c:when ui:Reference ; c:content ui:reference .
 ui:examplesCase c:when ui:Examples ; c:content ui:examples .
+ui:changesCase c:when ui:Changes ; c:content ui:changes .
 ui:home sem:warm sem:OnIntent .
 ui:docs sem:warm sem:OnIntent .
 ui:gallery sem:warm sem:OnIntent .
 ui:reference sem:warm sem:OnIntent .
 ui:examples sem:warm sem:OnIntent .
+ui:changes sem:warm sem:OnIntent .
 
 # --- tools --------------------------------------------------------------------------------------
 # The developer tools are on every page: a window on the desktop, docked to the bottom

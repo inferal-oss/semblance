@@ -154,7 +154,7 @@ c:ClassDocRendering-sparql a sem:Rule ;
     sem:implements c:ClassDocRendering ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle" ; rdfhtml:attribute ?tab .
+  ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle language-turtle" ; rdfhtml:attribute ?tab .
   ?tab a rdfhtml:Attribute ; rdfhtml:attributeName "tabindex" ; rdfhtml:attributeValue "0" .
 }
 WHERE {

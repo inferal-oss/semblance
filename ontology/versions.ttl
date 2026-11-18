@@ -71,7 +71,7 @@ clip:Copier sem:version 1 ; sem:closure "328a88760cc35c28" ; sem:internal "new" 
 c:Accordion sem:version 1 ; sem:closure "aaf132b3a772efb8" ; sem:internal "new" .
 c:AccordionItem sem:version 1 ; sem:closure "9e05766282279f52" ; sem:internal "new" .
 c:Alert sem:version 1 ; sem:closure "82a51096882177ca" ; sem:internal "new" .
-c:AppBar sem:version 2 ; sem:closure "85e25268f11e07d4" ; sem:changedBy change:app-bar-links .
+c:AppBar sem:version 5 ; sem:closure "ecaa6e36f45ae701" ; sem:changedBy change:app-bar-one-row .
 c:AreaChart sem:version 1 ; sem:closure "4b2654c199af9555" ; sem:internal "new" .
 c:AreaPoint sem:version 2 ; sem:closure "1c32f78ae3dacea2" ; sem:changedBy change:charts-on-shared-parts .
 c:Avatar sem:version 1 ; sem:closure "f287dc13d1441263" ; sem:internal "new" .
@@ -98,6 +98,9 @@ c:CalendarEntry sem:version 1 ; sem:closure "56748a3c2cae2fdb" ; sem:internal "n
 c:Canvas sem:version 1 ; sem:closure "69eab156284dc6d5" ; sem:internal "new" .
 c:CanvasItem sem:version 1 ; sem:closure "ecda9dc74d7abbf0" ; sem:internal "new" .
 c:Card sem:version 3 ; sem:closure "7ec1ab3dec1e5785" ; sem:changedBy change:card-title-link .
+c:ChangeEntry sem:version 1 ; sem:closure "f8e5bba7c9da126b" ; sem:internal "new" .
+c:ChangeLog sem:version 1 ; sem:closure "f338704da50e972c" ; sem:internal "new" .
+c:ChangeSummary sem:version 1 ; sem:closure "326003b12dad132b" ; sem:internal "new" .
 c:Charset sem:version 1 ; sem:closure "e0bd36111a8206a5" ; sem:internal "new" .
 c:Chart sem:version 1 ; sem:closure "c4cbf309f649c5a7" ; sem:internal "new" .
 c:ChartPoint sem:version 2 ; sem:closure "e8efc0f602b5e769" ; sem:changedBy change:charts-on-shared-parts .
@@ -106,15 +109,16 @@ c:Checkbox sem:version 1 ; sem:closure "dd1293cfeedb76b8" ; sem:internal "new" .
 c:Chips sem:version 1 ; sem:closure "133a4a7a58f76b04" ; sem:internal "new" .
 c:Choice sem:version 1 ; sem:closure "f0068d241e6836ac" ; sem:internal "new" .
 c:Chooser sem:version 1 ; sem:closure "523738c50240d62d" ; sem:internal "new" .
-c:ClassDoc sem:version 1 ; sem:closure "efdd11d534785e80" ; sem:internal "new" .
+c:ClassDoc sem:version 2 ; sem:closure "358056cbb5021c4c" ; sem:changedBy change:code-says-its-language .
 c:Code sem:version 2 ; sem:closure "0685f1934a55142a" ; sem:internal "Each sx:matches joins its group again instead of sitting in its own LATERAL, now that compiled Rust passes a BIND's value into a magic relation (#281); the same rows and HTML" .
-c:CodeEditor sem:version 2 ; sem:closure "e70a4c3f38d90570" ; sem:internal "Each sx:matches joins its group again instead of sitting in its own LATERAL, now that compiled Rust passes a BIND's value into a magic relation (#281); the same rows and HTML" .
+c:CodeEditor sem:version 3 ; sem:closure "eb9159560739bc67" ; sem:changedBy change:code-says-its-language .
 c:CodeInput sem:version 1 ; sem:closure "84c31d8939b15a12" ; sem:internal "new" .
 c:Column sem:version 1 ; sem:closure "464f99def558b8e2" ; sem:internal "new" .
 c:ColumnChart sem:version 1 ; sem:closure "6fa522ecb469ab0f" ; sem:internal "new" .
 c:ColumnPoint sem:version 1 ; sem:closure "5dad8ba33da00056" ; sem:internal "new" .
 c:Combobox sem:version 1 ; sem:closure "7f502a5ddb46824e" ; sem:internal "new" .
 c:CommandPalette sem:version 2 ; sem:closure "3b8525dba5e88eab" ; sem:changedBy change:palette-keywords .
+c:ComponentHistory sem:version 1 ; sem:closure "1acc6af5098e3e11" ; sem:internal "new" .
 c:Connector sem:version 1 ; sem:closure "e60a508aa6a7f144" ; sem:internal "new" .
 c:CountBadge sem:version 1 ; sem:closure "9e1a00ed237471d6" ; sem:internal "new" .
 c:DataGrid sem:version 1 ; sem:closure "cced3fb79757287f" ; sem:internal "new" .
@@ -170,7 +174,7 @@ c:Legend sem:version 1 ; sem:closure "6b92926554401ed1" ; sem:internal "new" .
 c:Lightbox sem:version 2 ; sem:closure "974f7ee398cef6b1" ; sem:changedBy change:lightbox-compact .
 c:LineChart sem:version 2 ; sem:closure "1410c7cd9820d413" ; sem:changedBy change:charts-on-shared-parts .
 c:LinePoint sem:version 1 ; sem:closure "f6f0c0a14e8bb5ca" ; sem:internal "new" .
-c:Link sem:version 1 ; sem:closure "3ac39dc5ebf4d5e2" ; sem:internal "new" .
+c:Link sem:version 2 ; sem:closure "c58f3c1ce4c4fd2a" ; sem:changedBy change:links-to-dimension-values .
 c:LinkedCard sem:version 1 ; sem:closure "188c9d74982ef735" ; sem:internal "new" .
 c:List sem:version 1 ; sem:closure "055cd3db19599413" ; sem:internal "new" .
 c:ListItem sem:version 1 ; sem:closure "b01f15e88edc5067" ; sem:internal "new" .
@@ -178,12 +182,13 @@ c:LiveExample sem:version 1 ; sem:closure "c65ed8859c72b07c" ; sem:internal "new
 c:LiveIndicator sem:version 1 ; sem:closure "3fbef1419eaa9ee8" ; sem:internal "new" .
 c:MarkupNode sem:version 1 ; sem:closure "031a6f715b5672b9" ; sem:internal "new" .
 c:Maximizable sem:version 1 ; sem:closure "03da6f420769fab9" ; sem:internal "new" .
-c:Mention sem:version 1 ; sem:closure "59c19b0c7c7bd717" ; sem:internal "new" .
+c:Mention sem:version 2 ; sem:closure "d069cfa5dd5c5dea" ; sem:changedBy change:links-to-dimension-values .
 c:Menu sem:version 1 ; sem:closure "66c4527a8cb25efe" ; sem:internal "new" .
 c:MenuItem sem:version 2 ; sem:closure "0ecc5e459fa16e9f" ; sem:changedBy change:menu-item-links .
 c:Message sem:version 1 ; sem:closure "746382458fdd3fef" ; sem:internal "new" .
 c:MessageList sem:version 1 ; sem:closure "f84d8ec5192f89ba" ; sem:internal "new" .
 c:Metrics sem:version 1 ; sem:closure "e39028f1dc804a6a" ; sem:internal "new" .
+c:MigrationView sem:version 1 ; sem:closure "de1837b8e69b3b3e" ; sem:internal "new" .
 c:Minimizable sem:version 1 ; sem:closure "b88bbf67dde1176a" ; sem:internal "new" .
 c:Money sem:version 1 ; sem:closure "ec8b96654f17c964" ; sem:internal "new" .
 c:MonthGrid sem:version 1 ; sem:closure "4d62819ed3ae8285" ; sem:internal "new" .
@@ -204,7 +209,7 @@ c:Progress sem:version 1 ; sem:closure "d5e0e7de8617c5c5" ; sem:internal "new" .
 c:ProjectionView sem:version 1 ; sem:closure "db65cd0d58a6eab5" ; sem:internal "new" .
 c:QueryEditor sem:version 1 ; sem:closure "87abc3a0a40e6af1" ; sem:internal "new" .
 c:QueryResultView sem:version 1 ; sem:closure "8b3100c0bd012ffa" ; sem:internal "new" .
-c:QueryView sem:version 1 ; sem:closure "c0451cc5132d111d" ; sem:internal "new" .
+c:QueryView sem:version 2 ; sem:closure "8638da55fcc6bfc8" ; sem:changedBy change:code-says-its-language .
 c:QueryWorkbench sem:version 2 ; sem:closure "bd506d48cbd5de2d" ; sem:internal "Each sx:matches joins its group again instead of sitting in its own LATERAL, now that compiled Rust passes a BIND's value into a magic relation (#281); the same rows and HTML" .
 c:RadioGroup sem:version 1 ; sem:closure "5cfbedd6dee84039" ; sem:internal "new" .
 c:Raisable sem:version 1 ; sem:closure "88bcf9c2effe9e18" ; sem:internal "new" .
@@ -218,7 +223,7 @@ c:Resizable sem:version 1 ; sem:closure "d54424795ba2adfc" ; sem:internal "new" 
 c:Restorable sem:version 1 ; sem:closure "2dceab5e1b75cef4" ; sem:internal "new" .
 c:ResultGraph sem:version 1 ; sem:closure "652af62b7648e5c4" ; sem:internal "new" .
 c:ResultTable sem:version 1 ; sem:closure "95946f4822a57dc3" ; sem:internal "new" .
-c:ResultTurtle sem:version 1 ; sem:closure "5d1f8d9e763e0a2b" ; sem:internal "new" .
+c:ResultTurtle sem:version 2 ; sem:closure "f0f11514dc454da1" ; sem:changedBy change:code-says-its-language .
 c:RowChart sem:version 2 ; sem:closure "0ed79056e3a80ecb" ; sem:changedBy change:charts-on-shared-parts .
 c:RunQueryButton sem:version 1 ; sem:closure "3bc2ec8f61d0099c" ; sem:internal "new" .
 c:ScatterChart sem:version 1 ; sem:closure "1342bf38f2800d75" ; sem:internal "new" .
@@ -239,7 +244,7 @@ c:SlicePoint sem:version 1 ; sem:closure "90af2bba9e2cca95" ; sem:internal "new"
 c:Slider sem:version 1 ; sem:closure "8eba9e75f42466d6" ; sem:internal "new" .
 c:Sortable sem:version 1 ; sem:closure "f4985ff3d8c0ce28" ; sem:internal "new" .
 c:SourceBack sem:version 2 ; sem:closure "6b0ad805bf53b042" ; sem:internal "Each sx:matches joins its group again instead of sitting in its own LATERAL, now that compiled Rust passes a BIND's value into a magic relation (#281); the same rows and HTML" .
-c:SourceView sem:version 2 ; sem:closure "7733e104e903bd47" ; sem:internal "Each sx:matches joins its group again instead of sitting in its own LATERAL, now that compiled Rust passes a BIND's value into a magic relation (#281); the same rows and HTML" .
+c:SourceView sem:version 3 ; sem:closure "a79582ddaa7f8f85" ; sem:changedBy change:code-says-its-language .
 c:Spacer sem:version 1 ; sem:closure "4a2e522796021853" ; sem:internal "new" .
 c:Sparkline sem:version 1 ; sem:closure "503fd84c93efdbb2" ; sem:internal "new" .
 c:Specimen sem:version 2 ; sem:closure "51c246631a3148db" ; sem:internal "On a phone a specimen, its stage, a card's body and a surface take one step less inset, and a dock panel's header wraps, so what they hold fits at 320px (#246)" .
@@ -287,7 +292,7 @@ c:ToggleSwitch sem:version 1 ; sem:closure "c2f934e05b0a5bd7" ; sem:internal "ne
 c:Toolbar sem:version 1 ; sem:closure "f014ec119dc8b7fc" ; sem:internal "new" .
 c:Tree sem:version 1 ; sem:closure "c31820230299ba95" ; sem:internal "new" .
 c:TreeItem sem:version 1 ; sem:closure "6b8cb4051e2b7541" ; sem:internal "new" .
-c:TriplesView sem:version 1 ; sem:closure "cc7f15174bf52953" ; sem:internal "new" .
+c:TriplesView sem:version 2 ; sem:closure "f7fbf9ea8058efb1" ; sem:changedBy change:code-says-its-language .
 c:TurtleEntry sem:version 1 ; sem:closure "71b71a8ecfac1ab6" ; sem:internal "new" .
 c:TurtleHead sem:version 1 ; sem:closure "60bf1a8801b26216" ; sem:internal "new" .
 c:TurtleNode sem:version 1 ; sem:closure "95373a08208c7624" ; sem:internal "new" .
@@ -312,7 +317,7 @@ l10n:Dated sem:version 1 ; sem:closure "eb4435e8a3b227d1" ; sem:internal "new" .
 l10n:Viewer sem:version 2 ; sem:closure "f13ba1f3e29ae67d" ; sem:internal "l10n:Terms leaves a component's own c:label to l10n:Labels in its watch as in its query (sem:leavesTo): same output, no re-run over the whole graph when a component's translated label changes (#547)" .
 lc:WithParts sem:version 1 ; sem:closure "55f5674640084adb" ; sem:internal "new" .
 nav:ContainmentProperty sem:version 1 ; sem:closure "6107f25c832848e4" ; sem:internal "new" .
-nav:Location sem:version 1 ; sem:closure "ebe2918971db016a" ; sem:internal "new" .
+nav:Location sem:version 2 ; sem:closure "87761f39728afec1" ; sem:changedBy change:links-to-dimension-values .
 per:Policy sem:version 1 ; sem:closure "0d9f7744daa6ef90" ; sem:internal "new" .
 ret:MemoryBudget sem:version 2 ; sem:closure "5dc3ff6020796e95" ; sem:changedBy change:toasts-undo-horizon .
 src:Source sem:version 1 ; sem:closure "0a4d62fbc46c87e5" ; sem:internal "new" .

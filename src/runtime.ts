@@ -16,6 +16,7 @@ import { privacyFunctions } from './layers/privacy.ts'
 import { functions as workbenchFunctions } from './components/workbench.ts'
 import { exampleFunctions } from './examples/index.ts'
 import { functions as referenceFunctions } from './components/reference.ts'
+import { functions as changesFunctions } from './components/changes.ts'
 import { VIEW_GRAPH, ViewRuntime } from './view/runtime.ts'
 import { viewFunctions } from './view/functions.ts'
 import { applyEffective, Consolidation } from './view/input.ts'
@@ -29,9 +30,11 @@ import { Watchdog } from './engine/watchdog.ts'
  * where relative URLs in what it renders resolve (by default the store's nav:base, see HtmlIndex);
  * `policy` makes it authored content (src/safety.ts): what the policy refuses is not rendered, and
  * is reported through the projection's onError. Read it from a trusted store (authoredPolicy), never
- * from this one.
+ * from this one. `hidden`: what is placed under an element marked hidden waits until it is shown
+ * ('wait', the default), or is rendered all the same ('render': a page read whole, as a document is,
+ * its other tabs' panels too; the site's Markdown, scripts/gen-llms.ts).
  */
-export type ProjectOptions = EngineOptions & { roots?: string[]; urlBase?: string; policy?: SafetyPolicy }
+export type ProjectOptions = EngineOptions & { roots?: string[]; urlBase?: string; policy?: SafetyPolicy; hidden?: 'wait' | 'render' }
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -441,7 +444,7 @@ export class Runtime {
       // A rule maintained as a view (iv:strategy iv:Incremental): one hosted view per rule and projection.
       maintain: (rule, query) => this.views.hostRule(mint(rule.iri, 'view-' + name), query),
       ...opts,
-      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...retentionFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
+      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...retentionFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...changesFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
     const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase(), opts.policy)
     engine.watchdog = this.watchdog
@@ -463,7 +466,7 @@ export class Runtime {
       engine.demand = (focus) => {
         if (epoch !== index.visibility) (epoch = index.visibility), (shown = new Map())
         let v = shown.get(focus)
-        if (v === undefined) shown.set(focus, (v = index.isShown(focus, roots)))
+        if (v === undefined) shown.set(focus, (v = opts.hidden === 'render' ? index.isPlaced(focus, roots) : index.isShown(focus, roots)))
         return v
       }
       // Idle time warms only what an ancestor declares sem:warm sem:Eager (default: lazy).

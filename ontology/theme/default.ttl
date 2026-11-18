@@ -962,18 +962,42 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > .sem-byline [data-sem-c=text]" ;
     sty:declares [ sty:property "font-size" ; sty:raw "inherit" ] , [ sty:property "line-height" ; sty:raw "inherit" ] , [ sty:property "color" ; sty:raw "inherit" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions" ;
+# The tools: the actions and the end actions, one group after the brand. The bar wraps the brand and the group
+# by their content, with no breakpoint: one row while they fit (the brand, then the tools), and the tools on a row
+# of their own below the brand only when they do not. Inside the group the actions wrap within their own room, so
+# the end actions never take a row of their own.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:raw "16px" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools > .sem-actions" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:raw "12px" ] ,
-                 [ sty:property "min-width" ; sty:raw "0" ] ,
-                 [ sty:property "max-width" ; sty:raw "100%" ] .
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools > .sem-actions:empty" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
-# A link among the actions (a c:Link: the app's source, its docs, a profile) stands with the buttons
+# The end actions (c:endActions): the bar's corner, at the inline end of the tools' row, whether that row is the
+# brand's or one of its own: the tools then take the rest of the row and the end actions the end of it, aligned
+# with the actions' first line. On a compact or medium screen (below) they follow the More button in the one row.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools:has(> .sem-end)" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools > .sem-end" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "align-self" ; sty:raw "start" ] ,
+                 [ sty:property "gap" ; sty:raw "12px" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
+
+# A link among the actions or the end actions (a c:Link: the app's source, its docs, a profile) stands with the buttons
 # as a calm control - a control's height and inset, the bar's text colour, its logo beside its name -
 # rather than as a link in running text.
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link], .sem-more-body > [data-sem-c=link]" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools > :is(.sem-actions, .sem-end) > [data-sem-c=link], .sem-more-body > [data-sem-c=link]" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "justify-content" ; sty:raw "center" ] ,
@@ -986,23 +1010,23 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "text-decoration" ; sty:raw "none" ] ,
                  [ sty:property "transition" ; sty:raw "background var(--sem-motion)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link]:hover, .sem-more-body > [data-sem-c=link]:hover" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools > :is(.sem-actions, .sem-end) > [data-sem-c=link]:hover, .sem-more-body > [data-sem-c=link]:hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:surface-hover ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link]:focus-visible, .sem-more-body > [data-sem-c=link]:focus-visible" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools > :is(.sem-actions, .sem-end) > [data-sem-c=link]:focus-visible, .sem-more-body > [data-sem-c=link]:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] , [ sty:property "box-shadow" ; sty:token tok:ring ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link] > [data-sem-c=emblem]" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools > :is(.sem-actions, .sem-end) > [data-sem-c=link] > [data-sem-c=emblem]" ;
     sty:declares [ sty:property "height" ; sty:raw "1.25em" ] , [ sty:property "align-self" ; sty:raw "center" ] .
 # A link that is its logo alone (c:content a c:Emblem, its c:label its name) is a square control.
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link]:has(> [data-sem-c=emblem]:only-child)" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools > :is(.sem-actions, .sem-end) > [data-sem-c=link]:has(> [data-sem-c=emblem]:only-child)" ;
     sty:declares [ sty:property "padding" ; sty:raw "0" ] ,
                  [ sty:property "min-width" ; sty:raw "var(--control-h, var(--sem-control-height))" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions > [data-sem-c=link] > [data-sem-c=emblem]:only-child" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-tools > :is(.sem-actions, .sem-end) > [data-sem-c=link] > [data-sem-c=emblem]:only-child" ;
     sty:declares [ sty:property "height" ; sty:raw "20px" ] .
 # On a phone an action with a logo (a c:Link's or a c:Button's c:logo, or a link's c:Emblem alone) is
 # its logo alone, a square control; what it says stays its name for assistive technology. Its text is
 # set at font-size 0 and, where a theme sets a size of its own, pushed past the square's edge and
 # clipped; its other parts are visually hidden. None of it leaves the accessibility tree.
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions > :is([data-sem-c=link], [data-sem-c=button]):has(> [data-sem-c=emblem]:first-child)" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-tools > :is(.sem-actions, .sem-end) > :is([data-sem-c=link], [data-sem-c=button]):has(> [data-sem-c=emblem]:first-child)" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "width" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
@@ -1013,14 +1037,14 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "gap" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "font-size" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions > :is([data-sem-c=link], [data-sem-c=button]):has(> [data-sem-c=emblem]:first-child) > :not(:first-child)" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-tools > :is(.sem-actions, .sem-end) > :is([data-sem-c=link], [data-sem-c=button]):has(> [data-sem-c=emblem]:first-child) > :not(:first-child)" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "width" ; sty:raw "1px" ] ,
                  [ sty:property "height" ; sty:raw "1px" ] ,
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions > :is([data-sem-c=link], [data-sem-c=button]) > [data-sem-c=emblem]:first-child" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-tools > :is(.sem-actions, .sem-end) > :is([data-sem-c=link], [data-sem-c=button]) > [data-sem-c=emblem]:first-child" ;
     sty:declares [ sty:property "height" ; sty:raw "20px" ] .
 
 # The more actions (c:moreActions): where there is room they simply follow the others - the group
@@ -1066,15 +1090,23 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "font-size" ; sty:raw "15px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > .sem-byline" ;
     sty:declares [ sty:property "font-size" ; sty:raw "10px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-actions" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-tools" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
+                 [ sty:property "gap" ; sty:raw "8px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-tools > .sem-actions" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
                  [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
                  [ sty:property "gap" ; sty:raw "4px" ] ,
                  [ sty:property "--control-px" ; sty:raw "10px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-actions > :not(.sem-more)" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-tools > .sem-actions > :not(.sem-more)" ;
     sty:declares [ sty:property "flex" ; sty:raw "0 1 auto" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
+# The end actions after the More button, at the row's inline end.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-tools > .sem-end" ;
+    sty:declares [ sty:property "align-self" ; sty:raw "auto" ] ,
+                 [ sty:property "gap" ; sty:raw "4px" ] ,
+                 [ sty:property "--control-px" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-more" ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] ,
                  [ sty:property "position" ; sty:raw "relative" ] ,

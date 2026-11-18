@@ -79,6 +79,24 @@ describe('width classes (sty:atWidth)', () => {
     expect(css.slice(css.indexOf(narrow))).not.toContain(narrow + '\n    [data-sem-c="segmented"][data-sem-compact-as')
   })
 
+  it('wraps an app bar by its content: the brand and one group of the actions and the end actions, no grid and no breakpoint for it', () => {
+    const components = layerOf(css, 'components')
+    const narrow = '@media (max-width: 640px), (min-width: 641px) and (max-width: 1099px) {'
+    const media = components.indexOf(narrow)
+    const wide = components.slice(0, media)
+    // The bar is a wrapping row: the brand and the tools share it while they fit.
+    const bar = wide.slice(wide.indexOf('  [data-sem-c="app-bar"] {'))
+    expect(bar.slice(0, bar.indexOf('}'))).toContain('flex-wrap: wrap;')
+    expect(wide).not.toMatch(/\[data-sem-c="app-bar"\][^{]*\{[^}]*display: grid/)
+    // With end actions the tools take the rest of the row, the end actions its inline end, aligned with the actions' first line.
+    expect(wide).toContain('  [data-sem-c="app-bar"] > .sem-tools:has(> .sem-end) { flex: 1 1 auto; }')
+    const end = wide.slice(wide.indexOf('  [data-sem-c="app-bar"] > .sem-tools > .sem-end {'))
+    expect(end.slice(0, end.indexOf('}'))).toContain('margin-inline-start: auto;')
+    expect(end.slice(0, end.indexOf('}'))).toContain('align-self: start;')
+    // On a compact or medium screen, the one row: the end actions after the More button.
+    expect(components.indexOf('    [data-sem-c="app-bar"] > .sem-tools > .sem-end {', media)).toBeGreaterThan(media)
+  })
+
   it('narrows rules by a hooked value inside the condition too (a segmented control as a picker)', () => {
     const variants = layerOf(css, 'variants')
     const media = variants.indexOf(COMPACT)
@@ -108,8 +126,8 @@ function site(prefer: 'sparql' | 'function' = 'sparql') {
 describe('the app bar on a compact screen', () => {
   it('puts the more actions after the others, behind a More button that says what it opens', () => {
     const { $ } = site()
-    const actions = $('[data-sem-c=app-bar] > .sem-actions')
-    expect([...actions.children].map((c) => c.getAttribute('data-sem-c') ?? c.className)).toEqual(['segmented', 'button', 'link', 'sem-more'])
+    const actions = $('[data-sem-c=app-bar] > .sem-tools > .sem-actions')
+    expect([...actions.children].map((c) => c.getAttribute('data-sem-c') ?? c.className)).toEqual(['segmented', 'button', 'sem-more'])
     const toggle = actions.querySelector('.sem-more > .sem-more-toggle')!
     const body = actions.querySelector('.sem-more > .sem-more-body')!
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -117,6 +135,14 @@ describe('the app bar on a compact screen', () => {
     expect(toggle.getAttribute('aria-label')).toBe('Tools and display')
     expect(toggle.querySelector('[aria-hidden=true]')!.textContent).toBe('⋯')
     expect([...body.children].map((c) => c.getAttribute('data-sem-c'))).toEqual(['toggle', 'theme-switcher', 'choice'])
+  })
+
+  it('pins the end actions (c:endActions) after them, at the end of the bar\'s tools, never folded', () => {
+    const { $ } = site()
+    const bar = $('[data-sem-c=app-bar]')
+    expect([...bar.children].map((c) => c.className)).toEqual(['sem-brand', 'sem-tools'])
+    expect([...$('[data-sem-c=app-bar] > .sem-tools').children].map((c) => c.className)).toEqual(['sem-actions', 'sem-end'])
+    expect([...$('[data-sem-c=app-bar] > .sem-tools > .sem-end').children].map((c) => c.getAttribute('href'))).toEqual(['https://github.com/inferal-oss/semblance'])
   })
 
   it('opens and closes them through the graph (c:expanded)', () => {
@@ -176,7 +202,7 @@ describe('pickers (c:compactAs c:Picker)', () => {
     const picker = nav.firstElementChild!
     expect(picker.localName).toBe('select')
     expect(picker.getAttribute('aria-label')).toBe('Page')
-    expect([...picker.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Home', 'Docs', 'Components', 'Reference', 'Examples'])
+    expect([...picker.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Home', 'Docs', 'Components', 'Reference', 'Examples', 'Changes'])
     expect(picker.querySelector('option[selected]')!.textContent).toBe('Home')
     choose(picker, 'Docs')
     expect(value(UI + 'page')).toBe(UI + 'Docs')

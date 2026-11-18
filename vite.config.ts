@@ -45,6 +45,40 @@ function llms(): Plugin {
   }
 }
 
+// The change log (src/changes/records.ts): the change files and what git says about them, as Turtle
+// the client imports (virtual:semblance-changes) and as an Atom feed (/changes.atom). Made again when a
+// change file or ontology/versions.ttl changes while the dev server runs.
+function changes(): Plugin {
+  const ID = 'virtual:semblance-changes'
+  const RESOLVED = '\0' + ID
+  let records: string | undefined
+  const turtle = async () => (records ??= (await import('./src/changes/records.ts')).changeRecords())
+  const atom = async () => (await import('./src/changes/atom.ts')).changesAtom(await turtle(), 'https://semblance.dev/')
+  return {
+    name: 'semblance-changes',
+    resolveId: (id) => (id === ID ? RESOLVED : undefined),
+    async load(id) {
+      return id === RESOLVED ? `export default ${JSON.stringify(await turtle())}` : undefined
+    },
+    configureServer(server) {
+      server.watcher.on('change', (path) => {
+        if (!path.includes('/ontology/changes/') && !path.endsWith('/ontology/versions.ttl')) return
+        records = undefined
+        const module = server.moduleGraph.getModuleById(RESOLVED)
+        if (module) server.moduleGraph.invalidateModule(module)
+      })
+      server.middlewares.use(async (req, res, next) => {
+        if ((req.url ?? '').split(/[?#]/)[0] !== '/changes.atom') return next()
+        res.setHeader('Content-Type', 'application/atom+xml; charset=utf-8')
+        res.end(await atom())
+      })
+    },
+    async generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'changes.atom', source: await atom() })
+    },
+  }
+}
+
 // `vite build --mode single` produces one self-contained HTML file (JS, CSS,
 // ontologies and the Oxigraph WASM inlined) in dist-single/.
 export default defineConfig(({ command, mode }) => ({
@@ -68,7 +102,7 @@ export default defineConfig(({ command, mode }) => ({
   optimizeDeps: { exclude: ['oxigraph'] },
   // Every page of the site is rendered at build time (semblance.config.ts) and taken over by the
   // client; the single file is rendered too, with everything inline.
-  plugins: [llms(), ...(mode === 'single' ? [viteSingleFile({ removeViteModuleLoader: true })] : []), semblance({ config: resolve(here, 'semblance.config.ts') })],
+  plugins: [llms(), changes(), ...(mode === 'single' ? [viteSingleFile({ removeViteModuleLoader: true })] : []), semblance({ config: resolve(here, 'semblance.config.ts') })],
   build: {
     outDir: resolve(here, mode === 'single' ? 'dist-single' : 'dist'),
     emptyOutDir: true,

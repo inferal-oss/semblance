@@ -137,10 +137,17 @@ the buttons as a control in the bar's text colour: its c:logo beside its label, 
 c:content alone (its c:label then its name) as a square control; on a compact screen a link with a logo
 shows the logo alone, its label kept as its name. Where there is room the more actions follow the others; on a
 compact or medium screen (sty:CompactWidth, sty:MediumWidth) they fold behind a More button, shown while the bar is c:expanded; Escape or a
-press outside closes them."""@en ;
+press outside closes them. c:endActions are pinned to the bar's corner, at its inline end after everything else.
+The actions and the end actions are one group after the brand (a div with class sem-tools), and the bar wraps by
+its content: one row while the brand and that group fit, the group on a row of its own below the brand when they
+do not. The end actions stay at the inline end of the group's row, in line with the actions' first line: the
+actions wrap within their own room rather than leaving them a row of their own. On a compact or medium screen
+they follow the More button in the one row."""@en ;
     sem:slug "app-bar" .
 c:moreActions a owl:ObjectProperty ; rdfs:domain c:AppBar ; rdfs:range rdf:List ;
     rdfs:comment "Secondary actions (settings, tools): after c:actions where there is room, behind a More button on a compact screen."@en .
+c:endActions a owl:ObjectProperty ; rdfs:domain c:AppBar ; rdfs:range rdf:List ;
+    rdfs:comment "Actions pinned to the bar's corner (the app's source, an account): at its inline end, after c:actions and the More button, never folded."@en .
 c:moreLabel a owl:DatatypeProperty ; rdfs:domain c:AppBar ;
     rdfs:comment "What the More button is called for assistive technology (default \"More\")."@en .
 c:byline a owl:ObjectProperty ; rdfs:domain c:AppBar ;
@@ -155,8 +162,9 @@ c:AppBarRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Header ; sem:renders $this ; rdfhtml:hasChild ?brand, ?actions .
-  ?brand a rdfhtml:Div ; rdfhtml:class "sem-brand" ; rdfhtml:hasChild ?logoOut, ?nameOut, ?home, ?subtitle, ?bylineBox ; ord:immediatelyPrecedes ?actions .
+  ?root a rdfhtml:Header ; sem:renders $this ; rdfhtml:hasChild ?brand, ?tools .
+  ?brand a rdfhtml:Div ; rdfhtml:class "sem-brand" ; rdfhtml:hasChild ?logoOut, ?nameOut, ?home, ?subtitle, ?bylineBox ; ord:immediatelyPrecedes ?tools .
+  ?tools a rdfhtml:Div ; rdfhtml:class "sem-tools" ; rdfhtml:hasChild ?actions, ?end .
   ?home a rdfhtml:A ; rdfhtml:class "sem-home" ; rdfhtml:href ?href ; rdfhtml:hasChild ?logoIn, ?nameIn ; ord:immediatelyPrecedes ?subtitle .
   ?bylineBox a rdfhtml:Span ; rdfhtml:class "sem-byline" ; rdfhtml:hasChild ?byline .
   ?beforeByline ord:immediatelyPrecedes ?bylineBox .
@@ -181,6 +189,9 @@ CONSTRUCT {
   ?moreIconText a rdfhtml:Text ; rdfhtml:data "⋯" .
   ?moreBody a rdfhtml:Div ; rdfhtml:class "sem-more-body" ; rdfhtml:id ?moreBodyId ; rdfhtml:hasChild ?moreAction .
   ?ma ord:immediatelyPrecedes ?mb .
+  ?end a rdfhtml:Div ; rdfhtml:class "sem-end" ; rdfhtml:hasChild ?endAction .
+  ?actions ord:immediatelyPrecedes ?end .
+  ?ea ord:immediatelyPrecedes ?eb .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:AppBar .
@@ -208,6 +219,9 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
   BIND(IF(BOUND(?subtitleData), IRI(CONCAT(STR($this), "/~subtitle")), ?none) AS ?subtitle)
   BIND(IF(BOUND(?subtitleData), IRI(CONCAT(STR($this), "/~subtitle-text")), ?none) AS ?subtitleText)
+  # The actions and the end actions are one group after the brand (the bar wraps the brand and the group, the
+  # group keeps the end actions at its end).
+  BIND(IRI(CONCAT(STR($this), "/~tools")) AS ?tools)
   BIND(IRI(CONCAT(STR($this), "/~actions")) AS ?actions)
   # Home: the logo and the name are one link (c:to, resolved as nav:href; else c:href). The byline may
   # hold a link of its own, so it stays outside.
@@ -247,8 +261,11 @@ WHERE {
   BIND(IF(?openText = "true", IRI(CONCAT(STR($this), "/~more-toggle-data-sem-escape")), ?none) AS ?escapeAttr)
   BIND(IF(?openText = "true", IRI(CONCAT(STR($this), "/~more-toggle-data-sem-dismiss-outside")), ?none) AS ?dismissAttr)
   BIND(IF(BOUND(?firstMore), ?moreLabel0, ?none) AS ?moreLabel)
+  # The end actions, in a group of their own after the actions (and the More button), in the same group: the bar's corner.
+  BIND(IF(EXISTS { $this c:endActions/rdf:rest*/rdf:first ?anyEnd FILTER(isIRI(?anyEnd)) }, IRI(CONCAT(STR($this), "/~end")), ?none) AS ?end)
   {} UNION { $this c:actions/rdf:rest*/rdf:first ?action FILTER(isIRI(?action)) } UNION { $this c:actions/rdf:rest* ?pairCell . ?pairCell rdf:first ?a ; rdf:rest/rdf:first ?b FILTER(isIRI(?a) && isIRI(?b)) }
   UNION { $this c:moreActions/rdf:rest*/rdf:first ?moreAction FILTER(isIRI(?moreAction)) } UNION { $this c:moreActions/rdf:rest* ?morePairCell . ?morePairCell rdf:first ?ma ; rdf:rest/rdf:first ?mb FILTER(isIRI(?ma) && isIRI(?mb)) }
+  UNION { $this c:endActions/rdf:rest*/rdf:first ?endAction FILTER(isIRI(?endAction)) } UNION { $this c:endActions/rdf:rest* ?endPairCell . ?endPairCell rdf:first ?ea ; rdf:rest/rdf:first ?eb FILTER(isIRI(?ea) && isIRI(?eb)) }
 }""" .
 
 # The More button opens and closes the folded actions (c:expanded; closed when absent).
@@ -439,7 +456,7 @@ c:SourceViewRendering a sem:Rendering ;
     sem:targets c:SourceView ;
     sem:stratum 0 ;
     sem:follows c:of ;
-    sem:watches rdf:type , c:of , c:label , c:emptyText , c:text , c:path .
+    sem:watches rdf:type , c:of , c:label , c:emptyText , c:text , c:path , c:language .
 c:SourceViewRendering-fn a sem:Rule ; sem:implements c:SourceViewRendering ; sem:function "source-view" .
 # One row per line (c:line, its number), its tokens by the shared lexicon (c:SparqlLexicon), each
 # keyed by where it starts. Lines are tokenized one by one, so a long string that spans lines is
@@ -466,7 +483,7 @@ CONSTRUCT {
             rdfhtml:attribute ?fsKind , ?fsLabel .
   ?fsKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "screen" .
   ?fsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?fsPhrase .
-  ?code a rdfhtml:Pre ; rdfhtml:class "sem-turtle sem-source" ; rdfhtml:hasChild ?row .
+  ?code a rdfhtml:Pre ; rdfhtml:class ?codeClass ; rdfhtml:hasChild ?row .
   ?row a rdfhtml:Span ; rdfhtml:class "sem-line" ; c:line ?k ; rdfhtml:hasChild ?tok , ?nl ; ord:immediatelyPrecedes ?nextRow .
   ?nl a rdfhtml:Text ; rdfhtml:data "\\n" .
   ?tok a ?tokTag ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterTok .
@@ -476,6 +493,8 @@ WHERE {
   $this a c:SourceView .
   LATERAL { OPTIONAL { $this c:of ?source FILTER(isIRI(?source)) ?source c:text ?body0 } }
   LATERAL { OPTIONAL { $this c:of ?pathSource FILTER(isIRI(?pathSource)) ?pathSource c:path ?path0 } }
+  LATERAL { OPTIONAL { $this c:of ?languageSource FILTER(isIRI(?languageSource)) ?languageSource c:language ?language0 } }
+  BIND(CONCAT("sem-turtle sem-source", IF(BOUND(?language0), CONCAT(" language-", REPLACE(LCASE(STR(?language0)), " +", "-")), "")) AS ?codeClass)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   LATERAL {
     {
@@ -616,7 +635,7 @@ CONSTRUCT {
   ?nameText a rdfhtml:Text ; rdfhtml:data ?caption .
   ?path a rdfhtml:Code ; rdfhtml:class "sem-source-path" ; rdfhtml:hasChild ?pathText .
   ?pathText a rdfhtml:Text ; rdfhtml:data ?pathData .
-  ?code a rdfhtml:Pre ; rdfhtml:class "sem-turtle sem-source" ; rdfhtml:hasChild ?row .
+  ?code a rdfhtml:Pre ; rdfhtml:class ?codeClass ; rdfhtml:hasChild ?row .
   ?row a rdfhtml:Span ; rdfhtml:class "sem-line" ; c:line ?k ; rdfhtml:hasChild ?tok , ?nl ; ord:immediatelyPrecedes ?nextRow .
   ?nl a rdfhtml:Text ; rdfhtml:data "\\n" .
   ?tok a ?tokTag ; rdfhtml:class ?tokClass ; rdfhtml:data ?plain ; rdfhtml:hasChild ?tokText ; ord:immediatelyPrecedes ?afterTok .
@@ -626,6 +645,8 @@ WHERE {
   $this a c:SourceView .
   LATERAL { OPTIONAL { $this c:of ?source FILTER(isIRI(?source)) ?source c:text ?body0 } }
   LATERAL { OPTIONAL { $this c:of ?pathSource FILTER(isIRI(?pathSource)) ?pathSource c:path ?path0 } }
+  LATERAL { OPTIONAL { $this c:of ?languageSource FILTER(isIRI(?languageSource)) ?languageSource c:language ?language0 } }
+  BIND(CONCAT("sem-turtle sem-source", IF(BOUND(?language0), CONCAT(" language-", REPLACE(LCASE(STR(?language0)), " +", "-")), "")) AS ?codeClass)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   LATERAL {
     {
@@ -1042,7 +1063,7 @@ WHERE {
   BIND(EXISTS { $this iv:run ?anyRun . ?anyRun rs:solution ?anySolution FILTER NOT EXISTS { ?anyRun iv:error ?anyError } } AS ?results)
   BIND(IF(?binds && !?bound, COALESCE(?emptyText, "Nothing selected."), IF(BOUND(?failure), SUBSTR(?failure, 7), IF(?results, ?none, COALESCE(?emptyText, "No results.")))) AS ?text)
   BIND(IF(BOUND(?text), rdfhtml:Div, rdfhtml:Pre) AS ?element)
-  BIND(IF(BOUND(?text), "sem-empty", "sem-turtle") AS ?class)
+  BIND(IF(BOUND(?text), "sem-empty", "sem-turtle language-turtle") AS ?class)
   BIND(IF(BOUND(?text), IRI(CONCAT(STR($this), "/~empty")), ?none) AS ?message)
 }""" .
 
@@ -1344,5 +1365,5 @@ c:TriplesViewRendering-fn a sem:Rule ; sem:implements c:TriplesViewRendering ; s
 c:TriplesViewRendering-sparql a sem:Rule ;
     sem:implements c:TriplesViewRendering ;
     sem:construct """
-CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle" . }
+CONSTRUCT { ?root a rdfhtml:Pre ; sem:renders $this ; rdfhtml:class "sem-turtle language-turtle" . }
 WHERE { $this a/rdfs:subClassOf* c:TriplesView ; c:of ?s FILTER(isIRI(?s)) BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .

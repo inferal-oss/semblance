@@ -134,6 +134,12 @@ changes"; [MIGRATIONS.md](MIGRATIONS.md)), so a consumer's move is `semblance mi
 edits. `npm run change -- changelog` prints the unreleased changes as changelog lines: paste them
 under **Unreleased**'s breaking changes, with anything else a consumer needs to know.
 
+The site's [Changes page](https://semblance.dev/changes/) follows the tags by itself: a release is its
+`v<version>` tag (its date the tag's), and a change is in the earliest release whose history holds the
+commit that added its file, unless the change states `chg:release`. Pushing the tag and the next deploy
+of `main` move its changes from Unreleased to the release; the Pages workflow checks out the full history
+and the tags for it (`src/changes/records.ts`).
+
 ## Before a publish
 
 On `main`, with every merge of the release in it:

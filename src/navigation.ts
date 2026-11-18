@@ -501,11 +501,15 @@ export function addressOf(r: Reader, resource: Term, keeps?: Set<string>): strin
     if (target && !whole) needs.set(target.iri, resource)
     return linkAddress(spellAddress(r, loc, kept(r, loc, needs, keeps)))
   }
+  if (resource.termType !== 'NamedNode') return undefined
   // A term no component shows (a class, a property): the dimension whose values are terms (nav:showsTerms),
-  // with the values its parents need (nav:when), e.g. #reference/c:List.
-  if (resource.termType !== 'NamedNode' || !isTerm(r, resource)) return undefined
+  // with the values its parents need (nav:when), e.g. #reference/c:List. Else a value no component
+  // shows: the dimension whose property's range it is an instance of (a change on the Changes page).
+  const term = isTerm(r, resource)
   for (const loc of locations) {
-    const d = loc.dimensions.find((x) => x.terms && x.spelledIn !== undefined)
+    const d = term
+      ? loc.dimensions.find((x) => x.terms && x.spelledIn !== undefined)
+      : loc.dimensions.find((x) => !x.terms && !x.target && x.spelledIn !== undefined && isValueOf(r, x, resource))
     if (!d) continue
     const values: Values = new Map([[d.iri, resource]])
     for (let at: Dimension | undefined = d, n = 0; at?.parent && n < 16; n++) {
@@ -604,6 +608,12 @@ export function routesOf(r: Reader, loc: Location): string[] {
   }
   walk(0, new Map())
   return [...out].sort()
+}
+
+/** Whether a resource is an instance of the range of a dimension's property: a value it can hold. */
+function isValueOf(r: Reader, d: Dimension, t: Term): boolean {
+  const range = one(r, r.f.namedNode(d.property), RDFS_RANGE)
+  return !!range && range.termType === 'NamedNode' && r.match(t, RDF_TYPE, range).length > 0
 }
 
 /**
@@ -923,11 +933,12 @@ export class Navigation {
     const loc = this.location()
     if (!loc?.paths || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
     const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
-    if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return
+    if (!a || (a.target && a.target !== '_self') || !pageLink(a)) return
     const href = a.getAttribute('href')!
     if (!href.startsWith('/') || href.startsWith('//')) return
     const path = href.split(/[?#]/)[0]!
     if (path !== loc.base.slice(0, -1) && !path.startsWith(loc.base)) return
+    if (namesFile(path)) return
     e.preventDefault()
     const next = path + (href.includes('?') ? '?' + href.split('?')[1]!.split('#')[0] : this.url.search) + (href.includes('#') ? href.slice(href.indexOf('#')) : '')
     if (next !== this.url.pathname + this.url.search + this.url.hash) this.step(next)
@@ -1243,6 +1254,26 @@ const locationSpelling: FnRule = (ctx, focus) => {
 }
 
 /** The link address of a reported address: a path and its fragment (no query), else the fragment, else '#'. */
+/**
+ * Whether a link may be a page of the app: not one to save (download) nor one whose stated type is
+ * not HTML (a feed, a file). Anything else is decided by its path.
+ */
+function pageLink(a: Element): boolean {
+  if (a.hasAttribute('download')) return false
+  const type = a.getAttribute('type')?.split(';')[0]!.trim().toLowerCase()
+  return !type || type === 'text/html' || type === 'application/xhtml+xml'
+}
+
+/**
+ * Whether a path names a file (its last segment has an extension: /changes.atom, /llms.txt) rather
+ * than a page. The addresses a location spells end with '/'; an HTML document (index.html) is a page.
+ */
+export function namesFile(path: string): boolean {
+  const last = path.slice(path.lastIndexOf('/') + 1)
+  const ext = /\.([A-Za-z0-9]{1,10})$/.exec(last)?.[1]?.toLowerCase()
+  return ext !== undefined && ext !== 'html' && ext !== 'htm'
+}
+
 function currentLink(address: string): string {
   const bare = address.replace(/\?[^#]*/, '')
   return bare.startsWith('/') ? bare : bare.includes('#') ? bare.slice(bare.indexOf('#')) : '#'

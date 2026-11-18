@@ -101,7 +101,7 @@ function shownClass(ctx: RuleContext, focus: NamedNode): NamedNode | undefined {
 const classDoc: FnRule = (ctx, focus) => {
   if (!shownClass(ctx, focus)) return []
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle', tabindex: '0' }))
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle language-turtle', tabindex: '0' }))
   return o.quads
 }
 

@@ -165,7 +165,10 @@ WHERE {
   BIND(REPLACE(STR(?to), "[^#/]*$", "") AS ?ns)
   BIND(!?shown && (EXISTS { ?anyOf a ?to } || EXISTS { ?anyS ?to ?anyO }
        || EXISTS { ?onto a owl:Ontology FILTER(STR(?onto) = ?ns || STR(?onto) = SUBSTR(?ns, 1, STRLEN(?ns) - 1)) }) AS ?term)
-  FILTER(?shown || ?term)
+  # Or a value no component shows: an instance of the range of a dimension's property.
+  BIND(!?shown && !?term && EXISTS { ?loc nav:dimensions/rdf:rest*/rdf:first ?valueDim0 . ?valueDim0 nav:property/rdfs:range ?valueRange0 . ?to a ?valueRange0
+       FILTER NOT EXISTS { ?valueDim0 nav:showsTerms true } FILTER NOT EXISTS { ?valueDim0 a nav:TargetDimension } } AS ?value)
+  FILTER(?shown || ?term || ?value)
   # Path segments end with '/'; fragment ones start with '#' (only the first stays: the rest become '/').
   # Each dimension once: what shows the resource decides it (rank 0); the rest of where we are is
   # kept (rank 1: the top-level dimensions, nav:keeps). An implicit value is kept without a part.
@@ -209,17 +212,31 @@ WHERE {
           # A term: the dimension whose values are terms, and what its parents need for it to apply.
           $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           FILTER NOT EXISTS { ?to (^nav:from/nav:to)* ?root }
+          BIND(REPLACE(STR(?to), "[^#/]*$", "") AS ?termNs)
+          FILTER(EXISTS { ?termOf a ?to } || EXISTS { ?termS ?to ?termO } || EXISTS { ?termOnto a owl:Ontology FILTER(STR(?termOnto) = ?termNs || STR(?termOnto) = SUBSTR(?termNs, 1, STRLEN(?termNs) - 1)) })
           ?loc nav:dimensions ?termHead . ?termHead rdf:rest* ?termCell . ?termCell rdf:first ?termDim .
           ?termDim nav:showsTerms true ; nav:carriedBy ?termCarrier . FILTER(?termCarrier IN (nav:Path, nav:Fragment))
           { ?termDim nav:showsTerms true . BIND(?termDim AS ?d) } UNION { ?termDim nav:showsTerms true ; nav:parent* ?x . ?x nav:parent ?d ; nav:when ?when }
           BIND(IF(?d = ?termDim, ?to, ?when) AS ?v)
+        } UNION {
+          # A value no component shows: the dimension whose property's range it is an instance of (a
+          # change on the Changes page), and what its parents need for it to apply.
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
+          FILTER NOT EXISTS { ?to (^nav:from/nav:to)* ?root }
+          FILTER NOT EXISTS { ?valueOf a ?to } FILTER NOT EXISTS { ?valueS ?to ?valueO }
+          ?loc nav:dimensions ?valueHead . ?valueHead rdf:rest* ?valueCell . ?valueCell rdf:first ?valueDim .
+          ?valueDim nav:property ?valueProperty ; nav:carriedBy ?valueCarrier . FILTER(?valueCarrier IN (nav:Path, nav:Fragment))
+          FILTER NOT EXISTS { ?valueDim nav:showsTerms true } FILTER NOT EXISTS { ?valueDim a nav:TargetDimension }
+          ?valueProperty rdfs:range ?valueRange . ?to a ?valueRange .
+          { ?valueDim nav:property ?valueProperty2 . BIND(?valueDim AS ?d) } UNION { ?valueDim nav:property ?valueProperty3 ; nav:parent* ?vx . ?vx nav:parent ?d ; nav:when ?valueWhen }
+          BIND(IF(?d = ?valueDim, ?to, ?valueWhen) AS ?v)
         }
       } }
       # The part of the address that spells it: the path when it is carried there, else the fragment.
       ?d nav:carriedBy ?dc . FILTER(?dc IN (nav:Path, nav:Fragment))
       FILTER(IF(EXISTS { ?d a nav:TargetDimension }, ?dc = nav:Fragment, ?dc = nav:Path || NOT EXISTS { ?d nav:carriedBy nav:Path }))
       BIND(?dc = nav:Path AS ?inPath)
-      OPTIONAL { ?d nav:keyProperty ?keyPropertys }
+      OPTIONAL { ?d nav:keyProperty ?keyProperty0s } BIND(COALESCE(?keyProperty0s, sem:slug) AS ?keyPropertys)
       BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
       OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
       OPTIONAL { FILTER(!?prefixeds) ?v sem:slug ?slugKeys }

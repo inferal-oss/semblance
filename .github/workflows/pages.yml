@@ -20,7 +20,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # The whole history and the release tags: the Changes page dates every change and version
+      # step, and places each in the earliest release (v<version> tag) whose history holds it.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-node@v4
         with:
           node-version: 26
