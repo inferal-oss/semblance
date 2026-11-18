@@ -1,0 +1,35 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:code-says-its-language a chg:Change ;
+    rdfs:label "Code says its language in its markup: language-… on a code editor's text area and on Turtle blocks"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/578> ;
+    chg:motivation """What reads a page's RDF/HTML as code (its Markdown, toMarkdown, which the site's /llms/ pages
+are) could not tell which language a code editor or a Turtle block held: a c:Code says it, these did not. HTML's
+own convention is a language-… class on the code (as on a <code>); with it, a live example's sources and a
+class's ontology read as fenced code in their language.""" ;
+    chg:substance """Each of these renderings adds a class naming the language of the code it shows to the
+element that holds the code, beside the classes it had:
+
+- c:CodeEditor: on screen, its text area (class sem-input) also has language-<its language>: its c:language in lower case,
+  spaces as hyphens, else sparql for a c:QueryEditor, else text (the language it highlights by). The rendering now
+  follows c:language.
+- c:SourceView: its code (pre, sem-turtle sem-source) also has language-<the source's c:language> (turtle,
+  typescript, text), when the c:SourceText says one. The rendering now follows c:language.
+- c:TriplesView, c:QueryView (its results), c:ResultTurtle and the docs layer's c:ClassDoc: their Turtle (pre,
+  sem-turtle) also has language-turtle.
+
+Nothing else in their output changes; the themes do not style the new classes.""" ;
+    chg:forwardGuide """Nothing in the graph moves. Code of your own that compares the class attribute of these
+elements as a whole (class="sem-turtle", className === 'sem-input') matches by class instead (.sem-turtle,
+classList.contains). A style of your own may select the language (pre.language-turtle).""" ;
+    chg:backwardGuide """Nothing in the graph moves. Code or styles that select a language-… class on these elements
+no longer find it; Markdown read from the page has those code blocks without their language (and a code editor's
+text no longer reads as code).""" ;
+    chg:affects c:ClassDoc , c:SourceView , c:QueryView , c:TriplesView , c:CodeEditor , c:ResultTurtle .

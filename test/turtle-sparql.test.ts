@@ -427,7 +427,7 @@ describe('the element markup in SPARQL', () => {
     for (const node of ['ex:title', 'ex:todos', 'ex:triples', 'ex:add'].map((x) => x.replace('ex:', EX))) {
       for (const h of [sp, fn]) h.pick(node)
       same(`picking ${node}`)
-      if (node.endsWith('triples')) expect(sp.text('markup')).toContain('<pre class="sem-turtle" data-sem-c="triples-view">\n  <span class="ttl-pname">ex:write</span>')
+      if (node.endsWith('triples')) expect(sp.text('markup')).toContain('<pre class="sem-turtle language-turtle" data-sem-c="triples-view">\n  <span class="ttl-pname">ex:write</span>')
     }
     for (const h of [sp, fn]) h.add('write', 'note', 'a new triple')
     same('a triple the picked view shows')

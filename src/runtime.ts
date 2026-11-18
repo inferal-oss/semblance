@@ -29,9 +29,11 @@ import { Watchdog } from './engine/watchdog.ts'
  * where relative URLs in what it renders resolve (by default the store's nav:base, see HtmlIndex);
  * `policy` makes it authored content (src/safety.ts): what the policy refuses is not rendered, and
  * is reported through the projection's onError. Read it from a trusted store (authoredPolicy), never
- * from this one.
+ * from this one. `hidden`: what is placed under an element marked hidden waits until it is shown
+ * ('wait', the default), or is rendered all the same ('render': a page read whole, as a document is,
+ * its other tabs' panels too; the site's Markdown, scripts/gen-llms.ts).
  */
-export type ProjectOptions = EngineOptions & { roots?: string[]; urlBase?: string; policy?: SafetyPolicy }
+export type ProjectOptions = EngineOptions & { roots?: string[]; urlBase?: string; policy?: SafetyPolicy; hidden?: 'wait' | 'render' }
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -406,7 +408,7 @@ export class Runtime {
       engine.demand = (focus) => {
         if (epoch !== index.visibility) (epoch = index.visibility), (shown = new Map())
         let v = shown.get(focus)
-        if (v === undefined) shown.set(focus, (v = index.isShown(focus, roots)))
+        if (v === undefined) shown.set(focus, (v = opts.hidden === 'render' ? index.isPlaced(focus, roots) : index.isShown(focus, roots)))
         return v
       }
       // Idle time warms only what an ancestor declares sem:warm sem:Eager (default: lazy).

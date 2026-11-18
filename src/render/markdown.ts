@@ -5,17 +5,40 @@
 // alike (they render the same elements).
 //
 // What a reader of the page does not see is left out: an element that is `hidden` or `aria-hidden`,
-// a control (a button, a field: Markdown cannot act), a graphic (svg). A link's note for a screen
-// reader on how it opens (`.sem-sr` inside an `a`) is left out too: a Markdown link has no "new tab".
+// a control (a button, a field, a tab: Markdown cannot act) with what names and describes it (its
+// label, its keys hint), a graphic (svg). A link's note for a screen reader on how it opens (`.sem-sr`
+// inside an `a`) is left out too: a Markdown link has no "new tab".
+//
+// Some of what controls hold is content all the same. A button in running text (a mention of a term)
+// reads as its words. A field of code (a text area whose class names its language, `language-…`, as a
+// `<code>`'s does: a code editor) reads as a code block of its text; a code block's language label
+// (`.sem-language`, in it or beside it) is its fence's language. A tab panel reads under its tab's
+// name, every panel of a tab list, shown or not: a document has no tabs to choose.
 import type { HtmlIndex } from './html-index.ts'
 
 export interface MarkdownOptions {
   /** Where a link goes in the Markdown, from its href (default: the href). `undefined` keeps its text without the link. */
   link?: (href: string) => string | undefined
+  /**
+   * The level the subtree's top headings take (default: their own): its headings move down together,
+   * so that it sits under a heading of the page that holds it (a specimen under its section).
+   */
+  headings?: number
+  /**
+   * Read controls as their words (a button as its label, a field as its value, a choice as what is
+   * chosen) rather than leaving them out: for a page whose subject they are (a gallery's specimen).
+   */
+  controls?: boolean
 }
 
 /** Elements that are not shown as content: controls, graphics and what is never rendered. */
-const SKIP = new Set(['button', 'input', 'select', 'textarea', 'option', 'svg', 'script', 'style', 'template', 'noscript', 'head'])
+const SKIP = new Set(['button', 'input', 'select', 'textarea', 'option', 'label', 'svg', 'script', 'style', 'template', 'noscript', 'head'])
+/** What is left out when controls read as their words: what is never shown, graphics, a choice's other options. */
+const SKIP_UNCONTROLLED = new Set(['option', 'datalist', 'svg', 'script', 'style', 'template', 'noscript', 'head'])
+/** The elements a reader acts with: what describes one (aria-describedby) goes with it. */
+const CONTROLS = new Set(['button', 'input', 'select', 'textarea'])
+/** Roles of controls (on elements that are not controls by their tag). */
+const CONTROL_ROLES = new Set(['tab', 'tablist', 'menu', 'menubar', 'listbox', 'option', 'toolbar', 'slider', 'spinbutton', 'switch', 'checkbox', 'radio', 'radiogroup', 'combobox'])
 /** Elements that are blocks: what holds them is a block too. */
 const BLOCKS = new Set([
   ...['p', 'div', 'section', 'article', 'header', 'footer', 'main', 'nav', 'aside', 'form', 'fieldset', 'legend', 'address', 'hgroup'],
@@ -27,15 +50,41 @@ const QUOTES = new Set(['status', 'alert', 'note'])
 /** The Markdown of the element (or component) at `focus`: blocks separated by a blank line. */
 export function toMarkdown(index: HtmlIndex, focus: string, opts: MarkdownOptions = {}): string {
   const root = index.resolve(focus)
-  return root ? new Writer(index, opts).blocks(root).join('\n\n') : ''
+  return root ? new Writer(index, opts, root).blocks(root).join('\n\n') : ''
 }
 
 class Writer {
   private readonly blocky = new Map<string, boolean>()
+  /** The elements of the subtree by their id (a tab panel's name is its tab's). */
+  private readonly byId = new Map<string, string>()
+  /** The ids that describe a control (aria-describedby): its hint goes with it. */
+  private readonly describing = new Set<string>()
+  /** Each element's parent, in the subtree. */
+  private readonly parent = new Map<string, string>()
+  /** How many levels the headings move down. */
+  private readonly shift: number
   constructor(
     private readonly index: HtmlIndex,
     private readonly opts: MarkdownOptions,
-  ) {}
+    root: string,
+  ) {
+    const levels: number[] = []
+    const walk = (k: string) => {
+      if (this.isText(k)) return
+      const a = this.attrs(k)
+      const id = a.get('id')
+      if (id !== undefined) this.byId.set(id, k)
+      if (CONTROLS.has(this.tag(k))) for (const d of (a.get('aria-describedby') ?? '').split(/\s+/)) if (d) this.describing.add(d)
+      const h = /^h([1-6])$/.exec(this.tag(k))
+      if (h) levels.push(Number(h[1]))
+      for (const c of this.children(k)) {
+        this.parent.set(c, k)
+        walk(c)
+      }
+    }
+    walk(root)
+    this.shift = opts.headings !== undefined && levels.length ? Math.max(0, opts.headings - Math.min(...levels)) : 0
+  }
 
   private children(k: string): string[] {
     return this.index
@@ -55,17 +104,58 @@ class Writer {
   private classes(k: string): string[] {
     return (this.attrs(k).get('class') ?? '').split(/\s+/).filter(Boolean)
   }
-  /** Whether a reader of the page sees the element. */
+  private role(k: string): string {
+    return this.attrs(k).get('role') ?? ''
+  }
+  /** Whether a reader of the page sees the element (a tab panel: whichever tab is chosen). */
   private shown(k: string): boolean {
     if (this.isText(k)) return true
+    if (this.codeField(k)) return true
     const a = this.attrs(k)
-    return !SKIP.has(this.tag(k)) && !a.has('hidden') && a.get('aria-hidden') !== 'true' && !this.index.isSvg(k)
+    const id = a.get('id')
+    return (
+      !(this.opts.controls ? SKIP_UNCONTROLLED : SKIP).has(this.tag(k)) &&
+      !this.classes(k).includes('sem-language') &&
+      (this.opts.controls || !CONTROL_ROLES.has(this.role(k))) &&
+      (!a.has('hidden') || this.role(k) === 'tabpanel') &&
+      a.get('aria-hidden') !== 'true' &&
+      !(id !== undefined && this.describing.has(id)) &&
+      !this.index.isSvg(k)
+    )
+  }
+  /** The language a field of code names (a code editor's text area), if it is one. */
+  private codeField(k: string): string | undefined {
+    return this.tag(k) === 'textarea' ? this.languageClass(k) : undefined
+  }
+  private languageClass(k: string): string | undefined {
+    return this.classes(k).find((c) => c.startsWith('language-'))?.slice('language-'.length)
+  }
+  /** Whether an element holds text of its own beside its elements: running text, whose buttons are words in it. */
+  private prose(k: string): boolean {
+    return !this.isText(k) && this.children(k).some((c) => this.isText(c) && /\S/.test(this.index.nodes.get(c)!.data ?? ''))
+  }
+  /** The name an element is given (aria-label, or the text of what aria-labelledby names). */
+  private nameOf(k: string): string {
+    const a = this.attrs(k)
+    const by = (a.get('aria-labelledby') ?? '')
+      .split(/\s+/)
+      .map((id) => this.byId.get(id))
+      .filter((r): r is string => r !== undefined)
+      .map((r) => this.words(r))
+      .join(' ')
+    return (by || a.get('aria-label') || '').replace(/\s+/g, ' ').trim()
+  }
+  /** The text of an element, controls included (a tab's name). */
+  private words(k: string): string {
+    if (this.isText(k)) return this.index.nodes.get(k)!.data ?? ''
+    if (this.attrs(k).get('aria-hidden') === 'true' || this.index.isSvg(k)) return ''
+    return this.children(k).map((c) => this.words(c)).join('')
   }
   /** Whether a block element is under `k` (or is `k`). */
   private hasBlock(k: string): boolean {
     let b = this.blocky.get(k)
     if (b === undefined) {
-      b = !this.isText(k) && this.shown(k) && (BLOCKS.has(this.tag(k)) || this.children(k).some((c) => this.hasBlock(c)))
+      b = !this.isText(k) && this.shown(k) && (BLOCKS.has(this.tag(k)) || this.codeField(k) !== undefined || this.children(k).some((c) => this.hasBlock(c)))
       this.blocky.set(k, b)
     }
     return b
@@ -82,11 +172,16 @@ class Writer {
     const heading = /^h([1-6])$/.exec(tag)
     if (heading) {
       const text = this.flat(k)
-      return text ? [`${'#'.repeat(Number(heading[1]))} ${text}`] : []
+      return text ? [`${'#'.repeat(Math.min(6, Number(heading[1]) + this.shift))} ${text}`] : []
     }
-    if (tag === 'pre') return [this.fence(k)]
+    if (tag === 'pre' || this.codeField(k)) return [this.fence(k)]
     if (tag === 'hr') return ['---']
-    const role = this.attrs(k).get('role') ?? ''
+    const role = this.role(k)
+    if (role === 'tabpanel') {
+      const inner = this.container(k)
+      const name = this.nameOf(k)
+      return inner.length && name && !inner[0]!.replace(/^#+ /, '').startsWith(markdownText(name)) ? [paragraph(`**${markdownText(name)}**`), ...inner] : inner
+    }
     if (tag === 'ul' || tag === 'ol' || role === 'list') return this.list(k, tag === 'ol')
     if (tag === 'table') return this.table(k)
     if (tag === 'blockquote' || QUOTES.has(role)) {
@@ -118,23 +213,52 @@ class Writer {
       if (this.hasBlock(c)) {
         flush()
         out.push(...this.blocks(c))
-      } else run.push(this.inline(c))
+      } else run.push(this.inline(c, false, this.prose(k)))
     }
     flush()
     return out
   }
 
-  /** An element's inline Markdown (it holds no blocks). */
-  inline(k: string, inLink = false): string {
+  /** An element's inline Markdown (it holds no blocks); `inProse`: its parent is running text. */
+  inline(k: string, inLink = false, inProse = false): string {
     const n = this.index.nodes.get(k)!
     if (n.cls === 'Text') return escape((n.data ?? '').replace(/\s+/g, ' '))
+    const tag = this.tag(k)
+    // A button in running text (a mention) is a word of it.
+    if (inProse && tag === 'button' && this.attrs(k).get('aria-hidden') !== 'true' && !this.attrs(k).has('hidden'))
+      return join(this.children(k).map((c) => this.inline(c, inLink, this.prose(k))))
     if (!this.shown(k)) return ''
     if (inLink && this.classes(k).includes('sem-sr')) return ''
+    // A switch's or a check box's state, when controls read as their words.
+    const checked = this.attrs(k).get('aria-checked')
+    if (this.opts.controls && (checked === 'true' || checked === 'false')) {
+      const rest = this.inlineOf(k, inLink)
+      return rest ? `${checked === 'true' ? '☑' : '☐'} ${rest}` : ''
+    }
+    return this.inlineOf(k, inLink)
+  }
+
+  /** An element's own inline Markdown, by its tag. */
+  private inlineOf(k: string, inLink: boolean): string {
     const tag = this.tag(k)
-    const inner = () => join(this.children(k).map((c) => this.inline(c, inLink || tag === 'a')))
+    const prose = this.prose(k)
+    const inner = () => join(this.children(k).map((c) => this.inline(c, inLink || tag === 'a', prose)))
     switch (tag) {
       case 'br':
         return '\\\n'
+      case 'input': {
+        // Shown only when controls read as their words: what it holds, or a box's state.
+        const a = this.attrs(k)
+        const type = a.get('type') ?? 'text'
+        if (type === 'hidden') return ''
+        if (type === 'checkbox' || type === 'radio') return a.has('checked') ? '☑' : '☐'
+        return markdownText(a.get('value') ?? '')
+      }
+      case 'select': {
+        const chosen = this.children(k).filter((c) => this.tag(c) === 'option')
+        const pick = chosen.find((c) => this.attrs(c).has('selected')) ?? chosen[0]
+        return pick ? markdownText(this.words(pick)) : ''
+      }
       case 'img': {
         const a = this.attrs(k)
         return a.get('src') ? `![${escape(a.get('alt') ?? '')}](${a.get('src')})` : ''
@@ -192,14 +316,16 @@ class Writer {
   }
 
   private fence(k: string): string {
-    // The code block's language, as its label (hidden from readers) or its code's class names it.
-    const label = this.children(k).find((c) => !this.isText(c) && this.classes(c).includes('sem-language'))
+    // The code block's language, as its label (in it or beside it) or its code's class names it.
+    const isLabel = (c: string) => !this.isText(c) && this.classes(c).includes('sem-language')
+    const parent = this.parent.get(k)
+    const label = this.children(k).find(isLabel) ?? (parent !== undefined ? this.children(parent).find(isLabel) : undefined)
     const language =
       (label ? this.index.childrenOf(label).map((c) => this.index.nodes.get(c)?.data ?? '').join('') : '') ||
+      this.languageClass(k) ||
       this.children(k)
-        .flatMap((c) => (this.isText(c) ? [] : this.classes(c)))
-        .find((c) => c.startsWith('language-'))
-        ?.slice('language-'.length) ||
+        .map((c) => (this.isText(c) ? undefined : this.languageClass(c)))
+        .find(Boolean) ||
       ''
     const body = this.raw(k).replace(/^\n+|\s+$/g, '')
     const ticks = '`'.repeat(Math.max(3, ...[...body.matchAll(/`+/g)].map((m) => m[0].length + 1)))
@@ -215,7 +341,8 @@ class Writer {
         if (!inner.length) return ''
         inner[0] = this.named(item, inner[0]!)
         const pad = ' '.repeat(marker.length)
-        return marker + inner.join('\n\n').replace(/\n(?!\n)/g, '\n' + pad).replace(/\n\n/g, '\n\n' + pad)
+        // Every line after the first under the item's text (a blank line stays blank).
+        return marker + inner.join('\n\n').replace(/\n(?!\n)/g, '\n' + pad)
       })
       .filter(Boolean)
     if (!lines.length) return []
