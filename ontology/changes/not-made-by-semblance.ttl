@@ -25,11 +25,21 @@ figures, the maintained views um:FindingCounts and um:CategoryCounts), the surve
 with um:selector, um:slot, um:category, um:because and um:issue, and um:exceptedBy on the findings it allows), which
 the guard scripts/unmanaged-check.ts checks every page against.
 
+What an island mounts, or a custom element the graph names draws in its shadow root, is listed as a finding of
+um:Island (um:madeBySemblance true, um:allowed true): counted as made by Semblance, left out of um:found on a survey.
+A survey with um:whileShown runs by itself while that component is shown.
+
+c:Segmented explains its options: an option's c:help, in the viewer's language, is its button's tooltip
+(c:SegmentedHelp, sem:tooltip). c:SplitView with c:bindFrom and c:bindProperty is a master-detail view: its secondary
+pane is collapsed while that property holds nothing.
+
 c:Flippable's control (Source) sits at the inline end of its face: the top left right to left, where it sat on the
 start of the face's first row, not the top right.""" ;
     chg:forwardGuide """Nothing to move: a highlight without c:via marks what it marked. To mark a node one hop away, add
-c:via with the property that leads to it.""" ;
+c:via with the property that leads to it. A segmented control whose options already have a c:help now shows it as
+their tooltip; a split view that already had c:bindFrom and c:bindProperty (it read neither) now collapses while
+nothing is held: remove them to keep both panes.""" ;
     chg:backwardGuide """Remove c:via from every c:Highlight that has one; such a highlight then marks what is held (a
 finding), which is not an element, so it marks nothing. A flippable's control goes back to the top right in every
-direction.""" ;
-    chg:affects c:Highlight , c:Flippable .
+direction. Segmented options lose their tooltips; a master-detail split view shows both panes again.""" ;
+    chg:affects c:Highlight , c:Flippable , c:Segmented , c:SplitView .

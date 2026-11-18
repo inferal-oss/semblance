@@ -133,7 +133,10 @@ const splitView: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const primary = ctx.object(focus, C + 'primary')
   const secondary = ctx.object(focus, C + 'secondary')
-  const collapsed = isTrue(ctx.object(focus, C + 'collapsed'))
+  // Collapsed, or master-detail with nothing held (c:bindProperty of c:bindFrom: a selection).
+  const from = ctx.object(focus, C + 'bindFrom')
+  const held = ctx.object(focus, C + 'bindProperty')
+  const collapsed = isTrue(ctx.object(focus, C + 'collapsed')) || (named(from) && named(held) && !ctx.object(from, held))
   if (ctx.modality === MOD.Text) {
     const parts: NamedNode[] = named(primary) ? [primary] : []
     if (!collapsed) parts.push(o.text('divider', '────────'), ...(named(secondary) ? [secondary] : []))

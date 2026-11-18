@@ -127,7 +127,9 @@ const found: FnView = {
   memberVar: 'm',
   groupBy: ['survey'],
   aggregates: [{ as: 'n', fn: 'COUNT', distinct: true, slot: 'f' }],
-  local: (ctx, _survey, m) => (ctx.match(m, RDF_TYPE, ctx.nn(UM + 'Finding')).length ? [row([['f', m]])] : []),
+  // Islands' findings are made by Semblance (um:madeBySemblance on their category): not counted.
+  local: (ctx, _survey, m) =>
+    ctx.match(m, RDF_TYPE, ctx.nn(UM + 'Finding')).length && !ctx.objects(m, UM + 'category').some((c) => ctx.objects(c, UM + 'madeBySemblance').some((v) => v.value === 'true')) ? [row([['f', m]])] : [],
   output: (ctx, r) => quads(ctx, [[r.get('survey'), UM + 'found', r.get('n')]]),
 }
 

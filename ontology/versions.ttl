@@ -229,7 +229,7 @@ c:RunQueryButton sem:version 1 ; sem:closure "3bc2ec8f61d0099c" ; sem:internal "
 c:ScatterChart sem:version 1 ; sem:closure "1342bf38f2800d75" ; sem:internal "new" .
 c:ScatterPoint sem:version 1 ; sem:closure "9b5267d98d1f3100" ; sem:internal "new" .
 c:SearchField sem:version 2 ; sem:closure "4f169cbd8809357c" ; sem:changedBy change:search-field-disabled .
-c:Segmented sem:version 1 ; sem:closure "a3b208f5df88fc42" ; sem:internal "new" .
+c:Segmented sem:version 2 ; sem:closure "112d318bd9996554" ; sem:changedBy change:not-made-by-semblance .
 c:Selector sem:version 1 ; sem:closure "ec774feecdfa9139" ; sem:internal "new" .
 c:SeriesChart sem:version 2 ; sem:closure "183808c912527bb0" ; sem:changedBy change:charts-on-shared-parts .
 c:Setter sem:version 1 ; sem:closure "64b1555171d4d66a" ; sem:internal "new" .
@@ -249,7 +249,7 @@ c:Spacer sem:version 1 ; sem:closure "4a2e522796021853" ; sem:internal "new" .
 c:Sparkline sem:version 1 ; sem:closure "503fd84c93efdbb2" ; sem:internal "new" .
 c:Specimen sem:version 2 ; sem:closure "51c246631a3148db" ; sem:internal "On a phone a specimen, its stage, a card's body and a surface take one step less inset, and a dock panel's header wraps, so what they hold fits at 320px (#246)" .
 c:Spinner sem:version 1 ; sem:closure "3a6f03108b666df7" ; sem:internal "new" .
-c:SplitView sem:version 1 ; sem:closure "526b048270e89644" ; sem:internal "new" .
+c:SplitView sem:version 2 ; sem:closure "a5331ccbdb22c567" ; sem:changedBy change:not-made-by-semblance .
 c:Stack sem:version 2 ; sem:closure "a992e7ad0d3e26ca" ; sem:changedBy change:field-row-cells .
 c:StallReport sem:version 1 ; sem:closure "08b5dab9b633cfc3" ; sem:internal "new" .
 c:Stat sem:version 1 ; sem:closure "762e6109ea3bf780" ; sem:internal "new" .

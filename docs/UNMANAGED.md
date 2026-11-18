@@ -35,6 +35,7 @@ and a box of more than a pixel (a visually hidden live region is not UI). Where 
 | `host-code` | inside a renderer's tree (a host-owned slot, named in the reason, or not), or bearing one of the framework effects' marks (`data-sem-*`, `sem-*`) |
 | `third-party` | a custom element the page does not define (an extension defines its own in its own world), an element on `<html>` outside `<body>` |
 | `sanctioned` | a hosted library's own elements inside `<sem-host>`; embedded media (`iframe`, `video`, `audio`, `canvas`, `embed`, `object`) |
+| `island` | what an island mounts in its slot, or a custom element the graph names draws in its shadow root: made by Semblance (counted as such, and allowed), listed to show what it draws |
 | `unknown` | outside every renderer, with nothing to say who made it |
 
 It is one walk of the DOM with each renderer's own map, no query per element; it reads layout, so it
@@ -97,7 +98,8 @@ expect(notMadeBySemblance(shell.document)).toEqual([])
 
 `attachUnmanaged(runtime, { renderers, onWrite })` is the host effect of `um:Survey`
 (`ontology/layers/unmanaged.ttl`). When a survey is asked (`um:request um:Run`, a `c:Setter` button),
-the page is walked and the findings written into the rendered graph (`urn:semblance:rendered`,
+or, with `um:whileShown`, while that component is shown (when it is shown, and after each patch, at
+most once a second), the page is walked and the findings written into the rendered graph (`urn:semblance:rendered`,
 unrecorded) as the survey's members, replacing the last ones:
 
 ```turtle
@@ -108,8 +110,9 @@ unrecorded) as the survey's members, replacing the last ones:
 
 with the survey's figures (`um:visibleElements`, `um:managedElements`, `um:unmanagedElements`,
 `um:share`, `um:surveyedAt`). A finding is named by where it is and what it is, so the same element
-keeps its name from one survey to the next. The counts are maintained views, SPARQL with function
-twins: `um:found` on a survey (`um:FindingCounts`) and on each `um:Category` (`um:CategoryCounts`),
+keeps its name from one survey to the next; nothing is written when nothing changed, so the patch a
+survey causes does not set off another. The counts are maintained views, SPARQL with function
+twins: `um:found` on a survey (`um:FindingCounts`, islands left out: `um:madeBySemblance`) and on each `um:Category` (`um:CategoryCounts`),
 which a `c:Segmented` shows with `c:countProperty um:found`.
 
 With `c:bindFrom` and `c:bindProperty` on the survey (a data grid's `c:selectedRow`), the finding held
@@ -117,4 +120,7 @@ there is marked on the page (`data-sem-unmanaged`, its category) and scrolled to
 while a `c:Highlight` is shown. A `c:Highlight` with `c:via um:near` marks the nearest element Semblance
 made. Nothing is walked until a survey is asked, and nothing is marked before.
 
-The site's Inspector has it as its second view, **Not made by Semblance** (`demo/app.ttl`).
+The site's Inspector has it as its second view, **Not made by Semblance** (`demo/app.ttl`): it surveys
+while shown (Refresh asks at once), each category explains itself on hover (an option's `c:help`, which
+`c:Segmented` shows as its tooltip), and the selected finding's details open beside the grid only once
+one is selected (`c:SplitView` with `c:bindFrom` and `c:bindProperty`: master-detail).

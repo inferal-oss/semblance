@@ -11,7 +11,7 @@ const UM = 'https://semblance.dev/ns/unmanaged#'
 
 function shellWithSurvey(prefer: 'sparql' | 'function' = 'sparql') {
   const h = mountShell(5, 'oxigraph', prefer)
-  const stop = attachUnmanaged(h.runtime, { renderers: () => [h.shell], onWrite: () => h.shell.flush() })
+  const stop = attachUnmanaged(h.runtime, { renderers: () => [h.shell], onWrite: () => h.shell.flush(), every: 0 })
   const f = h.store.factory
   const nn = (iri: string) => f.namedNode(iri)
   const set = (s: string, p: string, o: string) => {
@@ -23,15 +23,20 @@ function shellWithSurvey(prefer: 'sparql' | 'function' = 'sparql') {
     h.shell.flush()
   }
   const byText = (selector: string, text: string) => [...h.document.querySelectorAll(selector)].find((e) => e.textContent?.trim() === text)
+  /** What the effect does next: a request (a microtask), a survey while shown (a timer). */
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 0))
+      h.shell.flush()
+    }
+  }
   const find = async () => {
-    click(byText('button', 'Find on this page')!)
-    await Promise.resolve()
-    await Promise.resolve()
-    h.shell.flush()
+    click(byText('button', 'Refresh')!)
+    await settle()
   }
   const found = (s: string) => Number(h.store.match(nn(s), nn(UM + 'found'), null)[0]?.object.value ?? 0)
   const rows = () => [...h.document.querySelectorAll('[data-sem-c=grid-row]')].filter((r) => r.closest('[data-sem-c=data-grid]')?.textContent?.includes('Why'))
-  return { ...h, stop, set, click, find, found, rows, nn }
+  return { ...h, stop, set, click, find, settle, found, rows, nn }
 }
 
 describe('the finder', () => {
@@ -105,7 +110,7 @@ describe('what a site allows', () => {
     const h = mountShell()
     const doc = h.document
     const allowed = readAllowed(h.store)
-    expect([...allowed.categories]).toEqual(['sanctioned'])
+    expect([...allowed.categories].sort()).toEqual(['island', 'sanctioned'])
     const surface = allowed.exceptions.find((x) => x.iri === UI + 'allowAnchoredSurface')!
     expect(surface).toMatchObject({ category: 'host-code', selector: '.sem-tooltip[data-sem-anchor]', issue: 'https://github.com/inferal-oss/semblance/issues/584' })
     expect(surface.because).toBeTruthy()
@@ -134,9 +139,6 @@ describe('what a site allows', () => {
 describe.each(['sparql', 'function'] as const)('the Inspector: not made by Semblance (%s)', (prefer) => {
   it('finds on request, counts by category, filters, and marks the selected finding and its nearest Semblance element', async () => {
     const h = shellWithSurvey(prefer)
-    h.set(UI + 'app', UI + 'inspects', UI + 'unmanaged')
-    // Nothing is walked until Find is pressed.
-    expect(h.store.match(h.nn(UI + 'unmanaged'), h.nn('https://w3id.org/tree#member'), null)).toHaveLength(0)
     const doc = h.document
     const rendered = [...doc.querySelectorAll('#app [data-sem-c]')].find((e) => !e.closest('[data-sem-c=window]'))!
     const chip = doc.createElement('span')
@@ -144,7 +146,12 @@ describe.each(['sparql', 'function'] as const)('the Inspector: not made by Sembl
     rendered.append(chip)
     const ext = doc.createElement('helper-ext-widget')
     doc.documentElement.append(ext)
-    await h.find()
+    // Nothing is walked while the view is not shown.
+    await h.settle()
+    expect(h.store.match(h.nn(UI + 'unmanaged'), h.nn('https://w3id.org/tree#member'), null)).toHaveLength(0)
+    // Shown, it surveys by itself.
+    h.set(UI + 'app', UI + 'inspects', UI + 'unmanaged')
+    await h.settle()
     expect(h.store.match(h.nn(UI + 'unmanaged'), h.nn('https://w3id.org/tree#member'), null)).toHaveLength(2)
     expect(h.found(UI + 'unmanaged')).toBe(2)
     expect(h.found(UM + 'HostCode')).toBe(1)
@@ -160,6 +167,11 @@ describe.each(['sparql', 'function'] as const)('the Inspector: not made by Sembl
     expect(categories.textContent).toMatch(/Host code\s*1/)
     expect(categories.textContent).toMatch(/Third party\s*1/)
     const option = (text: string) => [...categories.querySelectorAll('*')].find((e) => e.textContent?.trim().startsWith(text) && e.matches('button, [role=radio], label'))!
+    // The details take room only once a finding is selected (master-detail).
+    const split = doc.querySelector('[data-sem-c=split-view] [data-sem-c=data-grid]')!.closest('[data-sem-c=split-view]')!
+    expect(split.querySelector('.sem-secondary')!.hasAttribute('hidden')).toBe(true)
+    // Each category says what it holds, on hover and to assistive technology.
+    expect(option('Third party').closest('button')?.getAttribute('data-sem-tooltip') ?? option('Third party').getAttribute('data-sem-tooltip')).toMatch(/extension/)
     // Third party only.
     h.click(option('Third party'))
     expect(h.rows()).toHaveLength(1)
@@ -169,6 +181,7 @@ describe.each(['sparql', 'function'] as const)('the Inspector: not made by Sembl
     // Selecting the host-code finding: the element marked, the nearest element Semblance made highlighted.
     h.click(h.rows().find((r) => r.textContent?.includes('legacy-chip'))!)
     await Promise.resolve()
+    expect(split.querySelector('.sem-secondary')!.hasAttribute('hidden')).toBe(false)
     expect(chip.getAttribute('data-sem-unmanaged')).toBe('host-code')
     expect(rendered.getAttribute('data-sem-highlighted')).toBe('true')
     expect(ext.hasAttribute('data-sem-unmanaged')).toBe(false)
@@ -194,11 +207,57 @@ it('renders the same Inspector with SPARQL rules and their function twins', asyn
     const chip = h.document.createElement('span')
     chip.className = 'legacy-chip'
     h.document.querySelector('#app [data-sem-c]')!.append(chip)
-    await h.find()
+    await h.settle()
     h.click(h.rows()[0]!)
-    const panel = [...h.document.querySelectorAll('[data-sem-c=stack]')].find((e) => e.querySelector('[data-sem-c=data-grid]') && e.textContent?.includes('Find on this page'))!
+    const panel = [...h.document.querySelectorAll('[data-sem-c=stack]')].find((e) => e.querySelector('[data-sem-c=data-grid]') && e.textContent?.includes('Refresh'))!
+    h.stop()
     // When the survey ran is the clock's.
     return panel.outerHTML.replace(/\d{4}-\d\d-\d\dT[\d:.]+Z|\d\d:\d\d(:\d\d)?/g, 'T')
   }
   expect(await html('function')).toBe(await html('sparql'))
+})
+
+// examples/foreign: a custom element (<star-rating>) and a vanilla widget (the spark chart), as islands.
+describe('islands', () => {
+  it('lists what each island mounts as an island finding, made by Semblance and allowed', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { parseHTML } = await import('linkedom')
+    const { Islands } = await import('../src/foreign.ts')
+    const { loadStore } = await import('../src/node/load.ts')
+    const { EventBus } = await import('../src/behaviour/events.ts')
+    const { Runtime } = await import('../src/runtime.ts')
+    const { DEFAULT_LAYERS } = await import('../src/web/mount.ts')
+    const { MOD } = await import('../src/ns.ts')
+    const { foreignExampleFunctions } = await import('../examples/foreign/functions.ts')
+    const { spark } = await import('../examples/foreign/spark.ts')
+    const { defineStarRating } = await import('../examples/foreign/star-rating.ts')
+    const read = (f: string) => readFileSync(new URL('../examples/foreign/' + f, import.meta.url), 'utf8')
+    const EX = 'https://example.org/foreign#'
+    const store = loadStore('oxigraph', read('foreign.ttl'), read('app.ttl'), readFileSync(new URL('../ontology/layers/unmanaged.ttl', import.meta.url), 'utf8'))
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, layers: DEFAULT_LAYERS, prefer: 'sparql', functions: foreignExampleFunctions, name: 'screen', roots: [EX + 'page'] }, (e) => {
+      throw e
+    })
+    const win = parseHTML('<!doctype html><html><head></head><body><div id="app"></div></body></html>')
+    defineStarRating(win as never)
+    const renderer = new DomRenderer(screen.index, win.document.getElementById('app')!, EX + 'page')
+    renderer.flush()
+    const bus = new EventBus(runtime, screen)
+    bus.attach(renderer, () => renderer.flush())
+    const islands = new Islands(bus, renderer, { widgets: { spark }, onHandled: () => renderer.flush(), onError: (e) => { throw e } })
+    islands.attach()
+    await islands.settled()
+    const s = surveyUnmanaged(win.document)
+    const found = s.findings.filter((f) => f.category === 'island')
+    expect(found.map((f) => f.reason)).toEqual(expect.arrayContaining(['island star-rating', 'island week']))
+    for (const f of found) {
+      expect(f.elements).toBeGreaterThan(0)
+      expect(f.near && renderer.keyOf(f.near.element)).toBe(f.near?.key)
+    }
+    // Made by Semblance: in the managed figure, not the unmanaged one; allowed by kind.
+    expect(s.unmanaged).toBe(0)
+    expect(s.managed).toBe(s.visible)
+    expect(unexcused(s, readAllowed(store))).toEqual([])
+    expect(readAllowed(store).categories.has('island')).toBe(true)
+  })
 })

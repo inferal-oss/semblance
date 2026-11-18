@@ -29,6 +29,8 @@ export type UnmanagedCategory =
   | 'host-code'
   /** Injected by an extension or devtools. */
   | 'third-party'
+  /** What an island (or a custom element the graph names) mounts: Semblance's way of hosting foreign components, so made by Semblance, listed to show what it draws. */
+  | 'island'
   | 'unknown'
 
 /** The category's individual in the um: vocabulary. */
@@ -36,6 +38,7 @@ export const CATEGORY_IRI: Record<UnmanagedCategory, string> = {
   sanctioned: UM + 'Sanctioned',
   'host-code': UM + 'HostCode',
   'third-party': UM + 'ThirdParty',
+  island: UM + 'Island',
   unknown: UM + 'Unknown',
 }
 
@@ -61,9 +64,9 @@ export interface UnmanagedSurvey {
   findings: UnmanagedFinding[]
   /** Visible elements, Semblance's or not (the renderers' frames not counted). */
   visible: number
-  /** Visible elements Semblance made. */
+  /** Visible elements Semblance made (what islands mount included). */
   managed: number
-  /** Visible elements in the findings (visible - managed). */
+  /** Visible elements in the findings that are not islands (visible - managed). */
   unmanaged: number
 }
 
@@ -150,6 +153,25 @@ export function surveyUnmanaged(root: ParentNode = document, opts: UnmanagedOpti
     if (key !== undefined || ctx.island) {
       if (visible(el)) out.visible++, out.managed++
       const node = key !== undefined ? ctx.renderer!.index.nodes.get(key) : undefined
+      // What an island mounts in its slot, and what a custom element the graph names draws in its
+      // shadow root: Semblance's (counted as made by it), each listed as an island finding.
+      const island = key !== undefined && !inner && !ctx.island && (node?.island !== undefined || (node?.tag !== undefined && !!el.shadowRoot))
+      if (island) {
+        const near = { element: el, key: key!, renderer: ctx.renderer! }
+        const name = node!.tag ?? node!.island!.slice(Math.max(node!.island!.lastIndexOf('#'), node!.island!.lastIndexOf('/')) + 1)
+        const mounted = node!.island !== undefined ? [...el.children] : [el]
+        for (const c of mounted) {
+          const n = node!.island !== undefined ? count(c) : [...el.shadowRoot!.children].reduce((a, x) => a + count(x), 0)
+          if (!n) continue
+          out.visible += n
+          out.managed += n
+          if (!wanted || wanted.has('island')) out.findings.push({ element: c, category: 'island', reason: `${node!.island !== undefined ? 'island' : 'custom element'} ${name}`, elements: n, near, path: pathOf(c, el), slot: node!.slot })
+        }
+        if (node!.island !== undefined) return
+        // A named custom element's own children are the graph's: walked as usual.
+        for (const c of el.children) visit(c, { renderer: ctx.renderer, island: false, hosted: ctx.hosted, slot: ctx.slot, near })
+        return
+      }
       const next: Context = {
         renderer: inner ?? ctx.renderer,
         island: ctx.island || (!inner && (node?.island !== undefined || node?.tag !== undefined)),
@@ -309,12 +331,16 @@ export interface UnmanagedHost {
   /** After the findings were written (to patch the page). */
   onWrite?: () => void
   options?: UnmanagedOptions
+  /** A survey that runs by itself (um:whileShown) runs at most once in this many ms (default 1000). */
+  every?: number
 }
 
 /**
- * The host effect of um:Survey: when a survey is asked (um:request um:Run), the page is walked and
- * its findings written into the rendered graph (unrecorded) as the survey's members, replacing the
- * last ones; the finding held in the survey's c:bindProperty of c:bindFrom (a data grid's selection)
+ * The host effect of um:Survey: when a survey is asked (um:request um:Run), or while the component
+ * its um:whileShown names is shown (when it is shown, and after each patch, at most once every
+ * `every` ms), the page is walked and its findings written into the rendered graph (unrecorded) as
+ * the survey's members, replacing the last ones (nothing is written when nothing changed, so the
+ * patch a survey causes does not set off another one); the finding held in the survey's c:bindProperty of c:bindFrom (a data grid's selection)
  * is marked on the page (data-sem-unmanaged) and scrolled to. Nothing runs until a survey is asked.
  */
 export function attachUnmanaged(runtime: Runtime, host: UnmanagedHost): () => void {
@@ -406,12 +432,37 @@ export function attachUnmanaged(runtime: Runtime, host: UnmanagedHost): () => vo
     t(survey, UM + 'unmanagedElements', int(found.unmanaged))
     const share = found.visible ? Math.round((found.unmanaged / found.visible) * 1000) / 10 : 0
     t(survey, UM + 'share', f.literal(share.toFixed(1), nn(NS.xsd + 'decimal')))
+    const before = written.get(survey.value) ?? []
+    const key = (q: Quad) => `${q.subject.value} ${q.predicate.value} ${q.object.value}`
+    const same = before.length === add.length + 1 && add.every((q) => before.some((b) => key(b) === key(q)))
+    if (same) return void mark()
     t(survey, UM + 'surveyedAt', f.literal(new Date().toISOString(), nn(NS.xsd + 'dateTime')))
-    runtime.write(RENDERED_GRAPH, { add, remove: written.get(survey.value) ?? [] })
+    runtime.write(RENDERED_GRAPH, { add, remove: before })
     written.set(survey.value, add)
     mark()
     host.onWrite?.()
   }
+
+  // Surveys that run by themselves, while the component they name is shown.
+  const every = host.every ?? 1000
+  let last = -Infinity
+  let pending: ReturnType<typeof setTimeout> | undefined
+  const shown = (component: string) => host.renderers().some((r) => !!r && r.index.isShown(component, new Set([r.rootFocus])))
+  const auto = () => {
+    pending = undefined
+    if (runtime.ended) return
+    last = Date.now()
+    for (const s of surveys()) {
+      const w = one(s, UM + 'whileShown')
+      if (w && shown(w.value)) run(nn(s))
+    }
+  }
+  const schedule = () => {
+    if (pending !== undefined || runtime.ended) return
+    if (!surveys().some((s) => one(s, UM + 'whileShown'))) return
+    pending = setTimeout(auto, Math.max(0, last + every - Date.now()))
+  }
+  const unpatch = host.renderers().filter((r): r is DomRenderer => !!r).map((r) => r.onPatched(schedule))
 
   const stop = runtime.onInput((graph, delta) => {
     if (graph !== undefined) return
@@ -427,9 +478,21 @@ export function attachUnmanaged(runtime: Runtime, host: UnmanagedHost): () => vo
       })
     else if (moved) queueMicrotask(mark)
   })
-  return () => {
+  schedule()
+  let stopped = false
+  const dispose = () => {
+    if (stopped) return
+    stopped = true
     stop()
+    for (const u of unpatch) u()
+    if (pending !== undefined) clearTimeout(pending)
     marked?.removeAttribute('data-sem-unmanaged')
     marked = undefined
+  }
+  // The runtime ending (its store let go) ends the effect: no survey is left waiting on a timer.
+  const unend = runtime.onEnd(dispose)
+  return () => {
+    unend()
+    dispose()
   }
 }

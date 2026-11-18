@@ -157,7 +157,9 @@ WHERE {
 # The primary pane takes c:ratio of the room (a fraction, 0.5 by default); the divider between
 # the panes sizes it. Side by side by default; pos:direction pos:Column stacks them. With
 # c:collapsed true the secondary pane is hidden (kept, not dropped) and the divider goes, so
-# any control that sets a boolean (a c:ToggleSwitch, a c:Setter) can open and close it.
+# any control that sets a boolean (a c:ToggleSwitch, a c:Setter) can open and close it. With
+# c:bindFrom and c:bindProperty it is a master-detail view: the secondary pane shows only while that
+# property holds a value (a grid's c:selectedRow), so the details take room only once there are some.
 
 c:SplitView a owl:Class ;
     rdfs:subClassOf sem:Component ;
@@ -165,7 +167,8 @@ c:SplitView a owl:Class ;
     rdfs:comment """Two panes, c:primary and c:secondary, side by side (pos:direction pos:Column stacks them)
 with a divider between them (role=separator) that drags or moves with the arrow keys. The primary's
 share is c:ratio (0-1, default 0.5), bounded by c:minSize for each pane; c:collapsed true hides the
-secondary pane. c:label names the divider ("Resize: ...")."""@en ;
+secondary pane, as does c:bindProperty of c:bindFrom holding nothing (master-detail: the details show
+once something is selected). c:label names the divider ("Resize: ...")."""@en ;
     sem:slug "split-view" .
 c:primary a owl:ObjectProperty ; rdfs:domain c:SplitView ; rdfs:range sem:Component ; rdfs:comment "The first pane: the one the divider sizes."@en .
 c:secondary a owl:ObjectProperty ; rdfs:domain c:SplitView ; rdfs:range sem:Component ; rdfs:comment "The second pane: it takes the rest, and c:collapsed hides it."@en .
@@ -175,7 +178,7 @@ c:collapsed a owl:DatatypeProperty ; rdfs:domain c:SplitView ; rdfs:range xsd:bo
     rdfs:label "Collapsed"@en , "Згорнуто"@uk , "Eingeklappt"@de , "مطوي"@ar ;
     rdfs:comment "The secondary pane is hidden and the primary fills the view."@en .
 
-c:SplitViewRendering a sem:Rendering ; sem:targets c:SplitView ; sem:stratum 0 .
+c:SplitViewRendering a sem:Rendering ; sem:targets c:SplitView ; sem:stratum 0 ; sem:follows c:bindFrom .
 c:SplitViewRendering-fn a sem:Rule ; sem:implements c:SplitViewRendering ; sem:function "panes:split-view" .
 # The ratio is written canonically (xsd:decimal, as panes.ts does with Number) and clamped to
 # 0-1; the separator reports it as a percentage.
@@ -226,7 +229,8 @@ WHERE {
   BIND(EXISTS { $this pos:direction pos:Column } AS ?stacked)
   BIND(IF(?stacked, "y", "x") AS ?axis)
   BIND(IF(?stacked, "horizontal", "vertical") AS ?orientation)
-  BIND(EXISTS { $this c:collapsed ?c FILTER(STR(?c) = "true") } AS ?collapsed)
+  # Collapsed, or master-detail with nothing held (c:bindProperty of c:bindFrom: a selection).
+  BIND(EXISTS { $this c:collapsed ?c FILTER(STR(?c) = "true") } || EXISTS { $this c:bindFrom ?from ; c:bindProperty ?held FILTER NOT EXISTS { ?from ?held ?any } } AS ?collapsed)
   BIND(CONCAT("--split-ratio: ", ?ratioText) AS ?style)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~first")) AS ?first)
@@ -259,7 +263,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* c:SplitView .
-  BIND(EXISTS { $this c:collapsed ?flag FILTER(STR(?flag) = "true") } AS ?collapsed)
+  BIND(EXISTS { $this c:collapsed ?flag FILTER(STR(?flag) = "true") } || EXISTS { $this c:bindFrom ?from ; c:bindProperty ?held FILTER NOT EXISTS { ?from ?held ?any } } AS ?collapsed)
   OPTIONAL { $this c:primary ?primary0 FILTER(isIRI(?primary0)) }
   OPTIONAL { $this c:secondary ?secondary0 FILTER(isIRI(?secondary0)) }
   BIND(?primary0 AS ?primary)

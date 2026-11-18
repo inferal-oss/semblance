@@ -2785,6 +2785,7 @@ um:Exception a sem:Term .
 um:Finding a sem:Term .
 um:FindingCounts a sem:Term .
 um:HostCode a sem:Term .
+um:Island a sem:Term .
 um:Run a sem:Term .
 um:Sanctioned a sem:Term .
 um:Survey a sem:Term .
@@ -2798,6 +2799,7 @@ um:elements a sem:Term .
 um:exceptedBy a sem:Term .
 um:found a sem:Term .
 um:issue a sem:Term .
+um:madeBySemblance a sem:Term .
 um:managedElements a sem:Term .
 um:near a sem:Term .
 um:nearComponent a sem:Term .
@@ -2811,6 +2813,7 @@ um:slot a sem:Term .
 um:surveyedAt a sem:Term .
 um:unmanagedElements a sem:Term .
 um:visibleElements a sem:Term .
+um:whileShown a sem:Term .
 val:Layer a sem:Term .
 val:ShapesLayer a sem:Term .
 val:full a sem:Term .

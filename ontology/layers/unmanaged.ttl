@@ -18,8 +18,10 @@
 # visible element - on the page, anywhere in the document, not only in the viewport - belongs to a
 # finding: the topmost element of a subtree of such elements, in one of four categories.
 #
-#   1. A um:Survey asks (um:request um:Run, written by a reaction: a c:Setter button). Nothing is
-#      walked until then: the walk reads layout, so it is a tool's, never an interaction's.
+#   1. A um:Survey asks (um:request um:Run, written by a reaction: a c:Setter button), or, with
+#      um:whileShown, the survey runs by itself while that component is shown: when it is shown and
+#      after each change of the page, at most once a second. Nothing is walked otherwise: the walk
+#      reads layout, so it is a tool's, never an interaction's.
 #   2. The survey effect (src/web/unmanaged.ts) walks the page once, reading each renderer's own map,
 #      and writes what it found to the rendered graph (urn:semblance:rendered, unrecorded), replacing
 #      the survey's last findings: its members (tree:member), um:Finding nodes <survey>/~finding-N,
@@ -41,6 +43,8 @@ um:Survey a owl:Class ;
     rdfs:comment "Asks for the visible elements of the page that Semblance did not make (um:request um:Run); its members (tree:member) are what was found, um:Finding nodes. With c:bindFrom and c:bindProperty, the finding held there is marked on the page."@en .
 um:request a owl:ObjectProperty ; rdfs:domain um:Survey ;
     rdfs:comment "Written by a reaction: survey the page now (um:Run). Performed and removed by the survey effect."@en .
+um:whileShown a owl:ObjectProperty ; rdfs:domain um:Survey ;
+    rdfs:comment "Survey by itself while this component is shown: when it is shown, and again after the page changes (at most once a second). Without it, only on request."@en .
 um:Run a owl:NamedIndividual ;
     rdfs:label "Find"@en , "Знайти"@uk , "Suchen"@de , "بحث"@ar ;
     rdfs:comment "The value of um:request: walk the page and write what was found."@en .
@@ -63,7 +67,7 @@ um:surveyedAt a owl:DatatypeProperty ; rdfs:domain um:Survey ; rdfs:range xsd:da
     rdfs:comment "When the page was last walked."@en .
 um:found a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:label "found"@en , "знайдено"@uk , "gefunden"@de , "تم العثور عليها"@ar ;
-    rdfs:comment "Maintained: on a survey, its findings (um:FindingCounts); on a um:Category, the page's findings of that category (um:CategoryCounts)."@en .
+    rdfs:comment "Maintained: on a survey, its findings that are not made by Semblance (um:FindingCounts: islands left out); on a um:Category, the page's findings of that category (um:CategoryCounts)."@en .
 
 # --- a finding --------------------------------------------------------------------------------------
 
@@ -96,21 +100,35 @@ um:nearComponent a owl:ObjectProperty ; rdfs:domain um:Finding ;
 
 # --- the categories ---------------------------------------------------------------------------------
 
+um:madeBySemblance a owl:DatatypeProperty ; rdfs:domain um:Category ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a category: its findings are made by Semblance after all (what islands mount), listed to show what they hold, not counted against the page."@en .
 um:Category a owl:Class ;
     rdfs:label "Category"@en , "Категорія"@uk , "Kategorie"@de , "الفئة"@ar ;
     rdfs:comment "What an element Semblance did not make is."@en .
 um:HostCode a um:Category ; sem:order 1 ; sem:slug "host-code" ; sty:tone sty:Warning ;
+    c:help "Elements host code inserted by hand: what should become renderings."@en , "Елементи, які код хоста вставив вручну: те, що має стати відображеннями."@uk , "Elemente, die Host-Code von Hand einfügt: was zu Renderings werden sollte."@de , "عناصر أدرجتها شيفرة المضيف يدويًا: ما ينبغي أن يصبح عروضًا."@ar ;
     rdfs:label "Host code"@en , "Код хоста"@uk , "Host-Code"@de , "شيفرة المضيف"@ar ;
     rdfs:comment "Inserted by host code: inside a renderer's tree (a host-owned slot or not), or marked by one of the framework's effects (data-sem-*, sem-*). What should become renderings."@en .
 um:ThirdParty a um:Category ; sem:order 2 ; sem:slug "third-party" ; sty:tone sty:Danger ;
+    c:help "Injected by a browser extension or devtools, not by the page."@en , "Вставлене розширенням браузера чи інструментами розробника, а не сторінкою."@uk , "Von einer Browsererweiterung oder den Entwicklerwerkzeugen eingefügt, nicht von der Seite."@de , "أدرجته إضافة للمتصفح أو أدوات المطوّر، لا الصفحة."@ar ;
     rdfs:label "Third party"@en , "Стороннє"@uk , "Drittanbieter"@de , "طرف ثالث"@ar ;
     rdfs:comment "Injected by an extension or devtools: a custom element the page does not define, an element on <html> outside <body>."@en .
 um:Sanctioned a um:Category ; sem:order 3 ; sem:slug "sanctioned" ; sty:tone sty:Info ;
+    c:help "Foreign by design and allowed: a hosted library's own elements, embedded media (iframe, video, canvas) outside an island."@en , "Чуже за задумом і дозволене: власні елементи бібліотеки-хоста, вбудовані медіа (iframe, відео, canvas) поза островом."@uk , "Absichtlich fremd und erlaubt: die eigenen Elemente einer gehosteten Bibliothek, eingebettete Medien (iframe, Video, Canvas) außerhalb einer Insel."@de , "أجنبي عن قصد ومسموح: عناصر مكتبة مستضافة الخاصة، والوسائط المضمّنة (iframe، فيديو، canvas) خارج جزيرة."@ar ;
     rdfs:label "Foreign on purpose"@en , "Чуже навмисно"@uk , "Absichtlich fremd"@de , "أجنبي عن قصد"@ar ;
     rdfs:comment "Foreign by design: a hosted library's own elements inside a <sem-host>, embedded media (iframe, video, audio, canvas, embed, object)."@en .
-um:Unknown a um:Category ; sem:order 4 ; sem:slug "unknown" ; sty:tone sty:Neutral ;
+um:Unknown a um:Category ; sem:order 5 ; sem:slug "unknown" ; sty:tone sty:Neutral ;
+    c:help "Outside every renderer, with nothing to say who made it."@en , "Поза будь-яким рендерером, і ніщо не каже, хто це зробив."@uk , "Außerhalb jedes Renderers, ohne Hinweis, wer es gemacht hat."@de , "خارج كل عارض، ولا شيء يدل على من صنعه."@ar ;
     rdfs:label "Unknown"@en , "Невідоме"@uk , "Unbekannt"@de , "غير معروف"@ar ;
     rdfs:comment "Outside every renderer, with nothing to say who made it."@en .
+
+um:Island a um:Category ; sem:order 4 ; sem:slug "island" ; sty:tone sty:Success ; um:madeBySemblance true ;
+    c:help "What an island mounts: a foreign component the graph asked for and feeds. Made by Semblance; listed to show what it draws."@en ,
+        "Те, що монтує острів: чужий компонент, який граф замовив і живить. Зроблено Semblance; показано, щоб видно було, що він малює."@uk ,
+        "Was eine Insel einhängt: eine fremde Komponente, die der Graph anfordert und versorgt. Von Semblance gemacht; aufgeführt, um zu zeigen, was sie zeichnet."@de ,
+        "ما تركّبه جزيرة: مكوّن أجنبي طلبه الرسم البياني ويغذّيه. صنعه Semblance؛ مدرج ليظهر ما يرسمه."@ar ;
+    rdfs:label "Island"@en , "Острів"@uk , "Insel"@de , "جزيرة"@ar ;
+    rdfs:comment "What an island (ext:Island) mounts in its slot, or a custom element the graph names (ext:tag) draws in its shadow root: Semblance's way of hosting foreign components."@en .
 
 # --- what is allowed: by kind, or by an exception that says why --------------------------------------
 # A guard (scripts/unmanaged-check.ts, AGENTS.md) walks every page of a site in a browser and fails on a
@@ -123,6 +141,7 @@ um:Unknown a um:Category ; sem:order 4 ; sem:slug "unknown" ; sty:tone sty:Neutr
 um:allowed a owl:DatatypeProperty ; rdfs:domain um:Category ; rdfs:range xsd:boolean ;
     rdfs:comment "On a category: its findings need no exception (foreign by design)."@en .
 um:Sanctioned um:allowed true .
+um:Island um:allowed true .
 
 um:Exception a owl:Class ;
     rdfs:label "Exception"@en , "Виняток"@uk , "Ausnahme"@de , "استثناء"@ar ;
@@ -147,7 +166,7 @@ um:FindingCounts a iv:View ;
     sem:function "unmanaged:found" ;
     sem:construct """
 CONSTRUCT { ?survey um:found ?n }
-WHERE { { SELECT ?survey (COUNT(DISTINCT ?m) AS ?n) WHERE { ?survey tree:member ?m . ?m a um:Finding } GROUP BY ?survey } }""" .
+WHERE { { SELECT ?survey (COUNT(DISTINCT ?m) AS ?n) WHERE { ?survey tree:member ?m . ?m a um:Finding FILTER NOT EXISTS { ?m um:category/um:madeBySemblance true } } GROUP BY ?survey } }""" .
 
 um:CategoryCounts a iv:View ;
     rdfs:label "findings per category"@en ;
