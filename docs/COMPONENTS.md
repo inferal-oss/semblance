@@ -711,7 +711,32 @@ omit a field's length to show it as variable and use `c:byteSizeLabel` to descri
 Marks use the same offset origin as their enclosing field. Span indices are inclusive.
 `c:byteAxisLabel` optionally names the offset origin. Choose `c:ByteRuler` (default),
 `c:ByteRecord` (separate rounded fields), or `c:ByteOutline` (monochrome outlines).
-The gallery uses `c:Segmented` to change the style in RDF.
+The gallery uses `c:Segmented` to change the style in RDF. Set `c:byteWrap true` on a schematic (no
+`c:byteExtent`) to let its fields flow onto as many rows as its column needs. It is then drawn in HTML
+rather than as one SVG strip: a grid whose columns are at least one field's drawing width, where each
+field spans three of the grid's rows (its offsets, its box, its brackets), so the fields of a row share
+their height and long labels wrap at their regular size. A bracket is drawn in segments, one in each
+field it covers, closed at its first and last field and open where a row ends; its label is under its
+first field. Nothing is measured: the page breaks the rows, and the server's HTML is the final layout.
+A to-scale layout stays one scrollable strip, with `c:byteWrap` or without.
+
+A field of a wrapping schematic can hold another `c:ByteLayout` with `c:byteDetail`: the field takes a
+row of its own and grows with what is in it. The nested layout has its own offset origin and
+appearance, and wraps or not as it says. Give each nested layout one containing field; nesting can go
+on across levels, and a detail that leads back to its own layout is not drawn. In Text, the nested
+layout's lines follow its field's line.
+
+```turtle
+ex:directory a c:ByteLayout ; c:label "Root directory" ; c:byteWrap true ;
+  c:byteField ex:count, ex:entries .
+ex:count c:byteIndex 0 ; c:label "Block count" ; c:byteOffset 0 ; c:byteLength 4 .
+ex:entries c:byteIndex 1 ; c:label "Block entries" ; c:byteOffset 4 ;
+  c:byteDetail ex:entry .
+ex:entry a c:ByteLayout ; c:label "Directory entry" ; c:byteWrap true ;
+  c:byteField ex:offset, ex:length .
+ex:offset c:byteIndex 0 ; c:label "Block offset" ; c:byteOffset 0 ; c:byteLength 8 .
+ex:length c:byteIndex 1 ; c:label "Block length" ; c:byteOffset 8 ; c:byteLength 4 .
+```
 
 The diagram is a figure named by its caption; its fields are a list whose items are named by their
 Text line (`@4 · ChunkSize · uint32 LE · 4 B`, the unit from `c:BytesPhrase` in the viewer's

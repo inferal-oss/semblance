@@ -856,6 +856,7 @@ c:branchClass a sem:Term .
 c:branchOf a sem:Term .
 c:byline a sem:Term .
 c:byteAxisLabel a sem:Term .
+c:byteDetail a sem:Term .
 c:byteEmphasis a sem:Term .
 c:byteEncoding a sem:Term .
 c:byteExtent a sem:Term .
@@ -867,6 +868,7 @@ c:byteMark a sem:Term .
 c:byteOffset a sem:Term .
 c:byteSizeLabel a sem:Term .
 c:byteSpan a sem:Term .
+c:byteWrap a sem:Term .
 c:canvas a sem:Term .
 c:caption a sem:Term .
 c:card a sem:Term .

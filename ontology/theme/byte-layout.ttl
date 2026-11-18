@@ -2,7 +2,8 @@
 @prefix sty: <https://semblance.dev/ns/style#> .
 
 # Offsets run left to right in every language (as in a hex dump): the diagram is not mirrored in RTL,
-# and it scrolls from byte 0 when it is wider than its column.
+# and it scrolls from byte 0 when it is wider than its column. The strip's rules for one appearance
+# select its own SVG (> svg > …), so that they do not reach a layout nested in a field.
 
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ;
     sty:declares [ sty:property "overflow" ; sty:raw "auto" ],
@@ -45,27 +46,187 @@
                  [ sty:property "stroke-width" ; sty:raw "1.2" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:part "svg .card-offset" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "svg :is(.rail, .tick, .offset)" ;
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "> svg > .rail, > svg > g[role=list] > g > :is(.tick, .offset)" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "svg .card-offset" ;
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "> svg > g[role=list] > g > .card-offset" ;
     sty:declares [ sty:property "display" ; sty:raw "inline" ] .
-[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "svg g > rect:first-child" ;
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "> svg > g[role=list] > g > rect:first-child" ;
     sty:declares [ sty:property "transform-box" ; sty:raw "fill-box" ],
                  [ sty:property "transform-origin" ; sty:raw "center" ],
                  [ sty:property "transform" ; sty:raw "scale(.965, 1.04)" ],
                  [ sty:property "rx" ; sty:raw "6px" ],
                  [ sty:property "stroke-width" ; sty:raw "0" ],
                  [ sty:property "fill" ; sty:raw "var(--sem-gray-3)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "svg g > .emphasized:first-child" ;
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=record]" ; sty:part "> svg > g[role=list] > g > .emphasized:first-child" ;
     sty:declares [ sty:property "fill" ; sty:raw "var(--sem-accent-4)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "svg rect:not(.used, .emphasized)" ;
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "> svg > g[role=list] > g > rect:not(.used, .emphasized)" ;
     sty:declares [ sty:property "fill" ; sty:raw "none" ],
                  [ sty:property "stroke" ; sty:raw "currentColor" ],
                  [ sty:property "stroke-width" ; sty:raw ".75" ] .
-[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "svg :is(.rail, .bracket, .tick)" ;
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "> svg > .rail, > svg > g > :is(.rail, .bracket, .tick), > svg > g[role=list] > g > .tick" ;
     sty:declares [ sty:property "stroke" ; sty:raw "currentColor" ],
                  [ sty:property "stroke-width" ; sty:raw ".75" ] .
-[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "svg .annotation" ;
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "> svg > g > .annotation" ;
     sty:declares [ sty:property "fill" ; sty:raw "currentColor" ] .
-[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "svg .variable" ;
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-layout-appearance=outline]" ; sty:part "> svg > g[role=list] > g > .variable" ;
     sty:declares [ sty:property "stroke-dasharray" ; sty:raw "4 2" ] .
+
+# --- a wrapping schematic (c:byteWrap): fields in a grid as wide as the column ----------------------
+# Columns of at least one field's drawing width (132px); each field spans three rows of the grid (its
+# offsets, its box, its brackets) as a subgrid, so the fields of a row share their height. A field with
+# a nested layout takes a row of its own. Every selector names its path from the layout (> … >), so
+# that none reaches the fields of a layout nested in one of these.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ;
+    sty:declares [ sty:property "font" ; sty:raw "400 11px var(--sem-font-mono)" ],
+                 [ sty:property "inline-size" ; sty:raw "100%" ],
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ;
+    sty:part "> [role=figure] > .axis-label, > [role=figure] > [role=list] > * > :is(.ruler, .bar) > :is(.offset, .end, .card-offset, .meta)" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-muted)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > .axis-label" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0 0 2px 18px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list]" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ],
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fill, minmax(min(132px, 100%), 1fr))" ],
+                 [ sty:property "padding" ; sty:raw "0 18px 4px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > [role=listitem]" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ],
+                 [ sty:property "grid-row" ; sty:raw "span 3" ],
+                 [ sty:property "grid-template-rows" ; sty:raw "subgrid" ],
+                 [ sty:property "min-inline-size" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > [data-byte-detail]" ;
+    sty:declares [ sty:property "grid-column" ; sty:raw "1 / -1" ] .
+# The offsets: the start of each field over its first byte, the end of the layout on its last field;
+# the rail under them is the top of the fields' boxes.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .ruler" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ],
+                 [ sty:property "min-block-size" ; sty:raw "26px" ],
+                 [ sty:property "border-block-end" ; sty:raw "1px solid var(--sem-border-strong)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ;
+    sty:part "> [role=figure] > [role=list] > * > .ruler::before, > [role=figure] > [role=list] > * > .ruler:has(> .end)::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "''" ],
+                 [ sty:property "position" ; sty:raw "absolute" ],
+                 [ sty:property "inset-block-end" ; sty:raw "0" ],
+                 [ sty:property "left" ; sty:raw "0" ],
+                 [ sty:property "block-size" ; sty:raw "8px" ],
+                 [ sty:property "border-left" ; sty:raw "1px solid var(--sem-border-strong)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .ruler:has(> .end)::after" ;
+    sty:declares [ sty:property "left" ; sty:raw "auto" ],
+                 [ sty:property "right" ; sty:raw "-1px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .ruler > :is(.offset, .end)" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ],
+                 [ sty:property "inset-block-end" ; sty:raw "10px" ],
+                 [ sty:property "left" ; sty:raw "0" ],
+                 [ sty:property "translate" ; sty:raw "-50% 0" ],
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .ruler > .end" ;
+    sty:declares [ sty:property "left" ; sty:raw "100%" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .ruler > .card-offset" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+# The box: the label and the encoding and size, wrapping in it; adjacent boxes share their border.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ],
+                 [ sty:property "display" ; sty:raw "flex" ],
+                 [ sty:property "flex-direction" ; sty:raw "column" ],
+                 [ sty:property "justify-content" ; sty:raw "center" ],
+                 [ sty:property "gap" ; sty:raw "3px" ],
+                 [ sty:property "min-block-size" ; sty:raw "47px" ],
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ],
+                 [ sty:property "margin-inline-end" ; sty:raw "-1px" ],
+                 [ sty:property "padding" ; sty:raw "7px 8px 9px" ],
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ],
+                 [ sty:property "border-block-start" ; sty:raw "0" ],
+                 [ sty:property "background" ; sty:raw "var(--sem-surface)" ],
+                 [ sty:property "text-align" ; sty:raw "center" ],
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar > .label" ;
+    sty:declares [ sty:property "font" ; sty:raw "600 12px var(--sem-font-mono)" ],
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar.variable" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ],
+                 [ sty:property "padding-inline" ; sty:raw "20px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar.emphasized" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-4)" ],
+                 [ sty:property "border-color" ; sty:raw "var(--sem-accent-9)" ] .
+# A mark: its bytes of the field's (--at, --span of --of), at the foot of the box.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar > .used" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ],
+                 [ sty:property "inset-block-end" ; sty:raw "0" ],
+                 [ sty:property "left" ; sty:raw "calc(var(--at) / var(--of) * 100%)" ],
+                 [ sty:property "width" ; sty:raw "max(2px, min(var(--span), var(--of) - var(--at)) / var(--of) * 100%)" ],
+                 [ sty:property "block-size" ; sty:raw "5px" ],
+                 [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
+# A variable field's break: two strokes at the top of its box's end.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar > .continuation" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ],
+                 [ sty:property "inset-block-start" ; sty:raw "2px" ],
+                 [ sty:property "right" ; sty:raw "6px" ],
+                 [ sty:property "inline-size" ; sty:raw "12px" ],
+                 [ sty:property "block-size" ; sty:raw "7px" ],
+                 [ sty:property "background" ; sty:raw "linear-gradient(to bottom right, transparent calc(50% - .8px), var(--sem-muted) 0 calc(50% + .8px), transparent 0) 0 0 / 6px 7px repeat-x" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar > .detail" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:raw "4px" ],
+                 [ sty:property "text-align" ; sty:raw "start" ] .
+# The brackets: a segment per field, closed at the bracket's first and last field; the label under the first.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .brackets" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ],
+                 [ sty:property "align-items" ; sty:raw "start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .brackets > .bracket" ;
+    sty:declares [ sty:property "grid-area" ; sty:raw "1 / 1" ],
+                 [ sty:property "padding-block-start" ; sty:raw "8px" ],
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-11)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .brackets > .bracket::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "''" ],
+                 [ sty:property "display" ; sty:raw "block" ],
+                 [ sty:property "block-size" ; sty:raw "7px" ],
+                 [ sty:property "border-block-end" ; sty:raw "1.2px solid var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .brackets > .start::before" ;
+    sty:declares [ sty:property "border-left" ; sty:raw "1.2px solid var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .brackets > .end::before" ;
+    sty:declares [ sty:property "border-right" ; sty:raw "1.2px solid var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .brackets > .bracket > .annotation" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ],
+                 [ sty:property "padding" ; sty:raw "3px 4px 0" ],
+                 [ sty:property "text-align" ; sty:raw "center" ] .
+# Record: separate rounded fields, each with its offset over it.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list]" ;
+    sty:declares [ sty:property "column-gap" ; sty:raw "6px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list] > * > .ruler" ;
+    sty:declares [ sty:property "border-block-end" ; sty:raw "0" ],
+                 [ sty:property "display" ; sty:raw "flex" ],
+                 [ sty:property "align-items" ; sty:raw "flex-end" ],
+                 [ sty:property "justify-content" ; sty:raw "center" ],
+                 [ sty:property "padding-block-end" ; sty:raw "4px" ],
+                 [ sty:property "min-block-size" ; sty:raw "22px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ;
+    sty:part "> [role=figure] > [role=list] > * > .ruler::before, > [role=figure] > [role=list] > * > .ruler::after, > [role=figure] > [role=list] > * > .ruler > :is(.offset, .end)" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list] > * > .ruler > .card-offset" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list] > * > .bar" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ],
+                 [ sty:property "border" ; sty:raw "0" ],
+                 [ sty:property "border-radius" ; sty:raw "6px" ],
+                 [ sty:property "background" ; sty:raw "var(--sem-gray-3)" ],
+                 [ sty:property "overflow" ; sty:raw "hidden" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list] > * > .bar.emphasized" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-4)" ] .
+# A field holding a nested layout is outlined, so that the nested layout's own fields stand out in it.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list] > * > .bar:has(> .detail)" ;
+    sty:declares [ sty:property "background" ; sty:raw "none" ],
+                 [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px var(--sem-gray-6)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list] > * > .brackets > :not(.end)" ;
+    sty:declares [ sty:property "margin-inline-end" ; sty:raw "-6px" ] .
+# Outline: monochrome strokes, the variable field's box dashed.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=outline]" ;
+    sty:part "> [role=figure] > [role=list] > * > .ruler, > [role=figure] > [role=list] > * > .ruler::before, > [role=figure] > [role=list] > * > .ruler::after" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "currentColor" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=outline]" ; sty:part "> [role=figure] > [role=list] > * > .bar:not(.emphasized)" ;
+    sty:declares [ sty:property "background" ; sty:raw "none" ],
+                 [ sty:property "border-color" ; sty:raw "currentColor" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=outline]" ; sty:part "> [role=figure] > [role=list] > * > .bar.variable" ;
+    sty:declares [ sty:property "border-style" ; sty:raw "dashed" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=outline]" ; sty:part "> [role=figure] > [role=list] > * > .brackets > .bracket" ;
+    sty:declares [ sty:property "color" ; sty:raw "currentColor" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=outline]" ; sty:part "> [role=figure] > [role=list] > * > .brackets > .bracket::before" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "currentColor" ] .

@@ -61,7 +61,7 @@ function mount(kind: StoreKind, prefer: 'sparql' | 'function', languages: string
   const n = (local: string) => f.namedNode(EX + local)
   const c = (local: string) => f.namedNode(NS.c + local)
   const int = (v: number) => f.literal(String(v), f.namedNode(NS.xsd + 'integer'))
-  const set = (s: string, p: string, o: ReturnType<typeof int> | ReturnType<typeof n> | undefined) => {
+  const set = (s: string, p: string, o: ReturnType<typeof f.literal> | ReturnType<typeof n> | undefined) => {
     runtime.apply({ remove: store.match(n(s), c(p), null), add: o ? [f.quad(n(s), c(p), o)] : [] })
     dom.flush()
   }
@@ -69,7 +69,7 @@ function mount(kind: StoreKind, prefer: 'sparql' | 'function', languages: string
     runtime.apply({ remove: [], add: triples.map(([s, p, o]) => f.quad(n(s), c(p), o)) })
     dom.flush()
   }
-  return { store, runtime, screen, root, click, option, seen, set, add, f, n, c, int, dispose: () => (runtime.dispose(), store.dispose?.()) }
+  return { store, runtime, screen, window, root, click, option, seen, set, add, f, n, c, int, dispose: () => (runtime.dispose(), store.dispose?.()) }
 }
 
 describe('ByteLayout', () => {
@@ -127,6 +127,97 @@ describe('ByteLayout', () => {
       const unbracketed = both((m) => (m.runtime.apply({ remove: m.store.match(m.n('record'), m.c('byteSpan'), null), add: [] }), m.set('record', 'label', m.f.literal('Header'))))
       expect(unbracketed.record).not.toContain('class="bracket"')
       expect(unbracketed.record).toContain('viewBox="0 0 564 90"')
+      sparql!.dispose()
+      fn!.dispose()
+    }, 120_000)
+  }
+
+  // A wrapping schematic (c:byteWrap, no c:byteExtent) is HTML whose grid the page breaks into rows:
+  // the same fields and brackets, member-wise, and a field's nested layout inside it. Both sides
+  // render it byte for byte alike after every step, on the screen and in Text; nothing is measured.
+  for (const kind of ['wat', 'oxigraph'] as const) {
+    it(`flows a wrapping schematic and nests a layout, by SPARQL as by function, step by step (${kind})`, () => {
+      const source = graph(`
+ex:chunk c:byteWrap true ; c:byteSpan ex:ck-head .
+ex:record c:byteWrap true .
+ex:ck-head c:firstByteIndex 0 ; c:lastByteIndex 1 ; c:label "Header" .
+ex:entry a c:ByteLayout ; c:label "Directory entry" ; c:byteWrap true ; c:byteAxisLabel "From the entry" ;
+  c:byteField ex:e0 , ex:e1 .
+ex:e0 c:byteIndex 0 ; c:label "Block offset" ; c:byteOffset 0 ; c:byteLength 8 ; c:byteEncoding "u64 LE" .
+ex:e1 c:byteIndex 1 ; c:label "Block length" ; c:byteOffset 8 ; c:byteLength 4 .
+`)
+      const [sparql, fn] = (['sparql', 'function'] as const).map((prefer) => mount(kind, prefer, [], source))
+      const both = (step: (m: ReturnType<typeof mount>) => void) => {
+        step(sparql!)
+        step(fn!)
+        const seen = sparql!.seen()
+        expect(seen).toEqual(fn!.seen())
+        return seen
+      }
+      const first = both(() => {})
+      // A to-scale layout stays one strip, c:byteWrap or not.
+      expect(first.record).toContain('<svg')
+      expect(first.record).not.toContain('data-byte-wrap')
+      // The schematic flows: no SVG, a figure, a list of three fields, each with its three rows.
+      expect(first.chunk).not.toContain('<svg')
+      expect(first.chunk).toContain('data-byte-wrap="true"')
+      expect(first.chunk).toContain('role="figure"')
+      expect(first.chunk.match(/role="listitem"/g)).toHaveLength(3)
+      expect(first.chunk.match(/class="ruler"/g)).toHaveLength(3)
+      expect(first.chunk).toContain('class="bar variable"')
+      expect(first.chunk).toContain('class="continuation"')
+      expect(first.chunk).toContain('aria-label="ckID · FourCC · 4 B"')
+      // The bracket over fields 0 and 1: closed at both, its label under the first.
+      expect([...first.chunk.matchAll(/class="(bracket(?: start)?(?: end)?)"/g)].map((m) => m[1])).toEqual(['bracket start', 'bracket end'])
+      expect(first.chunk.match(/class="annotation"/g)).toHaveLength(1)
+      expect(first.chunkText).toBe('Chunk\nckID · FourCC · 4 B\nckSize · 4 B\nckData · ckSize bytes')
+
+      // Offsets and marks: the start of each field, the end on the last, a mark's bytes as a share.
+      const placed = both((m) => {
+        m.set('ck-id', 'byteOffset', m.int(0)), m.set('ck-size', 'byteOffset', m.int(4)), m.set('ck-data', 'byteOffset', m.int(8)), m.set('ck-data', 'byteLength', m.int(4))
+        m.add([['ck-size', 'byteMark', m.n('ck-size-low')], ['ck-size-low', 'byteOffset', m.int(5)], ['ck-size-low', 'byteLength', m.int(2)]])
+      })
+      expect([...placed.chunk.matchAll(/class="offset">([^<]*)</g)].map((m) => m[1])).toEqual(['0', '4', '8'])
+      expect(placed.chunk).toContain('class="end">12<')
+      expect(placed.chunk).toContain('style="--at:1;--span:2;--of:4"')
+      expect(placed.chunk).not.toContain('class="continuation"')
+
+      // The bracket across a third field: a middle segment, open at both ends.
+      expect([...both((m) => m.set('ck-head', 'lastByteIndex', m.int(2))).chunk.matchAll(/class="(bracket(?: start)?(?: end)?)"/g)].map((m) => m[1])).toEqual(['bracket start', 'bracket', 'bracket end'])
+
+      // A nested layout in a field: the field takes a row (data-byte-detail) and holds it; its own
+      // offsets, its own flow; in Text, its lines under the field's.
+      const nested = both((m) => m.set('ck-size', 'byteDetail', m.n('entry')))
+      expect(nested.chunk).toContain('data-byte-detail=""')
+      expect(nested.chunk).toContain('class="detail"')
+      expect(nested.chunk.match(/role="figure"/g)).toHaveLength(2)
+      expect(nested.chunk).toContain('aria-label="Directory entry"')
+      expect(nested.chunk).toContain('class="axis-label">From the entry<')
+      expect(nested.chunk).toContain('aria-label="@0 · Block offset · u64 LE · 8 B"')
+      expect(nested.chunkText).toBe(
+        'Chunk\n@0 · ckID · FourCC · 4 B\n@4 · ckSize · 4 B\nDirectory entry\n@0 · Block offset · u64 LE · 8 B\n@8 · Block length · 4 B\n@8 · ckData · 4 B',
+      )
+      // The nested layout changes: a field added, a style.
+      const grown = both((m) => {
+        m.add([['entry', 'byteField', m.n('e2')], ['e2', 'byteIndex', m.int(2)], ['e2', 'label', m.f.literal('Checksum')], ['e2', 'byteOffset', m.int(12)], ['e2', 'byteLength', m.int(4)]])
+        m.set('entry', 'byteLayoutStyle', m.c('ByteRecord'))
+      })
+      expect(grown.chunk).toContain('data-layout-appearance="record"')
+      expect(grown.chunk).toContain('class="end">16<')
+      expect(grown.chunkText).toContain('@12 · Checksum · 4 B')
+      // A detail that leads back to its layout is not drawn, on either side of the cycle.
+      const cycle = both((m) => m.set('e1', 'byteDetail', m.n('chunk')))
+      expect(cycle.chunk).not.toContain('class="detail"')
+      expect(cycle.chunkText).not.toContain('Directory entry')
+      both((m) => m.set('e1', 'byteDetail', undefined))
+      // Wrapping taken away: the strip again, with its brackets; the nested layout is not shown in it.
+      const strip = both((m) => m.set('chunk', 'byteWrap', undefined))
+      expect(strip.chunk).toContain('<svg')
+      expect(strip.chunk).not.toContain('class="detail"')
+      expect(strip.chunk.match(/class="bracket"/g)).toHaveLength(1)
+      expect(strip.chunkText).not.toContain('Directory entry')
+      // And back.
+      expect(both((m) => m.set('chunk', 'byteWrap', m.f.literal('true', m.f.namedNode(NS.xsd + 'boolean')))).chunk).toContain('class="detail"')
       sparql!.dispose()
       fn!.dispose()
     }, 120_000)

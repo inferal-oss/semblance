@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { todoOps } from '../src/examples/todo.ts'
-import { NS, SEM } from '../src/ns.ts'
+import { loadStore } from '../src/node/load.ts'
+import { MOD, NS, SEM, STY } from '../src/ns.ts'
+import { toHTML } from '../src/render/serialize.ts'
+import { Runtime } from '../src/runtime.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -271,4 +274,75 @@ describe('idle time', () => {
     h.runtime.warm(8)
     expect(reads).toBeGreaterThan(0)
   })
+})
+
+describe('a wrapping byte layout', () => {
+  // A wrapping schematic (c:byteWrap) is drawn by rules into a grid the page breaks into rows: a
+  // change to one field re-renders that field, and the rows after it move by CSS, so no rule runs for
+  // them; a bracket re-renders its segments; a field of a nested layout (c:byteDetail) re-renders that
+  // field, not its containing field; the nested layout growing re-renders its own fields and the field
+  // it is in, not the other fields of the outer layout. Twelve fields and twelve brackets. (The strip's
+  // rules, which leave a flowing layout to the flow's, run for the same focus or member: once each.)
+  for (const prefer of ['sparql', 'function'] as const) {
+    it(`re-renders the field that changed, not the rows it moves (wat, ${prefer})`, () => {
+      const EX = 'https://example.org/bytes#'
+      const fields = Array.from({ length: 12 }, (_, i) => `ex:f${i} c:byteIndex ${i} ; c:label "F${i}" ; c:byteOffset ${i * 4} ; c:byteLength 4 .
+ex:s${i} c:firstByteIndex ${i} ; c:lastByteIndex ${Math.min(i + 1, 11)} ; c:label "S${i}" .`).join('\n')
+      const store = loadStore('wat', `
+@prefix c: <${NS.c}> .
+@prefix ex: <${EX}> .
+ex:wide a c:ByteLayout ; c:label "Wide" ; c:byteWrap true ;
+  c:byteField ${Array.from({ length: 12 }, (_, i) => `ex:f${i}`).join(' , ')} ;
+  c:byteSpan ${Array.from({ length: 12 }, (_, i) => `ex:s${i}`).join(' , ')} .
+ex:f3 c:byteDetail ex:entry .
+ex:entry a c:ByteLayout ; c:label "Entry" ; c:byteWrap true ; c:byteField ex:e0 , ex:e1 .
+ex:e0 c:byteIndex 0 ; c:label "Offset" ; c:byteOffset 0 ; c:byteLength 8 .
+ex:e1 c:byteIndex 1 ; c:label "Length" ; c:byteOffset 8 ; c:byteLength 4 .
+${fields}`)
+      const runtime = new Runtime(store)
+      const page = runtime.project({ modality: MOD.Screen, layers: [STY.Layer], prefer, name: 'wide', roots: [EX + 'wide'] }, (e) => {
+        throw e
+      })
+      const f = store.factory
+      const set = (s: string, p: string, o: ReturnType<typeof f.literal> | ReturnType<typeof f.namedNode>) =>
+        runtime.apply({ remove: store.match(f.namedNode(EX + s), f.namedNode(NS.c + p), null), add: [f.quad(f.namedNode(EX + s), f.namedNode(NS.c + p), o)] })
+      const int = (v: number) => f.literal(String(v), f.namedNode(NS.xsd + 'integer'))
+      // Rule runs by rule, and the cells (foci) the field rule ran for.
+      const ran = (change: () => void) => {
+        const runs = new Map([...page.engine.stats.byRule].map(([k, v]) => [k, v.runs]))
+        change()
+        return Object.fromEntries([...page.engine.stats.byRule]
+          .filter(([k, v]) => /Byte/.test(k) && v.runs > (runs.get(k) ?? 0))
+          .map(([k, v]) => [k.replace(/^.*[#/]/, ''), v.runs - (runs.get(k) ?? 0)]))
+      }
+      const cell = prefer === 'sparql' ? 'ByteFlowCell-sparql' : 'ByteFlowCell-fn'
+      const spans = prefer === 'sparql' ? 'ByteFlowSpans-sparql' : 'ByteFlowSpans-fn'
+      const frame = prefer === 'sparql' ? 'ByteFlowScreen' : 'ByteFlowFunction'
+      const strip = prefer === 'sparql' ? 'ByteCellScreen' : 'ByteCellFunction'
+      const stripSpans = prefer === 'sparql' ? 'ByteLayoutSpans-sparql' : 'ByteLayoutSpans-fn'
+      const stripFrame = prefer === 'sparql' ? 'ByteLayoutScreen' : 'ByteLayoutFunction'
+      expect(toHTML(page.index, EX + 'wide')).toContain('data-byte-detail')
+      // A field's label (it may wrap onto more lines, and its row grow): that field.
+      expect(ran(() => set('f5', 'label', f.literal('A much longer label that wraps in its box')))).toEqual({ [cell]: 1, [strip]: 1 })
+      // A bracket made longer: that bracket.
+      expect(ran(() => set('s2', 'lastByteIndex', int(6)))).toEqual({ [spans]: 1, [stripSpans]: 1 })
+      // A field of the nested layout: that field (and, by SPARQL, the field it is in, which follows the
+      // nested layout's fields to see that no detail leads back to it).
+      expect(ran(() => set('e1', 'label', f.literal('Block length')))).toEqual(prefer === 'sparql' ? { [cell]: 2, [strip]: 2 } : { [cell]: 1, [strip]: 1 })
+      // The nested layout grows by a field: its fields (which is last moves), its frame, and the field
+      // it is in; none of the outer layout's other eleven fields.
+      const grown = ran(() => runtime.apply({ remove: [], add: [
+        f.quad(f.namedNode(EX + 'entry'), f.namedNode(NS.c + 'byteField'), f.namedNode(EX + 'e2')),
+        f.quad(f.namedNode(EX + 'e2'), f.namedNode(NS.c + 'byteIndex'), int(2)),
+        f.quad(f.namedNode(EX + 'e2'), f.namedNode(NS.c + 'label'), f.literal('Checksum')),
+      ] }))
+      expect(grown[cell]).toBe(4)
+      expect(grown[frame]).toBe(1)
+      expect(grown[strip] ?? 0).toBeLessThanOrEqual(4)
+      // The style: the frame.
+      expect(ran(() => set('wide', 'byteLayoutStyle', f.namedNode(NS.c + 'ByteRecord')))).toEqual({ [frame]: 1, [stripFrame]: 1 })
+      runtime.dispose()
+      store.dispose?.()
+    }, 120_000)
+  }
 })

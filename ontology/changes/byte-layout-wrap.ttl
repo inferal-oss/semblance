@@ -1,0 +1,15 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+
+change:byte-layout-wrap a chg:Change ;
+    rdfs:label "Byte layouts flow across rows, and nest in a field"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/568> ;
+    chg:motivation "A long byte diagram needs panning in a narrow column, on a phone above all; and a field can stand for another record, such as an LDLS directory entry, whose own layout belongs inside it." ;
+    chg:substance """Wrapping (c:byteWrap). A schematic ByteLayout (no c:byteExtent) with c:byteWrap true is drawn in HTML instead of one SVG strip. Its fields sit in a grid as wide as its column, whose columns are at least one field's drawing width (132px). Each field spans three of the grid's rows (offsets, box, brackets), so the fields of a row share their height and long labels wrap at their regular size. Each field shows its start offset; the last field also shows the layout's end. A bracket is a segment in each field it covers, closed at its first and last field, open where a row ends, and labelled under its first field. The page breaks the rows; nothing is measured, and the server's HTML is the final layout. The fields are still c:ByteCell nodes: a list of list items, each named by its Text line. A to-scale layout stays one strip.
+
+Nesting (c:byteDetail). A field of a wrapping schematic can name another ByteLayout with c:byteDetail. The field takes a row of its own and contains the nested layout, which keeps its own offsets and appearance and wraps or not as it says. The field grows with it, and the rows after it move down. A detail that leads back to its own layout is not drawn. In Text, a field with a detail is its line followed by the nested layout's lines. In a strip, c:byteDetail is not shown.""" ;
+    chg:forwardGuide "Set c:byteWrap true on a schematic that should flow, and point a field's c:byteDetail at a layout to show inside it, leaving that layout out of any other container. Styles written against the strip's SVG (svg rect, svg text) do not reach a flowing layout: its parts are .ruler, .bar, .label, .meta, .detail, .brackets and .bracket (theme/byte-layout.ttl)." ;
+    chg:backwardGuide "Remove c:byteWrap to return a diagram to the single scrollable strip, and c:byteDetail to show a nested layout on its own." ;
+    chg:affects c:ByteLayout, c:ByteCell .
