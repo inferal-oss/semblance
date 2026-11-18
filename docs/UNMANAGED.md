@@ -27,7 +27,7 @@ sandbox's box) are neither Semblance's nor not.
 Every other element that is **visible on the page** belongs to a finding: the topmost element of a
 subtree of such elements, with how many visible elements it holds. Visible means rendered on the page,
 anywhere in the document, not only in the viewport: `checkVisibility()` with opacity and visibility,
-and a box with an area. Where there is no layout (linkedom), what is not hidden counts as visible;
+and a box of more than a pixel (a visually hidden live region is not UI). Where there is no layout (linkedom), what is not hidden counts as visible;
 `options.visible` and `options.displayed` replace either test.
 
 | category | what |

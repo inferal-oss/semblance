@@ -66,7 +66,7 @@ export interface UnmanagedSurvey {
 }
 
 export interface UnmanagedOptions {
-  /** Whether an element is visible on the page. Default: checkVisibility (with opacity and visibility) and a box with an area; where there is no layout (linkedom), not hidden. */
+  /** Whether an element is visible on the page. Default: checkVisibility (with opacity and visibility) and a box of more than a pixel; where there is no layout (linkedom), not hidden. */
   visible?: (el: Element) => boolean
   /** Whether an element's descendants can be visible. Default: it has a box or is display: contents; without layout, not hidden. */
   displayed?: (el: Element) => boolean
@@ -98,8 +98,9 @@ function visibleByDefault(el: Element): boolean {
   const check = (el as Element & { checkVisibility?: CheckVisibility }).checkVisibility
   if (!check) return notHidden(el)
   if (!check.call(el, { opacityProperty: true, visibilityProperty: true })) return false
+  // A box of a pixel or less is a visually hidden one (a live region for assistive technology), not UI.
   const r = el.getBoundingClientRect()
-  return r.width > 0 && r.height > 0
+  return r.width > 0 && r.height > 0 && r.width * r.height > 1
 }
 
 interface Context {
