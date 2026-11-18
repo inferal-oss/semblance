@@ -99,7 +99,8 @@ export async function mountNavigating(opts: NavigationOptions, backends?: Record
   await navigation.restore()
   const shell = mount(store, prefer)
   persistence?.attach(shell.runtime, { bus: shell.bus })
-  navigation.attach(shell.runtime, { bus: shell.bus, onNavigate: () => shell.shell.flush() })
+  // Clicks on links are taken over where the host takes them over: the document.
+  navigation.attach(shell.runtime, { bus: shell.bus, onNavigate: () => shell.shell.flush(), links: opts.links ?? shell.document })
   return { ...shell, persistence, navigation }
 }
 

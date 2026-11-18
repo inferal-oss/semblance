@@ -933,11 +933,12 @@ export class Navigation {
     const loc = this.location()
     if (!loc?.paths || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
     const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
-    if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return
+    if (!a || (a.target && a.target !== '_self') || !pageLink(a)) return
     const href = a.getAttribute('href')!
     if (!href.startsWith('/') || href.startsWith('//')) return
     const path = href.split(/[?#]/)[0]!
     if (path !== loc.base.slice(0, -1) && !path.startsWith(loc.base)) return
+    if (namesFile(path)) return
     e.preventDefault()
     const next = path + (href.includes('?') ? '?' + href.split('?')[1]!.split('#')[0] : this.url.search) + (href.includes('#') ? href.slice(href.indexOf('#')) : '')
     if (next !== this.url.pathname + this.url.search + this.url.hash) this.step(next)
@@ -1253,6 +1254,26 @@ const locationSpelling: FnRule = (ctx, focus) => {
 }
 
 /** The link address of a reported address: a path and its fragment (no query), else the fragment, else '#'. */
+/**
+ * Whether a link may be a page of the app: not one to save (download) nor one whose stated type is
+ * not HTML (a feed, a file). Anything else is decided by its path.
+ */
+function pageLink(a: Element): boolean {
+  if (a.hasAttribute('download')) return false
+  const type = a.getAttribute('type')?.split(';')[0]!.trim().toLowerCase()
+  return !type || type === 'text/html' || type === 'application/xhtml+xml'
+}
+
+/**
+ * Whether a path names a file (its last segment has an extension: /changes.atom, /llms.txt) rather
+ * than a page. The addresses a location spells end with '/'; an HTML document (index.html) is a page.
+ */
+export function namesFile(path: string): boolean {
+  const last = path.slice(path.lastIndexOf('/') + 1)
+  const ext = /\.([A-Za-z0-9]{1,10})$/.exec(last)?.[1]?.toLowerCase()
+  return ext !== undefined && ext !== 'html' && ext !== 'htm'
+}
+
 function currentLink(address: string): string {
   const bare = address.replace(/\?[^#]*/, '')
   return bare.startsWith('/') ? bare : bare.includes('#') ? bare.slice(bare.indexOf('#')) : '#'
