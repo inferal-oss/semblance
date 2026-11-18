@@ -45,6 +45,7 @@ export const NS = {
   fs: 'https://semblance.dev/ns/fullscreen#',
   ext: 'https://semblance.dev/ns/foreign#',
   rnd: 'https://semblance.dev/ns/rendered#',
+  um: 'https://semblance.dev/ns/unmanaged#',
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
   file: 'https://semblance.dev/ns/file#',
   ol: 'https://semblance.dev/ns/outline#',

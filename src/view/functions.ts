@@ -119,7 +119,33 @@ const undoable: FnView = {
   output: (ctx, r) => quads(ctx, [[r.get('log'), BEH.undoableCount, r.get('n')]]),
 }
 
+const UM = NS.um
+
+/** um:FindingCounts: how many findings each survey has. */
+const found: FnView = {
+  streamVar: 'survey',
+  memberVar: 'm',
+  groupBy: ['survey'],
+  aggregates: [{ as: 'n', fn: 'COUNT', distinct: true, slot: 'f' }],
+  // Islands' findings are made by Semblance (um:madeBySemblance on their category): not counted.
+  local: (ctx, _survey, m) =>
+    ctx.match(m, RDF_TYPE, ctx.nn(UM + 'Finding')).length && !ctx.objects(m, UM + 'category').some((c) => ctx.objects(c, UM + 'madeBySemblance').some((v) => v.value === 'true')) ? [row([['f', m]])] : [],
+  output: (ctx, r) => quads(ctx, [[r.get('survey'), UM + 'found', r.get('n')]]),
+}
+
+/** um:CategoryCounts: how many findings of each category a survey has, on the category. */
+const categories: FnView = {
+  streamVar: 'survey',
+  memberVar: 'm',
+  groupBy: ['survey', 'category'],
+  aggregates: [{ as: 'n', fn: 'COUNT', distinct: true, slot: 'f' }],
+  local: (ctx, _survey, m) => (ctx.match(m, RDF_TYPE, ctx.nn(UM + 'Finding')).length ? ctx.objects(m, UM + 'category').map((c) => row([['category', c], ['f', m]])) : []),
+  output: (ctx, r) => quads(ctx, [[r.get('category'), UM + 'found', r.get('n')]]),
+}
+
 export const viewFunctions: Record<string, FnView> = {
+  'unmanaged:found': found,
+  'unmanaged:categories': categories,
   'stream-stats:totals': totals,
   'stream-stats:keys': keys,
   'count:members': members,

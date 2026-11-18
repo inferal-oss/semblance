@@ -1815,9 +1815,10 @@ ui:doc-iv-more a c:Text ; c:label "docs/IVM.md in the repository has the full de
 
 # --- Tools ---
 ui:doc-tools a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-to-h ui:doc-to-1 ui:doc-to-keys ui:doc-to-2 ) .
+    c:children ( ui:doc-to-h ui:doc-to-1 ui:doc-to-unmanaged ui:doc-to-keys ui:doc-to-2 ) .
 ui:doc-to-h a c:Heading ; c:level 1 ; c:label "Tools" .
 ui:doc-to-1 a c:Text ; c:label "The tools are on every page, in a window docked to the bottom: the Inspector (the rendered element, its provenance and the rule that made it, for whatever you hover), a SPARQL workbench over the live graph, Activity and the Change log, and the Engine (store, rule implementations, layers). Each tab can be torn off into its own window." .
+ui:doc-to-unmanaged a c:Text ; c:label "The Inspector's other view, Not made by Semblance, finds what on the page no rendering made: elements host code inserted, what an extension injected, a hosted library's own elements and embedded media. While it is shown it walks the page, and again as the page changes, and puts each finding in the graph (um:Finding, in the rendered graph); a data grid lists them by category, with a count of each, islands listed apart (made by Semblance, to show what they mount), and selecting one outlines it on the page and highlights the nearest element Semblance made. Tests ask the same of a page or a component: surveyUnmanaged and unmanagedElements, from the web entry." .
 ui:doc-to-keys a c:DescriptionList ; c:of ui:doc-to-key-items ; c:fields ( ui:k-tools ui:k-here ui:k-pause ui:k-off ui:k-private ) .
 ui:doc-to-key-items ui:k-tools "⌘. - open or close the tools" ; ui:k-here "⌘Z - inspect what is under the pointer, in a window, paused" ;
     ui:k-pause "Z - pause or resume the inspector" ; ui:k-off "⇧Z - turn the inspector off or on" ; ui:k-private "⌘⇧H - private mode" .

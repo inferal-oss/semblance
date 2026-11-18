@@ -95,6 +95,7 @@
     "prepack": "npm run engine:build && npm run layout:build && npm run build:package",
     "serve": "node bin/semblance.mjs serve",
     "perf:interactions": "tsx scripts/interactions.ts",
+    "check:unmanaged": "tsx scripts/unmanaged-check.ts",
     "build:package": "tsx scripts/build-package.ts",
     "pack:check": "tsx scripts/pack-check.ts",
     "release:version": "tsx scripts/release-version.ts"

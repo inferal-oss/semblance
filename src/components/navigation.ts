@@ -2,7 +2,7 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out } from '../engine/context.ts'
-import { C, MOD, NS, RDF_TYPE, XSD_INTEGER } from '../ns.ts'
+import { C, MOD, NS, RDF_TYPE, SEM, XSD_INTEGER } from '../ns.ts'
 import { el, marked, md5Key } from './data.ts'
 import { isTrue, labelOf, named, nodes, num, text, encodeForUri } from './util.ts'
 
@@ -275,13 +275,30 @@ const H_HAS_CHILD = NS.rdfhtml + 'hasChild'
  * read after it by assistive technology. Decorates the option buttons the segmented rule
  * mints (same keys); each option's count is a traced read, so a count changing re-runs this.
  */
+/** A segmented control's options: c:options, else the individuals of its property's range. */
+function segmentedOptions(ctx: Parameters<FnRule>[0], focus: NamedNode, property: NamedNode): NamedNode[] {
+  const explicit = ctx.object(focus, NS.c + 'options')
+  const range = ctx.object(property, 'http://www.w3.org/2000/01/rdf-schema#range')
+  return explicit ? nodes(ctx, explicit).filter(named) : range ? ctx.match(null, NS.rdf + 'type', range).map((q) => q.subject).filter(named) : []
+}
+
+/** Each option's c:help, in the viewer's language, as its button's tooltip (c:SegmentedHelp). */
+const optionHelp: FnRule = (ctx, focus) => {
+  const property = ctx.object(focus, C.property)
+  if (!named(property)) return []
+  const o = ctx.out(focus)
+  for (const opt of segmentedOptions(ctx, focus, property)) {
+    const help = text(ctx, opt, NS.c + 'help')
+    if (help !== undefined) o.t(o.node('opt-' + encodeForUri(opt.value)), SEM.tooltip, help)
+  }
+  return o.quads
+}
+
 const counts: FnRule = (ctx, focus) => {
   const property = ctx.object(focus, C.property)
   const countProperty = ctx.object(focus, NS.c + 'countProperty')
   if (!named(property) || !named(countProperty)) return []
-  const explicit = ctx.object(focus, NS.c + 'options')
-  const range = ctx.object(property, 'http://www.w3.org/2000/01/rdf-schema#range')
-  const options = explicit ? nodes(ctx, explicit) : range ? ctx.match(null, NS.rdf + 'type', range).map((q) => q.subject).filter(named) : []
+  const options = segmentedOptions(ctx, focus, property)
   const spoken = text(ctx, focus, NS.c + 'countLabel')
   const o = ctx.out(focus)
   for (const opt of options) {
@@ -349,6 +366,7 @@ const picker: FnRule = (ctx, focus) => {
 export const functions: Record<string, FnRule> = {
   'segmented:picker': picker,
   'nav:counts': counts,
+  'nav:option-help': optionHelp,
   'nav:breadcrumbs': breadcrumbs,
   'nav:breadcrumb-steps': breadcrumbSteps,
   'nav:breadcrumb-trail': breadcrumbTrail,

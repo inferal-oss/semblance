@@ -87,6 +87,32 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-spoken-text"))) AS ?spokenText)
 }""" .
 
+# What an option is, on hover and to assistive technology: an option's c:help (in the viewer's
+# language) is its button's tooltip (sem:tooltip, shown by the tooltip layer). Any c:Segmented whose
+# options say what they are has them explained; one whose options have no c:help gets nothing.
+c:SegmentedHelp a sem:Rendering ;
+    sem:targets c:Segmented ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 .
+c:SegmentedHelp-fn a sem:Rule ; sem:implements c:SegmentedHelp ; sem:function "nav:option-help" .
+c:SegmentedHelp-sparql a sem:Rule ;
+    sem:implements c:SegmentedHelp ;
+    sem:follows ( c:property rdfs:range [ sem:inverse rdf:type ] ) , ( c:options [ sem:zeroOrMore rdf:rest ] rdf:first ) ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?button sem:tooltip ?help }
+WHERE {
+  $this c:property ?property . FILTER(isIRI(?property))
+  { $this c:options/rdf:rest*/rdf:first ?opt . FILTER(isIRI(?opt)) }
+  UNION
+  { FILTER NOT EXISTS { $this c:options ?explicit } ?property rdfs:range ?range . ?opt a ?range . FILTER(isIRI(?opt)) }
+  OPTIONAL { ?pickedAt l10n:of ?opt ; l10n:help ?picked }
+  OPTIONAL { FILTER(!BOUND(?picked)) ?opt c:help ?only FILTER(isLiteral(?only)) }
+  BIND(STR(COALESCE(?picked, ?only)) AS ?help)
+  FILTER(BOUND(?help))
+  BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?opt)))) AS ?button)
+}""" .
+
 # --- Breadcrumbs: where you are in a hierarchy ----------------------------------------------------
 # The trail is c:items (nodes, labelled), or derived: from an end node up through c:parentProperty
 # (`?node <parentProperty> ?parent`) to a node with no parent. The end node is c:of, or the

@@ -1,0 +1,45 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:not-made-by-semblance a chg:Change ;
+    rdfs:label "A highlight reaches one hop further (c:via); what Semblance did not make, found and in the graph (um:)"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/582> ;
+    chg:motivation """Some of a page's visible UI is still drawn by host code rather than projected from the graph, and
+nothing said which, or how much. A survey of the page (um:Survey, ontology/layers/unmanaged.ttl) finds it and puts
+it in the graph, where a data grid lists it; showing where a finding sits needs a highlight of the node the finding
+points at (um:near), not of the finding itself.""" ;
+    chg:substance """c:Highlight takes c:via, as c:DescriptionList does: with it, the node marked is the one c:via leads to
+from what c:bindProperty of c:bindFrom holds (one hop), and nothing is marked when there is no such node. Without
+c:via it marks what is held, as before.
+
+New, beside it: the um: vocabulary (um:Survey, um:Finding, um:Category and its four individuals, the survey's
+figures, the maintained views um:FindingCounts and um:CategoryCounts), the survey effect and the finder
+(attachUnmanaged, surveyUnmanaged and unmanagedElements from the web entry), and the style of its mark
+(data-sem-unmanaged, outlined while a c:Highlight is shown); what a site allows (um:allowed on a category, um:Exception
+with um:selector, um:slot, um:category, um:because and um:issue, and um:exceptedBy on the findings it allows), which
+the guard scripts/unmanaged-check.ts checks every page against.
+
+What an island mounts, or a custom element the graph names draws in its shadow root, is listed as a finding of
+um:Island (um:madeBySemblance true, um:allowed true): counted as made by Semblance, left out of um:found on a survey.
+A survey with um:whileShown runs by itself while that component is shown.
+
+c:Segmented explains its options: an option's c:help, in the viewer's language, is its button's tooltip
+(c:SegmentedHelp, sem:tooltip). c:SplitView with c:bindFrom and c:bindProperty is a master-detail view: its secondary
+pane is collapsed while that property holds nothing.
+
+c:Flippable's control (Source) sits at the inline end of its face: the top left right to left, where it sat on the
+start of the face's first row, not the top right.""" ;
+    chg:forwardGuide """Nothing to move: a highlight without c:via marks what it marked. To mark a node one hop away, add
+c:via with the property that leads to it. A segmented control whose options already have a c:help now shows it as
+their tooltip; a split view that already had c:bindFrom and c:bindProperty (it read neither) now collapses while
+nothing is held: remove them to keep both panes.""" ;
+    chg:backwardGuide """Remove c:via from every c:Highlight that has one; such a highlight then marks what is held (a
+finding), which is not an element, so it marks nothing. A flippable's control goes back to the top right in every
+direction. Segmented options lose their tooltips; a master-detail split view shows both panes again.""" ;
+    chg:affects c:Highlight , c:Flippable , c:Segmented , c:SplitView .

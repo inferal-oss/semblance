@@ -11,3 +11,5 @@ export { DEFAULT_LAYERS, mount, type MountedApp, type MountOptions } from './mou
 export { attachConnectors, type ConnectorHost } from './connectors.ts'
 export { attachSnaps, type SnapHost } from './snap.ts'
 export { attachLightboxes, type LightboxHost } from './lightbox.ts'
+// What on the page Semblance did not make (docs/UNMANAGED.md): the finder and its Tools effect.
+export { attachUnmanaged, surveyUnmanaged, unmanagedElements, type UnmanagedCategory, type UnmanagedFinding, type UnmanagedHost, type UnmanagedOptions, type UnmanagedSurvey } from './unmanaged.ts'
