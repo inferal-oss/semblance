@@ -21,7 +21,8 @@ concurrency:
 
 jobs:
   guard:
-    runs-on: ubuntu-latest
+    # Playwright 1.57 installs its headless Chromium on Ubuntu 24.04, not on the latest runner image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       # The whole history and the tags: the Changes page is built from them, as on Pages.
