@@ -2585,7 +2585,6 @@ sty:when a sem:Term .
 svg:Circle a sem:Term .
 svg:Defs a sem:Term .
 svg:Element a sem:Term .
-svg:ForeignObject a sem:Term .
 svg:G a sem:Term .
 svg:Line a sem:Term .
 svg:LinearGradient a sem:Term .

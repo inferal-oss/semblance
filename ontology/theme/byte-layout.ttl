@@ -77,7 +77,9 @@
 # a nested layout takes a row of its own. Every selector names its path from the layout (> … >), so
 # that none reaches the fields of a layout nested in one of these.
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ;
-    sty:declares [ sty:property "font" ; sty:raw "400 11px var(--sem-font-mono)" ] .
+    sty:declares [ sty:property "font" ; sty:raw "400 11px var(--sem-font-mono)" ],
+                 [ sty:property "inline-size" ; sty:raw "100%" ],
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ;
     sty:part "> [role=figure] > .axis-label, > [role=figure] > [role=list] > * > :is(.ruler, .bar) > :is(.offset, .end, .card-offset, .meta)" ;
     sty:declares [ sty:property "color" ; sty:raw "var(--sem-muted)" ] .
