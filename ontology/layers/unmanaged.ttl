@@ -1,0 +1,139 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix um: <https://semblance.dev/ns/unmanaged#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix tree: <https://w3id.org/tree#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# What on the page Semblance did not make: a survey of the visible elements that no rendering
+# produced, as triples one can query (docs/UNMANAGED.md).
+#
+# An element is Semblance's when a renderer made it from a rendering (it traces back to a graph node
+# and the rule that rendered it), when a host library drew it for a graph node (ext:Hosted), or when
+# it is inside an island (ext:Island) or a custom element the graph names (ext:tag). Every other
+# visible element - on the page, anywhere in the document, not only in the viewport - belongs to a
+# finding: the topmost element of a subtree of such elements, in one of four categories.
+#
+#   1. A um:Survey asks (um:request um:Run, written by a reaction: a c:Setter button). Nothing is
+#      walked until then: the walk reads layout, so it is a tool's, never an interaction's.
+#   2. The survey effect (src/web/unmanaged.ts) walks the page once, reading each renderer's own map,
+#      and writes what it found to the rendered graph (urn:semblance:rendered, unrecorded), replacing
+#      the survey's last findings: its members (tree:member), um:Finding nodes <survey>/~finding-N,
+#      and the survey's totals.
+#   3. The counts are maintained views (um:FindingCounts, um:CategoryCounts): a c:Segmented with
+#      c:countProperty um:found shows them on its options.
+#   4. The finding held in the survey's c:bindProperty of c:bindFrom (a data grid's c:selectedRow) is
+#      marked on the page (data-sem-unmanaged, its category) and scrolled to: the element is not
+#      Semblance's, so its mark is the effect's to set; the theme outlines it while a c:Highlight is
+#      shown, as the inspector's mark.
+
+<https://semblance.dev/ns/unmanaged> a owl:Ontology ;
+    rdfs:label "Semblance: what Semblance did not make"@en .
+
+# --- the survey -----------------------------------------------------------------------------------
+
+um:Survey a owl:Class ;
+    rdfs:label "Survey of what Semblance did not make"@en , "Огляд того, що зробив не Semblance"@uk , "Erhebung dessen, was nicht Semblance gemacht hat"@de , "مسح لما لم يصنعه Semblance"@ar ;
+    rdfs:comment "Asks for the visible elements of the page that Semblance did not make (um:request um:Run); its members (tree:member) are what was found, um:Finding nodes. With c:bindFrom and c:bindProperty, the finding held there is marked on the page."@en .
+um:request a owl:ObjectProperty ; rdfs:domain um:Survey ;
+    rdfs:comment "Written by a reaction: survey the page now (um:Run). Performed and removed by the survey effect."@en .
+um:Run a owl:NamedIndividual ;
+    rdfs:label "Find"@en , "Знайти"@uk , "Suchen"@de , "بحث"@ar ;
+    rdfs:comment "The value of um:request: walk the page and write what was found."@en .
+
+um:visibleElements a owl:DatatypeProperty ; rdfs:domain um:Survey ; rdfs:range xsd:integer ;
+    rdfs:label "visible elements"@en , "видимі елементи"@uk , "sichtbare Elemente"@de , "العناصر المرئية"@ar ;
+    rdfs:comment "The visible elements of the page, Semblance's or not (the elements that only hold a renderer not counted)."@en .
+um:managedElements a owl:DatatypeProperty ; rdfs:domain um:Survey ; rdfs:range xsd:integer ;
+    rdfs:label "made by Semblance"@en , "зроблено Semblance"@uk , "von Semblance gemacht"@de , "صنعها Semblance"@ar ;
+    rdfs:comment "The visible elements Semblance made."@en .
+um:unmanagedElements a owl:DatatypeProperty ; rdfs:domain um:Survey ; rdfs:range xsd:integer ;
+    rdfs:label "not made by Semblance"@en , "зроблено не Semblance"@uk , "nicht von Semblance"@de , "لم يصنعها Semblance"@ar ;
+    rdfs:comment "The visible elements in the findings."@en .
+um:share a owl:DatatypeProperty ; rdfs:domain um:Survey ; rdfs:range xsd:decimal ;
+    rdfs:label "share not made by Semblance"@en , "частка не від Semblance"@uk , "Anteil nicht von Semblance"@de , "نسبة ما لم يصنعه Semblance"@ar ;
+    c:unit "%" ;
+    rdfs:comment "um:unmanagedElements in percent of um:visibleElements, to a tenth."@en .
+um:surveyedAt a owl:DatatypeProperty ; rdfs:domain um:Survey ; rdfs:range xsd:dateTime ;
+    rdfs:label "surveyed"@en , "оглянуто"@uk , "erhoben"@de , "وقت المسح"@ar ;
+    rdfs:comment "When the page was last walked."@en .
+um:found a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:label "found"@en , "знайдено"@uk , "gefunden"@de , "تم العثور عليها"@ar ;
+    rdfs:comment "Maintained: on a survey, its findings (um:FindingCounts); on a um:Category, the page's findings of that category (um:CategoryCounts)."@en .
+
+# --- a finding --------------------------------------------------------------------------------------
+
+um:Finding a owl:Class ;
+    rdfs:label "Finding"@en , "Знахідка"@uk , "Fund"@de , "نتيجة"@ar ;
+    rdfs:comment "A visible subtree of the page that Semblance did not make, by its topmost element."@en .
+um:order a owl:DatatypeProperty ; rdfs:domain um:Finding ; rdfs:range xsd:integer ;
+    rdfs:comment "Its place in document order (1 first): the members' sequence."@en .
+um:category a owl:ObjectProperty ; rdfs:domain um:Finding ; rdfs:range um:Category ;
+    rdfs:label "category"@en , "категорія"@uk , "Kategorie"@de , "الفئة"@ar .
+um:reason a owl:DatatypeProperty ; rdfs:domain um:Finding ;
+    rdfs:label "why"@en , "чому"@uk , "warum"@de , "السبب"@ar ;
+    rdfs:comment "What put it in its category: \"embedded media\", \"hosted component\", \"host-owned slot <name>\", the framework mark it bears (data-sem-anchor), \"inside a rendered element\", \"undefined custom element\", \"outside <body>\"."@en .
+um:element a owl:DatatypeProperty ; rdfs:domain um:Finding ;
+    rdfs:label "element"@en , "елемент"@uk , "Element"@de , "العنصر"@ar ;
+    rdfs:comment "Its topmost element's name (div)."@en .
+um:path a owl:DatatypeProperty ; rdfs:domain um:Finding ;
+    rdfs:label "path"@en , "шлях"@uk , "Pfad"@de , "المسار"@ar ;
+    rdfs:comment "Where it is: from the nearest element Semblance made down to it, selector-like and short."@en .
+um:elements a owl:DatatypeProperty ; rdfs:domain um:Finding ; rdfs:range xsd:integer ;
+    rdfs:label "visible elements"@en , "видимі елементи"@uk , "sichtbare Elemente"@de , "العناصر المرئية"@ar ;
+    rdfs:comment "How many visible elements it holds, its topmost one included."@en .
+um:near a owl:ObjectProperty ; rdfs:domain um:Finding ;
+    rdfs:label "nearest Semblance element"@en , "найближчий елемент Semblance"@uk , "nächstes Semblance-Element"@de , "أقرب عنصر من Semblance"@ar ;
+    rdfs:comment "The RDF/HTML node of the nearest element above it that Semblance made (for the renderers whose graph this is: a live example's sandbox has its own)."@en .
+um:nearComponent a owl:ObjectProperty ; rdfs:domain um:Finding ;
+    rdfs:label "in component"@en , "у компоненті"@uk , "in Komponente"@de , "في المكوّن"@ar ;
+    rdfs:comment "The component that rendered um:near."@en .
+
+# --- the categories ---------------------------------------------------------------------------------
+
+um:Category a owl:Class ;
+    rdfs:label "Category"@en , "Категорія"@uk , "Kategorie"@de , "الفئة"@ar ;
+    rdfs:comment "What an element Semblance did not make is."@en .
+um:HostCode a um:Category ; sem:order 1 ; sem:slug "host-code" ; sty:tone sty:Warning ;
+    rdfs:label "Host code"@en , "Код хоста"@uk , "Host-Code"@de , "شيفرة المضيف"@ar ;
+    rdfs:comment "Inserted by host code: inside a renderer's tree (a host-owned slot or not), or marked by one of the framework's effects (data-sem-*, sem-*). What should become renderings."@en .
+um:ThirdParty a um:Category ; sem:order 2 ; sem:slug "third-party" ; sty:tone sty:Danger ;
+    rdfs:label "Third party"@en , "Стороннє"@uk , "Drittanbieter"@de , "طرف ثالث"@ar ;
+    rdfs:comment "Injected by an extension or devtools: a custom element the page does not define, an element on <html> outside <body>."@en .
+um:Sanctioned a um:Category ; sem:order 3 ; sem:slug "sanctioned" ; sty:tone sty:Info ;
+    rdfs:label "Foreign on purpose"@en , "Чуже навмисно"@uk , "Absichtlich fremd"@de , "أجنبي عن قصد"@ar ;
+    rdfs:comment "Foreign by design: a hosted library's own elements inside a <sem-host>, embedded media (iframe, video, audio, canvas, embed, object)."@en .
+um:Unknown a um:Category ; sem:order 4 ; sem:slug "unknown" ; sty:tone sty:Neutral ;
+    rdfs:label "Unknown"@en , "Невідоме"@uk , "Unbekannt"@de , "غير معروف"@ar ;
+    rdfs:comment "Outside every renderer, with nothing to say who made it."@en .
+
+# --- the counts: maintained, so a filter shows how many of each there are ---------------------------
+
+um:FindingCounts a iv:View ;
+    rdfs:label "findings per survey"@en ;
+    sem:function "unmanaged:found" ;
+    sem:construct """
+CONSTRUCT { ?survey um:found ?n }
+WHERE { { SELECT ?survey (COUNT(DISTINCT ?m) AS ?n) WHERE { ?survey tree:member ?m . ?m a um:Finding } GROUP BY ?survey } }""" .
+
+um:CategoryCounts a iv:View ;
+    rdfs:label "findings per category"@en ;
+    sem:function "unmanaged:categories" ;
+    sem:construct """
+CONSTRUCT { ?category um:found ?n }
+WHERE { { SELECT ?survey ?category (COUNT(DISTINCT ?m) AS ?n) WHERE { ?survey tree:member ?m . ?m a um:Finding ; um:category ?category } GROUP BY ?survey ?category } }""" .
+
+# --- the mark: the selected finding's element, outlined while a highlight is shown -------------------
+# An outline only: the element is not Semblance's, so nothing that could move it or what it holds
+# (no position, border or pseudo-element), solid and in the warning colour, apart from the
+# inspector's dashed accent mark on the nearest element Semblance made.
+
+[] a sty:StyleRule ; sty:part ":root:has([data-sem-c=highlight]:not([hidden] *)) [data-sem-unmanaged]" ;
+    sty:declares [ sty:property "outline" ; sty:raw "2px solid var(--sem-warning-9)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:part ":root:has([data-sem-c=highlight]:not([hidden] *)) [data-sem-unmanaged=third-party]" ;
+    sty:declares [ sty:property "outline-color" ; sty:raw "var(--sem-danger)" ] .

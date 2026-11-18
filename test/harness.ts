@@ -19,8 +19,19 @@ import { DomRenderer } from '../src/render/dom.ts'
 import { RenderedState } from '../src/rendered.ts'
 import { Runtime } from '../src/runtime.ts'
 import { FakeLayout } from './rendered-layout.ts'
+import { surveyUnmanaged, type UnmanagedOptions } from '../src/web/unmanaged.ts'
 
 const UI = 'https://semblance.dev/demo#'
+
+/**
+ * What in `root` is visible and not made by Semblance (src/web/unmanaged.ts), each as
+ * "category reason: path", so a test can assert a page or a component has none:
+ * `expect(notMadeBySemblance(shell.document)).toEqual([])`. Without layout (linkedom), what is not
+ * hidden counts as visible.
+ */
+export function notMadeBySemblance(root: ParentNode, opts?: UnmanagedOptions): string[] {
+  return surveyUnmanaged(root, opts).findings.map((f) => `${f.category} ${f.reason}: ${f.path}`)
+}
 export const appGraph = readFileSync(new URL('../demo/app.ttl', import.meta.url), 'utf8')
 const galleryDir = new URL('../demo/gallery/', import.meta.url)
 export const galleryFiles = Object.fromEntries(readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort().map((f) => ['demo/gallery/' + f, readFileSync(new URL(f, galleryDir), 'utf8')]))

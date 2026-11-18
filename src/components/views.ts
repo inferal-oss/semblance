@@ -429,7 +429,10 @@ const highlight: FnRule = (ctx, focus) => {
   o.renders(o.el('root', 'Span', { hidden: '' }))
   const from = ctx.object(focus, C.bindFrom)
   const property = ctx.object(focus, C.bindProperty)
-  const node = from && property ? ctx.object(from, property) : undefined
+  const held = from && property ? ctx.object(from, property) : undefined
+  // With c:via, the node one hop further from what is held (a finding's nearest element).
+  const via = ctx.object(focus, NS.c + 'via')
+  const node = named(via) ? (named(held) ? ctx.object(held, via) : undefined) : held
   if (named(node)) o.attr(node, 'data-sem-highlighted', 'true', 'mark')
   return o.quads
 }

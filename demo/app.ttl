@@ -28,6 +28,7 @@
 @prefix nav: <https://semblance.dev/ns/navigation#> .
 @prefix chg: <https://semblance.dev/ns/change#> .
 @prefix rnd: <https://semblance.dev/ns/rendered#> .
+@prefix um: <https://semblance.dev/ns/unmanaged#> .
 @prefix lc: <https://semblance.dev/ns/layout-constraints#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 
@@ -49,6 +50,7 @@ ui:app sty:colorScheme sty:System ;
     ui:docSection ui:DocOverview ;
     ui:example ui:ExTodo ;
     ui:inspectorMode ui:Live ;
+    ui:inspects ui:ElementView ;
     ui:galleryGroup ui:GroupFoundations .
 
 ui:store rdfs:label "Store" ; rdfs:range ui:StoreKind .
@@ -310,7 +312,17 @@ ui:logTab a c:Tab ; c:label "Change log" ; c:content ui:logCard .
 # Inspector: hovering any component writes ui:inspecting (unrecorded hover events);
 # the view is CONSTRUCTs bound to it, and the node is highlighted.
 ui:inspectorCard a c:Flippable ; c:front ui:inspectorPanel .
-ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorBar ui:inspectorMarkup ui:inspector ui:highlight ) .
+# Two views: the element under the pointer, and what on the page Semblance did not make.
+ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorViews ui:inspectorPanes ) .
+ui:inspects rdfs:label "Inspect" , "Оглядати"@uk , "Untersuchen"@de , "فحص"@ar ; rdfs:range ui:InspectorView .
+ui:ElementView a ui:InspectorView ; sem:order 1 ;
+    rdfs:label "Element" , "Елемент"@uk , "Element"@de , "العنصر"@ar .
+ui:inspectorViews a c:Segmented ; c:controls ui:app ; c:property ui:inspects ; c:options ( ui:ElementView ui:unmanaged ) ;
+    c:countProperty um:found ; c:countLabel "found" , "знайдено"@uk , "gefunden"@de , "تم العثور عليها"@ar .
+ui:inspectorPanes a c:Switch ; c:controls ui:app ; c:property ui:inspects ; c:cases ( ui:elementCase ui:unmanagedCase ) .
+ui:elementCase c:when ui:ElementView ; c:content ui:elementPanes .
+ui:unmanagedCase c:when ui:unmanaged ; c:content ui:unmanagedPanel .
+ui:elementPanes a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorBar ui:inspectorMarkup ui:inspector ui:highlight ) .
 ui:inspectorBar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inspectorModes ui:pauseHint ui:inspectingChip ui:inspectorStrip ) .
 # Without the RDF/HTML: the component that rendered the hovered element, as Turtle, and the HTML
 # the element becomes (c:ElementMarkup); the RDF/HTML section steps aside (ui:qElement).
@@ -407,6 +419,54 @@ ui:inspector a c:QueryView ; sem:readsProvenance true ;
     c:baseIri "https://example.org/todo" ;
     c:emptyText "With the inspector Live, hover any element on the page to see its RDF/HTML, the PROV-O activity and rule that generated it, the layers that decorated it, and the input it was derived from." .
 ui:highlight a c:Highlight ; c:bindFrom ui:app ; c:bindProperty ui:inspecting .
+
+# Not made by Semblance (ontology/layers/unmanaged.ttl): Find walks the page once (the survey effect,
+# src/web/unmanaged.ts) and writes what it found into the rendered graph; nothing runs until it is
+# pressed. The counts are maintained views: the total on the view's option, each category's on the
+# filter. Selecting a finding outlines its element on the page (the effect's mark, as the survey
+# binds the grid's selection) and highlights the nearest element Semblance made (c:via um:near).
+ui:unmanaged a um:Survey , ui:InspectorView ; sem:order 2 ;
+    rdfs:label "Not made by Semblance" , "Зроблено не Semblance"@uk , "Nicht von Semblance"@de , "لم يصنعه Semblance"@ar ;
+    c:bindFrom ui:unmanagedGrid ; c:bindProperty c:selectedRow .
+um:FindingCounts iv:whileShown ui:inspectorViews .
+um:CategoryCounts iv:whileShown ui:unmanagedCategories .
+ui:unmanagedPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:unmanagedBar ui:unmanagedCategories ui:unmanagedSplit ui:unmanagedHighlight ) .
+ui:unmanagedBar a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ; c:children ( ui:unmanagedFind ui:unmanagedFigures ) .
+ui:unmanagedFind a c:Button , c:Setter ; c:controls ui:unmanaged ; c:property um:request ; c:value um:Run ; sty:size sty:Small ;
+    c:label "Find on this page" , "Знайти на цій сторінці"@uk , "Auf dieser Seite suchen"@de , "ابحث في هذه الصفحة"@ar .
+ui:unmanagedFigures a c:Metrics ; c:of ui:unmanaged ; c:fields ( um:share um:unmanagedElements um:visibleElements ) .
+ui:unmanagedCategory a c:ValueFilter ; c:filterProperty um:category ; c:filterValue c:AnyValue .
+ui:unmanagedCategories a c:Segmented ; c:controls ui:unmanagedCategory ; c:property c:filterValue ; c:compactAs c:Picker ;
+    c:label "Category" , "Категорія"@uk , "Kategorie"@de , "الفئة"@ar ;
+    c:options ( c:AnyValue um:HostCode um:ThirdParty um:Sanctioned um:Unknown ) ;
+    c:countProperty um:found ; c:countLabel "found" , "знайдено"@uk , "gefunden"@de , "تم العثور عليها"@ar .
+ui:unmanagedSplit a c:SplitView ; c:ratio 0.62 ; c:minSize 200 ;
+    c:label "the findings and the selected one" , "знахідки й вибрана"@uk , "die Funde und der ausgewählte"@de , "النتائج والمحددة منها"@ar ;
+    c:primary ui:unmanagedGrid ; c:secondary ui:unmanagedDetails .
+ui:um-col-element a c:GridColumn ; c:cellProperty um:element ; c:detailProperty um:path ; c:width 240 ;
+    c:label "Element" , "Елемент"@uk , "Element"@de , "العنصر"@ar .
+ui:um-col-category a c:GridColumn ; c:cellProperty um:category ; c:cellAs c:BadgeCell ; c:width 140 ;
+    c:label "Category" , "Категорія"@uk , "Kategorie"@de , "الفئة"@ar .
+ui:um-col-elements a c:GridColumn ; c:cellProperty um:elements ; c:align "end" ; c:width 72 ;
+    c:label "Visible" , "Видимих"@uk , "Sichtbar"@de , "مرئية"@ar .
+ui:um-col-reason a c:GridColumn ; c:cellProperty um:reason ; c:width 200 ;
+    c:label "Why" , "Чому"@uk , "Warum"@de , "السبب"@ar .
+ui:unmanagedGrid a c:DataGrid ; c:collection ui:unmanaged ; c:sequenceProperty um:order ; c:pageSize 200 ;
+    c:label "Not made by Semblance" , "Зроблено не Semblance"@uk , "Nicht von Semblance"@de , "لم يصنعه Semblance"@ar ;
+    c:gridColumns ( ui:um-col-element ui:um-col-category ui:um-col-elements ui:um-col-reason ) ;
+    c:filteredBy ui:unmanagedCategory ;
+    c:emptyText "Press Find on this page: every visible element no rendering made is listed here, by the subtree it heads." ,
+        "Натисніть «Знайти на цій сторінці»: тут з’явиться кожен видимий елемент, якого не зробило жодне відображення, за піддеревом, яке він очолює."@uk ,
+        "„Auf dieser Seite suchen“ listet hier jedes sichtbare Element, das kein Rendering gemacht hat, nach dem Teilbaum, den es anführt."@de ,
+        "اضغط «ابحث في هذه الصفحة»: يُدرج هنا كل عنصر مرئي لم يصنعه أي عرض، بحسب الشجرة الفرعية التي يتصدرها."@ar .
+ui:unmanagedDetails a c:DescriptionList ; c:bindFrom ui:unmanagedGrid ; c:bindProperty c:selectedRow ;
+    c:fields ( um:category um:reason um:element um:path um:elements um:nearComponent um:near ) ;
+    c:emptyText "Select a finding to outline it on the page and highlight the nearest element Semblance made." ,
+        "Виберіть знахідку, щоб обвести її на сторінці й підсвітити найближчий елемент, зроблений Semblance."@uk ,
+        "Wählen Sie einen Fund, um ihn auf der Seite zu umranden und das nächste von Semblance gemachte Element hervorzuheben."@de ,
+        "حدّد نتيجة لتحيطها في الصفحة وتبرز أقرب عنصر صنعه Semblance."@ar .
+ui:unmanagedHighlight a c:Highlight ; c:bindFrom ui:unmanagedGrid ; c:bindProperty c:selectedRow ; c:via um:near .
 
 ui:qElement a sem:Query ; rdfs:label "rendered element (RDF/HTML)" ;
     sem:construct """CONSTRUCT { $node ?p ?o . ?attr ?ap ?ao }

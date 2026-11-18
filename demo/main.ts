@@ -37,6 +37,7 @@ import { attachLightboxes } from '../src/web/lightbox.ts'
 import { attachAnchoredPopups } from '../src/web/anchored-popups.ts'
 import { attachSizeHandles } from '../src/web/size-handles.ts'
 import { attachStickyTop } from '../src/web/sticky-top.ts'
+import { attachUnmanaged } from '../src/web/unmanaged.ts'
 import { RenderedState } from '../src/rendered.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
@@ -375,6 +376,8 @@ attachSnaps(document.getElementById('app')!)
 attachLightboxes(document.getElementById('app')!)
 attachAnchoredPopups(document.getElementById('app')!, node => !shell.inSlot(node))
 attachSizeHandles(shell)
+// Not made by Semblance (the Inspector's view): the page walked when Find is pressed, the findings in the rendered graph.
+attachUnmanaged(runtime, { renderers: () => [shell, textDom], onWrite: () => flush() })
 persistence.attach(runtime, { bus })
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })
