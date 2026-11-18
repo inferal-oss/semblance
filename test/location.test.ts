@@ -638,4 +638,39 @@ ui:deep a c:Text .`)
     s.tab.visit('/components/inputs/#inp-text-spec')
     expect(revealed.at(-1)).toEqual({ iri: UI + 'inp-text-spec', smooth: false })
   })
+
+  it('takes over a followed link to a page, and leaves one to a file (a feed, Markdown) to the browser', async () => {
+    const s = await site('/changes/')
+    expect(s.value(UI + 'page')).toBe(UI + 'Changes')
+    /** A person's plain click (the main button, no modifier): whether the page took it over. */
+    const follow = (a: Element) => {
+      const e = Object.assign(new s.window.Event('click', { bubbles: true, cancelable: true }), { button: 0 })
+      a.dispatchEvent(e)
+      return e.defaultPrevented
+    }
+    const link = (href: string) => [...s.document.querySelectorAll('a')].find((a) => a.getAttribute('href') === href && s.visible(a))!
+    const before = s.tab.length
+    // The Changes page's links for agents and feeds: files the site serves, not addresses of the app.
+    for (const href of ['/changes.atom', '/llms/changes.md']) {
+      expect(follow(link(href))).toBe(false)
+      expect(s.tab.url).toBe('/changes/')
+      expect(s.tab.length).toBe(before)
+    }
+    // Any link to a file under the base, to save, or of a type other than HTML, wherever it is.
+    const at = link('/changes.atom').parentElement!
+    for (const [href, attrs] of [['/llms.txt', {}], ['/demo/app.ttl', {}], ['/changes/', { download: '' }], ['/changes/', { type: 'application/atom+xml' }]] as const) {
+      const a = s.document.createElement('a')
+      a.setAttribute('href', href)
+      for (const [k, v] of Object.entries(attrs)) a.setAttribute(k, v)
+      at.appendChild(a)
+      expect(follow(a), href + ' ' + JSON.stringify(attrs)).toBe(false)
+      a.remove()
+    }
+    expect(s.tab.url).toBe('/changes/')
+    // A link to a page is still a step here, not a page load.
+    expect(follow(link('/'))).toBe(true)
+    await tick()
+    expect(s.tab.url).toBe('/')
+    expect(s.tab.length).toBe(before + 1)
+  })
 })
