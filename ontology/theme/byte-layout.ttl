@@ -143,7 +143,8 @@
     sty:declares [ sty:property "font" ; sty:raw "600 12px var(--sem-font-mono)" ],
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar.variable" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] .
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ],
+                 [ sty:property "padding-inline" ; sty:raw "20px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar.emphasized" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-4)" ],
                  [ sty:property "border-color" ; sty:raw "var(--sem-accent-9)" ] .
@@ -162,7 +163,7 @@
                  [ sty:property "right" ; sty:raw "6px" ],
                  [ sty:property "inline-size" ; sty:raw "12px" ],
                  [ sty:property "block-size" ; sty:raw "7px" ],
-                 [ sty:property "background" ; sty:raw "linear-gradient(to top right, transparent calc(50% - .8px), var(--sem-muted) 0 calc(50% + .8px), transparent 0) 0 0 / 6px 7px repeat-x" ] .
+                 [ sty:property "background" ; sty:raw "linear-gradient(to bottom right, transparent calc(50% - .8px), var(--sem-muted) 0 calc(50% + .8px), transparent 0) 0 0 / 6px 7px repeat-x" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true]" ; sty:part "> [role=figure] > [role=list] > * > .bar > .detail" ;
     sty:declares [ sty:property "margin-block-start" ; sty:raw "4px" ],
                  [ sty:property "text-align" ; sty:raw "start" ] .
@@ -210,6 +211,10 @@
                  [ sty:property "overflow" ; sty:raw "hidden" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list] > * > .bar.emphasized" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-4)" ] .
+# A field holding a nested layout is outlined, so that the nested layout's own fields stand out in it.
+[] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list] > * > .bar:has(> .detail)" ;
+    sty:declares [ sty:property "background" ; sty:raw "none" ],
+                 [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px var(--sem-gray-6)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ByteLayout ; sty:state "[data-byte-wrap=true][data-layout-appearance=record]" ; sty:part "> [role=figure] > [role=list] > * > .brackets > :not(.end)" ;
     sty:declares [ sty:property "margin-inline-end" ; sty:raw "-6px" ] .
 # Outline: monochrome strokes, the variable field's box dashed.
