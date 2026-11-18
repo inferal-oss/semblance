@@ -170,6 +170,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:RadioGroup ; sty:part ".sem-option-text" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] ,
                  [ sty:property "line-height" ; sty:raw "1.35" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RadioGroup ; sty:part ".sem-option-label" ;
     sty:declares [ sty:property "font-weight" ; sty:raw "600" ] ,
