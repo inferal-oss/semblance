@@ -105,7 +105,7 @@ c:Charset sem:version 1 ; sem:closure "e0bd36111a8206a5" ; sem:internal "new" .
 c:Chart sem:version 1 ; sem:closure "c4cbf309f649c5a7" ; sem:internal "new" .
 c:ChartPoint sem:version 2 ; sem:closure "e8efc0f602b5e769" ; sem:changedBy change:charts-on-shared-parts .
 c:ChartSeries sem:version 1 ; sem:closure "14f559da52a07575" ; sem:internal "new" .
-c:Checkbox sem:version 1 ; sem:closure "dd1293cfeedb76b8" ; sem:internal "new" .
+c:Checkbox sem:version 2 ; sem:closure "a0f19d0239456e48" ; sem:changedBy change:choice-labels-wrap .
 c:Chips sem:version 1 ; sem:closure "133a4a7a58f76b04" ; sem:internal "new" .
 c:Choice sem:version 1 ; sem:closure "f0068d241e6836ac" ; sem:internal "new" .
 c:Chooser sem:version 1 ; sem:closure "523738c50240d62d" ; sem:internal "new" .
@@ -211,7 +211,7 @@ c:QueryEditor sem:version 1 ; sem:closure "87abc3a0a40e6af1" ; sem:internal "new
 c:QueryResultView sem:version 1 ; sem:closure "8b3100c0bd012ffa" ; sem:internal "new" .
 c:QueryView sem:version 2 ; sem:closure "8638da55fcc6bfc8" ; sem:changedBy change:code-says-its-language .
 c:QueryWorkbench sem:version 2 ; sem:closure "bd506d48cbd5de2d" ; sem:internal "Each sx:matches joins its group again instead of sitting in its own LATERAL, now that compiled Rust passes a BIND's value into a magic relation (#281); the same rows and HTML" .
-c:RadioGroup sem:version 1 ; sem:closure "5cfbedd6dee84039" ; sem:internal "new" .
+c:RadioGroup sem:version 2 ; sem:closure "0c482a85e0a3952c" ; sem:changedBy change:choice-labels-wrap .
 c:Raisable sem:version 1 ; sem:closure "88bcf9c2effe9e18" ; sem:internal "new" .
 c:RdfDropRow sem:version 1 ; sem:closure "da73dbbbe08b9a74" ; sem:internal "new" .
 c:RdfEditor sem:version 2 ; sem:closure "f7d1503fda4621c3" ; sem:changedBy change:rdf-editor-entry-pages .
@@ -288,7 +288,7 @@ c:TimelineItem sem:version 1 ; sem:closure "30590a3437d90986" ; sem:internal "ne
 c:Toast sem:version 4 ; sem:closure "259aab9cc084e892" ; sem:changedBy change:toasts-undo-horizon .
 c:ToastRegion sem:version 2 ; sem:closure "57fffcd4eddafaa9" ; sem:changedBy change:toasts-undo-horizon .
 c:Toggle sem:version 1 ; sem:closure "c9a471ad760c2c20" ; sem:internal "new" .
-c:ToggleSwitch sem:version 1 ; sem:closure "c2f934e05b0a5bd7" ; sem:internal "new" .
+c:ToggleSwitch sem:version 2 ; sem:closure "25c787499f7be133" ; sem:changedBy change:choice-labels-wrap .
 c:Toolbar sem:version 1 ; sem:closure "f014ec119dc8b7fc" ; sem:internal "new" .
 c:Tree sem:version 1 ; sem:closure "c31820230299ba95" ; sem:internal "new" .
 c:TreeItem sem:version 1 ; sem:closure "6b8cb4051e2b7541" ; sem:internal "new" .

@@ -103,6 +103,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Checkbox ; sty:part "> .sem-row > label" ;
     sty:declares [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "line-height" ; sty:raw "1.35" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Checkbox ; sty:part "> .sem-row:has(> input:disabled)" ;
@@ -170,6 +171,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:RadioGroup ; sty:part ".sem-option-text" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] ,
                  [ sty:property "line-height" ; sty:raw "1.35" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RadioGroup ; sty:part ".sem-option-label" ;
     sty:declares [ sty:property "font-weight" ; sty:raw "600" ] ,
@@ -195,6 +197,7 @@
                  [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "font" ; sty:raw "500 var(--control-font, 14px)/1.35 var(--sem-font)" ] ,
                  [ sty:property "text-align" ; sty:raw "start" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ToggleSwitch ; sty:part "> button:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] .

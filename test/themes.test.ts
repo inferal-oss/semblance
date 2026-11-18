@@ -420,6 +420,17 @@ describe('long labels', () => {
     expect(offending.filter((l) => !l.startsWith('  [data-sem-c="segmented"] button, '))).toEqual([])
   })
 
+  it('wrap a long radio option, check box or switch label (an email address) inside its box', () => {
+    const labels = ['[data-sem-c="radio-group"] .sem-option-text', '[data-sem-c="checkbox"] > .sem-row > label', '[data-sem-c="toggle-switch"] > button']
+    for (const selector of labels) {
+      expect(layerOf(selector), selector).toBe('sem.components')
+      expect(block(selector).get('overflow-wrap'), selector).toBe('anywhere')
+    }
+    // no theme takes it back
+    const parts = /radio-group\]? \.sem-option-text|checkbox\]? > \.sem-row > label|toggle-switch\]? > button[^a-z:\[.]/
+    expect(lines.filter((l) => parts.test(l) && /overflow-wrap: (normal|break-word)|word-break: keep-all|white-space: (nowrap|pre)\b/.test(l))).toEqual([])
+  })
+
   it('align text logically, so it follows the writing direction (RTL)', () => {
     expect(lines.filter((l) => /text-align: (left|right)\b/.test(l))).toEqual([])
   })
