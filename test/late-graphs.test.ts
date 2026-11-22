@@ -69,8 +69,9 @@ describe('a graph loaded after start', () => {
     })
   }
 
-  // l10n:Terms reads every translated text in the graph: it hears a text with two values or more,
-  // a graph that brings one included, and nothing else; slices evaluate it once (#355).
+  // l10n:Terms reads every translated text in the graph, member by member: it hears a text with two
+  // values or more, a graph that brings one included, and nothing else (#355); each slice of a graph
+  // arriving late gets its texts picked as it arrives (#589).
   for (const prefer of ['sparql', 'function'] as const) {
     it(`a text with translations reaches the viewer's language however it arrives (WAT, ${prefer} preferred)`, () => {
       const h = mountSite('wat', prefer)
@@ -98,28 +99,28 @@ describe('a graph loaded after start', () => {
       // Back to one value: the twin goes.
       h.runtime.apply({ add: [], remove: [say('Einmal', 'de')] })
       expect(twin()).toEqual([])
-      // Slices: nothing until the last, then once for them all.
+      // Slices: each brings its nodes' texts picked, at the cost of those nodes alone; the last adds nothing (#589).
       const [first, second] = [f.namedNode(UI + 'lateShape1'), f.namedNode(UI + 'lateShape2')]
       const before = runs()
       h.runtime.arriving(true)
       h.runtime.apply({ add: [say('First', undefined, first), say('Erste', 'de', first)], remove: [] })
-      h.runtime.apply({ add: [say('Second', undefined, second), say('Друге', 'uk', second)], remove: [] })
-      expect(runs()).toBe(before)
-      expect(twin(first)).toEqual([])
-      h.runtime.arriving(false)
-      expect(runs()).toBe(before + 1)
       expect(twin(first)).toEqual(['First'])
+      expect(runs()).toBe(before + 1)
+      h.runtime.apply({ add: [say('Second', undefined, second), say('Друге', 'uk', second)], remove: [] })
       expect(twin(second)).toEqual(['Second'])
+      expect(runs()).toBe(before + 2)
+      h.runtime.arriving(false)
+      expect(runs()).toBe(before + 2)
       // Nothing arrived: nothing to do.
       h.runtime.arriving(true)
       h.runtime.arriving(false)
-      expect(runs()).toBe(before + 1)
+      expect(runs()).toBe(before + 2)
     })
   }
 
   // What l10n:Labels derives per component (sem:leavesTo) is not l10n:Terms': a component's own label
   // changed in every language (a reaction, a view: the reader's progress bar) re-runs that component's
-  // l10n:Labels, never l10n:Terms over the whole graph; the same text on a node that is no component does (#547).
+  // l10n:Labels, never l10n:Terms; the same text on a node that is no component re-runs that node's (#547).
   for (const prefer of ['sparql', 'function'] as const) {
     it(`a component's translated label costs l10n:Terms nothing (WAT, ${prefer} preferred)`, () => {
       const h = mountSite('wat', prefer)

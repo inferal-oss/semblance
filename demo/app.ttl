@@ -281,8 +281,15 @@ SELECT ?dimension ?value ?spelled ?carriers ?history WHERE {
   BIND(COALESCE(?spelled0, "—") AS ?spelled)
   OPTIONAL { ?d nav:history ?history0 }
   BIND(COALESCE(?history0, nav:MakesHistory) AS ?history)
-  OPTIONAL { SELECT ?d (GROUP_CONCAT(?carrier; separator = ", ") AS ?carriers)
-             WHERE { ?d nav:carriedBy ?c . ?c rdfs:label ?carrier FILTER(langMatches(lang(?carrier), "en")) } GROUP BY ?d }
+  # Each carrier by its label in the page's language, else its untagged one, else its English one.
+  OPTIONAL { SELECT ?d (GROUP_CONCAT(?carrier; separator = ", ") AS ?carriers) WHERE {
+    ?d nav:carriedBy ?c .
+    OPTIONAL { ui:app l10n:language/l10n:code ?code . ?c rdfs:label ?mine FILTER(langMatches(lang(?mine), ?code)) }
+    OPTIONAL { FILTER(!BOUND(?mine)) ?c rdfs:label ?plain FILTER(lang(?plain) = "") }
+    OPTIONAL { FILTER(!BOUND(?mine) && !BOUND(?plain)) ?c rdfs:label ?english FILTER(langMatches(lang(?english), "en")) }
+    BIND(COALESCE(?mine, ?plain, ?english) AS ?carrier)
+    FILTER(BOUND(?carrier))
+  } GROUP BY ?d }
 }
 ORDER BY ?i""" .
 ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .

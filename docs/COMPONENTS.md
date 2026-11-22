@@ -293,9 +293,12 @@ A pair is dirty when the focus's own triples change, and also:
   properties): adding or removing one makes that focus dirty;
 - `sem:watchesManyValued l10n:pickedAs` — the rule reads, on any node, the statements made with
   each predicate that has that property, and says something only about a node with two values or
-  more of one (`l10n:Terms`, on texts with translations): a change in the input to such a node's
-  values makes each focus dirty, and a text with one value replaced by another does not. A host
-  that takes an addition in slices brackets them with `Runtime.arriving`, so the rule runs once;
+  more of one (`l10n:Terms`, on texts with translations). It is member-wise over those nodes
+  (`$member`), which the engine keeps: a change in the input to such a node's values re-runs that
+  node's pair, a text with one value replaced by another re-runs nothing, and a graph that arrives
+  later, in slices or at once, costs the nodes it brings, in the change that brings them. What it
+  says about a member is minted under its focus and names the member (`?node ?p $member`), so its
+  SPARQL rule takes many members in one query;
 - `sem:follows ( c:of [ sem:inverseVia ( c:inTree c:parentProperty ) ] )` — a path whose last
   step goes against a predicate named in the data: a triple `?child ?p ?node` makes dirty the
   foci that reach `?node` along the path's other steps and name `?p` along the given one (a tree's

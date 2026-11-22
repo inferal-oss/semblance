@@ -449,7 +449,6 @@ export class Runtime {
     const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase(), opts.policy)
     engine.watchdog = this.watchdog
     if (opts.policy?.maxDerived !== undefined) engine.maxDerived = opts.policy.maxDerived
-    engine.arriving = this.isArriving
     engine.onChange((d) => index.apply(d))
     // A view that reads what rules derive (iv:reads <rendering>) reads the first projection's.
     if (!this.projections.length) {
@@ -739,14 +738,14 @@ export class Runtime {
   }
 
   /**
-   * An addition is arriving in slices (sliceAddition), from before its first to after its last: what
-   * is due over the whole graph (sem:watchesManyValued) is evaluated once, when it has all arrived,
-   * not again at each slice. A change applied meanwhile is taken in as usual. What was evaluated
-   * before it arrived is evaluated again, in idle time (reread).
+   * An addition is arriving in slices (sliceAddition), from before its first to after its last. Each
+   * slice is taken in as a change of its own (what reads over the whole graph, sem:watchesManyValued,
+   * hears the nodes each slice brings, so a text's translations are picked as they arrive, #589). A
+   * change applied meanwhile is taken in as usual. What was evaluated before it arrived is evaluated
+   * again, in idle time (reread).
    */
   arriving(on: boolean): void {
     this.isArriving = on
-    for (const p of this.projections) p.engine.arriving = on
     if (on) return
     this.watchdog.turn(() => {
       for (const p of this.projections) p.engine.process({ add: [], remove: [] }), settle(p)

@@ -160,10 +160,10 @@ describe('incremental updates', () => {
       runtime.apply(change)
       return screen.engine.stats.ruleRuns - before
     }
-    // The item's rendering for done; for a label, it, the member-wise list, and the viewer's terms
-    // (l10n:Terms reads every labelled node, to pick a label by language: what it declares misses that).
+    // The item's rendering for done; for a label, it and the member-wise list (a label with one value
+    // is nothing for the viewer's terms to pick: l10n:Terms hears texts with two values or more, #589).
     expect(ran(t.set('t7', 'done', true))).toBe(1)
-    expect(ran(t.set('t7', NS.rdfs + 'label', 'x'))).toBe(3)
+    expect(ran(t.set('t7', NS.rdfs + 'label', 'x'))).toBe(2)
     // The item's rendering never reads ex:priority (its patterns say so): only the list, which places the item by it.
     expect(ran(t.set('t7', 'priority', 1000))).toBe(1)
     // A block's handle is named by its type: a label reaches it through a class of its block. The block templates

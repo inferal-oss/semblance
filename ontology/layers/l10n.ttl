@@ -263,18 +263,20 @@ WHERE {
 # --- texts in the viewer's language, for SPARQL rules -------------------------------------
 # A text property whose values are translations has an l10n: twin (l10n:pickedAs). l10n:Terms
 # derives, in each engine's derived graph, every node's twin value when it has two values or
-# more, on a node of its own about it (l10n:of, so the node's own triples stay as written): the one util.text picks (the viewer's languages by rank, then the untagged value, then
-# English, then any). A SPARQL rule reads a text as its twin, else the one value it has:
+# more, on a node of its own about it (minted under the viewer, l10n:of the node, so the node's own
+# triples stay as written): the one util.text picks (the viewer's languages by rank, then the untagged
+# value, then English, then the least). A SPARQL rule reads a text as its twin, else the one value it has:
 #   OPTIONAL { ?pickedAt l10n:of ?n ; l10n:name ?picked } OPTIONAL { FILTER(!BOUND(?picked)) ?n rdfs:label ?only }
-# Components' own labels (c:label) are l10n:Labels', per component, since they may change;
-# l10n:Terms covers what does not change while the page runs (phrases, the ontology's terms,
-# options, shapes' messages), and is re-run when the viewer's languages change, or when a text
-# with two values or more changes or arrives (sem:watchesManyValued: a graph loaded later), except a
-# component's own c:label, which l10n:Labels derives (sem:leavesTo): a label a reaction or a view
-# changes in every language re-runs that component's l10n:Labels, not this. Its
-# focus is the viewer (the engine's agent), never shown, so it is evaluated regardless (sem:always).
-# Only named nodes get twins (a derived node cannot be about a blank one): a translated text a
-# SPARQL rule reads lives on a node with an IRI (a shape, a phrase, an option).
+# which is deterministic because a node with two values or more always has its twin: l10n:Terms is
+# member-wise over those nodes (sem:watchesManyValued), so the twin is derived in the change that
+# brings the values, a graph loaded later included, before any rule above it reads them (#589).
+# It is evaluated again for a node when its values change or arrive, and for every node when the
+# viewer's languages change, except for a component's own c:label, which l10n:Labels derives
+# (sem:leavesTo): a label a reaction or a view changes in every language re-runs that component's
+# l10n:Labels, not this. Its focus is the viewer (the engine's agent), never shown, so it is
+# evaluated regardless (sem:always). Only named nodes get twins (a derived node cannot be about a
+# blank one): a translated text a SPARQL rule reads lives on a node with an IRI (a shape, a phrase,
+# an option).
 
 l10n:of a owl:ObjectProperty ; rdfs:comment "What a derived text node (l10n:Terms) gives the texts of."@en .
 l10n:pickedAs a owl:ObjectProperty ; rdfs:range owl:DatatypeProperty ;
@@ -343,40 +345,36 @@ l10n:Terms-fn a sem:Rule ; sem:implements l10n:Terms ; sem:function "l10n:terms"
 l10n:Terms-sparql a sem:Rule ;
     sem:implements l10n:Terms ;
     sem:construct """
-CONSTRUCT { ?at l10n:of ?n ; ?twin ?picked }
+CONSTRUCT { ?at l10n:of $member ; ?twin ?picked }
 WHERE {
   $this a l10n:Viewer .
-  { SELECT ?p ?twin ?n WHERE {
-    ?p l10n:pickedAs ?twin . ?n ?p ?value . FILTER(isLiteral(?value) && isIRI(?n))
-  } GROUP BY ?p ?twin ?n HAVING(COUNT(DISTINCT ?value) > 1) }
-  # Components' own c:label is l10n:Labels'. (MINUS against the component classes: a path per
-  # node, in a FILTER, made this a hundred times slower on Oxigraph.)
-  MINUS { ?n a ?nt . { SELECT DISTINCT ?nt WHERE { ?nt rdfs:subClassOf* sem:Component } } BIND(c:label AS ?p) }
-  LATERAL { OPTIONAL { SELECT ?n ?p ?twin ?picked WHERE {
-  ?p l10n:pickedAs ?twin . 
+  ?p l10n:pickedAs ?twin .
+  FILTER EXISTS { $member ?p ?a , ?b FILTER(isLiteral(?a) && isLiteral(?b) && !sameTerm(?a, ?b)) }
+  # Components' own c:label is l10n:Labels'.
+  OPTIONAL { $member a ?nt . ?nt rdfs:subClassOf* sem:Component . BIND(c:label AS ?componentText) }
+  FILTER(!BOUND(?componentText) || ?p != ?componentText)
   OPTIONAL {
-    ?n ?p ?pick . FILTER(isLiteral(?pick))
-    ?viewer l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
+    $member ?p ?pick . FILTER(isLiteral(?pick))
+    $this l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
     BIND(LCASE(LANG(?pick)) AS ?tag)
     FILTER(?tag = ?code || STRSTARTS(?tag, CONCAT(?code, "-")))
     FILTER NOT EXISTS {
-      ?viewer l10n:prefers ?better . ?better l10n:code ?code2 ; sem:order ?rank2 .
-      ?n ?p ?other . FILTER(isLiteral(?other))
+      $this l10n:prefers ?better . ?better l10n:code ?code2 ; sem:order ?rank2 .
+      $member ?p ?other . FILTER(isLiteral(?other))
       BIND(LCASE(LANG(?other)) AS ?tag2)
       FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
       FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code)
         || (?rank2 = ?rank && (?tag2 = ?code2 || ?tag != ?code) && STR(?other) < STR(?pick)))
     }
   }
-  OPTIONAL { FILTER(!BOUND(?pick)) ?n ?p ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "")
-    FILTER NOT EXISTS { ?n ?p ?plainLess FILTER(isLiteral(?plainLess) && LANG(?plainLess) = "" && STR(?plainLess) < STR(?plain)) } }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) ?n ?p ?en FILTER(LCASE(LANG(?en)) = "en")
-    FILTER NOT EXISTS { ?n ?p ?enLess FILTER(LCASE(LANG(?enLess)) = "en" && STR(?enLess) < STR(?en)) } }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) ?n ?p ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-"))
-    FILTER NOT EXISTS { ?n ?p ?enxLess FILTER(STRSTARTS(LCASE(LANG(?enxLess)), "en-") && STR(?enxLess) < STR(?enx)) } }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) ?n ?p ?any FILTER(isLiteral(?any))
-    FILTER NOT EXISTS { ?n ?p ?anyLess FILTER(isLiteral(?anyLess) && STR(?anyLess) < STR(?any)) } }
+  OPTIONAL { FILTER(!BOUND(?pick)) $member ?p ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "")
+    FILTER NOT EXISTS { $member ?p ?plainLess FILTER(isLiteral(?plainLess) && LANG(?plainLess) = "" && STR(?plainLess) < STR(?plain)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $member ?p ?en FILTER(LCASE(LANG(?en)) = "en")
+    FILTER NOT EXISTS { $member ?p ?enLess FILTER(LCASE(LANG(?enLess)) = "en" && STR(?enLess) < STR(?en)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $member ?p ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-"))
+    FILTER NOT EXISTS { $member ?p ?enxLess FILTER(STRSTARTS(LCASE(LANG(?enxLess)), "en-") && STR(?enxLess) < STR(?enx)) } }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $member ?p ?any FILTER(isLiteral(?any))
+    FILTER NOT EXISTS { $member ?p ?anyLess FILTER(isLiteral(?anyLess) && STR(?anyLess) < STR(?any)) } }
   BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?picked)
-  } } }
-  BIND(IRI(CONCAT(STR($this), "/~t-", MD5(STR(?n)))) AS ?at)
+  BIND(IRI(CONCAT(STR($this), "/~t-", MD5(STR($member)))) AS ?at)
 }""" .
