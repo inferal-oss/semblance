@@ -1,0 +1,33 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:values-own-direction a chg:Change ;
+    rdfs:label "Table values read in their own direction in a right-to-left page"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/591> ;
+    chg:motivation """In a right-to-left page (Arabic), a table's text joined its cell's right-to-left paragraph, so
+the neutral characters at the ends of a value that reads left to right took the page's direction: a
+result table's header ?component showed as component?, a query plan's algebra had its brackets moved,
+and a hex dump's ASCII column put leading dots at the end. Isolating the cell instead (dir=auto or
+unicode-bidi: plaintext on the cell) would also align each cell by its own text, so Latin values
+would move to the left edge of a right-to-left table.""" ;
+    chg:substance """A value's text is now inside a <bdi> element in its cell: isolated, and in the direction of its
+own content, while the cell keeps the table's alignment. This is so for a c:ResultTable's header
+names and literal values (an IRI or a blank node was already <code>, which reads left to right), a
+c:Table's text values (not its code, component or slot cells), and a c:GridRow's text values and
+details (inside its .sem-value and .sem-detail spans). The <bdi> has no class and no style of its own.
+A c:ResultTable's c:markdown reads the names and values from it; the Markdown is unchanged.
+
+A c:HexView reads left to right as a whole (offset, hex, then ASCII), as code does: its root has
+direction: ltr and unicode-bidi: isolate.
+
+The text renderings are unchanged.""" ;
+    chg:forwardGuide """Nothing to change in the graph. A stylesheet or script of your own that reaches a cell's text
+as its direct child (a td > text, or the cell's first child) finds it one level down, inside the <bdi>;
+textContent is the same.""" ;
+    chg:backwardGuide """Nothing to change in the graph. Going back, the values join their cell's paragraph again
+and reorder in a right-to-left page; a c:HexView runs right to left there.""" ;
+    chg:affects c:Table , c:ResultTable , c:GridRow , c:HexView .

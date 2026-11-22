@@ -103,6 +103,9 @@ describe('c:Table', () => {
     expect(dom.slot('action-Missing')).toBeUndefined()
     const missing = [...document.querySelectorAll('tbody tr')].find((row) => row.querySelector('th')?.textContent === 'Missing')!
     expect(missing.querySelector('td')?.textContent).toBe('')
+    // A text value is isolated in its own direction (<bdi>), a slot cell is left to its host.
+    expect(missing.querySelector('th > bdi')?.textContent).toBe('Missing')
+    expect(missing.querySelector('td bdi')).toBeNull()
   })
 
   it('keeps distinct slot cells for rows with the same displayed value', () => {

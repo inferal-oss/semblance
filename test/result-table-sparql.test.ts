@@ -96,10 +96,10 @@ describe('result tables over runs of their queries, in SPARQL', () => {
       expect(s.at('people')).toContain('Rows: 3')
       expect(s.at('people')).toContain('+1 more')
       expect(s.at('people')).toContain('<code>ex:bob</code>')
-      expect(s.at('people')).toContain('class="sem-end">4</td>')
+      expect(s.at('people')).toContain('class="sem-end"><bdi>4</bdi></td>')
       expect(s.at('people')).toContain('class="sem-unbound"')
       // SELECT *: the variables it binds; a long IRI by its end.
-      expect(s.at('all')).toContain('<th scope="col">?s</th>')
+      expect(s.at('all')).toContain('<th scope="col"><bdi>?s</bdi></th>')
       expect(s.at('all')).toContain('&lt;…')
       // A CONSTRUCT's triples, a language tag, an answer, an error, no rows, not run.
       expect(s.at('graph')).toContain('Triples: 3')
@@ -123,7 +123,7 @@ describe('result tables over runs of their queries, in SPARQL', () => {
       expect(s.at('all')).toContain('ex:dave')
       // New text runs it; a binding's value runs the bound one; none shows its empty text.
       both((h) => h.text('qPeople', 'https://semblance.dev/ns/core#select', 'SELECT ?name WHERE { ?p ex:name ?name } ORDER BY DESC(?name)'))
-      expect(s.at('people')).toContain('<th scope="col">?name</th>')
+      expect(s.at('people')).toContain('<th scope="col"><bdi>?name</bdi></th>')
       both((h) => h.set('pick', 'who', 'bob'))
       expect(s.at('bound')).toContain('Bob')
       both((h) => h.runtime.apply({ remove: h.runtime.store.match(h.runtime.store.factory.namedNode(EX + 'pick'), null, null), add: [] }))

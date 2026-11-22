@@ -1006,7 +1006,7 @@ WHERE {
       BIND(IF(?a < 1000, CONCAT(STR(ROUND(?a)), " ms"), CONCAT(STR(ROUND(?a / 10) / 100), " s")) AS ?aText)
       BIND(?b - ?a AS ?span)
       BIND(IF(?span < 1000, CONCAT(STR(ROUND(?span)), " ms"), CONCAT(STR(ROUND(?span / 10) / 100), " s")) AS ?spanText)
-      VALUES ?part { "td" "bar" "a-bar" "text" "badge" "a-badge" "code" "image" "value" "detail" }
+      VALUES ?part { "td" "bar" "a-bar" "text" "badge" "a-badge" "code" "image" "value" "detail" "value-bdi" "detail-bdi" }
       LATERAL {
         {
           FILTER(?part = "td")
@@ -1055,12 +1055,18 @@ WHERE {
         } UNION {
           FILTER(?part = "value" && ?kind = c:TextCell && ?hasValue)
           BIND(IRI(CONCAT(?id, "-value")) AS ?el) BIND(rdfhtml:Span AS ?tag) BIND("sem-value" AS ?cls) BIND(IRI(?id) AS ?parent)
-          BIND(?el AS ?txtParent) BIND(IRI(CONCAT(?id, "-text")) AS ?txt) BIND(?shown AS ?data)
         } UNION {
           FILTER(?part = "detail" && ?kind = c:TextCell && ?hasDetail)
           BIND(IRI(CONCAT(?id, "-detail")) AS ?el) BIND(rdfhtml:Span AS ?tag) BIND("sem-detail" AS ?cls) BIND(IRI(?id) AS ?parent)
           BIND(IF(?hasValue, IRI(CONCAT(?id, "-value")), ?none) AS ?prev)
-          BIND(?el AS ?txtParent) BIND(IRI(CONCAT(?id, "-detail-text")) AS ?txt) BIND(?detail AS ?data)
+        } UNION {
+          # The value and the detail, each in its own direction, isolated (<bdi>): a value that reads
+          # left to right keeps its marks in a right-to-left grid.
+          FILTER(?kind = c:TextCell && IF(?part = "value-bdi", ?hasValue, ?part = "detail-bdi" && ?hasDetail))
+          BIND(IF(?part = "value-bdi", "-value", "-detail") AS ?which)
+          BIND(IRI(CONCAT(?id, ?which, "-bdi")) AS ?el) BIND(rdfhtml:Bdi AS ?tag) BIND(IRI(CONCAT(?id, ?which)) AS ?parent)
+          BIND(?el AS ?txtParent) BIND(IRI(CONCAT(?id, IF(?part = "value-bdi", "", ?which), "-text")) AS ?txt)
+          BIND(IF(?part = "value-bdi", ?shown, ?detail) AS ?data)
         }
       }
     }

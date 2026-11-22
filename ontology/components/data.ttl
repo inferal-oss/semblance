@@ -261,7 +261,8 @@ WHERE {
       BIND(CONCAT(?me, "/~r-", SUBSTR(MD5(STR(?r)), 1, 8)) AS ?rowId)
     BIND(IRI(?rowId) AS ?el) BIND(rdfhtml:Tr AS ?tag) BIND(?rowKey AS ?key) BIND(IRI(CONCAT(?me, "/~body")) AS ?parent)
   } UNION {
-    # A cell per row and column: a host-owned slot, code, or the value as text.
+    # A cell per row and column: a host-owned slot, code, or the value as text, in a <bdi> (isolated,
+    # in its own direction: a value that reads left to right keeps its marks in a right-to-left table).
     FILTER(!BOUND(?error))
     ?run rs:solution ?r .
     BIND(CONCAT(?me, "/~r-", SUBSTR(MD5(STR(?r)), 1, 8)) AS ?rowId)
@@ -319,18 +320,19 @@ WHERE {
     BIND(IRI(CONCAT(STR(?r), "-", ?slotVariable)) AS ?slotBinding)
     LATERAL { OPTIONAL { ?slotBinding rs:value ?slotValue } }
     BIND(CONCAT(?rowId, "-c", STR(?ci)) AS ?td)
-    VALUES ?cellPart { "cell" "code" }
-    FILTER(?cellPart = "cell" || (!BOUND(?slotPrefix) && ?format = "code" && ?cellText != ""))
-    BIND(IF(?cellPart = "cell", IRI(?td), IRI(CONCAT(?td, "-code"))) AS ?el)
-    BIND(IF(?cellPart = "code", rdfhtml:Code, IF(?ci = 0, rdfhtml:Th, rdfhtml:Td)) AS ?tag)
+    VALUES ?cellPart { "cell" "code" "value" }
+    BIND(?format = "code" && ?cellText != "" AS ?asCode)
+    BIND(?format = "component" && IF(BOUND(?cellValue), isIRI(?cellValue), false) AS ?asComponent)
+    FILTER(?cellPart = "cell" || (!BOUND(?slotPrefix) && IF(?cellPart = "code", ?asCode, !?asCode && !?asComponent)))
+    BIND(IF(?cellPart = "cell", IRI(?td), IRI(CONCAT(?td, "-", ?cellPart))) AS ?el)
+    BIND(IF(?cellPart = "code", rdfhtml:Code, IF(?cellPart = "value", rdfhtml:Bdi, IF(?ci = 0, rdfhtml:Th, rdfhtml:Td))) AS ?tag)
     BIND(IF(?cellPart = "cell" && ?ci = 0, "row", ?none) AS ?scope)
     BIND(IF(?cellPart = "cell", ?alignClass, ?none) AS ?cls)
     BIND(IF(?cellPart = "cell", IRI(?rowId), IRI(?td)) AS ?parent)
     BIND(IF(?cellPart = "cell" && BOUND(?slotPrefix) && BOUND(?slotValue), CONCAT(?slotPrefix, STR(?slotValue)), ?none) AS ?slot)
-    BIND(?format = "code" && ?cellText != "" AS ?asCode)
     # A component column's cell holds the component its value names (a sparkline, a badge); else the value as text.
-    BIND(IF(?cellPart = "cell" && !BOUND(?slotPrefix) && ?format = "component" && isIRI(?cellValue), ?cellValue, ?none) AS ?component)
-    BIND(IF(!BOUND(?slotPrefix) && !BOUND(?component) && (?cellPart = "code" || !?asCode), IRI(CONCAT(?td, "-text")), ?none) AS ?textNode)
+    BIND(IF(?cellPart = "cell" && !BOUND(?slotPrefix) && ?asComponent, ?cellValue, ?none) AS ?component)
+    BIND(IF(?cellPart IN ("code", "value"), IRI(CONCAT(?td, "-text")), ?none) AS ?textNode)
     BIND(?cellText AS ?data)
     BIND(IF(?cellPart = "cell" && ?ci + 1 < ?columnCount, IRI(CONCAT(?rowId, "-c", STR(?ci + 1))), ?none) AS ?after)
   } UNION {

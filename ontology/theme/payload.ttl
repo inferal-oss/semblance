@@ -102,8 +102,11 @@
                  [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
 
 # --- hex view ---
+# A dump reads left to right in a right-to-left page too (offset, hex, then ASCII), as code does.
 [] a sty:StyleRule ; sty:appliesTo c:HexView ;
-    sty:declares [ sty:property "flex" ; sty:raw "1 1 100%" ] ,
+    sty:declares [ sty:property "direction" ; sty:raw "ltr" ] ,
+                 [ sty:property "unicode-bidi" ; sty:raw "isolate" ] ,
+                 [ sty:property "flex" ; sty:raw "1 1 100%" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "max-height" ; sty:raw "24rem" ] ,
                  [ sty:property "overflow" ; sty:raw "auto" ] ,

@@ -606,7 +606,7 @@ CONSTRUCT {
   ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:scope ?scope ; sem:orderKey ?key ; c:column ?column ; c:row ?row ; c:term ?term ;
       c:label ?alertLabel ; c:help ?alertHelp ; sty:tone ?tone ; rdfhtml:hasChild ?textNode .
   ?parent rdfhtml:hasChild ?el .
-  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data .
   ?el ord:immediatelyPrecedes ?after .
 }
 WHERE {
@@ -698,13 +698,19 @@ WHERE {
     OPTIONAL { ?cell rdf:rest/rdf:first ?after FILTER(isIRI(?after)) }
   } UNION {
     # A header cell per column (c:column, from 0): ?variable, or for a CONSTRUCT's triples what the
-    # column holds (rdf:subject, rdf:predicate, rdf:object), by its label.
+    # column holds (rdf:subject, rdf:predicate, rdf:object), by its label. The name is in a <bdi>
+    # (isolated, in its own direction): ?variable reads so in a right-to-left table too.
     FILTER(?state = "rows" && ?total > 0)
     ?view iv:column ?col . ?col rs:variable ?variable ; rs:index ?colIndex .
-    BIND(xsd:integer(?colIndex) - 1 AS ?column)
-    BIND(IRI(CONCAT(?me, "/~h", STR(?column))) AS ?el) BIND(rdfhtml:Th AS ?tag) BIND("col" AS ?scope) BIND(?column AS ?key)
-    BIND(IRI(CONCAT(?me, "/~head-row")) AS ?parent)
-    BIND(IRI(CONCAT(?me, "/~h", STR(?column), "-text")) AS ?textNode)
+    BIND(xsd:integer(?colIndex) - 1 AS ?headColumn)
+    VALUES ?headPart { "th" "value" }
+    BIND(IRI(CONCAT(?me, "/~h", STR(?headColumn), IF(?headPart = "th", "", "-value"))) AS ?el)
+    BIND(IF(?headPart = "th", rdfhtml:Th, rdfhtml:Bdi) AS ?tag)
+    BIND(IF(?headPart = "th", "col", ?unset) AS ?scope)
+    BIND(IF(?headPart = "th", ?headColumn, ?unset) AS ?key)
+    BIND(IF(?headPart = "th", ?headColumn, ?unset) AS ?column)
+    BIND(IRI(IF(?headPart = "th", CONCAT(?me, "/~head-row"), CONCAT(?me, "/~h", STR(?headColumn)))) AS ?parent)
+    BIND(IF(?headPart = "value", IRI(CONCAT(?me, "/~h", STR(?headColumn), "-text")), ?unset) AS ?textNode)
     BIND(IF(?triples, IRI(CONCAT("http://www.w3.org/1999/02/22-rdf-syntax-ns#", STR(?variable))), c:none) AS ?columnTerm)
     LATERAL { OPTIONAL { ?columnLabelAt l10n:of ?columnTerm ; l10n:name ?columnLabel0 } }
     LATERAL { OPTIONAL { FILTER(!BOUND(?columnLabel0)) ?columnTerm rdfs:label ?columnLabel1 FILTER(isLiteral(?columnLabel1)) } }
@@ -718,7 +724,8 @@ WHERE {
     BIND(IRI(CONCAT(?me, "/~body")) AS ?parent)
   } UNION {
     # A cell per row and column (c:column): an IRI (c:term) or a blank node as code, a literal as its
-    # text (cut at 240 characters; numbers at the end), with its language.
+    # text in a <bdi> (isolated, in its own direction; cut at 240 characters; numbers at the end),
+    # with its language.
     FILTER(?state = "rows" && ?total > 0)
     ?view rs:solution ?r . ?r rs:index ?rowIndex . FILTER(?rowIndex <= ?limit)
     ?view iv:column ?col . ?col rs:variable ?variable ; rs:index ?colIndex .
@@ -753,17 +760,17 @@ WHERE {
     BIND(IF(isIRI(?value), COALESCE(?prefixed, IF(STRLEN(?iriText) > 60, CONCAT("<…", SUBSTR(?iriText, STRLEN(?iriText) - 55), ">"), CONCAT("<", ?iriText, ">"))),
          IF(isBlank(?value), STR(?blankLabel), STR(?value))) AS ?shownText)
     BIND(isLiteral(?value) && LANG(?value) = "" && REGEX(STR(DATATYPE(?value)), "#(integer|decimal|double|float|long|int|short|nonNegativeInteger|positiveInteger)$") AS ?numeric)
-    VALUES ?part { "td" "code" "lang" }
-    FILTER(?part = "td" || (?part = "code" && (isIRI(?value) || isBlank(?value))) || (?part = "lang" && isLiteral(?value) && LANG(?value) != ""))
+    VALUES ?part { "td" "code" "value" "lang" }
+    FILTER(?part = "td" || (?part = "code" && (isIRI(?value) || isBlank(?value))) || (?part = "value" && isLiteral(?value))
+           || (?part = "lang" && isLiteral(?value) && LANG(?value) != ""))
     BIND(IRI(IF(?part = "td", ?td, CONCAT(?td, "-", ?part))) AS ?el)
-    BIND(IF(?part = "td", rdfhtml:Td, IF(?part = "code", rdfhtml:Code, rdfhtml:Span)) AS ?tag)
+    BIND(IF(?part = "td", rdfhtml:Td, IF(?part = "code", rdfhtml:Code, IF(?part = "value", rdfhtml:Bdi, rdfhtml:Span))) AS ?tag)
     BIND(IRI(IF(?part = "td", ?tr, ?td)) AS ?parent)
-    BIND(IF(?part = "td", ?cellColumn, IF(?part = "lang", 1, ?unset)) AS ?key)
+    BIND(IF(?part = "td", ?cellColumn, IF(?part = "lang", 1, IF(?part = "value", 0, ?unset))) AS ?key)
     BIND(IF(?part = "td", ?cellColumn, ?unset) AS ?column)
     BIND(IF(?part = "td" && isIRI(?value), ?value, ?unset) AS ?term)
     BIND(IF(?part = "td", IF(!BOUND(?value), "sem-unbound", IF(?numeric, "sem-end", ?unset)), IF(?part = "lang", "sem-lang", ?unset)) AS ?cls)
-    BIND(IF(?part = "lang", IRI(CONCAT(?td, "-lang-text")), IF(?part = "code" || (BOUND(?value) && isLiteral(?value)), IRI(CONCAT(?td, "-text")), ?unset)) AS ?textNode)
-    BIND(IF(?part = "td" && BOUND(?textNode), 0, ?unset) AS ?textKey)
+    BIND(IF(?part = "lang", IRI(CONCAT(?td, "-lang-text")), IF(?part IN ("code", "value"), IRI(CONCAT(?td, "-text")), ?unset)) AS ?textNode)
     BIND(IF(?part = "lang", CONCAT("@", LANG(?value)), IF(?part = "code", ?shownText,
          IF(STRLEN(?shownText) > 240, CONCAT(SUBSTR(?shownText, 1, 239), "…"), ?shownText))) AS ?data)
   }
@@ -945,7 +952,7 @@ WHERE {
   { SELECT (GROUP_CONCAT(?name; separator=" | ") AS ?names) (GROUP_CONCAT(?dash; separator=" | ") AS ?rule) WHERE {
       { SELECT ?name ?dash WHERE {
           BIND(IRI(CONCAT(STR($this), "/~head-row")) AS ?row)
-          ?row rdfhtml:hasChild ?th . ?th c:column ?i ; rdfhtml:hasChild ?label . ?label rdfhtml:data ?raw .
+          ?row rdfhtml:hasChild ?th . ?th c:column ?i ; rdfhtml:hasChild ?named . ?named a rdfhtml:Bdi ; rdfhtml:hasChild ?label . ?label rdfhtml:data ?raw .
           BIND(REPLACE(REPLACE(STR(?raw), "[|]", "&#124;"), "\\r?\\n", "<br>") AS ?name)
           BIND("---" AS ?dash)
         } ORDER BY ?i }
@@ -975,7 +982,7 @@ WHERE {
                     } }
                   # What the cell shows: a blank node's label (code), a literal's text, its language.
                   OPTIONAL { ?td rdfhtml:hasChild ?code . ?code a rdfhtml:Code ; rdfhtml:hasChild ?codeText . ?codeText rdfhtml:data ?codeValue }
-                  OPTIONAL { ?td rdfhtml:hasChild ?text . ?text a rdfhtml:Text ; rdfhtml:data ?value }
+                  OPTIONAL { ?td rdfhtml:hasChild ?shown . ?shown a rdfhtml:Bdi ; rdfhtml:hasChild ?text . ?text rdfhtml:data ?value }
                   OPTIONAL { ?td rdfhtml:hasChild ?lang . ?lang rdfhtml:class "sem-lang" ; rdfhtml:hasChild ?langText . ?langText rdfhtml:data ?tag }
                   BIND(IF(BOUND(?iri), CONCAT("`", COALESCE(?prefixed, CONCAT("<", STR(?iri), ">")), "`"),
                        IF(BOUND(?codeValue), CONCAT("`", STR(?codeValue), "`"),
