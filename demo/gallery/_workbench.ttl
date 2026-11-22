@@ -14,6 +14,7 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix iv: <https://semblance.dev/ns/view#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 
 # The Playground's SPARQL workbench (the Query tab): its instance, sample queries and remembered state.
@@ -84,27 +85,73 @@ ui:queryTableCopy a c:IconButton , clip:Copier ; clip:copies ui:queryTable ; cli
 ui:queryGraph a c:ResultGraph ; c:of ui:currentQuery .
 ui:queryTurtle a c:ResultTurtle ; c:of ui:currentQuery .
 
-# The Plan tab: how the query is maintained while it follows updates - what the runtime writes about
-# it in the views graph (docs/IVM.md §8.4): its strategy, or why it is recomputed, the work of its
-# last change against what a re-run reads, the check against a from-scratch run, and its operators.
+# The Plan tab: how the query is maintained, or would be - what the runtime writes about it in the
+# views graph (docs/IVM.md §8.4). Run on request, the query asks for its plan (iv:explain): the
+# compiler's plan only, nothing maintained or evaluated, so the tab shows the operators before Follow
+# updates is on. Following, it shows its strategy, or why it is recomputed, the work of its last
+# change against what a re-run reads, the check against a from-scratch run, and its operators.
 ui:queryPlanTab a c:Tab ; c:label "Plan" , "План"@uk , "Plan"@de , "الخطة"@ar ; c:content ui:queryPlan .
 ui:queryPlan a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:queryPlanSummary ui:queryPlanTable ) .
 ui:queryPlanSummary a c:Text ; c:valueQuery ui:qPlanSummary ; c:dataset ui:currentQuery .
-# A view over what the runtime writes about the query (iv:reads), stepped when it writes it.
-ui:qPlanSummary a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ui:currentQuery ; sem:select """
+ui:currentQuery iv:explain true .
+# A view over what the runtime writes about the query (iv:reads), stepped when it writes it, in the
+# viewer's language: the phrases' texts l10n:Terms derives (iv:reads l10n:Terms), English before it has.
+ui:qPlanSummary a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ui:currentQuery , l10n:Terms ; sem:select """
 SELECT ?label WHERE {
-  BIND(EXISTS { ui:currentQuery a iv:View } AS ?live)
-  OPTIONAL { ui:currentQuery iv:strategy ?s FILTER(?s IN (iv:Incremental, iv:Recompute)) }
-  OPTIONAL { ui:currentQuery iv:fallback ?why }
+  # The strategy it got (the views graph), not the one it asks for (iv:Auto, while it follows updates).
+  OPTIONAL { ui:currentQuery iv:strategy ?s FILTER(?s IN (iv:OnRequest, iv:Incremental, iv:Recompute)) }
+  OPTIONAL { ui:currentQuery iv:planned ?planned }
+  OPTIONAL { ui:currentQuery iv:fallback ?why0 }
   OPTIONAL { ui:currentQuery iv:lastRows ?last ; iv:inputRows ?reads ; iv:stateRows ?state }
   OPTIONAL { ui:currentQuery iv:matches ?ok }
-  BIND(COALESCE(?s = iv:Recompute, false) AS ?recomputed)
-  BIND(IF(BOUND(?last), CONCAT(" Last change: ", STR(?last), " rows of work; a re-run reads ", STR(?reads), "; ", STR(?state), " rows of state."), "") AS ?work)
-  BIND(IF(BOUND(?ok), IF(STR(?ok) = "true", " ✓ Matches a from-scratch run.", " ✕ Differs from a from-scratch run."), "") AS ?check)
-  BIND(IF(!?live, "Not maintained. Switch on Follow updates: the query becomes a maintained view, and its plan and the work of each change show here.",
-       IF(?recomputed, CONCAT("Recomputed from scratch when a triple it reads changes: ", STR(?why), ".", ?check),
-          CONCAT("Maintained incrementally: each change costs what it changes.", ?work, ?check))) AS ?label)
+  BIND(COALESCE(?s = iv:OnRequest, false) AS ?onRequest)
+  BIND(IF(?onRequest, COALESCE(?planned = iv:Recompute, false), COALESCE(?s = iv:Recompute, false)) AS ?recomputed)
+  BIND(IF(?onRequest && !BOUND(?planned), ui:PlanNonePhrase,
+       IF(?onRequest, IF(?recomputed, ui:PlanWouldRecomputePhrase, ui:PlanWouldMaintainPhrase),
+          IF(BOUND(?s), IF(?recomputed, ui:PlanRecomputedPhrase, ui:PlanMaintainedPhrase), ui:PlanNonePhrase))) AS ?main)
+  BIND(IF(!?onRequest && !?recomputed && BOUND(?last), ui:PlanWorkPhrase, ui:PlanNoPhrase) AS ?work)
+  BIND(IF(!?onRequest && BOUND(?ok), IF(STR(?ok) = "true", ui:PlanMatchesPhrase, ui:PlanDiffersPhrase), ui:PlanNoPhrase) AS ?check)
+  # Each phrase's text, looked up for the phrase picked (ui:PlanNoPhrase, which has none: no text).
+  LATERAL { OPTIONAL { ?mainAt l10n:of ?main ; l10n:name ?mainPicked } OPTIONAL { FILTER(!BOUND(?mainPicked)) ?main rdfs:label ?mainOnly FILTER(langMatches(lang(?mainOnly), "en")) } }
+  LATERAL { OPTIONAL { ?workAt l10n:of ?work ; l10n:name ?workPicked } OPTIONAL { FILTER(!BOUND(?workPicked)) ?work rdfs:label ?workOnly FILTER(langMatches(lang(?workOnly), "en")) } }
+  LATERAL { OPTIONAL { ?checkAt l10n:of ?check ; l10n:name ?checkPicked } OPTIONAL { FILTER(!BOUND(?checkPicked)) ?check rdfs:label ?checkOnly FILTER(langMatches(lang(?checkOnly), "en")) } }
+  # {why} is the compiler's reason, put in as it is (no REPLACE: it may hold a $); the figures are numbers.
+  BIND(STR(COALESCE(?mainPicked, ?mainOnly)) AS ?main0)
+  BIND(IF(CONTAINS(?main0, "{why}"), CONCAT(STRBEFORE(?main0, "{why}"), STR(COALESCE(?why0, "")), STRAFTER(?main0, "{why}")), ?main0) AS ?mainText)
+  BIND(REPLACE(REPLACE(REPLACE(STR(COALESCE(?workPicked, ?workOnly, "")), "[{]last[}]", STR(COALESCE(?last, ""))), "[{]reads[}]", STR(COALESCE(?reads, ""))), "[{]state[}]", STR(COALESCE(?state, ""))) AS ?workText)
+  BIND(STR(COALESCE(?checkPicked, ?checkOnly, "")) AS ?checkText)
+  BIND(CONCAT(?mainText, IF(?workText = "", "", CONCAT(" ", ?workText)), IF(?checkText = "", "", CONCAT(" ", ?checkText))) AS ?label)
 }""" .
+ui:PlanNonePhrase a c:Phrase ;
+    rdfs:label "No plan yet: run a query."@en , "Плану ще немає: виконайте запит."@uk ,
+               "Noch kein Plan: Führen Sie eine Abfrage aus."@de , "لا توجد خطة بعد: نفّذ استعلامًا."@ar .
+ui:PlanWouldMaintainPhrase a c:Phrase ;
+    rdfs:label "Runs on request. With Follow updates on, it is maintained incrementally by the operators below: each change costs what it changes."@en ,
+               "Виконується на запит. Зі стеженням за змінами його підтримують інкрементно оператори нижче: кожна зміна коштує стільки, скільки змінює."@uk ,
+               "Läuft auf Anfrage. Mit „Änderungen folgen“ pflegen die Operatoren unten sie inkrementell: Jede Änderung kostet, was sie ändert."@de ,
+               "يُنفَّذ عند الطلب. مع تشغيل متابعة التحديثات، تحافظ عليه العوامل أدناه تزايديًا: كل تغيير يكلّف بقدر ما يغيّر."@ar .
+ui:PlanWouldRecomputePhrase a c:Phrase ;
+    rdfs:label "Runs on request. With Follow updates on, it is recomputed from scratch when a triple it reads changes: {why}."@en ,
+               "Виконується на запит. Зі стеженням за змінами його обчислюють заново, щойно змінюється трійка, яку він читає: {why}."@uk ,
+               "Läuft auf Anfrage. Mit „Änderungen folgen“ wird sie neu berechnet, sobald sich ein Tripel ändert, das sie liest: {why}."@de ,
+               "يُنفَّذ عند الطلب. مع تشغيل متابعة التحديثات، يُعاد حسابه من البداية عندما يتغيّر ثلاثي يقرؤه: {why}."@ar .
+ui:PlanMaintainedPhrase a c:Phrase ;
+    rdfs:label "Maintained incrementally: each change costs what it changes."@en , "Підтримується інкрементно: кожна зміна коштує стільки, скільки змінює."@uk ,
+               "Inkrementell gepflegt: Jede Änderung kostet, was sie ändert."@de , "يُحافَظ عليه تزايديًا: كل تغيير يكلّف بقدر ما يغيّر."@ar .
+ui:PlanRecomputedPhrase a c:Phrase ;
+    rdfs:label "Recomputed from scratch when a triple it reads changes: {why}."@en , "Обчислюється заново, щойно змінюється трійка, яку він читає: {why}."@uk ,
+               "Neu berechnet, sobald sich ein Tripel ändert, das sie liest: {why}."@de , "يُعاد حسابه من البداية عندما يتغيّر ثلاثي يقرؤه: {why}."@ar .
+ui:PlanWorkPhrase a c:Phrase ;
+    rdfs:label "Last change: {last} rows of work; a re-run reads {reads}; {state} rows of state."@en ,
+               "Остання зміна: рядків роботи — {last}; повторний запуск читає {reads}; рядків стану — {state}."@uk ,
+               "Letzte Änderung: {last} Zeilen Arbeit; ein neuer Lauf liest {reads}; {state} Zeilen Zustand."@de ,
+               "آخر تغيير: {last} صفًا من العمل؛ إعادة التشغيل تقرأ {reads}؛ {state} صفًا من الحالة."@ar .
+ui:PlanMatchesPhrase a c:Phrase ;
+    rdfs:label "✓ Matches a from-scratch run."@en , "✓ Збігається із запуском з нуля."@uk ,
+               "✓ Stimmt mit einem Lauf von Grund auf überein."@de , "✓ يطابق تشغيلًا من البداية."@ar .
+ui:PlanDiffersPhrase a c:Phrase ;
+    rdfs:label "✕ Differs from a from-scratch run."@en , "✕ Відрізняється від запуску з нуля."@uk ,
+               "✕ Weicht von einem Lauf von Grund auf ab."@de , "✕ يختلف عن تشغيل من البداية."@ar .
 ui:queryPlanTable a c:ResultTable ; c:of ui:qPlanOperators ; c:followUpdates true .
 # What the runtime writes about the query is in the views graph: a view that reads its view (iv:reads).
 ui:qPlanOperators a sem:Query , iv:View ; iv:strategy iv:Auto ; iv:materialize iv:ResultSet ; iv:reads ui:currentQuery ;

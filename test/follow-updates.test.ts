@@ -61,7 +61,10 @@ describe('following updates as a maintained view (the workbench and IVM)', () =>
     sample(h, 'The todo items')
     expect(isView(h)).toBe(false)
     tab(h, 'Plan')
-    expect(plan(h)!.textContent).toContain('Not maintained')
+    await frame()
+    h.shell.flush()
+    // Run on request, it shows the plan it would be maintained by (#588, test/query-plan.test.ts).
+    expect(plan(h)!.textContent).toContain('Runs on request. With Follow updates on, it is maintained incrementally')
     tab(h, 'Table')
     h.fire(followSwitch(h), 'click')
     expect(isView(h)).toBe(true)
@@ -83,7 +86,7 @@ describe('following updates as a maintained view (the workbench and IVM)', () =>
     expect(plan(h)!.textContent).toContain('Maintained incrementally')
     expect(planRows(h).some((r) => r.includes('iv:Partition'))).toBe(true)
     expect(planRows(h).some((r) => r.includes('iv:Sink'))).toBe(true)
-    // Off again: a query run on request (c:QueryRuns), no plan.
+    // Off again: a query run on request (c:QueryRuns).
     h.fire(followSwitch(h), 'click')
     expect(isView(h)).toBe(false)
     expect(h.runtime.views.view(UI + 'currentQuery')!.strategy).toBe('on request')

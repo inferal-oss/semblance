@@ -42,7 +42,15 @@ c:runCount), when a parameter changes and when it is shown again - never for a c
 query someone runs and reads (a result table that is not following updates). With iv:ResultSet, its
 result stays in the views graph until the next run."""@en .
 iv:fallback a owl:DatatypeProperty ; rdfs:domain iv:View ;
-    rdfs:comment "Why the runtime recomputes a view rather than maintaining it (written by the runtime)."@en .
+    rdfs:comment "Why the runtime recomputes a view rather than maintaining it, or would (iv:planned iv:Recompute) (written by the runtime)."@en .
+iv:explain a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """On a query run on request (iv:OnRequest): true writes the plan it would be maintained by to the
+views graph - iv:planned and its operators, or iv:fallback - while it stays run on request. The plan is
+compiled only: nothing is maintained or evaluated for it. The workbench's query, whose Plan tab shows
+how it would follow updates before it does."""@en .
+iv:planned a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Strategy ;
+    rdfs:comment """Written by the runtime on a view run on request that asks for its plan (iv:explain): the strategy it
+would get if maintained, iv:Incremental (its operators are written too) or iv:Recompute (iv:fallback says why)."""@en .
 
 # --- inputs and time -----------------------------------------------------------------------------------
 
@@ -99,7 +107,7 @@ iv:reads a owl:ObjectProperty ; rdfs:domain iv:View ;
     rdfs:comment """What this view reads beyond the input graphs. A view: its output and what the runtime writes about it
 (its plan, strategy and figures - iv:lastRows, iv:inputRows, iv:matches -, in the views graph); it steps after that view
 in each tick and sees what it wrote, and the figures when the runtime writes them (in idle time; never its own), as a
-change like any other. A rendering (sem:Rendering): what rules derive (the first projection's derived graph); it is
+change like any other. A rendering (sem:Rendering) or a building block (sem:BuildingBlock): what rules derive (the first projection's derived graph); it is
 stepped again after the projections, with what they derived, round by round until nothing more changes (docs/IVM.md §27)."""@en .
 iv:Everything a owl:NamedIndividual ;
     rdfs:comment """As the object of iv:reads: what a rule's query reads - the input graphs, every view's output (the view

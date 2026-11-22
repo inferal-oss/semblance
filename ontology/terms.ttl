@@ -2834,6 +2834,7 @@ iv:default a sem:Term .
 iv:deltaLog a sem:Term .
 iv:entered a sem:Term .
 iv:error a sem:Term .
+iv:explain a sem:Term .
 iv:fallback a sem:Term .
 iv:focus a sem:Term .
 iv:followedBy a sem:Term .
@@ -2863,6 +2864,7 @@ iv:partitionBy a sem:Term .
 iv:partitionKey a sem:Term .
 iv:perQuery a sem:Term .
 iv:perReferrer a sem:Term .
+iv:planned a sem:Term .
 iv:property a sem:Term .
 iv:propertyBy a sem:Term .
 iv:range a sem:Term .
