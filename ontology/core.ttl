@@ -99,15 +99,16 @@ made with that property on any node (`?s $this ?o`): adding or removing one (a g
 another) makes that focus dirty."""@en .
 sem:watchesManyValued a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment """On a rendering that reads, on any node, the statements made with each predicate that has this property, and says
-something only about a node with two values or more of one (l10n:Terms and l10n:pickedAs: a text with translations): a change
-in the input to such a node's values, a graph loaded later among them, makes each of its foci dirty. A change to a node with one
-value does not, so editing a text costs nothing here. The rule is evaluated over the whole graph: an addition that arrives in
-slices (Runtime.arriving) evaluates it once, after the last."""@en .
+something only about a node with two values or more of one (l10n:Terms and l10n:pickedAs: a text with translations). The rule
+is member-wise over those nodes (`$member`, as with sem:forEach), which the engine keeps from the input: a node that gains a second
+value joins, one left with a single value leaves, and one whose values change is evaluated again. A change to a node with one value
+does nothing, so editing a text costs nothing here, and a graph loaded later, in slices or at once, costs the nodes it brings. What
+it says about a member is minted under the member (`<member>/~…`), so its SPARQL rule evaluates many members in one query."""@en .
 sem:leavesTo a owl:ObjectProperty ; rdfs:range sem:Rendering ;
     rdfs:comment """On a rendering with sem:watchesManyValued: another rendering that derives, per focus, part of what this one would,
-so this one leaves it out (l10n:Terms leaves a component's own c:label to l10n:Labels). A change to the values of a predicate the
-other watches (sem:watches), on an instance of the class it targets, makes this rendering nothing due: a reaction or a view that
-changes a component's translated label costs it nothing."""@en .
+so this one leaves it out (l10n:Terms leaves a component's own c:label to l10n:Labels). The values of a predicate the other
+watches (sem:watches), on an instance of the class it targets, do not make a member, and a change to them makes nothing due: a
+reaction or a view that changes a component's translated label costs it nothing."""@en .
 sem:inverse a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment "In a sem:follows path: a step against this predicate (from a class to its instances: [ sem:inverse rdf:type ])."@en .
 sem:inverseVia a owl:ObjectProperty ;

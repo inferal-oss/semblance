@@ -1,0 +1,33 @@
+@prefix chg: <https://semblance.dev/ns/change#> .
+@prefix mig: <https://semblance.dev/ns/migration#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix change: <https://semblance.dev/change/> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+
+# What changed for whoever has to move with it: AGENTS.md, "When a component changes".
+
+change:texts-picked-as-they-arrive a chg:Change ;
+    rdfs:label "A text's translations are picked in the change that brings them, member by member"@en ;
+    chg:issue <https://github.com/inferal-oss/semblance/issues/589> ;
+    chg:motivation """A SPARQL rule reads a translated text as its twin (l10n:Terms), else the one value it has. While
+graphs arrived in slices (the graphs a page did not need first), l10n:Terms waited for the last slice, since it was
+evaluated over the whole graph; until then a node that had arrived with its translations had no twin, its fallback
+bound all of them, and the page showed whichever the store gave last: the Tools window's sample queries in Arabic,
+for seconds, to an English reader.""" ;
+    chg:substance """sem:watchesManyValued now makes a rendering member-wise over the nodes it says something about: those
+with two values or more of a marked predicate in the input, which the engine keeps as changes arrive. Each node's pair
+is evaluated in the change that gives it a second value, again when its values change, withdrawn when it is left with
+one, and every pair again when the viewer's languages change; nothing waits for the end of an arrival. l10n:Terms is
+written that way: per node ($member), its twins on <node>/~l10n (they were on <viewer>/~t-<md5 of the node>), l10n:of
+the node as before. The picks are the same, the viewer's languages by rank, then the untagged value, then English,
+then the least. Its SPARQL rule takes many nodes in one query (VALUES ?member). Runtime.arriving no longer holds
+anything back in the engine.""" ;
+    chg:forwardGuide """Nothing to move for a rule that reads a twin as documented (`?at l10n:of ?n ; l10n:name ?picked`).
+Something that named a twin's node by its IRI under the viewer (`…/~t-<md5>`) finds it under the node it is about
+(`<node>/~l10n`). A rendering of your own with sem:watchesManyValued is now member-wise: read the node as $member,
+and mint what it says under it (IRI(CONCAT(STR($member), "/~…"))) so it is evaluated in bulk.""" ;
+    chg:backwardGuide """Going back, twins sit under the viewer again, and a graph arriving in slices has its translated
+texts picked only after the last slice: until then a SPARQL rule may show any of their values.""" ;
+    chg:affects l10n:Viewer .

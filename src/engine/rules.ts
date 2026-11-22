@@ -93,6 +93,13 @@ export interface Rule {
    * can be grouped back by focus (see attributable()); sem:bulk false opts out.
    */
   bulk: boolean
+  /**
+   * Whether a member-wise SPARQL rule may be evaluated once for many members of a focus
+   * (`$member` as ?member, restricted by VALUES): every subject its template writes is minted
+   * under the member, so the output groups back by member. For the rules whose members the
+   * engine keeps (sem:watchesManyValued), whose queries read the member only in the main pattern.
+   */
+  bulkMembers?: boolean
   /** The focus must have at least one of these properties, or the rule is not run (sem:requires). */
   requires: string[]
   /** The focus must have none of these properties, or the rule is not run (sem:unless). */
@@ -201,7 +208,10 @@ export function loadRules(store: GraphStore): Rule[] {
     })
     const requires = getAll(SEM.requires)
     const unless = getAll(SEM.unless)
-    const forEach = get(SEM.forEach)?.value
+    // sem:watchesManyValued: member-wise over the nodes it says something about, which the engine
+    // keeps (Engine.membersOf); it reads of each the marked predicates alone (noteManyValued).
+    const manyValued = getAll(SEM.watchesManyValued)
+    const forEach = get(SEM.forEach)?.value ?? (manyValued.length ? SEM.watchesManyValued : undefined)
     rules.push({
       iri: r.value,
       target: target.value,
@@ -219,16 +229,19 @@ export function loadRules(store: GraphStore): Rule[] {
       forEach,
       anywhere: getAll(SEM.watchesAnywhere),
       watchesStatements: get(SEM.watchesStatements)?.value === 'true',
-      manyValued: getAll(SEM.watchesManyValued),
+      manyValued,
       leavesTo: getAll(SEM.leavesTo).map((other) => ({ target: all(namedNode(other), SEM.targets)[0] ?? '', predicates: all(namedNode(other), SEM.watches) })).filter((l) => l.target && l.predicates.length),
-      memberWatches:
-        getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
+      memberWatches: manyValued.length
+        ? { predicates: new Set(), via: [] }
+        : getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
           ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }
           : undefined,
       inputOnly: get(SEM.inputOnly)?.value === 'true',
       always: get(SEM.always)?.value === 'true',
       // Member-wise output is attributed to (focus, member) pairs, which bulk output cannot be.
-      bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributableOnce(query)),
+      bulk: get(SEM.bulk)?.value !== 'false' && !forEach && (!query || attributableOnce(query)),
+      // Its pairs, several members at a time (VALUES ?member), when what it says is minted under its member.
+      bulkMembers: !!forEach && get(SEM.bulk)?.value !== 'false' && !!query && manyValued.length > 0 && attributableOnce(query.replaceAll('$this', '?thisFocus').replaceAll('$member', '$this')),
       requires,
       unless,
       // The rule's own: a rendering's sem:needsExtension says what its SPARQL rule awaits.

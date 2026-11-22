@@ -229,15 +229,15 @@ export class Engine {
   private anywhereFoci = new Map<Rule, Set<string>>()
   /** sem:watchesStatements: the rules whose focus is a property whose statements they read anywhere. */
   private statementWatchers: Rule[] = []
-  /** sem:watchesManyValued: the rules, the predicates each reads (read from the graphs when asked), and those due. */
+  /**
+   * sem:watchesManyValued: the rules, the predicates each reads (read from the graphs when asked),
+   * and each rule's members: the nodes with two values or more of one of those predicates in the
+   * input (read when first asked, then kept as changes arrive). Such a rule is member-wise over
+   * them: a change costs the nodes it touches, a graph arriving in slices costs each slice its own.
+   */
   private manyValuedRules: Rule[] = []
   private manyValuedPredicates?: Map<string, Rule[]>
-  private manyValuedDue = new Set<Rule>()
-  /**
-   * An addition is arriving in slices (Runtime.arriving): what is due over the whole graph
-   * (sem:watchesManyValued) waits for the last, or each slice would evaluate it again.
-   */
-  arriving = false
+  private manyValuedMembers = new Map<Rule, Set<string>>()
   private pristine = new Set<Rule>()
   /** Every predicate whose links are indexed: followed alone or on a path. */
   private linkedPredicates = new Set<string>()
@@ -771,7 +771,7 @@ export class Engine {
    * did not change costs its evaluation and no patch. It happens once per arrival, not per change.
    */
   reread(): void {
-    // (What declares all it reads over the graph, sem:watchesManyValued, has heard it all.)
+    // (What says what it reads over the graph, sem:watchesManyValued, has heard all of it, member by member.)
     for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!r.manyValued.length) this.markFocus(r, focus)
     if (!this.demand) return this.run()
     const due: [Rule, string[]][] = []
@@ -994,6 +994,7 @@ export class Engine {
     this.queryFollowersByPredicate.clear()
     this.stale.clear()
     this.memberKeys.clear()
+    this.manyValuedMembers.clear()
     this.memberReaders.clear()
     this.dirty.clear()
     this.held.clear()
@@ -1095,8 +1096,10 @@ export class Engine {
     this.statementWatchers = rules.filter((r) => r.watchesStatements)
     this.manyValuedRules = rules.filter((r) => r.manyValued.length)
     this.manyValuedPredicates = undefined
+    for (const r of [...this.manyValuedMembers.keys()]) if (!this.manyValuedRules.includes(r)) this.manyValuedMembers.delete(r)
     for (const r of rules) for (const p of r.anywhere) this.anywhere.set(p, [...(this.anywhere.get(p) ?? []), r])
-    this.exact = this.exactOn ? new ExactIndex(this.store.factory, fed) : undefined
+    // (A rule with sem:watchesManyValued says what it reads: the marked predicates of its members.)
+    this.exact = this.exactOn ? new ExactIndex(this.store.factory, fed.filter((r) => !r.manyValued.length)) : undefined
     // What a rule with exact dependencies declares is not used: its patterns say what it reads.
     const declaring = this.exact ? fed.filter((r) => !this.exact!.has(r)) : fed
     for (const r of declaring) for (const p of r.follows) this.followers.set(p, [...(this.followers.get(p) ?? []), r])
@@ -1289,9 +1292,13 @@ export class Engine {
     // there) does not re-run the other members.
     if (this.committing?.rule === rule && focusOf(this.committing.focus) === focus) return
     const f = this.store.factory
-    for (const g of this.graphs) {
-      for (const q of this.store.match(f.namedNode(focus), f.namedNode(rule.forEach), null, g)) {
-        if (q.object.termType === 'NamedNode' && (!keep || keep(focus + SEP + q.object.value))) this.markDirty(rule, focus + SEP + q.object.value)
+    // (sem:watchesManyValued: its members are the nodes it says something about, kept by the engine.)
+    if (rule.manyValued.length) for (const m of this.membersOf(rule)) (!keep || keep(focus + SEP + m)) && this.markDirty(rule, focus + SEP + m)
+    else {
+      for (const g of this.graphs) {
+        for (const q of this.store.match(f.namedNode(focus), f.namedNode(rule.forEach), null, g)) {
+          if (q.object.termType === 'NamedNode' && (!keep || keep(focus + SEP + q.object.value))) this.markDirty(rule, focus + SEP + q.object.value)
+        }
       }
     }
     for (const key of this.memberKeys.get(rule)?.get(focus) ?? []) if (!keep || keep(key)) this.markDirty(rule, key)
@@ -1301,6 +1308,7 @@ export class Engine {
   private linked(rule: Rule, key: string): boolean {
     const member = memberOf(key)
     if (!rule.forEach || member === undefined) return true
+    if (rule.manyValued.length) return this.membersOf(rule).has(member)
     const f = this.store.factory
     return this.holds(f.namedNode(focusOf(key)), f.namedNode(rule.forEach), f.namedNode(member), this.graphKeys)
   }
@@ -1483,53 +1491,112 @@ export class Engine {
   }
 
   /**
-   * sem:watchesManyValued: the rules a change in the input makes due, each evaluated once it may
-   * be. A node's values count before and after the change, so a text replaced by another (one
-   * value, then one value) makes nothing due, and neither does what a rule derives.
+   * sem:watchesManyValued: what a change in the input makes due, member by member. A node's values
+   * count before and after the change: a node that gains a second value joins the rule's members
+   * (its pairs are evaluated), one left with a single value leaves (they are withdrawn), and one
+   * whose values change while it has two or more is evaluated again. A text replaced by another
+   * (one value, then one value) costs nothing, and neither does what a rule derives. A predicate
+   * marked, or no longer marked, changes what the rules read: every member is read again.
    */
   private noteManyValued(delta: Delta) {
-    if (this.manyValuedRules.length) {
-      const f = this.store.factory
-      const input = this.graphs.filter((g) => this.inputGraphKeys.has(g.value))
-      // A predicate marked, or no longer marked: what the rules read has changed.
-      for (const r of this.manyValuedRules) {
-        if (!delta.add.some((q) => r.manyValued.includes(q.predicate.value)) && !delta.remove.some((q) => r.manyValued.includes(q.predicate.value))) continue
-        this.manyValuedPredicates = undefined
-        this.manyValuedDue.add(r)
-      }
-      if (!this.manyValuedPredicates) {
-        this.manyValuedPredicates = new Map()
-        for (const r of this.manyValuedRules) {
-          for (const m of r.manyValued) {
-            for (const g of input) for (const q of this.store.match(null, f.namedNode(m), null, g)) this.manyValuedPredicates.set(q.subject.value, [...(this.manyValuedPredicates.get(q.subject.value) ?? []), r])
-          }
-        }
-      }
-      // Per node and predicate: how many values the change added, less those it removed.
-      const net = new Map<string, { q: Quad; rules: Rule[]; n: number }>()
-      for (const [qs, w] of [[delta.add, 1], [delta.remove, -1]] as const) {
-        for (const q of qs) {
-          if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'Literal' || !this.inputGraphKeys.has(q.graph.value)) continue
-          const rules = this.manyValuedPredicates.get(q.predicate.value)
-          if (!rules) continue
-          const k = q.subject.value + ' ' + q.predicate.value
-          const e = net.get(k)
-          if (e) e.n += w
-          else net.set(k, { q, rules, n: w })
-        }
-      }
-      for (const { q, rules: all, n } of net.values()) {
-        // What another rendering derives per focus (sem:leavesTo: a component's own translated label)
-        // is not this rule's: changing it, by a reaction or a view, costs this rule nothing.
-        const rules = all.filter((r) => !this.manyValuedDue.has(r) && !r.leavesTo.some((l) => l.predicates.includes(q.predicate.value) && this.isA(q.subject.value, l.target)))
-        if (!rules.length) continue
-        const values = new Set(input.flatMap((g) => this.store.match(q.subject, q.predicate, null, g)).filter((v) => v.object.termType === 'Literal').map((v) => v.object.value + '@' + (v.object as { language?: string }).language)).size
-        if (values >= 2 || values - n >= 2) for (const r of rules) this.manyValuedDue.add(r)
+    if (!this.manyValuedRules.length) return
+    for (const r of this.manyValuedRules) {
+      if (!delta.add.some((q) => r.manyValued.includes(q.predicate.value)) && !delta.remove.some((q) => r.manyValued.includes(q.predicate.value))) continue
+      this.manyValuedPredicates = undefined
+      this.manyValuedMembers.delete(r)
+      for (const focus of this.anywhereFoci.get(r) ?? []) this.markFocus(r, focus)
+    }
+    const marked = this.markedPredicates()
+    // Per node and predicate: how many values the change added, less those it removed.
+    const net = new Map<string, { q: Quad; rules: Rule[]; n: number }>()
+    for (const [qs, w] of [[delta.add, 1], [delta.remove, -1]] as const) {
+      for (const q of qs) {
+        if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'Literal' || !this.inputGraphKeys.has(q.graph.value)) continue
+        const rules = marked.get(q.predicate.value)
+        if (!rules) continue
+        const k = q.subject.value + ' ' + q.predicate.value
+        const e = net.get(k)
+        if (e) e.n += w
+        else net.set(k, { q, rules, n: w })
       }
     }
-    if (this.arriving || !this.manyValuedDue.size) return
-    for (const r of this.manyValuedDue) if (this.manyValuedRules.includes(r)) for (const focus of this.anywhereFoci.get(r) ?? []) this.markFocus(r, focus)
-    this.manyValuedDue.clear()
+    for (const { q, rules, n } of net.values()) {
+      const s = q.subject.value
+      const values = this.valueCount(s, q.predicate.value)
+      for (const r of rules) {
+        // (A rule whose members are read again below hears this change then.)
+        const members = this.manyValuedMembers.get(r)
+        if (!members) continue
+        // What another rendering derives per focus (sem:leavesTo: a component's own translated label)
+        // is not this rule's: changing it, by a reaction or a view, costs this rule nothing.
+        if (this.leftTo(r, s, q.predicate.value)) continue
+        const was = members.has(s)
+        const is = this.manyValued(r, s)
+        if (is) members.add(s)
+        else members.delete(s)
+        if (was === is && values < 2 && values - n < 2) continue
+        for (const focus of this.anywhereFoci.get(r) ?? []) this.markDirty(r, focus + SEP + s)
+      }
+    }
+  }
+
+  /** The predicates the rules with sem:watchesManyValued read (those with one of their marks, in the input), and which rules read each. */
+  private markedPredicates(): Map<string, Rule[]> {
+    if (this.manyValuedPredicates) return this.manyValuedPredicates
+    const f = this.store.factory
+    const by = new Map<string, Rule[]>()
+    for (const r of this.manyValuedRules) {
+      for (const m of r.manyValued) {
+        for (const g of this.inputGraphs()) for (const q of this.store.match(null, f.namedNode(m), null, g)) if (!by.get(q.subject.value)?.includes(r)) by.set(q.subject.value, [...(by.get(q.subject.value) ?? []), r])
+      }
+    }
+    return (this.manyValuedPredicates = by)
+  }
+
+  private inputGraphs(): Quad_Graph[] {
+    return this.graphs.filter((g) => this.inputGraphKeys.has(g.value))
+  }
+
+  /** How many distinct literal values a node has for a predicate, in the input. */
+  private valueCount(s: string, p: string): number {
+    const f = this.store.factory
+    const values = new Set<string>()
+    for (const g of this.inputGraphs()) for (const q of this.store.match(f.namedNode(s), f.namedNode(p), null, g)) if (q.object.termType === 'Literal') values.add(q.object.value + '@' + q.object.language)
+    return values.size
+  }
+
+  /** sem:leavesTo: whether what this predicate says of this node is another rendering's to derive. */
+  private leftTo(rule: Rule, s: string, p: string): boolean {
+    return rule.leavesTo.some((l) => l.predicates.includes(p) && this.isA(s, l.target))
+  }
+
+  /** Whether a node is one a rule with sem:watchesManyValued says something about: two values or more of a predicate it reads. */
+  private manyValued(rule: Rule, s: string): boolean {
+    for (const [p, rules] of this.markedPredicates()) if (rules.includes(rule) && !this.leftTo(rule, s, p) && this.valueCount(s, p) >= 2) return true
+    return false
+  }
+
+  /** A rule with sem:watchesManyValued: its members, read from the input when first asked. */
+  private membersOf(rule: Rule): Set<string> {
+    let members = this.manyValuedMembers.get(rule)
+    if (members) return members
+    members = new Set()
+    const f = this.store.factory
+    for (const [p, rules] of this.markedPredicates()) {
+      if (!rules.includes(rule)) continue
+      const values = new Map<string, Set<string>>()
+      for (const g of this.inputGraphs()) {
+        for (const q of this.store.match(null, f.namedNode(p), null, g)) {
+          if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'Literal') continue
+          let v = values.get(q.subject.value)
+          if (!v) values.set(q.subject.value, (v = new Set()))
+          v.add(q.object.value + '@' + q.object.language)
+        }
+      }
+      for (const [s, v] of values) if (v.size >= 2 && !this.leftTo(rule, s, p)) members.add(s)
+    }
+    this.manyValuedMembers.set(rule, members)
+    return members
   }
 
   /** Rules with exact dependencies: the foci a changed triple reaches through their patterns. */
@@ -1914,6 +1981,22 @@ export class Engine {
       if (wd) wd.evaluated(live.length)
       return
     }
+    // Several members of a focus of a member-wise rule whose output is minted under its member: one query per focus.
+    if (rule.kind === 'sparql' && rule.bulkMembers && foci.size >= this.bulkThreshold) {
+      const live = [...foci].filter((key) => memberOf(key) !== undefined && this.isInstance(key, rule) && this.linked(rule, key))
+      let groups: Map<string, Quad[]>
+      try {
+        groups = live.length ? this.bulkMembers(rule, live) : new Map<string, Quad[]>()
+      } catch (e) {
+        if (wd && interruption(e)) return { foci: new Set(foci), interrupted: true }
+        throw e
+      }
+      this.stats.ruleRuns += live.length
+      const evaluated = new Set(live)
+      for (const key of foci) this.commit(rule, key, evaluated.has(key) ? (groups.get(key) ?? []) : [])
+      if (wd) wd.evaluated(live.length)
+      return
+    }
     if (!wd) {
       for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) && this.linked(rule, focus) ? this.evaluateOne(rule, focus) : [])
       return
@@ -2042,6 +2125,43 @@ export class Engine {
       let g = groups.get(focus)
       if (!g) groups.set(focus, (g = []))
       g.push(q)
+    }
+    return groups
+  }
+
+  /** A member-wise rule's pairs (Rule.bulkMembers), by focus: one query each, its members restricted by VALUES, the output grouped back by member. */
+  private bulkMembers(rule: Rule, keys: string[]): Map<string, Quad[]> {
+    this.stats.bulkQueries++
+    const groups = new Map<string, Quad[]>()
+    const byFocus = new Map<string, Set<string>>()
+    for (const key of keys) {
+      const focus = focusOf(key)
+      let members = byFocus.get(focus)
+      if (!members) byFocus.set(focus, (members = new Set()))
+      members.add(memberOf(key)!)
+    }
+    for (const [focus, members] of byFocus) {
+      // A member minted under another of the batch goes alone: a triple about it could be its own or the other's.
+      for (const m of [...members]) {
+        if (owningFocus(m) === m || mintedUnder(owningFocus(m), members) === undefined) continue
+        members.delete(m)
+        groups.set(focus + SEP + m, this.evaluateOne(rule, focus + SEP + m))
+      }
+      if (!members.size) continue
+      this.stats.queries++
+      const query = rule.queryParts!.join('<' + focus + '>').replaceAll('$member', '?member')
+      const template = query.search(/CONSTRUCT\s*\{/i)
+      const where = query.slice(template).search(/WHERE\s*\{/i)
+      const at = template + where + query.slice(template + where).indexOf('{') + 1
+      const restricted = `${query.slice(0, at)} VALUES ?member { ${[...members].map((m) => `<${m}>`).join(' ')} } ${query.slice(at)}`
+      for (const q of this.construct(rule, restricted)) {
+        const member = mintedUnder(q.subject.value, members)
+        if (member === undefined) continue
+        const key = focus + SEP + member
+        let g = groups.get(key)
+        if (!g) groups.set(key, (g = []))
+        g.push(q)
+      }
     }
     return groups
   }
