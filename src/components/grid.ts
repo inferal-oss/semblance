@@ -551,8 +551,9 @@ function cell(ctx: RuleContext, o: Out, id: string, row: NamedNode, c: Column): 
   const v = c.property ? ctx.object(s, c.property) : undefined
   const d = c.detail ? ctx.object(s, c.detail) : undefined
   const out: NamedNode[] = []
-  if (v) out.push(el(o, `${id}-value`, 'Span', { class: 'sem-value' }, [o.text(`${id}-text`, shown(ctx, v))]))
-  if (d) out.push(el(o, `${id}-detail`, 'Span', { class: 'sem-detail' }, [o.text(`${id}-detail-text`, shown(ctx, d))]))
+  // Each in its own direction, isolated (<bdi>): a value that reads left to right keeps its marks in a right-to-left grid.
+  if (v) out.push(el(o, `${id}-value`, 'Span', { class: 'sem-value' }, [el(o, `${id}-value-bdi`, 'Bdi', {}, [o.text(`${id}-text`, shown(ctx, v))])]))
+  if (d) out.push(el(o, `${id}-detail`, 'Span', { class: 'sem-detail' }, [el(o, `${id}-detail-bdi`, 'Bdi', {}, [o.text(`${id}-detail-text`, shown(ctx, d))])]))
   return out
 }
 
