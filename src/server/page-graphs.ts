@@ -8,7 +8,7 @@ import type { Quad } from '@rdfjs/types'
 import { Parser } from 'n3'
 import type { Engine } from '../engine/engine.ts'
 import { superclasses } from '../engine/rules.ts'
-import { RDF_TYPE } from '../ns.ts'
+import { NS, RDF_TYPE } from '../ns.ts'
 import type { GraphStore } from '../store/types.ts'
 import { PAGE_GRAPHS_META, type PageGraphsIndex } from '../web/takeover.ts'
 
@@ -62,6 +62,21 @@ export function neededGraphs(index: GraphIndex, engine: Engine, store: GraphStor
     for (const q of store.match(f.namedNode(focus), f.namedNode(RDF_TYPE), null)) for (const c of supers(q.object.value)) subjects.add(c)
   }
   for (const s of subjects) for (const n of index.bySubject.get(s) ?? []) need.add(n)
+  // A text's values travel together: a graph needed that states a value of a translated text (an
+  // rdfs:label, a c:label, a text with an l10n: twin) brings every graph that states that text, so a
+  // node never has its translations without its source text, or the reverse. Shown before the rest
+  // arrives (a window remembered open, a page reached meanwhile), it would pick from what is there:
+  // a translation in another language than the viewer's (#589).
+  const texts = new Set([NS.rdfs + 'label', NS.c + 'label', ...store.match(null, f.namedNode(NS.l10n + 'pickedAs'), null).map((q) => q.subject.value)])
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const [statement, names] of index.byStatement) {
+      if (names.size < 2 || !texts.has(statement.slice(statement.indexOf(' ') + 1))) continue
+      if (![...names].some((n) => need.has(n)) || [...names].every((n) => need.has(n))) continue
+      for (const n of names) need.add(n)
+      grew = true
+    }
+  }
   return index.names.filter((n) => need.has(n))
 }
 
