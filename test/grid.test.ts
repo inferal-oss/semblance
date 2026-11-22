@@ -59,6 +59,8 @@ describe('data grid', () => {
         const { root, click, values, rows, part } = showGrids(prefer)
         const grid = root('dt-grid-logGrid')
         const row = () => [...grid.querySelectorAll('tbody > tr')].find((tr) => tr.textContent!.startsWith('7'))!
+        // A text value is isolated in its own direction (<bdi>), inside its line.
+        expect(row().querySelector('td:last-child > .sem-value > bdi')?.textContent).toBe(row().querySelector('td:last-child')!.textContent)
         click(row().querySelector('td:last-child')!)
         expect(values('dt-grid-logGrid', 'selectedRow')).toEqual([UI + 'log-7'])
         expect(row().getAttribute('aria-selected')).toBe('true')

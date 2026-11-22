@@ -328,7 +328,9 @@ const table: FnRule = (ctx, focus) => {
         const component = c.format === 'component' ? row.get(c.variable) : undefined
         const content = c.slotPrefix !== undefined ? []
           : component?.termType === 'NamedNode' ? [component as NamedNode]
-          : c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])] : [o.text(`${id}-c${ci}-text`, v)]
+          : c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])]
+          // The value in its own direction, isolated (<bdi>): it keeps its marks in a right-to-left table.
+          : [el(o, `${id}-c${ci}-value`, 'Bdi', {}, [o.text(`${id}-c${ci}-text`, v)])]
         const cellEl = el(o, `${id}-c${ci}`, ci === 0 ? 'Th' : 'Td', { scope: ci === 0 ? 'row' : undefined, class: alignClass(c) }, content)
         if (slotName !== undefined) o.t(cellEl, SEM.slot, slotName)
         return cellEl

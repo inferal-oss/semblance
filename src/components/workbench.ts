@@ -689,7 +689,9 @@ function cell(ctx: RuleContext, o: Out, id: string, t: Term | undefined, label: 
   }
   const lit = t as Term & { language?: string; datatype?: NamedNode }
   const numeric = !lit.language && NUMERIC.test(lit.datatype?.value ?? '')
-  const parts = [o.text(`${id}-text`, cut(t.value, 240))]
+  // The value in its own direction, isolated (<bdi>): a left-to-right value keeps its brackets and
+  // marks in a right-to-left table, and the cell stays aligned by the table.
+  const parts = [o.el(`${id}-value`, 'Bdi', {}, [o.text(`${id}-text`, cut(t.value, 240))])]
   if (lit.language) parts.push(o.el(`${id}-lang`, 'Span', { class: 'sem-lang' }, [o.text(`${id}-lang-text`, '@' + lit.language)]))
   return o.el(id, 'Td', { class: numeric ? 'sem-end' : undefined }, parts)
 }
@@ -719,7 +721,7 @@ const table: FnRule = (ctx, focus) => {
   }
   // Each cell says which column it is in (c:column), as each row which row (c:row).
   const at = (n: NamedNode, i: number) => (o.t(n, W.column, int(ctx, i)), n)
-  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, run.columns.map((v, i) => at(o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, header(ctx, run, v))]), i)))])
+  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, run.columns.map((v, i) => at(o.el(`h${i}`, 'Th', { scope: 'col' }, [o.el(`h${i}-value`, 'Bdi', {}, [o.text(`h${i}-text`, header(ctx, run, v))])]), i)))])
   // Keyed by its values (its row's node): a row that is in the next run too keeps its elements.
   const body = o.el(
     'body',
@@ -787,6 +789,8 @@ const markdownCell = (s: string) => s.replace(/[|]/g, '&#124;').replace(/\r?\n/g
 const isA = (ctx: RuleContext, n: Term, cls: string) => ctx.match(n, RDF_TYPE, H.ns + cls).length > 0
 /** The data of a node's text children. */
 const dataOf = (ctx: RuleContext, n: Term) => ctx.objects(n, H.hasChild).flatMap((t) => ctx.objects(t, H.data)).map((d) => d.value)
+/** The text of a header or a literal: inside its <bdi>. */
+const valueOf = (ctx: RuleContext, n: Term) => ctx.objects(n, H.hasChild).filter((c) => isA(ctx, c, 'Bdi')).flatMap((b) => dataOf(ctx, b))
 /** A row's cells in their order (c:column); one without a column is not shown. */
 const cellsOf = (ctx: RuleContext, n: Term): Term[] =>
   ctx
@@ -799,7 +803,7 @@ const cellsOf = (ctx: RuleContext, n: Term): Term[] =>
 const tableMarkdown: FnRule = (ctx, focus) => {
   const head = ctx.nn(mint(focus.value, 'head-row'))
   if (!isA(ctx, head, 'Tr')) return []
-  const names = cellsOf(ctx, head).flatMap((th) => dataOf(ctx, th).map(markdownCell))
+  const names = cellsOf(ctx, head).flatMap((th) => valueOf(ctx, th).map(markdownCell))
   if (!names.length) return []
   const shown = (td: Term): string => {
     const iri = ctx.object(td, W.term)
@@ -809,7 +813,7 @@ const tableMarkdown: FnRule = (ctx, focus) => {
     const code = children.find((n) => isA(ctx, n, 'Code'))
     if (code) return dataOf(ctx, code).map((d) => '`' + d + '`').join('')
     // A literal: its text, and its language tag.
-    const text = children.filter((n) => isA(ctx, n, 'Text')).flatMap((n) => ctx.objects(n, H.data).map((d) => markdownCell(d.value)))
+    const text = valueOf(ctx, td).map(markdownCell)
     const tag = children.filter((n) => ctx.objects(n, H.ns + 'class').some((c) => c.value === 'sem-lang')).flatMap((n) => dataOf(ctx, n))
     return text.join('') + tag.join('')
   }
