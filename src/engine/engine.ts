@@ -1520,9 +1520,10 @@ export class Engine {
         else net.set(k, { q, rules, n: w })
       }
     }
+    const input = this.inputGraphs()
     for (const { q, rules, n } of net.values()) {
       const s = q.subject.value
-      const values = this.valueCount(s, q.predicate.value)
+      const values = this.valueCount(s, q.predicate.value, input)
       for (const r of rules) {
         // (A rule whose members are read again below hears this change then.)
         const members = this.manyValuedMembers.get(r)
@@ -1531,7 +1532,9 @@ export class Engine {
         // is not this rule's: changing it, by a reaction or a view, costs this rule nothing.
         if (this.leftTo(r, s, q.predicate.value)) continue
         const was = members.has(s)
-        const is = this.manyValued(r, s)
+        // Two values here make a member; fewer leave one only if no other text of it has two (a scan
+        // of its texts, for a member alone).
+        const is = values >= 2 || (was && this.manyValued(r, s, input))
         if (is) members.add(s)
         else members.delete(s)
         if (was === is && values < 2 && values - n < 2) continue
@@ -1558,10 +1561,10 @@ export class Engine {
   }
 
   /** How many distinct literal values a node has for a predicate, in the input. */
-  private valueCount(s: string, p: string): number {
+  private valueCount(s: string, p: string, input = this.inputGraphs()): number {
     const f = this.store.factory
     const values = new Set<string>()
-    for (const g of this.inputGraphs()) for (const q of this.store.match(f.namedNode(s), f.namedNode(p), null, g)) if (q.object.termType === 'Literal') values.add(q.object.value + '@' + q.object.language)
+    for (const g of input) for (const q of this.store.match(f.namedNode(s), f.namedNode(p), null, g)) if (q.object.termType === 'Literal') values.add(q.object.value + '@' + q.object.language)
     return values.size
   }
 
@@ -1571,8 +1574,8 @@ export class Engine {
   }
 
   /** Whether a node is one a rule with sem:watchesManyValued says something about: two values or more of a predicate it reads. */
-  private manyValued(rule: Rule, s: string): boolean {
-    for (const [p, rules] of this.markedPredicates()) if (rules.includes(rule) && !this.leftTo(rule, s, p) && this.valueCount(s, p) >= 2) return true
+  private manyValued(rule: Rule, s: string, input = this.inputGraphs()): boolean {
+    for (const [p, rules] of this.markedPredicates()) if (rules.includes(rule) && !this.leftTo(rule, s, p) && this.valueCount(s, p, input) >= 2) return true
     return false
   }
 
