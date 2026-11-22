@@ -27,6 +27,26 @@ export function takeFocus(el: HTMLElement, options?: FocusOptions) {
 /** Where an element is: each ancestor, nearest first, with what stood next to the way down to it. */
 export type ElementPlace = { at: Element; next: Element | null; previous: Element | null }[]
 
+/** Every renderer by the element it renders into, so what made an element can be asked of the page (src/web/unmanaged.ts). */
+const byHost = new WeakMap<Node, DomRenderer>()
+const live = new Set<WeakRef<DomRenderer>>()
+
+/** The renderer that renders into `host`, if one does. */
+export function rendererAt(host: Node): DomRenderer | undefined {
+  return byHost.get(host)
+}
+
+/** The renderers not let go whose host is in the page (each keyOf says what it made). */
+export function liveRenderers(): DomRenderer[] {
+  const out: DomRenderer[] = []
+  for (const ref of live) {
+    const r = ref.deref()
+    if (!r) live.delete(ref)
+    else if (r.host.isConnected) out.push(r)
+  }
+  return out
+}
+
 export class DomRenderer {
   private readonly doc: Document
   private els = new Map<string, Node>()
@@ -67,11 +87,16 @@ export class DomRenderer {
   ) {
     this.doc = host.ownerDocument
     this.takeDirty = index.consumer()
+    byHost.set(host, this)
+    live.add((this.ref = new WeakRef(this)))
   }
+  private readonly ref: WeakRef<DomRenderer>
 
   /** Stop hearing of the index's changes (the renderer is let go). */
   dispose(): void {
     this.takeDirty.release()
+    live.delete(this.ref)
+    if (byHost.get(this.host) === this) byHost.delete(this.host)
   }
 
   keyOf(node: Node): string | undefined {

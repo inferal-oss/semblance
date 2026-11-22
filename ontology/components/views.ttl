@@ -1137,7 +1137,8 @@ WHERE {
 
 c:Highlight a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment """Marks the RDF/HTML node held in c:bindProperty of c:bindFrom (data-sem-highlighted). Of its own it
+    rdfs:comment """Marks the RDF/HTML node held in c:bindProperty of c:bindFrom (data-sem-highlighted); with c:via, the
+node one hop further from it, through that property (a finding's nearest element, um:near). Of its own it
 renders only an empty hidden root, so the theme shows the mark only while a highlight is shown: one parked
 with what holds it (a closed or minimized window, a tab not selected) leaves its last mark in place, unseen."""@en ;
     sem:slug "highlight" .
@@ -1161,7 +1162,11 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   OPTIONAL {
     $this c:bindFrom ?from ; c:bindProperty ?property .
-    ?from ?property ?node FILTER(isIRI(?node))
+    ?from ?property ?held FILTER(isIRI(?held))
+    # One c:via hop, when it has one: what is held is then not marked itself.
+    OPTIONAL { $this c:via ?via FILTER(isIRI(?via)) OPTIONAL { ?held ?via ?hop FILTER(isIRI(?hop)) } }
+    BIND(IF(BOUND(?via), ?hop, ?held) AS ?node)
+    FILTER(BOUND(?node))
     BIND(IRI(CONCAT(STR($this), "/~mark")) AS ?mark)
   }
 }""" .

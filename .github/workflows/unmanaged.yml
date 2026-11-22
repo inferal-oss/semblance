@@ -1,0 +1,42 @@
+# The guard (docs/UNMANAGED.md): every page of the site, built for production and visited in a headless
+# Chromium, made by Semblance, but for what the site allows (um:Exception in demo/app.ttl, each with its
+# reason). It fails on any other visible element no rendering made, and on an exception that matches
+# nothing any more.
+name: Made by Semblance
+
+on:
+  pull_request:
+    paths: ['src/**', 'ontology/**', 'demo/**', 'semblance.config.ts', 'vite.config.ts', 'scripts/unmanaged-check.ts', 'scripts/cdp.ts', '.github/workflows/unmanaged.yml']
+  push:
+    branches: [main]
+    paths: ['src/**', 'ontology/**', 'demo/**', 'semblance.config.ts', 'vite.config.ts', 'scripts/unmanaged-check.ts', 'scripts/cdp.ts', '.github/workflows/unmanaged.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unmanaged-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    # Playwright 1.57 installs its headless Chromium on Ubuntu 24.04, not on the latest runner image.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      # The whole history and the tags: the Changes page is built from them, as on Pages.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: rustup target add wasm32-unknown-unknown
+      - run: npm run engine:build
+      # The headless shell the DevTools client drives (scripts/cdp.ts finds Playwright's cache).
+      - run: npx playwright-core install --with-deps --only-shell chromium
+      - run: npx tsx scripts/unmanaged-check.ts --build

@@ -178,6 +178,16 @@ npm run pack:check     # the npm packages as a consumer gets them (docs/RELEASIN
   shards, `--only=<shard,…>` re-runs some of them. When files are added or grow slower, refresh the
   times with `npm run test:full -- --update-timings` and commit `test/timings.json`.
 - A test that times out under a full run is re-run alone before it counts as a failure.
+- **UI is made by Semblance, not hand-built DOM.** `npm run check:unmanaged` (`scripts/unmanaged-check.ts`,
+  [docs/UNMANAGED.md](docs/UNMANAGED.md)) visits every page of the site in a headless Chromium, with a
+  few interactive states, and fails on a visible element no rendering made (host code, a third party, of
+  unknown origin) and on a stale exception. The "Made by Semblance" workflow runs it on a production
+  build for every PR touching `src/`, `ontology/` or `demo/`; locally it uses a dev server (`--pages
+  /,/docs/` for some pages, `--build` for the CI run). A failure names the page, the element, why, and
+  the nearest component Semblance made: make it a rendering of that (rules 1 and 2). Only if it must stay
+  as it is, add a `um:Exception` to `demo/app.ttl` with `um:selector` or `um:slot`, `um:because` (why)
+  and `um:issue` (the issue that removes it). Hosted components, islands, sandboxes and embedded media
+  are allowed by kind. In tests, `notMadeBySemblance(root)` (`test/harness.ts`) lists the same findings.
 - The default store is Semblance's WASM engine (`wat`) with SPARQL rules preferred. A new query
   shape can be checked quickly with `npx tsx rdf-engine/host/parse-check.ts wat` and
   `test/rdf-engine.test.ts`. `rdf-engine/` is developed in its own session and branch; report
