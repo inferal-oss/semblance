@@ -103,7 +103,8 @@ something only about a node with two values or more of one (l10n:Terms and l10n:
 is member-wise over those nodes (`$member`, as with sem:forEach), which the engine keeps from the input: a node that gains a second
 value joins, one left with a single value leaves, and one whose values change is evaluated again. A change to a node with one value
 does nothing, so editing a text costs nothing here, and a graph loaded later, in slices or at once, costs the nodes it brings. What
-it says about a member is minted under the member (`<member>/~…`), so its SPARQL rule evaluates many members in one query."""@en .
+it says about a member is minted under its focus and names the member (`?node ?p $member`), so its SPARQL rule evaluates many
+members in one query."""@en .
 sem:leavesTo a owl:ObjectProperty ; rdfs:range sem:Rendering ;
     rdfs:comment """On a rendering with sem:watchesManyValued: another rendering that derives, per focus, part of what this one would,
 so this one leaves it out (l10n:Terms leaves a component's own c:label to l10n:Labels). The values of a predicate the other

@@ -2,6 +2,7 @@
 import type { FnRule } from '../engine/context.ts'
 import { C, L10N, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { text } from '../components/util.ts'
+import { md5 } from '../components/data.ts'
 
 /** For components with translations: their label in the viewer's language (for SPARQL rules). */
 const localLabel: FnRule = (ctx, focus) => {
@@ -17,13 +18,13 @@ const localLabel: FnRule = (ctx, focus) => {
 /**
  * l10n:Terms, member-wise (sem:watchesManyValued): for a node with two values or more of a text
  * property that has an l10n: twin (l10n:pickedAs), the one in the viewer's language as the twin,
- * on <node>/~l10n (components' own c:label is l10n:label's per component).
+ * on a node of the viewer's about it (components' own c:label is l10n:label's per component).
  */
-const terms: FnRule = (ctx, _viewer, member) => {
+const terms: FnRule = (ctx, viewer, member) => {
   if (!member) return []
-  const o = ctx.out(member)
+  const o = ctx.out(viewer)
   const component = () => ctx.objects(member, RDF_TYPE).some((t) => ctx.memo('l10n:component ' + t.value, () => isComponentClass(ctx, t.value)))
-  const at = o.node('l10n')
+  const at = o.node('t-' + md5(member.value))
   let about = false
   for (const twin of ctx.match(null, L10N.pickedAs, null)) {
     const p = twin.subject.value

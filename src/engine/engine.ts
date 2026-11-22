@@ -2132,7 +2132,12 @@ export class Engine {
     return groups
   }
 
-  /** A member-wise rule's pairs (Rule.bulkMembers), by focus: one query each, its members restricted by VALUES, the output grouped back by member. */
+  /**
+   * A member-wise rule's pairs (Rule.bulkMembers), by focus: one query each, its members restricted by
+   * VALUES. What it writes is minted under the focus, each node naming its member (`?node ?p $member`):
+   * a node goes to the member it names. Output that names none, or several, is not attributable: those
+   * pairs are evaluated one by one.
+   */
   private bulkMembers(rule: Rule, keys: string[]): Map<string, Quad[]> {
     this.stats.bulkQueries++
     const groups = new Map<string, Quad[]>()
@@ -2144,23 +2149,24 @@ export class Engine {
       members.add(memberOf(key)!)
     }
     for (const [focus, members] of byFocus) {
-      // A member minted under another of the batch goes alone: a triple about it could be its own or the other's.
-      for (const m of [...members]) {
-        if (owningFocus(m) === m || mintedUnder(owningFocus(m), members) === undefined) continue
-        members.delete(m)
-        groups.set(focus + SEP + m, this.evaluateOne(rule, focus + SEP + m))
-      }
-      if (!members.size) continue
       this.stats.queries++
       const query = rule.queryParts!.join('<' + focus + '>').replaceAll('$member', '?member')
       const template = query.search(/CONSTRUCT\s*\{/i)
       const where = query.slice(template).search(/WHERE\s*\{/i)
       const at = template + where + query.slice(template + where).indexOf('{') + 1
-      const restricted = `${query.slice(0, at)} VALUES ?member { ${[...members].map((m) => `<${m}>`).join(' ')} } ${query.slice(at)}`
-      for (const q of this.construct(rule, restricted)) {
-        const member = mintedUnder(q.subject.value, members)
-        if (member === undefined) continue
-        const key = focus + SEP + member
+      const out = this.construct(rule, `${query.slice(0, at)} VALUES ?member { ${[...members].map((m) => `<${m}>`).join(' ')} } ${query.slice(at)}`)
+      const named = new Map<string, string | null>()
+      for (const q of out) {
+        if (q.object.termType !== 'NamedNode' || !members.has(q.object.value)) continue
+        const was = named.get(q.subject.value)
+        named.set(q.subject.value, was === undefined || was === q.object.value ? q.object.value : null)
+      }
+      if (out.some((q) => !named.get(q.subject.value))) {
+        for (const m of members) groups.set(focus + SEP + m, this.evaluateOne(rule, focus + SEP + m))
+        continue
+      }
+      for (const q of out) {
+        const key = focus + SEP + named.get(q.subject.value)!
         let g = groups.get(key)
         if (!g) groups.set(key, (g = []))
         g.push(q)

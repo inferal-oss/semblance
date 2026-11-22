@@ -96,8 +96,9 @@ export interface Rule {
   /**
    * Whether a member-wise SPARQL rule may be evaluated once for many members of a focus
    * (`$member` as ?member, restricted by VALUES): every subject its template writes is minted
-   * under the member, so the output groups back by member. For the rules whose members the
-   * engine keeps (sem:watchesManyValued), whose queries read the member only in the main pattern.
+   * under the focus and names its member (`?node ?p $member`), so the output groups back by
+   * member (Engine.bulkMembers). For the rules whose members the engine keeps
+   * (sem:watchesManyValued), whose queries read the member only in the main pattern.
    */
   bulkMembers?: boolean
   /** The focus must have at least one of these properties, or the rule is not run (sem:requires). */
@@ -240,8 +241,8 @@ export function loadRules(store: GraphStore): Rule[] {
       always: get(SEM.always)?.value === 'true',
       // Member-wise output is attributed to (focus, member) pairs, which bulk output cannot be.
       bulk: get(SEM.bulk)?.value !== 'false' && !forEach && (!query || attributableOnce(query)),
-      // Its pairs, several members at a time (VALUES ?member), when what it says is minted under its member.
-      bulkMembers: !!forEach && get(SEM.bulk)?.value !== 'false' && !!query && manyValued.length > 0 && attributableOnce(query.replaceAll('$this', '?thisFocus').replaceAll('$member', '$this')),
+      // Its pairs, several members at a time (VALUES ?member), when what it says is minted under its focus.
+      bulkMembers: !!forEach && get(SEM.bulk)?.value !== 'false' && !!query && manyValued.length > 0 && attributableOnce(query),
       requires,
       unless,
       // The rule's own: a rendering's sem:needsExtension says what its SPARQL rule awaits.

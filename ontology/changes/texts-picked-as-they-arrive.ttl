@@ -20,14 +20,12 @@ for seconds, to an English reader.""" ;
 with two values or more of a marked predicate in the input, which the engine keeps as changes arrive. Each node's pair
 is evaluated in the change that gives it a second value, again when its values change, withdrawn when it is left with
 one, and every pair again when the viewer's languages change; nothing waits for the end of an arrival. l10n:Terms is
-written that way: per node ($member), its twins on <node>/~l10n (they were on <viewer>/~t-<md5 of the node>), l10n:of
-the node as before. The picks are the same, the viewer's languages by rank, then the untagged value, then English,
+written that way: per node ($member), its twins where they were (<viewer>/~t-<md5 of the node>, l10n:of the node). The picks are the same, the viewer's languages by rank, then the untagged value, then English,
 then the least. Its SPARQL rule takes many nodes in one query (VALUES ?member). Runtime.arriving no longer holds
 anything back in the engine.""" ;
-    chg:forwardGuide """Nothing to move for a rule that reads a twin as documented (`?at l10n:of ?n ; l10n:name ?picked`).
-Something that named a twin's node by its IRI under the viewer (`…/~t-<md5>`) finds it under the node it is about
-(`<node>/~l10n`). A rendering of your own with sem:watchesManyValued is now member-wise: read the node as $member,
-and mint what it says under it (IRI(CONCAT(STR($member), "/~…"))) so it is evaluated in bulk.""" ;
-    chg:backwardGuide """Going back, twins sit under the viewer again, and a graph arriving in slices has its translated
-texts picked only after the last slice: until then a SPARQL rule may show any of their values.""" ;
+    chg:forwardGuide """Nothing to move for a rule that reads a twin (`?at l10n:of ?n ; l10n:name ?picked`): its node and
+its value are as before, and arrive sooner. A rendering of your own with sem:watchesManyValued is now member-wise: read
+the node as $member, and have each node it writes name it (`?node ?p $member`) so its pairs are evaluated in bulk.""" ;
+    chg:backwardGuide """Going back, a graph arriving in slices has its translated texts picked only after the last
+slice: until then a SPARQL rule may show any of their values.""" ;
     chg:affects l10n:Viewer .

@@ -297,7 +297,8 @@ A pair is dirty when the focus's own triples change, and also:
   (`$member`), which the engine keeps: a change in the input to such a node's values re-runs that
   node's pair, a text with one value replaced by another re-runs nothing, and a graph that arrives
   later, in slices or at once, costs the nodes it brings, in the change that brings them. What it
-  says about a member is minted under the member, so its SPARQL rule takes many members in one query;
+  says about a member is minted under its focus and names the member (`?node ?p $member`), so its
+  SPARQL rule takes many members in one query;
 - `sem:follows ( c:of [ sem:inverseVia ( c:inTree c:parentProperty ) ] )` — a path whose last
   step goes against a predicate named in the data: a triple `?child ?p ?node` makes dirty the
   foci that reach `?node` along the path's other steps and name `?p` along the given one (a tree's

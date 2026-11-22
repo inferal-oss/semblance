@@ -263,8 +263,8 @@ WHERE {
 # --- texts in the viewer's language, for SPARQL rules -------------------------------------
 # A text property whose values are translations has an l10n: twin (l10n:pickedAs). l10n:Terms
 # derives, in each engine's derived graph, every node's twin value when it has two values or
-# more, on a node of its own about it (<node>/~l10n, l10n:of the node, so the node's own triples
-# stay as written): the one util.text picks (the viewer's languages by rank, then the untagged
+# more, on a node of its own about it (minted under the viewer, l10n:of the node, so the node's own
+# triples stay as written): the one util.text picks (the viewer's languages by rank, then the untagged
 # value, then English, then the least). A SPARQL rule reads a text as its twin, else the one value it has:
 #   OPTIONAL { ?pickedAt l10n:of ?n ; l10n:name ?picked } OPTIONAL { FILTER(!BOUND(?picked)) ?n rdfs:label ?only }
 # which is deterministic because a node with two values or more always has its twin: l10n:Terms is
@@ -350,7 +350,9 @@ WHERE {
   $this a l10n:Viewer .
   ?p l10n:pickedAs ?twin .
   FILTER EXISTS { $member ?p ?a , ?b FILTER(isLiteral(?a) && isLiteral(?b) && !sameTerm(?a, ?b)) }
-  FILTER(?p != c:label || NOT EXISTS { $member a/rdfs:subClassOf* sem:Component })
+  # Components' own c:label is l10n:Labels'.
+  OPTIONAL { $member a ?nt . ?nt rdfs:subClassOf* sem:Component . BIND(c:label AS ?componentText) }
+  FILTER(!BOUND(?componentText) || ?p != ?componentText)
   OPTIONAL {
     $member ?p ?pick . FILTER(isLiteral(?pick))
     $this l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
@@ -374,5 +376,5 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $member ?p ?any FILTER(isLiteral(?any))
     FILTER NOT EXISTS { $member ?p ?anyLess FILTER(isLiteral(?anyLess) && STR(?anyLess) < STR(?any)) } }
   BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?picked)
-  BIND(IRI(CONCAT(STR($member), "/~l10n")) AS ?at)
+  BIND(IRI(CONCAT(STR($this), "/~t-", MD5(STR($member)))) AS ?at)
 }""" .
