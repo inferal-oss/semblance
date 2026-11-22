@@ -1892,6 +1892,13 @@ maintained one (`src/view/runs.ts`, `runtime.ts`, `ontology/layers/view.ttl`):
   instance `iv:Auto` while a node naming it says the property true; `iv:bindsBy` gives a node that binds
   a variable a view of its own, `<node>/~run`, the variable an `iv:parameter`. An instance is maintained
   while one of the nodes naming it is shown.
+- **`iv:explain true`** on a query run on request writes the plan it would be maintained by, while it stays
+  run on request: `iv:planned` (`iv:Incremental`, with its operators, or `iv:Recompute`, with `iv:fallback`
+  saying why), in the views graph beside `iv:strategy iv:OnRequest`. The plan is the compiler's only: the
+  compiler parses, partitions and finds the dependencies, and its evaluators run only in a circuit, which
+  an explained run never builds - no partition, no tick, no run for a change to the data
+  (`test/query-plan.test.ts`). The workbench's query says it, so its Plan tab shows the operators before
+  Follow updates is on (#588).
 - **What uses it**: every `c:QueryResultView`'s query (`c:QueryRuns` in `ontology/components/workbench.ttl`).
   The result table renders the result set in SPARQL (`c:ResultTableRendering-sparql`, and
   `c:ResultTableAsText-sparql` as text), byte for byte as its function twins, which read the same rows
@@ -1911,7 +1918,8 @@ A maintained view reads the input graphs; with `iv:reads` it also reads (`src/vi
   views that read the views graph. A view never sees the figures about itself (they change because it
   stepped, so it would step at every idle slice); figures are written after the tick they describe, so
   a view over figures is one step behind them by construction, never in a cycle with them.
-- **What rules derive** (`iv:reads <rendering>`, a `sem:Rendering`): the derived graph of the first
+- **What rules derive** (`iv:reads <rendering>`, a `sem:Rendering` or a `sem:BuildingBlock`, such as
+  `l10n:Terms` for phrases in the viewer's language): the derived graph of the first
   projection (`ViewRuntime.derivedGraph`). Rules read views (the views graph is an input of every
   projection), so views over rules over views is a cycle of graphs - not, for data that has none, of
   values. The runtime runs it as **rounds** (`Runtime.rounds`): after the projections have taken a
@@ -1938,7 +1946,7 @@ A maintained view reads the input graphs; with `iv:reads` it also reads (`src/vi
   recalculation trace hears the views runtime step them (`ViewRuntime.onStep`). The dashboard's
   progress (`dx:qWork`, `iv:reads dx:Cube`), the warehouse's cost lines (`wh:qCost`, a view per line
   reading its views' figures) and the workbench's Plan tab (`ui:qPlanSummary`, `iv:reads
-  ui:currentQuery`) are views over figures.
+  ui:currentQuery , l10n:Terms`: its phrases in the viewer's language) are views over figures.
 
 ## 28. Views on their own, as built
 

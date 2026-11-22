@@ -190,6 +190,7 @@ const localName = (iri: string) => iri.replace(/^.*[#/]/, '')
 const NONE: Delta = { add: [], remove: [] }
 /** iv:reads iv:Everything: what a rule's query reads - the input graphs, every view's output, what rules derive. */
 const EVERYTHING = IV + 'Everything'
+const SEM_BUILDING_BLOCK = NS.sem + 'BuildingBlock'
 
 /** Which graphs beyond the input a view reads: the views graph (iv:reads a view), the derived graph (iv:reads a rendering). */
 export interface Reads {
@@ -447,12 +448,13 @@ export class ViewRuntime {
     return hit.foci === 'all' || hit.foci.has(v.def.focus)
   }
 
-  /** Whether a view node reads what a rendering derives (iv:reads <rendering>, or iv:reads iv:Everything). */
+  /** Whether a view node reads what a rendering or a building block derives (iv:reads <rendering>, or iv:reads iv:Everything). */
   private readsRendering(node: NamedNode): boolean {
     const f = this.store.factory
+    const slot = (o: NamedNode) => [SEM.Rendering, SEM_BUILDING_BLOCK].some((c) => this.store.match(o, f.namedNode(RDF_TYPE), f.namedNode(c)).length > 0)
     return this.store
       .match(node, f.namedNode(IV + 'reads'), null)
-      .some((q) => q.object.termType === 'NamedNode' && (q.object.value === EVERYTHING || this.store.match(q.object, f.namedNode(RDF_TYPE), f.namedNode(SEM.Rendering)).length > 0))
+      .some((q) => q.object.termType === 'NamedNode' && (q.object.value === EVERYTHING || slot(q.object)))
   }
 
   /**
@@ -1214,6 +1216,9 @@ export class ViewRuntime {
     view.params = params
     view.paramNodes = paramNodes
     view.onRequest = onRequest
+    // Run on request, asked for its plan (iv:explain): the plan it would be maintained by, compiled
+    // only - nothing is evaluated (the compiler's evaluators run only in a circuit, which it has none of).
+    if (onRequest && plan.kind === 'recompute' && this.explains(def)) view.explained = this.compileFor(def, params)
     const written = text ?? this.queryText(def, params)
     view.text = written.query
     // A run with a parameter that has no value would read every triple ($name a variable): none.
@@ -1232,6 +1237,12 @@ export class ViewRuntime {
     view.readsDerived = this.readsRendering(s)
     this.views.set(def.iri, view)
     out.plus(view.planQuads())
+  }
+
+  /** Whether a view run on request writes the plan it would be maintained by (iv:explain true on its query or its node). */
+  private explains(def: Definition): boolean {
+    const f = this.store.factory
+    return [def.query, def.node].some((n) => !!n && this.one(f.namedNode(n), IV + 'explain')?.value === 'true')
   }
 
   /** Step order: views that read other views (iv:reads) after them. */
@@ -2141,6 +2152,8 @@ export class MaintainedView implements ViewHandle {
   resultSet?: ResultSetWriter
   /** iv:strategy iv:OnRequest: run when defined (and shown), never stepped by a change to the data. */
   onRequest = false
+  /** Run on request with iv:explain: the plan it would be maintained by (compiled, never built or evaluated). */
+  explained?: ViewPlan
   /** iv:writeEach iv:Tick: a maintained result set is written in the tick that changed it, not at the next refresh. */
   eachTick = false
   /** The query text it runs (parameters put in): its result set's columns are read from it. */
@@ -2259,11 +2272,15 @@ export class MaintainedView implements ViewHandle {
       t(v, IV + 'instanceOf', nn(this.def.node))
       t(v, IV + 'focus', nn(this.def.focus))
     }
-    if (this.plan.kind === 'recompute') {
-      if (!this.onRequest) t(v, IV + 'fallback', f.literal(this.plan.reason))
+    // Run on request and explained: the strategy it would get (iv:planned), and its operators or why it would be recomputed.
+    const explained = this.onRequest ? this.explained : undefined
+    if (explained) t(v, IV + 'planned', nn(IV + (explained.kind === 'recompute' ? 'Recompute' : 'Incremental')))
+    const plan = explained ?? this.plan
+    if (plan.kind === 'recompute') {
+      if (!this.onRequest || explained) t(v, IV + 'fallback', f.literal(plan.reason))
       return out
     }
-    const p = this.plan
+    const p = plan
     const ops: [string, string, string?][] = []
     for (const part of p.parts) {
       if (part.stream?.stream) t(this.activity, PROV.used, nn(part.stream.stream))
